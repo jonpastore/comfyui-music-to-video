@@ -101,52 +101,7 @@
     <th></th>
   </tr></thead>
   <tbody>
-  {% for e in songs %}
-    <tr data-song="{{ e.song.id }}">
-      <td class="pick"><input type="checkbox" class="pick-song" value="{{ e.song.id }}"></td>
-      <td>
-        <a href="/songs/{{ e.song.id }}">{{ e.song.title }}</a>
-        {% if e.song.explicit %}<span class="tag explicit">EXPLICIT</span>{% endif %}
-      </td>
-      <td>{{ e.song.album or "" }}</td>
-      <td class="cell-genre">
-        {{ e.song.genre or "" }}{% if e.song.subgenre %} / {{ e.song.subgenre }}{% endif %}
-        {% if e.song.genre2 %}<br>{{ e.song.genre2 }}{% if e.song.subgenre2 %} / {{ e.song.subgenre2 }}{% endif %}{% endif %}
-      </td>
-      <td class="num" data-k="{{ e.song.duration or '' }}">
-        {% if e.song.duration %}{{ e.song.duration | hms }}{% endif %}
-      </td>
-      <td class="num cell-bpm" data-k="{{ e.song.bpm or '' }}">{% if e.song.bpm %}{{ "%.0f"|format(e.song.bpm) }}{% endif %}</td>
-      <td class="cell-key">{{ e.song.key or "" }}</td>
-      <td class="num cell-energy" data-k="{{ e.song.energy or '' }}">{% if e.song.energy %}{{ "%.3f"|format(e.song.energy) }}{% endif %}</td>
-      <td data-k="{{ e.song.created or '' }}">
-        {% if e.song.created %}
-        <time class="local-time" datetime="{{ e.song.created | isotime }}">
-          {{ e.song.created | isotime }}</time>
-        {% endif %}
-      </td>
-      {# one modal per song rather than per render: the tiers of a song are
-         watched against each other, and a row of buttons is not a column #}
-      <td data-k="{{ e.videos | length }}">
-        {% if e.videos %}
-        <button type="button" class="linkish"
-                onclick="document.getElementById('vid-{{ e.song.id }}').showModal()">
-          {% for v in e.videos %}{{ v.tier | tiername }}{% if not loop.last %}, {% endif %}{% endfor %}
-        </button>
-        {% endif %}
-      </td>
-      <td data-k="{{ e.sets | length }}">
-        {% for s in e.sets %}
-        <a href="/sets#set-{{ s.id }}">{{ s.label }}</a>{% if not loop.last %}<br>{% endif %}
-        {% else %}<span class="muted">&mdash;</span>{% endfor %}
-      </td>
-      <td>
-        <form method="post" action="/songs/{{ e.song.id }}/delete" class="delete-song">
-          <input type="hidden" name="confirm" value="DELETE">
-          <button type="submit">Delete</button>
-        </form>
-      </td>
-    </tr>
+  {% for e in songs %}{% include "_song_row.html" %}
   {% endfor %}
   </tbody>
 </table>

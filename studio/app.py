@@ -1045,8 +1045,9 @@ def song_row(request: Request, id: int):
 
 
 @app.post("/songs")
-async def create_song(title: str = Form(...), album: str = Form(""), genre: str = Form(""),
-                       subgenre: str = Form(""), genre2: str = Form(""), subgenre2: str = Form(""),
+async def create_song(request: Request, title: str = Form(...), album: str = Form(""),
+                       genre: str = Form(""), subgenre: str = Form(""), genre2: str = Form(""),
+                       subgenre2: str = Form(""),
                        explicit: bool = Form(False), mp3: UploadFile = File(...)):
     genre, subgenre = valid_genre_or_400(genre, subgenre, "genre")
     genre2, subgenre2 = valid_genre_or_400(genre2, subgenre2, "genre2")
@@ -1062,6 +1063,10 @@ async def create_song(title: str = Form(...), album: str = Form(""), genre: str 
                           mp3_path=dest, duration=duration, explicit=int(explicit))
     jobs.enqueue("transcribe", {"song_id": sid}, song_id=sid)
     jobs.enqueue("analyse", {"song_id": sid}, song_id=sid)
+    if wants_json(request):
+        # the Library stays put and gets the new row; it does not follow the
+        # redirect off to the song page mid-upload of the next file
+        return JSONResponse({"song_id": sid, "title": title.strip() or slug})
     return RedirectResponse(f"/songs/{sid}", status_code=303)
 
 
@@ -1077,7 +1082,7 @@ def analyse_all_songs(request: Request):
     queued = [{"song_id": r["id"], "job_id": jobs.enqueue("analyse", {"song_id": r["id"]},
                                                            song_id=r["id"])}
               for r in rows]
-    if "application/json" in (request.headers.get("accept") or ""):
+    if wants_json(request):
         return JSONResponse({"queued": queued})
     return RedirectResponse("/", status_code=303)
 
@@ -2726,7 +2731,7 @@ def revert_audio(id: int):
 
 
 @app.post("/songs/{id}/delete")
-def delete_song(id: int, confirm: str = Form("")):
+def delete_song(request: Request, id: int, confirm: str = Form("")):
     get_song_or_404(id)
     if confirm != "DELETE":
         raise HTTPException(400, "confirm=DELETE is required to delete a song")
@@ -2754,6 +2759,8 @@ def delete_song(id: int, confirm: str = Form("")):
     for table in ("storyboards", "refs", "clips", "renders", "assets", "playlist_items", "set_items"):
         db.run(f"DELETE FROM {table} WHERE song_id=?", id)
     db.run("DELETE FROM songs WHERE id=?", id)
+    if wants_json(request):
+        return JSONResponse({"deleted": id})
     return RedirectResponse("/", status_code=303)
 
 

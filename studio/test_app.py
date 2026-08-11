@@ -1014,6 +1014,44 @@ def test_suggest_drops_unquotable_evidence_and_bad_taxonomy(patch_stub):
         assert {x["song_id"] for x in d["dropped"]} == {liar, invented}
 
 
+def test_library_routes_answer_json_and_still_redirect_a_form_post():
+    """Every Library button goes through app.js's api() helper, which asks for
+    JSON. The same routes keep their redirect so the page works without
+    JavaScript -- one set of routes, both callers."""
+    with TestClient(appmod.app) as client:
+        J = {"Accept": "application/json"}
+        up = client.post("/songs", data={"title": "Async Upload"}, headers=J,
+                         files={"mp3": ("a.mp3", _mp3_bytes(), "audio/mpeg")})
+        assert up.status_code == 200, up.text
+        sid = up.json()["song_id"]
+        assert db.one("SELECT title FROM songs WHERE id=?", sid)["title"] == "Async Upload"
+
+        # the row partial the async upload inserts is the SAME one the table
+        # renders, so it can never drift from it
+        row = client.get(f"/songs/{sid}/row")
+        assert row.status_code == 200, row.text
+        assert f'<tr data-song="{sid}"' in row.text
+        assert 'class="pick-song"' in row.text and "cell-genre" in row.text
+
+        # uploading queues transcribe and analyse, so an immediate delete is
+        # refused -- and the reason arrives in `detail`, which is what app.js's
+        # api() shows instead of a bare "Conflict"
+        busy = client.post(f"/songs/{sid}/delete", data={"confirm": "DELETE"}, headers=J)
+        assert busy.status_code == 409, busy.text
+        assert "job is queued or running" in busy.json()["detail"]
+
+        # a song with no jobs against it deletes, and answers JSON
+        quiet = _mk_song("Async Delete Me")
+        d = client.post(f"/songs/{quiet}/delete", data={"confirm": "DELETE"}, headers=J)
+        assert d.status_code == 200 and d.json() == {"deleted": quiet}, d.text
+
+        # and a plain form post still redirects
+        other = _mk_song("Form Post Delete Me")
+        d2 = client.post(f"/songs/{other}/delete", data={"confirm": "DELETE"},
+                         follow_redirects=False)
+        assert d2.status_code == 303, d2.text
+
+
 def test_analysis_poll_answers_for_a_batch():
     """One poll for the whole batch is what lets the Library patch rows in place
     without opening an EventSource per job. Deliberately does NOT call
@@ -2844,19 +2882,27 @@ def test_upload_enqueues_analyse_and_fills_bpm_key_energy():
 
 def test_song_page_shows_analysis_card_before_and_after():
     with TestClient(appmod.app) as client:
-        song = _upload_song(client, "Analysis Card Song")
-        page_before = client.get(f"/songs/{song['id']}").text
+        # NOT _upload_song: that enqueues analyse immediately, and the one
+        # worker often finished it before the "before" page was fetched -- the
+        # assertion below then failed on timing rather than on behaviour. Borrow
+        # its audio onto a row with no job against it, as the analyse-all test
+        # already does, so "before" is a state and not a race.
+        src = _upload_song(client, "Analysis Card Source")
+        sid = db.upsert_song("analysis-card-song", title="Analysis Card Song",
+                              mp3_path=src["mp3_path"])
+        page_before = client.get(f"/songs/{sid}").text
         assert "Not analysed yet" in page_before
-        assert f'/songs/{song["id"]}/analyse' in page_before
+        assert f"/songs/{sid}/analyse" in page_before
 
-        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='analyse'", song["id"])
+        client.post(f"/songs/{sid}/analyse")
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='analyse' ORDER BY id DESC", sid)
         wait_job(job["id"])
 
-        page_after = client.get(f"/songs/{song['id']}").text
+        page_after = client.get(f"/songs/{sid}").text
         assert "128.0 BPM" in page_after
         assert "8A" in page_after
         assert "4 beats" in page_after
-        assert f'/songs/{song["id"]}/downbeat-offset' in page_after
+        assert f"/songs/{sid}/downbeat-offset" in page_after
 
 
 def test_analyse_on_demand_requires_audio():

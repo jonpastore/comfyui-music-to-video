@@ -425,6 +425,35 @@ document.addEventListener("DOMContentLoaded", function () {
   initLibraryBulk();
 });
 
+// ---- the one way this app talks to the server from a button ----------------
+// Every Library control goes through here: same Accept header, same error
+// extraction, same promise shape. app.py answers JSON to this and a redirect to
+// a plain form post, so the page still works with JavaScript off -- one set of
+// routes serving both, rather than a parallel /api/* tree to keep in step.
+//
+// body: a plain object -> JSON, a FormData -> multipart (uploads), omitted -> GET.
+function api(url, body, method) {
+  var opts = {method: method || (body === undefined ? "GET" : "POST"),
+              headers: {"Accept": "application/json"}};
+  if (body instanceof FormData) {
+    opts.body = body;                       // let the browser set the boundary
+  } else if (body !== undefined) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  return fetch(url, opts).then(function (r) {
+    if (r.status === 204) return {};
+    return r.text().then(function (t) {
+      var d;
+      try { d = t ? JSON.parse(t) : {}; } catch (err) { d = {detail: t.slice(0, 200)}; }
+      // FastAPI puts the readable reason in `detail`; surfacing r.statusText
+      // instead is how "409 a job is running for this song" became "Conflict".
+      if (!r.ok) throw new Error(d.detail || d.error || r.statusText);
+      return d;
+    });
+  });
+}
+
 // ---- Library: select rows, apply a genre to all of them, analyse in place ---
 // Everything here talks JSON to app.py and paints from the RESPONSE, never from
 // what was typed -- a value the server drops in validation must not stay on
@@ -473,16 +502,50 @@ function initLibraryBulk() {
     cell.textContent = first;
     if (second) { cell.appendChild(document.createElement("br")); cell.append(second); }
   }
-  function post(url, body) {
-    return fetch(url, {method: "POST", headers: {"Content-Type": "application/json"},
-                       body: JSON.stringify(body)}).then(function (r) {
-      return r.json().then(function (d) {
-        if (!r.ok) throw new Error(d.detail || r.statusText);
-        return d;
-      });
-    });
-  }
+  var post = api;
   function busy(on, msg) { note.textContent = msg || ""; bar.classList.toggle("busy", !!on); }
+
+  // Upload: same route, same validation, but the Library stays where it is and
+  // asks for the row it just made rather than following a redirect away.
+  var upload = document.querySelector('form[action="/songs"]');
+  if (upload) upload.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var btn = upload.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    busy(true, "uploading…");
+    api("/songs", new FormData(upload))
+      .then(function (d) {
+        // the ROW comes from the server's own partial, not from markup rebuilt
+        // here -- so it can never drift from what the table renders
+        return fetch("/songs/" + d.song_id + "/row").then(function (r) { return r.text(); })
+          .then(function (html) {
+            var body = document.querySelector("table.list tbody");
+            if (body) body.insertAdjacentHTML("afterbegin", html);
+            upload.reset();
+            refresh();
+            busy(false, "Uploaded " + d.title + ". Transcribe and analyse are queued.");
+          });
+      })
+      .catch(function (err) { busy(false, "Upload failed: " + err.message); })
+      .then(function () { btn.disabled = false; });
+  });
+
+  // Delete: remove the row in place. The <form> stays in the markup as the
+  // no-JavaScript path; this intercepts it.
+  document.addEventListener("submit", function (e) {
+    var form = e.target.closest(".delete-song");
+    if (!form || !form.closest("tr[data-song]")) return;
+    // the confirm() handler above is also a document-level submit listener and
+    // runs first; if the user cancelled there, it already preventDefault'd and
+    // this must not go on to delete anyway
+    if (e.defaultPrevented) return;
+    e.preventDefault();
+    var row = form.closest("tr[data-song]");
+    busy(true, "deleting…");
+    api(form.action, new FormData(form))
+      .then(function () { row.remove(); refresh(); busy(false, "Deleted."); })
+      .catch(function (err) { busy(false, "Not deleted: " + err.message); });
+  });
 
   document.getElementById("bulk-save").addEventListener("click", function () {
     var sel = ids();
@@ -530,15 +593,13 @@ function initLibraryBulk() {
   if (form) form.addEventListener("submit", function (e) {
     e.preventDefault();
     busy(true, "queueing…");
-    fetch("/songs/analyse-all", {method: "POST", headers: {"Accept": "application/json"}})
-      .then(function (r) { return r.json(); })
+    api("/songs/analyse-all", {})
       .then(function (d) {
         var want = d.queued.map(function (q) { return q.song_id; });
         if (!want.length) return busy(false, "Nothing to analyse — every song already has a bpm.");
         var left = want.slice();
         var tick = setInterval(function () {
-          fetch("/songs/analysis?ids=" + left.join(","))
-            .then(function (r) { return r.json(); })
+          api("/songs/analysis?ids=" + left.join(","))
             .then(function (a) {
               a.songs.forEach(function (s) {
                 if (s.bpm === null || s.bpm === undefined) return;
