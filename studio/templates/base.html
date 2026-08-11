@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Meow P Studio{% endblock %}</title>
+  <!-- the only console error a browser reports on this app: chrome asks for
+       /favicon.ico on every page and gets a 404. An empty data: icon answers it
+       without shipping a file. -->
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/htmx.min.js"></script>
   <script src="/static/app.js" defer></script>

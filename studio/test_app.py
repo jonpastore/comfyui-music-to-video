@@ -479,6 +479,43 @@ def test_refs_tier_without_chosen_anchor_400_names_tier_and_enqueues_nothing():
         assert len(jobs.recent(1000)) == before
 
 
+def test_jobs_page_refresh_interval_follows_the_queue_and_the_control():
+    with TestClient(appmod.app) as client:
+        # idle queue -> the slow poll
+        assert appmod.jobs_refresh_secs("auto", busy=False) == 60
+        assert appmod.jobs_refresh_secs("auto", busy=True) == 10
+        assert appmod.jobs_refresh_secs("off", busy=True) == 0
+        assert appmod.jobs_refresh_secs("30", busy=True) == 30
+        # a hand-edited URL must not become a hot loop, or a 10-hour timer
+        assert appmod.jobs_refresh_secs("0", busy=False) == 5
+        assert appmod.jobs_refresh_secs("999999", busy=False) == 3600
+        assert appmod.jobs_refresh_secs("banana", busy=False) == 60
+
+        idle = client.get("/jobs")
+        assert 'hx-trigger="every 60s"' in idle.text, idle.text[:400]
+
+        # something running -> the page polls 6x faster, without being asked
+        db.run("""INSERT INTO jobs (kind, args_json, status, created, started)
+                  VALUES ('refs','{}','running',?,?)""", time.time(), time.time())
+        busy = client.get("/jobs")
+        assert 'hx-trigger="every 10s"' in busy.text
+
+        off = client.get("/jobs?refresh=off")
+        assert "hx-trigger" not in off.text and "hx-get" not in off.text
+        assert ">off<" in off.text  # the control still reports its own state
+
+        fixed = client.get("/jobs?refresh=15")
+        assert 'hx-trigger="every 15s"' in fixed.text
+        assert 'hx-get="/jobs?refresh=15&partial=1"' in fixed.text  # interval survives the poll
+
+        # the poll returns the panel alone, not a second whole document
+        part = client.get("/jobs?refresh=15&partial=1")
+        assert part.status_code == 200
+        assert "<html" not in part.text and 'id="jobs-panel"' in part.text
+
+        db.run("UPDATE jobs SET status='done' WHERE status='running'")
+
+
 def test_classify_reviews_only_approved_refs_and_reports_flags():
     from conftest import classify_calls, contact_sheet_calls
     with TestClient(appmod.app) as client:

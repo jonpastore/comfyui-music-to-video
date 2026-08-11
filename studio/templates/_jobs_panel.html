@@ -1,0 +1,53 @@
+{# Swapped whole by the poll below, so the hx-* attributes must live on this
+   div: after a swap the replacement is what keeps polling. The interval comes
+   from the server every time, so 'auto' speeds up on its own the moment a job
+   starts and slows down again when the queue drains. #}
+<div id="jobs-panel"
+     {% if refresh_secs %}hx-get="/jobs?refresh={{ refresh }}&partial=1"
+     hx-trigger="every {{ refresh_secs }}s" hx-target="#jobs-panel" hx-swap="outerHTML"{% endif %}>
+
+  <form method="get" action="/jobs" class="refresh-ctl">
+    <label>Auto-refresh
+      <select name="refresh" onchange="this.form.submit()">
+        {% for value, label in refresh_choices %}
+        <option value="{{ value }}" {% if value == refresh %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Set</button>
+    <span class="muted">{% if refresh_secs %}every {{ refresh_secs }}s{% else %}off{% endif %}</span>
+  </form>
+
+  {% if active %}
+  <p>Running: <strong>{{ active.kind }}</strong> (#{{ active.id }}) — {{ active.progress or "" }}</p>
+  {% else %}
+  <p class="empty">Nothing running.</p>
+  {% endif %}
+
+  {% if not jobs %}
+  <p class="empty">No jobs yet.</p>
+  {% else %}
+  <table class="list">
+    <thead><tr><th>ID</th><th>Job</th><th>Status</th><th>Elapsed</th><th>Progress</th><th></th></tr></thead>
+    <tbody>
+    {% for e in jobs %}
+      <tr>
+        <td>{{ e.job.id }}</td>
+        <td>{{ e.desc }}</td>
+        <td class="status-{{ e.job.status }}">{{ e.job.status }}</td>
+        <td>{% if e.elapsed is not none %}{{ "%.0f"|format(e.elapsed) }}s{% endif %}</td>
+        <td>{{ e.job.progress or "" }}</td>
+        <td>
+          <a href="/jobs/{{ e.job.id }}/log">log</a>
+          {% if e.cancelable %}
+          <form method="post" action="/jobs/{{ e.job.id }}/cancel" style="display:inline">
+            <button type="submit">Cancel</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>

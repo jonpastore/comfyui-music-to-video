@@ -937,8 +937,32 @@ def remove_tier(name: str):
 
 # ------------------------------------------------------------------- jobs --
 
+JOBS_REFRESH_CHOICES = [("auto", "auto (10s busy / 60s idle)"), ("5", "5s"),
+                       ("15", "15s"), ("30", "30s"), ("60", "60s"), ("off", "off")]
+JOBS_REFRESH_BUSY, JOBS_REFRESH_IDLE = 10, 60
+JOBS_REFRESH_RANGE = (5, 3600)
+
+
+def jobs_refresh_secs(choice, busy):
+    """Seconds between polls, or 0 for no polling.
+
+    'auto' is the point of the feature: a queue with something running is worth
+    watching every 10s, an idle one is not. Any explicit number wins over that
+    and is clamped -- 'refresh=0' in a hand-edited URL must not become a
+    hot loop hammering the box the renderer is running on.
+    """
+    if choice == "off":
+        return 0
+    if choice == "auto":
+        return JOBS_REFRESH_BUSY if busy else JOBS_REFRESH_IDLE
+    try:
+        return max(JOBS_REFRESH_RANGE[0], min(JOBS_REFRESH_RANGE[1], int(choice)))
+    except (TypeError, ValueError):
+        return JOBS_REFRESH_BUSY if busy else JOBS_REFRESH_IDLE
+
+
 @app.get("/jobs", response_class=HTMLResponse)
-def jobs_page(request: Request):
+def jobs_page(request: Request, refresh: str = "auto", partial: int = 0):
     now = time.time()
     entries = []
     for j in jobs.recent():
@@ -947,7 +971,15 @@ def jobs_page(request: Request):
             elapsed = (j["finished"] or now) - j["started"]
         entries.append({"job": j, "desc": jobs.describe(j), "elapsed": elapsed,
                          "cancelable": j["status"] in ("queued", "running")})
-    return templates.TemplateResponse(request, "jobs.html", {"jobs": entries, "active": jobs.active()})
+    busy = any(e["job"]["status"] in ("queued", "running", "cancelling") for e in entries)
+    if refresh not in dict(JOBS_REFRESH_CHOICES):
+        refresh = "auto"
+    ctx = {"jobs": entries, "active": jobs.active(), "refresh": refresh,
+           "refresh_secs": jobs_refresh_secs(refresh, busy),
+           "refresh_choices": JOBS_REFRESH_CHOICES}
+    # the poll swaps the panel only -- returning the whole page would nest a
+    # second <html> inside the one already on screen
+    return templates.TemplateResponse(request, "_jobs_panel.html" if partial else "jobs.html", ctx)
 
 
 @app.post("/jobs/{id}/cancel")

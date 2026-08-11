@@ -1,37 +1,5 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Jobs</h1>
-
-{% if active %}
-<p>Running: <strong>{{ active.kind }}</strong> (#{{ active.id }}) — {{ active.progress or "" }}</p>
-{% else %}
-<p class="empty">Nothing running.</p>
-{% endif %}
-
-{% if not jobs %}
-<p class="empty">No jobs yet.</p>
-{% else %}
-<table class="list">
-  <thead><tr><th>ID</th><th>Job</th><th>Status</th><th>Elapsed</th><th>Progress</th><th></th></tr></thead>
-  <tbody>
-  {% for e in jobs %}
-    <tr>
-      <td>{{ e.job.id }}</td>
-      <td>{{ e.desc }}</td>
-      <td class="status-{{ e.job.status }}">{{ e.job.status }}</td>
-      <td>{% if e.elapsed is not none %}{{ "%.0f"|format(e.elapsed) }}s{% endif %}</td>
-      <td>{{ e.job.progress or "" }}</td>
-      <td>
-        <a href="/jobs/{{ e.job.id }}/log">log</a>
-        {% if e.cancelable %}
-        <form method="post" action="/jobs/{{ e.job.id }}/cancel" style="display:inline">
-          <button type="submit">Cancel</button>
-        </form>
-        {% endif %}
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% endif %}
+{% include "_jobs_panel.html" %}
 {% endblock %}
