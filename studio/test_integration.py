@@ -112,68 +112,50 @@ if grok:
     check("grok.write_storyboard", lambda: sig(grok, "write_storyboard", ["sb", "outdir", "slug", "tier"]))
     check("grok.validate exists", lambda: sig(grok, "validate", ["sb"]))
 
-    def _guardrail_forced_into_every_scene():
-        """The model omitting the guardrail must NOT be able to produce a
-        storyboard without it. Enforcement is by construction in _compose, not
-        by retrying until the model complies."""
-        guard = tiers.compose_guardrail("pg13")
-        scenes = [
-            {"scene_number": 1, "name": "a", "cue": "intro", "camera": "wide",
-             "image_prompt": "a rooftop at night " + guard},
-            {"scene_number": 2, "name": "b", "cue": "drop", "camera": "close",
-             "image_prompt": "a crowded floor"},          # <- guardrail omitted
-            {"scene_number": 3, "name": "c", "cue": "outro", "camera": "crane",
-             "image_prompt": ""},                          # <- empty entirely
-        ]
-        sb = grok._compose({"title": "T", "album": "A"}, "pg13", guard, "style",
-                           "[Intro]\nline\n", scenes, 3, 8.0)
-        for s in sb["scenes"]:
-            assert guard in s["image_prompt"], \
-                f"scene {s['scene_number']} reached output without the guardrail"
-        assert tiers.PINNED in sb["global_guardrail"]
+    def _json_stays_clean_and_builder_applies():
+        """The clause is NOT stored per scene; the prompt builder attaches it.
 
-    check("guardrail is forced into every scene by construction",
-          _guardrail_forced_into_every_scene)
+        Storing it in the JSON only covered storyboards our own composer made --
+        not the 187 already in this repo, not `*_comfy.json` from another tool,
+        not a hand-edited file. build_refs.workflow() is the one chokepoint every
+        storyboard reaches on the way to the image model, so that is where it goes.
+        """
+        import sys as _s
+        _s.path.insert(0, os.path.dirname(HERE))
+        import build_refs, guardrail as g
 
-    def _own_guardrail_does_not_trip_the_minor_filter():
-        """The guardrail SPELLS OUT the forbidden terms ("no minors, no children
-        ... no playground, nursery or juvenile settings") and _compose appends it
-        to every image_prompt. Scanning the composed text therefore made our own
-        safety clause trip our own filter and refused every storyboard that could
-        ever be generated. Caught only by a real end-to-end run. Never again."""
         guard = tiers.compose_guardrail("r")
-        assert "minors" in guard and "playground" in guard, \
-            "test is meaningless unless PINNED still names the forbidden terms"
-        scenes = [
-            {"scene_number": 1, "name": "Loading Bay", "cue": "intro",
-             "duration_guidance": "5-9 sec", "story": "she crosses the wet loading bay",
-             "camera": "wide establishing", "motion": "slow drift", "lighting": "red utility",
-             "image_prompt": "a wet loading bay at night", "video_motion_prompt": "slow drift",
-             "negative_prompt": "blurry"},
-            {"scene_number": 2, "name": "Booth Detail", "cue": "drop",
-             "duration_guidance": "4-6 sec", "story": "hands on the mixer faders",
-             "camera": "detail insert", "motion": "fast cuts", "lighting": "magenta spill",
-             "image_prompt": "close on the mixer faders", "video_motion_prompt": "fast cuts",
-             "negative_prompt": "blurry"},
-        ]
+        scenes = [{"scene_number": 1, "name": "Loading Bay", "cue": "intro",
+                   "duration_guidance": "5-9 sec", "story": "she crosses the bay",
+                   "camera": "wide establishing", "motion": "drift", "lighting": "red",
+                   "image_prompt": "a wet loading bay at night",
+                   "video_motion_prompt": "drift", "negative_prompt": "blurry"}]
         sb = grok._compose({"title": "T", "album": "A"}, "r", guard, "style",
-                           "[Intro]\na line\n", scenes, 2, 8.0)
-        assert all(guard in s["image_prompt"] for s in sb["scenes"])
-        grok.validate(sb)          # must NOT raise ContentRefused on our own text
+                           "[Intro]\na line\n", scenes, 1, 8.0)
+        assert g.PINNED not in sb["scenes"][0]["image_prompt"], \
+            "guardrail is being baked into the JSON again"
+        assert "global_guardrail" not in sb, \
+            "the clause must not be written into the JSON at all -- it lives in code"
 
-        # and it must still catch genuinely model-authored content
-        sb2 = grok._compose({"title": "T", "album": "A"}, "r", guard, "style",
-                            "[Intro]\na line\n",
-                            [dict(scenes[0], image_prompt="a child in the crowd"),
-                             dict(scenes[1])], 2, 8.0)
+        # a storyboard from ANYWHERE still gets the clause at build time
+        wf = build_refs.workflow(sb["scenes"][0], "a.png", None, "empty",
+                                 1280, 720, 7000, "clean", "WIDE SHOT.", guard)
+        built = wf["11"]["inputs"]["prompt"]
+        assert g.PINNED in built, "prompt builder did not attach the pinned clause"
+        assert built.count("No nudity") == 1, "clause attached more than once"
+
+        # and the builder refuses model-authored minor references at that point,
+        # whatever produced the storyboard
+        bad = dict(sb["scenes"][0], image_prompt="a child in the crowd")
         try:
-            grok.validate(sb2)
-            raise AssertionError("model-authored minor reference was not caught")
-        except tiers.ContentRefused:
+            build_refs.workflow(bad, "a.png", None, "empty", 1280, 720, 7000,
+                                "clean", "WIDE SHOT.", guard)
+            raise AssertionError("builder accepted a minor reference")
+        except g.ContentRefused:
             pass
 
-    check("our own guardrail text does not trip the minor filter",
-          _own_guardrail_does_not_trip_the_minor_filter)
+    check("guardrail lives in the builder, not the storyboard JSON",
+          _json_stays_clean_and_builder_applies)
 
 lyrics = optional_import("lyrics")
 if lyrics:

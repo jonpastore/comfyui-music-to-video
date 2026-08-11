@@ -17,6 +17,7 @@ usage:
 import argparse, json, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import guardrail  # noqa: E402  (applied here, NOT stored in the storyboard)
 from build_song import allocate, audio_duration, apply_outfit, shot_directive, sname, normalize, CHUNK  # noqa: E402  (shared allocation)
 
 # Lightning LoRA settings: 4 steps at cfg 1.0. NOTE: at cfg 1.0 ComfyUI skips
@@ -56,12 +57,19 @@ def tighten_for_detail(image_prompt, scene, version):
 DETAIL_SHOTS = ("EXTREME CLOSE-UP", "CLOSE-UP SHOT")
 
 
-def workflow(scene, anchor, base, latent_mode, w, h, seed, version="clean", shot=""):
+def workflow(scene, anchor, base, latent_mode, w, h, seed, version="clean", shot="", guard=""):
+    """guard: tier wording. The pinned clause is appended regardless, HERE --
+    this is the chokepoint every storyboard reaches on its way to the image
+    model, whoever generated it. Storing the clause in the storyboard JSON only
+    covered files our own composer produced; it did nothing for the ones already
+    in this repo, for `*_comfy.json` from another tool, or for a hand-edited
+    file -- and editing prompts is the documented workflow."""
     # shot directive goes FIRST -- framing is ignored when buried mid-prompt
     if shot.startswith(DETAIL_SHOTS):
         pos = shot + " " + tighten_for_detail(scene["image_prompt"], scene, version)
     else:
         pos = (shot + " " if shot else "") + apply_outfit(scene["image_prompt"], version) + SINGLE
+    pos = guardrail.build_prompt(pos, guard, f"scene {scene.get('scene_number','?')}")
     neg = scene.get("negative_prompt", "")
 
     wf = {
@@ -125,6 +133,8 @@ def main():
     ap.add_argument("--audio", help="mp3 path. Given this, emit one reference per CLIP "
                                     "instead of one per scene, so no two consecutive clips "
                                     "animate the same still.")
+    ap.add_argument("--guardrail", default="", help="tier wording; the pinned clause is "
+                                                    "appended regardless and cannot be disabled")
     ap.add_argument("--outdir", required=True)
     args = ap.parse_args()
 
@@ -144,7 +154,7 @@ def main():
                 # scene, with the anchor still pinning the character
                 wf = workflow(scene, args.anchor, args.base, args.latent,
                               args.width, args.height, 7000 + i, args.version,
-                              shot_directive(scene, i))
+                              shot_directive(scene, i), args.guardrail)
                 wf["18"] = {"class_type": "SaveImage", "inputs": {
                     "images": ["17", 0],
                     "filename_prefix": f"refs_{args.slug}_{args.version}/clip_{i:03d}"}}
@@ -166,7 +176,7 @@ def main():
             continue
         wf = workflow(scene, args.anchor, args.base, args.latent,
                       args.width, args.height, 7000 + num, args.version,
-                      shot_directive(scene, num))
+                      shot_directive(scene, num), args.guardrail)
         wf["18"] = {"class_type": "SaveImage", "inputs": {
             "images": ["17", 0],
             "filename_prefix": f"refs_{args.slug}_{args.version}/scene_{num:02d}"}}

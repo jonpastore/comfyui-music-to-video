@@ -363,13 +363,11 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
             s["lighting"] = s.get("palette", "")
         s.setdefault("palette", s.get("lighting", ""))
         s.setdefault("energy", energy(str(s.get("cue", ""))))
-        # Deterministic guardrail enforcement. validate() checks this too, but a
-        # safety property must not depend on the model having complied: append it
-        # here so it is true by construction, and let validate() stand as a
-        # regression tripwire that should now never fire for this reason.
-        ip = (s.get("image_prompt") or "").strip()
-        if guardrail and guardrail not in ip:
-            s["image_prompt"] = (ip + " " + guardrail).strip()
+        # The guardrail is deliberately NOT written into image_prompt. It is
+        # applied by build_refs.workflow()/build_song.workflow() at the point the
+        # prompt is built -- the one chokepoint every storyboard reaches, however
+        # it was produced. Baking it in here duplicated a 40-word clause across
+        # 20-50 scenes and protected nothing our own composer had not generated.
         out.append(s)
 
     return {
@@ -387,7 +385,6 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
         "audio_lyrics": lyrics,
         "character_reference": character_reference or style_note,
         "album_world_reference": world_reference or style_note,
-        "global_guardrail": guardrail,
         "global_negative_prompt": out[0].get("negative_prompt", "") if out else "",
         "scenes": out,
     }
@@ -418,12 +415,10 @@ def validate(sb, exemplar=None):
     if nums != list(range(1, len(scenes) + 1)):
         problems.append(f"scene_number not contiguous starting at 1: {nums}")
 
-    guardrail = sb.get("global_guardrail", "")
-    if guardrail:
-        for s in scenes:
-            if guardrail not in (s.get("image_prompt") or ""):
-                problems.append(
-                    f"scene {s.get('scene_number', '?')} image_prompt is missing the guardrail text verbatim")
+    # No "the guardrail must appear in image_prompt" check any more. The clause is
+    # applied downstream by the prompt builders, so asserting it here would only
+    # confirm that our own composer ran -- which says nothing about the storyboards
+    # that arrive from anywhere else.
 
     min_scenes = len(parse_sections(sb.get("audio_lyrics", "")))
     if len(scenes) < min_scenes:
@@ -453,15 +448,14 @@ def validate(sb, exemplar=None):
     # definition -- every storyboard in this repo has "child, teen, underage" in
     # it. Scanning it refuses 1692 of the project's own existing scenes. (It is
     # also inert at cfg 1.0, where ComfyUI skips the negative pass entirely.)
+    # No stripping needed now that the clause is not written into the scenes:
+    # this reads only model-authored text. (When the guardrail WAS baked in, it
+    # had to be removed first or PINNED's own "no minors, no children ..." wording
+    # matched the filter and refused every storyboard ever generated.)
     import tiers as _tiers
-    guard = (sb.get("global_guardrail") or "").strip()
     for s in scenes:
         for field in ("image_prompt", "story", "name", "video_motion_prompt"):
-            text = s.get(field) or ""
-            for own in (guard, _tiers.PINNED):
-                if own:
-                    text = text.replace(own, " ")
-            _tiers.check_text(text, f"scene {s.get('scene_number','?')} {field}")
+            _tiers.check_text(s.get(field), f"scene {s.get('scene_number','?')} {field}")
 
     cams = {(s.get("camera") or "").strip().lower() for s in scenes}
     if len(scenes) > 1 and len(cams) <= 1:
@@ -469,10 +463,12 @@ def validate(sb, exemplar=None):
 
     # exemplar must guide format only -- its own guardrail/content must not leak in
     ex = exemplar or {}
+    # No global_guardrail field exists any more -- the clause lives in code
+    # (guardrail.py) and is attached by the prompt builders, so a third-party
+    # storyboard needs no such field. The only leak still worth catching is the
+    # exemplar's own wording turning up inside a generated scene.
     ex_guardrail = ex.get("global_guardrail", "")
     if ex_guardrail:
-        if sb.get("global_guardrail") == ex_guardrail:
-            problems.append("global_guardrail is the exemplar's guardrail, not the requested tier's")
         for s in scenes:
             if ex_guardrail in (s.get("image_prompt") or ""):
                 problems.append(
@@ -609,7 +605,6 @@ def demo():
         httpx.stream = queued([json.dumps({"scenes": good})])
         sb = generate_storyboard(LYRICS, "pg13", GUARD, "neon world lock", SONG, model="grok-test")
         assert [s["scene_number"] for s in sb["scenes"]] == [1, 2], sb["scenes"]
-        assert sb["global_guardrail"] == GUARD
         validate(sb)
 
         # 1b. distinct character_reference/world_reference from the model are
@@ -627,29 +622,33 @@ def demo():
         assert sb1c["character_reference"] == "neon world lock"
         assert sb1c["album_world_reference"] == "neon world lock"
 
-        # 2. validate() still rejects a missing guardrail when handed one
-        # directly. It can no longer be reached via _compose (see #3), so build
-        # the offending storyboard by hand -- this stays as the tripwire that
-        # fires if the enforcement in _compose is ever removed.
-        hand_built = _compose(SONG, "pg13", GUARD, "note", LYRICS, bad_guard, 2, 8.0)
-        hand_built["scenes"][0]["image_prompt"] = "a rooftop with no guardrail text"
-        try:
-            validate(hand_built)
-            raise AssertionError("validate accepted a storyboard missing the guardrail")
-        except ValueError as e:
-            assert "guardrail" in str(e)
-
-        # 3. a model response that OMITS the guardrail still yields a storyboard
-        # where every scene carries it, using ZERO retries -- enforcement is by
-        # construction in _compose, not by retrying until the model complies.
+        # 2. the storyboard JSON stays CLEAN: the guardrail is not duplicated into
+        # every scene. It is attached by build_refs/build_song when they build the
+        # prompt, which is what makes it apply to storyboards this composer never
+        # touched.
         calls = []
         httpx.stream = queued([json.dumps({"scenes": bad_guard})])
         sb2 = generate_storyboard(LYRICS, "pg13", GUARD, "neon world lock", SONG,
                                    model="grok-test", progress=calls.append)
         assert len(calls) == 1, f"expected no retries, model was called {len(calls)}x"
-        for s in sb2["scenes"]:
-            assert GUARD in s["image_prompt"], f"scene {s['scene_number']} lost the guardrail"
+        # scene 2 of this fixture arrives WITHOUT the clause; _compose must leave
+        # it that way rather than injecting it (scene 1 echoes it on its own, which
+        # is the model's business, not ours)
+        assert GUARD not in sb2["scenes"][1]["image_prompt"], \
+            "guardrail was baked into the JSON again; it belongs in the prompt builder"
         validate(sb2)
+
+        # 3. ...and the builder is what actually attaches it, for ANY storyboard,
+        # including one that never went through this composer.
+        import build_refs, guardrail as _g
+        foreign = {"scene_number": 1, "image_prompt": "a rooftop at night",
+                   "negative_prompt": "", "story": "s", "name": "n"}
+        wf = build_refs.workflow(foreign, "a.png", None, "empty", 1280, 720, 7000,
+                                  "clean", "WIDE SHOT.", "tier wording")
+        built = wf["11"]["inputs"]["prompt"]
+        assert _g.PINNED in built, "prompt builder did not attach the pinned clause"
+        assert "tier wording" in built, "prompt builder dropped the tier wording"
+        assert built.count("No nudity") == 1, "guardrail attached more than once"
 
         # 3. fenced ```json output still parses
         httpx.stream = queued(["```json\n" + json.dumps({"scenes": good}) + "\n```"])
@@ -699,10 +698,10 @@ def demo():
         assert found, f"expected the real template at {TEMPLATE_JSON}"
 
         leaked_guardrail_sb = _compose(SONG, "pg13", GUARD, "note", LYRICS, good, 2, 8.0)
-        leaked_guardrail_sb["global_guardrail"] = real_exemplar["global_guardrail"]
+        leaked_guardrail_sb["scenes"][0]["image_prompt"] += " " + real_exemplar["global_guardrail"]
         try:
             validate(leaked_guardrail_sb, real_exemplar)
-            raise AssertionError("validate accepted the exemplar's guardrail as global_guardrail")
+            raise AssertionError("validate accepted the exemplar's guardrail inside a scene")
         except ValueError as e:
             assert "exemplar" in str(e)
 

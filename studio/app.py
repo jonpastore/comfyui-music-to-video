@@ -213,7 +213,8 @@ def h_refs(args, progress):
     song = db.one("SELECT * FROM songs WHERE id=?", sid)
     sb = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", sid, tier)
     results = pipeline.gen_refs(song["slug"], tier, sb["json_path"], song["anchor_path"],
-                                 song["mp3_path"], progress, limit=args.get("limit"))
+                                 song["mp3_path"], progress, limit=args.get("limit"),
+                                 guard=tiers.compose_guardrail(tier))
     now = time.time()
     for r in results:
         db.run("""INSERT OR IGNORE INTO refs (song_id, tier, clip_idx, path, seed, approved, created)

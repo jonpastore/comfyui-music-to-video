@@ -82,7 +82,6 @@ def build_scenes(sections, profile, version, dur, target):
 
     locs, pals = profile["locations"], profile["palettes"]
     char = profile["character_base"].replace("{outfit}", profile["outfit"][version])
-    guard = profile["guardrail"][version]
     total_w = sum(weights)
 
     scenes, n = [], 0
@@ -124,10 +123,14 @@ def build_scenes(sections, profile, version, dur, target):
                 "camera": cam,
                 "motion": motion,
                 "lighting": pal,
+                # No guardrail here: build_refs.py/build_song.py attach it when
+                # they build the prompt, so it applies to every storyboard rather
+                # than only the ones this script wrote. Keeping it out also stops
+                # a 40-word clause being duplicated across 20-50 scenes.
                 "image_prompt": (
                     f"{mood} {char}. {profile['world']}, {pal}. "
                     f"Scene: {story} Camera: {cam}. Motion context: {motion}. "
-                    f"Lighting: {pal}. {guard} {profile['render_tail']}"),
+                    f"Lighting: {pal}. {profile['render_tail']}"),
                 "video_motion_prompt": f"{motion}; {cam}",
                 "negative_prompt": profile["negative_prompt"],
             })
@@ -143,6 +146,9 @@ def to_md(sb):
          f"**Character:** `{sb['character_reference']}`", "",
          f"**Album world:** `{sb['album_world_reference']}`", "",
          "## Global negative prompt", "", "```text", sb["global_negative_prompt"], "```", "",
+         "_Content guardrail is applied in code by `build_refs.py` / "
+         "`build_song.py` when the prompt is built (see `guardrail.py`). It is "
+         "deliberately absent from this file, which may be third-party generated._", "",
          "## Scenes", ""]
     for s in sb["scenes"]:
         L += [f"### Scene {s['scene_number']} — {s['name']}  ({s['cue']}, {s['energy']})",
@@ -212,7 +218,6 @@ def main():
             "character_reference": profile["character_base"].replace(
                 "{outfit}", profile["outfit"][version]),
             "album_world_reference": profile["world"],
-            "global_guardrail": profile["guardrail"][version],
             "global_negative_prompt": profile["negative_prompt"],
             "scenes": scenes,
         }

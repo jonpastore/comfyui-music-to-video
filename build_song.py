@@ -16,6 +16,9 @@ usage:
 """
 import argparse, json, math, os, re, subprocess, sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import guardrail  # noqa: E402  (applied here, NOT stored in the storyboard)
+
 FPS = 16.0
 LEN = 77                 # WAN 2.2 S2V chunk; needs >= 73
 CHUNK = LEN / FPS        # 4.8125s
@@ -161,9 +164,12 @@ def allocate(scenes, nclips):
     return counts
 
 
-def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guardrail):
+def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard):
+    """Same rule as build_refs.workflow: the pinned clause is attached HERE, at
+    the point the prompt is built, not read out of the storyboard JSON."""
     motion = scene.get("video_motion_prompt") or scene.get("motion", "")
-    pos = f"{shot_directive(scene, i)} {char_lock} {world_lock} Motion: {motion} Camera: {scene.get('camera','')} Lighting: {scene.get('lighting','')} {guardrail}"
+    pos = f"{shot_directive(scene, i)} {char_lock} {world_lock} Motion: {motion} Camera: {scene.get('camera','')} Lighting: {scene.get('lighting','')}"
+    pos = guardrail.build_prompt(pos, guard, f"scene {i}")
     neg = scene.get("negative_prompt", "")
     start = round(i * CHUNK, 4)
     return {
