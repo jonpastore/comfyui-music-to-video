@@ -141,12 +141,20 @@
 <section class="card">
   <h2>Reference images</h2>
   <form method="post" action="/songs/{{ song.id }}/refs">
+    {% if storyboards %}
     <fieldset>
       <legend>Tiers (select one or more -- each yields an independent set)</legend>
-      {% for t in tiers %}<label><input type="checkbox" name="tier" value="{{ t.name }}"> {{ t.name }}</label>{% endfor %}
+      {# only tiers that HAVE a storyboard: there is nothing to render images
+         from without one, and offering the rest just moves the failure #}
+      {% for t in storyboards %}
+      <label class="check"><input type="checkbox" name="tier" value="{{ t }}"> {{ t }}</label>
+      {% endfor %}
     </fieldset>
     <label>Limit (0 = all) <input type="number" name="limit" value="0" min="0"></label>
     <button type="submit">Generate refs</button>
+    {% else %}
+    <p class="empty">No storyboard yet -- generate one above and its tier appears here.</p>
+    {% endif %}
   </form>
 </section>
 
@@ -227,16 +235,17 @@
   <div class="table-scroll">
     <table class="list">
       <thead><tr><th>ID</th><th>Kind</th><th>Status</th><th>Progress</th>
-                 <th>Start</th><th>End</th><th>Exec</th><th></th></tr></thead>
+                 <th class="num">Start</th><th class="num">End</th><th class="num">Exec</th>
+                 <th></th></tr></thead>
       <tbody>
       {% for j in song_jobs %}
         <tr>
           <td>{{ j.id }}</td><td>{{ j.kind }}</td>
           <td class="status-{{ j.status }}">{{ j.status }}</td>
           <td class="truncate">{{ j.progress or "" }}</td>
-          <td class="nowrap">{{ j.started | clock }}</td>
-          <td class="nowrap">{{ j.finished | clock }}</td>
-          <td class="nowrap">{{ (j.finished - j.started) | hms if j.started and j.finished else "" }}</td>
+          <td class="nowrap num">{{ j.started | clock }}</td>
+          <td class="nowrap num">{{ j.finished | clock }}</td>
+          <td class="nowrap num">{{ (j.finished - j.started) | hms if j.started and j.finished else "" }}</td>
           <td>
             {% if j.status in ("queued", "running") %}
             <form method="post" action="/jobs/{{ j.id }}/cancel" style="display:inline">

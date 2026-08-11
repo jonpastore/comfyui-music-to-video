@@ -483,6 +483,32 @@ def test_refs_tier_without_chosen_anchor_400_names_tier_and_enqueues_nothing():
         assert len(jobs.recent(1000)) == before
 
 
+def test_refs_offers_only_tiers_with_a_storyboard_and_one_review_per_tier():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Refs Gate Song")
+        sid = song["id"]
+
+        page = client.get(f"/songs/{sid}").text
+        assert "No storyboard yet" in page
+        assert 'name="tier" value="pg13"' not in page, "offered a tier with nothing to render from"
+
+        client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13"})
+        wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC",
+                        sid)["id"])
+        page2 = client.get(f"/songs/{sid}").text
+        assert 'class="check"><input type="checkbox" name="tier" value="pg13"' in page2
+        assert 'value="r"' not in page2.split("Reference images")[1].split("</section>")[0]
+
+        # running the check twice must not list the tier twice
+        for note in ("first", "second"):
+            db.run("""INSERT INTO assets (song_id, kind, path, meta_json, created)
+                      VALUES (?,'review',?,?,?)""",
+                   sid, f"/fake/{note}.jpg", '{"tier": "pg13", "flagged": []}', time.time())
+        page3 = client.get(f"/songs/{sid}").text
+        assert page3.count("nothing flagged") == 1, "the same tier was listed twice"
+        assert "second.jpg" in page3, "showed the older review, not the newest"
+
+
 def test_body_consistency_wording_reaches_every_reference_prompt(patch_stub):
     """Colouring stated once at the top of a prompt does not hold below the
     waist -- pale limbs, and one glute black and the other white. The album's
@@ -604,7 +630,8 @@ def test_song_page_layout_rebuild():
         assert "highest available" in page
         assert "view reference image gallery" in page or not page.count("approve refs")
         assert 'class="table-scroll"' in page             # jobs scroll, not stretch
-        assert "<th>Start</th>" in page and "<th>Exec</th>" in page
+        # right-aligned so the times and durations line up down the column
+        assert '<th class="num">Start</th>' in page and '<th class="num">Exec</th>' in page
         # delete needs the word typed; a hidden field is not a confirmation
         assert 'name="confirm" placeholder="DELETE"' in page
         assert '<input type="hidden" name="confirm" value="DELETE">' not in page

@@ -84,11 +84,11 @@
 
   <h3>Render set</h3>
   <form method="post" action="/playlists/{{ d.playlist.id }}/render">
-    <label><input type="checkbox" name="include_videos" value="true"> Include videos</label>
+    <label class="check"><input type="checkbox" name="include_videos" value="true"> Include videos</label>
     {% if d.video_tiers %}
     <span class="tiers">
       {% for t in d.video_tiers %}
-      <label><input type="checkbox" name="tier" value="{{ t }}"> {{ t }}</label>
+      <label class="check"><input type="checkbox" name="tier" value="{{ t }}"> {{ t }}</label>
       {% endfor %}
     </span>
     {% else %}

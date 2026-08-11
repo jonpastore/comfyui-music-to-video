@@ -315,3 +315,19 @@ button.linkish {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* A checkbox belongs beside its text. The base label is a column (caption over
+   its input), which stacked every tier box above its own name and pushed it to
+   the far side of the row. */
+label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text);
+  margin-bottom: 0.35rem;
+}
+label.check input { margin: 0; flex: none; }
+
+/* Times and durations line up on the right so they can be compared down the
+   column; Exec especially, which is what you scan for. */
+table.list th.num, table.list td.num { text-align: right; font-variant-numeric: tabular-nums; }

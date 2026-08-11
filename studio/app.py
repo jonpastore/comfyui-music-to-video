@@ -606,11 +606,18 @@ def song_page(request: Request, id: int):
     # point, waiting for all 41 to be approved defeats it.
     approved_tiers = sorted({r["tier"] for r in
                              db.q("SELECT DISTINCT tier FROM refs WHERE song_id=? AND approved=1", id)})
-    reviews = []
-    for a in db.q("SELECT * FROM assets WHERE song_id=? AND kind='review' ORDER BY id DESC LIMIT 4", id):
+    # newest review PER TIER. Listing the last N assets showed the same tier
+    # twice whenever the check was run more than once, which reads as a bug in
+    # the review rather than a second run of it.
+    reviews, seen_tiers = [], set()
+    for a in db.q("SELECT * FROM assets WHERE song_id=? AND kind='review' ORDER BY id DESC", id):
         meta = json.loads(a["meta_json"] or "{}")
-        reviews.append({"tier": meta.get("tier", "?"), "flagged": meta.get("flagged", []),
-                        "path": a["path"]})
+        tier = meta.get("tier", "?")
+        if tier in seen_tiers:
+            continue
+        seen_tiers.add(tier)
+        reviews.append({"tier": tier, "flagged": meta.get("flagged", []),
+                        "path": a["path"], "backend": meta.get("backend", "")})
     return templates.TemplateResponse(request, "song.html", {
         "song": song, "tiers": tiers.all_tiers(), "storyboards": storyboards,
         "approved_tiers": approved_tiers, "reviews": reviews,
