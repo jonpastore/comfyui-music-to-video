@@ -491,6 +491,18 @@ def test_transcribe_frees_comfyui_vram_first():
         assert len(free_vram_calls) == n + 1
 
 
+def test_empty_playlist_render_refused_at_the_route():
+    with TestClient(appmod.app) as client:
+        r = client.post("/playlists", data={"name": "Empty Set", "kind": "playlist"})
+        assert r.status_code in (200, 303), r.text
+        pl = db.one("SELECT * FROM playlists WHERE name='Empty Set'")
+        before = len(jobs.recent(1000))
+        r2 = client.post(f"/playlists/{pl['id']}/render")
+        # used to enqueue a job whose only outcome was to fail inside mixer
+        assert r2.status_code == 400, r2.text
+        assert len(jobs.recent(1000)) == before
+
+
 def test_jobs_page_refresh_interval_follows_the_queue_and_the_control():
     with TestClient(appmod.app) as client:
         # idle queue -> the slow poll

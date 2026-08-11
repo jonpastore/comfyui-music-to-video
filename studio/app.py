@@ -903,6 +903,10 @@ def reorder_playlist(id: int, order: str = Form(...)):
 def render_playlist(id: int):
     get_playlist_or_404(id)
     items = db.q("""SELECT pi.* FROM playlist_items pi WHERE pi.playlist_id=? ORDER BY pi.position""", id)
+    if not items:
+        # mixer.render_set raises on an empty list, so this used to enqueue a
+        # job whose only purpose was to fail. Refuse where the user can see it.
+        raise HTTPException(400, "this playlist has no songs yet -- add one first")
     build_items = []
     for it in items:
         render_row = db.one("SELECT * FROM renders WHERE song_id=? AND tier=? ORDER BY id DESC LIMIT 1",
