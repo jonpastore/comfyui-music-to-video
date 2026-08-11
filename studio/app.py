@@ -322,8 +322,18 @@ def h_storyboard(args, progress):
     sid, tier = args["song_id"], args["tier"]
     song = db.one("SELECT * FROM songs WHERE id=?", sid)
     guardrail = tiers.compose_guardrail(tier)
+    # The style note used to come from a per-song style-guide upload. That UI
+    # moved to the album, so it comes from the ALBUM now: its theme, its world
+    # and its render style are exactly what "the look of this release" means.
+    # Without this the note was silently EMPTY for every storyboard generated
+    # after the move -- the upload form was gone but nothing replaced it.
+    # A legacy per-song asset still wins, so songs set up before the move keep
+    # the note they were given.
     style_row = db.one("SELECT * FROM assets WHERE song_id=? AND kind='style' ORDER BY id DESC LIMIT 1", sid)
-    style_note = db.jset(style_row).get("note", "") if style_row else ""
+    legacy_note = db.jset(style_row).get("note", "") if style_row else ""
+    prof = album_profile(song["album"] or "")
+    style_note = legacy_note or " ".join(
+        p for p in (prof["style_text"], prof["world"], prof["render_tail"]) if p)
     # `explicit` is a fact about the LYRICS, not a rendering instruction -- the
     # tier picked for this storyboard already carries the tone/wardrobe choice.
     # Passing both to the model is exactly the conflation this rework removes.
@@ -950,7 +960,7 @@ ALBUM_FIELDS = {
     "style_text": (
         "Overarching theme",
         "The look and mood of the whole album, in a sentence or two.",
-        "Not sent to the renderer. Context for you and for storyboard writing."),
+        "The first thing the storyboard model is told about this release."),
     "identity": (
         "Character identity",
         "Head, face and hair come from the identity image; keep that identity exactly.",
@@ -972,12 +982,14 @@ ALBUM_FIELDS = {
     "world": (
         "World",
         "The recurring places this album's videos happen in.",
-        "List real, distinct locations. Scenes rotate through them, which is what stops "
-        "every frame being the same corridor in the same purple light."),
+        "Goes to the storyboard model as this album's world. List real, distinct "
+        "locations: scenes rotate through them, and that is what stops every frame "
+        "being the same corridor in the same purple light."),
     "render_tail": (
         "Render style",
         "photorealistic cinematic frame, premium music video still, high detail, 16:9",
-        "Appended to every image prompt. Medium, quality and aspect only -- no subject."),
+        "Part of the look handed to the storyboard model, which writes it into each "
+        "scene's image prompt. Medium, quality and aspect only -- no subject."),
 }
 
 # Fields the wand can draft from a look at the album's anchor image.

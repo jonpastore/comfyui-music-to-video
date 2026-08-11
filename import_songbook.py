@@ -92,15 +92,19 @@ class Studio:
     def __init__(self, base, apply_):
         self.c = httpx.Client(base_url=base, timeout=120, follow_redirects=True)
         self.apply = apply_
-        self.songs = {}       # lowercased title -> id
+        self.songs = {}       # (album, lowercased title) -> id
         self.playlists = {}   # name -> id
 
     def load(self):
-        # the app has no read API, so identity comes from the pages it renders
-        for m in re.finditer(r'href="/songs/(\d+)">([^<]+)</a>', self.c.get("/").text):
-            self.songs[m.group(2).strip().lower()] = int(m.group(1))
-        for m in re.finditer(r'/playlists/(\d+)/profile', self.c.get("/playlists").text):
-            pass
+        # the app has no read API, so identity comes from the pages it renders.
+        # The library lists album and title in the same row.
+        for row in re.finditer(r"<tr>(.*?)</tr>", self.c.get("/").text, re.S):
+            m = re.search(r'href="/songs/(\d+)">([^<]+)</a>', row.group(1))
+            if not m:
+                continue
+            cells = re.findall(r"<td[^>]*>(.*?)</td>", row.group(1), re.S)
+            album = re.sub(r"<[^>]+>", "", cells[1]).strip() if len(cells) > 1 else ""
+            self.songs[(album, m.group(2).strip().lower())] = int(m.group(1))
         page = self.c.get("/playlists").text
         for m in re.finditer(r'<strong>([^<]+)</strong>.*?/playlists/(\d+)/', page, re.S):
             self.playlists.setdefault(m.group(1).strip(), int(m.group(2)))
@@ -116,7 +120,7 @@ class Studio:
         return self.playlists.get(name)
 
     def song(self, album, title, mp3):
-        got = self.songs.get(title.lower())
+        got = self.songs.get((album, title.lower()))
         if got:
             return got, False
         if not mp3:
@@ -129,7 +133,7 @@ class Studio:
             self.c.post("/songs", data={"title": title, "album": album, "genre": ""},
                         files={"mp3": (os.path.basename(mp3), f, "audio/mpeg")})
         self.load()
-        return self.songs.get(title.lower()), True
+        return self.songs.get((album, title.lower())), True
 
 
 def main():

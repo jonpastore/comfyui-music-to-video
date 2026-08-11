@@ -482,6 +482,36 @@ def test_refs_tier_without_chosen_anchor_400_names_tier_and_enqueues_nothing():
         assert len(jobs.recent(1000)) == before
 
 
+def test_storyboard_style_note_comes_from_the_album():
+    """The per-song style-guide upload moved to the album. Nothing may end up
+    sending the model an EMPTY style note because the form moved."""
+    from conftest import grok_calls
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Album Look Song", album="Look Album")
+        sid = song["id"]
+        pl = db.run("INSERT INTO playlists (name, kind, created) VALUES (?,'playlist',?)",
+                    "Look Album", time.time())
+        client.post(f"/playlists/{pl}/profile",
+                    data={"style_text": "grimy neon", "world": "flooded car parks",
+                          "render_tail": "16:9 film still"})
+
+        grok_calls.clear()
+        client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13"})
+        wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC",
+                        sid)["id"])
+        note = grok_calls["args"]["style_note"]
+        assert "grimy neon" in note and "flooded car parks" in note and "16:9 film still" in note, note
+
+        # a legacy per-song style asset still wins for songs set up before the move
+        db.run("""INSERT INTO assets (song_id, kind, path, meta_json, created)
+                  VALUES (?,'style','/fake/s.png',?,?)""", sid, '{"note": "the old note"}', time.time())
+        grok_calls.clear()
+        client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13"})
+        wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC",
+                        sid)["id"])
+        assert grok_calls["args"]["style_note"] == "the old note"
+
+
 def test_audio_edit_from_a_prompt_is_recorded_with_its_provenance():
     from conftest import edit_prompt_calls
     with TestClient(appmod.app) as client:
