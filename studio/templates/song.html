@@ -19,35 +19,38 @@
 {% endif %}
 {% endif %}
 
-<section class="card">
-  <h2>Lyrics</h2>
-  <form method="post" action="/songs/{{ song.id }}/lyrics">
-    <textarea name="lyrics_text" rows="10">{{ song.lyrics or "" }}</textarea>
-    <button type="submit">Save lyrics</button>
-  </form>
-</section>
+<div class="row-2col">
+  <section class="card">
+    <h2>Lyrics</h2>
+    <form method="post" action="/songs/{{ song.id }}/lyrics" class="stack-form">
+      <textarea name="lyrics_text" rows="16">{{ song.lyrics or "" }}</textarea>
+      <button type="submit">Save lyrics</button>
+    </form>
+  </section>
 
-<section class="card">
-  <h2>Style prompt</h2>
-  <p class="muted">What the track was generated from (Suno / ChatGPT). Saved with
-    the song; not sent to the storyboard model or the renderer.</p>
-  <form method="post" action="/songs/{{ song.id }}/style-text">
-    <textarea name="style_text" rows="8">{{ song.style_text or "" }}</textarea>
-    <button type="submit">Save style prompt</button>
-  </form>
-</section>
-
+  <section class="card">
+    <h2>Style prompt</h2>
+    <p class="muted">What the track was generated from (Suno / ChatGPT). Saved with the
+      song; not sent to the storyboard model or the renderer.</p>
+    <form method="post" action="/songs/{{ song.id }}/style-text" class="stack-form">
+      <textarea name="style_text" rows="16">{{ song.style_text or "" }}</textarea>
+      <button type="submit">Save style prompt</button>
+    </form>
+  </section>
+</div>
 
 <section class="card">
   <h2>Edit audio</h2>
   <p class="meta">Current track: <code>{{ song.mp3_path.split('/')[-1] if song.mp3_path else "none" }}</code>
     {% if audio_duration %}&middot; {{ "%.1f"|format(audio_duration) }}s{% endif %}</p>
-  <form method="post" action="/songs/{{ song.id }}/audio">
-    <label>Trim start (s) <input type="number" step="0.1" min="0" name="trim_start" value="0"></label>
-    <label>Trim end (s, blank = end) <input type="number" step="0.1" min="0" name="trim_end"></label>
-    <label>Gain (dB) <input type="number" step="0.5" name="gain_db" value="0" min="-30" max="30"></label>
-    <label>Fade in (s) <input type="number" step="0.1" min="0" name="fade_in" value="0"></label>
-    <label>Fade out (s) <input type="number" step="0.1" min="0" name="fade_out" value="0"></label>
+  <form method="post" action="/songs/{{ song.id }}/audio" class="stack-form">
+    <div class="field-row">
+      <label>Trim start (s) <input type="number" step="0.1" min="0" name="trim_start" value="0"></label>
+      <label>Trim end (s, blank = end) <input type="number" step="0.1" min="0" name="trim_end"></label>
+      <label>Gain (dB) <input type="number" step="0.5" name="gain_db" value="0" min="-30" max="30"></label>
+      <label>Fade in (s) <input type="number" step="0.1" min="0" name="fade_in" value="0"></label>
+      <label>Fade out (s) <input type="number" step="0.1" min="0" name="fade_out" value="0"></label>
+    </div>
     <button type="submit">Create edit</button>
   </form>
 
@@ -87,19 +90,23 @@
 
 <section class="card">
   <h2>Storyboard</h2>
-  <form method="post" action="/songs/{{ song.id }}/storyboard">
-    <label>Tier
-      <select name="tier">
-        {% for t in tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
-      </select>
-    </label>
-    <label>Model
-      <select name="model">
-        <option value="">(default)</option>
-        {% for m in models %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
-      </select>
-    </label>
-    <label>Scene seconds <input type="number" step="0.5" name="scene_seconds" value="4.0"></label>
+  <form method="post" action="/songs/{{ song.id }}/storyboard" class="stack-form">
+    <div class="field-row">
+      <label>Tier
+        <select name="tier">
+          {% for t in tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Model
+        <select name="model">
+          <option value="">(highest available{% if best_model %}: {{ best_model }}{% endif %})</option>
+          {% for m in models %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <p class="hint">Scene count and pacing are the model's call -- it has the lyrics and the
+      track length. A scene longer than one 4.8125s clip is cut into consecutive clips and
+      merged automatically, so nothing has to be trimmed to fit.</p>
     <button type="submit">Generate storyboard</button>
   </form>
 
@@ -109,7 +116,7 @@
     <li>
       <a href="/songs/{{ song.id }}/storyboard/{{ t }}">{{ t }}</a>
       ({{ sb.scene_count or "?" }} scenes)
-      &middot; <a href="/songs/{{ song.id }}/approve/{{ t }}">approve refs</a>
+      &middot; <a href="/songs/{{ song.id }}/approve/{{ t }}">view reference image gallery &mdash; approve reference images</a>
     </li>
     {% endfor %}
   </ul>
@@ -145,7 +152,20 @@
     {{ rv.tier }}: {% if rv.flagged %}<strong>{{ rv.flagged|length }} flagged</strong> --
       {% for f in rv.flagged %}clip {{ f.clip }} ({{ f.issue }}){% if not loop.last %}, {% endif %}{% endfor %}
     {% else %}nothing flagged{% endif %}
-    &middot; <a href="{{ media_url(rv.path) }}">contact sheet</a>
+    &middot; <button type="button" class="linkish"
+        onclick="document.getElementById('sheet-{{ loop.index }}').showModal()">contact sheet</button>
+  </p>
+  <dialog class="sheet-modal" id="sheet-{{ loop.index }}">
+    <div class="modal-bar">
+      <strong>{{ rv.tier }} contact sheet</strong>
+      <span>
+        <a href="{{ media_url(rv.path) }}" download>download</a>
+        <button type="button" onclick="this.closest('dialog').close()">Close</button>
+      </span>
+    </div>
+    <img src="{{ media_url(rv.path) }}" alt="{{ rv.tier }} contact sheet">
+  </dialog>
+  <p>
   </p>
   {% endfor %}
 
@@ -161,13 +181,17 @@
     <button type="submit">Render clips</button>
   </form>
 
-  <form method="post" action="/songs/{{ song.id }}/render">
-    <label>Tier
-      <select name="tier">
-        {% for t in tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
-      </select>
-    </label>
-    <label>Crossfade secs <input type="number" step="0.1" name="fade" value="0"></label>
+  <form method="post" action="/songs/{{ song.id }}/render" class="stack-form">
+    <div class="field-row">
+      <label>Tier
+        <select name="tier">
+          {% for t in render_tiers %}<option value="{{ t }}">{{ t }}</option>
+          {% else %}<option value="" disabled selected>no clips rendered yet</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Crossfade secs <input type="number" step="0.1" name="fade" value="0"></label>
+    </div>
     <button type="submit">Assemble &amp; mux</button>
   </form>
 
@@ -185,23 +209,31 @@
   {% if not song_jobs %}
   <p class="empty">None yet.</p>
   {% else %}
-  <table class="list">
-    <thead><tr><th>ID</th><th>Kind</th><th>Status</th><th>Progress</th><th></th></tr></thead>
-    <tbody>
-    {% for j in song_jobs %}
-      <tr>
-        <td>{{ j.id }}</td><td>{{ j.kind }}</td><td>{{ j.status }}</td><td>{{ j.progress or "" }}</td>
-        <td>
-          {% if j.status in ("queued", "running") %}
-          <form method="post" action="/jobs/{{ j.id }}/cancel" style="display:inline">
-            <button type="submit">Cancel</button>
-          </form>
-          {% endif %}
-        </td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-scroll">
+    <table class="list">
+      <thead><tr><th>ID</th><th>Kind</th><th>Status</th><th>Progress</th>
+                 <th>Start</th><th>End</th><th>Exec</th><th></th></tr></thead>
+      <tbody>
+      {% for j in song_jobs %}
+        <tr>
+          <td>{{ j.id }}</td><td>{{ j.kind }}</td>
+          <td class="status-{{ j.status }}">{{ j.status }}</td>
+          <td class="truncate">{{ j.progress or "" }}</td>
+          <td class="nowrap">{{ j.started | clock }}</td>
+          <td class="nowrap">{{ j.finished | clock }}</td>
+          <td class="nowrap">{{ (j.finished - j.started) | hms if j.started and j.finished else "" }}</td>
+          <td>
+            {% if j.status in ("queued", "running") %}
+            <form method="post" action="/jobs/{{ j.id }}/cancel" style="display:inline">
+              <button type="submit">Cancel</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% endif %}
 </section>
 
@@ -209,8 +241,10 @@
   <h2>Delete this song</h2>
   <p class="hint">Removes the song, its storyboards, refs, clips and renders --
     row and files -- permanently. Anchors belong to the album/playlist and are not touched.</p>
-  <form method="post" action="/songs/{{ song.id }}/delete" class="delete-song">
-    <input type="hidden" name="confirm" value="DELETE">
+  <form method="post" action="/songs/{{ song.id }}/delete" class="delete-song stack-form">
+    <label>Type <code>DELETE</code> to confirm
+      <input type="text" name="confirm" placeholder="DELETE" autocomplete="off" required>
+    </label>
     <button type="submit">Delete song</button>
   </form>
 </section>

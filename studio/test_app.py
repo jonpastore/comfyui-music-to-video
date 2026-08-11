@@ -482,6 +482,42 @@ def test_refs_tier_without_chosen_anchor_400_names_tier_and_enqueues_nothing():
         assert len(jobs.recent(1000)) == before
 
 
+def test_song_page_layout_rebuild():
+    """The annotated batch: paired cards, one-row fields, model default, job
+    timings, a real delete confirmation, and no scene-seconds knob."""
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Layout Song")
+        sid = song["id"]
+        page = client.get(f"/songs/{sid}").text
+
+        assert 'class="row-2col"' in page                 # lyrics beside style prompt
+        assert page.count('class="stack-form"') >= 3      # save buttons below their boxes
+        assert 'class="field-row"' in page                # audio fields on one row
+        assert 'name="scene_seconds"' not in page         # the model paces itself now
+        assert "highest available" in page
+        assert "view reference image gallery" in page or not page.count("approve refs")
+        assert 'class="table-scroll"' in page             # jobs scroll, not stretch
+        assert "<th>Start</th>" in page and "<th>Exec</th>" in page
+        # delete needs the word typed; a hidden field is not a confirmation
+        assert 'name="confirm" placeholder="DELETE"' in page
+        assert '<input type="hidden" name="confirm" value="DELETE">' not in page
+
+        # assembling is offered only for tiers that actually have clips
+        assert "no clips rendered yet" in page
+        db.run("""INSERT INTO clips (song_id, tier, clip_idx, path, status)
+                  VALUES (?,'pg13',0,'/fake/c0.mp4','done')""", sid)
+        page2 = client.get(f"/songs/{sid}").text
+        assert "no clips rendered yet" not in page2
+        assert '<option value="pg13">pg13</option>' in page2
+
+        # timings render as clock times, not epochs
+        db.run("""INSERT INTO jobs (kind, args_json, status, song_id, created, started, finished)
+                  VALUES ('refs','{}','done',?,?,?,?)""", sid, 1000.0, 1000.0, 1123.0)
+        page3 = client.get(f"/songs/{sid}").text
+        assert "1123" not in page3, "raw epoch leaked into the jobs table"
+        assert "2:03" in page3, "exec time (123s) not shown as m:ss"
+
+
 def test_builtin_tiers_exist_from_startup_not_from_visiting_a_page():
     """A fresh database used to have an empty tiers table until some page
     called all_tiers(), so every tier-validating route 400'd 'no such tier'."""

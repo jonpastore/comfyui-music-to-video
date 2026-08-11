@@ -304,3 +304,14 @@ dialog.sheet-modal .modal-bar {
 /* htmx toggles .htmx-request on the element named by hx-indicator */
 .htmx-indicator { display: none; }
 .htmx-indicator.htmx-request { display: inline; }
+
+/* A button that reads as a link (contact sheet opens a dialog, not a page). */
+button.linkish {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

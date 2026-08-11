@@ -66,8 +66,16 @@ def _classify_sheet(sheet_path, note="", model=None, progress=None):
             "cells_seen": 2}
 
 
+_stub("vision",
+      classify_sheet=_classify_sheet,
+      describe_anchor=lambda image_path, field, model=None, progress=None: (
+          describe_calls.append((image_path, field))
+          or f"drafted {field} from the anchor"),
+      available=lambda: ("local", "stub"))
+
 _stub("grok",
-      list_models=lambda: ["grok-x"],
+      list_models=lambda: ["grok-x", "grok-2"],
+      best_model=lambda models: max(models) if models else None,
       generate_storyboard=_generate_storyboard,
       classify_sheet=_classify_sheet,
       describe_anchor=lambda image_path, field, model=None, progress=None: (

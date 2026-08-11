@@ -19,6 +19,7 @@ from build_song import CHUNK
 import jobs
 import pipeline
 import grok
+import vision
 import lyrics
 import mixer
 
@@ -78,6 +79,10 @@ def hms(secs):
 templates.env.filters["hms"] = hms
 templates.env.filters["ts"] = lambda t: (
     time.strftime("%Y-%m-%d", time.localtime(t)) if t else "date unknown")
+# time of day for job rows: a date is useless for telling this render from the
+# one before it, which is the whole point of showing start and end
+templates.env.filters["clock"] = lambda t: (
+    time.strftime("%H:%M:%S", time.localtime(t)) if t else "")
 
 
 @app.middleware("http")
@@ -422,7 +427,8 @@ def h_classify(args, progress):
                 shutil.copy(r["path"], os.path.join(staged, f"clip_{r['clip_idx']:03d}.png"))
         progress(f"contact sheet: {len(os.listdir(staged))} approved frames")
         pipeline.contact_sheet(staged, sheet)
-    verdict = grok.classify_sheet(sheet, note=f"{song['title']} ({tier} tier)", progress=progress)
+    verdict = vision.classify_sheet(sheet, note=f"{song['title']} ({tier} tier)",
+                                    progress=progress)
     verdict["sheet"] = sheet
     db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
            sid, "review", sheet, json.dumps({"tier": tier, **verdict}), time.time())
@@ -548,6 +554,12 @@ def song_page(request: Request, id: int):
         models = grok.list_models()
     except Exception:
         models = []
+    # what "(highest available)" will actually pick, named in the dropdown so
+    # the default is not a mystery
+    best = grok.best_model(models) if models else None
+    # assembling needs CLIPS, not a tier that merely exists
+    render_tiers = sorted({r["tier"] for r in
+                           db.q("SELECT DISTINCT tier FROM clips WHERE song_id=? AND status='done'", id)})
     audio_duration = None
     if song["mp3_path"]:
         try:
@@ -590,6 +602,7 @@ def song_page(request: Request, id: int):
         "clips_ready_tiers": clips_ready_tiers,
         "renders": renders, "song_jobs": song_jobs, "active_job": active_job, "models": models,
         "audio_duration": audio_duration, "audio_edits": audio_edits, "audio_original": audio_original,
+        "best_model": best, "render_tiers": render_tiers,
     })
 
 
@@ -1077,7 +1090,7 @@ def describe_album_field(request: Request, id: int, field: str = Form(...)):
     if not anchor:
         raise HTTPException(400, f"no anchor for album '{p['name']}' yet -- generate one first")
     try:
-        text = grok.describe_anchor(anchor["path"], field)
+        text = vision.describe_anchor(anchor["path"], field)
     except Exception as e:
         raise HTTPException(502, f"could not describe the anchor: {e}") from None
     label, _default, hint = ALBUM_FIELDS[field]

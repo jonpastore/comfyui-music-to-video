@@ -58,6 +58,10 @@ WorkingDirectory=%h/meowp-studio/app
 Environment=STUDIO_SCRIPTS=%h/meowp-studio/scripts
 Environment=STUDIO_DATA=%h/meowp-studio/data
 Environment=COMFY_URL=http://127.0.0.1:8188
+# Vision: studio/vision.py prefers a local VL model on the litellm
+# gateway and only falls back to xAI when there is none. Set
+# STUDIO_VISION_MODEL to pin one instead of auto-detecting.
+Environment=LITELLM_BASE=http://127.0.0.1:4000/v1
 Environment=COMFY_INPUT=%h/ComfyUI/input
 Environment=COMFY_OUTPUT=%h/ComfyUI/output
 # Album profile: character, wardrobe, world, locations. The scripts carry no

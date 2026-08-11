@@ -1,0 +1,298 @@
+"""Ask questions about an image. Local model first, xAI only as a fallback.
+
+Two jobs in this pipeline need eyes:
+
+  classify_sheet  -- review a contact sheet of the frames that will be rendered.
+                     Runs per song, on 40-80 frames, repeatedly. Cost matters,
+                     so this belongs on the local fleet.
+  describe_anchor -- draft an album-profile field from the anchor. Once per
+                     album at setup. Cost does not matter.
+
+Backend choice is made per call, not at import: the local gateway comes and
+goes as models are loaded on it, and a studio that started before the model did
+must not be stuck on the paid path for the rest of its life.
+
+The local door is the litellm gateway (OpenAI-compatible). Its key lives in
+~/.config/morpheus/litellm.env, never in the repo.
+"""
+import base64
+import json
+import os
+import re
+
+import httpx
+
+import grok
+
+_FENCE = re.compile(r"^```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
+
+KEY_FILE = os.path.expanduser("~/.config/morpheus/litellm.env")
+BASE = os.environ.get("LITELLM_BASE", "")
+KEY = os.environ.get("LITELLM_KEY", "")
+# Explicit override wins; otherwise any model whose id looks like a vision
+# model is used, so loading one on the gateway is all it takes to switch over.
+MODEL = os.environ.get("STUDIO_VISION_MODEL", "")
+_VISION_HINTS = ("vl", "vision", "llava", "pixtral", "moondream", "intern")
+TIMEOUT = float(os.environ.get("STUDIO_VISION_TIMEOUT", 180))
+
+
+def _env():
+    base, key = BASE, KEY
+    try:
+        with open(KEY_FILE) as f:
+            for line in f:
+                k, _, v = line.strip().partition("=")
+                v = v.strip().strip('"').strip("'")
+                if k == "LITELLM_KEY" and not key:
+                    key = v
+                elif k == "LITELLM_BASE" and not base:
+                    base = v
+    except FileNotFoundError:
+        pass
+    return base, key
+
+
+def local_model():
+    """The local vision model id, or None. Never raises: no gateway, no key,
+    no vision model loaded and a timeout all mean the same thing to a caller."""
+    base, key = _env()
+    if not base or not key:
+        return None
+    if MODEL:
+        return MODEL
+    try:
+        r = httpx.get(f"{base}/models", headers={"Authorization": f"Bearer {key}"}, timeout=10)
+        r.raise_for_status()
+        ids = [m["id"] for m in r.json().get("data", [])]
+    except Exception:
+        return None
+    hits = [i for i in ids if any(h in i.lower() for h in _VISION_HINTS)]
+    return hits[0] if hits else None
+
+
+def available():
+    """(where, detail) for the UI and the job log."""
+    m = local_model()
+    if m:
+        return "local", f"{m} via the litellm gateway"
+    return "xai", "no local vision model; falling back to xAI (billed)"
+
+
+def _data_url(path):
+    with open(path, "rb") as f:
+        raw = f.read()
+    kind = "png" if path.lower().endswith(".png") else "jpeg"
+    return f"data:image/{kind};base64," + base64.b64encode(raw).decode()
+
+
+def _ask_local(model, image_path, system, user_text):
+    base, key = _env()
+    content = [{"type": "text", "text": user_text},
+               {"type": "image_url", "image_url": {"url": _data_url(image_path)}}]
+    messages = ([{"role": "system", "content": system}] if system else []) + \
+               [{"role": "user", "content": content}]
+    r = httpx.post(f"{base}/chat/completions",
+                   headers={"Authorization": f"Bearer {key}"},
+                   json={"model": model, "messages": messages,
+                         "response_format": {"type": "json_object"}},
+                   timeout=TIMEOUT)
+    if r.status_code >= 400:
+        raise RuntimeError(f"local vision model {model} failed ({r.status_code}): {r.text[:200]}")
+    return r.json()["choices"][0]["message"]["content"] or ""
+
+
+def ask(image_path, system, user_text, progress=None, prefer_local=True):
+    """One image + one question -> the model's raw reply text.
+
+    A local failure falls through to xAI rather than failing the job: the local
+    gateway is best-effort infrastructure, and a half-loaded model must not cost
+    someone an hour of rendering.
+    """
+    if prefer_local:
+        model = local_model()
+        if model:
+            try:
+                if progress:
+                    progress(f"vision: {model} (local)")
+                return _ask_local(model, image_path, system, user_text)
+            except Exception as e:
+                if progress:
+                    progress(f"vision: local model failed ({e}); falling back to xAI")
+    if progress:
+        progress("vision: xAI (billed)")
+    content = [{"type": "text", "text": user_text},
+               {"type": "image_url", "image_url": {"url": _data_url(image_path), "detail": "high"}}]
+    messages = ([{"role": "system", "content": system}] if system else []) + \
+               [{"role": "user", "content": content}]
+    return grok._chat(grok._resolve_model(grok.VISION_MODEL), messages, progress)
+
+
+def _json(out, what):
+    try:
+        return json.loads(_FENCE.sub("", out).strip())
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"{what} returned non-JSON: {e}") from None
+
+
+# --------------------------------------------------------------- reviewing --
+
+REVIEW_SYSTEM = (
+    "You are reviewing a contact sheet of AI-generated frames for one music video. "
+    "It is a grid of frames, each labelled 'clip N' in the top-left of its cell. "
+    "Judge only what is visible.\n\n"
+    "You have TWO jobs.\n\n"
+    "1. CONTINUITY. The same character appears in every frame and must look like the "
+    "same individual throughout. Compare the cells against each other and flag any cell "
+    "that breaks continuity: fur or skin colour that differs from the other frames "
+    "(pale or human-toned limbs on an otherwise dark-furred character is the known "
+    "failure), hair colour or length changing, eye colour changing, ears or tail "
+    "missing or changed, wardrobe changing when the other frames agree, or the "
+    "character's build changing. Say which cells are the majority and which is the odd "
+    "one out -- the flagged clip is the one that disagrees with the rest.\n\n"
+    "2. USABILITY. Flag a cell that is broken: two copies of the character, extra or "
+    "missing limbs, melted anatomy, or unreadable garbage.\n\n"
+    "Deliberate variation is NOT a fault: camera angle, distance, location, lighting "
+    "colour and pose are supposed to change between frames. A dark scene is not a fur "
+    "colour change. Only flag what a viewer would read as a different character or a "
+    "broken frame.\n\n"
+    'Answer with JSON only: {"flagged": [{"clip": <int>, "issue": "continuity"|"broken", '
+    '"reason": "<short, name the specific mismatch>"}], "cells_seen": <int>}. '
+    'An empty "flagged" list is the expected answer for a consistent sheet.'
+)
+
+
+def classify_sheet(sheet_path, note="", model=None, progress=None):
+    """Review one contact sheet. {"flagged": [...], "cells_seen": int, "backend": str}.
+
+    Advisory. It names clips to look at; it never unapproves or deletes
+    anything, because a false positive must not silently drop a third of a song.
+    """
+    where, detail = available()
+    if progress:
+        progress(f"reviewing with {detail}")
+    out = ask(sheet_path, REVIEW_SYSTEM,
+              "Review this contact sheet." + (f" Context: {note}" if note else ""),
+              progress)
+    obj = _json(out, "vision review")
+    flagged = []
+    for f in obj.get("flagged") or []:
+        if not isinstance(f, dict) or "clip" not in f:
+            continue
+        try:
+            clip = int(f["clip"])
+        except (TypeError, ValueError):
+            continue
+        flagged.append({"clip": clip, "issue": str(f.get("issue", "other"))[:20],
+                        "reason": str(f.get("reason", ""))[:200]})
+    flagged.sort(key=lambda f: f["clip"])
+    return {"flagged": flagged, "cells_seen": int(obj.get("cells_seen") or 0),
+            "backend": where}
+
+
+def describe_anchor(image_path, field, model=None, progress=None):
+    """Draft one album-profile field by looking at the anchor. See grok._DESCRIBE."""
+    if field not in grok._DESCRIBE:
+        raise ValueError(f"nothing to describe for {field!r}")
+    out = ask(image_path, None,
+              grok._DESCRIBE[field] + " This is a character reference sheet for an adult "
+              "fictional character in a music video. Answer as ONE plain sentence or two, "
+              "present tense, no preamble, no markdown, no bullet points -- the text goes "
+              'straight into an image prompt. Reply as JSON: {"text": "<the description>"}',
+              progress)
+    text = _json(out, "describe").get("text", "")
+    return " ".join(str(text).split()).strip()
+
+
+def demo():
+    import subprocess, tempfile
+
+    real_get, real_post = httpx.get, httpx.post
+
+    with tempfile.TemporaryDirectory() as d:
+        sheet = os.path.join(d, "sheet.jpg")
+        subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=gray:s=64x64",
+                        "-frames:v", "1", sheet], check=True, capture_output=True)
+
+        # --- model discovery: a vl-looking id is picked up automatically ---
+        class R:
+            status_code = 200
+
+            def __init__(self, payload):
+                self._p = payload
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return self._p
+
+        global BASE, KEY, MODEL
+        BASE, KEY, MODEL = "http://gw/v1", "k", ""
+        httpx.get = lambda url, headers=None, timeout=None: R(
+            {"data": [{"id": "gpt-oss-120b"}, {"id": "qwen3-vl"}]})
+        assert local_model() == "qwen3-vl", local_model()
+        assert available()[0] == "local"
+
+        httpx.get = lambda url, headers=None, timeout=None: R({"data": [{"id": "gpt-oss-120b"}]})
+        assert local_model() is None, "text-only fleet must not look like vision"
+        assert available()[0] == "xai"
+
+        # a gateway that is down is not an error, just not local
+        def boom(url, headers=None, timeout=None):
+            raise httpx.ConnectError("refused")
+
+        httpx.get = boom
+        assert local_model() is None
+
+        # --- the local path is used, and its answer parsed ---
+        httpx.get = lambda url, headers=None, timeout=None: R(
+            {"data": [{"id": "qwen3-vl"}]})
+        seen = {}
+
+        def fake_post(url, headers=None, json=None, timeout=None):
+            seen["body"] = json
+            payload = {"flagged": [{"clip": "7", "issue": "continuity",
+                                    "reason": "pale legs, every other cell is black"},
+                                   {"issue": "broken"}],
+                       "cells_seen": 12}
+            return type("P", (), {
+                "status_code": 200,
+                "json": staticmethod(lambda: {
+                    "choices": [{"message": {"content": __import__("json").dumps(payload)}}]}),
+                "text": "",
+            })
+
+        httpx.post = fake_post
+        v = classify_sheet(sheet, note="T (r tier)")
+        assert v["backend"] == "local", v
+        assert [f["clip"] for f in v["flagged"]] == [7], v      # junk row dropped
+        assert v["flagged"][0]["issue"] == "continuity"
+        assert v["cells_seen"] == 12
+        assert seen["body"]["model"] == "qwen3-vl"
+        sys_msg = seen["body"]["messages"][0]["content"]
+        assert "CONTINUITY" in sys_msg and "human-toned limbs" in sys_msg
+        assert "camera angle" in sys_msg, "must not flag deliberate variation"
+        img = seen["body"]["messages"][1]["content"][1]["image_url"]["url"]
+        assert img.startswith("data:image/jpeg;base64,")
+
+        # --- a local failure falls through to xAI rather than failing ---
+        def bad_post(url, headers=None, json=None, timeout=None):
+            return type("P", (), {"status_code": 500, "text": "boom", "json": staticmethod(dict)})
+
+        httpx.post = bad_post
+        notes = []
+        real_chat = grok._chat
+        grok._chat = lambda model, messages, progress=None: '{"flagged": [], "cells_seen": 3}'
+        try:
+            v2 = classify_sheet(sheet, progress=notes.append)
+            assert v2["flagged"] == [] and v2["cells_seen"] == 3, v2
+            assert any("falling back to xAI" in n for n in notes), notes
+        finally:
+            grok._chat = real_chat
+
+    httpx.get, httpx.post = real_get, real_post
+    print("vision.py OK")
+
+
+if __name__ == "__main__":
+    demo()

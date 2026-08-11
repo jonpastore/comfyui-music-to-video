@@ -9,7 +9,15 @@ function watchJob(jobId, targetId) {
       (data.error || data.progress || "");
     if (data.status === "done" || data.status === "failed" || data.status === "cancelled") {
       es.close();
-      setTimeout(function () { location.reload(); }, 600);
+      // No surprise reload. The line reports the outcome and offers the refresh;
+      // an automatic one threw away whatever you were typing in a textarea.
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = "Refresh to see the results";
+      btn.className = "linkish";
+      btn.style.marginLeft = "0.6rem";
+      btn.addEventListener("click", function () { location.reload(); });
+      el.appendChild(btn);
     }
   };
   es.onerror = function () { es.close(); };
