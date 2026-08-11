@@ -681,6 +681,19 @@ def delete_song(id: int, confirm: str = Form("")):
                 os.remove(path)
             except OSError:
                 pass
+    # remove the now-empty per-song directories. rmdir, never rmtree: it fails
+    # rather than recursing if anything unexpected is still in there, and the
+    # same containment rule applies as for the files themselves.
+    song = db.one("SELECT slug FROM songs WHERE id=?", id)
+    if song:
+        for sub in ("uploads", "storyboards", "renders", "audio"):
+            d = os.path.join(db.DATA, sub, song["slug"])
+            if _within_data(d) and os.path.isdir(d):
+                try:
+                    os.rmdir(d)
+                except OSError:
+                    pass          # not empty: leave it, deleting more is not our call
+
     for table in ("song_tiers", "storyboards", "refs", "clips", "renders", "assets", "playlist_items"):
         db.run(f"DELETE FROM {table} WHERE song_id=?", id)
     db.run("DELETE FROM songs WHERE id=?", id)
