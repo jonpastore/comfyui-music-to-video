@@ -22,6 +22,10 @@
 <div class="row-2col">
   <section class="card">
     <h2>Lyrics</h2>
+    {# the paired card carries a note too, so the two boxes line up rather than
+       sitting 60px apart -- and the storyboard really is built from this text #}
+    <p class="muted">The words, in [Section] blocks. Whisper drafts them; edit freely.
+      This is what the storyboard is written from.</p>
     <form method="post" action="/songs/{{ song.id }}/lyrics" class="stack-form">
       <textarea name="lyrics_text" rows="16">{{ song.lyrics or "" }}</textarea>
       <button type="submit">Save lyrics</button>
