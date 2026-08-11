@@ -28,6 +28,16 @@
 </section>
 
 <section class="card">
+  <h2>Style prompt</h2>
+  <p class="muted">What the track was generated from (Suno / ChatGPT). Saved with
+    the song; not sent to the storyboard model or the renderer.</p>
+  <form method="post" action="/songs/{{ song.id }}/style-text">
+    <textarea name="style_text" rows="8">{{ song.style_text or "" }}</textarea>
+    <button type="submit">Save style prompt</button>
+  </form>
+</section>
+
+<section class="card">
   <h2>Style guide</h2>
   {% if song.style_path %}<img class="thumb" src="{{ media_url(song.style_path) }}" alt="style guide">{% endif %}
   <form method="post" action="/songs/{{ song.id }}/style" enctype="multipart/form-data">

@@ -479,6 +479,27 @@ def test_refs_tier_without_chosen_anchor_400_names_tier_and_enqueues_nothing():
         assert len(jobs.recent(1000)) == before
 
 
+def test_style_prompt_saved_and_shown_and_never_sent_to_grok():
+    from conftest import grok_calls
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Style Song")
+        sid = song["id"]
+        text = "Dark warehouse tech house, 128 BPM, rolling sub, spoken female hook."
+        r = client.post(f"/songs/{sid}/style-text", data={"style_text": text})
+        assert r.status_code in (200, 303), r.text
+        assert db.one("SELECT style_text FROM songs WHERE id=?", sid)["style_text"] == text
+        assert text in client.get(f"/songs/{sid}").text          # editable, not write-only
+
+        # it describes AUDIO. The storyboard model must not receive it -- that
+        # is the text that was just stripped out of every storyboard on disk.
+        grok_calls.clear()
+        client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13"})
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
+        wait_job(job["id"])
+        assert grok_calls, "storyboard job never reached grok"
+        assert "128 BPM" not in json.dumps(grok_calls, default=str)
+
+
 def test_transcribe_frees_comfyui_vram_first():
     """ComfyUI keeps ~21.5 GB of the shared 24 GB card resident, which is what
     made every real transcribe job die with CUDA OOM."""

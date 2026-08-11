@@ -88,6 +88,11 @@ MIGRATIONS = [
     "ALTER TABLE songs ADD COLUMN explicit INTEGER DEFAULT 0",
     # song_tiers was a modelling mistake: ratings are not a property of a title.
     "DROP TABLE IF EXISTS song_tiers",
+    # The music-generation style prompt (written elsewhere, e.g. ChatGPT, and
+    # pasted into Suno). Kept beside the lyrics because they are the pair that
+    # made the track. Distinct from style_path, which is a visual reference
+    # IMAGE for the video -- this one describes the AUDIO.
+    "ALTER TABLE songs ADD COLUMN style_text TEXT",
 ]
 
 

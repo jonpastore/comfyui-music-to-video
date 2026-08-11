@@ -296,6 +296,13 @@ def h_storyboard(args, progress):
     # Passing both to the model is exactly the conflation this rework removes.
     song_fields = dict(song)
     song_fields.pop("explicit", None)
+    # style_text is the prompt the AUDIO was generated from -- drums, BPM,
+    # vocal delivery. The storyboard is about pictures. Storyboards carried
+    # exactly this text as `suno_style_reference` until it was stripped off
+    # disk as dead weight; passing it here would put it straight back.
+    # dict(song) hands grok every column, so a new column leaks by DEFAULT:
+    # anything added to the songs table has to be considered here.
+    song_fields.pop("style_text", None)
     sb = grok.generate_storyboard(song["lyrics"] or "", tier, guardrail, style_note,
                                    song_fields, args.get("model"), args.get("scene_seconds"), progress)
     outdir = os.path.join(db.DATA, "storyboards", song["slug"])
@@ -559,6 +566,18 @@ def toggle_explicit(id: int):
 def save_lyrics(id: int, lyrics_text: str = Form(...)):
     get_song_or_404(id)
     db.run("UPDATE songs SET lyrics=? WHERE id=?", lyrics_text, id)
+    return RedirectResponse(f"/songs/{id}", status_code=303)
+
+
+@app.post("/songs/{id}/style-text")
+def save_style_text(id: int, style_text: str = Form(...)):
+    """The prompt the TRACK was generated from. Stored, shown and editable --
+    it is not sent to grok or the renderer: it describes drums and vocals, and
+    the storyboard prompt is about pictures. Storyboards used to carry exactly
+    this text as `suno_style_reference` and it was stripped out as dead weight.
+    """
+    get_song_or_404(id)
+    db.run("UPDATE songs SET style_text=? WHERE id=?", style_text, id)
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
