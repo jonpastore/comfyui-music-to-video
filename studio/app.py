@@ -3214,7 +3214,35 @@ def set_detail(row):
          for it in items]) if len(items) > 1 else []
     suggested_order_ids = ",".join(str(o["song"]["id"]) for o in suggested_order)
 
+    # Timeline widths come from mixer._item_duration, the SAME helper
+    # render_set, mix_audio and set_duration share -- a block whose width was
+    # computed separately would drift from what actually renders, which is the
+    # defect this codebase has already fixed three times.
+    timeline, longest = [], 0.0
+    for it in items:
+        secs = 0.0
+        try:
+            # OSError/RuntimeError only: a file that is missing or unreadable is
+            # a real condition and zero is the honest width for it. A broad
+            # except swallowed an AttributeError once and rendered every block
+            # at zero width, which looked like a layout bug rather than a
+            # missing helper.
+            info = mixer.probe(it["mp3_path"]) if it["mp3_path"] else None
+            if info:
+                secs = mixer._item_duration(info, dict(it))
+        except (OSError, RuntimeError, KeyError):
+            secs = 0.0
+        longest = max(longest, secs)
+        timeline.append({"id": it["id"], "title": it["song_title"], "secs": secs,
+                          "bpm": it["song_bpm"], "key": it["song_key"],
+                          "transition": it["transition"], "trans_secs": it["secs"],
+                          "beatmatch": it["beatmatch"]})
+    for t in timeline:
+        # a floor so a very short item is still clickable rather than a hairline
+        t["pct"] = max(8.0, 100.0 * t["secs"] / longest) if longest else 100.0
+
     return {"set": row, "items": items, "count": len(items), "total_secs": total,
+            "timeline": timeline,
             "duration_error": duration_error, "missing_video": missing_video, "renders": renders,
             "beatmatch_plan": beatmatch_plan, "suggested_order": suggested_order,
             "suggested_order_ids": suggested_order_ids}

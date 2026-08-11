@@ -23,30 +23,38 @@ function watchJob(jobId, targetId) {
   es.onerror = function () { es.close(); };
 }
 
-// Drag-to-reorder for playlist AND set-editor rows -- one handler, keyed off
-// data-reorder-url rather than the playlist endpoint, so both tables reuse it
-// instead of a second copy. Native HTML5 drag and drop -- a sortable library
-// would be a dependency for what is one dragover handler and a POST.
-// The row order in the DOM is the source of truth; on drop the new order of
-// row ids is posted and the server renumbers positions.
+// Drag-to-reorder, for a table of rows OR a horizontal timeline of blocks.
+// One handler keyed off data-reorder-url rather than the playlist endpoint, and
+// off data-axis rather than assuming vertical, so the set editor's table and its
+// timeline share it instead of keeping two copies that drift. Native HTML5 drag
+// and drop -- a sortable library would be a dependency for one dragover handler
+// and a POST. DOM order is the source of truth; on drop the new order of ids is
+// posted and the server renumbers positions.
 document.addEventListener("DOMContentLoaded", function () {
-  document.querySelectorAll("table.sortable").forEach(function (table) {
-    var body = table.tBodies[0];
+  document.querySelectorAll("[data-reorder-url]").forEach(function (root) {
+    // a table reorders its rows, anything else reorders its own children
+    var body = root.tBodies ? root.tBodies[0] : root;
+    var horizontal = root.dataset.axis === "x";
     var dragging = null;
+    var kids = function () {
+      return Array.prototype.filter.call(body.children, function (c) {
+        return c.dataset && c.dataset.item !== undefined;
+      });
+    };
 
     body.addEventListener("dragstart", function (e) {
-      dragging = e.target.closest("tr");
+      dragging = e.target.closest("[data-item]");
       if (dragging) dragging.classList.add("dragging");
-      // Firefox will not start a drag without data on the transfer
       if (e.dataTransfer) e.dataTransfer.setData("text/plain", "");
     });
 
     body.addEventListener("dragover", function (e) {
       e.preventDefault();
-      var over = e.target.closest("tr");
-      if (!dragging || !over || over === dragging) return;
+      var over = e.target.closest("[data-item]");
+      if (!dragging || !over || over === dragging || over.parentNode !== body) return;
       var rect = over.getBoundingClientRect();
-      var after = (e.clientY - rect.top) > rect.height / 2;
+      var after = horizontal ? (e.clientX - rect.left) > rect.width / 2
+                             : (e.clientY - rect.top) > rect.height / 2;
       body.insertBefore(dragging, after ? over.nextSibling : over);
     });
 
@@ -54,16 +62,37 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!dragging) return;
       dragging.classList.remove("dragging");
       dragging = null;
-      var ids = Array.prototype.map.call(body.rows, function (r) { return r.dataset.item; });
-      Array.prototype.forEach.call(body.rows, function (r, i) {
+      var items = kids();
+      var ids = items.map(function (r) { return r.dataset.item; });
+      items.forEach(function (r, i) {
         var pos = r.querySelector(".pos");
         if (pos) pos.textContent = i + 1;
       });
       var form = new FormData();
       form.append("order", ids.join(","));
-      fetch(table.dataset.reorderUrl, {method: "POST", body: form});
+      var post = fetch(root.dataset.reorderUrl, {method: "POST", body: form});
+      // Opt-in reload: the table updates itself in place, but the timeline's
+      // block widths and its transition markers are server-rendered, so leaving
+      // them stale after a drop would show a set that is not the saved one.
+      if (root.dataset.reload !== undefined) post.then(function () { location.reload(); });
     });
   });
+});
+
+// Clicking a timeline block reveals the DJ controls for that item: the controls
+// live below the timeline, and with a long set the one you just clicked is
+// otherwise somewhere off screen.
+document.addEventListener("click", function (e) {
+  var block = e.target.closest(".tl-block");
+  if (!block) return;
+  var panel = document.getElementById("item-" + block.dataset.item);
+  if (!panel) return;
+  document.querySelectorAll(".tl-block").forEach(function (b) {
+    b.classList.toggle("active", b === block);
+  });
+  panel.scrollIntoView({behavior: "smooth", block: "center"});
+  panel.classList.add("just-focused");
+  setTimeout(function () { panel.classList.remove("just-focused"); }, 1600);
 });
 
 // Delegated confirm for tier deletion -- kept out of an inline onsubmit="..."

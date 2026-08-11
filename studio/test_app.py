@@ -2976,3 +2976,42 @@ def test_unknown_effect_keys_are_refused_rather_than_silently_ignored():
         r = client.post(f"/sets/{sid}/items/{iid}",
                         data=dict(base, effects_json='{"eq_kill": {"low_db": -6}}'))
         assert r.status_code in (200, 303), r.text
+
+
+def test_timeline_widths_come_from_the_same_helper_the_renderer_uses():
+    """A block's width is how long the item actually PLAYS after trim. Computing
+    it separately from mixer._item_duration would let the picture drift from the
+    render -- the defect class this codebase has already fixed three times."""
+    with TestClient(appmod.app) as client:
+        a = _upload_song(client, "TL Song A")
+        b = _upload_song(client, "TL Song B")
+        client.post("/sets/new", data={"name": "TL Set", "mode": "audio"})
+        sid = db.one("SELECT id FROM sets WHERE name='TL Set'")["id"]
+        for s in (a, b):
+            client.post(f"/sets/{sid}/items", data={"song_id": s["id"], "transition": "fade",
+                                                     "secs": "1.0"})
+        items = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", sid)
+
+        page = client.get(f"/sets/{sid}").text
+        assert 'class="timeline"' in page and 'data-axis="x"' in page
+        assert page.count('class="tl-block"') == 2
+        # every block can be clicked through to its controls
+        for it in items:
+            assert f'data-item="{it["id"]}"' in page and f'id="item-{it["id"]}"' in page
+
+        ctx = appmod.set_detail(db.one("SELECT * FROM sets WHERE id=?", sid))
+        full = [t["secs"] for t in ctx["timeline"]]
+        assert all(s > 0 for s in full), full
+
+        # trimming an item must shrink ITS block, not another one
+        client.post(f"/sets/{sid}/items/{items[0]['id']}",
+                    data={"transition": "fade", "secs": "1.0", "gain_db": "0",
+                          "in_secs": "1.0", "out_secs": "4.0"})
+        ctx2 = appmod.set_detail(db.one("SELECT * FROM sets WHERE id=?", sid))
+        trimmed = [t["secs"] for t in ctx2["timeline"]]
+        assert trimmed[0] < full[0], "trimming did not shrink its own block"
+        assert trimmed[1] == full[1], "trimming one item changed another's block"
+        # and the width agrees with the renderer's own helper
+        import mixer as _m
+        info = _m.probe(db.one("SELECT mp3_path FROM songs WHERE id=?", a["id"])["mp3_path"])
+        assert abs(trimmed[0] - _m._item_duration(info, {"in_secs": 1.0, "out_secs": 4.0})) < 0.01

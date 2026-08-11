@@ -811,3 +811,54 @@ dialog.video-modal video { max-width: 100%; max-height: 70vh; display: block; }
   animation: saved-fade 2.5s ease-out forwards;
 }
 @keyframes saved-fade { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ---- set timeline ----
+   Blocks are flex-sized by how long each item actually PLAYS after trim, so the
+   picture matches the render rather than being a decorative strip. */
+.timeline {
+  display: flex;
+  gap: 2px;
+  align-items: stretch;
+  min-height: 74px;
+  margin: 0.5rem 0 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  background: var(--bg);
+  overflow-x: auto;
+}
+.tl-block {
+  position: relative;
+  min-width: 90px;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  overflow: hidden;
+}
+.tl-block:hover { border-color: var(--accent); }
+.tl-block.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.tl-block.dragging { opacity: 0.45; cursor: grabbing; }
+.tl-title { font-size: 0.8rem; font-weight: 600; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis; }
+.tl-meta { font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+/* the handover sits on the trailing edge, where the overlap actually happens */
+.tl-trans {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  font-size: 0.66rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.tl-trans.beat { border-color: var(--accent); color: var(--accent); }
+.tl-key { color: var(--accent); }
+/* a clicked block's controls flash so the jump is visible on a long set */
+.just-focused { outline: 2px solid var(--accent); outline-offset: 3px; }

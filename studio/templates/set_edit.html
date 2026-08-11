@@ -53,6 +53,28 @@
   </form>
 </section>
 {% endif %}
+{# The timeline: one block per song, width proportional to how long it actually
+   plays after trim, with the handover to the next shown between them. Drag a
+   block to reorder; click one to jump to its controls below. #}
+<h3>Timeline</h3>
+<div class="timeline" data-reorder-url="/sets/{{ set.id }}/reorder" data-axis="x" data-reload>
+  {% for t in timeline %}
+  <div class="tl-block" draggable="true" data-item="{{ t.id }}" style="flex: {{ t.pct }} 1 0"
+       title="{{ t.title }} — {{ t.secs | hms }}">
+    <span class="tl-title">{{ loop.index }}. {{ t.title }}</span>
+    <span class="tl-meta">{{ t.secs | hms }}{% if t.bpm %} · {{ "%.0f"|format(t.bpm) }}{% endif %}{% if t.key %} · {{ t.key }}{% endif %}</span>
+    {% if not loop.last %}
+    <span class="tl-trans {% if t.beatmatch %}beat{% endif %}">
+      {{ t.transition }}{% if t.transition != "cut" %} {{ t.trans_secs }}s{% endif %}
+      {%- if t.beatmatch %} ♪{% endif %}</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+<p class="muted">Drag a block to reorder. Click one to jump to its mixing controls.
+  <span class="tl-key">♪</span> means the handover is snapped to the beat.</p>
+
+<h3>Running order</h3>
 <table class="list sortable" data-reorder-url="/sets/{{ set.id }}/reorder">
   <thead><tr><th></th><th>#</th><th>Song</th><th>BPM/Key</th><th>Length</th><th>Transition</th><th></th></tr></thead>
   <tbody>
@@ -104,7 +126,8 @@
 <h3>Item settings</h3>
 <p class="hint">Trim, gain and transition, per song. In/out blank means the whole track.</p>
 {% for it in items %}
-<form method="post" action="/sets/{{ set.id }}/items/{{ it.id }}" class="stack-form character-row">
+<form method="post" action="/sets/{{ set.id }}/items/{{ it.id }}"
+      id="item-{{ it.id }}" class="stack-form character-row">
   <div class="field-row">
     <strong>{{ loop.index }}. {{ it.song_title }}</strong>
     {% if it.song_bpm %}<span class="muted">{{ "%.0f"|format(it.song_bpm) }} BPM</span>{% endif %}

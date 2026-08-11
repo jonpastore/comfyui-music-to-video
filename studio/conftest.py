@@ -199,6 +199,17 @@ def _mix_audio(items, out, progress=None):
     open(out, "w").close()
 
 
+def _item_duration(info, it):
+    """Mirrors the real mixer._item_duration. app.set_detail reads it to size the
+    timeline blocks, so a stub without it silently produced a zero-width
+    timeline -- the missing-from-the-stub trap, again."""
+    full = info["duration"]
+    in_s = float(it.get("in_secs") or 0.0)
+    out_s = it.get("out_secs")
+    out_s = float(out_s) if out_s is not None else full
+    return max(0.0, min(out_s, full) - in_s)
+
+
 def _set_duration(items, key="video"):
     # Real mixer.set_duration: walks items, each transition's secs checked
     # against the running duration so far, raising ValueError exactly like
@@ -226,6 +237,7 @@ _XFADE_NAMES = {"fade": "fade", "dissolve": "dissolve", "wipe": "wipeleft"}
 _stub("mixer",
       _XFADE_NAMES=_XFADE_NAMES,
       probe=lambda p: {"duration": _STUB_ITEM_DUR},
+      _item_duration=_item_duration,
       assemble_song=lambda clip_paths, mp3, out, progress, fade: open(out, "w").close(),
       edit_audio=lambda *a, **k: None,
       render_set=_render_set,
