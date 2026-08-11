@@ -69,9 +69,17 @@ MINOR_TERMS = (
 # plus the normalisation above is effective. Revisit with a classifier, not more
 # words, if that threat model ever changes.
 
-# Words that legitimately contain a blocked substring. Removed before matching
-# rather than dropping the term -- "canteen" must not cost us "teenage".
-_ALLOW = ("canteen", "protein", "umpteen", "minorca", "minority", "minoritie")
+_SINGLE = tuple(t for t in MINOR_TERMS if " " not in t)
+_PHRASES = tuple(t for t in MINOR_TERMS if " " in t)
+
+# Ordinary words that genuinely START with a blocked term, so prefix matching
+# alone would refuse them. Short list by design: prefix matching already spares
+# canteen/protein/eighteen/nineteen/between/minor/shot/halo/girl, which a
+# substring match did not.
+_ALLOW = frozenset({"infantry", "infantryman", "infantrymen",
+                    "teeny", "teensy", "teenier", "teeniest"})
+
+_LEET = str.maketrans("013456789@$", "oieasgtbgas")
 
 # "12 year old", "16-year-old", "9 yr old" -- digits survive no flattening, so
 # this runs on the raw text. Pure-numeric age was the cleanest bypass of a
@@ -98,30 +106,55 @@ class ContentRefused(ValueError):
     """
 
 
-def _flatten(text):
-    """Fold text to bare ascii letters so morphology and evasion both collapse.
+def _normalize(text):
+    """Fold away the ways a term can be disguised, WITHOUT joining words.
 
-    Exact token matching was trivially defeated by things that occur in ordinary
-    prose, never mind adversarial input: "child's" tokenises as one word that is
-    not "child"; "ch-ild", "c h i l d" and "ch1ld" split or mutate the token; and
-    a single Cyrillic 'с' made the whole word invisible to an ASCII \\w regex.
-    Normalising to NFKD, dropping non-ascii, then removing every non-letter turns
-    all of those into the same flat string, which a substring test then catches.
+    Homoglyphs are folded before the ascii encode: NFKD does not relate Cyrillic
+    'с' (U+0441) to Latin 'c' -- they are genuinely different letters -- so
+    encode(errors="ignore") would simply delete it and turn "сhild" into "hild".
+    Leet digits are mapped to letters rather than stripped, or "ch1ld" becomes
+    "chld" and matches nothing. The numeric-age regex runs on the raw text first,
+    so real digits are not lost here.
     """
     t = unicodedata.normalize("NFKD", (text or "").lower())
-    # Homoglyphs must be folded BEFORE the ascii encode. NFKD does not relate
-    # Cyrillic 'с' (U+0441) to Latin 'c' -- they are genuinely different letters --
-    # so encode(errors="ignore") simply deletes it and "сhild" becomes "hild".
-    # One substituted character was enough to make any term invisible.
     t = t.translate(_CONFUSABLES)
     t = t.encode("ascii", "ignore").decode()
-    for w in _ALLOW:
-        t = t.replace(w, " ")
-    # Map leet digits to letters BEFORE stripping non-letters -- deleting them
-    # instead turns "ch1ld" into "chld", which matches nothing. The numeric-age
-    # regex has already run on the raw text, so real digits are not lost here.
-    t = t.translate(str.maketrans("013456789@$", "oieasgtbgas"))
-    return re.sub(r"[^a-z]", "", t)
+    return t.translate(_LEET)
+
+
+def _tokens(text):
+    """Normalized words, with word boundaries PRESERVED.
+
+    An earlier version flattened the whole string to bare letters and substring-
+    matched against it. Removing the spaces removed the word boundaries, so any
+    two adjacent words could spell a term at their junction. Measured against
+    this project's own vocabulary it produced a 20/20 false-positive rate:
+
+        "crane shot above"      -> shot|a       -> "shota"
+        "alley between two"     -> be|tween     -> "tween"
+        "wet concrete entrance" -> concre|te en -> "teen"
+        "halo lighting"         -> ha|lo li     -> "loli"
+        "a minor seventh"       -> minor|s      -> "minors"
+        "the girl is holding"   -> girl|is h    -> "girlish"
+
+    "shot at" alone would have refused nearly every storyboard, since a shot list
+    is what this system generates. Splitting on whitespace first and stripping
+    punctuation only WITHIN a token keeps "ch-ild" and "child's" catchable while
+    making those junctions impossible.
+    """
+    words = _normalize(text).split()
+    toks = [w for w in (re.sub(r"[^a-z]", "", w) for w in words) if w]
+    # "c h i l d" spells a word across single-letter tokens; a run of them is
+    # never ordinary prose, so collapse it and check that too.
+    out, run = list(toks), []
+    for w in toks + [""]:
+        if len(w) == 1:
+            run.append(w)
+            continue
+        if len(run) >= 4:
+            out.append("".join(run))
+        run = []
+    return out
 
 
 def check_text(text, where="input"):
@@ -140,9 +173,17 @@ def check_text(text, where="input"):
         raise ContentRefused(
             f"This text specifies an age under 18 ({m.group(0).strip()}) in {where}. "
             "Every character in this pipeline is an adult; remove it and try again.")
-    flat = _flatten(text)
-    hits = sorted({t for t in MINOR_TERMS
-                   if t.replace(" ", "").replace("-", "") in flat})
+
+    toks = [t for t in _tokens(text) if t not in _ALLOW]
+    # PREFIX, not substring: a term must start the word. That is what separates
+    # "teenage" from "eighteen"/"canteen"/"protein", "shota" from "shot",
+    # "tween" from "between", "loli" from "halo", "minors" from "minor",
+    # "girlish" from "girl". Suffixes are what morphology adds ("child's",
+    # "childlike", "underaged", "lolicon"), so a prefix test still catches those.
+    hits = {t for t in _SINGLE for tok in toks if tok.startswith(t)}
+    joined = " ".join(toks)
+    hits |= {p for p in _PHRASES if re.search(r"\b" + p.replace(" ", r"\s+"), joined)}
+    hits = sorted(hits)
     if hits:
         raise ContentRefused(
             f"This text refers to minors and cannot be used in {where}: "
@@ -274,14 +315,42 @@ def demo():
     except ContentRefused:
         pass
 
-    # ...and these must NOT be blocked: ordinary storyboard vocabulary. A false
-    # positive here fails a whole 40-scene job, because this runs on model output.
-    for ok in ("baby blue neon lighting", "a baby grand piano", "kid gloves",
-               "shot with a cp lens", "the canteen at the back of the warehouse",
-               "protein shake on the bar", "Minorca street market at night",
-               "a minority of the crowd", "kidnapping-thriller narrative for adults",
-               "Revealing club wear, harness top, high-cut bottoms, bare thighs",
-               "she is 25 years old"):
+    # ...and these must NOT be blocked. This list is drawn from the project's OWN
+    # vocabulary -- profiles/street_cats.json, build_song.SHOT_RULES, the real
+    # storyboards, the song titles -- because a self-chosen "benign" list proves
+    # nothing. An earlier substring-on-flattened-text matcher scored 20/20 FALSE
+    # POSITIVES against exactly these, including "shot at" (matching "shota"),
+    # which appears in nearly every storyboard this system generates.
+    for ok in (
+        # word-junction collisions that killed the previous matcher
+        "wet concrete entrance to the loading bay",      # concre-TE EN-trance
+        "a narrow service alley between two buildings",  # be-TWEEN
+        "MEDIUM HERO SHOT at the DJ booth",              # SHOT-A-t
+        "crane shot above the dance floor",
+        "wide shot at the freight elevator",
+        "halo lighting behind her silhouette",           # ha-LO LI-ghting
+        "solo light on the mixer",
+        "a minor seventh stab on the synth",             # MINOR-S-eventh
+        "the minor scale motif returns",
+        "the girl is holding a drink",                   # GIRL-IS H-olding
+        "laser display ground fog rolls in",             # dis-PLAY GROUND
+        "the acoustics amplify the bass",                # acousti-CS AM-plify
+        "in fantasy the room dissolves",                 # IN FANT-asy
+        "nineteen-eighties synthwave palette",           # -TEEN
+        "she is eighteen bars into the drop",
+        "thirteen steps down the stairwell",
+        "private entrance at the rear of the warehouse",
+        "gate entrance under a sodium lamp",
+        # ordinary words that start with a term, or contain one
+        "infantry jacket over a harness top", "a teeny amount of haze",
+        "baby blue neon lighting", "a baby grand piano", "kid gloves",
+        "shot with a cp lens", "the canteen at the back", "protein shake on the bar",
+        "Minorca street market at night", "a minority of the crowd",
+        "kidnapping-thriller narrative for adults",
+        # this project's actual subject matter must remain expressible
+        "Revealing club wear, harness top, high-cut bottoms, bare thighs",
+        "she is 25 years old",
+    ):
         check_text(ok)
     # the tier name itself is checked too
     try:

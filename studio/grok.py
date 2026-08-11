@@ -404,6 +404,12 @@ def validate(sb, exemplar=None):
     # every image_prompt, so scanning the composed string made our own safety
     # clause trip our own filter and refused every storyboard ever generated.
     # Only the model-authored remainder is scanned.
+    #
+    # negative_prompt is deliberately NOT in the scanned list and must not be
+    # added. It is a list of things to AVOID, so it names forbidden concepts by
+    # definition -- every storyboard in this repo has "child, teen, underage" in
+    # it. Scanning it refuses 1692 of the project's own existing scenes. (It is
+    # also inert at cfg 1.0, where ComfyUI skips the negative pass entirely.)
     import tiers as _tiers
     guard = (sb.get("global_guardrail") or "").strip()
     for s in scenes:
