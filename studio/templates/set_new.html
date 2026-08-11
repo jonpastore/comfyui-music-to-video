@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>New set</h1>
+
+<section class="card">
+  <form method="post" action="/sets/new" class="stack-form">
+    <label>Name <input type="text" name="name" required></label>
+    <div class="field-row">
+      <label>Mode
+        <select name="mode">
+          <option value="video">Audio + video</option>
+          <option value="audio">Audio only</option>
+        </select>
+      </label>
+      <label>Tier
+        <select name="tier">
+          <option value="">(choose later)</option>
+          {% for t in all_tiers %}
+          <option value="{{ t.name }}">{{ t.name | tiername }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Start from a playlist (optional)
+        <select name="playlist_id">
+          <option value="">(none &mdash; build from scratch)</option>
+          {% for p in playlists %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <p class="hint">Starting from a playlist copies its current song order in. Editing the set
+      afterward never writes back to the playlist.</p>
+    <button type="submit">Create</button>
+  </form>
+</section>
+{% endblock %}

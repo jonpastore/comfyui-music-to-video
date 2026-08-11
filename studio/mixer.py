@@ -191,25 +191,55 @@ def edit_audio(mp3_path, out_path, trim_start=0.0, trim_end=None, gain_db=0.0,
 _XFADE_NAMES = {"fade": "fade", "dissolve": "dissolve", "wipe": "wipeleft"}  # xfade has no generic "wipe"
 
 
+def _item_duration(info, it):
+    """An item's playing length after in_secs/out_secs trim, clamped to the
+    file's own probed length. Shared by render_set, mix_audio and set_duration
+    so the three never disagree about how long a trimmed item runs -- the same
+    reason they already share their overlap arithmetic."""
+    full = info["duration"]
+    in_s = float(it.get("in_secs") or 0.0)
+    out_s = it.get("out_secs")
+    out_s = float(out_s) if out_s is not None else full
+    return max(0.0, min(out_s, full) - in_s)
+
+
+def _trim_input_args(it):
+    """-ss/-to as INPUT options, placed before -i. Matches edit_audio's own
+    seek pattern: -to here is absolute-from-file-start, not relative to -ss."""
+    args = []
+    if it.get("in_secs"):
+        args += ["-ss", str(it["in_secs"])]
+    if it.get("out_secs") is not None:
+        args += ["-to", str(it["out_secs"])]
+    return args
+
+
 def _normalize_filter(idx, w, h, fps):
     return (f"[{idx}:v]scale={w}:{h}:force_original_aspect_ratio=decrease,"
             f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps={fps}[v{idx}n]")
 
 
-def _build_render_set_filter(infos, items, w, h, fps):
+def _build_render_set_filter(infos, durations, items, w, h, fps):
     """Programmatically build the join filtergraph for n items (works for 2
     or 20 without a hand-written deep chain). Returns (lines, out_v, out_a,
-    predicted_duration). No ffmpeg call -- unit-tested directly in demo()."""
+    predicted_duration). No ffmpeg call -- unit-tested directly in demo().
+
+    `durations` are each item's length AFTER in_secs/out_secs trim -- the
+    input itself already arrives trimmed (via _trim_input_args), so this is
+    just the bookkeeping needed to place transitions correctly.
+    """
     n = len(infos)
     lines = []
     for idx, info in enumerate(infos):
         lines.append(_normalize_filter(idx, w, h, fps))
+        gain = float(items[idx].get("gain_db") or 0.0)
         if info["has_audio"]:
-            lines.append(f"[{idx}:a]aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a{idx}n]")
+            vol = f"volume={gain:.3f}dB," if gain else ""
+            lines.append(f"[{idx}:a]{vol}aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a{idx}n]")
         else:
-            lines.append(f"anullsrc=r=48000:cl=stereo:d={info['duration']:.3f}[a{idx}n]")
+            lines.append(f"anullsrc=r=48000:cl=stereo:d={durations[idx]:.3f}[a{idx}n]")
 
-    running_v, running_a, running_dur = "v0n", "a0n", infos[0]["duration"]
+    running_v, running_a, running_dur = "v0n", "a0n", durations[0]
     for i in range(n - 1):
         transition = items[i].get("transition", "cut")
         secs = float(items[i].get("secs", 0.0))
@@ -218,7 +248,7 @@ def _build_render_set_filter(infos, items, w, h, fps):
         if transition == "cut" or secs <= 0:
             lines.append(f"[{running_v}][{nxt_v}]concat=n=2:v=1:a=0[{out_v}]")
             lines.append(f"[{running_a}][{nxt_a}]concat=n=2:v=0:a=1[{out_a}]")
-            running_dur += infos[i + 1]["duration"]
+            running_dur += durations[i + 1]
         else:
             if secs > running_dur:
                 raise ValueError(f"transition secs={secs} longer than preceding duration={running_dur}")
@@ -226,7 +256,7 @@ def _build_render_set_filter(infos, items, w, h, fps):
             xf = _XFADE_NAMES.get(transition, "fade")
             lines.append(f"[{running_v}][{nxt_v}]xfade=transition={xf}:duration={secs:.3f}:offset={offset:.3f}[{out_v}]")
             lines.append(f"[{running_a}][{nxt_a}]acrossfade=d={secs:.3f}[{out_a}]")
-            running_dur += infos[i + 1]["duration"] - secs
+            running_dur += durations[i + 1] - secs
         running_v, running_a = out_v, out_a
     return lines, running_v, running_a, running_dur
 
@@ -239,17 +269,18 @@ def render_set(items, out_path, progress=None):
     infos = [probe(it["video"]) for it in items]
     if any(not i["has_video"] for i in infos):
         raise RuntimeError("one or more items have no video stream")
+    durations = [_item_duration(info, it) for info, it in zip(infos, items)]
 
     # Items may differ in resolution/fps (finished videos from different
     # songs) -- normalize every input to the first item's geometry/fps with
     # scale+pad+fps before joining. Lazy default: revisit if a mismatched
     # hero clip should drive dimensions instead.
     w, h, fps = infos[0]["width"], infos[0]["height"], infos[0]["fps"] or 30
-    lines, out_v, out_a, predicted_dur = _build_render_set_filter(infos, items, w, h, fps)
+    lines, out_v, out_a, predicted_dur = _build_render_set_filter(infos, durations, items, w, h, fps)
 
     inputs = []
     for it in items:
-        inputs += ["-i", it["video"]]
+        inputs += _trim_input_args(it) + ["-i", it["video"]]
 
     tmp = _atomic_out(out_path)
     try:
@@ -284,27 +315,31 @@ def mix_audio(items, out_path, progress=None):
     missing = [it["audio"] for it, i in zip(items, infos) if not i["has_audio"]]
     if missing:
         raise RuntimeError(f"no audio stream in: {missing[0]}")
+    durations = [_item_duration(info, it) for info, it in zip(infos, items)]
 
-    lines = [f"[{i}:a]aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a{i}n]"
-             for i in range(len(items))]
-    running, running_dur = "a0n", infos[0]["duration"]
+    lines = []
+    for i, it in enumerate(items):
+        gain = float(it.get("gain_db") or 0.0)
+        vol = f"volume={gain:.3f}dB," if gain else ""
+        lines.append(f"[{i}:a]{vol}aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a{i}n]")
+    running, running_dur = "a0n", durations[0]
     for i in range(len(items) - 1):
         secs = 0.0 if items[i].get("transition") == "cut" else float(items[i].get("secs", 0.0))
         out = f"am{i}"
         if secs <= 0:
             lines.append(f"[{running}][a{i + 1}n]concat=n=2:v=0:a=1[{out}]")
-            running_dur += infos[i + 1]["duration"]
+            running_dur += durations[i + 1]
         else:
             if secs > running_dur:
                 raise ValueError(f"transition secs={secs} longer than preceding duration={running_dur}")
             lines.append(f"[{running}][a{i + 1}n]acrossfade=d={secs:.3f}[{out}]")
-            running_dur += infos[i + 1]["duration"] - secs
+            running_dur += durations[i + 1] - secs
         running = out
 
     tmp = _atomic_out(out_path)
     inputs = []
     for it in items:
-        inputs += ["-i", it["audio"]]
+        inputs += _trim_input_args(it) + ["-i", it["audio"]]
     try:
         args = inputs + ["-filter_complex", ";\n".join(lines), "-map", f"[{running}]",
                           "-c:a", "libmp3lame", "-b:a", "320k", tmp]
@@ -320,12 +355,14 @@ def mix_audio(items, out_path, progress=None):
 
 
 def set_duration(items, key="video"):
-    """Predicted set length: sum of item durations minus each transition's
-    overlap. No ffmpeg call (ffprobe only, for real durations). key='audio'
-    prices the mp3 mix, key='video' the rendered set."""
+    """Predicted set length: sum of item durations (after in_secs/out_secs
+    trim) minus each transition's overlap. No ffmpeg call (ffprobe only, for
+    real durations). key='audio' prices the mp3 mix, key='video' the rendered
+    set. Same _item_duration as render_set/mix_audio, so this prediction is
+    never wrong about how a trim changes the total."""
     if not items:
         return 0.0
-    total = sum(probe(it[key])["duration"] for it in items)
+    total = sum(_item_duration(probe(it[key]), it) for it in items)
     overlap = sum(0.0 if it.get("transition") == "cut" else float(it.get("secs", 0.0))
                   for it in items[:-1])
     return max(0.0, total - overlap)
@@ -398,6 +435,31 @@ def demo():
         actual_cut = probe(out_cut)["duration"]
         assert abs(actual_cut - expected_cut) <= 0.3, (actual_cut, expected_cut)
 
+        # _item_duration: pure trim arithmetic, no ffmpeg call
+        assert _item_duration({"duration": 10.0}, {}) == 10.0
+        assert _item_duration({"duration": 10.0}, {"in_secs": 2.0, "out_secs": 6.0}) == 4.0
+        assert _item_duration({"duration": 10.0}, {"in_secs": 2.0}) == 8.0
+        # an out_secs past the file's own length clamps rather than lying about it
+        assert _item_duration({"duration": 10.0}, {"in_secs": 1.0, "out_secs": 99.0}) == 9.0
+
+        # render_set: in/out trim shortens the item, and set_duration predicts it.
+        # out1 (assembled above) has real audio+video and runs ~2.5-3.5s.
+        items_trim = [{"video": out1, "transition": "cut", "secs": 0.0, "in_secs": 0.5, "out_secs": 2.0},
+                      {"video": clip_a, "transition": "cut", "secs": 0.0}]
+        out_trim = os.path.join(tmpdir, "set_trim.mp4")
+        render_set(items_trim, out_trim)
+        pred_trim, actual_trim = set_duration(items_trim), probe(out_trim)["duration"]
+        assert abs(actual_trim - pred_trim) <= 0.3, (actual_trim, pred_trim)
+        assert actual_trim < probe(out1)["duration"] + probe(clip_a)["duration"] - 0.3, \
+            "in/out trim did not shorten the render"
+
+        # render_set: per-item gain_db must not break the filtergraph
+        items_gain = [{"video": out1, "transition": "cut", "secs": 0.0, "gain_db": -6.0},
+                      {"video": clip_a, "transition": "cut", "secs": 0.0}]
+        out_gain = os.path.join(tmpdir, "set_gain.mp4")
+        render_set(items_gain, out_gain)
+        assert probe(out_gain)["has_audio"], "gain_db item lost its audio stream"
+
         # edit_audio: trim/gain/fade
         out_audio = os.path.join(tmpdir, "trimmed.mp3")
         edit_audio(mp3, out_audio, trim_start=0.5, trim_end=2.5, gain_db=-3.0, fade_in=0.2, fade_out=0.2)
@@ -447,6 +509,26 @@ def demo():
         assert abs(actual_mix - predicted_mix) <= 0.35, (actual_mix, predicted_mix)
         # the overlap is real: a crossfaded pair is shorter than the two tracks
         assert actual_mix < probe(mp3)["duration"] + probe(mp3_b)["duration"] - 0.2
+
+        # mix_audio: in/out trim shortens an item, same as render_set. mp3 is 4s;
+        # trimmed to [1.0, 3.0] it contributes 2s instead of 4s.
+        mix_trim_items = [{"audio": mp3, "transition": "cut", "secs": 0.0,
+                            "in_secs": 1.0, "out_secs": 3.0},
+                           {"audio": mp3_b, "transition": "cut", "secs": 0.0}]
+        out_mix_trim = os.path.join(tmpdir, "set mix trim.mp3")
+        mix_audio(mix_trim_items, out_mix_trim)
+        pred_mix_trim = set_duration(mix_trim_items, key="audio")
+        actual_mix_trim = probe(out_mix_trim)["duration"]
+        assert abs(actual_mix_trim - pred_mix_trim) <= 0.3, (actual_mix_trim, pred_mix_trim)
+        assert actual_mix_trim < probe(mp3)["duration"] + probe(mp3_b)["duration"] - 1.5, \
+            "in/out trim did not shorten the mix"
+
+        # mix_audio: per-item gain_db must not break the filtergraph
+        mix_gain_items = [{"audio": mp3, "transition": "cut", "secs": 0.0, "gain_db": -6.0},
+                           {"audio": mp3_b, "transition": "cut", "secs": 0.0}]
+        out_mix_gain = os.path.join(tmpdir, "set mix gain.mp3")
+        mix_audio(mix_gain_items, out_mix_gain)
+        assert probe(out_mix_gain)["has_audio"]
 
         # a file with no audio stream is refused by name, not by ffmpeg later
         try:

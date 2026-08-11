@@ -1822,6 +1822,32 @@ def test_anchor_prompt_is_editable_shows_its_guardrails_and_is_screened(patch_st
             assert r.status_code == 400, f"{why} accepted"
 
 
+def test_blank_form_fields_are_not_a_422():
+    """The protagonist option and the trim-end box are both EMPTY when unset.
+
+    hx-include sends them anyway, and a bare Optional[int] answered 422 -- which
+    htmx will not swap, so ticking a tier left the tabs, the plan and the sheet
+    count showing whatever the last successful render had said.
+    """
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Blank Album"})
+        r = client.get("/anchors/form", params={"album": "Blank Album",
+                                                 "tier": ["r", "xxx"],
+                                                 "view": ["front", "back"],
+                                                 "character_id": ""})
+        assert r.status_code == 200, r.text[:300]
+        # and the tabs follow the ticked tiers, which is what the 422 hid
+        assert r.text.count('class="tier-tab ') == 2
+        assert 'name="prompt_r"' in r.text and 'name="prompt_xxx"' in r.text
+
+        sid = appmod.db.upsert_song("blank-trim", title="Blank Trim",
+                                     mp3_path="/nonexistent/blank-trim.mp3")
+        r = client.post(f"/songs/{sid}/audio", data={"trim_start": "0", "trim_end": "",
+                                                      "gain_db": "0", "fade_in": "0",
+                                                      "fade_out": "0"}, follow_redirects=False)
+        assert r.status_code != 422, r.text[:300]
+
+
 def test_each_tier_has_its_own_tab_and_its_own_prompt(patch_stub):
     """The prompt is per TIER. One shared textarea sat under one tier's wording,
     read as if it only applied to that tier, and was the only prompt sent for
@@ -2209,6 +2235,321 @@ def test_ltx_is_the_default_video_model_and_renders_the_same_chunk():
     import guardrail as g
     prompt = wf["4"]["inputs"]["text"]
     assert g.PINNED.strip() in prompt and prompt.count("No minors") == 1
+
+
+# ---------------------------------------------------------- set editor (phase 1) --
+
+def test_set_editor_builds_from_scratch_edits_items_and_renders_audio():
+    with TestClient(appmod.app) as client:
+        song1 = _upload_song(client, "Set Editor Song 1")
+        song2 = _upload_song(client, "Set Editor Song 2")
+
+        r = client.post("/sets/new", data={"name": "Late Shift", "mode": "audio"})
+        assert r.status_code in (200, 303), r.text
+        row = db.one("SELECT * FROM sets WHERE name='Late Shift'")
+        assert row is not None and row["mode"] == "audio" and row["playlist_id"] is None
+
+        # the editor page renders for a set with no songs yet
+        assert client.get(f"/sets/{row['id']}").status_code == 200
+
+        client.post(f"/sets/{row['id']}/items",
+                    data={"song_id": song1["id"], "transition": "fade", "secs": "1.5"})
+        client.post(f"/sets/{row['id']}/items",
+                    data={"song_id": song2["id"], "transition": "cut", "secs": "0"})
+        items = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", row["id"])
+        assert [it["song_id"] for it in items] == [song1["id"], song2["id"]]
+
+        # edit the first item's trim/gain -- clamped the same way audio-edit is
+        r = client.post(f"/sets/{row['id']}/items/{items[0]['id']}",
+                        data={"in_secs": "1.0", "out_secs": "3.0", "gain_db": "-4.0",
+                              "transition": "dissolve", "secs": "0.8"})
+        assert r.status_code in (200, 303), r.text
+        edited = db.one("SELECT * FROM set_items WHERE id=?", items[0]["id"])
+        assert edited["in_secs"] == 1.0 and edited["out_secs"] == 3.0
+        assert edited["gain_db"] == -4.0 and edited["transition"] == "dissolve"
+
+        # a bad trim (out before in) is refused, same shape as clamp_audio_edit_params
+        bad = client.post(f"/sets/{row['id']}/items/{items[0]['id']}",
+                          data={"in_secs": "5.0", "out_secs": "1.0", "gain_db": "0",
+                                "transition": "fade", "secs": "1.0"})
+        assert bad.status_code == 400, bad.text
+
+        # reorder: reverse the two items
+        client.post(f"/sets/{row['id']}/reorder", data={"order": f"{items[1]['id']},{items[0]['id']}"})
+        reordered = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", row["id"])
+        assert [it["id"] for it in reordered] == [items[1]["id"], items[0]["id"]]
+
+        page = client.get(f"/sets/{row['id']}").text
+        assert "Set Editor Song 1" in page and "Set Editor Song 2" in page
+
+        # render: audio mode goes through mixer.mix_audio, carrying the trim/gain
+        from conftest import mix_audio_calls
+        before = len(mix_audio_calls)
+        r = client.post(f"/sets/{row['id']}/render")
+        assert r.status_code in (200, 303), r.text
+        job = db.one("SELECT * FROM jobs WHERE kind='render_set' ORDER BY id DESC")
+        jrow = wait_job(job["id"])
+        assert jrow["status"] == "done", jrow
+        assert len(mix_audio_calls) == before + 1
+        sent = mix_audio_calls[-1]
+        edited_item = next(it for it in sent if it.get("gain_db") == -4.0)
+        assert edited_item["in_secs"] == 1.0 and edited_item["out_secs"] == 3.0
+
+        asset = db.one("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC")
+        meta = db.jset(asset)
+        assert meta["set_id"] == row["id"]
+
+        # the set now appears on its own editor page as a render, and on /sets
+        assert "Rendered" in client.get(f"/sets/{row['id']}").text
+        assert "Late Shift" in client.get("/sets").text
+
+
+def test_set_survives_an_item_whose_mp3_went_missing(patch_stub):
+    """set_detail() feeds every item's mp3_path straight to mixer.set_duration.
+    If that file is gone from disk (deleted, moved, or swapped by the
+    audio-edit undo/original-swap feature) the real ffprobe raises -- this
+    proves set_detail skips it instead of 500ing the shelf and the set's own
+    editor, which is the only page with the Remove button that could fix it."""
+    def _set_duration_like_real_ffprobe(items, key="video"):
+        for it in items:
+            if not os.path.isfile(it[key]):
+                raise RuntimeError("ffprobe failed: no such file")
+        return len(items) * 12.3
+
+    patch_stub("mixer", set_duration=_set_duration_like_real_ffprobe)
+
+    with TestClient(appmod.app) as client:
+        present = _upload_song(client, "Present Song")
+        gone = _upload_song(client, "Gone Song")
+        os.remove(gone["mp3_path"])
+
+        r = client.post("/sets/new", data={"name": "Missing File Set", "mode": "audio"})
+        assert r.status_code in (200, 303), r.text
+        row = db.one("SELECT * FROM sets WHERE name='Missing File Set'")
+        client.post(f"/sets/{row['id']}/items",
+                    data={"song_id": present["id"], "transition": "cut", "secs": "0"})
+        client.post(f"/sets/{row['id']}/items",
+                    data={"song_id": gone["id"], "transition": "cut", "secs": "0"})
+
+        editor = client.get(f"/sets/{row['id']}")
+        assert editor.status_code == 200, editor.text
+        assert "Gone Song" in editor.text  # still listed, so it can be removed
+
+        assert client.get("/sets").status_code == 200
+
+
+def test_set_from_playlist_seeds_items_without_linking_back():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Seed Song")
+        client.post("/playlists", data={"name": "Seed Playlist"})
+        pl = db.one("SELECT * FROM playlists WHERE name='Seed Playlist'")
+        client.post(f"/playlists/{pl['id']}/items",
+                    data={"song_id": song["id"], "transition": "fade", "secs": "3.0"})
+
+        r = client.post("/sets/new", data={"name": "From Playlist", "mode": "video",
+                                           "playlist_id": str(pl["id"])})
+        assert r.status_code in (200, 303), r.text
+        row = db.one("SELECT * FROM sets WHERE name='From Playlist'")
+        assert row["playlist_id"] == pl["id"]
+        items = db.q("SELECT * FROM set_items WHERE set_id=?", row["id"])
+        assert len(items) == 1 and items[0]["song_id"] == song["id"]
+        assert items[0]["transition"] == "fade" and items[0]["secs"] == 3.0
+
+        # editing the set afterward never writes back to the playlist
+        client.post(f"/sets/{row['id']}/items/{items[0]['id']}",
+                    data={"gain_db": "-2.0", "transition": "cut", "secs": "0"})
+        pl_item = db.one("SELECT * FROM playlist_items WHERE playlist_id=?", pl["id"])
+        assert pl_item["transition"] == "fade", "editing the set item changed the playlist"
+
+
+def test_set_video_render_requires_a_tier_and_every_song_ready():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Video Set Song")
+        r = client.post("/sets/new", data={"name": "Video Set", "mode": "video"})
+        row = db.one("SELECT * FROM sets WHERE name='Video Set'")
+        client.post(f"/sets/{row['id']}/items", data={"song_id": song["id"], "transition": "cut", "secs": "0"})
+
+        # no tier chosen yet -- refused before any job is enqueued
+        before = len(jobs.recent(1000))
+        r = client.post(f"/sets/{row['id']}/render")
+        assert r.status_code == 400, r.text
+        assert len(jobs.recent(1000)) == before
+
+        # tier chosen, but no rendered video exists for the song at that tier
+        client.post(f"/sets/{row['id']}", data={"name": "Video Set", "mode": "video", "tier": "pg13"})
+        r2 = client.post(f"/sets/{row['id']}/render")
+        assert r2.status_code == 400, r2.text
+        assert "Video Set Song" in r2.text
+
+        # once a render exists at that tier, the set can render
+        db.run("INSERT INTO renders (song_id, tier, path, created) VALUES (?,?,?,?)",
+               song["id"], "pg13", song["mp3_path"], time.time())
+        from conftest import render_set_calls
+        rbefore = len(render_set_calls)
+        r3 = client.post(f"/sets/{row['id']}/render")
+        assert r3.status_code in (200, 303), r3.text
+        job = db.one("SELECT * FROM jobs WHERE kind='render_set' ORDER BY id DESC")
+        assert wait_job(job["id"])["status"] == "done"
+        assert len(render_set_calls) == rbefore + 1
+
+
+def test_set_name_is_screened_like_any_other_free_text():
+    with TestClient(appmod.app) as client:
+        r = client.post("/sets/new", data={"name": "a 12 year old set", "mode": "audio"})
+        assert r.status_code == 400, r.text
+        assert db.one("SELECT id FROM sets WHERE name LIKE '%12 year old%'") is None
+
+
+def test_set_item_delete_removes_it_and_touches_updated():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Delete Item Song")
+        client.post("/sets/new", data={"name": "Delete Item Set", "mode": "audio"})
+        row = db.one("SELECT * FROM sets WHERE name='Delete Item Set'")
+        client.post(f"/sets/{row['id']}/items", data={"song_id": song["id"], "transition": "cut", "secs": "0"})
+        item = db.one("SELECT * FROM set_items WHERE set_id=?", row["id"])
+        r = client.post(f"/sets/{row['id']}/items/{item['id']}/delete")
+        assert r.status_code in (200, 303), r.text
+        assert db.one("SELECT id FROM set_items WHERE id=?", item["id"]) is None
+        assert db.one("SELECT updated FROM sets WHERE id=?", row["id"])["updated"] is not None
+
+
+def test_sets_by_song_reports_new_style_sets_on_the_library_page():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Library Column Song")
+        client.post("/sets/new", data={"name": "Library Set", "mode": "audio"})
+        row = db.one("SELECT * FROM sets WHERE name='Library Set'")
+        client.post(f"/sets/{row['id']}/items", data={"song_id": song["id"], "transition": "cut", "secs": "0"})
+        client.post(f"/sets/{row['id']}/render")
+        job = db.one("SELECT * FROM jobs WHERE kind='render_set' ORDER BY id DESC")
+        wait_job(job["id"])
+
+        page = client.get("/").text
+        assert "Library Set" in page, "the set-editor render is missing from the Library's Sets column"
+
+
+def test_set_editor_page_404s_for_an_unknown_id():
+    with TestClient(appmod.app) as client:
+        assert client.get("/sets/999999").status_code == 404
+        assert client.post("/sets/999999", data={"name": "x", "mode": "audio"}).status_code == 404
+
+
+# ---- analyse.py (SETS_MIXING_PLAN.md phase 2: per-song metadata) ---------
+
+def test_upload_enqueues_analyse_and_fills_bpm_key_energy():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Analyse Me")
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='analyse'", song["id"])
+        assert job is not None, "upload must enqueue an analyse job next to transcribe"
+        row = wait_job(job["id"])
+        assert row["status"] == "done", row
+
+        updated = db.one("SELECT * FROM songs WHERE id=?", song["id"])
+        assert updated["bpm"] == 128.0
+        assert updated["key"] == "8A"
+        assert json.loads(updated["beat_grid_json"]) == [0.0, 0.5, 1.0, 1.5]
+        assert updated["energy"] == 0.05
+        assert updated["downbeat_offset"] == 0
+
+
+def test_song_page_shows_analysis_card_before_and_after():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Analysis Card Song")
+        page_before = client.get(f"/songs/{song['id']}").text
+        assert "Not analysed yet" in page_before
+        assert f'/songs/{song["id"]}/analyse' in page_before
+
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='analyse'", song["id"])
+        wait_job(job["id"])
+
+        page_after = client.get(f"/songs/{song['id']}").text
+        assert "128.0 BPM" in page_after
+        assert "8A" in page_after
+        assert "4 beats" in page_after
+        assert f'/songs/{song["id"]}/downbeat-offset' in page_after
+
+
+def test_analyse_on_demand_requires_audio():
+    with TestClient(appmod.app) as client:
+        # a song with no mp3_path at all -- direct insert, since every upload
+        # route requires a file
+        sid = db.upsert_song("no-audio-slug", title="No Audio")
+        r = client.post(f"/songs/{sid}/analyse")
+        assert r.status_code == 400, r.text
+
+        song = _upload_song(client, "Has Audio For Analyse")
+        r2 = client.post(f"/songs/{song['id']}/analyse")
+        assert r2.status_code in (200, 303), r2.text
+        jobs_for_song = db.q("SELECT * FROM jobs WHERE song_id=? AND kind='analyse'", song["id"])
+        assert len(jobs_for_song) == 2, "one from upload, one from the on-demand click"
+
+
+def test_downbeat_offset_saved_and_validated():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Downbeat Song")
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='analyse'", song["id"])
+        wait_job(job["id"])
+
+        r = client.post(f"/songs/{song['id']}/downbeat-offset", data={"downbeat_offset": "2"})
+        assert r.status_code in (200, 303), r.text
+        assert db.one("SELECT downbeat_offset FROM songs WHERE id=?",
+                       song["id"])["downbeat_offset"] == 2
+
+        bad = client.post(f"/songs/{song['id']}/downbeat-offset", data={"downbeat_offset": "7"})
+        assert bad.status_code == 400, bad.text
+        # the bad attempt must not have overwritten the valid value
+        assert db.one("SELECT downbeat_offset FROM songs WHERE id=?",
+                       song["id"])["downbeat_offset"] == 2
+
+
+def test_analyse_all_only_enqueues_songs_missing_bpm():
+    with TestClient(appmod.app) as client:
+        already = _upload_song(client, "Already Analysed")
+        wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='analyse'",
+                         already["id"])["id"])
+
+        # a song that predates analyse.py: bpm is NULL and no analyse job exists
+        stale_id = db.upsert_song("stale-song-slug", title="Stale Song",
+                                   mp3_path=already["mp3_path"])
+        assert db.one("SELECT bpm FROM songs WHERE id=?", stale_id)["bpm"] is None
+
+        before = {r["id"] for r in
+                  db.q("SELECT id FROM jobs WHERE kind='analyse' AND song_id=?", stale_id)}
+        assert not before
+
+        r = client.post("/songs/analyse-all")
+        assert r.status_code in (200, 303), r.text
+
+        stale_job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='analyse'", stale_id)
+        assert stale_job is not None, "analyse-all must enqueue for an un-analysed song"
+        # already-analysed song must not get a second job from analyse-all
+        already_jobs = db.q("SELECT id FROM jobs WHERE song_id=? AND kind='analyse'", already["id"])
+        assert len(already_jobs) == 1
+
+
+def test_library_page_shows_bpm_key_energy_columns():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Library Metadata Song")
+        wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='analyse'",
+                         song["id"])["id"])
+        page = client.get("/").text
+        assert "BPM" in page and "Key" in page and "Energy" in page
+        assert "0.050" in page  # energy formatted to 3dp
+        assert "8A" in page
+
+
+def test_set_editor_shows_each_item_bpm_and_key():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Set Item Metadata Song")
+        wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='analyse'",
+                         song["id"])["id"])
+
+        r = client.post("/sets/new", data={"name": "Metadata Set", "mode": "audio"})
+        row = db.one("SELECT * FROM sets WHERE name='Metadata Set'")
+        client.post(f"/sets/{row['id']}/items",
+                    data={"song_id": song["id"], "transition": "fade", "secs": "1.0"})
+
+        page = client.get(f"/sets/{row['id']}").text
+        assert "128" in page and "8A" in page
 
 
 if __name__ == "__main__":

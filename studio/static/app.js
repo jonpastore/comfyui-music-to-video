@@ -23,10 +23,12 @@ function watchJob(jobId, targetId) {
   es.onerror = function () { es.close(); };
 }
 
-// Drag-to-reorder for playlist rows. Native HTML5 drag and drop -- a sortable
-// library would be a dependency for what is one dragover handler and a POST.
+// Drag-to-reorder for playlist AND set-editor rows -- one handler, keyed off
+// data-reorder-url rather than the playlist endpoint, so both tables reuse it
+// instead of a second copy. Native HTML5 drag and drop -- a sortable library
+// would be a dependency for what is one dragover handler and a POST.
 // The row order in the DOM is the source of truth; on drop the new order of
-// playlist_item ids is posted and the server renumbers positions.
+// row ids is posted and the server renumbers positions.
 document.addEventListener("DOMContentLoaded", function () {
   document.querySelectorAll("table.sortable").forEach(function (table) {
     var body = table.tBodies[0];
@@ -59,7 +61,7 @@ document.addEventListener("DOMContentLoaded", function () {
       });
       var form = new FormData();
       form.append("order", ids.join(","));
-      fetch("/playlists/" + table.dataset.playlist + "/reorder", {method: "POST", body: form});
+      fetch(table.dataset.reorderUrl, {method: "POST", body: form});
     });
   });
 });

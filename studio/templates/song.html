@@ -12,6 +12,31 @@
   <span class="muted">Whether the LYRICS are explicit. Never selects or gates a tier.</span>
 </form>
 
+<section class="card">
+  <h2>Analysis</h2>
+  {% if song.bpm %}
+  <p class="meta">{{ "%.1f"|format(song.bpm) }} BPM &middot; key {{ song.key }}
+    &middot; energy {{ "%.3f"|format(song.energy) }} &middot; {{ beat_count }} beats</p>
+  {% else %}
+  <p class="muted">Not analysed yet.</p>
+  {% endif %}
+  <form method="post" action="/songs/{{ song.id }}/analyse" class="header-action">
+    <button type="submit" class="secondary" {% if not song.mp3_path %}disabled{% endif %}>
+      {{ "Re-analyse" if song.bpm else "Analyse" }}
+    </button>
+  </form>
+  {% if song.bpm %}
+  <form method="post" action="/songs/{{ song.id }}/downbeat-offset" class="field-row">
+    <label>Downbeat offset (0&ndash;3)
+      <input type="number" min="0" max="3" name="downbeat_offset"
+             value="{{ song.downbeat_offset or 0 }}"></label>
+    <button type="submit">Save</button>
+  </form>
+  <p class="hint">Which of the first four beats is bar one. A set built on the
+    wrong bar-one sounds wrong in a way no tuning fixes -- listen once and correct it here.</p>
+  {% endif %}
+</section>
+
 {% if active_job %}
 <div id="job-status" class="job-status">job #{{ active_job.id }} ({{ active_job.kind }}) [{{ active_job.status }}]: {{ active_job.progress or "queued" }}</div>
 <script>watchJob({{ active_job.id }}, "job-status");</script>

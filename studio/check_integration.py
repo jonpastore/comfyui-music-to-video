@@ -195,12 +195,17 @@ if lyrics:
 
     check("lyrics output parses as storyboard sections", _round_trip)
 
+analyse = optional_import("analyse")
+if analyse:
+    check("analyse.analyse", lambda: sig(analyse, "analyse", ["mp3_path", "progress"]))
+
 mixer = optional_import("mixer")
 if mixer:
     check("mixer.probe", lambda: sig(mixer, "probe", ["path"]))
     check("mixer.assemble_song", lambda: sig(
         mixer, "assemble_song", ["clip_paths", "mp3_path", "out_path"]))
     check("mixer.render_set", lambda: sig(mixer, "render_set", ["items", "out_path"]))
+    check("mixer.mix_audio", lambda: sig(mixer, "mix_audio", ["items", "out_path"]))
     check("mixer.set_duration", lambda: sig(mixer, "set_duration", ["items"]))
     check("mixer.set_duration is pure arithmetic", lambda: (
         lambda d: None if isinstance(d, (int, float)) and d > 0

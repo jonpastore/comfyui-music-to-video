@@ -126,8 +126,21 @@ _stub("lyrics",
       to_sections=lambda result, gap=3.0: "[Section 1]\nhi\n",
       estimate_duration=lambda mp3: 12.3)
 
+# ---- analyse ------------------------------------------------------------
+# librosa is not installed on the system python the test suite runs on
+# (analyse.py imports it lazily, only inside analyse()) -- stubbed exactly
+# like pipeline/grok/lyrics/mixer so h_analyse never needs the real thing.
+analyse_calls = []
+_stub("analyse",
+      analyse=lambda mp3_path, progress=None: (
+          analyse_calls.append(mp3_path) or
+          {"bpm": 128.0, "key": "8A", "beat_grid": [0.0, 0.5, 1.0, 1.5],
+           "energy": 0.05, "downbeat_offset": 0}))
+
 # ---- mixer -------------------------------------------------------------
 render_set_calls = []
+mix_audio_calls = []
+_STUB_ITEM_DUR = 12.3  # matches probe()'s fake duration below
 
 
 def _render_set(items, out, progress=None):
@@ -141,12 +154,36 @@ def _render_set(items, out, progress=None):
     open(out, "w").close()
 
 
+def _mix_audio(items, out, progress=None):
+    if not items:
+        raise ValueError("items is empty")
+    for it in items:
+        assert "audio" in it, f"mix_audio item missing 'audio' key: {it}"
+    mix_audio_calls.append(items)
+    open(out, "w").close()
+
+
+def _set_duration(items, key="video"):
+    # Real mixer.set_duration: sum of (fake) per-item duration minus each
+    # transition's overlap. Approximates the trim math (probe() here always
+    # answers the same duration, so a trim cannot be modelled exactly) --
+    # good enough to prove the route wires items -> a number, which is all
+    # app.py needs from the stub.
+    if not items:
+        return 0.0
+    total = len(items) * _STUB_ITEM_DUR
+    overlap = sum(0.0 if it.get("transition") == "cut" else float(it.get("secs", 0.0))
+                  for it in items[:-1])
+    return max(0.0, total - overlap)
+
+
 _stub("mixer",
-      probe=lambda p: {"duration": 12.3},
+      probe=lambda p: {"duration": _STUB_ITEM_DUR},
       assemble_song=lambda clip_paths, mp3, out, progress, fade: open(out, "w").close(),
       edit_audio=lambda *a, **k: None,
       render_set=_render_set,
-      set_duration=lambda items: items)
+      mix_audio=_mix_audio,
+      set_duration=_set_duration)
 
 # ---- pipeline ------------------------------------------------------------
 _PIPE_DIR = tempfile.mkdtemp(prefix="studio_pipeline_")

@@ -4,10 +4,11 @@ does upload validation + path-traversal-safe media serving.
 """
 import json, math, os, re, shutil, sqlite3, tempfile, time
 from contextlib import asynccontextmanager
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from urllib.parse import quote
 
 from fastapi import FastAPI, Form, HTTPException, Query, Request, UploadFile, File
+from pydantic import BeforeValidator
 from fastapi.responses import (HTMLResponse, RedirectResponse, FileResponse,
                                 PlainTextResponse, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
@@ -25,6 +26,7 @@ import vision
 import lyrics
 import mixer
 import publish
+import analyse
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(ROOT, "static")
@@ -42,6 +44,22 @@ MAX_IMAGE = 20 * 1024 * 1024
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 MAX_REROLL_CLIPS = 64
 GAIN_DB_RANGE = (-30.0, 30.0)
+
+# A BLANK form field arrives as "", and a bare Optional[int]/Optional[float]
+# answers 422 rather than None. Both places that hit this mean "not given":
+# the protagonist is the EMPTY option on every character <select>, and an empty
+# trim-end means play to the end.
+#
+# On the anchor form the 422 was silent and total: hx-include sends the whole
+# form on every tier or view tick, htmx does not swap a non-2xx response, so the
+# tier tabs, the plan and the sheet count all froze at the last render that
+# happened to succeed while the checkboxes kept moving underneath them.
+_blank_none = BeforeValidator(lambda v: None if v in ("", None) else v)
+CharacterId = Annotated[Optional[int], _blank_none]
+BlankFloat = Annotated[Optional[float], _blank_none]
+BlankInt = CharacterId  # same blank-string -> None coercion, for any optional-id field
+
+SET_TRANSITIONS = ("fade", "dissolve", "wipe", "cut")
 
 # Anything servable over /media must resolve inside one of these -- reuses
 # pipeline's own ComfyUI paths rather than inventing a parallel config knob.
@@ -401,6 +419,30 @@ def clamp_audio_edit_params(trim_start, trim_end, gain_db, fade_in, fade_out):
     return trim_start, trim_end, gain_db, fade_in, fade_out
 
 
+def clamp_set_item_params(in_secs, out_secs, gain_db, transition, secs):
+    """Same shape as clamp_audio_edit_params, for one set_items row. These
+    feed mixer's -ss/-to input options and the xfade/acrossfade duration."""
+    for name, v in (("gain_db", gain_db), ("secs", secs)):
+        if not math.isfinite(v):
+            raise HTTPException(400, f"{name} must be a finite number")
+    if in_secs is not None and not math.isfinite(in_secs):
+        raise HTTPException(400, "in_secs must be a finite number")
+    if out_secs is not None and not math.isfinite(out_secs):
+        raise HTTPException(400, "out_secs must be a finite number")
+    if in_secs is not None and in_secs < 0:
+        raise HTTPException(400, "in_secs must be >= 0")
+    if out_secs is not None and in_secs is not None and out_secs <= in_secs:
+        raise HTTPException(400, "out_secs must be greater than in_secs")
+    lo, hi = GAIN_DB_RANGE
+    if not (lo <= gain_db <= hi):
+        raise HTTPException(400, f"gain_db must be between {lo} and {hi}")
+    if transition not in SET_TRANSITIONS:
+        raise HTTPException(400, f"transition must be one of {', '.join(SET_TRANSITIONS)}")
+    if secs < 0:
+        raise HTTPException(400, "secs must be >= 0")
+    return in_secs, out_secs, gain_db, transition, secs
+
+
 # ------------------------------------------------------------- job handlers --
 
 @jobs.handler("transcribe")
@@ -419,6 +461,23 @@ def h_transcribe(args, progress):
     text = lyrics.to_sections(result)
     db.run("UPDATE songs SET lyrics=? WHERE id=?", text, song["id"])
     return {"chars": len(text)}
+
+
+@jobs.handler("analyse")
+def h_analyse(args, progress):
+    """bpm/key/beat-grid/energy for one song -- see analyse.py. Same CPU-vs-GPU
+    reasoning as transcribe: negligible beside a render (measured ~19s for an
+    8-minute track), so it runs through the same serialized worker rather than
+    a second lane."""
+    song = db.one("SELECT * FROM songs WHERE id=?", args["song_id"])
+    if not song or not song["mp3_path"]:
+        return
+    result = analyse.analyse(song["mp3_path"], progress)
+    db.run("""UPDATE songs SET bpm=?, key=?, beat_grid_json=?, energy=?, downbeat_offset=?
+              WHERE id=?""",
+           result["bpm"], result["key"], json.dumps(result["beat_grid"]),
+           result["energy"], result["downbeat_offset"], song["id"])
+    return {"bpm": result["bpm"], "key": result["key"]}
 
 
 @jobs.handler("anchor")
@@ -745,23 +804,42 @@ def h_render_song(args, progress):
 
 @jobs.handler("render_set")
 def h_render_set(args, progress):
-    playlist = db.one("SELECT * FROM playlists WHERE id=?", args["playlist_id"])
+    """Render a set. Two callers feed this one handler: the quick playlist
+    render (playlist_id only) and the set editor (set_id, with or without a
+    playlist_id behind it).
+
+    A set-editor render is versioned -- the output filename carries a
+    timestamp, so re-rendering lands a new asset beside the old one rather
+    than overwriting it, the same shape as anchors keeping every candidate.
+    The playlist quick-render keeps its old, unversioned filename: that path
+    is exercised by assets rows that predate the sets table and must not move.
+    """
+    set_id = args.get("set_id")
+    set_row = db.one("SELECT * FROM sets WHERE id=?", set_id) if set_id else None
+    playlist = db.one("SELECT * FROM playlists WHERE id=?", args["playlist_id"]) \
+        if args.get("playlist_id") else None
     outdir = os.path.join(db.DATA, "sets")
     os.makedirs(outdir, exist_ok=True)
-    base = safe_name(playlist["name"])
+    base = safe_name((set_row["name"] if set_row else None) or
+                      (playlist["name"] if playlist else None) or "set")
+    tier = args.get("tier")
+    suffix = f"_{tier}" if tier else ""
+    ext = "mp3" if args.get("mode") == "audio" else "mp4"
+    fname = f"{base}{suffix}_{int(time.time() * 1000)}.{ext}" if set_row else f"{base}{suffix}.{ext}"
+    out = os.path.join(outdir, fname)
     # mode defaults to video so a job enqueued by an older build still means
     # what it meant when it was queued
     if args.get("mode") == "audio":
-        out = os.path.join(outdir, f"{base}.mp3")
         mixer.mix_audio(args["items"], out, progress)
     else:
-        tier = args.get("tier")
-        out = os.path.join(outdir, f"{base}_{tier}.mp4" if tier else f"{base}.mp4")
         mixer.render_set(args["items"], out, progress)
+    meta = {"playlist_id": args.get("playlist_id"), "mode": args.get("mode", "video"), "tier": tier}
+    if set_id:
+        meta["set_id"] = set_id
     db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
-           None, "set", out, json.dumps({"playlist_id": args["playlist_id"],
-                                          "mode": args.get("mode", "video"),
-                                          "tier": args.get("tier")}), time.time())
+           None, "set", out, json.dumps(meta), time.time())
+    if set_id:
+        db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), set_id)
     return {"path": out}
 
 
@@ -784,24 +862,38 @@ def media(path: str):
 def sets_by_song():
     """{song_id: [{id, label}]} -- the rendered sets each song appears in.
 
-    A set is assembled FROM a playlist, so the songs in it are that playlist's
-    items. Built in three queries for the whole library rather than two per row.
+    A rendered asset's membership comes from ONE of two places, depending on
+    which built it: a set-editor render (meta.set_id) reads set_items
+    directly, since an editable set need not have a playlist at all. A
+    playlist quick-render (no set_id, meta.playlist_id only) still reads
+    playlist_items -- that is every asset row that predates the sets table,
+    and it must keep resolving exactly as it always did.
     """
-    members = {}
+    pl_members = {}
     for it in db.q("SELECT playlist_id, song_id FROM playlist_items"):
-        members.setdefault(it["playlist_id"], []).append(it["song_id"])
-    names = {p["id"]: p["name"] for p in db.q("SELECT id, name FROM playlists")}
+        pl_members.setdefault(it["playlist_id"], []).append(it["song_id"])
+    set_members = {}
+    for it in db.q("SELECT set_id, song_id FROM set_items"):
+        set_members.setdefault(it["set_id"], []).append(it["song_id"])
+    pl_names = {p["id"]: p["name"] for p in db.q("SELECT id, name FROM playlists")}
+    set_names = {s["id"]: s["name"] for s in db.q("SELECT id, name FROM sets")}
     out = {}
     for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC"):
         meta = db.jset(a)
-        pid = meta.get("playlist_id")
-        label = names.get(pid, "(deleted playlist)")
+        sid = meta.get("set_id")
+        if sid is not None:
+            label = set_names.get(sid, "(deleted set)")
+            song_ids = set_members.get(sid, [])
+        else:
+            pid = meta.get("playlist_id")
+            label = pl_names.get(pid, "(deleted playlist)")
+            song_ids = pl_members.get(pid, [])
         if meta.get("tier"):
             label += f" {meta['tier'].upper()}"
         if meta.get("mode") == "audio":
             label += " (audio)"
-        for sid in members.get(pid, []):
-            out.setdefault(sid, []).append({"id": a["id"], "label": label})
+        for song_id in song_ids:
+            out.setdefault(song_id, []).append({"id": a["id"], "label": label})
     return out
 
 
@@ -842,7 +934,18 @@ async def create_song(title: str = Form(...), album: str = Form(""), genre: str 
                           subgenre=subgenre, genre2=genre2, subgenre2=subgenre2,
                           mp3_path=dest, duration=duration, explicit=int(explicit))
     jobs.enqueue("transcribe", {"song_id": sid}, song_id=sid)
+    jobs.enqueue("analyse", {"song_id": sid}, song_id=sid)
     return RedirectResponse(f"/songs/{sid}", status_code=303)
+
+
+@app.post("/songs/analyse-all")
+def analyse_all_songs():
+    """Runnable on demand for the songs that predate analyse.py -- everything
+    already in the library on the day this shipped."""
+    rows = db.q("SELECT id FROM songs WHERE mp3_path IS NOT NULL AND bpm IS NULL")
+    for r in rows:
+        jobs.enqueue("analyse", {"song_id": r["id"]}, song_id=r["id"])
+    return RedirectResponse("/", status_code=303)
 
 
 @app.get("/songs/{id}", response_class=HTMLResponse)
@@ -924,8 +1027,9 @@ def song_page(request: Request, id: int):
                     for e in models.catalog(role="video") if e["key"] in wired]
     all_tiers = tiers.all_tiers()
     form_tier = next(iter(storyboards), None) or (all_tiers[0]["name"] if all_tiers else "")
+    beat_count = len(json.loads(song["beat_grid_json"])) if song["beat_grid_json"] else 0
     return templates.TemplateResponse(request, "song.html", {
-        "song": song, "tiers": all_tiers, "storyboards": storyboards,
+        "song": song, "tiers": all_tiers, "storyboards": storyboards, "beat_count": beat_count,
         "approved_tiers": approved_tiers, "reviews": reviews,
         "style_assets": style_assets, "chosen_anchors": chosen_anchors,
         "clips_ready_tiers": clips_ready_tiers, "anchor_by_tier": anchor_by_tier,
@@ -936,6 +1040,27 @@ def song_page(request: Request, id: int):
         "best_model": best, "render_tiers": render_tiers,
         **storyboard_form_ctx(song, form_tier, chat_models, best),
     })
+
+
+@app.post("/songs/{id}/analyse")
+def start_analyse(id: int):
+    song = get_song_or_404(id)
+    if not song["mp3_path"]:
+        raise HTTPException(400, "no audio to analyse -- upload an mp3 first")
+    jobs.enqueue("analyse", {"song_id": id}, song_id=id)
+    return RedirectResponse(f"/songs/{id}", status_code=303)
+
+
+@app.post("/songs/{id}/downbeat-offset")
+def set_downbeat_offset(id: int, downbeat_offset: int = Form(...)):
+    """analyse.py only guesses bar one from the first four beats -- a set
+    built on the wrong guess sounds wrong in a way no tuning fixes, and a
+    human fixes it in a second by ear. See db.MIGRATIONS' comment."""
+    get_song_or_404(id)
+    if not 0 <= downbeat_offset <= 3:
+        raise HTTPException(400, "downbeat_offset must be 0-3")
+    db.run("UPDATE songs SET downbeat_offset=? WHERE id=?", downbeat_offset, id)
+    return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
 @app.post("/songs/{id}/explicit")
@@ -1014,7 +1139,7 @@ MAX_ANCHOR_UPLOADS = 8
 @app.post("/anchors")
 async def start_anchor(request: Request, album: str = Form(...), tier: List[str] = Form([]),
                         view: List[str] = Form([]), images: List[UploadFile] = File([]),
-                        n: int = Form(4), character_id: Optional[int] = Form(None)):
+                        n: int = Form(4), character_id: CharacterId = Form(None)):
     """Generate anchor candidates for one album, across any number of tiers and
     views, from an unordered set of reference images.
 
@@ -1281,7 +1406,7 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
 
 @app.get("/anchors/form", response_class=HTMLResponse)
 def anchor_form(request: Request, album: str = "", tier: List[str] = Query([]),
-                 view: List[str] = Query([]), character_id: Optional[int] = None):
+                 view: List[str] = Query([]), character_id: CharacterId = None):
     """The generate form, re-rendered when the album, tiers or views change.
 
     Its own route because the tabs below depend on which tiers are ticked, and
@@ -1324,7 +1449,7 @@ def delete_anchor(id: int):
 @app.post("/anchors/delete-unpicked")
 def delete_unpicked_anchors(scope_kind: str = Form(...), scope_value: str = Form(...),
                              tier: str = Form(...), view: str = Form(...),
-                             character_id: Optional[int] = Form(None)):
+                             character_id: CharacterId = Form(None)):
     """Clear out one group's rejects, keeping whichever is chosen.
 
     Deleting six candidates one at a time is the slow path, and the chosen one
@@ -2099,7 +2224,7 @@ def start_render(id: int, tier: str = Form(...), fade: float = Form(0.0)):
 
 
 @app.post("/songs/{id}/audio")
-def edit_song_audio(id: int, trim_start: float = Form(0.0), trim_end: Optional[float] = Form(None),
+def edit_song_audio(id: int, trim_start: float = Form(0.0), trim_end: BlankFloat = Form(None),
                      gain_db: float = Form(0.0), fade_in: float = Form(0.0), fade_out: float = Form(0.0),
                      prompt: str = Form("")):
     song = get_song_or_404(id)
@@ -2177,7 +2302,7 @@ def delete_song(id: int, confirm: str = Form("")):
                 except OSError:
                     pass          # not empty: leave it, deleting more is not our call
 
-    for table in ("storyboards", "refs", "clips", "renders", "assets", "playlist_items"):
+    for table in ("storyboards", "refs", "clips", "renders", "assets", "playlist_items", "set_items"):
         db.run(f"DELETE FROM {table} WHERE song_id=?", id)
     db.run("DELETE FROM songs WHERE id=?", id)
     return RedirectResponse("/", status_code=303)
@@ -2713,31 +2838,239 @@ def delete_publish_target(id: int):
 
 # -------------------------------------------------------------------- sets --
 
+def get_set_or_404(id):
+    row = db.one("SELECT * FROM sets WHERE id=?", id)
+    if not row:
+        raise HTTPException(404, "no such set")
+    return row
+
+
+def _set_render_row(a):
+    """One rendered asset (kind='set'), formatted for display -- shared by the
+    shelf (legacy renders with no set of their own) and the editor (renders
+    that belong to this set)."""
+    meta = db.jset(a)
+    missing = not (a["path"] and os.path.isfile(a["path"]))
+    size = duration = None
+    if not missing:
+        size = os.path.getsize(a["path"])
+        try:
+            duration = mixer.probe(a["path"])["duration"]
+        except Exception:
+            pass
+    return {"asset": a, "mode": meta.get("mode", "video"), "tier": meta.get("tier"),
+            "missing": missing, "size": size, "duration": duration}
+
+
+def set_detail(row):
+    """Editor context for one set: its items in order, the predicted running
+    length, whether it is ready to render video, and every file ever rendered
+    from it (newest first, so re-rendering never hides what you are comparing
+    against -- the same shape as an anchor's candidates).
+    """
+    items = db.q("""SELECT si.*, s.title AS song_title, s.mp3_path AS mp3_path,
+                           s.bpm AS song_bpm, s.key AS song_key
+                    FROM set_items si JOIN songs s ON s.id = si.song_id
+                    WHERE si.set_id=? ORDER BY si.position""", row["id"])
+    # Length is always predicted off the song's own AUDIO: build_song.py cuts
+    # every clip to match the track exactly, so the mp3 duration is the set's
+    # real running length whether or not this set includes video. Skip items
+    # whose mp3 is missing from disk (deleted, moved, or swapped by the
+    # audio-edit undo/original-swap feature) -- same guard _set_render_row
+    # already applies to its own probe, so a missing file degrades the total
+    # instead of 500ing the page the Remove button lives on.
+    mix_items = [{"audio": it["mp3_path"], "transition": it["transition"], "secs": it["secs"],
+                 "in_secs": it["in_secs"], "out_secs": it["out_secs"]} for it in items
+                 if it["mp3_path"] and os.path.isfile(it["mp3_path"])]
+    total = mixer.set_duration(mix_items, key="audio") if mix_items else 0.0
+    missing_video = []
+    if row["mode"] == "video" and row["tier"]:
+        for it in items:
+            if not db.one("""SELECT id FROM renders WHERE song_id=? AND tier=?
+                             ORDER BY id DESC LIMIT 1""", it["song_id"], row["tier"]):
+                missing_video.append(it["song_title"])
+    renders = [_set_render_row(a) for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC")
+               if db.jset(a).get("set_id") == row["id"]]
+    return {"set": row, "items": items, "count": len(items), "total_secs": total,
+            "missing_video": missing_video, "renders": renders}
+
+
 @app.get("/sets", response_class=HTMLResponse)
 def sets_page(request: Request):
-    """Every rendered set, audio and video.
-
-    They were only ever listed inside the playlist card that produced them, so
-    a set you made last week was three clicks and a guess away. This is the
-    shelf: what exists, from which playlist, at which tier, how long.
+    """The Sets shelf: every editable set (the document you can open and
+    change), plus every rendered file that predates the sets table and so has
+    no set of its own -- assets from the old playlist quick-render.
     """
+    editable = [set_detail(r) for r in db.q("SELECT * FROM sets ORDER BY updated DESC, id DESC")]
     names = {p["id"]: p["name"] for p in db.q("SELECT id, name FROM playlists")}
     rows = []
     for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC"):
         meta = db.jset(a)
-        size = duration = None
-        if a["path"] and os.path.isfile(a["path"]):
-            size = os.path.getsize(a["path"])
-            try:
-                duration = mixer.probe(a["path"])["duration"]
-            except Exception:
-                pass
-        rows.append({"asset": a, "mode": meta.get("mode", "video"), "tier": meta.get("tier"),
-                     "playlist": names.get(meta.get("playlist_id"), "(deleted playlist)"),
-                     "playlist_id": meta.get("playlist_id"),
-                     "missing": not (a["path"] and os.path.isfile(a["path"])),
-                     "size": size, "duration": duration})
-    return templates.TemplateResponse(request, "sets.html", {"sets": rows})
+        if meta.get("set_id") is not None:
+            continue  # shown under its own set's card above, not here too
+        row = _set_render_row(a)
+        row["playlist"] = names.get(meta.get("playlist_id"), "(deleted playlist)")
+        row["playlist_id"] = meta.get("playlist_id")
+        rows.append(row)
+    return templates.TemplateResponse(request, "sets.html",
+                                      {"sets": rows, "editable_sets": editable})
+
+
+@app.get("/sets/new", response_class=HTMLResponse)
+def new_set_page(request: Request):
+    playlists = db.q("SELECT id, name FROM playlists WHERE kind='playlist' ORDER BY name")
+    return templates.TemplateResponse(request, "set_new.html",
+                                      {"playlists": playlists, "all_tiers": tiers.all_tiers()})
+
+
+@app.post("/sets/new")
+def create_set(name: str = Form(...), mode: str = Form("video"), tier: str = Form(""),
+               playlist_id: BlankInt = Form(None)):
+    name = (name or "").strip()
+    if not name:
+        raise HTTPException(400, "name required")
+    # free text a user typed -- screened exactly like the anchor prompt and
+    # tier wording, for the same reason: it flows into no prompt today, but a
+    # field nobody screens is the one that eventually does.
+    try:
+        tiers.check_text(name, "set name")
+        tiers.check_override(name)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if mode not in ("audio", "video"):
+        raise HTTPException(400, "mode must be 'audio' or 'video'")
+    tier = (tier or "").strip() or None
+    if tier:
+        valid_tier_or_400(tier)
+    if playlist_id is not None:
+        get_playlist_or_404(playlist_id)
+    now = time.time()
+    sid = db.run("""INSERT INTO sets (name, playlist_id, tier, mode, created, updated)
+                    VALUES (?,?,?,?,?,?)""", name, playlist_id, tier, mode, now, now)
+    if playlist_id is not None:
+        # Seeds from the playlist's current ordering -- a STARTING POINT, not a
+        # link: editing the set afterward never writes back to the playlist,
+        # and re-ordering the playlist later never reaches this set either.
+        for it in db.q("SELECT * FROM playlist_items WHERE playlist_id=? ORDER BY position", playlist_id):
+            db.run("""INSERT INTO set_items (set_id, song_id, position, transition, secs)
+                      VALUES (?,?,?,?,?)""", sid, it["song_id"], it["position"],
+                   it["transition"], it["secs"])
+    return RedirectResponse(f"/sets/{sid}", status_code=303)
+
+
+@app.get("/sets/{id}", response_class=HTMLResponse)
+def set_edit_page(request: Request, id: int):
+    row = get_set_or_404(id)
+    songs = db.q("SELECT id, title FROM songs ORDER BY title")
+    ctx = {**set_detail(row), "songs": songs, "all_tiers": tiers.all_tiers(),
+           "transitions": SET_TRANSITIONS}
+    return templates.TemplateResponse(request, "set_edit.html", ctx)
+
+
+@app.post("/sets/{id}")
+def update_set(id: int, name: str = Form(...), mode: str = Form("video"), tier: str = Form("")):
+    get_set_or_404(id)
+    name = (name or "").strip()
+    if not name:
+        raise HTTPException(400, "name required")
+    try:
+        tiers.check_text(name, "set name")
+        tiers.check_override(name)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if mode not in ("audio", "video"):
+        raise HTTPException(400, "mode must be 'audio' or 'video'")
+    tier = (tier or "").strip() or None
+    if tier:
+        valid_tier_or_400(tier)
+    db.run("UPDATE sets SET name=?, mode=?, tier=?, updated=? WHERE id=?",
+           name, mode, tier, time.time(), id)
+    return RedirectResponse(f"/sets/{id}", status_code=303)
+
+
+@app.post("/sets/{id}/items")
+def add_set_item(id: int, song_id: int = Form(...), transition: str = Form("fade"),
+                 secs: float = Form(2.0)):
+    get_set_or_404(id)
+    get_song_or_404(song_id)
+    if transition not in SET_TRANSITIONS:
+        raise HTTPException(400, f"transition must be one of {', '.join(SET_TRANSITIONS)}")
+    pos_row = db.one("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM set_items WHERE set_id=?", id)
+    db.run("""INSERT INTO set_items (set_id, song_id, position, transition, secs)
+              VALUES (?,?,?,?,?)""", id, song_id, pos_row["p"], transition, secs)
+    db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
+    return RedirectResponse(f"/sets/{id}", status_code=303)
+
+
+@app.post("/sets/{id}/items/{item_id}")
+def edit_set_item(id: int, item_id: int, in_secs: BlankFloat = Form(None),
+                  out_secs: BlankFloat = Form(None), gain_db: float = Form(0.0),
+                  transition: str = Form("fade"), secs: float = Form(2.0)):
+    get_set_or_404(id)
+    if not db.one("SELECT id FROM set_items WHERE id=? AND set_id=?", item_id, id):
+        raise HTTPException(404, "no such item")
+    in_secs, out_secs, gain_db, transition, secs = clamp_set_item_params(
+        in_secs, out_secs, gain_db, transition, secs)
+    db.run("""UPDATE set_items SET in_secs=?, out_secs=?, gain_db=?, transition=?, secs=?
+              WHERE id=?""", in_secs, out_secs, gain_db, transition, secs, item_id)
+    db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
+    return RedirectResponse(f"/sets/{id}", status_code=303)
+
+
+@app.post("/sets/{id}/items/{item_id}/delete")
+def delete_set_item(id: int, item_id: int):
+    get_set_or_404(id)
+    db.run("DELETE FROM set_items WHERE id=? AND set_id=?", item_id, id)
+    db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
+    return RedirectResponse(f"/sets/{id}", status_code=303)
+
+
+@app.post("/sets/{id}/reorder")
+def reorder_set(id: int, order: str = Form(...)):
+    get_set_or_404(id)
+    ids = [int(x) for x in order.split(",") if x.strip().isdigit()]
+    for pos, item_id in enumerate(ids):
+        db.run("UPDATE set_items SET position=? WHERE id=? AND set_id=?", pos, item_id, id)
+    db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
+    return RedirectResponse(f"/sets/{id}", status_code=303)
+
+
+@app.post("/sets/{id}/render")
+def render_set_route(id: int):
+    row = get_set_or_404(id)
+    items = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", id)
+    if not items:
+        raise HTTPException(400, "this set has no songs yet -- add one first")
+    songs = {it["song_id"]: get_song_or_404(it["song_id"]) for it in items}
+
+    build = []
+    if row["mode"] == "audio":
+        missing = [songs[it["song_id"]]["title"] for it in items if not songs[it["song_id"]]["mp3_path"]]
+        if missing:
+            raise HTTPException(400, f"no audio for: {', '.join(missing)}")
+        for it in items:
+            build.append({"audio": songs[it["song_id"]]["mp3_path"], "transition": it["transition"],
+                          "secs": it["secs"], "in_secs": it["in_secs"], "out_secs": it["out_secs"],
+                          "gain_db": it["gain_db"]})
+    else:
+        if not row["tier"]:
+            raise HTTPException(400, "pick a tier before rendering video")
+        missing = []
+        for it in items:
+            r = db.one("""SELECT * FROM renders WHERE song_id=? AND tier=?
+                         ORDER BY id DESC LIMIT 1""", it["song_id"], row["tier"])
+            if not r:
+                missing.append(songs[it["song_id"]]["title"])
+            else:
+                build.append({"video": r["path"], "transition": it["transition"], "secs": it["secs"],
+                              "in_secs": it["in_secs"], "out_secs": it["out_secs"],
+                              "gain_db": it["gain_db"]})
+        if missing:
+            raise HTTPException(400, f"tier '{row['tier']}' has no video for: {', '.join(missing)}")
+
+    jobs.enqueue("render_set", {"set_id": id, "playlist_id": row["playlist_id"],
+                                "mode": row["mode"], "tier": row["tier"], "items": build})
+    return RedirectResponse(f"/sets/{id}", status_code=303)
 
 
 @app.post("/sets/{asset_id}/delete")

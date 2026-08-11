@@ -54,6 +54,7 @@ class Cancelled(Exception):
 # or how far along it was.
 LABELS = {
     "transcribe": "Transcribe lyrics",
+    "analyse": "Analyse audio (bpm/key/energy)",
     "anchor": "Generate anchor candidates",
     "storyboard": "Write storyboard (Grok)",
     "refs": "Render reference images",

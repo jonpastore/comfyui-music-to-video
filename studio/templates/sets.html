@@ -1,12 +1,56 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Sets</h1>
-<p class="hint">Every rendered set. A set is an assembly of songs that already exist &mdash;
-  deleting one here removes only the assembled file, never the songs or their own videos.
-  Render a new one from a playlist's card.</p>
+<p class="hint">A set is a document: songs in an order, each with its own trim, gain and
+  transition. Rendering it never destroys the last output &mdash; every render lands beside
+  the ones before it, exactly like an anchor keeps its candidates.</p>
+
+<p><a href="/sets/new"><button type="button">New set</button></a></p>
+
+{% if not editable_sets %}
+<p class="empty">No sets yet.</p>
+{% else %}
+<div class="set-grid">
+  {% for s in editable_sets %}
+  {# id so the Library's Sets column can link straight to the latest render #}
+  <section class="card set-card" {% if s.renders %}id="set-{{ s.renders[0].asset.id }}"{% endif %}>
+    <header class="model-head">
+      <strong><a href="/sets/{{ s.set.id }}">{{ s.set.name }}</a></strong>
+      <span class="tag">{{ s.set.mode }}</span>
+      {% if s.set.tier %}<span class="tag">{{ s.set.tier | tiername }}</span>{% endif %}
+    </header>
+    <p class="meta">
+      {{ s.count }} song{{ "" if s.count == 1 else "s" }} &middot; {{ s.total_secs | hms }}
+      {% if s.renders %}&middot; {{ s.renders | length }} render{{ "" if s.renders | length == 1 else "s" }}{% endif %}
+    </p>
+    {% if s.renders %}
+    {% with r = s.renders[0] %}
+      {% if not r.missing %}
+        {% if r.mode == "audio" %}
+        <audio controls preload="none" src="{{ media_url(r.asset.path) }}"></audio>
+        {% else %}
+        <video controls preload="metadata" src="{{ media_url(r.asset.path) }}"></video>
+        {% endif %}
+      {% endif %}
+    {% endwith %}
+    {% else %}
+    <p class="empty">Not rendered yet.</p>
+    {% endif %}
+    <div class="button-row">
+      <a class="linkish" href="/sets/{{ s.set.id }}">Open &rarr;</a>
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2>Legacy renders</h2>
+<p class="hint">Rendered before a set became a document &mdash; from a playlist's own
+  <strong>Render set</strong> form. Deleting one here removes only the assembled file, never
+  the songs or their own videos.</p>
 
 {% if not sets %}
-<p class="empty">No sets rendered yet. Open a playlist and use <strong>Render set</strong>.</p>
+<p class="empty">None.</p>
 {% else %}
 <div class="set-grid">
   {% for s in sets %}

@@ -44,6 +44,12 @@
 {% if not songs %}
 <p class="empty">No songs yet. Upload one above.</p>
 {% else %}
+<form method="post" action="/songs/analyse-all" class="header-action">
+  <button type="submit" class="secondary">Analyse all un-analysed songs</button>
+  <span class="muted">bpm / key / energy, for every song with no bpm yet.</span>
+</form>
+{% endif %}
+{% if songs %}
 <div class="table-scroll">
 <table class="list sortcols">
   <thead><tr>
@@ -51,6 +57,9 @@
     <th data-sort>Album</th>
     <th data-sort>Genre</th>
     <th data-sort class="num">Length</th>
+    <th data-sort class="num">BPM</th>
+    <th data-sort>Key</th>
+    <th data-sort class="num">Energy</th>
     <th data-sort>Added</th>
     <th data-sort>Video</th>
     <th data-sort>Sets</th>
@@ -71,6 +80,9 @@
       <td class="num" data-k="{{ e.song.duration or '' }}">
         {% if e.song.duration %}{{ e.song.duration | hms }}{% endif %}
       </td>
+      <td class="num" data-k="{{ e.song.bpm or '' }}">{% if e.song.bpm %}{{ "%.0f"|format(e.song.bpm) }}{% endif %}</td>
+      <td>{{ e.song.key or "" }}</td>
+      <td class="num" data-k="{{ e.song.energy or '' }}">{% if e.song.energy %}{{ "%.3f"|format(e.song.energy) }}{% endif %}</td>
       <td data-k="{{ e.song.created or '' }}">
         {% if e.song.created %}
         <time class="local-time" datetime="{{ e.song.created | isotime }}">

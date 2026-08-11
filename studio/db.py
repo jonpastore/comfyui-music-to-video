@@ -117,6 +117,26 @@ CREATE TABLE IF NOT EXISTS publish_targets (
   created REAL,
   UNIQUE(service, name));
 
+-- A set is a DOCUMENT now, not just a render. playlist_id is nullable: a set
+-- need not come from a playlist. mode/tier live here rather than only on the
+-- rendered asset, because they are what the EDITOR shows, and a set can be
+-- re-rendered any number of times without them being re-chosen each time.
+CREATE TABLE IF NOT EXISTS sets (
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, playlist_id INTEGER,
+  tier TEXT, mode TEXT DEFAULT 'video',
+  created REAL, updated REAL);
+
+-- One song, in order, with the trim/transition/gain that gets it there.
+-- effects_json is carried but unused until phase 4 fills it in.
+CREATE TABLE IF NOT EXISTS set_items (
+  id INTEGER PRIMARY KEY, set_id INTEGER NOT NULL, song_id INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  in_secs REAL, out_secs REAL,
+  transition TEXT DEFAULT 'fade', secs REAL DEFAULT 2.0,
+  gain_db REAL DEFAULT 0,
+  effects_json TEXT);
+
+CREATE INDEX IF NOT EXISTS idx_set_items ON set_items(set_id, position);
 CREATE INDEX IF NOT EXISTS idx_anchors ON anchors(scope_kind, scope_value, tier, view);
 CREATE INDEX IF NOT EXISTS idx_characters ON characters(scope_value, name);
 CREATE INDEX IF NOT EXISTS idx_refs_song ON refs(song_id, tier, clip_idx);
@@ -177,6 +197,17 @@ MIGRATIONS = [
     # an existing custom tier does not silently acquire the permission.
     # The built-ins set their own (pg13=0, r=1, xxx=1) in tiers.ensure_builtins.
     "ALTER TABLE tiers ADD COLUMN allow_nudity INTEGER DEFAULT 0",
+    # Per-song metadata from analyse.py (SETS_MIXING_PLAN.md phase 2). bpm
+    # already existed and had never been written to; these are its partners.
+    # key is Camelot notation ("8A"), beat_grid_json a JSON list of beat
+    # times in seconds, energy the mean RMS. downbeat_offset is which of the
+    # first four beats analyse.py guessed is bar one -- left editable because
+    # a wrong guess sounds wrong in a way no amount of tuning fixes, and a
+    # human listening once fixes it in a second.
+    "ALTER TABLE songs ADD COLUMN key TEXT",
+    "ALTER TABLE songs ADD COLUMN beat_grid_json TEXT",
+    "ALTER TABLE songs ADD COLUMN energy REAL",
+    "ALTER TABLE songs ADD COLUMN downbeat_offset INTEGER DEFAULT 0",
 ]
 
 

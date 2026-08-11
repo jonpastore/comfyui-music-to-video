@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ set.name }}</h1>
+<p class="hint"><a href="/sets">&larr; Sets</a></p>
+
+<section class="card">
+  <form method="post" action="/sets/{{ set.id }}" class="stack-form">
+    <div class="field-row">
+      <label>Name <input type="text" name="name" value="{{ set.name }}" required></label>
+      <label>Mode
+        <select name="mode">
+          <option value="video" {% if set.mode == "video" %}selected{% endif %}>Audio + video</option>
+          <option value="audio" {% if set.mode == "audio" %}selected{% endif %}>Audio only</option>
+        </select>
+      </label>
+      <label>Tier
+        <select name="tier">
+          <option value="">(none)</option>
+          {% for t in all_tiers %}
+          <option value="{{ t.name }}" {% if t.name == set.tier %}selected{% endif %}>{{ t.name | tiername }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <button type="submit">Save</button>
+  </form>
+</section>
+
+<p class="meta">{{ count }} song{{ "" if count == 1 else "s" }} &middot; running length
+  <strong>{{ total_secs | hms }}</strong></p>
+
+{% if not items %}
+<p class="empty">No songs yet. Add one below.</p>
+{% else %}
+<table class="list sortable" data-reorder-url="/sets/{{ set.id }}/reorder">
+  <thead><tr><th></th><th>#</th><th>Song</th><th>BPM/Key</th><th>Length</th><th>Transition</th><th></th></tr></thead>
+  <tbody>
+  {% for it in items %}
+  <tr draggable="true" data-item="{{ it.id }}">
+    <td class="grip" title="drag to reorder">&#8942;&#8942;</td>
+    <td class="pos">{{ loop.index }}</td>
+    <td><a href="/songs/{{ it.song_id }}">{{ it.song_title }}</a></td>
+    <td>
+      {% if it.song_bpm %}{{ "%.0f"|format(it.song_bpm) }}{% endif %}
+      {% if it.song_key %}&middot; {{ it.song_key }}{% endif %}
+      {% if not it.song_bpm and not it.song_key %}<span class="muted">&mdash;</span>{% endif %}
+    </td>
+    <td>
+      {% if it.in_secs or it.out_secs is not none %}
+      trim {{ it.in_secs or 0 }}s&ndash;{{ it.out_secs if it.out_secs is not none else "end" }}s
+      {% else %}<span class="muted">full track</span>{% endif %}
+      {% if it.gain_db %}&middot; {{ it.gain_db }} dB{% endif %}
+    </td>
+    <td>{{ it.transition }} {{ it.secs }}s</td>
+    <td>
+      <form method="post" action="/sets/{{ set.id }}/items/{{ it.id }}/delete">
+        <button type="submit">Remove</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted">Drag a row to reorder. Order saves on drop.</p>
+
+<h3>Item settings</h3>
+<p class="hint">Trim, gain and transition, per song. In/out blank means the whole track.</p>
+{% for it in items %}
+<form method="post" action="/sets/{{ set.id }}/items/{{ it.id }}" class="stack-form character-row">
+  <div class="field-row">
+    <strong>{{ loop.index }}. {{ it.song_title }}</strong>
+    {% if it.song_bpm %}<span class="muted">{{ "%.0f"|format(it.song_bpm) }} BPM</span>{% endif %}
+    {% if it.song_key %}<span class="muted">&middot; {{ it.song_key }}</span>{% endif %}
+  </div>
+  <div class="field-row">
+    <label>In (s) <input type="number" step="0.1" min="0" name="in_secs"
+                          value="{{ it.in_secs if it.in_secs is not none else '' }}"></label>
+    <label>Out (s) <input type="number" step="0.1" min="0" name="out_secs"
+                           value="{{ it.out_secs if it.out_secs is not none else '' }}"></label>
+    <label>Gain (dB) <input type="number" step="0.5" name="gain_db" value="{{ it.gain_db or 0 }}"></label>
+    <label>Transition
+      <select name="transition">
+        {% for t in transitions %}
+        <option value="{{ t }}" {% if t == it.transition %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Secs <input type="number" step="0.1" min="0" name="secs" value="{{ it.secs }}"></label>
+  </div>
+  <div class="field-row">
+    <button type="submit">Save {{ it.song_title }}</button>
+  </div>
+</form>
+{% endfor %}
+{% endif %}
+
+<h3>Add a song</h3>
+<form method="post" action="/sets/{{ set.id }}/items" class="field-row">
+  <label>Song
+    <select name="song_id" required>
+      {% for s in songs %}<option value="{{ s.id }}">{{ s.title }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Transition
+    <select name="transition">
+      {% for t in transitions %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Secs <input type="number" step="0.1" name="secs" value="2.0"></label>
+  <button type="submit">Add song</button>
+</form>
+
+<h3>Render</h3>
+{% if set.mode == "video" and not set.tier %}
+<p class="muted">Pick a tier above before rendering video.</p>
+{% elif missing_video %}
+<p class="muted">Tier {{ set.tier | tiername }} has no video for: {{ missing_video | join(", ") }}
+  &mdash; render those songs first, or switch this set to audio only.</p>
+{% else %}
+<form method="post" action="/sets/{{ set.id }}/render">
+  <button type="submit" {% if not items %}disabled{% endif %}>Render this set</button>
+</form>
+{% endif %}
+
+{% if renders %}
+<h3>Rendered</h3>
+<div class="set-grid">
+  {% for r in renders %}
+  <section class="card set-card">
+    <header class="model-head">
+      <span class="tag">{{ r.mode }}</span>
+      {% if r.tier %}<span class="tag">{{ r.tier | tiername }}</span>{% endif %}
+      {% if r.missing %}<span class="tag warn-tag">file missing</span>{% endif %}
+    </header>
+    <p class="meta">
+      <code>{{ r.asset.path.split('/')[-1] }}</code><br>
+      <time class="local-time muted" datetime="{{ r.asset.created | isotime }}">
+        {{ r.asset.created | isotime }}</time>
+      {% if r.duration %}&middot; {{ r.duration | hms }}{% endif %}
+      {% if r.size %}&middot; {{ "%.0f"|format(r.size / 1048576) }} MB{% endif %}
+    </p>
+    {% if not r.missing %}
+      {% if r.mode == "audio" %}
+      <audio controls preload="none" src="{{ media_url(r.asset.path) }}"></audio>
+      {% else %}
+      <video controls preload="metadata" src="{{ media_url(r.asset.path) }}"></video>
+      {% endif %}
+      <div class="button-row">
+        <a class="linkish" href="{{ media_url(r.asset.path) }}" download>Download</a>
+      </div>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

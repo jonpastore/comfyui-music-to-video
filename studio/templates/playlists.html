@@ -103,7 +103,7 @@
   {% if not d.rows %}
   <p class="empty">No songs added yet.</p>
   {% else %}
-  <table class="list sortable" data-playlist="{{ d.playlist.id }}">
+  <table class="list sortable" data-reorder-url="/playlists/{{ d.playlist.id }}/reorder">
     <thead><tr><th></th><th>#</th><th>Song</th><th>Length</th><th>Play</th>
                <th>Transition</th><th></th></tr></thead>
     <tbody>

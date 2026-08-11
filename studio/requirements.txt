@@ -18,3 +18,6 @@ faster-whisper>=1.0
 # instead of ~20 s on the 5090.
 nvidia-cublas-cu12
 nvidia-cudnn-cu12
+# analyse.py: bpm/key/energy per song. Verified against numpy 2.4.6 / numba
+# 0.66.0 already on this box (see analyse.py's module docstring).
+librosa>=1.0
