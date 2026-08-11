@@ -11,6 +11,7 @@ import pytest
 # conftest.py (which pytest always imports before this file) -- see its
 # docstring for why that has to be the one place it happens.
 from conftest import grok_calls  # noqa: F401  (read by test_guardrail_sent_to_grok_contains_pinned)
+from conftest import _set_duration as _stub_set_duration
 
 import db      # real
 import tiers   # real
@@ -2431,6 +2432,253 @@ def test_set_editor_page_404s_for_an_unknown_id():
     with TestClient(appmod.app) as client:
         assert client.get("/sets/999999").status_code == 404
         assert client.post("/sets/999999", data={"name": "x", "mode": "audio"}).status_code == 404
+
+
+# ---- SETS_MIXING_PLAN.md: beatmatch.py / effects.py / video_fx.py wired in,
+# and the shared "impossible transition" guard -----------------------------
+
+def test_set_item_effects_json_validated_screened_and_rendered():
+    """effects_json is free text (JSON) -- screened exactly like the anchor
+    prompt and tier wording, then checked structurally against effects.py/
+    video_fx.py before it's stored, so a value mixer.py's filtergraph would
+    refuse never reaches the db in the first place."""
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Effects Song")
+        client.post("/sets/new", data={"name": "Effects Set", "mode": "audio"})
+        row = db.one("SELECT * FROM sets WHERE name='Effects Set'")
+        client.post(f"/sets/{row['id']}/items",
+                    data={"song_id": song["id"], "transition": "cut", "secs": "0"})
+        item = db.one("SELECT * FROM set_items WHERE set_id=?", row["id"])
+
+        good = json.dumps({"eq_kill": {"low_db": -6, "mid_db": 0, "high_db": 2},
+                           "grade": {"brightness": 0.1}})
+        r = client.post(f"/sets/{row['id']}/items/{item['id']}",
+                        data={"transition": "cut", "secs": "0", "effects_json": good})
+        assert r.status_code in (200, 303), r.text
+        saved = db.one("SELECT effects_json FROM set_items WHERE id=?", item["id"])
+        assert json.loads(saved["effects_json"]) == json.loads(good)
+        assert "eq_kill" in client.get(f"/sets/{row['id']}").text
+
+        bad_json = client.post(f"/sets/{row['id']}/items/{item['id']}",
+                               data={"transition": "cut", "secs": "0", "effects_json": "{not json"})
+        assert bad_json.status_code == 400, bad_json.text
+
+        bad_range = client.post(f"/sets/{row['id']}/items/{item['id']}",
+                                data={"transition": "cut", "secs": "0",
+                                      "effects_json": json.dumps({"eq_kill": {"low_db": 999}})})
+        assert bad_range.status_code == 400, bad_range.text
+
+        bad_text = client.post(f"/sets/{row['id']}/items/{item['id']}",
+                               data={"transition": "cut", "secs": "0",
+                                     "effects_json": '{"note": "a 12 year old mix"}'})
+        assert bad_text.status_code == 400, bad_text.text
+
+        # duck (needs a sidechain input) and layer (needs a second clip) are
+        # neither wired into set rendering -- refused outright, not silently
+        # accepted-and-ignored
+        for unsupported in ('{"duck": 0.5}', '{"layer": {"mode": "screen", "opacity": 0.5}}'):
+            r = client.post(f"/sets/{row['id']}/items/{item['id']}",
+                            data={"transition": "cut", "secs": "0", "effects_json": unsupported})
+            assert r.status_code == 400, r.text
+
+        # every refusal above left the earlier valid save untouched
+        assert json.loads(db.one("SELECT effects_json FROM set_items WHERE id=?",
+                                  item["id"])["effects_json"]) == json.loads(good)
+
+
+def test_set_item_beatmatch_toggle_persists_and_shows_its_plan():
+    with TestClient(appmod.app) as client:
+        song1 = _upload_song(client, "Beatmatch Song 1")
+        song2 = _upload_song(client, "Beatmatch Song 2")
+        for s in (song1, song2):
+            wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='analyse'", s["id"])["id"])
+
+        client.post("/sets/new", data={"name": "Beatmatch Set", "mode": "audio"})
+        row = db.one("SELECT * FROM sets WHERE name='Beatmatch Set'")
+        client.post(f"/sets/{row['id']}/items",
+                    data={"song_id": song1["id"], "transition": "fade", "secs": "1.0", "beatmatch": "true"})
+        client.post(f"/sets/{row['id']}/items", data={"song_id": song2["id"], "transition": "cut", "secs": "0"})
+        item1 = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", row["id"])[0]
+        assert item1["beatmatch"] == 1
+
+        page = client.get(f"/sets/{row['id']}").text
+        assert 'name="beatmatch" checked' in page
+        # both songs analysed the same (stubbed) 4-beat grid -- one bar, not
+        # enough to ramp across, so the plan note says so
+        assert "not enough bars" in page or "snapped" in page
+
+        # toggling off (the field simply absent from the form) persists
+        r = client.post(f"/sets/{row['id']}/items/{item1['id']}", data={"transition": "fade", "secs": "1.0"})
+        assert r.status_code in (200, 303), r.text
+        assert db.one("SELECT beatmatch FROM set_items WHERE id=?", item1["id"])["beatmatch"] == 0
+
+
+def test_beatmatch_note_never_claims_a_tempo_ramp_the_render_does_not_apply():
+    """The editor may only promise what the renderer produces.
+
+    mixer.apply_tempo_ramp exists and works, but nothing calls it from the
+    render path -- only the beat SNAP is applied. A note reading "snapped +
+    tempo ramp 120->126 BPM" was therefore a promise the output did not keep,
+    the same defect as predicting a length for a set that will not render.
+
+    Wiring the ramp changes the item's DURATION, so set_duration and
+    _check_transition_fits have to account for it first. Until something calls
+    apply_tempo_ramp from the render path, this test holds the note honest.
+    """
+    # a CALL site, not a mention: this file and app.py both name the function in
+    # prose, and matching the bare name made this test fail on its own comment
+    here = os.path.dirname(appmod.__file__)
+    ramp_is_wired = any(
+        re.search(r"\bmixer\.apply_tempo_ramp\s*\(", open(os.path.join(here, f)).read())
+        for f in ("app.py", "jobs.py"))
+    assert not ramp_is_wired, \
+        "apply_tempo_ramp now has a caller -- wire it into set_duration's accounting and update this test"
+
+    import inspect
+    src = inspect.getsource(appmod._beatmatch_plan)
+    assert "not applied" in src, "the beatmatch note no longer says the ramp is unapplied"
+    assert "snapped + tempo ramp" not in src, \
+        "the note claims a tempo ramp is applied; nothing applies one at render time"
+
+
+def test_set_item_edit_and_reorder_feed_beatmatch_fields_to_set_duration(patch_stub):
+    """_mix_items_for_set (add/edit) and reorder_set's own row fetch must
+    carry beatmatch/beat_grid/downbeat_offset through to mixer.set_duration
+    (via _beatmatch_fields, the same helper render_set_route uses) -- the
+    integration defect this regresses: without these, a beatmatch=1 item's
+    edit-time guard validated raw, unsnapped secs/out_secs instead of what
+    the beat-snap will actually produce at render time."""
+    with TestClient(appmod.app) as client:
+        song1 = _upload_song(client, "Beatmatch Guard Song 1")
+        song2 = _upload_song(client, "Beatmatch Guard Song 2")
+        for s in (song1, song2):
+            wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='analyse'", s["id"])["id"])
+        client.post("/sets/new", data={"name": "Beatmatch Guard Set", "mode": "audio"})
+        row = db.one("SELECT * FROM sets WHERE name='Beatmatch Guard Set'")
+        client.post(f"/sets/{row['id']}/items",
+                    data={"song_id": song1["id"], "transition": "fade", "secs": "1.0", "beatmatch": "true"})
+        client.post(f"/sets/{row['id']}/items", data={"song_id": song2["id"], "transition": "cut", "secs": "0"})
+        item1 = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", row["id"])[0]
+
+        seen = []
+
+        def _spy(items, key="video"):
+            seen.append(items)
+            return _stub_set_duration(items, key=key)
+
+        patch_stub("mixer", set_duration=_spy)
+
+        r = client.post(f"/sets/{row['id']}/items/{item1['id']}",
+                        data={"transition": "fade", "secs": "1.0", "beatmatch": "true"})
+        assert r.status_code in (200, 303), r.text
+        assert seen, "edit-time guard never called mixer.set_duration"
+        edited = next(it for it in seen[-1] if it["audio"] == song1["mp3_path"])
+        assert edited["beatmatch"] is True
+        assert edited["beat_grid"] == [0.0, 0.5, 1.0, 1.5]  # the stubbed analyse() grid
+        assert edited["downbeat_offset"] == 0
+
+        # reorder_set's own row fetch (separate SELECT from _mix_items_for_set)
+        # carries the same fields
+        seen.clear()
+        ids_desc = ",".join(str(i["id"]) for i in db.q(
+            "SELECT id FROM set_items WHERE set_id=? ORDER BY position DESC", row["id"]))
+        r = client.post(f"/sets/{row['id']}/reorder", data={"order": ids_desc})
+        assert r.status_code in (200, 303), r.text
+        reordered_first = next(it for it in seen[-1] if it["audio"] == song1["mp3_path"])
+        assert reordered_first["beatmatch"] is True
+
+
+def test_set_editor_shows_suggested_order_and_apply_reorders():
+    with TestClient(appmod.app) as client:
+        a = _upload_song(client, "Suggest Song A")
+        b = _upload_song(client, "Suggest Song B")
+        c = _upload_song(client, "Suggest Song C")
+        # wait for each upload's analyse job before overwriting its bpm/key --
+        # otherwise the async job (which also writes bpm/key) can land AFTER
+        # this UPDATE and clobber it.
+        for s in (a, b, c):
+            wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='analyse'", s["id"])["id"])
+        db.run("UPDATE songs SET key='8A', bpm=120 WHERE id=?", a["id"])
+        db.run("UPDATE songs SET key='5A', bpm=90 WHERE id=?", b["id"])
+        db.run("UPDATE songs SET key='9A', bpm=122 WHERE id=?", c["id"])
+
+        client.post("/sets/new", data={"name": "Order Set", "mode": "audio"})
+        row = db.one("SELECT * FROM sets WHERE name='Order Set'")
+        for s in (a, b, c):
+            client.post(f"/sets/{row['id']}/items", data={"song_id": s["id"], "transition": "cut", "secs": "0"})
+        items_by_song = {r["song_id"]: r["id"] for r in
+                          db.q("SELECT id, song_id FROM set_items WHERE set_id=?", row["id"])}
+
+        page = client.get(f"/sets/{row['id']}").text
+        assert "Suggested running order" in page
+        assert "a fifth up" in page
+        m = re.search(r'name="order" value="([\d,]*)"', page)
+        assert m, "apply-suggested-order form missing its hidden order value"
+        # A(8A) is the starting point; C(9A) is a fifth up and harmonically
+        # compatible; B(5A) matches neither and lands last on tempo
+        expected = f"{items_by_song[a['id']]},{items_by_song[c['id']]},{items_by_song[b['id']]}"
+        assert m.group(1) == expected, (m.group(1), expected)
+
+        client.post(f"/sets/{row['id']}/reorder", data={"order": m.group(1)})
+        reordered = db.q("SELECT song_id FROM set_items WHERE set_id=? ORDER BY position", row["id"])
+        assert [r["song_id"] for r in reordered] == [a["id"], c["id"], b["id"]]
+
+
+def test_set_edit_refuses_an_impossible_transition_before_writing():
+    """The trim slider is exactly how this state gets reached one drag away
+    (SETS_MIXING_PLAN.md): an edit that leaves a transition longer than the
+    running duration is refused, not silently saved and only caught later
+    at render time."""
+    with TestClient(appmod.app) as client:
+        s1 = _upload_song(client, "Guard Song 1")
+        s2 = _upload_song(client, "Guard Song 2")
+        client.post("/sets/new", data={"name": "Guard Set", "mode": "audio"})
+        row = db.one("SELECT * FROM sets WHERE name='Guard Set'")
+        client.post(f"/sets/{row['id']}/items", data={"song_id": s1["id"], "transition": "fade", "secs": "1.0"})
+        client.post(f"/sets/{row['id']}/items", data={"song_id": s2["id"], "transition": "cut", "secs": "0"})
+        item1 = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", row["id"])[0]
+
+        # the stub's fixed per-item duration is 12.3s -- 15s cannot fit
+        r = client.post(f"/sets/{row['id']}/items/{item1['id']}",
+                        data={"transition": "fade", "secs": "15.0"})
+        assert r.status_code == 400, r.text
+        assert "longer than preceding duration" in r.text
+        assert db.one("SELECT secs FROM set_items WHERE id=?", item1["id"])["secs"] == 1.0
+
+
+def test_set_add_item_refuses_when_the_previous_transition_no_longer_fits():
+    with TestClient(appmod.app) as client:
+        s1 = _upload_song(client, "Add Guard Song 1")
+        s2 = _upload_song(client, "Add Guard Song 2")
+        client.post("/sets/new", data={"name": "Add Guard Set", "mode": "audio"})
+        row = db.one("SELECT * FROM sets WHERE name='Add Guard Set'")
+        # unused while nothing follows this (only) item
+        client.post(f"/sets/{row['id']}/items", data={"song_id": s1["id"], "transition": "fade", "secs": "15.0"})
+        # appending a second item activates that 15s transition against a 12.3s item
+        r = client.post(f"/sets/{row['id']}/items", data={"song_id": s2["id"], "transition": "cut", "secs": "0"})
+        assert r.status_code == 400, r.text
+        assert len(db.q("SELECT id FROM set_items WHERE set_id=?", row["id"])) == 1
+
+
+def test_set_reorder_refuses_a_proposed_order_that_breaks_a_transition():
+    with TestClient(appmod.app) as client:
+        s1 = _upload_song(client, "Reorder Guard 1")
+        s2 = _upload_song(client, "Reorder Guard 2")
+        s3 = _upload_song(client, "Reorder Guard 3")
+        client.post("/sets/new", data={"name": "Reorder Guard Set", "mode": "audio"})
+        row = db.one("SELECT * FROM sets WHERE name='Reorder Guard Set'")
+        client.post(f"/sets/{row['id']}/items", data={"song_id": s1["id"], "transition": "cut", "secs": "0"})
+        client.post(f"/sets/{row['id']}/items", data={"song_id": s2["id"], "transition": "fade", "secs": "15.0"})
+        client.post(f"/sets/{row['id']}/items", data={"song_id": s3["id"], "transition": "cut", "secs": "0"})
+        items = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", row["id"])
+
+        # moving the 15s-transition item to first place: nothing precedes it
+        # but its own duration, same shape as the add-item case above
+        r = client.post(f"/sets/{row['id']}/reorder",
+                        data={"order": f"{items[1]['id']},{items[0]['id']},{items[2]['id']}"})
+        assert r.status_code == 400, r.text
+        unchanged = db.q("SELECT id FROM set_items WHERE set_id=? ORDER BY position", row["id"])
+        assert [i["id"] for i in unchanged] == [it["id"] for it in items]
 
 
 # ---- analyse.py (SETS_MIXING_PLAN.md phase 2: per-song metadata) ---------

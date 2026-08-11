@@ -208,6 +208,10 @@ MIGRATIONS = [
     "ALTER TABLE songs ADD COLUMN beat_grid_json TEXT",
     "ALTER TABLE songs ADD COLUMN energy REAL",
     "ALTER TABLE songs ADD COLUMN downbeat_offset INTEGER DEFAULT 0",
+    # Per-item opt-in to beat matching the transition into the NEXT item
+    # (SETS_MIXING_PLAN.md phase 3). Default 0: an existing set's transitions
+    # keep behaving exactly as rendered until a user turns this on.
+    "ALTER TABLE set_items ADD COLUMN beatmatch INTEGER DEFAULT 0",
 ]
 
 

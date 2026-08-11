@@ -26,12 +26,33 @@
   </form>
 </section>
 
-<p class="meta">{{ count }} song{{ "" if count == 1 else "s" }} &middot; running length
-  <strong>{{ total_secs | hms }}</strong></p>
+<p class="meta">{{ count }} song{{ "" if count == 1 else "s" }}
+  {% if duration_error %}
+  &middot; <span class="tag warn-tag">can't render as configured: {{ duration_error }}</span>
+  {% else %}
+  &middot; running length <strong>{{ total_secs | hms }}</strong>
+  {% endif %}
+</p>
 
 {% if not items %}
 <p class="empty">No songs yet. Add one below.</p>
 {% else %}
+
+{% if suggested_order %}
+<section class="card">
+  <h3>Suggested running order</h3>
+  <p class="hint">By Camelot key adjacency -- a suggestion, never applied automatically.</p>
+  <ol>
+    {% for o in suggested_order %}
+    <li>{{ o.song.title }} <span class="muted">({{ o.reason }})</span></li>
+    {% endfor %}
+  </ol>
+  <form method="post" action="/sets/{{ set.id }}/reorder">
+    <input type="hidden" name="order" value="{{ suggested_order_ids }}">
+    <button type="submit">Apply suggested order</button>
+  </form>
+</section>
+{% endif %}
 <table class="list sortable" data-reorder-url="/sets/{{ set.id }}/reorder">
   <thead><tr><th></th><th>#</th><th>Song</th><th>BPM/Key</th><th>Length</th><th>Transition</th><th></th></tr></thead>
   <tbody>
@@ -87,6 +108,20 @@
     </label>
     <label>Secs <input type="number" step="0.1" min="0" name="secs" value="{{ it.secs }}"></label>
   </div>
+  <div class="check-row">
+    <label class="check"><input type="checkbox" name="beatmatch" {% if it.beatmatch %}checked{% endif %}>
+      Beatmatch into next <span class="muted">(snaps this transition to the beat)</span></label>
+  </div>
+  <div class="field-row">
+    <label style="flex: 1 1 100%">Effects (JSON, optional)
+      <textarea name="effects_json" rows="2" placeholder='{"eq_kill": {"low_db": -6, "mid_db": 0, "high_db": 2}}'>{{ it.effects_json or "" }}</textarea>
+    </label>
+  </div>
+  <p class="hint">Loudness matching is always on. Optional keys: sweep, eq_kill, echo_out, phaser,
+    flanger, gain_db (audio); grade, glitch (video).</p>
+  {% if beatmatch_plan.get(it.id) %}
+  <p class="hint">{{ beatmatch_plan[it.id].note or "" }}</p>
+  {% endif %}
   <div class="field-row">
     <button type="submit">Save {{ it.song_title }}</button>
   </div>
@@ -107,6 +142,7 @@
     </select>
   </label>
   <label>Secs <input type="number" step="0.1" name="secs" value="2.0"></label>
+  <label class="check"><input type="checkbox" name="beatmatch"> Beatmatch</label>
   <button type="submit">Add song</button>
 </form>
 

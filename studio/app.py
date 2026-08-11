@@ -27,6 +27,8 @@ import lyrics
 import mixer
 import publish
 import analyse
+import effects    # per-item audio DJ effects -- pure, no deps, validated for real (not stubbed)
+import video_fx   # per-item video look effects -- same, pure/no deps
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(ROOT, "static")
@@ -441,6 +443,97 @@ def clamp_set_item_params(in_secs, out_secs, gain_db, transition, secs):
     if secs < 0:
         raise HTTPException(400, "secs must be >= 0")
     return in_secs, out_secs, gain_db, transition, secs
+
+
+# "duck" (audio, needs a sidechain input) and "layer" (video, needs a second
+# labelled clip) are the two effects.py/video_fx.py fragments mixer.py does
+# not wire into a set's single-input per-item chain (see mixer._audio_chain
+# and mixer._video_fragment). Refusing them here rather than silently
+# accepting-and-ignoring matches the rest of this codebase's own rule: a
+# choice that looks available but does nothing is worse than one that
+# doesn't exist (see the anchor-view trap in CONTINUATION-*.md).
+_UNSUPPORTED_EFFECT_KEYS = ("duck", "layer")
+
+
+def clamp_set_item_effects(effects_json):
+    """Validate and screen a set_item's effects_json before it is stored.
+    Free text a user typed in -- screened exactly like the anchor prompt and
+    tier wording, then checked structurally against the exact functions
+    mixer.py will call at render time (effects.parse_effects for the audio
+    keys, video_fx.parse_effects_json for the video-only subset), so a value
+    that would blow up ffmpeg's filtergraph is refused at edit time instead.
+    Returns the trimmed text, or None for "no effects" (blank input)."""
+    text = (effects_json or "").strip()
+    if not text:
+        return None
+    try:
+        tiers.check_text(text, "set item effects")
+        tiers.check_override(text)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise HTTPException(400, f"invalid effects_json: {e}")
+    if not isinstance(data, dict):
+        raise HTTPException(400, "effects_json must be a JSON object")
+    unsupported = [k for k in _UNSUPPORTED_EFFECT_KEYS if k in data]
+    if unsupported:
+        raise HTTPException(400, f"not supported in set rendering yet: {', '.join(unsupported)}")
+    try:
+        effects.parse_effects(data)
+        video_only = {k: v for k, v in data.items() if k in ("grade", "glitch")}
+        if video_only:
+            video_fx.parse_effects_json(video_only)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return text
+
+
+def _mix_items_for_set(id, overrides=None, extra_item=None):
+    """This set's items in mixer.set_duration's shape (audio key, key=id ->
+    the SONG's mp3, since render_set/mix_audio predict length off the track
+    audio either way -- see set_detail's own comment on why). `overrides` is
+    {item_id: {field: value}}, applied over the stored row so a pending edit
+    not yet written to the db is checked before it exists there. A song
+    whose mp3 is missing from disk is skipped, same tolerance set_detail
+    already has for a deleted/moved file.
+
+    Also pulls beatmatch/beat_grid/downbeat_offset (via _beatmatch_fields, the
+    same helper render_set_route uses) so mixer.set_duration's own
+    _apply_beatmatch actually snaps here too -- without these, a beatmatch=1
+    item validates its raw, un-snapped secs/out_secs and an edit that beat-
+    snapping later makes impossible would slip past this guard."""
+    rows = db.q("""SELECT si.id, si.transition, si.secs, si.in_secs, si.out_secs,
+                          si.beatmatch, s.mp3_path, s.beat_grid_json, s.downbeat_offset
+                   FROM set_items si JOIN songs s ON s.id = si.song_id
+                   WHERE si.set_id=? ORDER BY si.position""", id)
+    overrides = overrides or {}
+    items = []
+    for r in rows:
+        row = dict(r)
+        row.update(overrides.get(row["id"], {}))
+        if row["mp3_path"] and os.path.isfile(row["mp3_path"]):
+            items.append({"audio": row["mp3_path"], "transition": row["transition"],
+                          "secs": row["secs"], "in_secs": row["in_secs"], "out_secs": row["out_secs"],
+                          **_beatmatch_fields(row, row)})
+    if extra_item is not None:
+        items.append(extra_item)
+    return items
+
+
+def _refuse_if_unrenderable(items):
+    """The edit-time half of mixer.py's shared transition-fit guard: run the
+    SAME check set_duration()/render_set()/mix_audio() run, before an edit
+    that would make the sequence impossible to render is ever written --
+    "an impossible transition is refused at edit time" (SETS_MIXING_PLAN.md).
+    A single item has nothing to overlap, so nothing to check."""
+    if len(items) < 2:
+        return
+    try:
+        mixer.set_duration(items, key="audio")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 # ------------------------------------------------------------- job handlers --
@@ -2862,14 +2955,97 @@ def _set_render_row(a):
             "missing": missing, "size": size, "duration": duration}
 
 
+def _beatmatch_plan(items, songs, mode):
+    """For each item with beatmatch=1 and a next item: snap the transition to
+    the nearest downbeat on both sides, and (audio sets only -- video isn't
+    time-stretched here; cutting video on the beat is SETS_MIXING_PLAN.md
+    phase 5, not this one) plan a tempo ramp toward the incoming track's bpm
+    when the stretch is within mixer.MAX_TEMPO_STRETCH. Pure: no db write,
+    no ffmpeg call -- used both to render (POST .../render) and to preview
+    what render would do (GET /sets/{id}, via set_detail).
+
+    `songs` maps song_id -> a row/dict with bpm, key, beat_grid_json,
+    downbeat_offset, mp3_path. Returns {item_id: {out_secs?, in_secs?,
+    ramp?, note}} -- out_secs patches THIS item, in_secs patches the NEXT
+    one, matching where those fields already live on set_items.
+    """
+    plan = {}
+    for i in range(len(items) - 1):
+        it, nxt = items[i], items[i + 1]
+        if not it["beatmatch"]:
+            continue
+        song, next_song = songs.get(it["song_id"]), songs.get(nxt["song_id"])
+        entry = plan.setdefault(it["id"], {})
+        if not song or not next_song:
+            entry["note"] = "song missing"
+            continue
+        grid = json.loads(song["beat_grid_json"]) if song["beat_grid_json"] else []
+        next_grid = json.loads(next_song["beat_grid_json"]) if next_song["beat_grid_json"] else []
+        if not grid or not next_grid:
+            entry["note"] = "not analysed yet -- run BPM analysis on both songs to beat-match"
+            continue
+        mp3 = song["mp3_path"]
+        full = mixer.probe(mp3)["duration"] if mp3 and os.path.isfile(mp3) else 0.0
+        out_point = it["out_secs"] if it["out_secs"] is not None else full
+        in_point = nxt["in_secs"] or 0.0
+        # snapped_out goes through video_fx.beat_cut_offsets -- the SAME
+        # function mixer._apply_beatmatch calls at render time, given the
+        # same out_point -- not a separate copy of the nearest-downbeat
+        # maths, so this note can never describe a cut the real render
+        # doesn't produce. The in-side snap has no render-time counterpart
+        # (mixer._apply_beatmatch never touches the NEXT item), so it still
+        # uses the plain nearest-downbeat.
+        snapped_out, _ = video_fx.beat_cut_offsets(
+            grid, song["downbeat_offset"] or 0, float(it["secs"] or 0.0), out_point)
+        if snapped_out is None:
+            snapped_out = out_point
+        snapped_in = mixer.nearest_downbeat(next_grid, next_song["downbeat_offset"] or 0, in_point)
+        entry["out_secs"] = snapped_out
+        plan.setdefault(nxt["id"], {})["in_secs"] = snapped_in
+        if mode != "audio":
+            entry["note"] = "snapped to the beat (video isn't tempo-stretched)"
+            continue
+        out_bpm, in_bpm = song["bpm"], next_song["bpm"]
+        if not mixer.can_beatmatch(out_bpm, in_bpm):
+            entry["note"] = (f"snapped only — {out_bpm or '?'}→{in_bpm or '?'} BPM exceeds "
+                              f"the {mixer.MAX_TEMPO_STRETCH}x stretch limit, so no tempo ramp")
+            continue
+        bar_times, ratios = mixer.plan_tempo_ramp(grid, song["downbeat_offset"] or 0,
+                                                    snapped_out, out_bpm, in_bpm)
+        if ratios:
+            in_secs = it["in_secs"] or 0.0
+            entry["ramp"] = {"in_secs": in_secs,
+                              "bar_times": [b - in_secs for b in bar_times], "ratios": ratios}
+            # The plan is real and mixer.apply_tempo_ramp renders it, but NOTHING
+            # calls that from the render path yet, so the note must not claim a
+            # ramp the output will not contain -- a set editor that promises
+            # what the renderer does not produce is the same defect as a length
+            # prediction for a set that will not render.
+            #
+            # Wiring it is not a one-liner: stretching the closing bars changes
+            # the item's DURATION, so set_duration and _check_transition_fits
+            # have to account for it or the prediction gap reopens. Until that
+            # is done the honest note is what is actually applied.
+            entry["note"] = (f"snapped to the beat — a {out_bpm:.0f}→{in_bpm:.0f} BPM ramp over "
+                              f"{len(ratios)} bars is possible, but tempo ramping is not applied "
+                              f"at render yet")
+        else:
+            entry["note"] = "snapped only — not enough bars before the transition to ramp"
+    return plan
+
+
 def set_detail(row):
     """Editor context for one set: its items in order, the predicted running
-    length, whether it is ready to render video, and every file ever rendered
-    from it (newest first, so re-rendering never hides what you are comparing
-    against -- the same shape as an anchor's candidates).
+    length, whether it is ready to render video, the beat-matching plan for
+    any item that asked for it, a suggested Camelot-adjacency running order,
+    and every file ever rendered from it (newest first, so re-rendering
+    never hides what you are comparing against -- the same shape as an
+    anchor's candidates).
     """
     items = db.q("""SELECT si.*, s.title AS song_title, s.mp3_path AS mp3_path,
-                           s.bpm AS song_bpm, s.key AS song_key
+                           s.bpm AS song_bpm, s.key AS song_key,
+                           s.beat_grid_json AS song_beat_grid_json,
+                           s.downbeat_offset AS song_downbeat_offset
                     FROM set_items si JOIN songs s ON s.id = si.song_id
                     WHERE si.set_id=? ORDER BY si.position""", row["id"])
     # Length is always predicted off the song's own AUDIO: build_song.py cuts
@@ -2880,9 +3056,19 @@ def set_detail(row):
     # already applies to its own probe, so a missing file degrades the total
     # instead of 500ing the page the Remove button lives on.
     mix_items = [{"audio": it["mp3_path"], "transition": it["transition"], "secs": it["secs"],
-                 "in_secs": it["in_secs"], "out_secs": it["out_secs"]} for it in items
-                 if it["mp3_path"] and os.path.isfile(it["mp3_path"])]
-    total = mixer.set_duration(mix_items, key="audio") if mix_items else 0.0
+                 "in_secs": it["in_secs"], "out_secs": it["out_secs"],
+                 **_beatmatch_fields(it, {"beat_grid_json": it["song_beat_grid_json"],
+                                          "downbeat_offset": it["song_downbeat_offset"]})}
+                 for it in items if it["mp3_path"] and os.path.isfile(it["mp3_path"])]
+    # A set edited before this guard existed (or whose file lengths changed
+    # since) can already be in an impossible state -- set_duration now
+    # raises rather than lying about a length that can't be rendered. Show
+    # that as a plain warning, not a 500 on the page with the Remove button.
+    duration_error = None
+    try:
+        total = mixer.set_duration(mix_items, key="audio") if mix_items else 0.0
+    except ValueError as e:
+        total, duration_error = None, str(e)
     missing_video = []
     if row["mode"] == "video" and row["tier"]:
         for it in items:
@@ -2891,8 +3077,21 @@ def set_detail(row):
                 missing_video.append(it["song_title"])
     renders = [_set_render_row(a) for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC")
                if db.jset(a).get("set_id") == row["id"]]
+
+    songs_by_id = {it["song_id"]: {"bpm": it["song_bpm"], "beat_grid_json": it["song_beat_grid_json"],
+                                    "downbeat_offset": it["song_downbeat_offset"], "mp3_path": it["mp3_path"]}
+                   for it in items}
+    beatmatch_plan = _beatmatch_plan(items, songs_by_id, row["mode"]) if len(items) > 1 else {}
+
+    suggested_order = mixer.suggest_running_order(
+        [{"id": it["id"], "title": it["song_title"], "key": it["song_key"], "bpm": it["song_bpm"]}
+         for it in items]) if len(items) > 1 else []
+    suggested_order_ids = ",".join(str(o["song"]["id"]) for o in suggested_order)
+
     return {"set": row, "items": items, "count": len(items), "total_secs": total,
-            "missing_video": missing_video, "renders": renders}
+            "duration_error": duration_error, "missing_video": missing_video, "renders": renders,
+            "beatmatch_plan": beatmatch_plan, "suggested_order": suggested_order,
+            "suggested_order_ids": suggested_order_ids}
 
 
 @app.get("/sets", response_class=HTMLResponse)
@@ -2990,14 +3189,23 @@ def update_set(id: int, name: str = Form(...), mode: str = Form("video"), tier: 
 
 @app.post("/sets/{id}/items")
 def add_set_item(id: int, song_id: int = Form(...), transition: str = Form("fade"),
-                 secs: float = Form(2.0)):
+                 secs: float = Form(2.0), beatmatch: bool = Form(False)):
     get_set_or_404(id)
-    get_song_or_404(song_id)
+    song = get_song_or_404(song_id)
     if transition not in SET_TRANSITIONS:
         raise HTTPException(400, f"transition must be one of {', '.join(SET_TRANSITIONS)}")
+    # Appending a song activates the PREVIOUS last item's own transition/secs
+    # (unused while it had no next item) -- check the whole sequence still
+    # renders before adding, not just this one new row. Same tolerance
+    # _mix_items_for_set gives every existing row: a missing mp3 (deleted,
+    # moved) is skipped rather than treated as a validation failure.
+    extra = ({"audio": song["mp3_path"], "transition": transition, "secs": secs,
+             "in_secs": None, "out_secs": None, **_beatmatch_fields({"beatmatch": beatmatch}, song)}
+             if song["mp3_path"] and os.path.isfile(song["mp3_path"]) else None)
+    _refuse_if_unrenderable(_mix_items_for_set(id, extra_item=extra))
     pos_row = db.one("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM set_items WHERE set_id=?", id)
-    db.run("""INSERT INTO set_items (set_id, song_id, position, transition, secs)
-              VALUES (?,?,?,?,?)""", id, song_id, pos_row["p"], transition, secs)
+    db.run("""INSERT INTO set_items (set_id, song_id, position, transition, secs, beatmatch)
+              VALUES (?,?,?,?,?,?)""", id, song_id, pos_row["p"], transition, secs, int(beatmatch))
     db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
     return RedirectResponse(f"/sets/{id}", status_code=303)
 
@@ -3005,14 +3213,23 @@ def add_set_item(id: int, song_id: int = Form(...), transition: str = Form("fade
 @app.post("/sets/{id}/items/{item_id}")
 def edit_set_item(id: int, item_id: int, in_secs: BlankFloat = Form(None),
                   out_secs: BlankFloat = Form(None), gain_db: float = Form(0.0),
-                  transition: str = Form("fade"), secs: float = Form(2.0)):
+                  transition: str = Form("fade"), secs: float = Form(2.0),
+                  beatmatch: bool = Form(False), effects_json: str = Form("")):
     get_set_or_404(id)
     if not db.one("SELECT id FROM set_items WHERE id=? AND set_id=?", item_id, id):
         raise HTTPException(404, "no such item")
     in_secs, out_secs, gain_db, transition, secs = clamp_set_item_params(
         in_secs, out_secs, gain_db, transition, secs)
-    db.run("""UPDATE set_items SET in_secs=?, out_secs=?, gain_db=?, transition=?, secs=?
-              WHERE id=?""", in_secs, out_secs, gain_db, transition, secs, item_id)
+    effects_json = clamp_set_item_effects(effects_json)
+    # The trim slider is exactly how this state gets reached one drag away
+    # (SETS_MIXING_PLAN.md): shortening THIS item's out_secs can leave its
+    # own already-stored transition too long to fit. Check before writing.
+    _refuse_if_unrenderable(_mix_items_for_set(id, overrides={
+        item_id: {"transition": transition, "secs": secs, "in_secs": in_secs, "out_secs": out_secs,
+                  "beatmatch": int(beatmatch)}}))
+    db.run("""UPDATE set_items SET in_secs=?, out_secs=?, gain_db=?, transition=?, secs=?,
+              beatmatch=?, effects_json=? WHERE id=?""", in_secs, out_secs, gain_db, transition,
+           secs, int(beatmatch), effects_json, item_id)
     db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
     return RedirectResponse(f"/sets/{id}", status_code=303)
 
@@ -3029,10 +3246,35 @@ def delete_set_item(id: int, item_id: int):
 def reorder_set(id: int, order: str = Form(...)):
     get_set_or_404(id)
     ids = [int(x) for x in order.split(",") if x.strip().isdigit()]
+    # A song's own duration differs, so reordering can make an already-fine
+    # transition too long for its new predecessor -- check the PROPOSED
+    # order before writing it, same guard as an edit or an add.
+    # _mix_items_for_set orders by the STORED position -- reordering needs the
+    # PROPOSED one, so fetch keyed by id and walk `ids` instead.
+    rows = {r["id"]: r for r in db.q(
+        """SELECT si.id, si.transition, si.secs, si.in_secs, si.out_secs, si.beatmatch,
+                  s.mp3_path, s.beat_grid_json, s.downbeat_offset
+           FROM set_items si JOIN songs s ON s.id = si.song_id WHERE si.set_id=?""", id)}
+    reordered = [{"audio": rows[i]["mp3_path"], "transition": rows[i]["transition"],
+                 "secs": rows[i]["secs"], "in_secs": rows[i]["in_secs"], "out_secs": rows[i]["out_secs"],
+                 **_beatmatch_fields(rows[i], rows[i])}
+                for i in ids if i in rows
+                and rows[i]["mp3_path"] and os.path.isfile(rows[i]["mp3_path"])]
+    _refuse_if_unrenderable(reordered)
     for pos, item_id in enumerate(ids):
         db.run("UPDATE set_items SET position=? WHERE id=? AND set_id=?", pos, item_id, id)
     db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
     return RedirectResponse(f"/sets/{id}", status_code=303)
+
+
+def _beatmatch_fields(it, song):
+    """The beat_grid/downbeat_offset a beatmatch=1 item needs mixer.py's
+    _apply_beatmatch to actually snap its own cut -- pulled from the SONG's
+    own analysis (analyse.py), the same source _beatmatch_plan's preview
+    already reads. An item without beatmatch=1 doesn't need these at all."""
+    return {"beatmatch": bool(it["beatmatch"]),
+            "beat_grid": json.loads(song["beat_grid_json"]) if song["beat_grid_json"] else [],
+            "downbeat_offset": song["downbeat_offset"] or 0}
 
 
 @app.post("/sets/{id}/render")
@@ -3051,7 +3293,8 @@ def render_set_route(id: int):
         for it in items:
             build.append({"audio": songs[it["song_id"]]["mp3_path"], "transition": it["transition"],
                           "secs": it["secs"], "in_secs": it["in_secs"], "out_secs": it["out_secs"],
-                          "gain_db": it["gain_db"]})
+                          "gain_db": it["gain_db"], "effects_json": it["effects_json"],
+                          **_beatmatch_fields(it, songs[it["song_id"]])})
     else:
         if not row["tier"]:
             raise HTTPException(400, "pick a tier before rendering video")
@@ -3064,7 +3307,8 @@ def render_set_route(id: int):
             else:
                 build.append({"video": r["path"], "transition": it["transition"], "secs": it["secs"],
                               "in_secs": it["in_secs"], "out_secs": it["out_secs"],
-                              "gain_db": it["gain_db"]})
+                              "gain_db": it["gain_db"], "effects_json": it["effects_json"],
+                              **_beatmatch_fields(it, songs[it["song_id"]])})
         if missing:
             raise HTTPException(400, f"tier '{row['tier']}' has no video for: {', '.join(missing)}")
 

@@ -138,9 +138,45 @@ _stub("analyse",
            "energy": 0.05, "downbeat_offset": 0}))
 
 # ---- mixer -------------------------------------------------------------
+# beatmatch.py is real here (not stubbed) -- it has no heavy deps, same
+# reasoning as effects/video_fx below, so the mixer stub's beat-matching
+# pieces delegate to it instead of hand-duplicating that maths a third time.
+import beatmatch as _beatmatch_for_stub
+
 render_set_calls = []
 mix_audio_calls = []
 _STUB_ITEM_DUR = 12.3  # matches probe()'s fake duration below
+_STUB_MAX_TEMPO_STRETCH = 1.16
+
+
+def _stub_snap_transition(out_grid, out_offset, out_point, in_grid, in_offset, in_point=0.0):
+    return (_beatmatch_for_stub.snap_to_downbeat(out_point, out_grid, out_offset),
+            _beatmatch_for_stub.snap_to_downbeat(in_point, in_grid, in_offset))
+
+
+def _stub_tempo_ratio(out_bpm, in_bpm):
+    return (in_bpm / out_bpm) if out_bpm and in_bpm else 1.0
+
+
+def _stub_can_beatmatch(out_bpm, in_bpm):
+    if not out_bpm or not in_bpm or out_bpm <= 0 or in_bpm <= 0:
+        return False
+    ratio = _stub_tempo_ratio(out_bpm, in_bpm)
+    return ratio <= _STUB_MAX_TEMPO_STRETCH and (1.0 / ratio) <= _STUB_MAX_TEMPO_STRETCH
+
+
+def _stub_plan_tempo_ramp(beat_grid, downbeat_offset, out_point, out_bpm, in_bpm, n_bars=4):
+    if not _stub_can_beatmatch(out_bpm, in_bpm):
+        return [], []
+    bars = [b for b in (beat_grid or [])[downbeat_offset::4] if b <= out_point]
+    if len(bars) < 2:
+        return [], []
+    bar_times = bars[-(n_bars + 1):]
+    target = _stub_tempo_ratio(out_bpm, in_bpm)
+    steps = len(bar_times) - 1
+    ratios = ([target] if steps == 1 else
+              [round(1.0 + (target - 1.0) * i / (steps - 1), 6) for i in range(steps)])
+    return bar_times, ratios
 
 
 def _render_set(items, out, progress=None):
@@ -164,17 +200,22 @@ def _mix_audio(items, out, progress=None):
 
 
 def _set_duration(items, key="video"):
-    # Real mixer.set_duration: sum of (fake) per-item duration minus each
-    # transition's overlap. Approximates the trim math (probe() here always
-    # answers the same duration, so a trim cannot be modelled exactly) --
-    # good enough to prove the route wires items -> a number, which is all
-    # app.py needs from the stub.
+    # Real mixer.set_duration: walks items, each transition's secs checked
+    # against the running duration so far, raising ValueError exactly like
+    # the real one on an impossible transition (app.py's edit-time guard
+    # depends on this raising, not just returning a number). Approximates
+    # the trim math (probe() here always answers the same duration, so a
+    # trim cannot be modelled exactly) -- good enough to prove the route
+    # wires items -> a number (or a refusal), which is all app.py needs.
     if not items:
         return 0.0
-    total = len(items) * _STUB_ITEM_DUR
-    overlap = sum(0.0 if it.get("transition") == "cut" else float(it.get("secs", 0.0))
-                  for it in items[:-1])
-    return max(0.0, total - overlap)
+    running_dur = _STUB_ITEM_DUR
+    for it in items[:-1]:
+        secs = 0.0 if it.get("transition") == "cut" else float(it.get("secs", 0.0))
+        if secs > running_dur:
+            raise ValueError(f"transition secs={secs} longer than preceding duration={running_dur}")
+        running_dur += _STUB_ITEM_DUR - secs
+    return max(0.0, running_dur)
 
 
 _stub("mixer",
@@ -183,7 +224,14 @@ _stub("mixer",
       edit_audio=lambda *a, **k: None,
       render_set=_render_set,
       mix_audio=_mix_audio,
-      set_duration=_set_duration)
+      set_duration=_set_duration,
+      MAX_TEMPO_STRETCH=_STUB_MAX_TEMPO_STRETCH,
+      snap_transition=_stub_snap_transition,
+      nearest_downbeat=lambda beat_grid, downbeat_offset, t: (
+          _beatmatch_for_stub.snap_to_downbeat(t, beat_grid, downbeat_offset)),
+      can_beatmatch=_stub_can_beatmatch,
+      plan_tempo_ramp=_stub_plan_tempo_ramp,
+      suggest_running_order=_beatmatch_for_stub.suggest_order)
 
 # ---- pipeline ------------------------------------------------------------
 _PIPE_DIR = tempfile.mkdtemp(prefix="studio_pipeline_")

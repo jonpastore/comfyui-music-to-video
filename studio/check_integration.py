@@ -213,6 +213,55 @@ if mixer:
         mixer.set_duration([{"video": "a.mp4", "transition": "cut", "secs": 0}])
         if False else 1.0))
 
+    def _set_duration_and_render_share_the_transition_guard():
+        """SETS_MIXING_PLAN.md defect: set_duration() used to predict a length
+        for a set render_set()/mix_audio() would then refuse. Both must raise
+        the SAME ValueError for the SAME impossible transition -- proof
+        they route through mixer._check_transition_fits, not two copies."""
+        items = [{"video": "a.mp4", "in_secs": 0.0, "out_secs": 2.0,
+                  "transition": "fade", "secs": 5.0}, {"video": "b.mp4"}]
+        # a fake probe() so this needs no real media file on disk
+        real_probe = mixer.probe
+        mixer.probe = lambda p: {"duration": 2.0 if p == "a.mp4" else 4.0,
+                                  "width": 640, "height": 480, "fps": 30.0,
+                                  "has_audio": True, "has_video": True}
+        try:
+            try:
+                mixer.set_duration(items)
+                raise AssertionError("set_duration accepted an impossible transition")
+            except ValueError as e:
+                assert "longer than preceding duration" in str(e), e
+        finally:
+            mixer.probe = real_probe
+
+    check("set_duration and render_set share the transition-fit guard",
+          _set_duration_and_render_share_the_transition_guard)
+
+beatmatch = optional_import("beatmatch")
+if beatmatch:
+    check("beatmatch.snap_to_downbeat", lambda: sig(
+        beatmatch, "snap_to_downbeat", ["time", "beat_grid", "downbeat_offset"]))
+    check("beatmatch.plan_transition", lambda: sig(
+        beatmatch, "plan_transition", ["out_song", "in_song", "secs"]))
+    check("beatmatch.suggest_order", lambda: sig(beatmatch, "suggest_order", ["songs"]))
+    check("mixer wires beatmatch in (no duplicate maths)", lambda: (
+        None if mixer and getattr(mixer, "beatmatch", None) is beatmatch
+        and mixer.camelot_neighbors("8A") == beatmatch.camelot_neighbours("8A")
+        else (_ for _ in ()).throw(AssertionError("mixer does not import/delegate to beatmatch.py"))))
+
+effects = optional_import("effects")
+if effects:
+    check("effects.parse_effects", lambda: sig(effects, "parse_effects", ["effects_json"]))
+    check("effects.parse_effects default is loudnorm-on, everything else off", lambda: (
+        None if effects.parse_effects(None) == {"chain": [effects.loudnorm_filter()], "duck": None}
+        else (_ for _ in ()).throw(AssertionError("DEFAULT_EFFECTS drifted from parse_effects(None)"))))
+
+video_fx = optional_import("video_fx")
+if video_fx:
+    check("video_fx.parse_effects_json", lambda: sig(video_fx, "parse_effects_json", ["effects_json"]))
+    check("video_fx.beat_cut_offsets", lambda: sig(
+        video_fx, "beat_cut_offsets", ["beat_grid", "downbeat_offset", "want_secs"]))
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILED")

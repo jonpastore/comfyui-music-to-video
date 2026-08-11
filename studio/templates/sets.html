@@ -20,7 +20,9 @@
       {% if s.set.tier %}<span class="tag">{{ s.set.tier | tiername }}</span>{% endif %}
     </header>
     <p class="meta">
-      {{ s.count }} song{{ "" if s.count == 1 else "s" }} &middot; {{ s.total_secs | hms }}
+      {{ s.count }} song{{ "" if s.count == 1 else "s" }} &middot;
+      {% if s.duration_error %}<span class="tag warn-tag">can't render as configured</span>
+      {% else %}{{ s.total_secs | hms }}{% endif %}
       {% if s.renders %}&middot; {{ s.renders | length }} render{{ "" if s.renders | length == 1 else "s" }}{% endif %}
     </p>
     {% if s.renders %}
