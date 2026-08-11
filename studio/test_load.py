@@ -10,6 +10,7 @@ Run: python3 -m pytest test_load.py -q
 """
 import asyncio
 import itertools
+import json
 import socket
 import threading
 import time
@@ -212,14 +213,15 @@ def test_render_set_receives_video_key_not_path(client):
     db.run("INSERT INTO renders (song_id, tier, path, created) VALUES (?,?,?,?)",
            s1, "pg13", "/fake/renders/one.mp4", time.time())
     db.run("INSERT INTO renders (song_id, tier, path, created) VALUES (?,?,?,?)",
-           s2, "r", "/fake/renders/two.mp4", time.time())
+           s2, "pg13", "/fake/renders/two.mp4", time.time())
 
     pl = db.run("INSERT INTO playlists (name, kind) VALUES (?, 'playlist')", f"RenderTest-{s1}")
-    client.post(f"/playlists/{pl}/items", data={"song_id": s1, "tier": "pg13"}, follow_redirects=False)
-    client.post(f"/playlists/{pl}/items", data={"song_id": s2, "tier": "r"}, follow_redirects=False)
+    client.post(f"/playlists/{pl}/items", data={"song_id": s1}, follow_redirects=False)
+    client.post(f"/playlists/{pl}/items", data={"song_id": s2}, follow_redirects=False)
 
     before_max = db.one("SELECT COALESCE(MAX(id),0) AS m FROM jobs")["m"]
-    r = client.post(f"/playlists/{pl}/render", follow_redirects=False)
+    r = client.post(f"/playlists/{pl}/render",
+                    data={"include_videos": "true", "tier": "pg13"}, follow_redirects=False)
     assert r.status_code == 303
 
     job = _wait_new_job("render_set", before_max)
@@ -257,13 +259,112 @@ def test_render_refused_cleanly_when_playlist_empty(client):
 def test_render_refused_cleanly_when_song_has_no_finished_render(client):
     s1 = _make_song("norender")
     pl = db.run("INSERT INTO playlists (name, kind) VALUES (?, 'playlist')", "NoRenderPL")
-    client.post(f"/playlists/{pl}/items", data={"song_id": s1, "tier": "pg13"}, follow_redirects=False)
+    client.post(f"/playlists/{pl}/items", data={"song_id": s1}, follow_redirects=False)
 
-    r = client.post(f"/playlists/{pl}/render", follow_redirects=False)
+    r = client.post(f"/playlists/{pl}/render",
+                    data={"include_videos": "true", "tier": "pg13"}, follow_redirects=False)
     assert r.status_code == 400, r.text
-    assert "render" in r.text.lower()
+    # named, not "song 7": the point of refusing here is that you know which
+    assert db.one("SELECT title FROM songs WHERE id=?", s1)["title"] in r.text
 
     assert client.get("/playlists").status_code == 200
+
+
+def test_video_set_is_per_tier_and_all_or_nothing(client):
+    """A playlist has no tier. Rendering with videos picks tiers at render
+    time, one set each, and a tier missing a single song refuses the lot."""
+    s1, s2 = _make_song("tierset"), _make_song("tierset")
+    pl = db.run("INSERT INTO playlists (name, kind) VALUES (?, 'playlist')", f"TierSet-{s1}")
+    for s in (s1, s2):
+        client.post(f"/playlists/{pl}/items", data={"song_id": s}, follow_redirects=False)
+    for s in (s1, s2):
+        db.run("INSERT INTO renders (song_id, tier, path, created) VALUES (?,?,?,?)",
+               s, "pg13", f"/fake/{s}_pg13.mp4", time.time())
+    db.run("INSERT INTO renders (song_id, tier, path, created) VALUES (?,?,?,?)",
+           s1, "r", f"/fake/{s1}_r.mp4", time.time())   # only ONE song has an r video
+
+    before = db.one("SELECT COALESCE(MAX(id),0) AS m FROM jobs")["m"]
+    r = client.post(f"/playlists/{pl}/render",
+                    data={"include_videos": "true", "tier": ["pg13", "r"]}, follow_redirects=False)
+    assert r.status_code == 400, r.text
+    assert "'r'" in r.text
+    # the good tier must NOT have been enqueued on its own
+    assert db.one("SELECT COALESCE(MAX(id),0) AS m FROM jobs")["m"] == before
+
+    # only the tier that covers every song is offered on the card
+    page = client.get("/playlists").text
+    assert 'value="pg13"' in page
+
+    r2 = client.post(f"/playlists/{pl}/render",
+                     data={"include_videos": "true", "tier": "pg13"}, follow_redirects=False)
+    assert r2.status_code == 303
+    jobs_made = db.q("SELECT * FROM jobs WHERE id>? AND kind='render_set'", before)
+    assert len(jobs_made) == 1
+    args = json.loads(jobs_made[0]["args_json"])
+    assert args["mode"] == "video" and args["tier"] == "pg13"
+    assert [i["video"] for i in args["items"]] == [f"/fake/{s1}_pg13.mp4", f"/fake/{s2}_pg13.mp4"]
+
+
+def test_audio_only_set_mixes_the_songs_own_mp3s(client):
+    s1, s2 = _make_song("audioset"), _make_song("audioset")
+    pl = db.run("INSERT INTO playlists (name, kind) VALUES (?, 'playlist')", f"AudioSet-{s1}")
+    for s in (s1, s2):
+        client.post(f"/playlists/{pl}/items", data={"song_id": s, "secs": "1.5"},
+                    follow_redirects=False)
+    before = db.one("SELECT COALESCE(MAX(id),0) AS m FROM jobs")["m"]
+
+    r = client.post(f"/playlists/{pl}/render", follow_redirects=False)
+    assert r.status_code == 303, r.text
+    job = db.q("SELECT * FROM jobs WHERE id>? AND kind='render_set'", before)[-1]
+    args = json.loads(job["args_json"])
+    assert args["mode"] == "audio"
+    # the TRACKS themselves, in playlist order -- an audio set needs no video
+    expected = [db.one("SELECT mp3_path FROM songs WHERE id=?", s)["mp3_path"] for s in (s1, s2)]
+    assert [i["audio"] for i in args["items"]] == expected
+    assert [i["secs"] for i in args["items"]] == [1.5, 1.5]
+
+
+def test_playlist_delete_keeps_songs_and_renders(client):
+    s1 = _make_song("keepme")
+    pl = db.run("INSERT INTO playlists (name, kind) VALUES (?, 'playlist')", f"Doomed-{s1}")
+    client.post(f"/playlists/{pl}/items", data={"song_id": s1}, follow_redirects=False)
+    db.run("INSERT INTO renders (song_id, tier, path, created) VALUES (?,?,?,?)",
+           s1, "pg13", "/fake/keep.mp4", time.time())
+
+    assert client.post(f"/playlists/{pl}/delete", follow_redirects=False).status_code == 400
+    assert db.one("SELECT id FROM playlists WHERE id=?", pl) is not None
+
+    r = client.post(f"/playlists/{pl}/delete", data={"confirm": "DELETE"}, follow_redirects=False)
+    assert r.status_code == 303, r.text
+    assert db.one("SELECT id FROM playlists WHERE id=?", pl) is None
+    assert db.q("SELECT id FROM playlist_items WHERE playlist_id=?", pl) == []
+    # the material survives: a playlist is an ordering, not the songs
+    assert db.one("SELECT id FROM songs WHERE id=?", s1) is not None
+    assert db.one("SELECT id FROM renders WHERE song_id=?", s1) is not None
+
+
+def test_playlist_card_summary_and_drag_order(client):
+    s1, s2 = _make_song("card"), _make_song("card")
+    db.run("UPDATE songs SET duration=? WHERE id=?", 200.0, s1)   # 3:20
+    db.run("UPDATE songs SET duration=? WHERE id=?", 100.0, s2)   # 1:40
+    pl = db.run("INSERT INTO playlists (name, kind, created) VALUES (?, 'playlist', ?)",
+                f"CardPL-{s1}", 1754870400.0)
+    for s in (s1, s2):
+        client.post(f"/playlists/{pl}/items", data={"song_id": s}, follow_redirects=False)
+
+    page = client.get("/playlists").text
+    assert "2 songs" in page
+    assert "5:00" in page          # 200 + 100 seconds, on the collapsed card
+    assert "2025-08" in page or "2025-0" in page or "20" in page
+
+    items = db.q("SELECT * FROM playlist_items WHERE playlist_id=? ORDER BY position", pl)
+    assert [i["song_id"] for i in items] == [s1, s2]
+    # what the drag handler posts on drop
+    r = client.post(f"/playlists/{pl}/reorder",
+                    data={"order": f"{items[1]['id']},{items[0]['id']}"}, follow_redirects=False)
+    assert r.status_code == 303
+    after = db.q("SELECT * FROM playlist_items WHERE playlist_id=? ORDER BY position", pl)
+    assert [i["song_id"] for i in after] == [s2, s1]
 
 
 # --------------------------------------------------------------- GAP 3 --

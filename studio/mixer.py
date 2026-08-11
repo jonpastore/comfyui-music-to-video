@@ -262,12 +262,64 @@ def render_set(items, out_path, progress=None):
     return out_path
 
 
-def set_duration(items):
-    """Predicted render_set output length: sum of clip durations minus each
-    transition's overlap. No ffmpeg call (ffprobe only, for real durations)."""
+def mix_audio(items, out_path, progress=None):
+    """Crossfaded audio mix of a playlist: [{audio, transition, secs}] -> mp3.
+
+    The audio-only half of a set render. Same overlap arithmetic as
+    render_set, so a playlist mixed with and without video runs to the same
+    length and cuts in the same places -- acrossfade here is exactly what
+    render_set pairs with xfade there.
+    """
+    progress = progress or _NOOP
+    if not items:
+        raise ValueError("items is empty")
+    progress(f"probing {len(items)} tracks")
+    infos = [probe(it["audio"]) for it in items]
+    missing = [it["audio"] for it, i in zip(items, infos) if not i["has_audio"]]
+    if missing:
+        raise RuntimeError(f"no audio stream in: {missing[0]}")
+
+    lines = [f"[{i}:a]aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a{i}n]"
+             for i in range(len(items))]
+    running, running_dur = "a0n", infos[0]["duration"]
+    for i in range(len(items) - 1):
+        secs = 0.0 if items[i].get("transition") == "cut" else float(items[i].get("secs", 0.0))
+        out = f"am{i}"
+        if secs <= 0:
+            lines.append(f"[{running}][a{i + 1}n]concat=n=2:v=0:a=1[{out}]")
+            running_dur += infos[i + 1]["duration"]
+        else:
+            if secs > running_dur:
+                raise ValueError(f"transition secs={secs} longer than preceding duration={running_dur}")
+            lines.append(f"[{running}][a{i + 1}n]acrossfade=d={secs:.3f}[{out}]")
+            running_dur += infos[i + 1]["duration"] - secs
+        running = out
+
+    tmp = _atomic_out(out_path)
+    inputs = []
+    for it in items:
+        inputs += ["-i", it["audio"]]
+    try:
+        args = inputs + ["-filter_complex", ";\n".join(lines), "-map", f"[{running}]",
+                          "-c:a", "libmp3lame", "-b:a", "320k", tmp]
+        progress("mixing audio")
+        _run_ffmpeg(args, progress, total_duration=running_dur, stage="mix_audio")
+        os.replace(tmp, out_path)
+    except Exception:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+    progress("done")
+    return out_path
+
+
+def set_duration(items, key="video"):
+    """Predicted set length: sum of item durations minus each transition's
+    overlap. No ffmpeg call (ffprobe only, for real durations). key='audio'
+    prices the mp3 mix, key='video' the rendered set."""
     if not items:
         return 0.0
-    total = sum(probe(it["video"])["duration"] for it in items)
+    total = sum(probe(it[key])["duration"] for it in items)
     overlap = sum(0.0 if it.get("transition") == "cut" else float(it.get("secs", 0.0))
                   for it in items[:-1])
     return max(0.0, total - overlap)
@@ -360,6 +412,28 @@ def demo():
         assert len(lines) == 2
         assert "xfade=transition=fade:duration=0.250:offset=0.750" in lines[0]
         assert label == "vx2"
+
+        # mix_audio: crossfaded mp3 set, same overlap arithmetic as render_set
+        mp3_b = os.path.join(tmpdir, "second track.mp3")
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+                        "-i", "sine=frequency=330:duration=3", "-c:a", "libmp3lame", mp3_b],
+                       capture_output=True, check=True)
+        mix_items = [{"audio": mp3, "transition": "fade", "secs": 0.5},
+                     {"audio": mp3_b, "transition": "fade", "secs": 0.5}]
+        out_mix = os.path.join(tmpdir, "set mix.mp3")
+        mix_audio(mix_items, out_mix)
+        predicted_mix = set_duration(mix_items, key="audio")
+        actual_mix = probe(out_mix)["duration"]
+        assert abs(actual_mix - predicted_mix) <= 0.35, (actual_mix, predicted_mix)
+        # the overlap is real: a crossfaded pair is shorter than the two tracks
+        assert actual_mix < probe(mp3)["duration"] + probe(mp3_b)["duration"] - 0.2
+
+        # a file with no audio stream is refused by name, not by ffmpeg later
+        try:
+            mix_audio([{"audio": clip_a, "transition": "cut", "secs": 0}], out_mix)
+            raise AssertionError("silent video accepted as a mix input")
+        except RuntimeError as e:
+            assert "clip a.mp4" in str(e), e
 
         assert logs, "progress callback never fired"
         print(f"mixer.py OK  assemble={info1['duration']:.2f}s fade={info2['duration']:.2f}s "

@@ -47,6 +47,12 @@ MEDIA_ROOTS = [os.path.realpath(db.DATA), os.path.realpath(pipeline.COMFY_INPUT)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Seed the built-in tiers HERE, not lazily. ensure_builtins() used to run
+    # only from all_tiers(), so on a fresh database every tier-validating route
+    # -- refs, clips, classify, video sets -- answered "no such tier: pg13"
+    # until someone happened to load a page that listed tiers. The deployed box
+    # worked only because /tiers had been visited early.
+    tiers.ensure_builtins()
     jobs.start()
     yield
 
@@ -56,6 +62,22 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 templates.env.globals["media_url"] = lambda p: media_url(p)
 templates.env.globals["jset"] = db.jset
+
+
+def hms(secs):
+    """Seconds -> m:ss, or h:mm:ss past an hour. Blank for unknown, because a
+    playlist of un-probed songs should not claim to be 0:00 long."""
+    if not secs:
+        return "" if secs is None else "0:00"
+    secs = int(round(float(secs)))
+    h, rem = divmod(secs, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+templates.env.filters["hms"] = hms
+templates.env.filters["ts"] = lambda t: (
+    time.strftime("%Y-%m-%d", time.localtime(t)) if t else "date unknown")
 
 
 @app.middleware("http")
@@ -443,8 +465,20 @@ def h_render_set(args, progress):
     playlist = db.one("SELECT * FROM playlists WHERE id=?", args["playlist_id"])
     outdir = os.path.join(db.DATA, "sets")
     os.makedirs(outdir, exist_ok=True)
-    out = os.path.join(outdir, f"{safe_name(playlist['name'])}.mp4")
-    mixer.render_set(args["items"], out, progress)
+    base = safe_name(playlist["name"])
+    # mode defaults to video so a job enqueued by an older build still means
+    # what it meant when it was queued
+    if args.get("mode") == "audio":
+        out = os.path.join(outdir, f"{base}.mp3")
+        mixer.mix_audio(args["items"], out, progress)
+    else:
+        tier = args.get("tier")
+        out = os.path.join(outdir, f"{base}_{tier}.mp4" if tier else f"{base}.mp4")
+        mixer.render_set(args["items"], out, progress)
+    db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+           None, "set", out, json.dumps({"playlist_id": args["playlist_id"],
+                                          "mode": args.get("mode", "video"),
+                                          "tier": args.get("tier")}), time.time())
     return {"path": out}
 
 
@@ -866,6 +900,35 @@ def delete_song(id: int, confirm: str = Form("")):
 
 # -------------------------------------------------------------- playlists --
 
+def playlist_detail(p):
+    """One playlist card: its songs in order, each with length and whatever
+    videos exist for it, plus the totals the collapsed card shows."""
+    items = db.q("""SELECT pi.*, s.title AS song_title, s.slug AS song_slug,
+                            s.duration AS duration, s.mp3_path AS mp3_path
+                     FROM playlist_items pi JOIN songs s ON s.id = pi.song_id
+                     WHERE pi.playlist_id=? ORDER BY pi.position""", p["id"])
+    rows, total, tiers_with_video = [], 0.0, {}
+    for it in items:
+        # every rendered video for this song, newest first per tier -- this is
+        # what makes a set renderable at a given tier, and what the card offers
+        # to play next to the track itself
+        videos = {}
+        for r in db.q("SELECT * FROM renders WHERE song_id=? ORDER BY id DESC", it["song_id"]):
+            videos.setdefault(r["tier"], r["path"])
+        total += it["duration"] or 0.0
+        for t in videos:
+            tiers_with_video[t] = tiers_with_video.get(t, 0) + 1
+        rows.append({"item": it, "videos": sorted(videos.items())})
+    # a tier can render a set only if EVERY song in the playlist has a video
+    # at that tier; offering one that cannot render just moves the failure
+    ready = sorted(t for t, n in tiers_with_video.items() if n == len(items)) if items else []
+    sets = [a for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC")
+            if db.jset(a).get("playlist_id") == p["id"]]
+    return {"playlist": p, "rows": rows, "count": len(items), "total_secs": total,
+            "video_tiers": ready, "sets": sets,
+            "partial_tiers": sorted(t for t in tiers_with_video if t not in ready)}
+
+
 @app.get("/playlists", response_class=HTMLResponse)
 def playlists_page(request: Request):
     # 'genre' rows can still exist in the db (a legacy row, or one inserted
@@ -873,13 +936,8 @@ def playlists_page(request: Request):
     # listed here; genres belong on the song now, not as a playlist kind.
     playlists = db.q("SELECT * FROM playlists WHERE kind='playlist' ORDER BY name")
     songs = db.q("SELECT * FROM songs ORDER BY title")
-    detail = []
-    for p in playlists:
-        items = db.q("""SELECT pi.*, s.title AS song_title, s.slug AS song_slug
-                         FROM playlist_items pi JOIN songs s ON s.id = pi.song_id
-                         WHERE pi.playlist_id=? ORDER BY pi.position""", p["id"])
-        detail.append({"playlist": p, "playlist_items": items})
-    return templates.TemplateResponse(request, "playlists.html", {"playlists": detail, "songs": songs})
+    return templates.TemplateResponse(request, "playlists.html", {
+        "playlists": [playlist_detail(p) for p in playlists], "songs": songs})
 
 
 @app.post("/playlists")
@@ -892,20 +950,57 @@ def create_playlist(name: str = Form(...), kind: str = Form("playlist")):
     if not name:
         raise HTTPException(400, "name required")
     try:
-        db.run("INSERT INTO playlists (name, kind) VALUES (?,?)", name, kind)
+        db.run("INSERT INTO playlists (name, kind, created) VALUES (?,?,?)", name, kind, time.time())
     except sqlite3.IntegrityError:
         raise HTTPException(400, f"playlist '{name}' ({kind}) already exists")
     return RedirectResponse("/playlists", status_code=303)
 
 
+@app.post("/playlists/{id}/image")
+async def set_playlist_image(id: int, image: UploadFile = File(...)):
+    """Cover art for the playlist card."""
+    get_playlist_or_404(id)
+    dest = await save_upload(image, MAX_IMAGE, os.path.join(db.DATA, "playlists", str(id)),
+                              "image", prefix="cover")
+    db.run("UPDATE playlists SET image_path=? WHERE id=?", dest, id)
+    return RedirectResponse("/playlists", status_code=303)
+
+
+@app.post("/playlists/{id}/delete")
+def delete_playlist(id: int, confirm: str = Form("")):
+    """Delete the playlist and its membership rows.
+
+    Songs, renders and everything generated stay: a playlist is an ordering,
+    not the material. Only the cover image, which nothing else references, is
+    removed -- and only if it resolves inside db.DATA.
+    """
+    p = get_playlist_or_404(id)
+    if confirm != "DELETE":
+        raise HTTPException(400, "deleting a playlist requires confirm=DELETE")
+    if p["image_path"] and _within_data(p["image_path"]) and os.path.isfile(p["image_path"]):
+        os.remove(p["image_path"])
+    db.run("DELETE FROM playlist_items WHERE playlist_id=?", id)
+    db.run("DELETE FROM playlists WHERE id=?", id)
+    return RedirectResponse("/playlists", status_code=303)
+
+
 @app.post("/playlists/{id}/items")
-def add_playlist_item(id: int, song_id: int = Form(...), tier: str = Form(...),
+def add_playlist_item(id: int, song_id: int = Form(...),
                        transition: str = Form("fade"), secs: float = Form(2.0)):
+    # No tier: membership is the song. Which tier's video (if any) is used is
+    # decided when the set is rendered.
     get_playlist_or_404(id)
     get_song_or_404(song_id)
     pos_row = db.one("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM playlist_items WHERE playlist_id=?", id)
-    db.run("""INSERT INTO playlist_items (playlist_id, song_id, tier, position, transition, secs)
-              VALUES (?,?,?,?,?,?)""", id, song_id, tier, pos_row["p"], transition, secs)
+    db.run("""INSERT INTO playlist_items (playlist_id, song_id, position, transition, secs)
+              VALUES (?,?,?,?,?)""", id, song_id, pos_row["p"], transition, secs)
+    return RedirectResponse("/playlists", status_code=303)
+
+
+@app.post("/playlists/{id}/items/{item_id}/delete")
+def remove_playlist_item(id: int, item_id: int):
+    get_playlist_or_404(id)
+    db.run("DELETE FROM playlist_items WHERE id=? AND playlist_id=?", item_id, id)
     return RedirectResponse("/playlists", status_code=303)
 
 
@@ -919,21 +1014,53 @@ def reorder_playlist(id: int, order: str = Form(...)):
 
 
 @app.post("/playlists/{id}/render")
-def render_playlist(id: int):
+def render_playlist(id: int, include_videos: bool = Form(False), tier: List[str] = Form([])):
+    """Render the set.
+
+    Without videos it is an audio mix: one mp3, crossfaded by each item's
+    transition. With videos it is one SET PER SELECTED TIER -- a playlist has
+    no tier of its own, so rendering at r and pg13 is two outputs from the one
+    ordering, the same shape as generating references for several tiers.
+    """
     get_playlist_or_404(id)
-    items = db.q("""SELECT pi.* FROM playlist_items pi WHERE pi.playlist_id=? ORDER BY pi.position""", id)
+    items = db.q("""SELECT pi.*, s.mp3_path AS mp3_path, s.title AS title
+                     FROM playlist_items pi JOIN songs s ON s.id = pi.song_id
+                     WHERE pi.playlist_id=? ORDER BY pi.position""", id)
     if not items:
-        # mixer.render_set raises on an empty list, so this used to enqueue a
-        # job whose only purpose was to fail. Refuse where the user can see it.
+        # mixer raises on an empty list, so this used to enqueue a job whose
+        # only purpose was to fail. Refuse where the user can see it.
         raise HTTPException(400, "this playlist has no songs yet -- add one first")
-    build_items = []
-    for it in items:
-        render_row = db.one("SELECT * FROM renders WHERE song_id=? AND tier=? ORDER BY id DESC LIMIT 1",
-                             it["song_id"], it["tier"])
-        if not render_row:
-            raise HTTPException(400, f"song {it['song_id']} tier {it['tier']} has no render yet")
-        build_items.append({"video": render_row["path"], "transition": it["transition"], "secs": it["secs"]})
-    jobs.enqueue("render_set", {"playlist_id": id, "items": build_items})
+
+    if not include_videos:
+        missing = [it["title"] for it in items if not it["mp3_path"]]
+        if missing:
+            raise HTTPException(400, f"no audio for: {', '.join(missing)}")
+        mix = [{"audio": it["mp3_path"], "transition": it["transition"], "secs": it["secs"]}
+               for it in items]
+        jobs.enqueue("render_set", {"playlist_id": id, "mode": "audio", "items": mix})
+        return RedirectResponse("/playlists", status_code=303)
+
+    selected = sorted(set(tier))
+    if not selected:
+        raise HTTPException(400, "select at least one tier to render videos")
+    # Validate EVERY tier before enqueuing anything, and name the songs that
+    # are missing a video -- half a set is worse than a refusal.
+    per_tier = {}
+    for t in selected:
+        valid_tier_or_400(t)
+        build, missing = [], []
+        for it in items:
+            row = db.one("SELECT * FROM renders WHERE song_id=? AND tier=? ORDER BY id DESC LIMIT 1",
+                          it["song_id"], t)
+            if not row:
+                missing.append(it["title"])
+            else:
+                build.append({"video": row["path"], "transition": it["transition"], "secs": it["secs"]})
+        if missing:
+            raise HTTPException(400, f"tier '{t}' has no video for: {', '.join(missing)}")
+        per_tier[t] = build
+    for t, build in per_tier.items():
+        jobs.enqueue("render_set", {"playlist_id": id, "mode": "video", "tier": t, "items": build})
     return RedirectResponse("/playlists", status_code=303)
 
 

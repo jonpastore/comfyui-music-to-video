@@ -59,11 +59,17 @@ CREATE TABLE IF NOT EXISTS renders (
 
 CREATE TABLE IF NOT EXISTS playlists (
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, kind TEXT DEFAULT 'playlist',
+  image_path TEXT, created REAL,
   UNIQUE(name, kind));
 
+-- A playlist item is a SONG, in an order, with the transition used to reach
+-- the next one. No tier: a tier is a rendering choice made when the set is
+-- rendered (and a set can be rendered at several tiers from one playlist),
+-- exactly as it is for a single song. transition/secs are VIDEO effects that
+-- also drive the audio crossfade of the mix.
 CREATE TABLE IF NOT EXISTS playlist_items (
   id INTEGER PRIMARY KEY, playlist_id INTEGER NOT NULL, song_id INTEGER NOT NULL,
-  tier TEXT, position INTEGER NOT NULL, transition TEXT DEFAULT 'fade',
+  position INTEGER NOT NULL, transition TEXT DEFAULT 'fade',
   secs REAL DEFAULT 2.0);
 
 CREATE TABLE IF NOT EXISTS jobs (
@@ -93,6 +99,14 @@ MIGRATIONS = [
     # made the track. Distinct from style_path, which is a visual reference
     # IMAGE for the video -- this one describes the AUDIO.
     "ALTER TABLE songs ADD COLUMN style_text TEXT",
+    # Playlist cards: cover art, and a creation date to show on the collapsed
+    # card. Existing rows get created=NULL, which the page renders as blank
+    # rather than pretending to know when they were made.
+    "ALTER TABLE playlists ADD COLUMN image_path TEXT",
+    "ALTER TABLE playlists ADD COLUMN created REAL",
+    # Playlists do not have tiers. Membership is the SONG; the tier is picked
+    # when the set is rendered, and one playlist can render a set per tier.
+    "ALTER TABLE playlist_items DROP COLUMN tier",
 ]
 
 
@@ -101,7 +115,12 @@ def _migrate(c):
         try:
             c.execute(stmt)
         except sqlite3.OperationalError as e:
-            if "duplicate column" not in str(e).lower():
+            # "duplicate column": an ADD COLUMN already applied.
+            # "no such column": a DROP COLUMN already applied, or a fresh
+            # database whose SCHEMA never had it. Both mean the migration has
+            # nothing left to do; anything else is a real error.
+            msg = str(e).lower()
+            if "duplicate column" not in msg and "no such column" not in msg:
                 raise
     c.commit()
 

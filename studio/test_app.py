@@ -195,9 +195,10 @@ def test_render_set_uses_video_key():
         client.post("/playlists", data={"name": "Set A", "kind": "playlist"})
         pl = db.one("SELECT * FROM playlists WHERE name='Set A'")
         client.post(f"/playlists/{pl['id']}/items",
-                    data={"song_id": sid, "tier": "pg13", "transition": "fade", "secs": "1.0"})
+                    data={"song_id": sid, "transition": "fade", "secs": "1.0"})
 
-        r = client.post(f"/playlists/{pl['id']}/render")
+        r = client.post(f"/playlists/{pl['id']}/render",
+                        data={"include_videos": "true", "tier": "pg13"})
         assert r.status_code in (200, 303), r.text
         job = db.one("SELECT * FROM jobs WHERE kind='render_set' ORDER BY id DESC")
         row = wait_job(job["id"])
@@ -477,6 +478,19 @@ def test_refs_tier_without_chosen_anchor_400_names_tier_and_enqueues_nothing():
         assert r.status_code == 400, r.text
         assert "pg13" in r.text
         assert len(jobs.recent(1000)) == before
+
+
+def test_builtin_tiers_exist_from_startup_not_from_visiting_a_page():
+    """A fresh database used to have an empty tiers table until some page
+    called all_tiers(), so every tier-validating route 400'd 'no such tier'."""
+    db.run("DELETE FROM tiers WHERE builtin=1")
+    assert db.q("SELECT name FROM tiers WHERE builtin=1") == []
+    with TestClient(appmod.app) as client:          # startup, nothing else
+        names = {r["name"] for r in db.q("SELECT name FROM tiers WHERE builtin=1")}
+        assert {"pg13", "r"} <= names, names
+        # and the validator that used to fail now passes without a page visit
+        assert appmod.valid_tier_or_400("pg13") == "pg13"
+        assert client.get("/").status_code == 200
 
 
 def test_style_prompt_saved_and_shown_and_never_sent_to_grok():

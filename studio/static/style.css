@@ -140,3 +140,36 @@ table.list th, table.list td {
 
 .tier-links { list-style: none; padding: 0; }
 .tier-links li { margin-bottom: 0.35rem; }
+
+/* Playlist cards. <details> collapses to the summary row: art, name, date,
+   song count, total length. */
+.playlist-card > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  list-style: none;
+}
+.playlist-card > summary::-webkit-details-marker { display: none; }
+.playlist-card .cover {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  flex: none;
+}
+.playlist-card .cover-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  color: var(--muted);
+  background: var(--bg);
+}
+.playlist-card .summary-text { display: flex; flex-direction: column; gap: 0.15rem; }
+.playlist-card .tiers { display: inline-flex; gap: 0.6rem; margin: 0 0.6rem; }
+
+/* Drag handle and the row being dragged. */
+table.sortable td.grip { cursor: grab; color: var(--muted); user-select: none; }
+table.sortable tr.dragging { opacity: 0.45; }

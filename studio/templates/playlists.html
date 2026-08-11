@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Playlists &amp; genres</h1>
+<h1>Playlists</h1>
 
 <section class="card">
   <h2>New playlist</h2>
@@ -14,33 +14,56 @@
 <p class="empty">No playlists yet.</p>
 {% else %}
 {% for d in playlists %}
-<section class="card">
-  <h2>{{ d.playlist.name }} <span class="tag">{{ d.playlist.kind }}</span></h2>
+{# <details> is the collapse: no JS, keyboard-accessible, and the summary is
+   the whole card when shut -- image, name, date, songs, total length. #}
+<details class="card playlist-card">
+  <summary>
+    {% if d.playlist.image_path %}
+    <img class="cover" src="{{ media_url(d.playlist.image_path) }}" alt="">
+    {% else %}
+    <span class="cover cover-empty">no art</span>
+    {% endif %}
+    <span class="summary-text">
+      <strong>{{ d.playlist.name }}</strong>
+      <span class="muted">
+        {{ d.playlist.created | ts }} &middot;
+        {{ d.count }} song{{ "" if d.count == 1 else "s" }} &middot;
+        {{ d.total_secs | hms }}
+      </span>
+    </span>
+  </summary>
 
-  {% if not d.playlist_items %}
+  {% if not d.rows %}
   <p class="empty">No songs added yet.</p>
   {% else %}
-  <table class="list">
-    <thead><tr><th>#</th><th>Song</th><th>Tier</th><th>Transition</th><th>Secs</th></tr></thead>
+  <table class="list sortable" data-playlist="{{ d.playlist.id }}">
+    <thead><tr><th></th><th>#</th><th>Song</th><th>Length</th><th>Play</th>
+               <th>Transition</th><th></th></tr></thead>
     <tbody>
-    {% for it in d.playlist_items %}
-      <tr>
-        <td>{{ it.position }}</td>
-        <td><a href="/songs/{{ it.song_id }}">{{ it.song_title }}</a></td>
-        <td>{{ it.tier }}</td>
-        <td>{{ it.transition }}</td>
-        <td>{{ it.secs }}</td>
+    {% for r in d.rows %}
+      <tr draggable="true" data-item="{{ r.item.id }}">
+        <td class="grip" title="drag to reorder">&#8942;&#8942;</td>
+        <td class="pos">{{ loop.index }}</td>
+        <td><a href="/songs/{{ r.item.song_id }}">{{ r.item.song_title }}</a></td>
+        <td>{{ r.item.duration | hms }}</td>
+        <td>
+          {% if r.item.mp3_path %}<a href="{{ media_url(r.item.mp3_path) }}">audio</a>{% endif %}
+          {% for tier, path in r.videos %}
+          <a href="{{ media_url(path) }}">{{ tier }}</a>
+          {% endfor %}
+          {% if not r.videos %}<span class="muted">no video</span>{% endif %}
+        </td>
+        <td>{{ r.item.transition }} {{ r.item.secs }}s</td>
+        <td>
+          <form method="post" action="/playlists/{{ d.playlist.id }}/items/{{ r.item.id }}/delete">
+            <button type="submit">Remove</button>
+          </form>
+        </td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
-
-  <form method="post" action="/playlists/{{ d.playlist.id }}/reorder">
-    <label>New order (comma-separated item ids)
-      <input type="text" name="order" placeholder="{{ d.playlist_items | map(attribute='id') | join(',') }}">
-    </label>
-    <button type="submit">Reorder</button>
-  </form>
+  <p class="muted">Drag a row to reorder. Order saves on drop.</p>
   {% endif %}
 
   <form method="post" action="/playlists/{{ d.playlist.id }}/items">
@@ -49,7 +72,6 @@
         {% for s in songs %}<option value="{{ s.id }}">{{ s.title }}</option>{% endfor %}
       </select>
     </label>
-    <label>Tier <input type="text" name="tier" required></label>
     <label>Transition
       <select name="transition">
         <option value="fade">fade</option>
@@ -60,10 +82,44 @@
     <button type="submit">Add song</button>
   </form>
 
+  <h3>Render set</h3>
   <form method="post" action="/playlists/{{ d.playlist.id }}/render">
+    <label><input type="checkbox" name="include_videos" value="true"> Include videos</label>
+    {% if d.video_tiers %}
+    <span class="tiers">
+      {% for t in d.video_tiers %}
+      <label><input type="checkbox" name="tier" value="{{ t }}"> {{ t }}</label>
+      {% endfor %}
+    </span>
+    {% else %}
+    <span class="muted">no tier has a video for every song
+      {%- if d.partial_tiers %} (partial: {{ d.partial_tiers | join(", ") }}){% endif -%}
+      &mdash; audio-only mix available</span>
+    {% endif %}
     <button type="submit">Render set</button>
   </form>
-</section>
+  <p class="muted">Unticked renders one crossfaded mp3. Ticked renders one video
+    set per selected tier, and only tiers with a video for every song are offered.</p>
+
+  {% if d.sets %}
+  <ul class="tier-links">
+    {% for a in d.sets %}
+    <li><a href="{{ media_url(a.path) }}">{{ a.path.split('/')[-1] }}</a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <h3>Card</h3>
+  <form method="post" action="/playlists/{{ d.playlist.id }}/image" enctype="multipart/form-data">
+    <label>Album image <input type="file" name="image" accept="image/*" required></label>
+    <button type="submit">Set image</button>
+  </form>
+  <form method="post" action="/playlists/{{ d.playlist.id }}/delete" class="delete-playlist"
+        data-name="{{ d.playlist.name }}">
+    <input type="hidden" name="confirm" value="DELETE">
+    <button type="submit">Delete playlist</button>
+  </form>
+</details>
 {% endfor %}
 {% endif %}
 {% endblock %}
