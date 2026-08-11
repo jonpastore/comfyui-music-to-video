@@ -32,7 +32,9 @@ _song_counter = itertools.count(1)
 def _make_song(prefix="song"):
     n = next(_song_counter)
     slug = f"{prefix}-{n}"
-    return db.upsert_song(slug, title=slug, mp3_path=f"/fake/{slug}.mp3")
+    # duration matters: the clip list comes from the audio length, not from the
+    # storyboard's scene count. 12.3 s = 3 clips of 4.8125 s.
+    return db.upsert_song(slug, title=slug, mp3_path=f"/fake/{slug}.mp3", duration=12.3)
 
 
 def _make_storyboard(song_id, tier, scene_count):

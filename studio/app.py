@@ -14,7 +14,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import db
-import tiers
+import tiers  # also puts the repo-root scripts on sys.path (STUDIO_SCRIPTS)
+from build_song import CHUNK
 import jobs
 import pipeline
 import grok
@@ -106,6 +107,17 @@ def media_url(path):
     if not path:
         return None
     return "/media/" + quote(os.path.realpath(path), safe="/")
+
+
+def clip_count(song):
+    """How many 4.8125 s clips this track is cut into.
+
+    Comes from the AUDIO LENGTH, never from the storyboard's scene count:
+    build_song.clip_plan() spreads a 20-scene storyboard across all 41 clips of
+    a 3:16 track. Using scene_count here hid clips 20..40 from the approve grid
+    and let clip generation start with two thirds of its references missing.
+    """
+    return math.ceil((song["duration"] or 0) / CHUNK)
 
 
 def get_song_or_404(sid):
@@ -467,13 +479,13 @@ def song_page(request: Request, id: int):
     # storyboard has an approved reference -- otherwise start_clips just 400s
     # one click later.
     clips_ready_tiers = []
+    n_clips = clip_count(song)
     for t, sb in storyboards.items():
-        scene_count = sb["scene_count"] or 0
-        if not scene_count:
+        if not n_clips:
             continue
         approved_idxs = {r["clip_idx"] for r in
                           db.q("SELECT clip_idx FROM refs WHERE song_id=? AND tier=? AND approved=1", id, t)}
-        if all(i in approved_idxs for i in range(scene_count)):
+        if all(i in approved_idxs for i in range(n_clips)):
             clips_ready_tiers.append(t)
     return templates.TemplateResponse(request, "song.html", {
         "song": song, "tiers": tiers.all_tiers(), "storyboards": storyboards,
@@ -631,14 +643,12 @@ def start_refs(id: int, tier: List[str] = Form([]), limit: int = Form(0)):
 @app.get("/songs/{id}/approve/{tier}", response_class=HTMLResponse)
 def approve_grid(request: Request, id: int, tier: str):
     song = get_song_or_404(id)
-    sb = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
-    scene_count = sb["scene_count"] if sb and sb["scene_count"] else 0
     refs_rows = db.q("SELECT * FROM refs WHERE song_id=? AND tier=? ORDER BY clip_idx, id", id, tier)
     by_clip = {}
     for r in refs_rows:
         by_clip.setdefault(r["clip_idx"], []).append(r)
     clips = []
-    for i in range(scene_count):
+    for i in range(clip_count(song)):
         cands = by_clip.get(i, [])
         clips.append({"idx": i, "candidates": cands, "approved": any(c["approved"] for c in cands)})
     return templates.TemplateResponse(request, "approve.html", {"song": song, "tier": tier, "clips": clips})
@@ -663,12 +673,11 @@ def approve_ref(request: Request, id: int, clip_idx: int, tier: str = Form(...),
 
 @app.post("/songs/{id}/reroll")
 def start_reroll(id: int, tier: str = Form(...), clip_idx: List[int] = Form(...)):
-    get_song_or_404(id)
+    song = get_song_or_404(id)
     sb = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
     if not sb:
         raise HTTPException(400, "generate a storyboard for this tier first")
-    scene_count = sb["scene_count"] or 0
-    idxs = sorted({i for i in clip_idx if 0 <= i < scene_count})
+    idxs = sorted({i for i in clip_idx if 0 <= i < clip_count(song)})
     if not idxs:
         raise HTTPException(400, "no valid clip indices given")
     if len(idxs) > MAX_REROLL_CLIPS:
@@ -683,10 +692,15 @@ def start_clips(id: int, tier: str = Form(...)):
     sb = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
     if not sb:
         raise HTTPException(400, "generate a storyboard for this tier first")
-    scene_count = sb["scene_count"] or 0
+    n_clips = clip_count(song)
+    if not n_clips:
+        # duration is what defines the clip list; without it the job would
+        # render every clip build_song computes from the mp3 with no staged
+        # references at all, and fail deep inside ComfyUI instead of here.
+        raise HTTPException(400, "this song has no known duration -- re-upload the mp3")
     approved_idxs = {r["clip_idx"] for r in
                       db.q("SELECT clip_idx FROM refs WHERE song_id=? AND tier=? AND approved=1", id, tier)}
-    missing = [i for i in range(scene_count) if i not in approved_idxs]
+    missing = [i for i in range(n_clips) if i not in approved_idxs]
     if missing:
         raise HTTPException(400, f"clips missing an approved reference: {missing}")
     jobs.enqueue("clips", {"song_id": id, "tier": tier}, song_id=id)

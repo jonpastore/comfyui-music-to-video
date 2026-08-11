@@ -226,8 +226,9 @@ def test_reroll_clamps_range_and_caps_count():
         assert r2.status_code == 400, r2.text
         assert len(jobs.recent(1000)) == before
 
-        # a big storyboard + a big request -> capped, not fanned out unbounded
-        db.run("UPDATE storyboards SET scene_count=? WHERE song_id=? AND tier='pg13'", 1000, sid)
+        # a long song + a big request -> capped, not fanned out unbounded.
+        # The bound is the CLIP count (audio length), not the scene count.
+        db.run("UPDATE songs SET duration=? WHERE id=?", 5000.0, sid)
         r3 = client.post(f"/songs/{sid}/reroll",
                           data={"tier": "pg13", "clip_idx": [str(i) for i in range(100)]})
         assert r3.status_code == 400, r3.text
@@ -484,15 +485,19 @@ def test_clips_form_offers_only_tiers_with_full_approved_refs():
         sid = song["id"]
         client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13"})
         job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
-        wait_job(job["id"])  # scene_count == 2, from the storyboard stub
+        wait_job(job["id"])
 
         r = client.get(f"/songs/{sid}")
         assert "no tier has fully approved refs yet" in r.text
 
+        # 3 clips, from the 12.3 s stub duration -- NOT the storyboard's 2
+        # scenes. Approving only the first two must leave the tier unoffered.
+        for i in range(2):
+            db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created)
+                      VALUES (?,'pg13',?,?,?,1,?)""", sid, i, f"r{i}.png", i, time.time())
+        assert "no tier has fully approved refs yet" in client.get(f"/songs/{sid}").text
         db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created)
-                  VALUES (?,'pg13',0,'r0.png',1,1,?)""", sid, time.time())
-        db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created)
-                  VALUES (?,'pg13',1,'r1.png',2,1,?)""", sid, time.time())
+                  VALUES (?,'pg13',2,'r2.png',2,1,?)""", sid, time.time())
 
         r2 = client.get(f"/songs/{sid}")
         assert "no tier has fully approved refs yet" not in r2.text
