@@ -18,6 +18,14 @@ faster-whisper>=1.0
 # instead of ~20 s on the 5090.
 nvidia-cublas-cu12
 nvidia-cudnn-cu12
-# analyse.py: bpm/key/energy per song. Verified against numpy 2.4.6 / numba
-# 0.66.0 already on this box (see analyse.py's module docstring).
-librosa>=1.0
+# analyse.py: bpm/key/energy per song.
+#
+# The floor is 0.11, NOT 1.0: librosa 1.0 requires python >= 3.12 and the RENDER
+# BOX runs 3.10, so a >=1.0 pin fails the deploy outright at the venv step. Pin
+# to what the deploy target can install, never to what a dev machine happens to
+# have -- the same rule that makes db.py use `IS` for sqlite 3.37.
+#
+# Both ends verified on the same track: 0.11.0 (py3.10 / numpy 2.2.6, the render
+# box) and 1.0.0 (py3.12 / numpy 2.4.6) return bit-identical bpm, key, beat count
+# and energy. Installing it does NOT move numpy, so faster-whisper is undisturbed.
+librosa>=0.11
