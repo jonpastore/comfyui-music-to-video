@@ -109,6 +109,39 @@
   </ul>
   {% endif %}
 
+  <h3>Album look</h3>
+  <p class="muted">Every description the pipeline uses for this album. These used to be
+    written into make_anchor.py and build_refs.py, which made one album part of the code;
+    a new album is now these boxes. Blank means "use the default shown".</p>
+  <form method="post" action="/playlists/{{ d.playlist.id }}/profile" class="stack-form">
+    {% for key, label, value in d.profile_fields %}
+    <label>{{ label }}
+      <textarea name="{{ key }}" rows="3">{{ value }}</textarea>
+    </label>
+    {% endfor %}
+    <button type="submit">Save album look</button>
+  </form>
+
+  <h3>Anchors</h3>
+  <p class="muted">Character sheets for this album, one per tier and view. Every song on
+    the album renders against these.</p>
+  {% if d.anchors %}
+  <div class="clip-tile candidates">
+    {% for a in d.anchors %}
+    <div class="candidate {% if a.chosen %}picked{% endif %}">
+      <img src="{{ media_url(a.path) }}" alt="{{ a.tier }} {{ a.view }} anchor">
+      <p class="muted">{{ a.tier }} &middot; {{ a.view }}{% if a.chosen %} &check;{% endif %}</p>
+      {% if not a.chosen %}
+      <form method="post" action="/anchors/{{ a.id }}/pick"><button type="submit">Use this</button></form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">None yet.</p>
+  {% endif %}
+  <p><a href="/anchors?scope_kind=album&amp;scope_value={{ d.playlist.name | urlencode }}">Manage anchors for this album &rarr;</a></p>
+
   <h3>Card</h3>
   <form method="post" action="/playlists/{{ d.playlist.id }}/image" enctype="multipart/form-data">
     <label>Album image <input type="file" name="image" accept="image/*" required></label>

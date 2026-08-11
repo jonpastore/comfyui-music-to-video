@@ -60,6 +60,9 @@ Environment=STUDIO_DATA=%h/meowp-studio/data
 Environment=COMFY_URL=http://127.0.0.1:8188
 Environment=COMFY_INPUT=%h/ComfyUI/input
 Environment=COMFY_OUTPUT=%h/ComfyUI/output
+# Album profile: character, wardrobe, world, locations. The scripts carry no
+# album content, so point this at a different profile for a different project.
+Environment=STUDIO_PROFILE=%h/meowp-studio/scripts/profiles/street_cats.json
 Environment=STUDIO_HOST=0.0.0.0
 Environment=STUDIO_PORT=8000
 # XAI_API_KEY is read from ~/.config/morpheus/grok-mcp.env by studio/grok.py.

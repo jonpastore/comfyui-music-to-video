@@ -28,11 +28,24 @@ STEPS, CFG = 4, 1.0
 SHIFT = 3.1
 
 
-# Negatives are inert at cfg 1.0, so the storyboard's "duplicate character" entry
-# does nothing and Meow P sometimes renders twice. This says it positively, and
-# targets only her -- background crowds are called for by several scenes.
-SINGLE = (" Exactly one Meow P in the frame: a single black feline woman protagonist, "
-          "no twin, no duplicate, no second copy of her.")
+def single_subject(character=""):
+    """Positive anti-duplicate clause, worded from the storyboard's OWN
+    character description.
+
+    Negatives are inert at cfg 1.0, so the storyboard's "duplicate character"
+    entry does nothing and the protagonist sometimes renders twice. This says
+    it positively. It targets the protagonist only -- background crowds are
+    called for by several scenes.
+
+    The subject used to be one album's character written into this file. It is
+    now the first clause of the storyboard's character_reference, so every
+    project describes its own protagonist and nothing here knows about any
+    particular one. Falls back to a neutral phrase when a storyboard carries no
+    character reference at all.
+    """
+    who = (character or "").split(",")[0].strip() or "the protagonist"
+    return (f" Exactly one {who} in the frame: a single protagonist, "
+            "no twin, no duplicate, no second copy.")
 
 
 def tighten_for_detail(scene, world="", character=""):
@@ -68,7 +81,7 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
     if shot.startswith(DETAIL_SHOTS):
         pos = shot + " " + tighten_for_detail(scene, world, character)
     else:
-        pos = (shot + " " if shot else "") + scene["image_prompt"] + SINGLE
+        pos = (shot + " " if shot else "") + scene["image_prompt"] + single_subject(character)
     pos = guardrail.build_prompt(pos, guard, f"scene {scene.get('scene_number','?')}")
     neg = scene.get("negative_prompt", "")
 

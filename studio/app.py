@@ -297,7 +297,13 @@ def h_anchor(args, progress):
     # anchors are scoped to an ALBUM/PLAYLIST and a TIER, never a song -- see
     # db.py's anchors table. Not tied to any song_id.
     view = args.get("view", "front")
-    paths = pipeline.gen_anchor(args["face"], args["outfit"], view, args.get("n", 4), progress)
+    # the album's own look, edited in the UI, is what describes the character --
+    # make_anchor.py no longer knows about any particular one
+    prof = album_profile(args["scope_value"] if args["scope_kind"] == "album" else "")
+    anchor_profile = {"anchor": {"identity": prof["identity"], "wardrobe": prof["wardrobe"],
+                                 "body": prof["body"]}}
+    paths = pipeline.gen_anchor(args["face"], args["outfit"], view, args.get("n", 4), progress,
+                                 profile=anchor_profile)
     now = time.time()
     for p in paths:
         db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen, created)
@@ -900,6 +906,43 @@ def delete_song(id: int, confirm: str = Form("")):
 
 # -------------------------------------------------------------- playlists --
 
+# Default album-profile text. Neutral on purpose: it describes a character
+# sheet, not a character. Every field is editable per album in the UI, which is
+# where anything album-specific belongs -- make_anchor.py and build_refs.py used
+# to carry one project's protagonist in their source.
+ALBUM_FIELDS = {
+    "style_text": ("Overarching theme",
+                   "The look and mood of the whole album, in a sentence or two."),
+    "identity": ("Character identity",
+                 "Head, face and hair come from the identity image; keep that identity exactly."),
+    "wardrobe": ("Wardrobe",
+                 "The outfit and accessories of the wardrobe image, same hardware and materials."),
+    "body": ("Body consistency",
+             "Body colouring and texture are identical head to toe, matching the face, with no "
+             "lighter or differently-toned patches anywhere."),
+    "world": ("World",
+              "The recurring places this album's videos happen in."),
+    "render_tail": ("Render style",
+                    "photorealistic cinematic frame, premium music video still, high detail, 16:9"),
+}
+
+
+def album_profile(name):
+    """The album's profile row, defaults filled in for anything blank.
+
+    An album and a playlist are the same record: the playlist whose name is the
+    song's album. Songs carry the album as text, and anchors are already scoped
+    by that same name, so nothing new has to be linked up.
+    """
+    row = db.one("SELECT * FROM playlists WHERE name=? AND kind='playlist'", name or "")
+    out = {}
+    for key, (_label, default) in ALBUM_FIELDS.items():
+        value = (row[key] if row and row[key] else "") or default
+        out[key] = value
+    out["_row"] = row
+    return out
+
+
 def playlist_detail(p):
     """One playlist card: its songs in order, each with length and whatever
     videos exist for it, plus the totals the collapsed card shows."""
@@ -924,8 +967,14 @@ def playlist_detail(p):
     ready = sorted(t for t, n in tiers_with_video.items() if n == len(items)) if items else []
     sets = [a for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC")
             if db.jset(a).get("playlist_id") == p["id"]]
+    # the album profile, as (key, label, current value) for the form
+    prof = album_profile(p["name"])
+    profile_fields = [(k, ALBUM_FIELDS[k][0], prof[k]) for k in ALBUM_FIELDS]
+    anchors = db.q("""SELECT * FROM anchors WHERE scope_kind='album' AND scope_value=?
+                      ORDER BY tier, view, id DESC""", p["name"])
     return {"playlist": p, "rows": rows, "count": len(items), "total_secs": total,
-            "video_tiers": ready, "sets": sets,
+            "video_tiers": ready, "sets": sets, "profile_fields": profile_fields,
+            "anchors": anchors,
             "partial_tiers": sorted(t for t in tiers_with_video if t not in ready)}
 
 
@@ -963,6 +1012,25 @@ async def set_playlist_image(id: int, image: UploadFile = File(...)):
     dest = await save_upload(image, MAX_IMAGE, os.path.join(db.DATA, "playlists", str(id)),
                               "image", prefix="cover")
     db.run("UPDATE playlists SET image_path=? WHERE id=?", dest, id)
+    return RedirectResponse("/playlists", status_code=303)
+
+
+@app.post("/playlists/{id}/profile")
+async def save_album_profile(id: int, request: Request):
+    """The album's look: identity, wardrobe, body, world, render style, theme.
+
+    Accepts only the known keys, so the form cannot write arbitrary columns.
+    A field left exactly at its default is stored as NULL rather than a copy,
+    so changing a default later still reaches every album that never edited it.
+    """
+    get_playlist_or_404(id)
+    form = await request.form()
+    for key, (_label, default) in ALBUM_FIELDS.items():
+        if key not in form:
+            continue
+        value = (form.get(key) or "").strip()
+        db.run(f"UPDATE playlists SET {key}=? WHERE id=?",
+               None if not value or value == default else value, id)
     return RedirectResponse("/playlists", status_code=303)
 
 

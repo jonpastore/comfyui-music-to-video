@@ -37,15 +37,6 @@
   </form>
 </section>
 
-<section class="card">
-  <h2>Style guide</h2>
-  {% if song.style_path %}<img class="thumb" src="{{ media_url(song.style_path) }}" alt="style guide">{% endif %}
-  <form method="post" action="/songs/{{ song.id }}/style" enctype="multipart/form-data">
-    <label>Image <input type="file" name="image" accept="image/*" required></label>
-    <label>Style note <input type="text" name="note"></label>
-    <button type="submit">Upload style</button>
-  </form>
-</section>
 
 <section class="card">
   <h2>Edit audio</h2>
@@ -93,24 +84,6 @@
   {% endif %}
 </section>
 
-<section class="card">
-  <h2>Anchors</h2>
-  <p class="hint">Anchors belong to this song's ALBUM, not the song -- every track on
-    "{{ song.album or "(no album)" }}" shares one look per tier.</p>
-  <a href="/anchors?scope_kind=album&scope_value={{ song.album | urlencode }}">Manage anchors for this album &rarr;</a>
-  {% if chosen_anchors %}
-  <div class="candidate-grid">
-    {% for a in chosen_anchors %}
-    <div class="candidate">
-      <img class="thumb" src="{{ media_url(a.path) }}" alt="chosen anchor">
-      <p class="meta">{{ a.tier }} &middot; {{ a.view }}</p>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="empty">no chosen anchor yet for this album</p>
-  {% endif %}
-</section>
 
 <section class="card">
   <h2>Storyboard</h2>

@@ -106,6 +106,7 @@ os.makedirs(os.path.join(_PIPE_DIR, "input"), exist_ok=True)
 os.makedirs(os.path.join(_PIPE_DIR, "output"), exist_ok=True)
 
 contact_sheet_calls = []
+anchor_calls = []
 free_vram_calls = []
 
 
@@ -124,7 +125,7 @@ _stub("pipeline",
       free_vram=lambda progress=None: free_vram_calls.append(True) or True,
       submit_dir=lambda wf_dir, progress=None: [],
       collect=lambda prefix_dir, pattern="*.png": [],
-      gen_anchor=lambda face, outfit, view="front", n=4, progress=None, prefix=None: [],
+      gen_anchor=lambda face, outfit, view="front", n=4, progress=None, prefix=None, profile=None: anchor_calls.append(profile) or [],
       gen_refs=lambda slug, tier, sb, anchor, mp3, progress=None, limit=None: [],
       reroll=lambda slug, tier, sb, anchor, mp3, idxs, progress=None: [],
       stage_refs=lambda slug, tier, ref_paths: [],

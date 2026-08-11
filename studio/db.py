@@ -107,6 +107,17 @@ MIGRATIONS = [
     # Playlists do not have tiers. Membership is the SONG; the tier is picked
     # when the set is rendered, and one playlist can render a set per tier.
     "ALTER TABLE playlist_items DROP COLUMN tier",
+    # THE ALBUM PROFILE. An album and a playlist are the same record here.
+    # These are the descriptions that used to be hardcoded in make_anchor.py
+    # and build_refs.py -- who the character is, what they wear, the world they
+    # are in. A second album is now a row to fill in, not a script to fork, and
+    # every one of these has a UI field with default text.
+    "ALTER TABLE playlists ADD COLUMN style_text TEXT",   # overarching theme
+    "ALTER TABLE playlists ADD COLUMN identity TEXT",     # face / hair / who
+    "ALTER TABLE playlists ADD COLUMN wardrobe TEXT",
+    "ALTER TABLE playlists ADD COLUMN body TEXT",         # colouring, consistency
+    "ALTER TABLE playlists ADD COLUMN world TEXT",
+    "ALTER TABLE playlists ADD COLUMN render_tail TEXT",
 ]
 
 

@@ -18,6 +18,10 @@ SCRIPTS = os.environ.get("STUDIO_SCRIPTS", os.path.dirname(ROOT))
 COMFY = os.environ.get("COMFY_URL", "http://127.0.0.1:8188")
 COMFY_INPUT = os.environ.get("COMFY_INPUT", os.path.expanduser("~/ComfyUI/input"))
 COMFY_OUTPUT = os.environ.get("COMFY_OUTPUT", os.path.expanduser("~/ComfyUI/output"))
+# Album profile json (profiles/<album>.json). Carries the things that are
+# specific to one project -- character, wardrobe, world, locations -- so no
+# script has to. Unset is valid: the pipeline then stays generic.
+PROFILE = os.environ.get("STUDIO_PROFILE", "")
 
 POLL_SECS = 2.0
 # A WAN clip legitimately takes ~90s; this is a "ComfyUI vanished" backstop,
@@ -159,15 +163,34 @@ def collect(prefix_dir, pattern="*.png"):
     return sorted(files, key=lambda p: _natkey(os.path.basename(p)))
 
 
-def gen_anchor(face, outfit, view="front", n=8, progress=None, prefix=None):
+def gen_anchor(face, outfit, view="front", n=8, progress=None, prefix=None, profile=None):
+    """profile: the album's look, as {"anchor": {identity, wardrobe, body, views}}.
+
+    WHO the character is is not in make_anchor.py any more -- it comes from the
+    album, which is edited in the UI. The dict is written to a temp file because
+    the CLI script takes a --profile path, which is also how it is used outside
+    the studio. STUDIO_PROFILE is the fallback for a checkout with no database.
+    """
     face_name = install_input(face)
     outfit_name = install_input(outfit)
     prefix = prefix or "anchor_v2"  # matches make_anchor.py's own default
+    args = ["--face", face_name, "--outfit", outfit_name,
+            "--n", str(n), "--view", view, "--prefix", prefix]
     with tempfile.TemporaryDirectory() as wf_dir:
-        _run_script("make_anchor.py", [
-            "--face", face_name, "--outfit", outfit_name, "--outdir", wf_dir,
-            "--n", str(n), "--view", view, "--prefix", prefix,
-        ], progress)
+        if profile:
+            prof_path = os.path.join(wf_dir, "album_profile.json")
+            with open(prof_path, "w") as f:
+                json.dump(profile, f)
+            args += ["--profile", prof_path]
+        elif PROFILE:
+            args += ["--profile", PROFILE]
+        elif progress:
+            progress("no album look set -- generic character-sheet wording")
+        _run_script("make_anchor.py", [*args, "--outdir", wf_dir], progress)
+        # the profile json sits in wf_dir; submit_dir only reads *.json
+        # workflows, so it must not be left where they are
+        if profile:
+            os.remove(prof_path)
         return _submit_and_collect(wf_dir, prefix, "*.png", progress)
 
 

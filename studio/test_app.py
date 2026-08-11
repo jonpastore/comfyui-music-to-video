@@ -397,8 +397,10 @@ def test_explicit_not_passed_to_grok_or_pipeline(patch_stub):
 def test_anchor_generation_independent_tier_groups_and_picking(patch_stub):
     n_calls = []
 
-    def _gen_anchor(face, outfit, view="front", n=4, progress=None, prefix=None):
-        n_calls.append(1)
+    def _gen_anchor(face, outfit, view="front", n=4, progress=None, prefix=None, profile=None):
+        # profile carries the ALBUM's look (identity/wardrobe/body) -- the
+        # character description is no longer inside make_anchor.py
+        n_calls.append(profile)
         return [f"/tmp/anchor_{len(n_calls)}_{i}.png" for i in range(2)]
 
     patch_stub("pipeline", gen_anchor=_gen_anchor)
