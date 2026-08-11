@@ -105,6 +105,18 @@ def _load_model(size, device, backend, progress):
     return model
 
 
+# CTranslate2, torch and the CUDA runtime each word an exhausted GPU
+# differently, and none of them raise a dedicated exception type -- the real
+# failure on this box was a bare RuntimeError reading "CUDA failed with error
+# out of memory". Matching on the message is the only handle available.
+_OOM_MARKERS = ("out of memory", "cuda failed", "cuda error", "cublas", "cudnn",
+                "cuda_error_out_of_memory")
+
+
+def _is_oom(exc):
+    return any(m in str(exc).lower() for m in _OOM_MARKERS)
+
+
 def transcribe(mp3_path, progress=None, model_size=None):
     def note(msg):
         if progress:
@@ -115,6 +127,21 @@ def transcribe(mp3_path, progress=None, model_size=None):
     if backend is None:
         raise RuntimeError("no whisper backend installed; " + available()[1])
     device, _detail = _device(backend)
+    try:
+        return _transcribe_on(mp3_path, backend, size, device, note)
+    except Exception as e:
+        if device != "cuda" or not _is_oom(e):
+            raise
+        # ComfyUI holds ~21.5 GB of this card between renders. The caller
+        # (h_transcribe) asks it to unload first, but a render can start in
+        # between -- CPU is slower, never unavailable, and a slow transcript
+        # beats a failed job.
+        note(f"GPU is full ({e}); retrying on CPU")
+        _model_cache.pop((backend, size, "cuda"), None)
+        return _transcribe_on(mp3_path, backend, size, "cpu", note)
+
+
+def _transcribe_on(mp3_path, backend, size, device, note):
     model = _load_model(size, device, backend, note)
 
     dur = estimate_duration(mp3_path)
@@ -323,6 +350,53 @@ def demo():
     with mock_modules(faster_whisper=fake_faster_whisper, ctranslate2=fake_ct2_cuda):
         ok3, msg3 = available()
         assert ok3 is True and "device=cuda" in msg3 and "CTranslate2" in msg3, msg3
+
+    # --- a full GPU falls back to CPU instead of failing the job -----------
+    # This is the exact failure seen on cerberus: ComfyUI holds ~21.5 GB of the
+    # 24 GB card, and every transcribe job died with a bare RuntimeError
+    # "CUDA failed with error out of memory".
+    class _Seg:
+        start, end, text = 0.0, 1.0, "on cpu"
+
+    class _FakeModel:
+        def __init__(self, size, device=None, compute_type=None):
+            if device == "cuda":
+                raise RuntimeError("CUDA failed with error out of memory")
+            self.device = device
+
+        def transcribe(self, path, vad_filter=False):
+            return iter([_Seg()]), types.SimpleNamespace(language="en")
+
+    fake_fw = types.ModuleType("faster_whisper")
+    fake_fw.WhisperModel = _FakeModel
+    with tempfile.TemporaryDirectory() as d:
+        mp3 = os.path.join(d, "s.mp3")
+        subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-t", "2", "-i", "anullsrc",
+                        "-c:a", "libmp3lame", mp3], capture_output=True, check=True)
+        with mock_modules(faster_whisper=fake_fw, ctranslate2=fake_ct2_cuda):
+            _model_cache.clear()
+            msgs = []
+            out = transcribe(mp3, progress=msgs.append)
+            assert out["device"] == "cpu", out
+            assert out["text"] == "on cpu", out
+            assert any("GPU is full" in m for m in msgs), msgs
+            assert (("faster-whisper", MODEL_SIZE, "cuda")) not in _model_cache
+
+        # a failure that is NOT about memory must still surface, not be masked
+        class _Broken(_FakeModel):
+            def __init__(self, size, device=None, compute_type=None):
+                raise RuntimeError("model file is corrupt")
+
+        fake_broken = types.ModuleType("faster_whisper")
+        fake_broken.WhisperModel = _Broken
+        with mock_modules(faster_whisper=fake_broken, ctranslate2=fake_ct2_cuda):
+            _model_cache.clear()
+            try:
+                transcribe(mp3)
+                raise AssertionError("a non-OOM error was swallowed")
+            except RuntimeError as e:
+                assert "corrupt" in str(e), e
+    _model_cache.clear()
 
     print("lyrics.py OK")
 

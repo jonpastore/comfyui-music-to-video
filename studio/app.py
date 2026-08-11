@@ -260,6 +260,10 @@ def h_transcribe(args, progress):
     ok, msg = lyrics.available()
     if not ok:
         raise RuntimeError(msg)
+    # ComfyUI and whisper share one 24 GB card and ComfyUI keeps its models
+    # resident, so a transcription that follows a render OOMs. Ask it to let go
+    # first; lyrics.transcribe falls back to CPU if that was not enough.
+    pipeline.free_vram(progress)
     result = lyrics.transcribe(song["mp3_path"], progress)
     text = lyrics.to_sections(result)
     db.run("UPDATE songs SET lyrics=? WHERE id=?", text, song["id"])

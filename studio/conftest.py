@@ -106,6 +106,7 @@ os.makedirs(os.path.join(_PIPE_DIR, "input"), exist_ok=True)
 os.makedirs(os.path.join(_PIPE_DIR, "output"), exist_ok=True)
 
 contact_sheet_calls = []
+free_vram_calls = []
 
 
 def _contact_sheet(src, out, cols=6):
@@ -120,6 +121,7 @@ _stub("pipeline",
       COMFY_INPUT=os.path.join(_PIPE_DIR, "input"),
       COMFY_OUTPUT=os.path.join(_PIPE_DIR, "output"),
       install_input=lambda local_path, name=None: (name or os.path.basename(local_path)),
+      free_vram=lambda progress=None: free_vram_calls.append(True) or True,
       submit_dir=lambda wf_dir, progress=None: [],
       collect=lambda prefix_dir, pattern="*.png": [],
       gen_anchor=lambda face, outfit, view="front", n=4, progress=None, prefix=None: [],

@@ -79,6 +79,33 @@ def install_input(local_path, name=None):
     return name
 
 
+def free_vram(progress=None):
+    """Ask ComfyUI to unload its models. Returns True if it answered.
+
+    Whisper and ComfyUI share ONE 24 GB card, and ComfyUI keeps ~21.5 GB
+    resident between renders -- which is why every transcribe job on this box
+    died with "CUDA failed with error out of memory" while nvidia-smi showed
+    the GPU at 0% utilisation. Freeing here is the actual fix; lyrics.py's CPU
+    fallback is the safety net for when it is not enough.
+
+    Best effort by design: a ComfyUI that is down or too old for /free must not
+    fail a transcription, it just means the fallback does the work.
+    """
+    req = urllib.request.Request(
+        f"{COMFY}/free", data=json.dumps({"unload_models": True, "free_memory": True}).encode(),
+        headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30):
+            pass
+    except Exception as e:
+        if progress:
+            progress(f"could not free ComfyUI VRAM ({e}) -- continuing")
+        return False
+    if progress:
+        progress("asked ComfyUI to unload its models")
+    return True
+
+
 def submit_dir(wf_dir, progress=None):
     progress = progress or (lambda msg: None)
     files = sorted(f for f in os.listdir(wf_dir) if f.endswith(".json"))
@@ -286,6 +313,35 @@ def demo():
     finally:
         _post, _get = real_post, real_get
         SUBMIT_TIMEOUT = real_timeout
+
+    # --- free_vram: never fatal, whatever ComfyUI does ---
+    seen = []
+    real_urlopen = urllib.request.urlopen
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake_urlopen(req, timeout=None):
+        seen.append((req.full_url, json.loads(req.data)))
+        return _Resp()
+
+    urllib.request.urlopen = fake_urlopen
+    try:
+        assert free_vram() is True
+        assert seen[0][0].endswith("/free"), seen
+        assert seen[0][1] == {"unload_models": True, "free_memory": True}, seen
+
+        def dead(req, timeout=None):
+            raise urllib.error.URLError("connection refused")
+
+        urllib.request.urlopen = dead
+        notes = []
+        # a ComfyUI that is down must not fail the transcription that called this
+        assert free_vram(progress=notes.append) is False
+        assert notes and "could not free" in notes[0], notes
+    finally:
+        urllib.request.urlopen = real_urlopen
 
     # --- collect() natural sort ---
     real_out = COMFY_OUTPUT

@@ -479,6 +479,18 @@ def test_refs_tier_without_chosen_anchor_400_names_tier_and_enqueues_nothing():
         assert len(jobs.recent(1000)) == before
 
 
+def test_transcribe_frees_comfyui_vram_first():
+    """ComfyUI keeps ~21.5 GB of the shared 24 GB card resident, which is what
+    made every real transcribe job die with CUDA OOM."""
+    from conftest import free_vram_calls
+    with TestClient(appmod.app) as client:
+        n = len(free_vram_calls)
+        song = _upload_song(client, "VRAM Song")
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='transcribe'", song["id"])
+        assert wait_job(job["id"])["status"] == "done"
+        assert len(free_vram_calls) == n + 1
+
+
 def test_jobs_page_refresh_interval_follows_the_queue_and_the_control():
     with TestClient(appmod.app) as client:
         # idle queue -> the slow poll
