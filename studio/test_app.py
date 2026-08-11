@@ -2513,32 +2513,68 @@ def test_set_item_beatmatch_toggle_persists_and_shows_its_plan():
         assert db.one("SELECT beatmatch FROM set_items WHERE id=?", item1["id"])["beatmatch"] == 0
 
 
-def test_tempo_ramp_is_wired_and_the_note_matches_what_renders():
-    """The editor may only promise what the renderer produces.
+def test_tempo_ramp_is_reachable_from_the_render_route_not_just_present():
+    """The previous version of this test grepped mixer.py for a call site. It
+    passed while the ramp was UNREACHABLE from every route, because
+    _beatmatch_fields did not include bpm and can_beatmatch(None, None) is
+    False -- so _ramp was never set and apply_tempo_ramp never ran, while the
+    editor's preview (which reads bpm straight off the song row) went on
+    promising a ramp.
 
-    mixer.apply_tempo_ramp exists and works, but nothing calls it from the
-    render path -- only the beat SNAP is applied. A note reading "snapped +
-    tempo ramp 120->126 BPM" was therefore a promise the output did not keep,
-    the same defect as predicting a length for a set that will not render.
-
-    Wiring the ramp changes the item's DURATION, so set_duration and
-    _check_transition_fits have to account for it first. Until something calls
-    apply_tempo_ramp from the render path, this test holds the note honest.
+    A test that asserts a call site exists in source proves nothing about
+    reachability. This one builds items exactly as render_set_route builds them
+    and asserts a ramp is actually planned.
     """
-    # a CALL site, not a mention: this file and app.py both name the function in
-    # prose, and matching the bare name made this test fail on its own comment
-    here = os.path.dirname(appmod.__file__)
-    # read the file, not the module: conftest replaces mixer with a synthetic
-    # stub that has no __file__
-    src = open(os.path.join(here, "mixer.py")).read()
-    assert re.search(r"apply_tempo_ramp\(\s*it\[.audio.\]", src), \
-        "mix_audio no longer renders the ramp, so the note would be a promise again"
-    assert "ramped_duration(" in src, "nothing prices the ramp, so prediction will drift"
+    # Load the REAL mixer under a private name. beatmatch/effects/video_fx are
+    # not stubbed by conftest, so they resolve normally -- and nothing is
+    # written back over a shared sys.modules entry, which would break
+    # conftest's one-stub-object-per-module invariant for every later test.
+    import importlib.util as _u
+    here = os.path.dirname(os.path.abspath(appmod.__file__))
+    _spec = _u.spec_from_file_location("_real_mixer_for_reach", os.path.join(here, "mixer.py"))
+    real_mixer = _u.module_from_spec(_spec)
+    _spec.loader.exec_module(real_mixer)
+
+    with TestClient(appmod.app) as client:
+        a = _upload_song(client, "Ramp Reach A")
+        b = _upload_song(client, "Ramp Reach B")
+        for s in (a, b):
+            wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='analyse'", s["id"])["id"])
+        # two tempi that differ but stay inside the stretch limit
+        grid = [i * (60.0 / 129.2) for i in range(400)]
+        db.run("UPDATE songs SET bpm=?, beat_grid_json=?, downbeat_offset=0 WHERE id=?",
+               129.2, json.dumps(grid), a["id"])
+        db.run("UPDATE songs SET bpm=?, beat_grid_json=?, downbeat_offset=0 WHERE id=?",
+               136.0, json.dumps(grid), b["id"])
+
+        client.post("/sets/new", data={"name": "Ramp Reach", "mode": "audio"})
+        sid = db.one("SELECT id FROM sets WHERE name='Ramp Reach'")["id"]
+        client.post(f"/sets/{sid}/items", data={"song_id": a["id"], "transition": "fade",
+                                                 "secs": "3.0", "beatmatch": "true"})
+        client.post(f"/sets/{sid}/items", data={"song_id": b["id"], "transition": "cut",
+                                                 "secs": "0"})
+
+        # exactly what the render route hands mixer
+        items = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", sid)
+        songs = {s["id"]: s for s in db.q("SELECT * FROM songs")}
+        build = []
+        for it in items:
+            song = songs[it["song_id"]]
+            build.append({"audio": song["mp3_path"], "transition": it["transition"],
+                          "secs": it["secs"], "in_secs": it["in_secs"],
+                          "out_secs": it["out_secs"] or 40.0,
+                          **appmod._beatmatch_fields(it, song)})
+
+        assert build[0].get("bpm"), "_beatmatch_fields dropped bpm; the ramp is unreachable again"
+        enriched = real_mixer._apply_beatmatch([dict(i) for i in build])
+        assert enriched[0].get("_ramp"), (
+            "no ramp planned from a route-shaped item -- apply_tempo_ramp is unreachable "
+            "while the editor's note still promises one")
+        assert enriched[0]["_ramp"]["ratios"], "ramp planned with no steps"
 
     import inspect
     note_src = inspect.getsource(appmod._beatmatch_plan)
-    assert "not applied" not in note_src, \
-        "the note still says the ramp is unapplied, but mix_audio renders it"
+    assert "not applied" not in note_src
     assert "tempo-ramped" in note_src
 
 

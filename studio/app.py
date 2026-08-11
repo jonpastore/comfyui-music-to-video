@@ -514,7 +514,7 @@ def _mix_items_for_set(id, overrides=None, extra_item=None):
     item validates its raw, un-snapped secs/out_secs and an edit that beat-
     snapping later makes impossible would slip past this guard."""
     rows = db.q("""SELECT si.id, si.transition, si.secs, si.in_secs, si.out_secs,
-                          si.beatmatch, s.mp3_path, s.beat_grid_json, s.downbeat_offset
+                          si.beatmatch, s.mp3_path, s.bpm, s.beat_grid_json, s.downbeat_offset
                    FROM set_items si JOIN songs s ON s.id = si.song_id
                    WHERE si.set_id=? ORDER BY si.position""", id)
     overrides = overrides or {}
@@ -3192,7 +3192,8 @@ def set_detail(row):
     # instead of 500ing the page the Remove button lives on.
     mix_items = [{"audio": it["mp3_path"], "transition": it["transition"], "secs": it["secs"],
                  "in_secs": it["in_secs"], "out_secs": it["out_secs"],
-                 **_beatmatch_fields(it, {"beat_grid_json": it["song_beat_grid_json"],
+                 **_beatmatch_fields(it, {"bpm": it["song_bpm"],
+                                          "beat_grid_json": it["song_beat_grid_json"],
                                           "downbeat_offset": it["song_downbeat_offset"]})}
                  for it in items if it["mp3_path"] and os.path.isfile(it["mp3_path"])]
     # A set edited before this guard existed (or whose file lengths changed
@@ -3510,7 +3511,7 @@ def reorder_set(id: int, order: str = Form(...)):
     # _mix_items_for_set orders by the STORED position -- reordering needs the
     # PROPOSED one, so fetch keyed by id and walk `ids` instead.
     rows = {r["id"]: r for r in db.q(
-        """SELECT si.id, si.transition, si.secs, si.in_secs, si.out_secs, si.beatmatch,
+        """SELECT si.id, si.transition, si.secs, si.in_secs, si.out_secs, si.beatmatch, s.bpm,
                   s.mp3_path, s.beat_grid_json, s.downbeat_offset
            FROM set_items si JOIN songs s ON s.id = si.song_id WHERE si.set_id=?""", id)}
     reordered = [{"audio": rows[i]["mp3_path"], "transition": rows[i]["transition"],
@@ -3526,11 +3527,18 @@ def reorder_set(id: int, order: str = Form(...)):
 
 
 def _beatmatch_fields(it, song):
-    """The beat_grid/downbeat_offset a beatmatch=1 item needs mixer.py's
-    _apply_beatmatch to actually snap its own cut -- pulled from the SONG's
-    own analysis (analyse.py), the same source _beatmatch_plan's preview
-    already reads. An item without beatmatch=1 doesn't need these at all."""
+    """The analysis a beatmatch=1 item needs mixer._apply_beatmatch to snap its
+    own cut AND to plan its tempo ramp -- pulled from the SONG's own analysis
+    (analyse.py), the same source _beatmatch_plan's preview already reads.
+
+    bpm is NOT optional. mixer._apply_beatmatch reads it.get("bpm") and the next
+    item's, and can_beatmatch(None, None) is False -- so leaving bpm out made
+    apply_tempo_ramp unreachable from every route while the editor's preview,
+    which reads bpm straight off the song row, went on promising a ramp. The
+    preview and the render must read the same fields or they describe different
+    renders."""
     return {"beatmatch": bool(it["beatmatch"]),
+            "bpm": song["bpm"],
             "beat_grid": json.loads(song["beat_grid_json"]) if song["beat_grid_json"] else [],
             "downbeat_offset": song["downbeat_offset"] or 0}
 
