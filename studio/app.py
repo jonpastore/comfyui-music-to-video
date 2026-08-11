@@ -453,6 +453,9 @@ def h_edit_audio(args, progress):
     mixer.edit_audio(song["mp3_path"], out, args["trim_start"], args["trim_end"],
                       args["gain_db"], args["fade_in"], args["fade_out"], progress)
     meta = {k: args[k] for k in ("trim_start", "trim_end", "gain_db", "fade_in", "fade_out")}
+    # what produced these numbers, stored with them: an edit you cannot explain
+    # six months later is an edit you cannot reproduce
+    meta.update({k: args.get(k, "") for k in ("prompt", "note", "model")})
     db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
            sid, "audio_edit", out, json.dumps(meta), time.time())
     return {"path": out}
@@ -851,8 +854,24 @@ def start_render(id: int, tier: str = Form(...), fade: float = Form(0.0)):
 
 @app.post("/songs/{id}/audio")
 def edit_song_audio(id: int, trim_start: float = Form(0.0), trim_end: Optional[float] = Form(None),
-                     gain_db: float = Form(0.0), fade_in: float = Form(0.0), fade_out: float = Form(0.0)):
+                     gain_db: float = Form(0.0), fade_in: float = Form(0.0), fade_out: float = Form(0.0),
+                     prompt: str = Form("")):
     song = get_song_or_404(id)
+    # A prompt REPLACES the sliders: a local model reads the instruction and
+    # fills in the same five parameters, which are then clamped by exactly the
+    # same validation. The model never touches audio -- what runs is ffmpeg.
+    prompt, note, model = (prompt or "").strip(), "", ""
+    if prompt:
+        try:
+            duration = mixer.probe(song["mp3_path"])["duration"] if song["mp3_path"] else 0.0
+        except Exception:
+            duration = song["duration"] or 0.0
+        try:
+            params, note, model = vision.read_edit_instruction(prompt, duration)
+        except Exception as e:
+            raise HTTPException(502, f"could not read that instruction: {e}") from None
+        trim_start, trim_end = params["trim_start"], params["trim_end"]
+        gain_db, fade_in, fade_out = params["gain_db"], params["fade_in"], params["fade_out"]
     trim_start, trim_end, gain_db, fade_in, fade_out = clamp_audio_edit_params(
         trim_start, trim_end, gain_db, fade_in, fade_out)
     # record the true original exactly once, before mp3_path can ever move --
@@ -861,7 +880,8 @@ def edit_song_audio(id: int, trim_start: float = Form(0.0), trim_end: Optional[f
         db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
                id, "audio_original", song["mp3_path"], None, time.time())
     jobs.enqueue("edit_audio", {"song_id": id, "trim_start": trim_start, "trim_end": trim_end,
-                                 "gain_db": gain_db, "fade_in": fade_in, "fade_out": fade_out}, song_id=id)
+                                 "gain_db": gain_db, "fade_in": fade_in, "fade_out": fade_out,
+                                 "prompt": prompt, "note": note, "model": model}, song_id=id)
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 

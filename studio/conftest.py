@@ -58,6 +58,7 @@ def _write_storyboard(sb, outdir, slug, tier):
 
 classify_calls = []
 describe_calls = []
+edit_prompt_calls = []
 
 
 def _classify_sheet(sheet_path, note="", model=None, progress=None):
@@ -71,7 +72,11 @@ _stub("vision",
       describe_anchor=lambda image_path, field, model=None, progress=None: (
           describe_calls.append((image_path, field))
           or f"drafted {field} from the anchor"),
-      available=lambda: ("local", "stub"))
+      available=lambda: ("local", "stub"),
+      read_edit_instruction=lambda prompt, duration, progress=None: (
+          edit_prompt_calls.append((prompt, duration))
+          or ({"trim_start": 4.0, "trim_end": None, "gain_db": 0.0,
+               "fade_in": 0.0, "fade_out": 0.0}, "cut the first 4s", "qwen-stub")))
 
 _stub("grok",
       list_models=lambda: ["grok-x", "grok-2"],

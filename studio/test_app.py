@@ -482,6 +482,45 @@ def test_refs_tier_without_chosen_anchor_400_names_tier_and_enqueues_nothing():
         assert len(jobs.recent(1000)) == before
 
 
+def test_audio_edit_from_a_prompt_is_recorded_with_its_provenance():
+    from conftest import edit_prompt_calls
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Prompt Edit Song")
+        sid = song["id"]
+        n = len(edit_prompt_calls)
+
+        r = client.post(f"/songs/{sid}/audio",
+                        data={"prompt": "cut the giggling in the first 4 seconds"})
+        assert r.status_code in (200, 303), r.text
+        assert len(edit_prompt_calls) == n + 1
+        assert edit_prompt_calls[-1][0] == "cut the giggling in the first 4 seconds"
+
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='edit_audio' ORDER BY id DESC", sid)
+        args = json.loads(job["args_json"])
+        # the model filled the SAME five parameters the form has
+        assert args["trim_start"] == 4.0 and args["gain_db"] == 0.0
+        # ...and what produced them travels with them
+        assert args["prompt"].startswith("cut the giggling")
+        assert args["note"] == "cut the first 4s" and args["model"] == "qwen-stub"
+
+        assert wait_job(job["id"])["status"] == "done"
+        asset = db.one("""SELECT * FROM assets WHERE song_id=? AND kind='audio_edit'
+                          ORDER BY id DESC""", sid)
+        meta = json.loads(asset["meta_json"])
+        assert meta["trim_start"] == 4.0
+        assert meta["prompt"].startswith("cut the giggling")
+        assert meta["model"] == "qwen-stub", meta
+        # and the page shows it, so an edit can be explained later
+        assert "cut the first 4s" in client.get(f"/songs/{sid}").text
+
+        # a hostile prompt result is still clamped by the same validation
+        appmod.vision.read_edit_instruction = lambda prompt, duration, progress=None: (
+            {"trim_start": -50.0, "trim_end": None, "gain_db": 999.0,
+             "fade_in": 0.0, "fade_out": 0.0}, "n", "m")
+        r2 = client.post(f"/songs/{sid}/audio", data={"prompt": "destroy it"})
+        assert r2.status_code == 400, "out-of-range params from a model must be refused"
+
+
 def test_song_page_layout_rebuild():
     """The annotated batch: paired cards, one-row fields, model default, job
     timings, a real delete confirmation, and no scene-seconds knob."""

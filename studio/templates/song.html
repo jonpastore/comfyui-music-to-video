@@ -55,6 +55,15 @@
       <label>Fade in (s) <input type="number" step="0.1" min="0" name="fade_in" value="0"></label>
       <label>Fade out (s) <input type="number" step="0.1" min="0" name="fade_out" value="0"></label>
     </div>
+    <label>Or describe the edit
+      <textarea name="prompt" rows="2"
+        placeholder="cut the giggling in the first 4 seconds"></textarea>
+    </label>
+    <p class="hint">A local model turns the sentence into the same five numbers above,
+      then ffmpeg does the work &mdash; so it is exact and reversible, and the prompt,
+      the numbers and the model are all stored with the edit. It can only trim the ends,
+      not cut something out of the middle; if you ask for that it will say so and change
+      nothing.</p>
     <button type="submit">Create edit</button>
   </form>
 
@@ -75,7 +84,9 @@
       <tr>
         <td>{{ a.id }}</td>
         <td>trim {{ p.trim_start }}&ndash;{{ p.trim_end or "end" }}, gain {{ p.gain_db }}dB,
-            fade {{ p.fade_in }}/{{ p.fade_out }}</td>
+            fade {{ p.fade_in }}/{{ p.fade_out }}
+            {% if p.prompt %}<br><span class="muted">&ldquo;{{ p.prompt }}&rdquo;
+              &mdash; {{ p.note }} <em>({{ p.model }})</em></span>{% endif %}</td>
         <td>{{ "yes" if song.mp3_path == a.path else "" }}</td>
         <td>
           {% if song.mp3_path != a.path %}

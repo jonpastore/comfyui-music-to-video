@@ -1,4 +1,6 @@
-"""Ask questions about an image. Local model first, xAI only as a fallback.
+"""Ask a model about an image, or ask a local model for structured text.
+
+Local model first, xAI only as a fallback.
 
 Two jobs in this pipeline need eyes:
 
@@ -134,6 +136,47 @@ def _json(out, what):
         raise RuntimeError(f"{what} returned non-JSON: {e}") from None
 
 
+def local_text_model():
+    """Any local chat model, vision or not -- for text-only jobs like reading an
+    edit instruction. Prefers an instruct/chat model over an embedding or
+    rerank one, which are on the same gateway and cannot answer."""
+    base, key = _env()
+    if not base or not key:
+        return None
+    try:
+        r = httpx.get(f"{base}/models", headers={"Authorization": f"Bearer {key}"}, timeout=10)
+        r.raise_for_status()
+        ids = [m["id"] for m in r.json().get("data", [])]
+    except Exception:
+        return None
+    skip = ("embed", "rerank", "whisper", "router")
+    usable = [i for i in ids if not any(s in i.lower() for s in skip)]
+    # prefer a local one: the gateway also fronts paid APIs under plain names
+    local_first = [i for i in usable if any(h in i.lower() for h in ("qwen", "oss", "llama"))]
+    return (local_first or usable or [None])[0]
+
+
+def ask_text(system, user_text, progress=None, model=None):
+    """One text question -> the model's raw reply. Local only: the callers are
+    conveniences, and none of them is worth a paid call if the fleet is down."""
+    base, key = _env()
+    model = model or local_text_model()
+    if not (base and key and model):
+        raise RuntimeError("no local text model available on the litellm gateway")
+    if progress:
+        progress(f"asking {model} (local)")
+    r = httpx.post(f"{base}/chat/completions",
+                   headers={"Authorization": f"Bearer {key}"},
+                   json={"model": model,
+                         "messages": [{"role": "system", "content": system},
+                                      {"role": "user", "content": user_text}],
+                         "response_format": {"type": "json_object"}},
+                   timeout=TIMEOUT)
+    if r.status_code >= 400:
+        raise RuntimeError(f"local model {model} failed ({r.status_code}): {r.text[:200]}")
+    return r.json()["choices"][0]["message"]["content"] or "", model
+
+
 # --------------------------------------------------------------- reviewing --
 
 REVIEW_SYSTEM = (
@@ -201,6 +244,52 @@ def describe_anchor(image_path, field, model=None, progress=None):
               progress)
     text = _json(out, "describe").get("text", "")
     return " ".join(str(text).split()).strip()
+
+
+# ----------------------------------------------------------- audio edits --
+
+EDIT_SYSTEM = (
+    "You turn a plain-English instruction about an audio track into edit "
+    "parameters for ffmpeg. The track is TRACK_SECONDS seconds long.\n\n"
+    "Reply with JSON only: {\"trim_start\": <seconds from the start to cut off>, "
+    "\"trim_end\": <keep audio up to this timestamp, or null for the end>, "
+    "\"gain_db\": <volume change in dB>, \"fade_in\": <seconds>, "
+    "\"fade_out\": <seconds>, \"note\": \"<one line saying what you did>\"}.\n\n"
+    "Rules: every number is seconds from the START of the track, not a duration "
+    "to remove from somewhere in the middle -- you can only cut from the ends. "
+    "If the instruction asks to remove something in the MIDDLE, set the numbers "
+    "to leave the track unchanged and say so in note. Use 0 for anything not "
+    "asked for. Never invent a fade nobody asked for."
+)
+
+
+def read_edit_instruction(prompt, duration, progress=None):
+    """Plain English -> edit parameters. Returns (params, note, model).
+
+    Deliberately mapped onto the SAME five parameters the manual form has, so
+    the result is deterministic ffmpeg, reversible, and clamped by exactly the
+    same validation. The model reads the instruction; it does not touch audio.
+    """
+    out, model = ask_text(EDIT_SYSTEM.replace("TRACK_SECONDS", f"{duration:.1f}"),
+                          prompt, progress)
+    obj = _json(out, "edit instruction")
+
+    def num(key, default=0.0):
+        v = obj.get(key, default)
+        if v is None:
+            return None
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return default
+        return f if f == f and abs(f) != float("inf") else default
+
+    params = {"trim_start": num("trim_start") or 0.0,
+              "trim_end": num("trim_end", None),
+              "gain_db": num("gain_db") or 0.0,
+              "fade_in": num("fade_in") or 0.0,
+              "fade_out": num("fade_out") or 0.0}
+    return params, str(obj.get("note", ""))[:300], model
 
 
 def demo():
@@ -289,6 +378,40 @@ def demo():
             assert any("falling back to xAI" in n for n in notes), notes
         finally:
             grok._chat = real_chat
+
+    # --- an instruction becomes clamped, reversible ffmpeg params ---------
+    httpx.get = lambda url, headers=None, timeout=None: R({"data": [{"id": "qwen3.6:27b"},
+                                                                    {"id": "qwen3-embed"}]})
+    assert local_text_model() == "qwen3.6:27b", local_text_model()
+
+    asked = {}
+
+    def text_post(url, headers=None, json=None, timeout=None):
+        asked["body"] = json
+        payload = {"trim_start": 4.0, "trim_end": None, "gain_db": 0,
+                   "fade_in": "0.5", "fade_out": 0, "note": "cut the first 4s"}
+        return type("P", (), {"status_code": 200, "text": "",
+                              "json": staticmethod(lambda: {"choices": [
+                                  {"message": {"content": __import__("json").dumps(payload)}}]})})
+
+    httpx.post = text_post
+    params, note, model = read_edit_instruction("cut the giggling in the first 4 seconds", 195.8)
+    assert params == {"trim_start": 4.0, "trim_end": None, "gain_db": 0.0,
+                      "fade_in": 0.5, "fade_out": 0.0}, params      # strings coerced
+    assert note == "cut the first 4s" and model == "qwen3.6:27b"
+    assert "195.8" in asked["body"]["messages"][0]["content"], "model was not told the length"
+
+    # a model that answers with junk must not put junk in an ffmpeg command
+    def junk_post(url, headers=None, json=None, timeout=None):
+        payload = {"trim_start": "nonsense", "gain_db": float("inf"), "fade_in": None}
+        return type("P", (), {"status_code": 200, "text": "",
+                              "json": staticmethod(lambda: {"choices": [
+                                  {"message": {"content": __import__("json").dumps(payload)}}]})})
+
+    httpx.post = junk_post
+    params2, _, _ = read_edit_instruction("do something", 100.0)
+    assert params2["trim_start"] == 0.0 and params2["gain_db"] == 0.0, params2
+    assert all(v is None or v == v for v in params2.values()), params2
 
     httpx.get, httpx.post = real_get, real_post
     print("vision.py OK")
