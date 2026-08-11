@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 from fastapi import FastAPI, Form, HTTPException, Query, Request, UploadFile, File
 from pydantic import BeforeValidator
-from fastapi.responses import (HTMLResponse, RedirectResponse, FileResponse,
+from fastapi.responses import (HTMLResponse, JSONResponse, RedirectResponse, FileResponse,
                                 PlainTextResponse, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -1041,13 +1041,173 @@ async def create_song(title: str = Form(...), album: str = Form(""), genre: str 
 
 
 @app.post("/songs/analyse-all")
-def analyse_all_songs():
+def analyse_all_songs(request: Request):
     """Runnable on demand for the songs that predate analyse.py -- everything
-    already in the library on the day this shipped."""
+    already in the library on the day this shipped.
+
+    Answers JSON to a fetch and a redirect to a plain form post, so the page can
+    patch rows as they land without giving up the no-JavaScript path.
+    """
     rows = db.q("SELECT id FROM songs WHERE mp3_path IS NOT NULL AND bpm IS NULL")
-    for r in rows:
-        jobs.enqueue("analyse", {"song_id": r["id"]}, song_id=r["id"])
+    queued = [{"song_id": r["id"], "job_id": jobs.enqueue("analyse", {"song_id": r["id"]},
+                                                           song_id=r["id"])}
+              for r in rows]
+    if "application/json" in (request.headers.get("accept") or ""):
+        return JSONResponse({"queued": queued})
     return RedirectResponse("/", status_code=303)
+
+
+# A poll is a query string, and a query string is not a place to accept an
+# unbounded list -- the library is 31 songs and this is generous.
+MAX_ANALYSIS_POLL = 500
+
+
+# Registered BEFORE /songs/{id}: FastAPI matches in declaration order, and
+# "analysis" would otherwise be read as a song id and 422.
+@app.get("/songs/analysis")
+def songs_analysis(ids: str = ""):
+    """bpm/key/energy for the given song ids, for polling while analyse runs.
+
+    One poll for the whole batch rather than an EventSource per job: analysing
+    the library is 31 jobs, and 31 open streams to watch a single worker do them
+    one at a time is a lot of machinery to learn nothing sooner.
+    """
+    want = [int(i) for i in ids.split(",") if i.strip().isdigit()][:MAX_ANALYSIS_POLL]
+    rows = [db.one("SELECT id, bpm, key, energy FROM songs WHERE id=?", i) for i in want]
+    return JSONResponse({"songs": [
+        {"song_id": r["id"], "bpm": r["bpm"], "key": r["key"], "energy": r["energy"]}
+        for r in rows if r]})
+
+
+# How much of style_text the classifier is shown. The genre is always named in
+# the opening clause; sending a whole three-minute production prompt is the
+# obvious way to make this expensive for no gain. MEASURED at 240: 31/31 of the
+# deployed library classified correctly inside the taxonomy at this length.
+GENRE_CLIP = 240
+
+# The ordering sentence and the evidence field are the tuned parts, and both are
+# load-bearing. Asked for the four values alone the model JUDGED instead of READ
+# and inverted the primary on 3 of the first 10 -- "chunky tech house / UK
+# garage-infused bass house" came back as Bass House. Making it copy the phrase
+# before choosing fixed all three with no other change.
+GENRE_SUGGEST_SYSTEM = (
+    "You classify music tracks into a CLOSED taxonomy. You may only use the exact "
+    "strings given to you. You never invent a genre or a subgenre.")
+
+GENRE_SUGGEST_USER = """TAXONOMY (genre -> allowed subgenres). Use ONLY these exact strings:
+{taxonomy}
+
+Each track below is given with its production style prompt, which usually names
+the genre directly. Where the prompt names two styles (often separated by a
+slash), the first is the primary and the second goes in genre2/subgenre2.
+
+First COPY the exact style phrase before the first comma. The FIRST style named
+there is always the primary -- do not reorder by what seems more specific.
+
+Reply with a JSON object: {{"tracks": [
+  {{"id": 1, "evidence": "<the copied phrase>", "genre": "...", "subgenre": "...",
+   "genre2": "...", "subgenre2": "..."}}]}}
+
+Use "" for genre2/subgenre2 when only one style is named. Every non-empty value
+MUST appear verbatim in the taxonomy above.
+
+TRACKS:
+{listing}
+"""
+
+
+@app.post("/songs/genres/suggest")
+async def suggest_genres(request: Request):
+    """Propose the four genre fields by READING songs.style_text.
+
+    Not an audio classifier, and deliberately so: style_text is the prompt that
+    made the track and it opens by naming the genre, on 31 of the 31 songs in the
+    library. A CLAP/MERT-class model would be a new dependency and a second
+    tenant on the one GPU to work out something already written down.
+
+    It SUGGESTS. Nothing is written -- the caller reviews and posts to
+    /songs/genres, exactly as the audio-edit route lets a model fill in the same
+    parameters the sliders set and then clamps them the same way.
+    """
+    body = await request.json()
+    ids = [int(i) for i in (body.get("song_ids") or [])]
+    if not ids:
+        raise HTTPException(400, "no songs selected")
+    rows = [r for r in (db.one("SELECT id, title, style_text FROM songs WHERE id=?", i)
+                        for i in ids) if r and (r["style_text"] or "").strip()]
+    if not rows:
+        raise HTTPException(400, "none of those songs has a style prompt to read")
+    listing = "\n".join(f'{r["id"]}. "{r["title"]}" :: {(r["style_text"] or "")[:GENRE_CLIP]}'
+                        for r in rows)
+    try:
+        out, model = vision.ask_text(GENRE_SUGGEST_SYSTEM,
+                                      GENRE_SUGGEST_USER.format(
+                                          taxonomy=json.dumps(GENRE_DATA), listing=listing))
+        data = vision.json_or_raise(out, "genre suggestion")
+    except Exception as e:
+        raise HTTPException(502, f"could not read the style prompts: {e}") from None
+
+    style = {r["id"]: (r["style_text"] or "") for r in rows}
+    suggestions, dropped = [], []
+    for item in (data.get("tracks") if isinstance(data, dict) else data) or []:
+        sid = item.get("id")
+        if sid not in style:
+            dropped.append({"song_id": sid, "why": "not a song that was asked about"})
+            continue
+        # TWO checks, not one. The taxonomy check catches an invented label; only
+        # the evidence check catches a confident answer about a track the model
+        # never actually read, and that is the failure no vocabulary can see.
+        evidence = (item.get("evidence") or "").strip()
+        if not evidence or evidence not in style[sid]:
+            dropped.append({"song_id": sid, "why": "evidence is not quoted from the style prompt"})
+            continue
+        try:
+            g, sg = valid_genre_or_400(item.get("genre"), item.get("subgenre"), "genre")
+            g2, sg2 = valid_genre_or_400(item.get("genre2"), item.get("subgenre2"), "genre2")
+        except HTTPException as e:
+            dropped.append({"song_id": sid, "why": e.detail})
+            continue
+        suggestions.append({"song_id": sid, "genre": g, "subgenre": sg,
+                            "genre2": g2, "subgenre2": sg2, "evidence": evidence})
+    return JSONResponse({"suggestions": suggestions, "dropped": dropped, "model": model})
+
+
+@app.post("/songs/genres")
+async def bulk_set_genres(request: Request):
+    """Apply one genre decision to many songs at once.
+
+    A BLANK genre means LEAVE IT ALONE, never "clear it": someone setting only
+    the secondary genre on twelve songs must not silently lose the primary on all
+    twelve. Clearing is a different intention and deliberately has no control
+    here. A genre carries its own subgenre, so picking a genre and leaving the
+    subgenre blank does clear that subgenre -- they are one choice, not two.
+    """
+    body = await request.json()
+    ids = [int(i) for i in (body.get("song_ids") or [])]
+    if not ids:
+        raise HTTPException(400, "no songs selected")
+    genre, subgenre = valid_genre_or_400(body.get("genre"), body.get("subgenre"), "genre")
+    genre2, subgenre2 = valid_genre_or_400(body.get("genre2"), body.get("subgenre2"), "genre2")
+    fields = {}
+    if genre:
+        fields["genre"], fields["subgenre"] = genre, subgenre
+    if genre2:
+        fields["genre2"], fields["subgenre2"] = genre2, subgenre2
+    if not fields:
+        raise HTTPException(400, "pick a genre to apply")
+    sets = ", ".join(f"{k}=?" for k in fields)
+    updated = []
+    for sid in ids:
+        if not db.one("SELECT id FROM songs WHERE id=?", sid):
+            continue
+        db.run(f"UPDATE songs SET {sets} WHERE id=?", *fields.values(), sid)
+        row = db.one("SELECT id, genre, subgenre, genre2, subgenre2 FROM songs WHERE id=?", sid)
+        updated.append({"song_id": row["id"], "genre": row["genre"] or "",
+                        "subgenre": row["subgenre"] or "", "genre2": row["genre2"] or "",
+                        "subgenre2": row["subgenre2"] or ""})
+    # the STORED values, so the page paints what was saved rather than what was
+    # typed -- otherwise a value dropped by validation stays visible and looks fine
+    return JSONResponse({"updated": updated})
 
 
 @app.get("/songs/{id}", response_class=HTMLResponse)

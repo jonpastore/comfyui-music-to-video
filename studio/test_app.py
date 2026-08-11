@@ -930,6 +930,107 @@ def test_delete_song_never_removes_files_outside_data_root():
         os.remove(outside_path)
 
 
+def _mk_song(title, **fields):
+    """A song row without an upload, for the genre tests -- they never touch audio."""
+    return appmod.db.upsert_song(title.lower().replace(" ", "-"), title=title, **fields)
+
+
+def test_bulk_genre_applies_only_to_selected_songs():
+    with TestClient(appmod.app) as client:
+        a = _mk_song("Bulk A")
+        b = _mk_song("Bulk B")
+        r = client.post("/songs/genres", json={"song_ids": [a], "genre": "Electronic",
+                                                "subgenre": "Tech House"})
+        assert r.status_code == 200, r.text
+        assert r.json()["updated"] == [{"song_id": a, "genre": "Electronic",
+                                        "subgenre": "Tech House", "genre2": "", "subgenre2": ""}]
+        assert appmod.db.one("SELECT genre FROM songs WHERE id=?", a)["genre"] == "Electronic"
+        assert not (appmod.db.one("SELECT genre FROM songs WHERE id=?", b)["genre"] or "")
+
+
+def test_blank_genre_leaves_the_existing_value_alone():
+    """The destructive mistake: setting only the SECONDARY genre on a batch must
+    not wipe the primary on every song in it."""
+    with TestClient(appmod.app) as client:
+        sid = _mk_song("Keep My Genre", genre="Electronic", subgenre="Tech House")
+        r = client.post("/songs/genres", json={"song_ids": [sid], "genre": "", "subgenre": "",
+                                                "genre2": "Electronic", "subgenre2": "Bass House"})
+        assert r.status_code == 200, r.text
+        row = appmod.db.one("SELECT * FROM songs WHERE id=?", sid)
+        assert row["genre"] == "Electronic" and row["subgenre"] == "Tech House"
+        assert row["genre2"] == "Electronic" and row["subgenre2"] == "Bass House"
+
+        # and a request that sets nothing at all is refused rather than silently
+        # rewriting four columns with blanks
+        r2 = client.post("/songs/genres", json={"song_ids": [sid]})
+        assert r2.status_code == 400, r2.text
+
+
+def test_bulk_genre_refuses_values_outside_genres_json():
+    with TestClient(appmod.app) as client:
+        sid = _mk_song("Hostile Genre")
+        for bad in ({"genre": "NotAGenre"},
+                    {"genre": "Electronic", "subgenre": "Hard Rock"},
+                    {"genre2": "Electronic", "subgenre2": "NotASubgenre"}):
+            r = client.post("/songs/genres", json={"song_ids": [sid], **bad})
+            assert r.status_code == 400, f"{bad} accepted: {r.text}"
+        assert not (appmod.db.one("SELECT genre FROM songs WHERE id=?", sid)["genre"] or "")
+
+
+def test_suggest_reads_style_text_and_never_writes():
+    with TestClient(appmod.app) as client:
+        sid = _mk_song("Read Me", style_text="Dark warehouse tech house, 128 BPM. Then a drop.")
+        r = client.post("/songs/genres/suggest", json={"song_ids": [sid]})
+        assert r.status_code == 200, r.text
+        got = r.json()["suggestions"]
+        assert len(got) == 1 and got[0]["song_id"] == sid
+        # the evidence must be quoted from the song's own style_text
+        assert got[0]["evidence"] == "Dark warehouse tech house"
+        # SUGGESTS. Nothing is written until the user posts to /songs/genres.
+        assert not (appmod.db.one("SELECT genre FROM songs WHERE id=?", sid)["genre"] or "")
+
+
+def test_suggest_drops_unquotable_evidence_and_bad_taxonomy(patch_stub):
+    """The two server-side checks, one bad row each. A taxonomy check cannot see
+    a confident answer about a track the model never read; the evidence check is
+    what catches that."""
+    good = _mk_song("Quotable", style_text="Chunky bass house, 130 BPM.")
+    liar = _mk_song("Fabricated", style_text="Deep dub-tech, 125 BPM.")
+    invented = _mk_song("Invented", style_text="Groovy tech house, 128 BPM.")
+    reply = json.dumps({"tracks": [
+        {"id": good, "evidence": "Chunky bass house", "genre": "Electronic",
+         "subgenre": "Bass House", "genre2": "", "subgenre2": ""},
+        {"id": liar, "evidence": "Melodic trance anthem", "genre": "Electronic",
+         "subgenre": "Tech House", "genre2": "", "subgenre2": ""},
+        {"id": invented, "evidence": "Groovy tech house", "genre": "Electronic",
+         "subgenre": "Warehouse Banger", "genre2": "", "subgenre2": ""}]})
+    patch_stub("vision", ask_text=lambda system, user_text, progress=None, model=None: (reply, "stub"))
+    with TestClient(appmod.app) as client:
+        r = client.post("/songs/genres/suggest",
+                        json={"song_ids": [good, liar, invented]})
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert [s["song_id"] for s in d["suggestions"]] == [good]
+        assert {x["song_id"] for x in d["dropped"]} == {liar, invented}
+
+
+def test_analysis_poll_answers_for_a_batch():
+    """One poll for the whole batch is what lets the Library patch rows in place
+    without opening an EventSource per job. Deliberately does NOT call
+    analyse-all -- that enqueues real work against the one shared worker, and
+    test_analyse_all_only_enqueues_songs_missing_bpm already covers it."""
+    with TestClient(appmod.app) as client:
+        done = _mk_song("Polled Analysed", bpm=128.0, key="8A", energy=0.164)
+        todo = _mk_song("Polled Pending")
+        r = client.get(f"/songs/analysis?ids={done},{todo}")
+        assert r.status_code == 200, r.text
+        by_id = {s["song_id"]: s for s in r.json()["songs"]}
+        assert by_id[done]["bpm"] == 128.0 and by_id[done]["key"] == "8A"
+        assert by_id[todo]["bpm"] is None
+        # junk in the query string is ignored rather than 422-ing a poll
+        assert client.get("/songs/analysis?ids=nope,,7x").json()["songs"] == []
+
+
 def test_create_genre_playlist_rejected():
     with TestClient(appmod.app) as client:
         r = client.post("/playlists", data={"name": "Some Genre", "kind": "genre"})
@@ -2806,8 +2907,13 @@ def test_analyse_all_only_enqueues_songs_missing_bpm():
                   db.q("SELECT id FROM jobs WHERE kind='analyse' AND song_id=?", stale_id)}
         assert not before
 
-        r = client.post("/songs/analyse-all")
-        assert r.status_code in (200, 303), r.text
+        # Accept: application/json is the Library's async path -- same enqueue,
+        # but it answers with the job ids so the page can watch them land
+        # instead of reloading. A plain form post still gets its redirect.
+        r = client.post("/songs/analyse-all", headers={"Accept": "application/json"})
+        assert r.status_code == 200, r.text
+        queued = {q["song_id"] for q in r.json()["queued"]}
+        assert stale_id in queued and already["id"] not in queued
 
         stale_job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='analyse'", stale_id)
         assert stale_job is not None, "analyse-all must enqueue for an un-analysed song"

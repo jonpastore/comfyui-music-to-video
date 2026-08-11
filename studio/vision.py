@@ -129,7 +129,13 @@ def ask(image_path, system, user_text, progress=None, prefer_local=True):
     return grok._chat(grok._resolve_model(grok.VISION_MODEL), messages, progress)
 
 
-def _json(out, what):
+def json_or_raise(out, what):
+    """Parse a model's reply as JSON, or raise saying which caller it came from.
+
+    Public because app.py's genre suggestion needs the same leading-zero repair
+    and the same fence stripping every other model reply here needs; a second
+    parser beside this one would drift from it.
+    """
     text = _FENCE.sub("", out or "").strip()
     try:
         return json.loads(text)
@@ -226,7 +232,7 @@ def classify_sheet(sheet_path, note="", model=None, progress=None):
     out = ask(sheet_path, REVIEW_SYSTEM,
               "Review this contact sheet." + (f" Context: {note}" if note else ""),
               progress)
-    obj = _json(out, "vision review")
+    obj = json_or_raise(out, "vision review")
     flagged = []
     for f in obj.get("flagged") or []:
         if not isinstance(f, dict) or "clip" not in f:
@@ -252,7 +258,7 @@ def describe_anchor(image_path, field, model=None, progress=None):
               "present tense, no preamble, no markdown, no bullet points -- the text goes "
               'straight into an image prompt. Reply as JSON: {"text": "<the description>"}',
               progress)
-    text = _json(out, "describe").get("text", "")
+    text = json_or_raise(out, "describe").get("text", "")
     return " ".join(str(text).split()).strip()
 
 
@@ -276,7 +282,7 @@ def describe_cover(image_path, field, progress=None):
               "sentence or two, present tense, no preamble, no markdown -- the text goes "
               'straight into an image prompt. Reply as JSON: {"text": "<the description>"}',
               progress)
-    text = _json(out, "describe cover").get("text", "")
+    text = json_or_raise(out, "describe cover").get("text", "")
     return " ".join(str(text).split()).strip()
 
 
@@ -307,7 +313,7 @@ def propose_character(image_path, progress=None):
     """
     out = ask(image_path, CAST_SYSTEM, "Propose one supporting character for this album.",
               progress)
-    obj = _json(out, "cast proposal")
+    obj = json_or_raise(out, "cast proposal")
     keys = ("name", "role", "identity", "wardrobe", "body")
     return {k: " ".join(str(obj.get(k, "") or "").split()).strip()[:1000] for k in keys}
 
@@ -338,7 +344,7 @@ def read_edit_instruction(prompt, duration, progress=None):
     """
     out, model = ask_text(EDIT_SYSTEM.replace("TRACK_SECONDS", f"{duration:.1f}"),
                           prompt, progress)
-    obj = _json(out, "edit instruction")
+    obj = json_or_raise(out, "edit instruction")
 
     def num(key, default=0.0):
         v = obj.get(key, default)
@@ -447,11 +453,11 @@ def demo():
 
     # --- leading-zero ints from a local model still parse ------------------
     # qwen3-vl echoes the sheet's own label: {"clip": 003}
-    assert _json('{"clip": 003, "ok": 1}', "t") == {"clip": 3, "ok": 1}
-    assert _json('{"a": 0, "b": 10}', "t") == {"a": 0, "b": 10}, "valid JSON must be untouched"
-    assert _json('{"s": "id 007"}', "t") == {"s": "id 007"}, "must not rewrite inside strings"
+    assert json_or_raise('{"clip": 003, "ok": 1}', "t") == {"clip": 3, "ok": 1}
+    assert json_or_raise('{"a": 0, "b": 10}', "t") == {"a": 0, "b": 10}, "valid JSON must be untouched"
+    assert json_or_raise('{"s": "id 007"}', "t") == {"s": "id 007"}, "must not rewrite inside strings"
     try:
-        _json("not json", "t")
+        json_or_raise("not json", "t")
         raise AssertionError("garbage parsed")
     except RuntimeError:
         pass

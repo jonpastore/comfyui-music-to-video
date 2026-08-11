@@ -878,3 +878,15 @@ dialog.video-modal video { max-width: 100%; max-height: 70vh; display: block; }
    arriving as a JSON error after submit. */
 .char-count { font-size: 0.75rem; align-self: flex-end; }
 .char-count.over { color: var(--danger); font-weight: 600; }
+
+/* Library bulk genre bar. The checkbox column is deliberately narrow and
+   unsortable -- a tick has no order. */
+table.list th.pick, table.list td.pick { width: 1.5rem; text-align: center; }
+.bulk-bar { margin-bottom: 0.75rem; }
+.bulk-bar.busy { opacity: 0.6; pointer-events: none; }
+/* A suggested genre is NOT a saved one, and must not look like it until Save. */
+tr.suggested td.cell-genre {
+  color: var(--accent, #8ab4f8);
+  font-style: italic;
+  cursor: help;
+}

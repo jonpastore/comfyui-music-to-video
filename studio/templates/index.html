@@ -44,15 +44,50 @@
 {% if not songs %}
 <p class="empty">No songs yet. Upload one above.</p>
 {% else %}
-<form method="post" action="/songs/analyse-all" class="header-action">
+<form method="post" action="/songs/analyse-all" class="header-action" id="analyse-all">
   <button type="submit" class="secondary">Analyse all un-analysed songs</button>
   <span class="muted">bpm / key / energy, for every song with no bpm yet.</span>
 </form>
 {% endif %}
 {% if songs %}
+{# The bulk bar sits ABOVE the table header, so the thing being changed reads
+   below the change. A blank genre means LEAVE ALONE -- see app.bulk_set_genres;
+   that is why there is no "clear" option here, which would have to be its own
+   deliberate control rather than an empty select. #}
+<section class="card bulk-bar" id="bulk-genre">
+  <div class="field-row">
+    <label>Genre
+      <select id="bulk-genre-select">
+        <option value="">(leave alone)</option>
+        {% for g in genre_data %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Subgenre
+      <select id="bulk-subgenre-select"><option value="">(none)</option></select>
+    </label>
+    <label>Secondary genre
+      <select id="bulk-genre2-select">
+        <option value="">(leave alone)</option>
+        {% for g in genre_data %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Secondary subgenre
+      <select id="bulk-subgenre2-select"><option value="">(none)</option></select>
+    </label>
+  </div>
+  <div class="form-actions">
+    <span class="muted" id="bulk-count">no songs selected</span>
+    <button type="button" class="secondary" id="bulk-suggest">Suggest from style prompts</button>
+    <button type="button" id="bulk-save">Save to selected</button>
+  </div>
+  <p class="hint" id="bulk-note"></p>
+</section>
 <div class="table-scroll">
 <table class="list sortcols">
   <thead><tr>
+    {# not data-sort: a checkbox column has no order, and the toggle must not
+       re-sort the table out from under the click #}
+    <th class="pick"><input type="checkbox" id="pick-all" title="Select all shown"></th>
     <th data-sort>Title</th>
     <th data-sort>Album</th>
     <th data-sort>Genre</th>
@@ -67,22 +102,23 @@
   </tr></thead>
   <tbody>
   {% for e in songs %}
-    <tr>
+    <tr data-song="{{ e.song.id }}">
+      <td class="pick"><input type="checkbox" class="pick-song" value="{{ e.song.id }}"></td>
       <td>
         <a href="/songs/{{ e.song.id }}">{{ e.song.title }}</a>
         {% if e.song.explicit %}<span class="tag explicit">EXPLICIT</span>{% endif %}
       </td>
       <td>{{ e.song.album or "" }}</td>
-      <td>
+      <td class="cell-genre">
         {{ e.song.genre or "" }}{% if e.song.subgenre %} / {{ e.song.subgenre }}{% endif %}
         {% if e.song.genre2 %}<br>{{ e.song.genre2 }}{% if e.song.subgenre2 %} / {{ e.song.subgenre2 }}{% endif %}{% endif %}
       </td>
       <td class="num" data-k="{{ e.song.duration or '' }}">
         {% if e.song.duration %}{{ e.song.duration | hms }}{% endif %}
       </td>
-      <td class="num" data-k="{{ e.song.bpm or '' }}">{% if e.song.bpm %}{{ "%.0f"|format(e.song.bpm) }}{% endif %}</td>
-      <td>{{ e.song.key or "" }}</td>
-      <td class="num" data-k="{{ e.song.energy or '' }}">{% if e.song.energy %}{{ "%.3f"|format(e.song.energy) }}{% endif %}</td>
+      <td class="num cell-bpm" data-k="{{ e.song.bpm or '' }}">{% if e.song.bpm %}{{ "%.0f"|format(e.song.bpm) }}{% endif %}</td>
+      <td class="cell-key">{{ e.song.key or "" }}</td>
+      <td class="num cell-energy" data-k="{{ e.song.energy or '' }}">{% if e.song.energy %}{{ "%.3f"|format(e.song.energy) }}{% endif %}</td>
       <td data-k="{{ e.song.created or '' }}">
         {% if e.song.created %}
         <time class="local-time" datetime="{{ e.song.created | isotime }}">

@@ -14,6 +14,7 @@ trying to swap the module out.
 """
 import json
 import os
+import re
 import sys
 import tempfile
 import types
@@ -94,10 +95,37 @@ def _propose_character(image_path, progress=None):
             "wardrobe": "a long grey coat", "body": "white fur on every limb"}
 
 
+genre_calls = []
+
+
+def _ask_text(system, user_text, progress=None, model=None):
+    """Answer a genre-classification prompt the way the real fleet does.
+
+    Echoes back one in-taxonomy suggestion per track it was shown, quoting the
+    phrase before the first comma -- which is exactly the contract app.py checks
+    (evidence must be verbatim). A test that wants a bad reply patches this.
+    """
+    genre_calls.append(user_text)
+    tracks = []
+    for line in user_text.splitlines():
+        m = re.match(r'^(\d+)\. ".*" :: (.+)$', line.strip())
+        if not m:
+            continue
+        tracks.append({"id": int(m.group(1)), "evidence": m.group(2).split(",")[0],
+                       "genre": "Electronic", "subgenre": "Tech House",
+                       "genre2": "", "subgenre2": ""})
+    return json.dumps({"tracks": tracks}), "qwen-stub"
+
+
 _stub("vision",
       classify_sheet=_classify_sheet,
       describe_cover=_describe_cover,
       propose_character=_propose_character,
+      ask_text=_ask_text,
+      # the real one is pure parsing, so the stub does the real thing rather
+      # than pretending -- a test asserting a malformed reply is refused would
+      # otherwise be testing the stub
+      json_or_raise=lambda out, what: json.loads(out),
       describe_anchor=lambda image_path, field, model=None, progress=None: (
           describe_calls.append((image_path, field))
           or f"drafted {field} from the anchor"),

@@ -420,7 +420,149 @@ function initGenreSelects(genreId, subgenreId) {
 document.addEventListener("DOMContentLoaded", function () {
   initGenreSelects("genre-select", "subgenre-select");
   initGenreSelects("genre2-select", "subgenre2-select");
+  initGenreSelects("bulk-genre-select", "bulk-subgenre-select");
+  initGenreSelects("bulk-genre2-select", "bulk-subgenre2-select");
+  initLibraryBulk();
 });
+
+// ---- Library: select rows, apply a genre to all of them, analyse in place ---
+// Everything here talks JSON to app.py and paints from the RESPONSE, never from
+// what was typed -- a value the server drops in validation must not stay on
+// screen looking saved.
+function initLibraryBulk() {
+  var bar = document.getElementById("bulk-genre");
+  if (!bar) return;
+  var all = document.getElementById("pick-all");
+  var count = document.getElementById("bulk-count");
+  var note = document.getElementById("bulk-note");
+  var val = function (id) { var e = document.getElementById(id); return e ? e.value : ""; };
+
+  // rows currently SHOWN. Sorting reorders and a filter could hide; either way
+  // "select all" must never reach a row the user cannot see.
+  function shown() {
+    return Array.prototype.filter.call(
+      document.querySelectorAll("tr[data-song]"),
+      function (r) { return r.offsetParent !== null; });
+  }
+  function picked() {
+    return shown().filter(function (r) { return r.querySelector(".pick-song").checked; });
+  }
+  function refresh() {
+    var n = picked().length;
+    count.textContent = n ? n + " song" + (n === 1 ? "" : "s") + " selected"
+                          : "no songs selected";
+    var vis = shown();
+    all.checked = vis.length > 0 && n === vis.length;
+    all.indeterminate = n > 0 && n < vis.length;
+  }
+  function ids() { return picked().map(function (r) { return Number(r.dataset.song); }); }
+
+  all.addEventListener("change", function () {
+    shown().forEach(function (r) { r.querySelector(".pick-song").checked = all.checked; });
+    refresh();
+  });
+  document.addEventListener("change", function (e) {
+    if (e.target.classList && e.target.classList.contains("pick-song")) refresh();
+  });
+
+  function paintGenre(row, g) {
+    var cell = row.querySelector(".cell-genre");
+    if (!cell) return;
+    var first = g.genre + (g.subgenre ? " / " + g.subgenre : "");
+    var second = g.genre2 ? g.genre2 + (g.subgenre2 ? " / " + g.subgenre2 : "") : "";
+    cell.textContent = first;
+    if (second) { cell.appendChild(document.createElement("br")); cell.append(second); }
+  }
+  function post(url, body) {
+    return fetch(url, {method: "POST", headers: {"Content-Type": "application/json"},
+                       body: JSON.stringify(body)}).then(function (r) {
+      return r.json().then(function (d) {
+        if (!r.ok) throw new Error(d.detail || r.statusText);
+        return d;
+      });
+    });
+  }
+  function busy(on, msg) { note.textContent = msg || ""; bar.classList.toggle("busy", !!on); }
+
+  document.getElementById("bulk-save").addEventListener("click", function () {
+    var sel = ids();
+    if (!sel.length) return busy(false, "Tick some songs first.");
+    busy(true, "saving…");
+    post("/songs/genres", {song_ids: sel, genre: val("bulk-genre-select"),
+                            subgenre: val("bulk-subgenre-select"),
+                            genre2: val("bulk-genre2-select"),
+                            subgenre2: val("bulk-subgenre2-select")})
+      .then(function (d) {
+        d.updated.forEach(function (u) {
+          var row = document.querySelector('tr[data-song="' + u.song_id + '"]');
+          if (row) paintGenre(row, u);
+        });
+        busy(false, "Saved to " + d.updated.length + " song" + (d.updated.length === 1 ? "" : "s") + ".");
+      })
+      .catch(function (err) { busy(false, "Not saved: " + err.message); });
+  });
+
+  // Suggestions FILL THE FORM. Nothing is written until Save is pressed -- the
+  // bar is the review step, which is the whole reason not to auto-apply.
+  document.getElementById("bulk-suggest").addEventListener("click", function () {
+    var sel = ids();
+    if (!sel.length) return busy(false, "Tick some songs first.");
+    busy(true, "reading style prompts…");
+    post("/songs/genres/suggest", {song_ids: sel})
+      .then(function (d) {
+        d.suggestions.forEach(function (s) {
+          var row = document.querySelector('tr[data-song="' + s.song_id + '"]');
+          if (!row) return;
+          paintGenre(row, s);
+          row.classList.add("suggested");
+          row.querySelector(".cell-genre").title = "suggested from: " + s.evidence;
+        });
+        var msg = d.suggestions.length + " suggested by " + d.model +
+                  " — shown in the table, nothing saved yet. Press Save to keep them.";
+        if (d.dropped.length) msg += " " + d.dropped.length + " dropped (unverifiable).";
+        busy(false, msg);
+      })
+      .catch(function (err) { busy(false, "No suggestions: " + err.message); });
+  });
+
+  // Analyse-all, without the reload. One poll for the batch; see /songs/analysis.
+  var form = document.getElementById("analyse-all");
+  if (form) form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    busy(true, "queueing…");
+    fetch("/songs/analyse-all", {method: "POST", headers: {"Accept": "application/json"}})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var want = d.queued.map(function (q) { return q.song_id; });
+        if (!want.length) return busy(false, "Nothing to analyse — every song already has a bpm.");
+        var left = want.slice();
+        var tick = setInterval(function () {
+          fetch("/songs/analysis?ids=" + left.join(","))
+            .then(function (r) { return r.json(); })
+            .then(function (a) {
+              a.songs.forEach(function (s) {
+                if (s.bpm === null || s.bpm === undefined) return;
+                var row = document.querySelector('tr[data-song="' + s.song_id + '"]');
+                if (row) {
+                  row.querySelector(".cell-bpm").textContent = Math.round(s.bpm);
+                  row.querySelector(".cell-key").textContent = s.key || "";
+                  row.querySelector(".cell-energy").textContent =
+                    s.energy === null || s.energy === undefined ? "" : s.energy.toFixed(3);
+                }
+                left = left.filter(function (i) { return i !== s.song_id; });
+              });
+              // one worker, one GPU -- say where we are rather than spin silently
+              busy(true, (want.length - left.length) + " of " + want.length + " analysed…");
+              if (!left.length) { clearInterval(tick); busy(false, "Analysed " + want.length + "."); }
+            })
+            .catch(function () { clearInterval(tick); busy(false, "Stopped watching; reload to see results."); });
+        }, 3000);
+      })
+      .catch(function (err) { busy(false, "Could not queue: " + err.message); });
+  });
+
+  refresh();
+}
 
 // ---- live character count against a field's own cap -------------------------
 // The composed anchor prompt can start out longer than the cap, so the count has
