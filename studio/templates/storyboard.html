@@ -21,13 +21,13 @@
   {% else %}
   <p class="empty">No chosen anchor for the <code>{{ tier | tiername }}</code> tier &mdash;
     reference generation cannot run without one.
-    <a href="/anchors?scope_kind=album&amp;scope_value={{ song.album | urlencode }}">create one</a>.</p>
+    <a href="/anchors?scope_value={{ song.album | urlencode }}">create one</a>.</p>
   {% endif %}
   {% if unanchored %}
   <p class="warn">Named in scenes but not anchored at this tier:
     <strong>{{ unanchored | join(", ") }}</strong>.
     They will be rendered from scene text alone, so their look can drift frame to frame.
-    <a href="/anchors?scope_kind=album&amp;scope_value={{ song.album | urlencode }}">anchor them</a>,
+    <a href="/anchors?scope_value={{ song.album | urlencode }}">anchor them</a>,
     or edit the scenes to stop naming them.</p>
   {% endif %}
   {% if sb.character_reference %}

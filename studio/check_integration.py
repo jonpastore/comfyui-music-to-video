@@ -108,7 +108,9 @@ pipeline = optional_import("pipeline")
 if pipeline:
     check("pipeline.install_input", lambda: sig(pipeline, "install_input", ["local_path"]))
     check("pipeline.submit_dir", lambda: sig(pipeline, "submit_dir", ["wf_dir", "progress"]))
-    check("pipeline.gen_anchor", lambda: sig(pipeline, "gen_anchor", ["face", "outfit", "view", "n"]))
+    # references are an unordered SET now, not face-then-outfit: one photograph
+    # often carries both, and demanding they be split made it unusable
+    check("pipeline.gen_anchor", lambda: sig(pipeline, "gen_anchor", ["images", "view", "n"]))
     check("pipeline.gen_refs", lambda: sig(pipeline, "gen_refs", ["slug", "tier", "progress"]))
     check("pipeline.gen_clips", lambda: sig(pipeline, "gen_clips", ["slug", "tier", "progress"]))
     check("pipeline.stage_refs", lambda: sig(pipeline, "stage_refs", ["slug", "tier"]))

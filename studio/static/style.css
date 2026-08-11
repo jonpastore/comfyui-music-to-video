@@ -739,3 +739,10 @@ table.list td.num, table.list th.num { text-align: right; }
 /* ---- publishing config ---- */
 .muted-row td { opacity: 0.55; }
 .table-scroll td form { display: inline-block; margin: 0 0.2rem 0 0; }
+
+/* checkbox groups that read as a row of choices rather than a stack */
+.check-row { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; }
+.check-row .check { margin: 0; }
+.check-row .check .muted { font-size: 0.75rem; }
+fieldset { border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem 0.9rem; }
+fieldset legend { padding: 0 0.35rem; color: var(--muted); font-size: 0.85rem; }

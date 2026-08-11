@@ -149,14 +149,14 @@
           {{ t | tiername }}
         </label>
         {% if anchor %}
-        <a href="/anchors?scope_kind=album&amp;scope_value={{ song.album | urlencode }}"
+        <a href="/anchors?scope_value={{ song.album | urlencode }}"
            title="anchor for the {{ t }} tier -- click to manage">
           <img class="anchor-thumb" src="{{ media_url(anchor.path) }}" alt="{{ t | tiername }} anchor">
         </a>
         <span class="muted">anchor ready</span>
         {% else %}
         <span class="warn">no anchor for this tier</span>
-        <a href="/anchors?scope_kind=album&amp;scope_value={{ song.album | urlencode }}">create one</a>
+        <a href="/anchors?scope_value={{ song.album | urlencode }}">create one</a>
         {% endif %}
       </div>
       {% endfor %}

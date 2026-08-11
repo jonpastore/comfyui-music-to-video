@@ -2,17 +2,17 @@
 {% block content %}
 <h1>Anchors</h1>
 <p class="hint">An anchor is the character reference sheet for an ALBUM or PLAYLIST at a given
-  TIER, CHARACTER and view &mdash; every track sharing that scope renders against the chosen
-  one. Reference generation cannot run without a chosen anchor for the tier.</p>
+  TIER, CHARACTER and view &mdash; every track on that album renders against the chosen one.
+  Reference generation cannot run without a chosen anchor for the tier. An album and a
+  playlist are the same record, so there is no separate scope to pick.</p>
 
 <section class="card">
   <h2>Generate anchor candidates</h2>
   {% include "_anchor_form.html" %}
-  {% if albums %}<p class="hint">Known albums: {{ albums | join(", ") }}</p>{% endif %}
-  {% if playlists %}
-  <p class="hint">Playlists:
-    {% for p in playlists %}{{ p.id }}={{ p.name }}{% if not loop.last %}, {% endif %}{% endfor %}
-  </p>
+  {% if known_albums %}
+  <p class="hint">Albums that songs already refer to: {{ known_albums | join(", ") }}.
+    An album with no playlist record cannot be picked above &mdash; create it on
+    <a href="/playlists">Playlists</a> and its anchors, cast and look all attach to that name.</p>
   {% endif %}
 </section>
 
@@ -21,7 +21,9 @@
 {% else %}
 {% for g in groups %}
 <section class="card">
-  <h3>{{ g.scope_kind }}: {{ g.scope_value }} &middot; {{ g.character_name or "protagonist" }}
+  {# scope_kind is not shown: an album IS a playlist, so "album:" on every
+     heading was a distinction with nothing on the other side of it #}
+  <h3>{{ g.scope_value }} &middot; {{ g.character_name or "protagonist" }}
       &middot; {{ g.tier | tiername }} &middot; {{ g.view | viewname }}</h3>
   <div class="candidate-grid">
     {% for c in g.candidates %}

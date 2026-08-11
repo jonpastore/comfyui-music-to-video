@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from typing import List, Optional
 from urllib.parse import quote
 
-from fastapi import FastAPI, Form, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, Form, HTTPException, Query, Request, UploadFile, File
 from fastapi.responses import (HTMLResponse, RedirectResponse, FileResponse,
                                 PlainTextResponse, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
@@ -443,7 +443,7 @@ def h_anchor(args, progress):
                                  "body": prof["body"]}}
     if view in NUDE_VIEWS:
         progress(f"nude anchor for tier '{args['tier']}' -- permitted by its allow_nudity flag")
-    paths = pipeline.gen_anchor(args["face"], args["outfit"], view, args.get("n", 4), progress,
+    paths = pipeline.gen_anchor(args["images"], view, args.get("n", 4), progress,
                                  profile=anchor_profile,
                                  guard=tiers.compose_guardrail(args["tier"]),
                                  prompt=args.get("prompt", ""))
@@ -972,29 +972,59 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = ""):
     albums = sorted({s["album"] for s in db.q("SELECT DISTINCT album FROM songs") if s["album"]})
     playlists = db.q("SELECT id, name FROM playlists WHERE kind='playlist' ORDER BY name")
     return templates.TemplateResponse(request, "anchors.html", dict(
-        anchor_form_ctx(scope_kind, scope_value, ""),
-        groups=group_list, albums=albums, playlists=playlists))
+        anchor_form_ctx(scope_value),
+        groups=group_list, known_albums=albums, playlists=playlists))
+
+
+MAX_ANCHOR_UPLOADS = 8
 
 
 @app.post("/anchors")
-async def start_anchor(scope_kind: str = Form(...), scope_value: str = Form(...), tier: str = Form(...),
-                        view: str = Form("front"), face: UploadFile = File(...),
-                        outfit: UploadFile = File(...), n: int = Form(4),
-                        character_id: Optional[int] = Form(None), prompt: str = Form("")):
-    if scope_kind not in ("album", "playlist"):
-        raise HTTPException(400, "scope_kind must be 'album' or 'playlist'")
-    scope_value = scope_value.strip()
-    if not scope_value:
-        raise HTTPException(400, "scope_value is required")
-    valid_tier_or_400(tier)
-    if view not in ANCHOR_VIEWS:
-        raise HTTPException(400, f"view must be one of {', '.join(ANCHOR_VIEWS)}")
-    # A nude anchor is only generated for a tier that permits nudity. The flag
-    # is the capability; refusing here is what makes it mean something, rather
-    # than being a label the UI shows and the renderer ignores.
-    if view in NUDE_VIEWS and not tiers.allows_nudity(tier):
-        raise HTTPException(400, f"the '{tier}' tier does not permit nudity, so it cannot have "
-                                  f"a nude anchor. Turn nudity on for that tier first.")
+async def start_anchor(album: str = Form(...), tier: List[str] = Form([]),
+                        view: List[str] = Form([]), images: List[UploadFile] = File([]),
+                        n: int = Form(4), character_id: Optional[int] = Form(None),
+                        prompt: str = Form("")):
+    """Generate anchor candidates for one album, across any number of tiers and
+    views, from an unordered set of reference images.
+
+    An ALBUM IS A PLAYLIST -- the same record, matched by the name songs already
+    carry -- so there is no scope to choose. There was a scope_kind select and a
+    free-text scope_value here, and typing an album name that did not match one
+    produced anchors nothing could ever find.
+
+    Tiers and views are both multi-select because the same references usually
+    want rendering several ways at once: front and back, clothed and nude, at
+    every tier the album ships. One job per combination, so each is separately
+    cancellable and a failure in one does not lose the rest.
+    """
+    album = (album or "").strip()
+    if not album:
+        raise HTTPException(400, "choose an album")
+    if not db.one("SELECT id FROM playlists WHERE name=? AND kind='playlist'", album):
+        raise HTTPException(400, f"no album called {album!r} -- create it on /playlists first")
+
+    selected_tiers = sorted(set(t for t in tier if t))
+    selected_views = sorted(set(v for v in view if v)) or ["front"]
+    if not selected_tiers:
+        raise HTTPException(400, "select at least one tier")
+    for t in selected_tiers:
+        valid_tier_or_400(t)
+    for v in selected_views:
+        if v not in ANCHOR_VIEWS:
+            raise HTTPException(400, f"view must be one of {', '.join(ANCHOR_VIEWS)}")
+
+    # Validate the WHOLE request before enqueuing any of it: a nude view against
+    # a tier that forbids it must refuse the request, not queue the legal
+    # combinations and fail partway through.
+    combos = []
+    for t in selected_tiers:
+        for v in selected_views:
+            if v in NUDE_VIEWS and not tiers.allows_nudity(t):
+                raise HTTPException(400, f"the '{t}' tier does not permit nudity, so it cannot "
+                                          f"have a {ANCHOR_VIEWS[v]} anchor. Turn nudity on for "
+                                          f"that tier, or untick that view.")
+            combos.append((t, v))
+
     prompt = (prompt or "").strip()
     if len(prompt) > MAX_ANCHOR_PROMPT:
         raise HTTPException(400, f"the anchor prompt is {len(prompt)} characters; keep it under "
@@ -1004,23 +1034,32 @@ async def start_anchor(scope_kind: str = Form(...), scope_value: str = Form(...)
         tiers.check_override(prompt)
     except ValueError as e:
         raise HTTPException(400, str(e))
+
     if character_id is not None:
         # a character belongs to the album it was defined on; anchoring one
-        # under a different scope would silently make an unreachable anchor
+        # elsewhere would silently make an unreachable anchor
         char = get_character_or_404(character_id)
-        if scope_kind != "album" or char["scope_value"] != scope_value:
+        if char["scope_value"] != album:
             raise HTTPException(400, f"character {char['name']!r} belongs to album "
-                                      f"{char['scope_value']!r}, not to {scope_kind} {scope_value!r}")
-    dest_dir = os.path.join(db.DATA, "uploads", "anchors", safe_name(scope_kind), safe_name(scope_value))
-    face_path = await save_upload(face, MAX_IMAGE, dest_dir, "image", prefix=f"face_{int(time.time() * 1000)}")
-    outfit_path = await save_upload(outfit, MAX_IMAGE, dest_dir, "image",
-                                     prefix=f"outfit_{int(time.time() * 1000)}")
+                                      f"{char['scope_value']!r}, not to {album!r}")
+
+    uploads = [f for f in (images or []) if f and f.filename]
+    if not uploads:
+        raise HTTPException(400, "upload at least one reference image")
+    if len(uploads) > MAX_ANCHOR_UPLOADS:
+        raise HTTPException(400, f"that is {len(uploads)} reference images; {MAX_ANCHOR_UPLOADS} "
+                                  f"is the most this form accepts")
+    dest_dir = os.path.join(db.DATA, "uploads", "anchors", "album", safe_name(album))
+    stamp = int(time.time() * 1000)
+    paths = [await save_upload(f, MAX_IMAGE, dest_dir, "image", prefix=f"ref{i}_{stamp}")
+             for i, f in enumerate(uploads)]
+
     n = max(1, min(int(n), 8))
-    jobs.enqueue("anchor", {"scope_kind": scope_kind, "scope_value": scope_value, "tier": tier,
-                             "view": view, "face": face_path, "outfit": outfit_path, "n": n,
-                             "character_id": character_id, "prompt": prompt})
-    return RedirectResponse(f"/anchors?scope_kind={scope_kind}&scope_value={quote(scope_value)}",
-                             status_code=303)
+    for t, v in combos:
+        jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": album, "tier": t,
+                                 "view": v, "images": paths, "n": n,
+                                 "character_id": character_id, "prompt": prompt})
+    return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 
 # ------------------------------------------------------------- characters --
@@ -1117,40 +1156,55 @@ def default_anchor_prompt(scope_value, view, character_id=None):
     return make_anchor.prompt_for(view, make_anchor.load_anchor(None) | fields)
 
 
-def anchor_form_ctx(scope_kind, scope_value, tier, view="front", character_id=None):
+def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), character_id=None):
+    """The generate form for one album, across any number of tiers and views.
+
+    The offered VIEWS depend on the selected TIERS: a nude view is not merely
+    disabled for a tier that forbids nudity, it is absent -- and with several
+    tiers selected it is offered only if EVERY one of them permits it, because
+    the request is refused otherwise and a checkbox that guarantees a 400 is
+    not a choice.
+    """
     all_t = tiers.all_tiers()
-    tier = tier or (all_t[0]["name"] if all_t else "")
-    allows = tiers.allows_nudity(tier) if tier else False
+    albums = [p["name"] for p in
+              db.q("SELECT name FROM playlists WHERE kind='playlist' ORDER BY name")]
+    album = album if album in albums else (albums[0] if albums else "")
+    selected = [t for t in selected_tiers if any(x["name"] == t for x in all_t)]
+    if not selected and all_t:
+        selected = [all_t[0]["name"]]
+    nude_ok = bool(selected) and all(tiers.allows_nudity(t) for t in selected)
+    views = [(k, v) for k, v in ANCHOR_VIEWS.items() if nude_ok or k not in NUDE_VIEWS]
+    chosen_views = [v for v, _ in views if v in set(selected_views)] or ["front"]
+    # the prompt is composed for the FIRST chosen view; the others differ only
+    # in their framing sentence, which make_anchor swaps in per view
     return {
-        "tiers": all_t, "prefill_scope_kind": scope_kind or "album",
-        "prefill_scope_value": scope_value, "form_tier": tier,
-        "form_view": view, "allows_nudity": allows,
-        # a nude view is not merely disabled -- it is absent from the list for a
-        # tier that cannot use it, the same way a tier with no storyboard is not
-        # offered for reference generation
-        "views": [(k, v) for k, v in ANCHOR_VIEWS.items()
-                  if allows or k not in NUDE_VIEWS],
-        "anchor_prompt": default_anchor_prompt(scope_value, view, character_id),
-        "pinned": tiers.PINNED.strip(), "tier_text": tier_tone(tier),
-        "max_anchor_prompt": MAX_ANCHOR_PROMPT,
-        "characters": (album_cast(scope_value) if scope_value
+        "tiers": all_t, "albums": albums, "form_album": album,
+        "selected_tiers": selected, "views": views, "selected_views": chosen_views,
+        "nude_ok": nude_ok,
+        "blocking_tiers": [t for t in selected if not tiers.allows_nudity(t)],
+        "anchor_prompt": default_anchor_prompt(album, chosen_views[0], character_id),
+        "pinned": tiers.PINNED.strip(),
+        "tier_texts": [(t, tier_tone(t)) for t in selected],
+        "max_anchor_prompt": MAX_ANCHOR_PROMPT, "max_uploads": MAX_ANCHOR_UPLOADS,
+        "max_refs": pipeline.MAX_ANCHOR_REFS,
+        "character_id": character_id,
+        "characters": (album_cast(album) if album
                        else db.q("SELECT * FROM characters ORDER BY scope_value, name")),
     }
 
 
 @app.get("/anchors/form", response_class=HTMLResponse)
-def anchor_form(request: Request, scope_kind: str = "album", scope_value: str = "",
-                 tier: str = "", view: str = "front", character_id: Optional[int] = None):
-    """The generate form, re-rendered for another tier or view.
+def anchor_form(request: Request, album: str = "", tier: List[str] = Query([]),
+                 view: List[str] = Query([]), character_id: Optional[int] = None):
+    """The generate form, re-rendered when the album, tiers or views change.
 
-    Its own route because the prefill and the offered views both depend on the
-    tier: a tier that does not permit nudity must not list a nude view, and the
-    guardrail shown has to be the one that will actually apply.
+    Its own route because the offered views and the guardrail panel both depend
+    on which tiers are ticked -- a tier that forbids nudity must not leave a
+    nude view on screen, and the guardrail shown has to be the one that will
+    actually apply.
     """
-    if view not in ANCHOR_VIEWS:
-        view = "front"
     return templates.TemplateResponse(request, "_anchor_form.html",
-                                       anchor_form_ctx(scope_kind, scope_value, tier, view,
+                                       anchor_form_ctx(album, tier, view or ["front"],
                                                        character_id))
 
 

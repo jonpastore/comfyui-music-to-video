@@ -1,75 +1,110 @@
 {# Generate anchor candidates.
 
-   Its own partial because the tier decides two things here: which views are
-   offered (a tier that does not permit nudity does not list a nude one) and
-   which guardrail is shown. Changing either re-fetches the form. #}
+   Its own partial because the ticked TIERS decide two things: which views are
+   offered (a nude view is absent, not disabled, when a selected tier forbids
+   it) and which guardrail wording is shown. Changing the album, a tier or a
+   view re-fetches the form. #}
 <form id="anchor-form" method="post" action="/anchors" enctype="multipart/form-data"
       class="stack-form">
+  {% set swap = {"hx-get": "/anchors/form", "hx-target": "#anchor-form",
+                 "hx-swap": "outerHTML", "hx-trigger": "change",
+                 "hx-include": "#anchor-form"} %}
+
   <div class="field-row">
-    <label>Scope
-      <select name="scope_kind">
-        <option value="album" {% if prefill_scope_kind == "album" %}selected{% endif %}>album</option>
-        <option value="playlist" {% if prefill_scope_kind == "playlist" %}selected{% endif %}>playlist</option>
-      </select>
-    </label>
-    <label>Scope value (album name, or playlist id)
-      <input type="text" name="scope_value" value="{{ prefill_scope_value }}" required>
-    </label>
-    <label>Tier
-      <select name="tier"
-              hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
-              hx-trigger="change" hx-include="#anchor-form">
-        {% for t in tiers %}
-        <option value="{{ t.name }}" {% if t.name == form_tier %}selected{% endif %}>
-          {{ t.name | tiername }}{% if not t.allow_nudity %} (no nudity){% endif %}
-        </option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>View
-      <select name="view"
-              hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
-              hx-trigger="change" hx-include="#anchor-form">
-        {% for key, label in views %}
-        <option value="{{ key }}" {% if key == form_view %}selected{% endif %}>{{ label }}</option>
+    <label>Album
+      {# An album IS a playlist -- the same record, matched by the name songs
+         already carry. There is no scope to choose, and the free-text box this
+         replaces let you type a name nothing would ever match. #}
+      <select name="album" hx-get="/anchors/form" hx-target="#anchor-form"
+              hx-swap="outerHTML" hx-trigger="change" hx-include="#anchor-form">
+        {% for a in albums %}
+        <option value="{{ a }}" {% if a == form_album %}selected{% endif %}>{{ a }}</option>
+        {% else %}
+        <option value="">no albums yet &mdash; create one on Playlists</option>
         {% endfor %}
       </select>
     </label>
     <label>Character
-      <select name="character_id"
-              hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
-              hx-trigger="change" hx-include="#anchor-form">
+      <select name="character_id" hx-get="/anchors/form" hx-target="#anchor-form"
+              hx-swap="outerHTML" hx-trigger="change" hx-include="#anchor-form">
         <option value="">protagonist (the album look)</option>
         {% for c in characters %}
-        <option value="{{ c.id }}">{{ c.name }}{% if c.role %} &mdash; {{ c.role }}{% endif %}</option>
+        <option value="{{ c.id }}" {% if character_id == c.id %}selected{% endif %}>
+          {{ c.name }}{% if c.role %} &mdash; {{ c.role }}{% endif %}</option>
         {% endfor %}
       </select>
     </label>
+    <label>Candidates per sheet
+      <input type="number" name="n" value="4" min="1" max="8">
+    </label>
   </div>
 
-  {% if not allows_nudity %}
-  <p class="hint">The <code>{{ form_tier | tiername }}</code> tier does not permit nudity, so
-    no nude view is offered. Turn nudity on for it under
-    <a href="/tiers">Tiers</a> if it should.</p>
-  {% endif %}
+  <fieldset>
+    <legend>Tiers &mdash; one set of sheets per tier</legend>
+    <div class="check-row">
+      {% for t in tiers %}
+      <label class="check">
+        <input type="checkbox" name="tier" value="{{ t.name }}"
+               {% if t.name in selected_tiers %}checked{% endif %}
+               hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
+               hx-trigger="change" hx-include="#anchor-form">
+        {{ t.name | tiername }}{% if not t.allow_nudity %}
+        <span class="muted">no nudity</span>{% endif %}
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
 
-  <div class="field-row">
-    <label>Face <input type="file" name="face" accept="image/*" required></label>
-    <label>Outfit <input type="file" name="outfit" accept="image/*" required></label>
-    <label>Candidates <input type="number" name="n" value="4" min="1" max="8"></label>
-  </div>
+  <fieldset>
+    <legend>Views &mdash; one sheet per view, per tier</legend>
+    <div class="check-row">
+      {% for key, label in views %}
+      <label class="check">
+        <input type="checkbox" name="view" value="{{ key }}"
+               {% if key in selected_views %}checked{% endif %}
+               hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
+               hx-trigger="change" hx-include="#anchor-form">
+        {{ label }}
+      </label>
+      {% endfor %}
+    </div>
+    {% if not nude_ok and blocking_tiers %}
+    <p class="hint">No nude view is offered because
+      {% if blocking_tiers | length == 1 %}the
+      <code>{{ blocking_tiers[0] | tiername }}</code> tier does not permit nudity{% else %}
+      these tiers do not permit nudity:
+      {% for t in blocking_tiers %}<code>{{ t | tiername }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+      {% endif %}. Untick {{ "it" if blocking_tiers | length == 1 else "them" }},
+      or turn nudity on under <a href="/tiers">Tiers</a>.</p>
+    {% endif %}
+    <p class="hint">{{ selected_tiers | length }} tier{{ "" if selected_tiers|length == 1 else "s" }}
+      &times; {{ selected_views | length }} view{{ "" if selected_views|length == 1 else "s" }}
+      = <strong>{{ selected_tiers | length * selected_views | length }}</strong> sheet
+      {{- "" if selected_tiers|length * selected_views|length == 1 else "s" }} to render,
+      each with its own candidates.</p>
+  </fieldset>
+
+  <label>Reference images
+    <input type="file" name="images" accept="image/*" multiple required>
+  </label>
+  <p class="hint">Upload as many as you like, up to {{ max_uploads }}; the first
+    {{ max_refs }} are attached, which is what the model conditions on. They are an
+    unordered SET, not face-then-outfit &mdash; one photograph carrying both is fine, and
+    with several the prompt tells the model they are the same character rather than
+    several to line up side by side.</p>
 
   {# ---- the rules that apply, above the box they govern ---- #}
   <div class="guardrail-panel">
-    <h3>What applies to this anchor</h3>
+    <h3>What applies to these sheets</h3>
     <p class="rule pinned"><strong>Always, and not editable here.</strong>
-      Attached to the prompt below by <code>guardrail.build_prompt()</code>, and
-      it screens the text first:</p>
+      Attached to the prompt below by <code>guardrail.build_prompt()</code>, and it screens
+      the text first:</p>
     <blockquote>{{ pinned }}</blockquote>
-    <p class="rule"><strong>The <code>{{ form_tier | tiername }}</code> tier's wording</strong>,
-      attached on top of it. An anchor used to be built with no tier wording at all &mdash;
-      it got the pinned clause and nothing else:</p>
-    <blockquote>{{ tier_text or "(this tier adds no wording of its own)" }}</blockquote>
+    {% for name, text in tier_texts %}
+    <p class="rule"><strong>The <code>{{ name | tiername }}</code> tier's wording</strong>,
+      attached on top of it for that tier's sheets:</p>
+    <blockquote>{{ text or "(this tier adds no wording of its own)" }}</blockquote>
+    {% endfor %}
     <p class="rule"><strong>Limits.</strong> Up to {{ max_anchor_prompt }} characters, refused
       if it references minors or tries to instruct the model about its own rules. A nude view
       is refused outright for a tier that does not permit nudity.</p>
@@ -79,9 +114,8 @@
     <textarea name="prompt" rows="8" maxlength="{{ max_anchor_prompt }}">{{ anchor_prompt }}</textarea>
   </label>
   <p class="hint">Composed from this album's identity, wardrobe and body wording plus the
-    chosen view. Edit it freely &mdash; what is here is what gets sent. The face image is
-    reference 1 and the outfit image is reference 2, so the prompt refers to them as the
-    first and second image.</p>
+    chosen view. Edit it freely &mdash; what is here is what gets sent. Each view swaps in its
+    own framing sentence, so this shows the first one selected.</p>
 
   <button type="submit">Generate anchors</button>
 </form>

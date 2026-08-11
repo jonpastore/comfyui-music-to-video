@@ -398,22 +398,27 @@ def test_explicit_not_passed_to_grok_or_pipeline(patch_stub):
 def test_anchor_generation_independent_tier_groups_and_picking(patch_stub):
     n_calls = []
 
-    def _gen_anchor(face, outfit, view="front", n=4, progress=None, prefix=None, profile=None,
+    def _gen_anchor(images, view="front", n=4, progress=None, prefix=None, profile=None,
                      guard="", prompt=""):
         # profile carries the ALBUM's look (identity/wardrobe/body) -- the
         # character description is no longer inside make_anchor.py
-        n_calls.append({"profile": profile, "guard": guard, "view": view})
+        n_calls.append({"profile": profile, "guard": guard, "view": view,
+                        "images": list(images)})
         return [f"/tmp/anchor_{len(n_calls)}_{i}.png" for i in range(2)]
 
     patch_stub("pipeline", gen_anchor=_gen_anchor)
     with TestClient(appmod.app) as client:
-        files = {"face": ("f.png", b"x", "image/png"), "outfit": ("o.png", b"x", "image/png")}
-        base = {"scope_kind": "album", "scope_value": "Street Cats", "view": "front", "n": "2"}
+        client.post("/playlists", data={"name": "Street Cats"})
+        files = [("images", ("f.png", _png_bytes(), "image/png")),
+                 ("images", ("o.png", _png_bytes(), "image/png"))]
+        base = {"album": "Street Cats", "view": "front", "n": "2"}
 
         r1 = client.post("/anchors", data=dict(base, tier="r"), files=files)
         assert r1.status_code in (200, 303), r1.text
         job1 = db.one("SELECT * FROM jobs WHERE kind='anchor' ORDER BY id DESC")
         wait_job(job1["id"])
+        # both uploads reach the model as one unordered SET
+        assert len(n_calls[-1]["images"]) == 2, n_calls[-1]
 
         r2 = client.post("/anchors", data=dict(base, tier="pg13"), files=files)
         assert r2.status_code in (200, 303), r2.text
@@ -1628,14 +1633,25 @@ def test_tier_wording_matches_the_mpa_and_nudity_is_a_capability():
 
 def test_nude_anchor_refused_for_a_tier_that_does_not_permit_nudity():
     with TestClient(appmod.app) as client:
-        files = {"face": ("f.png", b"x", "image/png"), "outfit": ("o.png", b"x", "image/png")}
-        base = {"scope_kind": "album", "scope_value": "Nude Gate Album", "n": "1"}
+        client.post("/playlists", data={"name": "Nude Gate Album"})
+        files = [("images", ("f.png", _png_bytes(), "image/png"))]
+        base = {"album": "Nude Gate Album", "n": "1"}
 
-        before = db.one("SELECT COUNT(*) c FROM jobs WHERE kind='anchor'")["c"]
+        def n_jobs():
+            return db.one("SELECT COUNT(*) c FROM jobs WHERE kind='anchor'")["c"]
+
+        before = n_jobs()
         r = client.post("/anchors", data=dict(base, tier="pg13", view="front_nude"), files=files)
         assert r.status_code == 400, r.text
         assert "does not permit nudity" in r.text
-        assert db.one("SELECT COUNT(*) c FROM jobs WHERE kind='anchor'")["c"] == before
+        assert n_jobs() == before
+
+        # ONE bad combination refuses the WHOLE request -- queuing the legal
+        # halves and 400ing on the rest is worse than refusing all of it
+        r = client.post("/anchors", data={**base, "tier": ["r", "pg13"],
+                                          "view": ["front", "front_nude"]}, files=files)
+        assert r.status_code == 400, r.text
+        assert n_jobs() == before, "a partly-illegal request queued its legal half"
 
         # ...and permitted for a tier that does
         r2 = client.post("/anchors", data=dict(base, tier="r", view="front_nude"), files=files)
@@ -1646,23 +1662,64 @@ def test_nude_anchor_refused_for_a_tier_that_does_not_permit_nudity():
         assert "front, nude" not in pg
         assert "does not permit nudity" in pg
         assert "front, nude" in client.get("/anchors/form", params={"tier": "r"}).text
+        # nor when pg13 is ticked ALONGSIDE a tier that permits it
+        both = client.get("/anchors/form", params=[("tier", "r"), ("tier", "pg13")]).text
+        assert "front, nude" not in both, "a nude view survived a tier that forbids it"
+
+
+def test_one_post_generates_every_tier_and_view_combination(patch_stub):
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                       prefix=None, profile=None, guard="", prompt="": (
+        seen.append(view) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Combo Album"})
+        files = [("images", ("a.png", _png_bytes(), "image/png"))]
+        r = client.post("/anchors", data={"album": "Combo Album", "n": "1",
+                                          "tier": ["r", "xxx"],
+                                          "view": ["front", "back", "front_nude"]},
+                        files=files)
+        assert r.status_code in (200, 303), r.text
+        jobs_made = db.q("SELECT * FROM jobs WHERE kind='anchor' ORDER BY id")
+        # 2 tiers x 3 views, one job each so a failure loses only its own sheet
+        assert len(jobs_made) >= 6, len(jobs_made)
+        args = [json.loads(j["args_json"]) for j in jobs_made[-6:]]
+        assert {(a["tier"], a["view"]) for a in args} == {
+            (t, v) for t in ("r", "xxx") for v in ("front", "back", "front_nude")}
+        assert all(a["scope_kind"] == "album" and a["scope_value"] == "Combo Album"
+                   for a in args)
+
+
+def test_anchor_form_needs_a_real_album_and_at_least_one_image():
+    with TestClient(appmod.app) as client:
+        files = [("images", ("a.png", _png_bytes(), "image/png"))]
+        # an album that is not a playlist record produces anchors nothing finds
+        assert client.post("/anchors", data={"album": "Nope", "tier": "r"},
+                           files=files).status_code == 400
+        client.post("/playlists", data={"name": "Real Album"})
+        assert client.post("/anchors", data={"album": "Real Album"},
+                           files=files).status_code == 400, "no tier was refused"
+        assert client.post("/anchors", data={"album": "Real Album", "tier": "r"}
+                           ).status_code == 400, "no reference image was accepted"
 
 
 def test_anchor_prompt_is_editable_shows_its_guardrails_and_is_screened(patch_stub):
     seen = []
-    patch_stub("pipeline", gen_anchor=lambda face, outfit, view="front", n=4, progress=None,
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
                                       prefix=None, profile=None, guard="", prompt="": (
-        seen.append({"guard": guard, "prompt": prompt, "view": view}) or []))
+        seen.append({"guard": guard, "prompt": prompt, "view": view,
+                     "images": list(images)}) or []))
     with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Prompt Album"})
         page = client.get("/anchors").text
         # the composed prompt is visible and editable, with its rules above it
         assert 'name="prompt"' in page
-        assert "What applies to this anchor" in page
+        assert "What applies to these sheets" in page
         assert "No minors" in page, "the pinned clause is not shown"
         assert "character reference sheet" in page, "the composed prompt is not prefilled"
 
-        files = {"face": ("f.png", b"x", "image/png"), "outfit": ("o.png", b"x", "image/png")}
-        base = {"scope_kind": "album", "scope_value": "Prompt Album", "tier": "r", "n": "1"}
+        files = [("images", ("f.png", _png_bytes(), "image/png"))]
+        base = {"album": "Prompt Album", "tier": "r", "n": "1"}
 
         client.post("/anchors", data=dict(base, view="front", prompt="a neutral studio sheet"),
                     files=files)

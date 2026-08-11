@@ -244,7 +244,7 @@
       {% else %}
       <span class="warn">no anchor &mdash; naming this character in a scene does nothing yet</span>
       {% endif %}
-      <a href="/anchors?scope_kind=album&amp;scope_value={{ d.playlist.name | urlencode }}">anchor &rarr;</a>
+      <a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">anchor &rarr;</a>
     </div>
     {% for f in d.character_fields %}
     <label>{{ f }}
@@ -356,7 +356,7 @@
   {% else %}
   <p class="empty">None yet.</p>
   {% endif %}
-  <p><a href="/anchors?scope_kind=album&amp;scope_value={{ d.playlist.name | urlencode }}">Manage anchors for this album &rarr;</a></p>
+  <p><a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">Manage anchors for this album &rarr;</a></p>
 
   <dialog class="confirm-modal" id="art-{{ d.playlist.id }}">
     <div class="modal-bar">

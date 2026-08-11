@@ -163,19 +163,35 @@ def collect(prefix_dir, pattern="*.png"):
     return sorted(files, key=lambda p: _natkey(os.path.basename(p)))
 
 
-def gen_anchor(face, outfit, view="front", n=8, progress=None, prefix=None, profile=None,
-               guard="", prompt=""):
-    """profile: the album's look, as {"anchor": {identity, wardrobe, body, views}}.
+# Qwen-Image-Edit 2511 conditions on at most three reference images. Anything
+# past the third is dropped HERE, loudly, rather than silently ignored by the
+# encoder -- uploading five and being told nothing is worse than uploading five
+# and being told two were not used.
+MAX_ANCHOR_REFS = 3
 
+
+def gen_anchor(images, view="front", n=8, progress=None, prefix=None, profile=None,
+               guard="", prompt=""):
+    """images: an unordered list of local reference paths, 0-3 used.
+
+    Not face-then-outfit. One photograph often carries both, and demanding they
+    be split made that image unusable; three references were impossible. The
+    prompt describes what to take from them collectively (make_anchor.COMPOSITE)
+    and the model composes.
+
+    profile: the album's look, as {"anchor": {identity, wardrobe, body, views}}.
     WHO the character is is not in make_anchor.py any more -- it comes from the
     album, which is edited in the UI. The dict is written to a temp file because
     the CLI script takes a --profile path, which is also how it is used outside
     the studio. STUDIO_PROFILE is the fallback for a checkout with no database.
     """
-    face_name = install_input(face)
-    outfit_name = install_input(outfit)
+    images = list(images or [])
+    if len(images) > MAX_ANCHOR_REFS and progress:
+        progress(f"{len(images)} references given; using the first {MAX_ANCHOR_REFS} "
+                 f"-- the model conditions on no more than that")
+    names = [install_input(p) for p in images[:MAX_ANCHOR_REFS]]
     prefix = prefix or "anchor_v2"  # matches make_anchor.py's own default
-    args = ["--face", face_name, "--outfit", outfit_name,
+    args = ["--images", ",".join(names),
             "--n", str(n), "--view", view, "--prefix", prefix,
             # the TIER's wording. An anchor was previously built with guard=""
             # -- it got PINNED and nothing else, which is why a nude anchor for
@@ -379,13 +395,11 @@ def gen_artwork(slug, prompt, progress=None, anchor_path=None, source_path=None,
     size -- and it already takes --prompt and --guardrail.
     """
     prefix = f"artwork_{slug}"
+    refs = [p for p in (anchor_path, source_path) if p]
     args = ["--n", str(n), "--prefix", prefix, "--view", "front",
             "--width", str(size), "--height", str(size),
-            "--prompt", prompt, "--guardrail", guard]
-    if anchor_path:
-        args += ["--face", install_input(anchor_path)]
-    if source_path:
-        args += ["--outfit", install_input(source_path)]
+            "--prompt", prompt, "--guardrail", guard,
+            "--images", ",".join(install_input(p) for p in refs)]
     with tempfile.TemporaryDirectory() as wf_dir:
         _run_script("make_anchor.py", [*args, "--outdir", wf_dir], progress)
         return _submit_and_collect(wf_dir, prefix, "*.png", progress)
