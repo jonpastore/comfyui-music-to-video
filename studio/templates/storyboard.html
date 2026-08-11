@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Storyboard &mdash; {{ song.title }} <span class="tag">{{ tier }}</span></h1>
+<h1>Storyboard &mdash; {{ song.title }} <span class="tag">{{ tier | tiername }}</span></h1>
 <p class="meta"><a href="/songs/{{ song.id }}">&larr; back to song</a> &middot;
    <a href="/songs/{{ song.id }}/approve/{{ tier }}">approve grid</a> &middot;
    <a href="{{ media_url(row.json_path) }}">download json</a></p>
@@ -19,7 +19,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="empty">No chosen anchor for the <code>{{ tier }}</code> tier &mdash;
+  <p class="empty">No chosen anchor for the <code>{{ tier | tiername }}</code> tier &mdash;
     reference generation cannot run without one.
     <a href="/anchors?scope_kind=album&amp;scope_value={{ song.album | urlencode }}">create one</a>.</p>
   {% endif %}

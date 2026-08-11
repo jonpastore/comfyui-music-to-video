@@ -10,7 +10,7 @@
               hx-get="/songs/{{ song.id }}/storyboard-form"
               hx-target="#sb-form" hx-swap="outerHTML" hx-trigger="change">
         {% for t in tiers %}
-        <option value="{{ t.name }}" {% if t.name == tier %}selected{% endif %}>{{ t.name }}</option>
+        <option value="{{ t.name }}" {% if t.name == tier %}selected{% endif %}>{{ t.name | tiername }}</option>
         {% endfor %}
       </select>
     </label>
@@ -32,7 +32,7 @@
       <code>guardrail.build_prompt()</code>:</p>
     <blockquote>{{ pinned }}</blockquote>
 
-    <p class="rule"><strong>The <code>{{ tier }}</code> tier's wording.</strong>
+    <p class="rule"><strong>The <code>{{ tier | tiername }}</code> tier's wording.</strong>
       Prefilled into the box below so you can tune it for this song. Editing it
       here changes only what the <em>storyboard writer</em> is told &mdash; the
       renderer re-applies the tier's own wording to every frame regardless:</p>

@@ -1,0 +1,87 @@
+{# Generate anchor candidates.
+
+   Its own partial because the tier decides two things here: which views are
+   offered (a tier that does not permit nudity does not list a nude one) and
+   which guardrail is shown. Changing either re-fetches the form. #}
+<form id="anchor-form" method="post" action="/anchors" enctype="multipart/form-data"
+      class="stack-form">
+  <div class="field-row">
+    <label>Scope
+      <select name="scope_kind">
+        <option value="album" {% if prefill_scope_kind == "album" %}selected{% endif %}>album</option>
+        <option value="playlist" {% if prefill_scope_kind == "playlist" %}selected{% endif %}>playlist</option>
+      </select>
+    </label>
+    <label>Scope value (album name, or playlist id)
+      <input type="text" name="scope_value" value="{{ prefill_scope_value }}" required>
+    </label>
+    <label>Tier
+      <select name="tier"
+              hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
+              hx-trigger="change" hx-include="#anchor-form">
+        {% for t in tiers %}
+        <option value="{{ t.name }}" {% if t.name == form_tier %}selected{% endif %}>
+          {{ t.name | tiername }}{% if not t.allow_nudity %} (no nudity){% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>View
+      <select name="view"
+              hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
+              hx-trigger="change" hx-include="#anchor-form">
+        {% for key, label in views %}
+        <option value="{{ key }}" {% if key == form_view %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Character
+      <select name="character_id"
+              hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
+              hx-trigger="change" hx-include="#anchor-form">
+        <option value="">protagonist (the album look)</option>
+        {% for c in characters %}
+        <option value="{{ c.id }}">{{ c.name }}{% if c.role %} &mdash; {{ c.role }}{% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+
+  {% if not allows_nudity %}
+  <p class="hint">The <code>{{ form_tier | tiername }}</code> tier does not permit nudity, so
+    no nude view is offered. Turn nudity on for it under
+    <a href="/tiers">Tiers</a> if it should.</p>
+  {% endif %}
+
+  <div class="field-row">
+    <label>Face <input type="file" name="face" accept="image/*" required></label>
+    <label>Outfit <input type="file" name="outfit" accept="image/*" required></label>
+    <label>Candidates <input type="number" name="n" value="4" min="1" max="8"></label>
+  </div>
+
+  {# ---- the rules that apply, above the box they govern ---- #}
+  <div class="guardrail-panel">
+    <h3>What applies to this anchor</h3>
+    <p class="rule pinned"><strong>Always, and not editable here.</strong>
+      Attached to the prompt below by <code>guardrail.build_prompt()</code>, and
+      it screens the text first:</p>
+    <blockquote>{{ pinned }}</blockquote>
+    <p class="rule"><strong>The <code>{{ form_tier | tiername }}</code> tier's wording</strong>,
+      attached on top of it. An anchor used to be built with no tier wording at all &mdash;
+      it got the pinned clause and nothing else:</p>
+    <blockquote>{{ tier_text or "(this tier adds no wording of its own)" }}</blockquote>
+    <p class="rule"><strong>Limits.</strong> Up to {{ max_anchor_prompt }} characters, refused
+      if it references minors or tries to instruct the model about its own rules. A nude view
+      is refused outright for a tier that does not permit nudity.</p>
+  </div>
+
+  <label>Prompt &mdash; what the character sheet is built from
+    <textarea name="prompt" rows="8" maxlength="{{ max_anchor_prompt }}">{{ anchor_prompt }}</textarea>
+  </label>
+  <p class="hint">Composed from this album's identity, wardrobe and body wording plus the
+    chosen view. Edit it freely &mdash; what is here is what gets sent. The face image is
+    reference 1 and the outfit image is reference 2, so the prompt refers to them as the
+    first and second image.</p>
+
+  <button type="submit">Generate anchors</button>
+</form>

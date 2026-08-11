@@ -79,6 +79,21 @@ def hms(secs):
 
 
 templates.env.filters["hms"] = hms
+# Tier names are DISPLAYED uppercase everywhere -- PG13, R, XXX read as the
+# content ratings they are, where "pg13" reads as a variable name. The stored
+# value stays lowercase: it is the key every form, route and query uses, so
+# only the presentation changes.
+templates.env.filters["tiername"] = lambda t: (t or "").upper()
+# Anchor views are stored as keys (front / back / front_nude / back_nude) and
+# read as prose.
+ANCHOR_VIEWS = {
+    "front": "front, clothed",
+    "back": "back, clothed",
+    "front_nude": "front, nude",
+    "back_nude": "back, nude",
+}
+NUDE_VIEWS = {"front_nude", "back_nude"}
+templates.env.filters["viewname"] = lambda v: ANCHOR_VIEWS.get(v, v or "")
 templates.env.filters["ts"] = lambda t: (
     time.strftime("%Y-%m-%d", time.localtime(t)) if t else "date unknown")
 # time of day for job rows: a date is useless for telling this render from the
@@ -363,8 +378,12 @@ def h_anchor(args, progress):
             progress(f"anchor for cast member: {char['name']}")
     anchor_profile = {"anchor": {"identity": prof["identity"], "wardrobe": prof["wardrobe"],
                                  "body": prof["body"]}}
+    if view in NUDE_VIEWS:
+        progress(f"nude anchor for tier '{args['tier']}' -- permitted by its allow_nudity flag")
     paths = pipeline.gen_anchor(args["face"], args["outfit"], view, args.get("n", 4), progress,
-                                 profile=anchor_profile)
+                                 profile=anchor_profile,
+                                 guard=tiers.compose_guardrail(args["tier"]),
+                                 prompt=args.get("prompt", ""))
     now = time.time()
     for p in paths:
         db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen, created,
@@ -836,34 +855,47 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = ""):
         key = (r["scope_kind"], r["scope_value"], r["character_id"], r["character_name"],
                r["tier"], r["view"])
         groups.setdefault(key, []).append(r)
-    group_list = [{"scope_kind": k[0], "scope_value": k[1], "character_name": k[3],
-                   "tier": k[4], "view": k[5], "candidates": v}
+    group_list = [{"scope_kind": k[0], "scope_value": k[1], "character_id": k[2],
+                   "character_name": k[3], "tier": k[4], "view": k[5], "candidates": v,
+                   # how many rejects this group is carrying: every generation
+                   # adds N candidates and only one is ever picked
+                   "unpicked": sum(1 for c in v if not c["chosen"])}
                   for k, v in groups.items()]
     albums = sorted({s["album"] for s in db.q("SELECT DISTINCT album FROM songs") if s["album"]})
     playlists = db.q("SELECT id, name FROM playlists WHERE kind='playlist' ORDER BY name")
-    # the cast selectable in the form: this album's, or every album's when no
-    # scope is prefilled (start_anchor refuses a mismatched pair either way)
-    characters = (album_cast(scope_value) if scope_value
-                  else db.q("SELECT * FROM characters ORDER BY scope_value, name"))
-    return templates.TemplateResponse(request, "anchors.html", {
-        "groups": group_list, "tiers": tiers.all_tiers(), "albums": albums, "playlists": playlists,
-        "characters": characters,
-        "prefill_scope_kind": scope_kind or "album", "prefill_scope_value": scope_value})
+    return templates.TemplateResponse(request, "anchors.html", dict(
+        anchor_form_ctx(scope_kind, scope_value, ""),
+        groups=group_list, albums=albums, playlists=playlists))
 
 
 @app.post("/anchors")
 async def start_anchor(scope_kind: str = Form(...), scope_value: str = Form(...), tier: str = Form(...),
                         view: str = Form("front"), face: UploadFile = File(...),
                         outfit: UploadFile = File(...), n: int = Form(4),
-                        character_id: Optional[int] = Form(None)):
+                        character_id: Optional[int] = Form(None), prompt: str = Form("")):
     if scope_kind not in ("album", "playlist"):
         raise HTTPException(400, "scope_kind must be 'album' or 'playlist'")
     scope_value = scope_value.strip()
     if not scope_value:
         raise HTTPException(400, "scope_value is required")
     valid_tier_or_400(tier)
-    if view not in ("front", "back"):
-        raise HTTPException(400, "view must be 'front' or 'back'")
+    if view not in ANCHOR_VIEWS:
+        raise HTTPException(400, f"view must be one of {', '.join(ANCHOR_VIEWS)}")
+    # A nude anchor is only generated for a tier that permits nudity. The flag
+    # is the capability; refusing here is what makes it mean something, rather
+    # than being a label the UI shows and the renderer ignores.
+    if view in NUDE_VIEWS and not tiers.allows_nudity(tier):
+        raise HTTPException(400, f"the '{tier}' tier does not permit nudity, so it cannot have "
+                                  f"a nude anchor. Turn nudity on for that tier first.")
+    prompt = (prompt or "").strip()
+    if len(prompt) > MAX_ANCHOR_PROMPT:
+        raise HTTPException(400, f"the anchor prompt is {len(prompt)} characters; keep it under "
+                                  f"{MAX_ANCHOR_PROMPT}")
+    try:
+        tiers.check_text(prompt, "anchor prompt")
+        tiers.check_override(prompt)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     if character_id is not None:
         # a character belongs to the album it was defined on; anchoring one
         # under a different scope would silently make an unreachable anchor
@@ -878,7 +910,7 @@ async def start_anchor(scope_kind: str = Form(...), scope_value: str = Form(...)
     n = max(1, min(int(n), 8))
     jobs.enqueue("anchor", {"scope_kind": scope_kind, "scope_value": scope_value, "tier": tier,
                              "view": view, "face": face_path, "outfit": outfit_path, "n": n,
-                             "character_id": character_id})
+                             "character_id": character_id, "prompt": prompt})
     return RedirectResponse(f"/anchors?scope_kind={scope_kind}&scope_value={quote(scope_value)}",
                              status_code=303)
 
@@ -955,6 +987,110 @@ def delete_character(cid: int):
     db.run("DELETE FROM anchors WHERE character_id=?", cid)
     db.run("DELETE FROM characters WHERE id=?", cid)
     return RedirectResponse("/playlists", status_code=303)
+
+
+MAX_ANCHOR_PROMPT = 2000
+
+
+def default_anchor_prompt(scope_value, view, character_id=None):
+    """The prompt make_anchor would compose, shown so it can be edited.
+
+    Built by the REAL composer (make_anchor.prompt_for) from the album's own
+    identity/wardrobe/body, so what the box shows is what would otherwise have
+    been sent -- not a lookalike that drifts from it.
+    """
+    import make_anchor
+    prof = album_profile(scope_value or "")
+    fields = {k: prof[k] for k in ("identity", "wardrobe", "body")}
+    if character_id:
+        char = db.one("SELECT * FROM characters WHERE id=?", character_id)
+        if char:
+            fields = {k: (char[k] or fields[k]) for k in fields}
+    return make_anchor.prompt_for(view, make_anchor.load_anchor(None) | fields)
+
+
+def anchor_form_ctx(scope_kind, scope_value, tier, view="front", character_id=None):
+    all_t = tiers.all_tiers()
+    tier = tier or (all_t[0]["name"] if all_t else "")
+    allows = tiers.allows_nudity(tier) if tier else False
+    return {
+        "tiers": all_t, "prefill_scope_kind": scope_kind or "album",
+        "prefill_scope_value": scope_value, "form_tier": tier,
+        "form_view": view, "allows_nudity": allows,
+        # a nude view is not merely disabled -- it is absent from the list for a
+        # tier that cannot use it, the same way a tier with no storyboard is not
+        # offered for reference generation
+        "views": [(k, v) for k, v in ANCHOR_VIEWS.items()
+                  if allows or k not in NUDE_VIEWS],
+        "anchor_prompt": default_anchor_prompt(scope_value, view, character_id),
+        "pinned": tiers.PINNED.strip(), "tier_text": tier_tone(tier),
+        "max_anchor_prompt": MAX_ANCHOR_PROMPT,
+        "characters": (album_cast(scope_value) if scope_value
+                       else db.q("SELECT * FROM characters ORDER BY scope_value, name")),
+    }
+
+
+@app.get("/anchors/form", response_class=HTMLResponse)
+def anchor_form(request: Request, scope_kind: str = "album", scope_value: str = "",
+                 tier: str = "", view: str = "front", character_id: Optional[int] = None):
+    """The generate form, re-rendered for another tier or view.
+
+    Its own route because the prefill and the offered views both depend on the
+    tier: a tier that does not permit nudity must not list a nude view, and the
+    guardrail shown has to be the one that will actually apply.
+    """
+    if view not in ANCHOR_VIEWS:
+        view = "front"
+    return templates.TemplateResponse(request, "_anchor_form.html",
+                                       anchor_form_ctx(scope_kind, scope_value, tier, view,
+                                                       character_id))
+
+
+@app.post("/anchors/{id}/delete")
+def delete_anchor(id: int):
+    """Delete one anchor candidate, row and file.
+
+    Anchors accumulate: every generation adds N candidates and only one is ever
+    picked, so a scope+tier+view group is mostly rejects. The file is removed
+    only if it resolves inside db.DATA -- ComfyUI's own output dir is shared and
+    is not ours to delete from.
+    """
+    row = db.one("SELECT * FROM anchors WHERE id=?", id)
+    if not row:
+        raise HTTPException(404, "no such anchor candidate")
+    if _within_data(row["path"]) and os.path.isfile(row["path"]):
+        try:
+            os.remove(row["path"])
+        except OSError:
+            pass
+    db.run("DELETE FROM anchors WHERE id=?", id)
+    return RedirectResponse(
+        f"/anchors?scope_kind={row['scope_kind']}&scope_value={quote(row['scope_value'])}",
+        status_code=303)
+
+
+@app.post("/anchors/delete-unpicked")
+def delete_unpicked_anchors(scope_kind: str = Form(...), scope_value: str = Form(...),
+                             tier: str = Form(...), view: str = Form(...),
+                             character_id: Optional[int] = Form(None)):
+    """Clear out one group's rejects, keeping whichever is chosen.
+
+    Deleting six candidates one at a time is the slow path, and the chosen one
+    is explicitly protected so this can never leave a tier with no anchor --
+    which would silently block every refs job for it.
+    """
+    rows = db.q("""SELECT * FROM anchors WHERE scope_kind=? AND scope_value=? AND tier=?
+                   AND view=? AND character_id IS ? AND chosen=0""",
+                scope_kind, scope_value, tier, view, character_id)
+    for r in rows:
+        if _within_data(r["path"]) and os.path.isfile(r["path"]):
+            try:
+                os.remove(r["path"])
+            except OSError:
+                pass
+        db.run("DELETE FROM anchors WHERE id=?", r["id"])
+    return RedirectResponse(
+        f"/anchors?scope_kind={scope_kind}&scope_value={quote(scope_value)}", status_code=303)
 
 
 @app.post("/anchors/{id}/pick")
@@ -2003,13 +2139,31 @@ def render_playlist(id: int, include_videos: bool = Form(False), tier: List[str]
 
 @app.get("/tiers", response_class=HTMLResponse)
 def tiers_page(request: Request):
-    return templates.TemplateResponse(request, "tiers.html", {"tiers": tiers.all_tiers()})
+    return templates.TemplateResponse(request, "tiers.html", {
+        "tiers": tiers.all_tiers(), "mpa_notes": tiers.MPA_NOTE,
+        "max_guardrail": tiers.MAX_TIER_GUARDRAIL})
 
 
 @app.post("/tiers")
-def create_tier(name: str = Form(...), guardrail: str = Form("")):
+def create_tier(name: str = Form(...), guardrail: str = Form(""),
+                 allow_nudity: bool = Form(False)):
     try:
-        tiers.add_tier(name, guardrail)
+        tiers.add_tier(name, guardrail, allow_nudity)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return RedirectResponse("/tiers", status_code=303)
+
+
+@app.post("/tiers/{name}/nudity")
+def toggle_tier_nudity(name: str, allow: int = Form(...)):
+    """Whether this tier may depict nudity.
+
+    A capability, not prompt text -- it gates whether a NUDE anchor can be
+    generated for the tier. What the model is told about nudity comes from the
+    tier's wording, so that there is only ever one thing steering it.
+    """
+    try:
+        tiers.set_allow_nudity(name, bool(allow))
     except ValueError as e:
         raise HTTPException(400, str(e))
     return RedirectResponse("/tiers", status_code=303)

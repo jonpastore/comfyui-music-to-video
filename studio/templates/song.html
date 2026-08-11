@@ -5,8 +5,11 @@
    {% if song.genre %}&middot; {{ song.genre }}{% if song.subgenre %} / {{ song.subgenre }}{% endif %}{% endif %}
    {% if song.genre2 %}&middot; {{ song.genre2 }}{% if song.subgenre2 %} / {{ song.subgenre2 }}{% endif %}{% endif %}
    {% if song.duration %}&middot; {{ "%.0f"|format(song.duration) }}s{% endif %}</p>
-<form method="post" action="/songs/{{ song.id }}/explicit">
-  <button type="submit">{{ "Mark clean" if song.explicit else "Mark explicit" }}</button>
+<form method="post" action="/songs/{{ song.id }}/explicit" class="header-action">
+  <button type="submit" class="secondary">
+    {{ "Mark clean" if song.explicit else "Mark explicit" }}
+  </button>
+  <span class="muted">Whether the LYRICS are explicit. Never selects or gates a tier.</span>
 </form>
 
 {% if active_job %}
@@ -47,7 +50,7 @@
   <h2>Edit audio</h2>
   <p class="meta">Current track: <code>{{ song.mp3_path.split('/')[-1] if song.mp3_path else "none" }}</code>
     {% if audio_duration %}&middot; {{ "%.1f"|format(audio_duration) }}s{% endif %}</p>
-  <form method="post" action="/songs/{{ song.id }}/audio" class="stack-form">
+  <form id="audio-edit-form" method="post" action="/songs/{{ song.id }}/audio" class="stack-form">
     <div class="field-row">
       <label>Trim start (s) <input type="number" step="0.1" min="0" name="trim_start" value="0"></label>
       <label>Trim end (s, blank = end) <input type="number" step="0.1" min="0" name="trim_end"></label>
@@ -64,18 +67,26 @@
       the numbers and the model are all stored with the edit. It can only trim the ends,
       not cut something out of the middle; if you ask for that it will say so and change
       nothing.</p>
-    <button type="submit">Create edit</button>
   </form>
 
-  {% if audio_original %}
-  <form method="post" action="/songs/{{ song.id }}/audio/revert">
-    <button type="submit" {% if song.mp3_path == audio_original.path %}disabled{% endif %}>
-      Revert to original
-    </button>
-  </form>
-  {% endif %}
+  {# Create and Revert are separate forms with different actions, so they
+     cannot share one; the row is what stops them stacking into two abutting
+     buttons with no relationship between them. #}
+  <div class="button-row">
+    <button type="submit" form="audio-edit-form">Create edit</button>
+    {% if audio_original %}
+    <form method="post" action="/songs/{{ song.id }}/audio/revert">
+      <button type="submit" class="secondary"
+              {% if song.mp3_path == audio_original.path %}disabled{% endif %}>
+        Revert to original
+      </button>
+    </form>
+    <span class="muted">Restores the file as uploaded. Edits below are kept.</span>
+    {% endif %}
+  </div>
 
   {% if audio_edits %}
+  <h3>Edits</h3>
   <table class="list">
     <thead><tr><th>Created</th><th>Params</th><th>Active</th><th></th></tr></thead>
     <tbody>
@@ -111,7 +122,7 @@
   <ul class="tier-links">
     {% for t, sb in storyboards.items() %}
     <li>
-      <a href="/songs/{{ song.id }}/storyboard/{{ t }}">{{ t }}</a>
+      <a href="/songs/{{ song.id }}/storyboard/{{ t }}">{{ t | tiername }}</a>
       ({{ sb.scene_count or "?" }} scenes)
       &middot; <a href="/songs/{{ song.id }}/approve/{{ t }}">approve grid</a>
     </li>
@@ -135,12 +146,12 @@
       <div class="tier-anchor {% if not anchor %}missing{% endif %}">
         <label class="check">
           <input type="checkbox" name="tier" value="{{ t }}" {% if not anchor %}disabled{% endif %}>
-          {{ t }}
+          {{ t | tiername }}
         </label>
         {% if anchor %}
         <a href="/anchors?scope_kind=album&amp;scope_value={{ song.album | urlencode }}"
            title="anchor for the {{ t }} tier -- click to manage">
-          <img class="anchor-thumb" src="{{ media_url(anchor.path) }}" alt="{{ t }} anchor">
+          <img class="anchor-thumb" src="{{ media_url(anchor.path) }}" alt="{{ t | tiername }} anchor">
         </a>
         <span class="muted">anchor ready</span>
         {% else %}
@@ -163,7 +174,7 @@
   <form method="post" action="/songs/{{ song.id }}/classify">
     <label>Tier
       <select name="tier">
-        {% for t in approved_tiers %}<option value="{{ t }}">{{ t }}</option>
+        {% for t in approved_tiers %}<option value="{{ t }}">{{ t | tiername }}</option>
         {% else %}<option value="" disabled selected>no approved refs yet</option>
         {% endfor %}
       </select>
@@ -172,7 +183,7 @@
   </form>
   {% for rv in reviews %}
   <p>
-    {{ rv.tier }}: {% if rv.flagged %}<strong>{{ rv.flagged|length }} flagged</strong> --
+    {{ rv.tier | tiername }}: {% if rv.flagged %}<strong>{{ rv.flagged|length }} flagged</strong> --
       {% for f in rv.flagged %}clip {{ f.clip }} ({{ f.issue }}){% if not loop.last %}, {% endif %}{% endfor %}
     {% else %}nothing flagged{% endif %}
     &middot; <button type="button" class="linkish"
@@ -180,13 +191,13 @@
   </p>
   <dialog class="sheet-modal" id="sheet-{{ loop.index }}">
     <div class="modal-bar">
-      <strong>{{ rv.tier }} contact sheet</strong>
+      <strong>{{ rv.tier | tiername }} contact sheet</strong>
       <span>
         <a href="{{ media_url(rv.path) }}" download>download</a>
         <button type="button" onclick="this.closest('dialog').close()">Close</button>
       </span>
     </div>
-    <img src="{{ media_url(rv.path) }}" alt="{{ rv.tier }} contact sheet">
+    <img src="{{ media_url(rv.path) }}" alt="{{ rv.tier | tiername }} contact sheet">
   </dialog>
   <p>
   </p>
@@ -198,7 +209,7 @@
     <div class="field-row">
       <label>Tier
         <select name="tier">
-          {% for t in clips_ready_tiers %}<option value="{{ t }}">{{ t }}</option>
+          {% for t in clips_ready_tiers %}<option value="{{ t }}">{{ t | tiername }}</option>
           {% else %}<option value="" disabled selected>no tier has fully approved refs yet</option>
           {% endfor %}
         </select>
@@ -238,7 +249,7 @@
     <div class="field-row">
       <label>Tier
         <select name="tier">
-          {% for t in render_tiers %}<option value="{{ t }}">{{ t }}</option>
+          {% for t in render_tiers %}<option value="{{ t }}">{{ t | tiername }}</option>
           {% else %}<option value="" disabled selected>no clips rendered yet</option>
           {% endfor %}
         </select>
@@ -251,7 +262,7 @@
   {% if renders %}
   <ul class="tier-links">
     {% for r in renders %}
-    <li>{{ r.tier }}: <a href="{{ media_url(r.path) }}">{{ r.path.split('/')[-1] }}</a></li>
+    <li>{{ r.tier | tiername }}: <a href="{{ media_url(r.path) }}">{{ r.path.split('/')[-1] }}</a></li>
     {% endfor %}
   </ul>
   {% endif %}

@@ -82,6 +82,17 @@ document.addEventListener("submit", function (e) {
                          "? Songs and rendered videos are kept.")) {
     e.preventDefault();
   }
+  var groupForm = e.target.closest(".delete-anchor-group");
+  if (groupForm && !confirm("Delete every unpicked candidate in this group? " +
+                            "The chosen one is kept.")) {
+    e.preventDefault();
+    return;
+  }
+  var anchorForm = e.target.closest(".delete-anchor");
+  if (anchorForm && !confirm("Delete this anchor candidate? The file is removed too.")) {
+    e.preventDefault();
+    return;
+  }
   var charForm = e.target.closest(".delete-character");
   if (charForm && !confirm("Delete character " + charForm.dataset.name +
                            "? Their anchor rows go too; the image files stay on disk.")) {

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Approve refs &mdash; {{ song.title }} <span class="tag">{{ tier }}</span></h1>
+<h1>Approve refs &mdash; {{ song.title }} <span class="tag">{{ tier | tiername }}</span></h1>
 <p class="meta"><a href="/songs/{{ song.id }}">&larr; back to song</a> &middot;
    <a href="/songs/{{ song.id }}/storyboard/{{ tier }}">storyboard &amp; timing</a></p>
 

@@ -49,7 +49,7 @@
         <td>
           {% if r.item.mp3_path %}<a href="{{ media_url(r.item.mp3_path) }}">audio</a>{% endif %}
           {% for tier, path in r.videos %}
-          <a href="{{ media_url(path) }}">{{ tier }}</a>
+          <a href="{{ media_url(path) }}">{{ tier | tiername }}</a>
           {% endfor %}
           {% if not r.videos %}<span class="muted">no video</span>{% endif %}
         </td>
@@ -88,7 +88,7 @@
     {% if d.video_tiers %}
     <span class="tiers">
       {% for t in d.video_tiers %}
-      <label class="check"><input type="checkbox" name="tier" value="{{ t }}"> {{ t }}</label>
+      <label class="check"><input type="checkbox" name="tier" value="{{ t }}"> {{ t | tiername }}</label>
       {% endfor %}
     </span>
     {% else %}
@@ -183,9 +183,9 @@
   <div class="clip-tile candidates">
     {% for a in d.anchors %}
     <div class="candidate {% if a.chosen %}picked{% endif %}">
-      <img src="{{ media_url(a.path) }}" alt="{{ a.tier }} {{ a.view }} anchor">
+      <img src="{{ media_url(a.path) }}" alt="{{ a.tier | tiername }} {{ a.view | viewname }} anchor">
       <p class="muted">{{ a.character_name or "protagonist" }} &middot;
-        {{ a.tier }} &middot; {{ a.view }}{% if a.chosen %} &check;{% endif %}</p>
+        {{ a.tier | tiername }} &middot; {{ a.view | viewname }}{% if a.chosen %} &check;{% endif %}</p>
       {% if not a.chosen %}
       <form method="post" action="/anchors/{{ a.id }}/pick"><button type="submit">Use this</button></form>
       {% endif %}

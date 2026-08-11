@@ -513,3 +513,49 @@ kbd {
 .model-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem; }
 .model-notes { font-size: 0.85rem; color: var(--muted); margin: 0.4rem 0 0.6rem; padding-left: 1.2rem; }
 .model-notes li { margin-bottom: 0.25rem; }
+
+/* ---- button rows: separate forms that belong together ---- */
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0 1.25rem;
+}
+.button-row form { margin: 0; }
+.button-row .muted { font-size: 0.85rem; }
+
+/* A secondary action must not read as the primary one. Two identical blue
+   buttons stacked is what made "Create edit" and "Revert to original" look
+   like a pair of equals. */
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+button.secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+/* the header toggle needs air before the cards below it */
+.header-action {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1.5rem;
+}
+.header-action .muted { font-size: 0.85rem; }
+
+/* ---- tiers: the nudity capability toggle ---- */
+button.toggle {
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+button.toggle.on { border-color: var(--accent); color: var(--accent); }
+button.toggle.off { color: var(--muted); }
+.mpa-note { margin: 0.35rem 0 0; font-style: italic; }
+
+/* ---- anchor candidates: pick and delete side by side ---- */
+.candidate-actions { display: flex; gap: 0.4rem; margin-top: 0.35rem; }
+.candidate-actions form { margin: 0; }
+.delete-anchor-group { margin-top: 0.75rem; }

@@ -1,14 +1,33 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Content tiers</h1>
+<p class="hint">A tier is a RENDERING choice, not a property of a song. Its wording describes
+  tone and wardrobe; <code>guardrail.PINNED</code> is appended to every prompt on top of it
+  and cannot be removed here or by editing a row.</p>
 
 <table class="list">
-  <thead><tr><th>Name</th><th>Guardrail</th><th>Built-in</th><th></th></tr></thead>
+  <thead><tr><th>Name</th><th>Guardrail</th><th class="num">Nudity</th><th>Built-in</th><th></th></tr></thead>
   <tbody>
   {% for t in tiers %}
     <tr>
-      <td>{{ t.name }}</td>
-      <td class="guardrail">{{ t.guardrail }}</td>
+      <td><strong>{{ t.name | tiername }}</strong></td>
+      <td class="guardrail">
+        {{ t.guardrail }}
+        {% if mpa_notes.get(t.name) %}
+        <p class="hint mpa-note">{{ mpa_notes[t.name] }}</p>
+        {% endif %}
+      </td>
+      <td>
+        {# a capability, not prompt text: it gates whether a NUDE anchor can be
+           generated for this tier. What the model is told comes from the
+           wording beside it. #}
+        <form method="post" action="/tiers/{{ t.name }}/nudity">
+          <input type="hidden" name="allow" value="{{ 0 if t.allow_nudity else 1 }}">
+          <button type="submit" class="toggle {{ 'on' if t.allow_nudity else 'off' }}">
+            {{ "permitted" if t.allow_nudity else "not permitted" }}
+          </button>
+        </form>
+      </td>
       <td>{{ "yes" if t.builtin else "" }}</td>
       <td>
         {% if not t.builtin %}
@@ -23,11 +42,28 @@
 </table>
 
 <section class="card">
+  <h2>Where these definitions come from</h2>
+  <p class="hint"><strong>PG-13</strong> and <strong>R</strong> are worded from the Motion
+    Picture Association's own rating definitions. The MPA's R says outright: <em>&ldquo;May
+    contain nudity, including graphic nudity&rdquo;</em> &mdash; so an R tier that only
+    permitted revealing clubwear was stricter than a real R rating, and has been widened.
+    PG-13's own definition says sexual activity <em>&ldquo;does not involve nudity&rdquo;</em>.</p>
+  <p class="hint"><strong>XXX is not an MPA rating.</strong> X was one until 26 September 1990,
+    when NC-17 replaced it &mdash; X had never been trademarked, so the adult industry adopted
+    X and XXX as self-applied labels and the MPA lost control of the mark. NC-17 is the real
+    top rating and is considerably tamer than this tier. The <code>XXX</code> wording here is
+    the owner's own and is deliberately not an MPA definition.</p>
+</section>
+
+<section class="card">
   <h2>Add a custom tier</h2>
-  <p class="hint">The non-explicit guardrail clause is always appended and cannot be removed.</p>
-  <form method="post" action="/tiers">
+  <p class="hint">Up to {{ max_guardrail }} characters, one line. Refused if it references
+    minors, or if it tries to instruct the model about its own rules.</p>
+  <form method="post" action="/tiers" class="stack-form">
     <label>Name <input type="text" name="name" pattern="[a-zA-Z_][a-zA-Z0-9_]*" required></label>
     <label>Guardrail text <textarea name="guardrail" rows="3"></textarea></label>
+    <label class="check"><input type="checkbox" name="allow_nudity" value="true">
+      Nudity permitted (allows a nude anchor to be generated for this tier)</label>
     <button type="submit">Add tier</button>
   </form>
 </section>

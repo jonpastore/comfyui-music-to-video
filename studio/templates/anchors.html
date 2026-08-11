@@ -2,44 +2,12 @@
 {% block content %}
 <h1>Anchors</h1>
 <p class="hint">An anchor is the character reference sheet for an ALBUM or PLAYLIST at a given
-  TIER and view -- every track sharing that scope+tier uses the same chosen anchor.</p>
+  TIER, CHARACTER and view &mdash; every track sharing that scope renders against the chosen
+  one. Reference generation cannot run without a chosen anchor for the tier.</p>
 
 <section class="card">
   <h2>Generate anchor candidates</h2>
-  <form method="post" action="/anchors" enctype="multipart/form-data">
-    <label>Scope
-      <select name="scope_kind">
-        <option value="album" {% if prefill_scope_kind == "album" %}selected{% endif %}>album</option>
-        <option value="playlist" {% if prefill_scope_kind == "playlist" %}selected{% endif %}>playlist</option>
-      </select>
-    </label>
-    <label>Scope value (album name, or playlist id)
-      <input type="text" name="scope_value" value="{{ prefill_scope_value }}" required>
-    </label>
-    <label>Tier
-      <select name="tier">
-        {% for t in tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
-      </select>
-    </label>
-    <label>View
-      <select name="view">
-        <option value="front">front</option>
-        <option value="back">back</option>
-      </select>
-    </label>
-    <label>Character
-      <select name="character_id">
-        <option value="">protagonist (the album look)</option>
-        {% for c in characters %}
-        <option value="{{ c.id }}">{{ c.name }}{% if c.role %} &mdash; {{ c.role }}{% endif %}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Face <input type="file" name="face" accept="image/*" required></label>
-    <label>Outfit <input type="file" name="outfit" accept="image/*" required></label>
-    <label>Candidates <input type="number" name="n" value="4" min="1" max="8"></label>
-    <button type="submit">Generate anchors</button>
-  </form>
+  {% include "_anchor_form.html" %}
   {% if albums %}<p class="hint">Known albums: {{ albums | join(", ") }}</p>{% endif %}
   {% if playlists %}
   <p class="hint">Playlists:
@@ -54,17 +22,37 @@
 {% for g in groups %}
 <section class="card">
   <h3>{{ g.scope_kind }}: {{ g.scope_value }} &middot; {{ g.character_name or "protagonist" }}
-      &middot; {{ g.tier }} &middot; {{ g.view }}</h3>
+      &middot; {{ g.tier | tiername }} &middot; {{ g.view | viewname }}</h3>
   <div class="candidate-grid">
     {% for c in g.candidates %}
     <div class="candidate {% if c.chosen %}picked{% endif %}">
-      <img class="thumb" src="{{ media_url(c.path) }}" alt="anchor candidate">
-      <form method="post" action="/anchors/{{ c.id }}/pick">
-        <button type="submit" {% if c.chosen %}disabled{% endif %}>{{ "Chosen" if c.chosen else "Pick" }}</button>
-      </form>
+      <img class="thumb" src="{{ media_url(c.path) }}" alt="anchor candidate" loading="lazy">
+      <div class="candidate-actions">
+        <form method="post" action="/anchors/{{ c.id }}/pick">
+          <button type="submit" {% if c.chosen %}disabled{% endif %}>{{ "Chosen" if c.chosen else "Pick" }}</button>
+        </form>
+        <form method="post" action="/anchors/{{ c.id }}/delete" class="delete-anchor">
+          {# the chosen one is not deletable from here: removing it would leave
+             the tier with no anchor and silently block every refs job for it #}
+          <button type="submit" class="thumb-btn-danger"
+                  {% if c.chosen %}disabled title="pick another candidate first"{% endif %}>
+            Delete
+          </button>
+        </form>
+      </div>
     </div>
     {% endfor %}
   </div>
+  {% if g.unpicked %}
+  <form method="post" action="/anchors/delete-unpicked" class="delete-anchor-group">
+    <input type="hidden" name="scope_kind" value="{{ g.scope_kind }}">
+    <input type="hidden" name="scope_value" value="{{ g.scope_value }}">
+    <input type="hidden" name="tier" value="{{ g.tier }}">
+    <input type="hidden" name="view" value="{{ g.view }}">
+    {% if g.character_id %}<input type="hidden" name="character_id" value="{{ g.character_id }}">{% endif %}
+    <button type="submit">Delete the {{ g.unpicked }} unpicked candidate{{ "" if g.unpicked == 1 else "s" }}</button>
+  </form>
+  {% endif %}
 </section>
 {% endfor %}
 {% endif %}

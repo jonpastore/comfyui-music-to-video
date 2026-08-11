@@ -156,6 +156,11 @@ MIGRATIONS = [
     # is every row that existed before the cast did -- so chosen_anchor() and
     # every refs job keep working untouched.
     "ALTER TABLE anchors ADD COLUMN character_id INTEGER",
+    # Whether this tier may depict nudity. A CAPABILITY, not prompt text: it
+    # gates whether a nude anchor can be generated. Default 0 is the safe one --
+    # an existing custom tier does not silently acquire the permission.
+    # The built-ins set their own (pg13=0, r=1, xxx=1) in tiers.ensure_builtins.
+    "ALTER TABLE tiers ADD COLUMN allow_nudity INTEGER DEFAULT 0",
 ]
 
 

@@ -163,7 +163,8 @@ def collect(prefix_dir, pattern="*.png"):
     return sorted(files, key=lambda p: _natkey(os.path.basename(p)))
 
 
-def gen_anchor(face, outfit, view="front", n=8, progress=None, prefix=None, profile=None):
+def gen_anchor(face, outfit, view="front", n=8, progress=None, prefix=None, profile=None,
+               guard="", prompt=""):
     """profile: the album's look, as {"anchor": {identity, wardrobe, body, views}}.
 
     WHO the character is is not in make_anchor.py any more -- it comes from the
@@ -175,7 +176,13 @@ def gen_anchor(face, outfit, view="front", n=8, progress=None, prefix=None, prof
     outfit_name = install_input(outfit)
     prefix = prefix or "anchor_v2"  # matches make_anchor.py's own default
     args = ["--face", face_name, "--outfit", outfit_name,
-            "--n", str(n), "--view", view, "--prefix", prefix]
+            "--n", str(n), "--view", view, "--prefix", prefix,
+            # the TIER's wording. An anchor was previously built with guard=""
+            # -- it got PINNED and nothing else, which is why a nude anchor for
+            # an adult tier had no wording permitting it.
+            "--guardrail", guard]
+    if prompt:
+        args += ["--prompt", prompt]
     with tempfile.TemporaryDirectory() as wf_dir:
         if profile:
             prof_path = os.path.join(wf_dir, "album_profile.json")

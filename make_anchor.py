@@ -54,7 +54,33 @@ DEFAULT_VIEWS = {
         "BACK VIEW character reference sheet of a single adult character, seen from directly "
         "behind, back to the camera, standing upright, arms relaxed at their sides, feet apart, "
         "head to toe fully in frame. Rear view, seen from behind, face not visible. "),
+    # Nude variants. A tier that permits nudity still needs the character's body
+    # to stay the SAME body -- without a nude reference the image model invents
+    # one below the neckline, which is the pale-limbs failure in a new place.
+    # Only generated for a tier whose allow_nudity is set; the studio gates it.
+    "front_nude": (
+        "FRONT VIEW nude character reference sheet of a single adult character, standing "
+        "upright facing the camera straight on, arms relaxed at their sides, feet apart, head "
+        "to toe fully in frame. "),
+    "back_nude": (
+        "BACK VIEW nude character reference sheet of a single adult character, seen from "
+        "directly behind, back to the camera, standing upright, arms relaxed at their sides, "
+        "feet apart, head to toe fully in frame. Rear view, seen from behind, face not "
+        "visible. "),
 }
+
+# Replaces the wardrobe clause on a nude view. Positive wording throughout --
+# negatives are inert at cfg 1.0, so "no clothing" would do nothing; what works
+# is describing bare skin as the thing that is there. The wardrobe IMAGE is
+# still passed as image2 because it carries build and proportion, so the prompt
+# says explicitly which part of it to take.
+NUDE_WARDROBE = (
+    "She is fully nude: bare skin over the whole body, no garments, no underwear, no straps "
+    "and no accessories. Take her build and proportions from the second image but none of its "
+    "clothing."
+)
+
+NUDE_VIEWS = ("front_nude", "back_nude")
 
 
 def load_anchor(profile_path):
@@ -75,7 +101,12 @@ def load_anchor(profile_path):
 
 def prompt_for(view, anchor=None):
     a = anchor or load_anchor(None)
-    return (a["views"][view] + a["wardrobe"] + " " + a["body"] + " "
+    # On a nude view the album's wardrobe wording is the one thing that must NOT
+    # be used -- it describes the outfit, and including it produces a clothed
+    # sheet however the view is worded. The BODY clause stays: colouring per
+    # body part is exactly as load-bearing here as anywhere else.
+    wardrobe = NUDE_WARDROBE if view in NUDE_VIEWS else a["wardrobe"]
+    return (a["views"][view] + wardrobe + " " + a["body"] + " "
             + a["identity"] + " " + BACKDROP)
 
 
@@ -87,21 +118,30 @@ def main():
     ap.add_argument("--n", type=int, default=6)
     ap.add_argument("--width", type=int, default=896)
     ap.add_argument("--height", type=int, default=1216)
-    ap.add_argument("--view", choices=["front", "back"], default="front")
+    ap.add_argument("--view", choices=list(DEFAULT_VIEWS), default="front")
     ap.add_argument("--prefix", default="anchor_v2")
     ap.add_argument("--profile", help="album profile json; its \"anchor\" block "
                                       "supplies identity/wardrobe/body/views")
+    ap.add_argument("--prompt", default="", help="use this prompt verbatim instead of the "
+                                                  "one composed from the profile and view")
+    ap.add_argument("--guardrail", default="", help="tier wording. The pinned clause is "
+                                                    "appended regardless; this adds the tier's "
+                                                    "own, which an anchor never used to get.")
     args = ap.parse_args()
 
-    scene = {"image_prompt": prompt_for(args.view, load_anchor(args.profile)),
+    scene = {"image_prompt": args.prompt.strip() or prompt_for(args.view, load_anchor(args.profile)),
              "negative_prompt": ""}
     os.makedirs(args.outdir, exist_ok=True)
     for k in range(args.n):
         seed = 4200 + k * 137
         # shot "" so no framing directive is prepended over the character-sheet
-        # instruction; the anchor prompt is self-contained
+        # instruction; the anchor prompt is self-contained.
+        # The guardrail is attached by workflow() -> guardrail.build_prompt, the
+        # same chokepoint every other prompt goes through. It used to be called
+        # with guard="" here, so an anchor got PINNED but never its TIER's
+        # wording -- which is what a nude anchor needs to be permitted at all.
         wf = workflow(scene, args.face, args.outfit, "empty",
-                      args.width, args.height, seed, "")
+                      args.width, args.height, seed, "", args.guardrail)
         wf["18"] = {"class_type": "SaveImage", "inputs": {
             "images": ["17", 0],
             "filename_prefix": f"{args.prefix}/{args.view}_s{seed}"}}
