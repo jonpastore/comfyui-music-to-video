@@ -6,7 +6,6 @@
   "outfit": "black leather harness top, black leather pants with gold buckles and straps, black thigh-high lace-up boots",
   "world": "Street Cats visual world: neon-noir industrial warehouse district, wet concrete, black steel, chain-link fencing, exposed pipes, service corridors, loading docks, stairwells, cinematic cyberpunk realism, premium underground electronic-music video, 16:9",
   "render_tail": "photorealistic cinematic 3D frame, premium music video still, high detail, 16:9",
-  "negative_prompt": "nudity, topless, exposed breasts, exposed genitals, lingerie focus, pornographic framing, sexual act, simulated sex, fetish pose, bondage, restraints, explicit gesture, coercion, crotch focus, breast focus, buttocks focus, child, teen, underage, young-looking, drug paraphernalia, needle, graphic violence, gore, weapon focus, extra limbs, extra fingers, malformed hands, duplicate face, inconsistent fur color, wrong eye color, text artifacts, watermark, logo artifacts, low resolution, blurry face",
   "_locations": "Rotated one per scene. This is the fix for 'every frame is Meow P in a purple corridor' — add or reorder to change where the video goes.",
   "locations": [
     "wet street outside the warehouse's public entrance, rain sheen on asphalt, shuttered roll-door behind",
@@ -77,7 +76,5 @@
     "low": "Quiet, watchful after-hours mood, the space breathing before anything happens.",
     "mid": "Momentum and intent, moving deeper into the building.",
     "high": "Peak-hour release, the room fully alive."
-  },
-  "_outfit": "Single wardrobe. There is no clean/explicit switch any more: how revealing the look is belongs to the content tier (studio/tiers.py), which is the one place that controls it.",
-  "_guardrail": "Removed. The content guardrail lives in guardrail.py and is applied by build_refs/build_song."
+  }
 }

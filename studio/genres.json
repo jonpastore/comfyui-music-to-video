@@ -1,0 +1,52 @@
+{
+  "_source": "STARTING LIST -- VERIFY AGAINST YOUR DISTROKID UPLOAD FORM BEFORE RELYING ON IT.",
+  "_why": [
+    "DistroKid's help centre blocks automated fetching (403) and does not publish the",
+    "enumerated dropdown anywhere. Its own docs say the list is 'comprised of all genres",
+    "accepted by all services we distribute to' and that 'your specific sub-genre may not",
+    "be available', and that the secondary genre list is identical to the primary one.",
+    "",
+    "The genres below are the widely-shared Apple/DDEX top level that distributors draw",
+    "from. The subgenres under Electronic are Beatport's published taxonomy, which is the",
+    "likely origin of the subgenre fields on the form -- DistroKid collects Beatport",
+    "subgenres for electronic releases.",
+    "",
+    "This file is data, not code. Replace it wholesale with your actual dropdown contents",
+    "and nothing else needs to change. Any genre may map to an empty subgenre list."
+  ],
+  "genres": {
+    "Alternative": ["College Rock", "Goth Rock", "Grunge", "Indie Rock", "New Wave", "Punk"],
+    "Blues": ["Acoustic Blues", "Chicago Blues", "Contemporary Blues", "Delta Blues", "Electric Blues"],
+    "Children's Music": ["Lullabies", "Sing-Along", "Stories"],
+    "Classical": ["Chamber Music", "Choral", "Contemporary Classical", "Opera", "Orchestral", "Solo Instrumental"],
+    "Comedy": ["Novelty", "Standup Comedy"],
+    "Country": ["Alternative Country", "Americana", "Bluegrass", "Contemporary Country", "Honky Tonk", "Outlaw Country"],
+    "Dance": ["Breakbeat", "Exercise", "Garage", "Hardcore", "Trance"],
+    "Electronic": [
+      "140 / Deep Dubstep / Grime", "Afro House", "Amapiano", "Ambient / Experimental",
+      "Bass House", "Bass / Club", "Breaks / Breakbeat / UK Bass", "Dance / Pop",
+      "Deep House", "DJ Tools", "Drum & Bass", "Dubstep", "Electro (Classic / Detroit / Modern)",
+      "Electronica", "Funky House", "Hard Dance / Hardcore / Neo Rave", "Hard Techno",
+      "House", "Indie Dance", "Jackin House", "Mainstage", "Melodic House & Techno",
+      "Minimal / Deep Tech", "Nu Disco / Disco", "Organic House", "Progressive House",
+      "Psy-Trance", "Tech House", "Techno (Peak Time / Driving)", "Techno (Raw / Deep / Hypnotic)",
+      "Trance (Main Floor)", "Trance (Raw / Deep / Hypnotic)", "Trap / Wave", "UK Garage / Bassline"
+    ],
+    "Folk": ["Contemporary Folk", "Traditional Folk"],
+    "Hip-Hop/Rap": ["Alternative Rap", "Dirty South", "East Coast Rap", "Gangsta Rap", "Hardcore Rap", "Latin Rap", "Old School Rap", "Rap", "Trap", "Underground Rap", "West Coast Rap"],
+    "Holiday": ["Christmas", "Halloween", "Thanksgiving"],
+    "Jazz": ["Avant-Garde Jazz", "Bebop", "Big Band", "Contemporary Jazz", "Cool Jazz", "Fusion", "Latin Jazz", "Smooth Jazz", "Vocal Jazz"],
+    "Latin": ["Alternative & Rock in Spanish", "Bachata", "Baladas y Boleros", "Cumbia", "Latin Jazz", "Pop in Spanish", "Reggaeton", "Regional Mexicano", "Salsa", "Tropical"],
+    "Metal": ["Black Metal", "Death Metal", "Doom Metal", "Hair Metal", "Heavy Metal", "Metalcore", "Thrash Metal"],
+    "New Age": ["Environmental", "Healing", "Meditation", "Nature", "Relaxation"],
+    "Pop": ["Adult Contemporary", "Britpop", "Indie Pop", "K-Pop", "Pop/Rock", "Synth-Pop", "Teen Pop"],
+    "Punk": ["Hardcore Punk", "Pop Punk", "Post-Punk", "Ska Punk"],
+    "R&B/Soul": ["Contemporary R&B", "Disco", "Doo Wop", "Funk", "Motown", "Neo-Soul", "Quiet Storm", "Soul"],
+    "Reggae": ["Dancehall", "Dub", "Roots Reggae", "Ska"],
+    "Rock": ["Adult Alternative", "American Trad Rock", "Arena Rock", "Blues-Rock", "Classic Rock", "Hard Rock", "Prog-Rock", "Psychedelic", "Rock & Roll", "Southern Rock", "Surf"],
+    "Singer/Songwriter": ["Alternative Folk", "Contemporary Folk", "Indie Singer/Songwriter"],
+    "Soundtrack": ["Film Score", "Musical", "Original Score", "TV Soundtrack", "Video Game"],
+    "Spoken Word": ["Audiobook", "Poetry", "Storytelling"],
+    "World": ["Afrobeat", "Asia", "Caribbean", "Celtic", "Europe", "Middle East", "North America", "South Africa", "Worldbeat"]
+  }
+}

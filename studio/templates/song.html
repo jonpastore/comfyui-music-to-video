@@ -1,12 +1,40 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>{{ song.title }}</h1>
-<p class="meta">{{ song.album or "" }} {% if song.genre %}&middot; {{ song.genre }}{% endif %}
+<p class="meta">{{ song.album or "" }}
+   {% if song.genre %}&middot; {{ song.genre }}{% if song.subgenre %} / {{ song.subgenre }}{% endif %}{% endif %}
+   {% if song.genre2 %}&middot; {{ song.genre2 }}{% if song.subgenre2 %} / {{ song.subgenre2 }}{% endif %}{% endif %}
    {% if song.duration %}&middot; {{ "%.0f"|format(song.duration) }}s{% endif %}</p>
 
+<section class="card">
+  <h2>Ratings</h2>
+  {% for r in ratings %}
+    <span class="tag">{{ r }}
+      <form method="post" action="/songs/{{ song.id }}/tiers/{{ r }}/remove" style="display:inline">
+        <button type="submit" title="remove rating">&times;</button>
+      </form>
+    </span>
+  {% else %}
+    <span class="empty">none</span>
+  {% endfor %}
+  <form method="post" action="/songs/{{ song.id }}/tiers" style="display:inline">
+    <label>Add
+      <select name="tier">
+        {% for t in tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit">Add rating</button>
+  </form>
+</section>
+
 {% if active_job %}
-<div id="job-status" class="job-status">job #{{ active_job.id }} ({{ active_job.kind }}): {{ active_job.progress or "queued" }}</div>
+<div id="job-status" class="job-status">job #{{ active_job.id }} ({{ active_job.kind }}) [{{ active_job.status }}]: {{ active_job.progress or "queued" }}</div>
 <script>watchJob({{ active_job.id }}, "job-status");</script>
+{% if active_job.status in ("queued", "running") %}
+<form method="post" action="/jobs/{{ active_job.id }}/cancel">
+  <button type="submit">Cancel</button>
+</form>
+{% endif %}
 {% endif %}
 
 <section class="card">
@@ -183,13 +211,32 @@
   <p class="empty">None yet.</p>
   {% else %}
   <table class="list">
-    <thead><tr><th>ID</th><th>Kind</th><th>Status</th><th>Progress</th></tr></thead>
+    <thead><tr><th>ID</th><th>Kind</th><th>Status</th><th>Progress</th><th></th></tr></thead>
     <tbody>
     {% for j in song_jobs %}
-      <tr><td>{{ j.id }}</td><td>{{ j.kind }}</td><td>{{ j.status }}</td><td>{{ j.progress or "" }}</td></tr>
+      <tr>
+        <td>{{ j.id }}</td><td>{{ j.kind }}</td><td>{{ j.status }}</td><td>{{ j.progress or "" }}</td>
+        <td>
+          {% if j.status in ("queued", "running") %}
+          <form method="post" action="/jobs/{{ j.id }}/cancel" style="display:inline">
+            <button type="submit">Cancel</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
     {% endfor %}
     </tbody>
   </table>
   {% endif %}
+</section>
+
+<section class="card">
+  <h2>Delete this song</h2>
+  <p class="hint">Removes the song, its ratings, storyboards, refs, clips and renders --
+    row and files -- permanently.</p>
+  <form method="post" action="/songs/{{ song.id }}/delete" class="delete-song">
+    <input type="hidden" name="confirm" value="DELETE">
+    <button type="submit">Delete song</button>
+  </form>
 </section>
 {% endblock %}

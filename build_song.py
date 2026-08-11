@@ -42,7 +42,6 @@ def normalize(sb):
         s.setdefault("scene_number", s.get("id", n))
         s.setdefault("name", s.get("section", f"scene {n}"))
         s.setdefault("image_prompt", s.get("prompt", ""))
-        s.setdefault("negative_prompt", sb.get("negative", sb.get("global_negative_prompt", "")))
         s.setdefault("camera", "")
         if "duration_guidance" not in s and "chunks" in s:
             s["duration_guidance"] = f"{s['chunks']} sec"
@@ -55,6 +54,12 @@ def normalize(sb):
             if s_.get(f):
                 s_[f] = guardrail.strip(s_[f], embedded)
     sb.pop("global_guardrail", None)
+    # Negative prompts are inert at cfg 1.0 (ComfyUI skips the negative pass),
+    # so nothing is gained by carrying them and they only restate policy.
+    sb.pop("global_negative_prompt", None)
+    sb.pop("negative", None)
+    for s_ in sb.get("scenes", []):
+        s_.pop("negative_prompt", None)
 
     sb.setdefault("character_reference", sb.get("style_lock", ""))
     sb.setdefault("album_world_reference", sb.get("style_lock", ""))

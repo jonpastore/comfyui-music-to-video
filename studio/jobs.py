@@ -46,19 +46,101 @@ def active():
     return db.one("SELECT * FROM jobs WHERE status='running' ORDER BY id LIMIT 1")
 
 
+class Cancelled(Exception):
+    """Raised inside a handler when the user asked for the job to stop."""
+
+
+# Human labels for the job list. "refs" told the user nothing about which song
+# or how far along it was.
+LABELS = {
+    "transcribe": "Transcribe lyrics",
+    "anchor": "Generate anchor candidates",
+    "storyboard": "Write storyboard (Grok)",
+    "refs": "Render reference images",
+    "reroll": "Re-roll reference images",
+    "clips": "Render video clips",
+    "render_song": "Assemble song video",
+    "render_set": "Render playlist set",
+    "edit_audio": "Edit audio",
+}
+
+
+def describe(row):
+    """One human-readable line for a job: what it is, for which song and tier."""
+    import json as _json
+    label = LABELS.get(row["kind"], row["kind"])
+    try:
+        args = _json.loads(row["args_json"] or "{}")
+    except ValueError:
+        args = {}
+    bits = []
+    if row["song_id"]:
+        song = db.one("SELECT title FROM songs WHERE id=?", row["song_id"])
+        if song:
+            bits.append(song["title"])
+    if args.get("tier"):
+        bits.append(f"[{args['tier']}]")
+    if args.get("view"):
+        bits.append(args["view"])
+    if args.get("limit"):
+        bits.append(f"first {args['limit']}")
+    return f"{label} — {' '.join(bits)}" if bits else label
+
+
 def cancel(jid):
-    """Only queued jobs can be cancelled; a running subprocess is left alone."""
-    db.run("UPDATE jobs SET status='cancelled', finished=? WHERE id=? AND status='queued'",
-           time.time(), jid)
+    """Stop a job. Queued ones die immediately; running ones stop cooperatively.
+
+    A running job cannot be killed outright -- it may be mid-ComfyUI-submit or
+    mid-ffmpeg -- so it is marked 'cancelling' and the next progress() call
+    inside the handler raises Cancelled. Every long loop here already reports
+    per item (submit_dir per workflow, ffmpeg per stage), so this stops a
+    41-image render within one image instead of ten minutes, with no changes
+    needed in pipeline.py or mixer.py.
+    """
+    row = get(jid)
+    if row is None:
+        raise ValueError(f"no such job: {jid}")
+    if row["status"] == "queued":
+        db.run("UPDATE jobs SET status='cancelled', finished=? WHERE id=? AND status='queued'",
+               time.time(), jid)
+    elif row["status"] == "running":
+        db.run("UPDATE jobs SET status='cancelling' WHERE id=? AND status='running'", jid)
+    else:
+        raise ValueError(f"job {jid} is already {row['status']}")
+    return get(jid)["status"]
+
+
+def cancel_requested(jid):
+    row = db.one("SELECT status FROM jobs WHERE id=?", jid)
+    return bool(row) and row["status"] == "cancelling"
 
 
 def _claim():
-    """Take the oldest queued job. Single worker, so no locking contest."""
-    row = db.one("SELECT * FROM jobs WHERE status='queued' ORDER BY id LIMIT 1")
-    if not row:
-        return None
-    db.run("UPDATE jobs SET status='running', started=? WHERE id=?", time.time(), row["id"])
-    return row
+    """Take the oldest queued job, atomically.
+
+    SELECT-then-UPDATE lost a concurrent cancel: click Cancel in the gap between
+    the two statements and cancel() matched (status was still 'queued'), wrote
+    'cancelled', and the worker then overwrote it with 'running' and ran the job
+    anyway -- the UI said cancelled while the GPU worked. BEGIN IMMEDIATE takes
+    the write lock up front so a cancel on another connection waits, and the
+    guard on status makes the update a no-op if it already landed.
+    """
+    c = db.conn()
+    try:
+        c.execute("BEGIN IMMEDIATE")
+        row = c.execute(
+            "SELECT * FROM jobs WHERE status='queued' ORDER BY id LIMIT 1").fetchone()
+        if row is None:
+            c.execute("COMMIT")
+            return None
+        cur = c.execute(
+            "UPDATE jobs SET status='running', started=? WHERE id=? AND status='queued'",
+            (time.time(), row["id"]))
+        c.execute("COMMIT")
+        return row if cur.rowcount == 1 else None
+    except Exception:
+        c.execute("ROLLBACK")
+        raise
 
 
 def _run_one(row):
@@ -69,6 +151,10 @@ def _run_one(row):
     log = open(log_path, "a", buffering=1)
 
     def progress(msg):
+        # also the cancellation checkpoint: handlers already call this between
+        # items, so cooperative cancel costs them nothing
+        if cancel_requested(jid):
+            raise Cancelled()
         msg = str(msg).rstrip()
         log.write(msg + "\n")
         db.run("UPDATE jobs SET progress=? WHERE id=?", msg[:500], jid)
@@ -80,6 +166,10 @@ def _run_one(row):
         db.run("UPDATE jobs SET status='done', finished=?, progress=? WHERE id=?",
                time.time(), json.dumps(result)[:500] if result else "done", jid)
         progress("done")
+    except Cancelled:
+        db.run("UPDATE jobs SET status='cancelled', finished=?, progress=? WHERE id=?",
+               time.time(), "cancelled by user", jid)
+        log.write("cancelled by user\n")
     except Exception as e:
         db.run("UPDATE jobs SET status='failed', finished=?, error=? WHERE id=?",
                time.time(), f"{type(e).__name__}: {e}"[:2000], jid)
@@ -123,6 +213,7 @@ def start():
     if _worker and _worker.is_alive():
         return _worker
     db.run("UPDATE jobs SET status='queued', started=NULL WHERE status='running'")
+    db.run("UPDATE jobs SET status='cancelled', finished=? WHERE status='cancelling'", time.time())
     _worker = threading.Thread(target=_loop, daemon=True, name="studio-worker")
     _worker.start()
     return _worker
@@ -199,6 +290,90 @@ def demo():
         raise AssertionError("unregistered kind was accepted")
     except ValueError:
         pass
+
+    # --- cancellation ---
+    # a queued job dies immediately
+    slow_started = threading.Event()
+    release = threading.Event()
+
+    @handler("blocker")
+    def _blocker(args, progress):
+        slow_started.set()
+        release.wait(10)
+        for i in range(50):          # long loop, reports per item like the real ones
+            progress(f"step {i}")
+            time.sleep(0.02)
+        return {"finished": True}
+
+    q1 = enqueue("blocker", {})
+    q2 = enqueue("slow", {"n": 3})
+    assert slow_started.wait(5), "worker never picked up the blocker"
+    assert cancel(q2) == "cancelled", "queued job was not cancelled outright"
+    release.set()
+
+    # a RUNNING job stops cooperatively at its next progress() call
+    b = enqueue("blocker", {})
+    slow_started.clear()
+    assert slow_started.wait(10), "second blocker never started"
+    release.clear()
+    time.sleep(0.05)
+    assert cancel(b) == "cancelling", "running job should go to 'cancelling'"
+    release.set()
+    deadline = time.time() + 10
+    while time.time() < deadline and get(b)["status"] not in ("cancelled", "done", "failed"):
+        time.sleep(0.05)
+    assert get(b)["status"] == "cancelled", f"running job did not stop: {get(b)['status']}"
+    assert get(q1)["status"] == "done", "the first blocker should have completed normally"
+
+    for bad in (999999,):
+        try:
+            cancel(bad)
+            raise AssertionError("cancelling an unknown job was accepted")
+        except ValueError:
+            pass
+    try:
+        cancel(q2)               # already cancelled
+        raise AssertionError("cancelling a finished job was accepted")
+    except ValueError:
+        pass
+
+    # --- a cancel must never be overwritten by the claim (lost-cancel race) ---
+    # Hold the worker so the victim genuinely sits queued; cancelling a job that
+    # the worker has already picked up tests nothing about _claim().
+    gate_started, gate_open = threading.Event(), threading.Event()
+
+    @handler("gate")
+    def _gate(args, progress):
+        gate_started.set()
+        gate_open.wait(15)
+        return {}
+
+    enqueue("gate", {})
+    assert gate_started.wait(10), "gate job never started"
+    victim = enqueue("slow", {"n": 99})
+    assert get(victim)["status"] == "queued", get(victim)["status"]
+    assert cancel(victim) == "cancelled"
+    gate_open.set()
+    deadline = time.time() + 10
+    while time.time() < deadline and get(victim)["status"] == "cancelled":
+        time.sleep(0.1)          # give the worker every chance to wrongly claim it
+    assert get(victim)["status"] == "cancelled", \
+        f"claim resurrected a cancelled job: {get(victim)['status']}"
+
+    # --- describe ---
+    db.run("INSERT INTO songs (title, slug, created) VALUES (?,?,?)", "Rear Entrance", "re", 0)
+    sid = db.one("SELECT id FROM songs WHERE slug='re'")["id"]
+    # insert directly: "refs" is registered by app.py, not here, and describe()
+    # only reads the row
+    dj = db.run("INSERT INTO jobs (kind, args_json, song_id, status, created) "
+                "VALUES (?,?,?, 'queued', ?)",
+                "refs", json.dumps({"tier": "r", "limit": 5}), sid, time.time())
+    text = describe(get(dj))
+    assert "Render reference images" in text, text
+    assert "Rear Entrance" in text and "[r]" in text and "first 5" in text, text
+    # an unknown kind falls back to the raw kind rather than blowing up
+    dk = db.run("INSERT INTO jobs (kind, status, created) VALUES ('mystery','queued',?)", time.time())
+    assert describe(get(dk)) == "mystery"
 
     # stream() must be an ASYNC generator. As a sync one it burns an anyio
     # threadpool worker per open viewer and 41 of them deadlock every route.

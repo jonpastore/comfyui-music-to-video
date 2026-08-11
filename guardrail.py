@@ -261,6 +261,12 @@ def build_prompt(text, tier_text="", where="prompt"):
 
     Raises ContentRefused (terminal) if the text references a minor.
     """
+    # Strip our own clause BEFORE screening. PINNED enumerates the forbidden
+    # terms, so any text already carrying it (a storyboard generated before the
+    # clause moved into code, or one that echoed it) matches the filter and gets
+    # refused. Doing this here rather than only in build_song.normalize() means a
+    # caller that forgets to normalize is still safe -- reroll_refs.py did exactly
+    # that and refused every scene.
+    text = strip(text)
     check_text(text, where)
-    text = (text or "").strip()
     return text if PINNED in text else (text + " " + compose(tier_text)).strip()

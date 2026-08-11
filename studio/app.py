@@ -25,6 +25,10 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(ROOT, "static")
 TEMPLATES_DIR = os.path.join(ROOT, "templates")
 
+# Read once at import -- genres.json is data, not config that changes per request.
+with open(os.path.join(ROOT, "genres.json")) as _f:
+    GENRE_DATA = json.load(_f)["genres"]
+
 HOST = os.environ.get("STUDIO_HOST", "0.0.0.0")
 PORT = int(os.environ.get("STUDIO_PORT", "8000"))
 
@@ -122,6 +126,47 @@ def valid_tier_or_400(name):
     if not db.one("SELECT id FROM tiers WHERE name=?", name):
         raise HTTPException(400, f"no such tier: {name}")
     return name
+
+
+def valid_genre_or_400(genre, subgenre, field):
+    """Both optional; a subgenre must belong to its genre's list in genres.json."""
+    genre = (genre or "").strip()
+    subgenre = (subgenre or "").strip()
+    if not genre:
+        if subgenre:
+            raise HTTPException(400, f"{field}: subgenre given without a genre")
+        return "", ""
+    if genre not in GENRE_DATA:
+        raise HTTPException(400, f"{field}: unknown genre {genre!r}")
+    if subgenre and subgenre not in GENRE_DATA[genre]:
+        raise HTTPException(400, f"{field}: {subgenre!r} is not a subgenre of {genre!r}")
+    return genre, subgenre
+
+
+def _within_data(path):
+    """True if path resolves inside db.DATA. Used to gate destructive file
+    deletes -- never follow a path outside the data root, and never touch
+    COMFY_INPUT/COMFY_OUTPUT (shared with ComfyUI)."""
+    if not path:
+        return False
+    real = os.path.realpath(path)
+    root = os.path.realpath(db.DATA)
+    return real == root or real.startswith(root + os.sep)
+
+
+def _song_file_paths(sid):
+    """Every file path this song's rows reference, across all the tables
+    that key off song_id."""
+    paths = []
+    song = db.one("SELECT mp3_path, style_path, anchor_path FROM songs WHERE id=?", sid)
+    if song:
+        paths += [song["mp3_path"], song["style_path"], song["anchor_path"]]
+    for r in db.q("SELECT json_path, md_path FROM storyboards WHERE song_id=?", sid):
+        paths += [r["json_path"], r["md_path"]]
+    for table in ("assets", "refs", "clips", "renders"):
+        for r in db.q(f"SELECT path FROM {table} WHERE song_id=?", sid):
+            paths.append(r["path"])
+    return paths
 
 
 async def save_upload(upload: UploadFile, cap: int, dest_dir: str, kind: str, prefix=None):
@@ -348,13 +393,18 @@ def index(request: Request):
         board_tiers = {r["tier"] for r in db.q("SELECT DISTINCT tier FROM storyboards WHERE song_id=?", s["id"])}
         rendered_tiers = {r["tier"] for r in db.q("SELECT DISTINCT tier FROM renders WHERE song_id=?", s["id"])}
         tier_status = [{"tier": t, "rendered": t in rendered_tiers} for t in sorted(board_tiers)]
-        entries.append({"song": s, "tiers": tier_status})
-    return templates.TemplateResponse(request, "index.html", {"songs": entries})
+        ratings = [r["tier"] for r in db.q("SELECT tier FROM song_tiers WHERE song_id=? ORDER BY tier", s["id"])]
+        entries.append({"song": s, "tiers": tier_status, "ratings": ratings})
+    return templates.TemplateResponse(request, "index.html",
+        {"songs": entries, "genre_data": GENRE_DATA, "all_tiers": tiers.all_tiers()})
 
 
 @app.post("/songs")
 async def create_song(title: str = Form(...), album: str = Form(""), genre: str = Form(""),
+                       subgenre: str = Form(""), genre2: str = Form(""), subgenre2: str = Form(""),
                        mp3: UploadFile = File(...)):
+    genre, subgenre = valid_genre_or_400(genre, subgenre, "genre")
+    genre2, subgenre2 = valid_genre_or_400(genre2, subgenre2, "genre2")
     slug = unique_slug(title)
     dest = await save_upload(mp3, MAX_MP3, upload_dir(slug), "mp3")
     duration = None
@@ -362,7 +412,8 @@ async def create_song(title: str = Form(...), album: str = Form(""), genre: str 
         duration = lyrics.estimate_duration(dest)
     except Exception:
         pass
-    sid = db.upsert_song(slug, title=title.strip() or slug, album=album.strip(), genre=genre.strip(),
+    sid = db.upsert_song(slug, title=title.strip() or slug, album=album.strip(), genre=genre,
+                          subgenre=subgenre, genre2=genre2, subgenre2=subgenre2,
                           mp3_path=dest, duration=duration)
     jobs.enqueue("transcribe", {"song_id": sid}, song_id=sid)
     return RedirectResponse(f"/songs/{sid}", status_code=303)
@@ -377,7 +428,7 @@ def song_page(request: Request, id: int):
     style_assets = db.q("SELECT * FROM assets WHERE song_id=? AND kind='style' ORDER BY id DESC", id)
     renders = db.q("SELECT * FROM renders WHERE song_id=? ORDER BY id DESC", id)
     song_jobs = db.q("SELECT * FROM jobs WHERE song_id=? ORDER BY id DESC LIMIT 20", id)
-    active_job = next((j for j in song_jobs if j["status"] in ("queued", "running")), None)
+    active_job = next((j for j in song_jobs if j["status"] in ("queued", "running", "cancelling")), None)
     try:
         models = grok.list_models()
     except Exception:
@@ -390,11 +441,13 @@ def song_page(request: Request, id: int):
             pass
     audio_edits = db.q("SELECT * FROM assets WHERE song_id=? AND kind='audio_edit' ORDER BY id DESC", id)
     audio_original = db.one("SELECT * FROM assets WHERE song_id=? AND kind='audio_original'", id)
+    ratings = [r["tier"] for r in db.q("SELECT tier FROM song_tiers WHERE song_id=? ORDER BY tier", id)]
     return templates.TemplateResponse(request, "song.html", {
         "song": song, "tiers": tiers.all_tiers(), "storyboards": storyboards,
         "anchor_candidates": anchor_candidates, "style_assets": style_assets,
         "renders": renders, "song_jobs": song_jobs, "active_job": active_job, "models": models,
         "audio_duration": audio_duration, "audio_edits": audio_edits, "audio_original": audio_original,
+        "ratings": ratings,
     })
 
 
@@ -595,11 +648,53 @@ def revert_audio(id: int):
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
+@app.post("/songs/{id}/tiers")
+def add_song_tier(id: int, tier: str = Form(...), from_index: str = Form("")):
+    get_song_or_404(id)
+    valid_tier_or_400(tier)
+    # PK on (song_id, tier) makes a duplicate add a no-op.
+    db.run("INSERT OR IGNORE INTO song_tiers (song_id, tier, created) VALUES (?,?,?)",
+           id, tier, time.time())
+    return RedirectResponse("/" if from_index else f"/songs/{id}", status_code=303)
+
+
+@app.post("/songs/{id}/tiers/{tier}/remove")
+def remove_song_tier(id: int, tier: str, from_index: str = Form("")):
+    get_song_or_404(id)
+    # A rating is just a label on the title. Storyboards/refs/clips for this
+    # tier are independent rows keyed by (song_id, tier) -- this must never
+    # cascade into deleting them.
+    db.run("DELETE FROM song_tiers WHERE song_id=? AND tier=?", id, tier)
+    return RedirectResponse("/" if from_index else f"/songs/{id}", status_code=303)
+
+
+@app.post("/songs/{id}/delete")
+def delete_song(id: int, confirm: str = Form("")):
+    get_song_or_404(id)
+    if confirm != "DELETE":
+        raise HTTPException(400, "confirm=DELETE is required to delete a song")
+    if db.one("SELECT id FROM jobs WHERE song_id=? AND status IN ('queued','running')", id):
+        raise HTTPException(409, "a job is queued or running for this song")
+    for path in _song_file_paths(id):
+        if _within_data(path):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+    for table in ("song_tiers", "storyboards", "refs", "clips", "renders", "assets", "playlist_items"):
+        db.run(f"DELETE FROM {table} WHERE song_id=?", id)
+    db.run("DELETE FROM songs WHERE id=?", id)
+    return RedirectResponse("/", status_code=303)
+
+
 # -------------------------------------------------------------- playlists --
 
 @app.get("/playlists", response_class=HTMLResponse)
 def playlists_page(request: Request):
-    playlists = db.q("SELECT * FROM playlists ORDER BY kind, name")
+    # 'genre' rows can still exist in the db (a legacy row, or one inserted
+    # directly rather than through this route) -- only 'playlist' rows are
+    # listed here; genres belong on the song now, not as a playlist kind.
+    playlists = db.q("SELECT * FROM playlists WHERE kind='playlist' ORDER BY name")
     songs = db.q("SELECT * FROM songs ORDER BY title")
     detail = []
     for p in playlists:
@@ -612,8 +707,10 @@ def playlists_page(request: Request):
 
 @app.post("/playlists")
 def create_playlist(name: str = Form(...), kind: str = Form("playlist")):
-    if kind not in ("playlist", "genre"):
-        raise HTTPException(400, "kind must be 'playlist' or 'genre'")
+    # Genres are set on the song at upload now (genre/subgenre/genre2/subgenre2
+    # columns) -- 'genre' is no longer a creatable playlist kind.
+    if kind != "playlist":
+        raise HTTPException(400, "kind must be 'playlist'")
     name = name.strip()
     if not name:
         raise HTTPException(400, "name required")
@@ -688,7 +785,24 @@ def remove_tier(name: str):
 
 @app.get("/jobs", response_class=HTMLResponse)
 def jobs_page(request: Request):
-    return templates.TemplateResponse(request, "jobs.html", {"jobs": jobs.recent(), "active": jobs.active()})
+    now = time.time()
+    entries = []
+    for j in jobs.recent():
+        elapsed = None
+        if j["started"]:
+            elapsed = (j["finished"] or now) - j["started"]
+        entries.append({"job": j, "desc": jobs.describe(j), "elapsed": elapsed,
+                         "cancelable": j["status"] in ("queued", "running")})
+    return templates.TemplateResponse(request, "jobs.html", {"jobs": entries, "active": jobs.active()})
+
+
+@app.post("/jobs/{id}/cancel")
+def cancel_job(id: int):
+    try:
+        jobs.cancel(id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return RedirectResponse("/jobs", status_code=303)
 
 
 @app.get("/jobs/{id}/stream")

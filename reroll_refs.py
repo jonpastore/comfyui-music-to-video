@@ -14,7 +14,7 @@ usage:
 """
 import argparse, json, math, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_song import clip_plan, CHUNK
+from build_song import clip_plan, normalize, CHUNK
 from build_refs import workflow
 
 SEED_OFFSETS = [8000, 9000, 10000, 11000]  # 4 alternates, distinct from base 7000+i
@@ -31,7 +31,9 @@ def main():
     ap.add_argument("--height", type=int, default=720)
     args = ap.parse_args()
 
-    sb = json.load(open(args.storyboard))
+    # normalize() like build_refs/build_song: strips any guardrail baked into
+    # legacy scene text and maps the older storyboard schemas
+    sb = normalize(json.load(open(args.storyboard)))
     scenes = sb["scenes"]
     # same mapping build_refs used -- shared, not re-derived, so a re-roll of
     # clip N can never target a different scene than the one you rejected

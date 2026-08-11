@@ -163,20 +163,25 @@ def test_sse_concurrency_does_not_starve_other_routes(live_server):
 
 
 # --------------------------------------------------------------- GAP 2 --
-# Playlist + genre flows: kind column, ordering, reorder, render_set item
-# shape ("video" key, not "path"), and clean refusal instead of a 500.
+# Playlist flows: ordering, reorder, render_set item shape ("video" key, not
+# "path"), and clean refusal instead of a 500.
+#
+# Genres are NOT playlists any more. They are fields on a song, set at upload,
+# so the route must refuse kind='genre'. Legacy genre-kind rows may still exist
+# in a deployed db, so the ordering logic is still exercised against one --
+# inserted directly, because the route can no longer create it.
 
 def test_playlist_and_genre_flow_ordering(client):
     r1 = client.post("/playlists", data={"name": "Chill Mix", "kind": "playlist"}, follow_redirects=False)
     assert r1.status_code == 303
     r2 = client.post("/playlists", data={"name": "Synthwave", "kind": "genre"}, follow_redirects=False)
-    assert r2.status_code == 303
+    assert r2.status_code == 400, "genre must no longer be creatable as a playlist kind"
 
     playlist = db.one("SELECT * FROM playlists WHERE name=? AND kind='playlist'", "Chill Mix")
+    assert playlist is not None and playlist["kind"] == "playlist"
+    db.run("INSERT INTO playlists (name, kind) VALUES (?, 'genre')", "Synthwave")
     genre = db.one("SELECT * FROM playlists WHERE name=? AND kind='genre'", "Synthwave")
-    assert playlist is not None and genre is not None
-    assert playlist["kind"] == "playlist"
-    assert genre["kind"] == "genre"
+    assert genre is not None
 
     s1, s2, s3 = _make_song("g"), _make_song("g"), _make_song("g")
     for sid, tier in ((s1, "pg13"), (s2, "pg13"), (s3, "r")):

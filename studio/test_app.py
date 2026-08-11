@@ -3,7 +3,7 @@ owned by other modules and stubbed here via sys.modules so the app is
 testable in isolation (no real ComfyUI/whisper/xAI/ffmpeg required, except
 ffmpeg to synthesize a tiny real mp3 fixture).
 """
-import asyncio, json, os, subprocess, sys, tempfile, time
+import asyncio, json, os, subprocess, sys, tempfile, threading, time
 
 import pytest
 
@@ -57,7 +57,7 @@ def test_empty_state_pages_200():
 
 def test_upload_mp3_creates_song_and_enqueues_transcribe():
     with TestClient(appmod.app) as client:
-        song = _upload_song(client, "Test Song", album="A", genre="G")
+        song = _upload_song(client, "Test Song", album="A", genre="Rock")
         assert song is not None
         assert song["mp3_path"] and os.path.isfile(song["mp3_path"])
         job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='transcribe'", song["id"])
@@ -140,6 +140,9 @@ def test_unknown_id_404_not_500():
         assert client.post("/playlists/999999/items",
                             data={"song_id": 1, "tier": "pg13"}).status_code == 404
         assert client.post("/playlists/999999/render").status_code == 404
+        assert client.post("/songs/999999/tiers", data={"tier": "pg13"}).status_code == 404
+        assert client.post("/songs/999999/tiers/pg13/remove").status_code == 404
+        assert client.post("/songs/999999/delete", data={"confirm": "DELETE"}).status_code == 404
 
 
 def test_playlist_crud_smoke():
@@ -330,6 +333,195 @@ def test_refs_limit_clamped():
         job2 = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='refs' ORDER BY id DESC", sid)
         # -100 clamped to 0, and 0 is falsy -> stored as None (unlimited), never negative
         assert json.loads(job2["args_json"])["limit"] is None
+
+
+def test_song_tier_ratings_add_remove_noop_and_independent_of_storyboards():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Rating Song")
+        sid = song["id"]
+
+        client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13"})
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
+        wait_job(job["id"])
+        assert db.one("SELECT id FROM storyboards WHERE song_id=? AND tier='pg13'", sid)
+
+        r1 = client.post(f"/songs/{sid}/tiers", data={"tier": "pg13"})
+        assert r1.status_code in (200, 303), r1.text
+        r2 = client.post(f"/songs/{sid}/tiers", data={"tier": "pg13"})  # duplicate add is a no-op
+        assert r2.status_code in (200, 303), r2.text
+        rows = db.q("SELECT * FROM song_tiers WHERE song_id=?", sid)
+        assert len(rows) == 1, rows
+
+        r3 = client.post(f"/songs/{sid}/tiers/pg13/remove")
+        assert r3.status_code in (200, 303), r3.text
+        assert db.one("SELECT tier FROM song_tiers WHERE song_id=? AND tier='pg13'", sid) is None
+        # removing the rating must not cascade into the storyboard generated for that tier
+        assert db.one("SELECT id FROM storyboards WHERE song_id=? AND tier='pg13'", sid) is not None
+
+
+def test_song_tier_unknown_tier_400():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Bad Tier Song")
+        r = client.post(f"/songs/{song['id']}/tiers", data={"tier": "not-a-tier"})
+        assert r.status_code == 400, r.text
+
+
+def test_delete_song_requires_confirm():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "No Confirm Song")
+        sid = song["id"]
+        r = client.post(f"/songs/{sid}/delete")
+        assert r.status_code == 400, r.text
+        assert db.one("SELECT id FROM songs WHERE id=?", sid) is not None
+
+
+def test_delete_song_removes_row_and_files():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Delete Me Song")
+        sid = song["id"]
+        mp3_path = song["mp3_path"]
+        assert os.path.isfile(mp3_path)
+        # let the auto-enqueued transcribe job finish, or the delete's
+        # own no-active-job guard (correctly) refuses it
+        wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='transcribe'", sid)["id"])
+
+        # a storyboard with real files under db.DATA, so the delete has more
+        # than the mp3 to clean up
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        json_path = os.path.join(outdir, "sb.json")
+        md_path = os.path.join(outdir, "sb.md")
+        open(json_path, "w").close()
+        open(md_path, "w").close()
+        db.run("""INSERT INTO storyboards (song_id, tier, json_path, md_path, scene_count, created)
+                  VALUES (?,?,?,?,?,?)""", sid, "pg13", json_path, md_path, 2, time.time())
+
+        r = client.post(f"/songs/{sid}/delete", data={"confirm": "DELETE"})
+        assert r.status_code in (200, 303), r.text
+        assert db.one("SELECT id FROM songs WHERE id=?", sid) is None
+        assert db.one("SELECT id FROM storyboards WHERE song_id=?", sid) is None
+        assert not os.path.isfile(mp3_path)
+        assert not os.path.isfile(json_path)
+        assert not os.path.isfile(md_path)
+
+
+def test_delete_song_refused_while_job_running():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Busy Song")
+        sid = song["id"]
+        db.run("INSERT INTO jobs (kind, args_json, status, song_id, created) VALUES (?,?, 'running', ?, ?)",
+               "storyboard", "{}", sid, time.time())
+        r = client.post(f"/songs/{sid}/delete", data={"confirm": "DELETE"})
+        assert r.status_code == 409, r.text
+        assert db.one("SELECT id FROM songs WHERE id=?", sid) is not None
+
+
+def test_delete_song_never_removes_files_outside_data_root():
+    with TestClient(appmod.app) as client:
+        fd, outside_path = tempfile.mkstemp(prefix="studio_outside_", suffix=".mp3")
+        os.close(fd)
+        with open(outside_path, "wb") as f:
+            f.write(b"not real audio")
+        sid = db.upsert_song("outside-song", title="Outside Song", mp3_path=outside_path)
+
+        r = client.post(f"/songs/{sid}/delete", data={"confirm": "DELETE"})
+        assert r.status_code in (200, 303), r.text
+        assert db.one("SELECT id FROM songs WHERE id=?", sid) is None
+        assert os.path.isfile(outside_path), "delete followed a path outside db.DATA"
+        os.remove(outside_path)
+
+
+def test_create_genre_playlist_rejected():
+    with TestClient(appmod.app) as client:
+        r = client.post("/playlists", data={"name": "Some Genre", "kind": "genre"})
+        assert r.status_code == 400, r.text
+        assert db.one("SELECT id FROM playlists WHERE name=? AND kind='genre'", "Some Genre") is None
+
+
+def test_genre_subgenre_validation():
+    with TestClient(appmod.app) as client:
+        r = client.post("/songs", data={"title": "Genre Song", "genre": "Rock", "subgenre": "Hard Rock"},
+                         files={"mp3": ("g.mp3", _mp3_bytes(), "audio/mpeg")})
+        assert r.status_code in (200, 303), r.text
+        song = db.one("SELECT * FROM songs WHERE title=?", "Genre Song")
+        assert song["genre"] == "Rock" and song["subgenre"] == "Hard Rock"
+
+        # subgenre that belongs to a different genre
+        r2 = client.post("/songs", data={"title": "Bad Genre Song", "genre": "Rock", "subgenre": "Trap"},
+                          files={"mp3": ("b.mp3", _mp3_bytes(), "audio/mpeg")})
+        assert r2.status_code == 400, r2.text
+        assert db.one("SELECT id FROM songs WHERE title=?", "Bad Genre Song") is None
+
+        # unknown genre outright
+        r3 = client.post("/songs", data={"title": "Unknown Genre Song", "genre": "NotAGenre"},
+                          files={"mp3": ("u.mp3", _mp3_bytes(), "audio/mpeg")})
+        assert r3.status_code == 400, r3.text
+        assert db.one("SELECT id FROM songs WHERE title=?", "Unknown Genre Song") is None
+
+
+# A handler that blocks until released, used to hold the single worker thread
+# so a second enqueued job reliably stays 'queued' long enough to cancel it --
+# with the instant stub handlers, a lone job finishes before a test could ever
+# observe it queued.
+_release_blocker = threading.Event()
+_blocker_started = threading.Event()
+
+
+@jobs.handler("test_blocker")
+def _test_blocker(args, progress):
+    _blocker_started.set()
+    _release_blocker.wait(10)
+    return {}
+
+
+def test_cancel_queued_job_returns_303_and_cancelled():
+    with TestClient(appmod.app) as client:
+        _release_blocker.clear()
+        _blocker_started.clear()
+        holder_jid = jobs.enqueue("test_blocker", {})
+        assert _blocker_started.wait(5), "blocker job never started"
+        victim_jid = jobs.enqueue("test_blocker", {})  # sits queued behind the holder
+        assert jobs.get(victim_jid)["status"] == "queued"
+
+        r = client.post(f"/jobs/{victim_jid}/cancel")
+        assert r.status_code in (200, 303), r.text
+        assert jobs.get(victim_jid)["status"] == "cancelled"
+
+        _release_blocker.set()
+        wait_job(holder_jid)
+
+
+def test_cancel_unknown_job_400():
+    with TestClient(appmod.app) as client:
+        r = client.post("/jobs/999999/cancel")
+        assert r.status_code == 400, r.text
+
+
+def test_cancel_already_finished_job_400():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Cancel Finished Song")
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='transcribe'", song["id"])
+        wait_job(job["id"])
+        r = client.post(f"/jobs/{job['id']}/cancel")
+        assert r.status_code == 400, r.text
+
+
+def test_jobs_page_renders_all_statuses_and_uses_describe():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Jobs Page Song")
+        sid = song["id"]
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='transcribe'", sid)
+        wait_job(job["id"])  # -> done, and its describe() line names this song
+
+        for kind, status in (("storyboard", "failed"), ("refs", "cancelled"),
+                              ("clips", "cancelling"), ("render_song", "queued")):
+            db.run("INSERT INTO jobs (kind, args_json, song_id, status, created) VALUES (?,?,?,?,?)",
+                   kind, "{}", sid, status, time.time())
+
+        r = client.get("/jobs")
+        assert r.status_code == 200, r.text
+        assert "cancelling" in r.text
+        assert "Jobs Page Song" in r.text  # from jobs.describe(), not just the raw kind
 
 
 if __name__ == "__main__":

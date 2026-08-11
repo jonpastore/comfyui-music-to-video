@@ -23,6 +23,8 @@ from guardrail import (  # noqa: E402,F401  (re-exported: callers use tiers.X)
 
 
 
+MAX_TIER_GUARDRAIL = 500
+
 BUILTIN = {
     "pg13": (
         "Mainstream music-video tone: confident, stylish, energetic performance and "
@@ -59,6 +61,17 @@ def add_tier(name, guardrail):
         raise ValueError(f"tier '{name}' already exists")
     check_text(name, "tier name")
     check_text(guardrail, "tier guardrail")
+    # A tier's wording is data, not instructions. It is JSON-quoted before it
+    # reaches the model and the pinned clause is delivered in a separate, earlier
+    # system message -- but an unbounded blob is still an unbounded prompt-
+    # injection surface, and newlines let it fake message structure.
+    guardrail = (guardrail or "").strip()
+    if len(guardrail) > MAX_TIER_GUARDRAIL:
+        raise ValueError(
+            f"tier wording is {len(guardrail)} characters; keep it under "
+            f"{MAX_TIER_GUARDRAIL}. It describes tone and wardrobe, not a script.")
+    if "\n" in guardrail or "\r" in guardrail:
+        raise ValueError("tier wording must be a single line")
     db.run("INSERT INTO tiers (name, guardrail, builtin) VALUES (?,?,0)",
            name, (guardrail or "").strip())
     return name
@@ -99,6 +112,14 @@ def demo():
         assert overreach not in PINNED.lower(), f"PINNED re-acquired a tone rule: {overreach!r}"
     # a tier is free to authorise revealing wardrobe
     add_tier("revealing", "Swimwear and harness looks, bare midriff and legs, high-cut bottoms.")
+    # tier wording is bounded and single-line: it is a description, not a script
+    for bad, why in ((("x" * (MAX_TIER_GUARDRAIL + 1)), "over-long"),
+                     ("line one\nline two", "multi-line")):
+        try:
+            add_tier("probe2", bad)
+            raise AssertionError(f"{why} tier wording was accepted")
+        except ValueError:
+            pass
     g = compose_guardrail("revealing")
     assert "high-cut" in g and PINNED in g
 

@@ -15,6 +15,13 @@ CREATE TABLE IF NOT EXISTS songs (
   slug TEXT UNIQUE NOT NULL, mp3_path TEXT, duration REAL, lyrics TEXT,
   anchor_path TEXT, style_path TEXT, bpm REAL, created REAL);
 
+-- Ratings applied to a title in the library. Distinct from the `tier` column on
+-- storyboards/refs/clips, which records which tier an ARTIFACT was generated
+-- for; a song can carry ratings before anything has been generated.
+CREATE TABLE IF NOT EXISTS song_tiers (
+  song_id INTEGER NOT NULL, tier TEXT NOT NULL, created REAL,
+  PRIMARY KEY (song_id, tier));
+
 CREATE TABLE IF NOT EXISTS tiers (
   id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, guardrail TEXT NOT NULL,
   builtin INTEGER DEFAULT 0);
@@ -57,9 +64,30 @@ CREATE TABLE IF NOT EXISTS jobs (
   status TEXT DEFAULT 'queued', progress TEXT, log_path TEXT,
   song_id INTEGER, created REAL, started REAL, finished REAL, error TEXT);
 
+CREATE INDEX IF NOT EXISTS idx_song_tiers ON song_tiers(song_id);
 CREATE INDEX IF NOT EXISTS idx_refs_song ON refs(song_id, tier, clip_idx);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, id);
 """
+
+# Columns added after the initial schema. CREATE TABLE IF NOT EXISTS does not
+# alter an existing table, so a deployed database keeps its old shape forever
+# without this. Applied once each; the duplicate-column error is expected.
+MIGRATIONS = [
+    "ALTER TABLE songs ADD COLUMN subgenre TEXT",
+    "ALTER TABLE songs ADD COLUMN genre2 TEXT",
+    "ALTER TABLE songs ADD COLUMN subgenre2 TEXT",
+]
+
+
+def _migrate(c):
+    for stmt in MIGRATIONS:
+        try:
+            c.execute(stmt)
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
+    c.commit()
+
 
 _local = threading.local()
 
@@ -74,6 +102,7 @@ def conn():
         c.execute("PRAGMA journal_mode=WAL")
         c.execute("PRAGMA foreign_keys=ON")
         c.executescript(SCHEMA)
+        _migrate(c)
         _local.c = c
     return c
 

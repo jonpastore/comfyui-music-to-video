@@ -12,16 +12,23 @@
 <p class="empty">No jobs yet.</p>
 {% else %}
 <table class="list">
-  <thead><tr><th>ID</th><th>Kind</th><th>Status</th><th>Progress</th><th>Song</th><th></th></tr></thead>
+  <thead><tr><th>ID</th><th>Job</th><th>Status</th><th>Elapsed</th><th>Progress</th><th></th></tr></thead>
   <tbody>
-  {% for j in jobs %}
+  {% for e in jobs %}
     <tr>
-      <td>{{ j.id }}</td>
-      <td>{{ j.kind }}</td>
-      <td>{{ j.status }}</td>
-      <td>{{ j.progress or "" }}</td>
-      <td>{% if j.song_id %}<a href="/songs/{{ j.song_id }}">#{{ j.song_id }}</a>{% endif %}</td>
-      <td><a href="/jobs/{{ j.id }}/log">log</a></td>
+      <td>{{ e.job.id }}</td>
+      <td>{{ e.desc }}</td>
+      <td class="status-{{ e.job.status }}">{{ e.job.status }}</td>
+      <td>{% if e.elapsed is not none %}{{ "%.0f"|format(e.elapsed) }}s{% endif %}</td>
+      <td>{{ e.job.progress or "" }}</td>
+      <td>
+        <a href="/jobs/{{ e.job.id }}/log">log</a>
+        {% if e.cancelable %}
+        <form method="post" action="/jobs/{{ e.job.id }}/cancel" style="display:inline">
+          <button type="submit">Cancel</button>
+        </form>
+        {% endif %}
+      </td>
     </tr>
   {% endfor %}
   </tbody>

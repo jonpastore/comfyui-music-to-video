@@ -2,13 +2,32 @@
 {% block content %}
 <h1>Library</h1>
 
+<script id="genre-data" type="application/json">{{ genre_data | tojson }}</script>
+
 <section class="card">
   <h2>Upload a song</h2>
   <form method="post" action="/songs" enctype="multipart/form-data">
     <label>Title <input type="text" name="title" required></label>
     <label>Album <input type="text" name="album"></label>
-    <label>Genre <input type="text" name="genre"></label>
     <label>MP3 <input type="file" name="mp3" accept="audio/mpeg,.mp3" required></label>
+    <label>Genre
+      <select name="genre" id="genre-select">
+        <option value="">(none)</option>
+        {% for g in genre_data %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Subgenre
+      <select name="subgenre" id="subgenre-select"><option value="">(none)</option></select>
+    </label>
+    <label>Secondary genre
+      <select name="genre2" id="genre2-select">
+        <option value="">(none)</option>
+        {% for g in genre_data %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Secondary subgenre
+      <select name="subgenre2" id="subgenre2-select"><option value="">(none)</option></select>
+    </label>
     <button type="submit">Upload</button>
   </form>
 </section>
@@ -17,19 +36,47 @@
 <p class="empty">No songs yet. Upload one above.</p>
 {% else %}
 <table class="list">
-  <thead><tr><th>Title</th><th>Album</th><th>Genre</th><th>Tiers</th></tr></thead>
+  <thead><tr><th>Title</th><th>Album</th><th>Genre</th><th>Tiers</th><th>Ratings</th><th></th></tr></thead>
   <tbody>
   {% for e in songs %}
     <tr>
       <td><a href="/songs/{{ e.song.id }}">{{ e.song.title }}</a></td>
       <td>{{ e.song.album or "" }}</td>
-      <td>{{ e.song.genre or "" }}</td>
+      <td>
+        {{ e.song.genre or "" }}{% if e.song.subgenre %} / {{ e.song.subgenre }}{% endif %}
+        {% if e.song.genre2 %}<br>{{ e.song.genre2 }}{% if e.song.subgenre2 %} / {{ e.song.subgenre2 }}{% endif %}{% endif %}
+      </td>
       <td>
         {% for t in e.tiers %}
           <span class="tag {% if t.rendered %}done{% endif %}">{{ t.tier }}{% if t.rendered %} &#10003;{% endif %}</span>
         {% else %}
           <span class="empty">none</span>
         {% endfor %}
+      </td>
+      <td>
+        {% for r in e.ratings %}
+          <span class="tag">{{ r }}
+            <form method="post" action="/songs/{{ e.song.id }}/tiers/{{ r }}/remove" style="display:inline">
+              <input type="hidden" name="from_index" value="1">
+              <button type="submit" title="remove rating">&times;</button>
+            </form>
+          </span>
+        {% else %}
+          <span class="empty">none</span>
+        {% endfor %}
+        <form method="post" action="/songs/{{ e.song.id }}/tiers" style="display:inline">
+          <input type="hidden" name="from_index" value="1">
+          <select name="tier">
+            {% for t in all_tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
+          </select>
+          <button type="submit">Add</button>
+        </form>
+      </td>
+      <td>
+        <form method="post" action="/songs/{{ e.song.id }}/delete" class="delete-song">
+          <input type="hidden" name="confirm" value="DELETE">
+          <button type="submit">Delete</button>
+        </form>
       </td>
     </tr>
   {% endfor %}

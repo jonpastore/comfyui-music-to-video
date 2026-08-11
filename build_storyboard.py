@@ -132,7 +132,6 @@ def build_scenes(sections, profile, dur, target):
                     f"Scene: {story} Camera: {cam}. Motion context: {motion}. "
                     f"Lighting: {pal}. {profile['render_tail']}"),
                 "video_motion_prompt": f"{motion}; {cam}",
-                "negative_prompt": profile["negative_prompt"],
             })
     return scenes
 
@@ -145,7 +144,6 @@ def to_md(sb):
          "## Character / world lock", "",
          f"**Character:** `{sb['character_reference']}`", "",
          f"**Album world:** `{sb['album_world_reference']}`", "",
-         "## Global negative prompt", "", "```text", sb["global_negative_prompt"], "```", "",
          "_Content guardrail is applied in code by `build_refs.py` / "
          "`build_song.py` when the prompt is built (see `guardrail.py`). It is "
          "deliberately absent from this file, which may be third-party generated._", "",
@@ -217,7 +215,6 @@ def main():
         "character_reference": profile["character_base"].replace(
             "{outfit}", profile["outfit"]),
         "album_world_reference": profile["world"],
-        "global_negative_prompt": profile["negative_prompt"],
         "scenes": scenes,
     }
     base = os.path.join(args.outdir, slug)
