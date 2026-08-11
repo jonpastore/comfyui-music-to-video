@@ -18,7 +18,8 @@ import argparse, json, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import guardrail  # noqa: E402  (applied here, NOT stored in the storyboard)
-from build_song import allocate, audio_duration, apply_outfit, shot_directive, sname, normalize, CHUNK  # noqa: E402  (shared allocation)
+from build_song import (allocate, audio_duration, apply_outfit, shot_directive, sname,
+                        normalize, clip_plan, CHUNK)  # noqa: E402  (shared allocation)
 
 # Lightning LoRA settings: 4 steps at cfg 1.0. NOTE: at cfg 1.0 ComfyUI skips
 # the negative pass entirely, so scene negative_prompt has no effect -- the
@@ -34,7 +35,7 @@ SINGLE = (" Exactly one Meow P in the frame: a single black feline woman protago
           "no twin, no duplicate, no second copy of her.")
 
 
-def tighten_for_detail(image_prompt, scene, version):
+def tighten_for_detail(image_prompt, scene, version, world=""):
     """Detail/macro framing loses to a prompt that enumerates her boots.
 
     The head-to-toe character lock is what keeps her consistent in shots where
@@ -42,10 +43,11 @@ def tighten_for_detail(image_prompt, scene, version):
     absent. So for close framings the lock is replaced by a short identity hint
     and the scene's own action becomes the subject.
     """
-    world = ("Street Cats visual world: neon-noir industrial warehouse district, wet concrete, "
-             "black steel, chain-link fencing, exposed pipes, red utility lights, magenta and "
-             "deep-purple club spill, atmospheric haze, small gold accents, "
-             "photorealistic cinematic 3D frame, high detail, 16:9")
+    # world comes from the storyboard being rendered. It used to be one album's
+    # description hardcoded here, so every OTHER album's detail shots inherited
+    # Street Cats' warehouse -- data baked into a generic script, the same fault
+    # as storing the guardrail in the storyboard.
+    world = world or "photorealistic cinematic 3D frame, high detail, 16:9"
     action = scene.get("story_action") or scene.get("story") or ""
     hint = ("If any part of her is visible it is a black-furred feline woman with "
             "yellow-green eyes and gold jewelry" +
@@ -57,7 +59,8 @@ def tighten_for_detail(image_prompt, scene, version):
 DETAIL_SHOTS = ("EXTREME CLOSE-UP", "CLOSE-UP SHOT")
 
 
-def workflow(scene, anchor, base, latent_mode, w, h, seed, version="clean", shot="", guard=""):
+def workflow(scene, anchor, base, latent_mode, w, h, seed, version="clean", shot="",
+             guard="", world=""):
     """guard: tier wording. The pinned clause is appended regardless, HERE --
     this is the chokepoint every storyboard reaches on its way to the image
     model, whoever generated it. Storing the clause in the storyboard JSON only
@@ -66,7 +69,7 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, version="clean", shot
     file -- and editing prompts is the documented workflow."""
     # shot directive goes FIRST -- framing is ignored when buried mid-prompt
     if shot.startswith(DETAIL_SHOTS):
-        pos = shot + " " + tighten_for_detail(scene["image_prompt"], scene, version)
+        pos = shot + " " + tighten_for_detail(scene["image_prompt"], scene, version, world)
     else:
         pos = (shot + " " if shot else "") + apply_outfit(scene["image_prompt"], version) + SINGLE
     pos = guardrail.build_prompt(pos, guard, f"scene {scene.get('scene_number','?')}")
@@ -140,27 +143,25 @@ def main():
 
     sb = normalize(json.load(open(args.storyboard)))
     scenes = sb["scenes"]
+    world = sb.get("album_world_reference") or sb.get("world_reference", "")
     os.makedirs(args.outdir, exist_ok=True)
 
     if args.audio:
-        import math
         dur = audio_duration(args.audio)
-        nclips = math.ceil(dur / CHUNK)
-        counts = allocate(scenes, nclips)
-        i = 0
-        for scene, n in zip(scenes, counts):
-            for k in range(n):
-                # distinct seed per clip -> a different composition of the same
-                # scene, with the anchor still pinning the character
-                wf = workflow(scene, args.anchor, args.base, args.latent,
-                              args.width, args.height, 7000 + i, args.version,
-                              shot_directive(scene, i), args.guardrail)
-                wf["18"] = {"class_type": "SaveImage", "inputs": {
-                    "images": ["17", 0],
-                    "filename_prefix": f"refs_{args.slug}_{args.version}/clip_{i:03d}"}}
-                with open(f"{args.outdir}/clip_{i:03d}.json", "w") as f:
-                    json.dump(wf, f)
-                i += 1
+        plan_clips = clip_plan(scenes, args.audio)
+        i = len(plan_clips)
+        counts = [sum(1 for _, s, _ in plan_clips if s is sc) for sc in scenes]
+        for ci, scene, shot in plan_clips:
+            # distinct seed per clip -> a different composition of the same
+            # scene, with the anchor still pinning the character
+            wf = workflow(scene, args.anchor, args.base, args.latent,
+                          args.width, args.height, 7000 + ci, args.version,
+                          shot, args.guardrail, world)
+            wf["18"] = {"class_type": "SaveImage", "inputs": {
+                "images": ["17", 0],
+                "filename_prefix": f"refs_{args.slug}_{args.version}/clip_{ci:03d}"}}
+            with open(f"{args.outdir}/clip_{ci:03d}.json", "w") as f:
+                json.dump(wf, f)
         print(f"{args.slug} [{args.version}] {dur:.1f}s -> {i} reference images "
               f"across {len(scenes)} scenes ({args.width}x{args.height}), "
               f"~{i*15/60:.0f} min to render")
@@ -176,7 +177,7 @@ def main():
             continue
         wf = workflow(scene, args.anchor, args.base, args.latent,
                       args.width, args.height, 7000 + num, args.version,
-                      shot_directive(scene, num), args.guardrail)
+                      shot_directive(scene, num), args.guardrail, world)
         wf["18"] = {"class_type": "SaveImage", "inputs": {
             "images": ["17", 0],
             "filename_prefix": f"refs_{args.slug}_{args.version}/scene_{num:02d}"}}

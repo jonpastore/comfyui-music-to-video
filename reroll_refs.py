@@ -14,7 +14,7 @@ usage:
 """
 import argparse, json, math, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_song import allocate, audio_duration, shot_directive, CHUNK
+from build_song import clip_plan, CHUNK
 from build_refs import workflow
 
 SEED_OFFSETS = [8000, 9000, 10000, 11000]  # 4 alternates, distinct from base 7000+i
@@ -34,17 +34,9 @@ def main():
 
     sb = json.load(open(args.storyboard))
     scenes = sb["scenes"]
-    dur = audio_duration(args.audio)
-    nclips = math.ceil(dur / CHUNK)
-    counts = allocate(scenes, nclips)
-
-    # rebuild clip -> (scene, shot) exactly as build_refs --audio did
-    clip_scene = {}
-    i = 0
-    for scene, n in zip(scenes, counts):
-        for _ in range(n):
-            clip_scene[i] = (scene, shot_directive(scene, i))
-            i += 1
+    # same mapping build_refs used -- shared, not re-derived, so a re-roll of
+    # clip N can never target a different scene than the one you rejected
+    clip_scene = {ci: (scene, shot) for ci, scene, shot in clip_plan(scenes, args.audio)}
 
     want = [int(x) for x in args.clips.split(",")]
     os.makedirs(args.outdir, exist_ok=True)

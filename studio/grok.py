@@ -26,9 +26,6 @@ from build_song import SHOT_RULES, CHUNK  # noqa: E402
 import tiers  # noqa: E402  (ContentRefused must be catchable by type)
 
 BASE_URL = "https://api.x.ai/v1"
-# A 25-50 scene storyboard is a very large single completion; the default
-# 120s read timeout expires mid-generation and wastes the whole call.
-CHAT_TIMEOUT = float(os.environ.get("XAI_TIMEOUT", 900))
 # Per-CHUNK timeout for the streamed response, not a whole-generation budget.
 # Streaming means the socket is never idle for long, so this can be tight: it
 # now detects a genuinely stalled connection instead of capping how long a big
@@ -67,38 +64,6 @@ REQUIRED_SCENE_KEYS = ("scene_number", "name", "cue", "duration_guidance", "stor
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
 
-# compact fallback exemplar, used only if TEMPLATE_JSON/TEMPLATE_MD are missing
-# (e.g. right after a deploy that copied scripts but not song directories)
-_INLINE_EXEMPLAR = {
-    "project": "Meow P — ComfyUI Music Video Storyboard",
-    "album": "Example Album", "track_number": 1, "title": "Example Song", "version": "clean",
-    "storyboard_strategy": {"scene_count": 2, "coverage_model": "coverage-based, not fixed scene count",
-                             "note": "compact inline fallback exemplar"},
-    "concept": "Placeholder concept used only when the real template files are unavailable.",
-    "audio_lyrics": "[Verse]\nexample line\n",
-    "character_reference": "adult anthropomorphic character, consistent face and proportions",
-    "album_world_reference": "neutral placeholder visual world, 16:9",
-    "global_guardrail": "adults only, fully clothed, non-graphic, no nudity, no sexual activity",
-    "global_negative_prompt": "blurry, watermark, extra limbs",
-    "scenes": [
-        {"scene_number": 1, "name": "Example Establishing Shot", "cue": "Verse",
-         "duration_guidance": "5-8 sec", "story": "placeholder establishing action",
-         "camera": "wide establishing", "motion": "slow drift", "lighting": "neutral",
-         "image_prompt": "Placeholder self-contained example image prompt.",
-         "video_motion_prompt": "placeholder motion", "negative_prompt": "blurry, watermark"},
-        {"scene_number": 2, "name": "Example Close Detail", "cue": "Verse",
-         "duration_guidance": "4-6 sec", "story": "placeholder close detail action",
-         "camera": "close-up", "motion": "static hold", "lighting": "neutral",
-         "image_prompt": "Placeholder self-contained example detail image prompt.",
-         "video_motion_prompt": "placeholder motion", "negative_prompt": "blurry, watermark"},
-    ],
-}
-_INLINE_EXEMPLAR_MD = (
-    "# Example Album — Track 1: Example Song\n## CLEAN CUT\n\n"
-    "**Scenes: 2** — compact inline fallback exemplar\n\n"
-    "## Scenes\n\n### Scene 1 — Example Establishing Shot (Verse, mid)\n\n"
-    "```text\nPlaceholder self-contained example image prompt.\n```\n"
-)
 
 
 def _api_key():
@@ -247,8 +212,15 @@ def _exemplar():
             tpl = json.load(f)
         with open(TEMPLATE_MD) as f:
             md = f.read()
-    except (FileNotFoundError, json.JSONDecodeError):
-        return _INLINE_EXEMPLAR, _INLINE_EXEMPLAR_MD, False
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        # Fail loudly. A silent fall back to a placeholder exemplar produced
+        # storyboards of quietly worse quality with nothing in the log to explain
+        # it -- and deploy.sh ships the template, so absence means the deploy is
+        # broken and should say so.
+        raise RuntimeError(
+            f"storyboard exemplar not readable at {TEMPLATE_JSON} ({e.__class__.__name__}). "
+            "deploy.sh copies it; set STUDIO_TEMPLATE_JSON/STUDIO_TEMPLATE_MD to override."
+        ) from None
 
     trimmed = dict(tpl)
     for key in ("audio_lyrics", "suno_style_reference"):
@@ -730,23 +702,17 @@ def demo():
         one_match_scenes = [dict(good[0], name=real_names[0]), dict(good[1])]
         validate(_compose(SONG, "pg13", GUARD, "note", LYRICS, one_match_scenes, 2, 8.0), real_exemplar)
 
-        # 4e. missing template files -> clean fallback to the inline exemplar,
-        # with progress() told about it
+        # 4e. missing template files fail loudly rather than silently degrading
         orig_tj, orig_tm = TEMPLATE_JSON, TEMPLATE_MD
         TEMPLATE_JSON = "/nonexistent/nope.json"
         TEMPLATE_MD = "/nonexistent/nope.md"
         try:
-            fallback_exemplar, fallback_md, found2 = _exemplar()
-            assert not found2
-            assert fallback_exemplar == _INLINE_EXEMPLAR
-            assert fallback_md == _INLINE_EXEMPLAR_MD
-
-            fallback_notes = []
-            httpx.stream = queued([json.dumps({"scenes": good})])
-            sb_fb = generate_storyboard(LYRICS, "pg13", GUARD, "neon world lock", SONG,
-                                         model="grok-test", progress=fallback_notes.append)
-            validate(sb_fb)
-            assert any("inline exemplar" in m for m in fallback_notes), fallback_notes
+            try:
+                _exemplar()
+                raise AssertionError("a missing exemplar was silently tolerated")
+            except RuntimeError as e:
+                assert "exemplar not readable" in str(e), e
+                assert "STUDIO_TEMPLATE_JSON" in str(e), "no remedy in the message"
         finally:
             TEMPLATE_JSON, TEMPLATE_MD = orig_tj, orig_tm
 

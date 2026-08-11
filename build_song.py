@@ -164,6 +164,27 @@ def allocate(scenes, nclips):
     return counts
 
 
+def clip_plan(scenes, audio_path):
+    """[(clip_index, scene, shot_directive)] for every clip in the song.
+
+    THE definition of which clip belongs to which scene. build_refs.py,
+    build_song.py and reroll_refs.py all need the identical mapping, and it used
+    to be copied into all three -- reroll_refs even carried the comment "rebuild
+    clip -> (scene, shot) exactly as build_refs --audio did". If the copies ever
+    drifted, re-rolling clip 17 would silently regenerate a different scene than
+    the one you rejected, which is the kind of bug nobody traces back to an
+    allocation loop.
+    """
+    nclips = math.ceil(audio_duration(audio_path) / CHUNK)
+    counts = allocate(scenes, nclips)
+    plan, i = [], 0
+    for scene, n in zip(scenes, counts):
+        for _ in range(n):
+            plan.append((i, scene, shot_directive(scene, i)))
+            i += 1
+    return plan
+
+
 def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard):
     """Same rule as build_refs.workflow: the pinned clause is attached HERE, at
     the point the prompt is built, not read out of the storyboard JSON."""
@@ -208,8 +229,8 @@ def main():
     sb = normalize(json.load(open(args.storyboard)))
     scenes = sb["scenes"]
     dur = audio_duration(args.audio)
-    nclips = math.ceil(dur / CHUNK)
-    counts = allocate(scenes, nclips)
+    plan_clips = clip_plan(scenes, args.audio)
+    nclips = len(plan_clips)
 
     audio_name = args.audio_name or os.path.basename(args.audio)
     char = apply_outfit(sb.get("character_reference", ""), args.version)
@@ -218,22 +239,22 @@ def main():
     guard = sb.get("global_guardrail", "")
 
     os.makedirs(args.outdir, exist_ok=True)
-    i = 0
-    plan = []
-    for scene, n in zip(scenes, counts):
-        for _ in range(n):
-            # one reference per clip (build_refs.py --audio), so consecutive
-            # clips in a scene are different compositions rather than the same still
-            ref = f"{args.slug}_{args.version}_clip_{i:03d}.png"
-            wf = workflow(i, scene, ref, audio_name, char, world, guard)
-            wf["18"] = {"class_type": "SaveVideo", "inputs": {
-                "video": ["17", 0],
-                "filename_prefix": f"{args.slug}_{args.version}/clip_{i:03d}",
-                "format": "auto", "codec": "auto"}}
-            with open(f"{args.outdir}/clip_{i:03d}.json", "w") as f:
-                json.dump(wf, f)
-            i += 1
-        plan.append((scene["scene_number"], sname(scene), n, ref))
+    per_scene = {}
+    for i, scene, _shot in plan_clips:
+        # one reference per clip (build_refs.py --audio), so consecutive clips in
+        # a scene are different compositions rather than the same still
+        ref = f"{args.slug}_{args.version}_clip_{i:03d}.png"
+        wf = workflow(i, scene, ref, audio_name, char, world, guard)
+        wf["18"] = {"class_type": "SaveVideo", "inputs": {
+            "video": ["17", 0],
+            "filename_prefix": f"{args.slug}_{args.version}/clip_{i:03d}",
+            "format": "auto", "codec": "auto"}}
+        with open(f"{args.outdir}/clip_{i:03d}.json", "w") as f:
+            json.dump(wf, f)
+        n_so_far, _ = per_scene.get(scene["scene_number"], (0, ref))
+        per_scene[scene["scene_number"]] = (n_so_far + 1, ref)
+    plan = [(num, sname(next(s for _, s, _ in plan_clips if s["scene_number"] == num)), n, ref)
+            for num, (n, ref) in per_scene.items()]
 
     print(f"{args.slug} [{args.version}] {dur:.1f}s -> {nclips} clips of {CHUNK:.4f}s")
     for num, name, n, ref in plan:
