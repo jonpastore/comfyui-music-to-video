@@ -175,14 +175,23 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
         "5": {"class_type": "CLIPLoader", "inputs": {
             "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors", "type": "qwen_image", "device": "default"}},
         "6": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_vae.safetensors"}},
-        "7": {"class_type": "LoadImage", "inputs": {"image": anchor}},
-        "8": {"class_type": "FluxKontextImageScale", "inputs": {"image": ["7", 0]}},
     }
+    if anchor:
+        wf["7"] = {"class_type": "LoadImage", "inputs": {"image": anchor}}
+        wf["8"] = {"class_type": "FluxKontextImageScale", "inputs": {"image": ["7", 0]}}
 
     # Conditioning: anchor is image1 (identity). A base plate, when supplied, is
     # image2 and sets composition/aspect. Cast members fill whatever slots are
     # left, up to MAX_REF_IMAGES.
-    enc = {"clip": ["5", 0], "vae": ["6", 0], "image1": ["8", 0]}
+    #
+    # anchor="" is a real mode, not a mistake: every image input on
+    # TextEncodeQwenImageEditPlus is optional, so with none attached the model
+    # is a plain text-to-image one. That is how album art gets generated from a
+    # prompt alone. A REFERENCE frame always has an anchor -- keeping the
+    # character is its entire purpose -- but artwork need not.
+    enc = {"clip": ["5", 0], "vae": ["6", 0]}
+    if anchor:
+        enc["image1"] = ["8", 0]
     if base:
         wf["9"] = {"class_type": "LoadImage", "inputs": {"image": base}}
         wf["10"] = {"class_type": "FluxKontextImageScale", "inputs": {"image": ["9", 0]}}
@@ -202,8 +211,10 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
     wf["14"] = {"class_type": "FluxKontextMultiReferenceLatentMethod", "inputs": {
         "conditioning": ["12", 0], "reference_latents_method": "index_timestep_zero"}}
 
-    if latent_mode == "empty":
-        # free-size generation: gives a true 16:9 frame
+    if latent_mode == "empty" or not (base or anchor):
+        # free-size generation: gives a true 16:9 frame. Also the only option
+        # when there is no source image at all -- there would be nothing to
+        # VAEEncode.
         wf["15"] = {"class_type": "EmptySD3LatentImage", "inputs": {"width": w, "height": h, "batch_size": 1}}
     else:
         # edit-in-place: output inherits the base/anchor aspect

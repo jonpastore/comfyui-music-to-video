@@ -4,8 +4,13 @@
 
 <section class="card">
   <h2>New playlist</h2>
-  <form method="post" action="/playlists">
-    <label>Name <input type="text" name="name" required></label>
+  <form method="post" action="/playlists" enctype="multipart/form-data" class="stack-form">
+    <div class="field-row">
+      <label>Name <input type="text" name="name" required></label>
+      <label>Cover image (optional)
+        <input type="file" name="image" accept="image/*">
+      </label>
+    </div>
     <button type="submit">Create</button>
   </form>
 </section>
@@ -188,19 +193,10 @@
       </form>
       <span class="htmx-indicator muted" id="fill-busy-{{ d.playlist.id }}">
         reading the cover&hellip;</span>
-      <form method="post" action="/playlists/{{ d.playlist.id }}/artwork" class="inline-form">
-        <label class="inline-label">Model
-          <select name="model">
-            {% for m in d.artwork_models %}
-            <option value="{{ m.key }}" {% if m.default %}selected{% endif %}
-                    {% if m.available is false %}disabled{% endif %}>{{ m.label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <button type="submit" title="Generate new album art from the boxes below">
-          Create album art
-        </button>
-      </form>
+      <button type="button" class="secondary"
+              onclick="document.getElementById('art-{{ d.playlist.id }}').showModal()">
+        Create album art&hellip;
+      </button>
     </span>
   </div>
   <p class="muted">Every description the pipeline uses for this album. These used to be
@@ -361,6 +357,47 @@
   <p class="empty">None yet.</p>
   {% endif %}
   <p><a href="/anchors?scope_kind=album&amp;scope_value={{ d.playlist.name | urlencode }}">Manage anchors for this album &rarr;</a></p>
+
+  <dialog class="confirm-modal" id="art-{{ d.playlist.id }}">
+    <div class="modal-bar">
+      <strong>Create album art for &ldquo;{{ d.playlist.name }}&rdquo;</strong>
+      <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+    </div>
+    <form method="post" action="/playlists/{{ d.playlist.id }}/artwork" class="stack-form">
+      <p class="hint">Rendered from the album look above. References are optional and
+        combine: with neither, this is plain text-to-image.</p>
+      <label class="check">
+        <input type="checkbox" name="use_anchor" value="true" {% if d.has_anchor %}checked{% endif %}
+               {% if not d.has_anchor %}disabled{% endif %}>
+        Use the album anchor, so the cover shows the actual protagonist
+        {% if not d.has_anchor %}<span class="muted">&mdash; no chosen anchor yet</span>{% endif %}
+      </label>
+      <label class="check">
+        <input type="checkbox" name="from_cover" value="true"
+               {% if not d.playlist.image_path %}disabled{% endif %}>
+        Modify the current cover rather than starting over
+        {% if not d.playlist.image_path %}<span class="muted">&mdash; no cover yet</span>{% endif %}
+      </label>
+      <label>Extra direction (optional)
+        <textarea name="instruction" rows="3"
+          placeholder="e.g. shot from below, rain-slick street, cold blue key light"></textarea>
+      </label>
+      <label class="inline-label">Model
+        <select name="model">
+          {% for m in d.artwork_models %}
+          <option value="{{ m.key }}" {% if m.default %}selected{% endif %}
+                  {% if m.available is false %}disabled{% endif %}>{{ m.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="button-row">
+        <button type="submit">Render the cover</button>
+        <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+      </div>
+      <p class="hint">The result replaces the cover shown on this card. The old file stays
+        on disk.</p>
+    </form>
+  </dialog>
 
   <h3>Album cover</h3>
   <p class="muted">Shown on this card, and what <strong>Fill from cover</strong> and

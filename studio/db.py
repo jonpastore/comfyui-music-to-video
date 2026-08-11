@@ -101,6 +101,22 @@ CREATE TABLE IF NOT EXISTS characters (
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY, value TEXT);
 
+-- Where finished work may be published. One row per DESTINATION, not per
+-- service: each subreddit and each Mastodon instance has its own rules and its
+-- own adult policy, and that is exactly the distinction that must not be lost.
+-- adult_ok is the per-target switch (an NSFW subreddit vs an ordinary one);
+-- publish.SERVICES holds the policy of the service itself, which a target can
+-- never exceed.
+CREATE TABLE IF NOT EXISTS publish_targets (
+  id INTEGER PRIMARY KEY,
+  service TEXT NOT NULL,
+  name TEXT NOT NULL,
+  adult_ok INTEGER DEFAULT 0,
+  note TEXT,
+  enabled INTEGER DEFAULT 1,
+  created REAL,
+  UNIQUE(service, name));
+
 CREATE INDEX IF NOT EXISTS idx_anchors ON anchors(scope_kind, scope_value, tier, view);
 CREATE INDEX IF NOT EXISTS idx_characters ON characters(scope_value, name);
 CREATE INDEX IF NOT EXISTS idx_refs_song ON refs(song_id, tier, clip_idx);

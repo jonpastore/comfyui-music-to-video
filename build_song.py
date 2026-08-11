@@ -204,6 +204,107 @@ REFINE_DENOISE = 0.25
 REFINE_STEPS = 6
 
 
+# ---- LTX-2.3 -------------------------------------------------------------
+# A second video family, measured on this box rather than assumed: 81 frames at
+# 832x480 in 45s against WAN s2v's ~90s, peak 18.9 GB of 24.4 GB.
+LTX_MODEL = "ltx-2.3-22b-distilled_transformer_only_fp8_scaled.safetensors"
+LTX_TEXT_ENCODER = "gemma_3_12B_it_fp4_mixed.safetensors"
+# LTXAVTextEncoderLoader reads ckpt_name from models/checkpoints/, NOT from
+# text_encoders/ -- the text projection has to live there or the node refuses.
+LTX_TEXT_PROJECTION = "ltx-2.3_text_projection_bf16.safetensors"
+LTX_VIDEO_VAE = "LTX23_video_vae_bf16.safetensors"
+LTX_AUDIO_VAE = "LTX23_audio_vae_bf16.safetensors"
+
+# LTX latent length must be 8n+1 (the node declares min 9, step 8), so the
+# pipeline's 77 frames is NOT a legal value. 81 is, and at 16.8312 fps it is
+# exactly CHUNK -- which is what keeps the clip allocation identical across
+# models. Changing CHUNK per model would change the clip count, and every
+# already-approved reference frame is keyed to a clip index.
+LTX_LEN = 81
+LTX_FPS = LTX_LEN / CHUNK          # 16.8312...
+LTX_STEPS = 8
+LTX_MAX_SHIFT, LTX_BASE_SHIFT = 2.05, 0.95
+
+
+def ltx_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard, with_audio=True):
+    """LTX-2.3, the audio-conditioned path.
+
+    Audio is fused as a JOINT AV LATENT (LTXVConcatAVLatent) rather than
+    cross-attended like WAN s2v's wav2vec2 conditioning -- a different mechanism
+    for the same purpose, which is why it had to be measured rather than
+    assumed. The sampled latent is split again and only the VIDEO half is
+    decoded: this pipeline lays the master mp3 over the assembled timeline once,
+    so per-clip audio cannot drift. The audio still CONDITIONS the motion, which
+    is the whole reason for using this path over plain i2v.
+    """
+    motion = scene.get("video_motion_prompt") or scene.get("motion", "")
+    pos = (f"{shot_directive(scene, i)} {char_lock} {world_lock} Motion: {motion} "
+           f"Camera: {scene.get('camera','')} Lighting: {scene.get('lighting','')}")
+    pos = guardrail.build_prompt(pos, guard, f"scene {i}")
+    start = round(i * CHUNK, 4)
+
+    wf = {
+        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": LTX_MODEL,
+                                                      "weight_dtype": "default"}},
+        "2": {"class_type": "ModelSamplingLTXV", "inputs": {
+            "model": ["1", 0], "max_shift": LTX_MAX_SHIFT, "base_shift": LTX_BASE_SHIFT}},
+        "3": {"class_type": "LTXAVTextEncoderLoader", "inputs": {
+            "text_encoder": LTX_TEXT_ENCODER, "ckpt_name": LTX_TEXT_PROJECTION,
+            "device": "default"}},
+        "4": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["3", 0], "text": pos}},
+        "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["3", 0], "text": ""}},
+        "6": {"class_type": "VAELoader", "inputs": {"vae_name": LTX_VIDEO_VAE}},
+        "7": {"class_type": "LoadImage", "inputs": {"image": ref_image}},
+        "8": {"class_type": "ImageScale", "inputs": {
+            "image": ["7", 0], "upscale_method": "lanczos", "width": W, "height": H,
+            "crop": "center"}},
+        # the approved reference frame is the first frame, exactly as ref_image
+        # is for s2v -- it is what carries the character into the clip
+        "9": {"class_type": "LTXVImgToVideo", "inputs": {
+            "positive": ["4", 0], "negative": ["5", 0], "vae": ["6", 0],
+            "image": ["8", 0], "width": W, "height": H, "length": LTX_LEN,
+            "batch_size": 1, "strength": 1.0}},
+        "10": {"class_type": "LTXVConditioning", "inputs": {
+            "positive": ["9", 0], "negative": ["9", 1], "frame_rate": round(LTX_FPS, 4)}},
+        "11": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
+        "12": {"class_type": "LTXVScheduler", "inputs": {
+            "steps": LTX_STEPS, "max_shift": LTX_MAX_SHIFT, "base_shift": LTX_BASE_SHIFT,
+            "stretch": True, "terminal": 0.1, "latent": ["9", 2]}},
+    }
+
+    latent = ["9", 2]
+    if with_audio:
+        wf["13"] = {"class_type": "LTXVAudioVAELoader", "inputs": {"ckpt_name": LTX_AUDIO_VAE}}
+        wf["14"] = {"class_type": "LoadAudio", "inputs": {"audio": audio_file}}
+        wf["15"] = {"class_type": "TrimAudioDuration", "inputs": {
+            "audio": ["14", 0], "start_index": start, "duration": round(CHUNK, 4)}}
+        wf["16"] = {"class_type": "LTXVAudioVAEEncode", "inputs": {
+            "audio": ["15", 0], "audio_vae": ["13", 0]}}
+        wf["17"] = {"class_type": "LTXVConcatAVLatent", "inputs": {
+            "video_latent": ["9", 2], "audio_latent": ["16", 0]}}
+        latent = ["17", 0]
+
+    wf["18"] = {"class_type": "SamplerCustom", "inputs": {
+        "model": ["2", 0], "add_noise": True, "noise_seed": 1000 + i, "cfg": 1.0,
+        "positive": ["10", 0], "negative": ["10", 1], "sampler": ["11", 0],
+        "sigmas": ["12", 0], "latent_image": latent}}
+
+    if with_audio:
+        # split the joint latent and keep the VIDEO half. The audio half is
+        # discarded on purpose -- the master mp3 is laid over the assembled
+        # timeline once, which is what stops per-clip audio drifting.
+        wf["19"] = {"class_type": "LTXVSeparateAVLatent", "inputs": {"av_latent": ["18", 0]}}
+        sampled = ["19", 0]
+    else:
+        sampled = ["18", 0]
+
+    wf["20"] = {"class_type": "VAEDecode", "inputs": {"samples": sampled, "vae": ["6", 0]}}
+    # silent, and at the fps that makes LTX_LEN frames last exactly CHUNK
+    wf["21"] = {"class_type": "CreateVideo", "inputs": {
+        "images": ["20", 0], "fps": round(LTX_FPS, 4)}}
+    return wf
+
+
 def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
              video_model="s2v", ref_motion=None, control_video=None, refine=False):
     """Same rule as build_refs.workflow: the pinned clause is attached HERE, at
@@ -226,6 +327,12 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
     pos = guardrail.build_prompt(pos, guard, f"scene {i}")
     neg = scene.get("negative_prompt", "")
     start = round(i * CHUNK, 4)
+
+    if video_model == "ltx":
+        # a separate builder: LTX shares none of WAN's node graph, and folding
+        # two unrelated graphs into one function with branches everywhere is how
+        # both of them end up subtly wrong
+        return ltx_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard)
 
     wf = {
         "4":  {"class_type": "CLIPLoader", "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan", "device": "default"}},
@@ -316,7 +423,7 @@ def main():
     ap.add_argument("--audio", required=True, help="path to the mp3 (for duration)")
     ap.add_argument("--audio-name", help="filename as it appears in ComfyUI/input (defaults to basename of --audio)")
     ap.add_argument("--slug", required=True, help="short song id, e.g. rear_entrance")
-    ap.add_argument("--video-model", choices=["s2v", "i2v"], default="s2v",
+    ap.add_argument("--video-model", choices=["s2v", "i2v", "ltx"], default="s2v",
                     help="s2v (default) is driven by the audio -- beat sync and mouth "
                           "movement. i2v is prompt-driven only and has NO audio input.")
     ap.add_argument("--ref-motion", help="s2v only: a motion-style reference clip (path)")
@@ -347,8 +454,11 @@ def main():
         wf = workflow(i, scene, ref, audio_name, char, world, guard,
                       video_model=args.video_model, ref_motion=args.ref_motion,
                       control_video=args.control_video, refine=args.refine)
-        wf["18"] = {"class_type": "SaveVideo", "inputs": {
-            "video": ["17", 0],
+        # the CreateVideo node differs per family (WAN 17, LTX 21), so the save
+        # is attached to whichever one this graph actually built
+        video_node = "21" if args.video_model == "ltx" else "17"
+        wf["99"] = {"class_type": "SaveVideo", "inputs": {
+            "video": [video_node, 0],
             "filename_prefix": f"{args.slug}/clip_{i:03d}",
             "format": "auto", "codec": "auto"}}
         with open(f"{args.outdir}/clip_{i:03d}.json", "w") as f:

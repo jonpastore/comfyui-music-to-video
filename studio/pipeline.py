@@ -362,28 +362,32 @@ def fix_ref(slug, tier, clip_idx, mode, image_path, seed, progress=None,
             for p, m in _clip_records(paths, r"clip_(\d+)_s(\d+)")]
 
 
-def gen_artwork(slug, prompt, anchor_path, progress=None, guard="", n=1, size=1024):
-    """Album cover from the album look, on the reference model.
+def gen_artwork(slug, prompt, progress=None, anchor_path=None, source_path=None,
+                guard="", n=1, size=1024):
+    """Album cover from the album look. Three modes, one workflow:
 
-    make_anchor.py is reused rather than a fourth script written: an album cover
-    and a character sheet are the same request -- this prompt, these reference
-    images, this size -- and it already takes --prompt and --guardrail.
+      neither given   text-to-image. Every image input on
+                      TextEncodeQwenImageEditPlus is optional, so with none
+                      attached the reference model is a plain t2i model.
+      anchor_path     the cover shows this album's actual protagonist rather
+                      than a lookalike built from the same words.
+      source_path     an existing cover as the second reference, so the prompt
+                      MODIFIES it instead of starting over.
 
-    anchor_path is REQUIRED. The cover is supposed to show this album's
-    protagonist, and the workflow's node 7 is a LoadImage either way, so there
-    is no text-only path here to fall back to -- an empty filename would be
-    rejected at submit rather than producing a picture.
+    make_anchor.py is reused rather than a fourth script written: a cover and a
+    character sheet are the same request -- this prompt, these references, this
+    size -- and it already takes --prompt and --guardrail.
     """
-    if not anchor_path:
-        raise ValueError("album artwork needs a chosen anchor to render the character from")
     prefix = f"artwork_{slug}"
-    name = install_input(anchor_path)
-    with tempfile.TemporaryDirectory() as wf_dir:
-        _run_script("make_anchor.py", [
-            "--n", str(n), "--prefix", prefix, "--view", "front",
+    args = ["--n", str(n), "--prefix", prefix, "--view", "front",
             "--width", str(size), "--height", str(size),
-            "--face", name, "--outfit", name,
-            "--prompt", prompt, "--guardrail", guard, "--outdir", wf_dir], progress)
+            "--prompt", prompt, "--guardrail", guard]
+    if anchor_path:
+        args += ["--face", install_input(anchor_path)]
+    if source_path:
+        args += ["--outfit", install_input(source_path)]
+    with tempfile.TemporaryDirectory() as wf_dir:
+        _run_script("make_anchor.py", [*args, "--outdir", wf_dir], progress)
         return _submit_and_collect(wf_dir, prefix, "*.png", progress)
 
 

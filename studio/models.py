@@ -38,12 +38,12 @@ ROLES = {
     "audio": "Generative audio repair",
 }
 
-# Roles where a model has to be WIRED to a renderer before it can be chosen.
-# A model in one of these is catalogued the moment it is worth documenting, but
-# only becomes selectable once it carries a "cli" value naming what the renderer
-# accepts -- see renderable(). Roles outside this set (storyboard, vision) are
-# resolved by their own module at call time and have nothing to wire.
-WIRED_ROLES = ("video", "artwork")
+# Roles whose models are rendered by one of this repo's own scripts, and so
+# carry a "cli" value naming what that script accepts. EVERY catalogued model in
+# such a role must have one: a model documented here but not actually wired is
+# unfinished work, not a feature, and the UI has no way to be honest about it.
+# storyboard and vision are resolved by their own modules at call time.
+RENDERED_ROLES = ("reference", "video", "refine", "artwork", "audio")
 
 # loader class -> the input whose enum lists installed files
 LOADER_FIELD = {
@@ -61,6 +61,8 @@ CATALOG = {
         "label": "Qwen-Image-Edit 2511 (fp8 mixed)",
         "file": "qwen_image_edit_2511_fp8mixed.safetensors",
         "loader": "UNETLoader",
+        "default": True,
+        "cli": "qwen",
         "purpose": (
             "Turns the anchor into this scene's still. An EDIT model, not a text-to-image "
             "model: it takes up to three reference images and keeps the person in them, "
@@ -85,9 +87,7 @@ CATALOG = {
         "label": "WAN 2.2 S2V 14B (sound to video)",
         "file": "wan2.2_s2v_14B_fp8_scaled.safetensors",
         "loader": "UNETLoader",
-        "default": True,
-        # the --video-model value build_song.py accepts. Absent = catalogued but
-        # not renderable yet, so the clip form must not offer it.
+        # the --video-model value build_song.py accepts
         "cli": "s2v",
         "purpose": (
             "Animates an approved reference frame using THE AUDIO. Takes the scene's motion "
@@ -131,35 +131,50 @@ CATALOG = {
     },
     "ltx23": {
         "role": "video",
-        "label": "LTX-2.3 22B distilled (evaluation candidate -- NOT INSTALLED)",
+        "label": "LTX-2.3 22B distilled (audio-conditioned, ~2x faster)",
         "file": "ltx-2.3-22b-distilled_transformer_only_fp8_scaled.safetensors",
         "loader": "UNETLoader",
+        "cli": "ltx",
+        "default": True,
         "purpose": (
-            "Candidate replacement for the WAN video pass: reported at roughly 3x the speed "
-            "for the same clip length, up to 1080p, and -- unlike i2v -- it has a NATIVE "
-            "audio path, so it is the only alternative that could replace s2v without "
-            "giving up beat sync and lip movement."),
+            "The other audio-driven video path. Like s2v it takes the approved reference "
+            "frame, the scene prompt AND the clip's audio -- but it fuses audio as a joint "
+            "AV latent rather than cross-attending it, and it renders about twice as fast."),
         "notes": [
-            "All 37 LTX node classes are ALREADY present on cerberus, including the audio "
-            "path (LTXVAudioVAELoader / LTXVAudioVAEEncode / LTXVConcatAVLatent / "
-            "LTXVReferenceAudio). Only the weights are missing -- same state ACE-Step is in.",
-            "Audio is fused as a joint AV latent rather than bolted on, which is a different "
-            "mechanism from s2v's wav2vec2 conditioning and has to be judged, not assumed.",
-            "~9.5GB at FP4-mixed, or fp8 with offloading on a 24GB card. Offloading would "
-            "eat the speed advantage, so the fp8-vs-fp4 choice is part of the test.",
-            "UNVERIFIED for this pipeline: whether it can produce the exact 77-frame / "
-            "4.8125s chunk the whole allocation is built on, and whether it holds character "
-            "identity from a reference frame as well as the anchor+s2v path does.",
-            "Needs ~30GB: transformer, gemma_3_12B text encoder, text projection, video VAE, "
-            "audio VAE, taeltx2_3.safetensors (required by every LTX workflow).",
+            "MEASURED on this box, not quoted: 81 frames at 832x480, 8 steps, in 45s, peak "
+            "18.9 GB of 24.4 GB. WAN s2v is ~90s for the same clip.",
+            "LTX latent length must be 8n+1 -- the pipeline's 77 frames is not a legal "
+            "value. It renders 81 frames at 16.8312 fps, which is exactly the same 4.8125s "
+            "chunk, so the clip allocation is identical whichever model renders it.",
+            "The audio half of the sampled latent is discarded: the master mp3 is laid over "
+            "the assembled timeline once, which is what stops per-clip audio drifting. The "
+            "audio still conditions the MOTION, which is the point.",
+            "Its text projection must live in models/checkpoints/, not text_encoders/ -- "
+            "LTXAVTextEncoderLoader reads ckpt_name from the checkpoints folder.",
+            "Peak VRAM is 95% of the card during text encoding. Nothing else may be "
+            "resident: run pipeline.free_vram() first, as the clip job already does.",
+            "A REAL clip -- the approved reference frame plus the track's own audio -- "
+            "renders in 50s against s2v's ~90s. That is the measurement the default is "
+            "based on.",
         ],
-        "companions": {},
+        "companions": {
+            "gemma_3_12B_it_fp4_mixed.safetensors": "CLIPLoader",
+            # BOTH of these load from models/checkpoints/, not from the folder
+            # their name suggests: LTXAVTextEncoderLoader and LTXVAudioVAELoader
+            # each read ckpt_name from the checkpoints list. Putting them in
+            # text_encoders/ and vae/ is what a reasonable person does first,
+            # and the node simply refuses to see them there.
+            "ltx-2.3_text_projection_bf16.safetensors": "CheckpointLoaderSimple",
+            "LTX23_audio_vae_bf16.safetensors": "CheckpointLoaderSimple",
+            "LTX23_video_vae_bf16.safetensors": "VAELoader"},
     },
     "wan22_i2v_low": {
         "role": "refine",
         "label": "WAN 2.2 I2V 14B low-noise (refiner pass)",
         "file": "Wan2.2/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
         "loader": "UNETLoader",
+        "default": True,
+        "cli": "i2v_low",
         "purpose": (
             "Optional second pass over a clip the s2v model already rendered: re-samples at "
             "low denoise to clean artifacts and sharpen detail, without touching the motion "
@@ -200,6 +215,8 @@ CATALOG = {
         "label": "ACE-Step v1 3.5B",
         "file": "ace_step_v1_3.5b.safetensors",
         "loader": "CheckpointLoaderSimple",
+        "default": True,
+        "cli": "ace_step",
         "purpose": (
             "Generative audio. The deterministic editor (ffmpeg) can only trim the ENDS of "
             "a track; cutting from the middle needs this."),
@@ -305,13 +322,11 @@ def get(key):
 
 
 def renderable(role):
-    """{catalogue key: the value the renderer accepts} for models in this role
-    that are actually WIRED.
+    """{catalogue key: the value the renderer accepts} for this role.
 
-    A model can be catalogued before it is wired -- that is how an evaluation
-    candidate is documented without pretending it works. Only entries with a
-    "cli" value may be offered as a render choice; anything else would be
-    submitted under some other model's name.
+    Every catalogued model in a RENDERED_ROLE has a "cli" value, so this is the
+    whole role -- it exists to map catalogue keys onto what the script expects,
+    not to filter out models that were never finished.
     """
     return {k: m["cli"] for k, m in CATALOG.items() if m["role"] == role and m.get("cli")}
 
@@ -333,17 +348,29 @@ def default_for(role):
     return None
 
 
+def chat_default():
+    """The remembered xAI chat model for storyboards, or "" for "highest available".
+
+    Not a CATALOGUE key: xAI model ids are discovered at runtime from
+    /v1/models, so there is nothing local to validate against and nothing local
+    to describe. The setting is stored here because this is where every other
+    remembered model choice lives.
+    """
+    row = db.one("SELECT value FROM settings WHERE key='model.storyboard'")
+    return (row["value"] if row else "") or ""
+
+
+def set_chat_default(key):
+    db.run("INSERT INTO settings (key, value) VALUES ('model.storyboard', ?) "
+           "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key or "").strip())
+    return key
+
+
 def set_default(role, key):
     if key not in CATALOG:
         raise ValueError(f"no such model: {key}")
     if CATALOG[key]["role"] != role:
         raise ValueError(f"{key} is a {CATALOG[key]['role']} model, not {role}")
-    # A catalogued-but-unwired model has no renderer value, so making it the
-    # default would set a preference the render form cannot honour -- it would
-    # quietly fall back to whichever option the browser selected first.
-    if role in WIRED_ROLES and not CATALOG[key].get("cli"):
-        raise ValueError(f"{key} is catalogued for evaluation but not wired to the "
-                          f"renderer yet, so it cannot be the default")
     db.run("INSERT INTO settings (key, value) VALUES (?,?) "
            "ON CONFLICT(key) DO UPDATE SET value=excluded.value", f"model.{role}", key)
     return key
@@ -423,22 +450,25 @@ def demo():
     # A catalogued-but-unwired one (ltx23) must NOT reach the clip form -- the
     # song page used to map "anything that is not s2v" to i2v, so adding a third
     # video model would silently have rendered it as i2v.
-    assert renderable("video") == {"wan22_s2v": "s2v", "wan22_i2v": "i2v"}
-    assert renderable("artwork") == {"qwen_artwork": "qwen"}
+    # EVERY catalogued model in a rendered role is wired. A model documented
+    # here but not actually renderable is unfinished work, and there is no
+    # honest way for the UI to offer it -- so the invariant is checked rather
+    # than worked around.
     for key, m in CATALOG.items():
-        if m.get("cli"):
-            assert m["role"] in WIRED_ROLES, f"{key} has a cli value but {m['role']} has no renderer"
-        elif m["role"] in WIRED_ROLES:
-            # catalogued for evaluation only -- must not be selectable as a
-            # render choice or made the default
-            assert key not in renderable(m["role"])
+        if m["role"] in RENDERED_ROLES:
+            assert m.get("cli"), (
+                f"{key} is catalogued for the {m['role']} role but carries no cli value, "
+                f"so nothing can render it. Wire it or remove it.")
+            assert key in renderable(m["role"]), key
+        else:
+            assert not m.get("cli"), f"{key} has a cli value but {m['role']} has no renderer"
 
     # defaults: the marked one, then a remembered override, then rejection of junk
-    assert default_for("video") == "wan22_s2v"
+    # LTX is the default: measured at ~50s for a real clip against s2v's ~90s
+    assert default_for("video") == "ltx23"
     set_default("video", "wan22_i2v")
     assert default_for("video") == "wan22_i2v"
-    for bad, why in (("nonexistent_model", "unknown key"), ("qwen_image_edit_2511", "wrong role"),
-                     ("ltx23", "catalogued but not wired to the renderer")):
+    for bad, why in (("nonexistent_model", "unknown key"), ("qwen_image_edit_2511", "wrong role")):
         try:
             set_default("video", bad)
             raise AssertionError(f"set_default accepted {why}")
@@ -446,7 +476,7 @@ def demo():
             pass
     # a stale setting pointing at something no longer catalogued falls back
     db.run("UPDATE settings SET value='deleted_model' WHERE key='model.video'")
-    assert default_for("video") == "wan22_s2v", "a stale setting wedged the role"
+    assert default_for("video") == "ltx23", "a stale setting wedged the role"
 
     print("models.py OK")
 

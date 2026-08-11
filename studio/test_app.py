@@ -988,9 +988,10 @@ def test_storyboard_direction_is_prefilled_from_the_tier_and_shows_its_limits():
         page = client.get(f"/songs/{sid}").text
 
         assert 'name="direction"' in page, "no direction textarea"
-        # prefilled from the tier's OWN wording, not from thin air
-        assert "Tone and wardrobe (pg13 tier)" in page
-        assert "Mainstream music-video tone" in page
+        # prefilled from the FIRST tier's own wording, not from thin air.
+        # all_tiers() orders builtin-first then by name, so G leads.
+        assert "Tone and wardrobe (g tier)" in page
+        assert "General-audience music-video tone" in page
         # ...and the limits are stated above it
         assert "What applies to this prompt" in page
         assert "No minors" in page, "the pinned clause is not shown"
@@ -1590,7 +1591,8 @@ def test_driving_clips_are_refused_for_i2v_which_has_no_such_input():
 def test_model_default_is_remembered_and_validated():
     import models as modelmod
     with TestClient(appmod.app) as client:
-        assert modelmod.default_for("video") == "wan22_s2v"
+        # LTX is the default: 50s for a real clip against s2v's ~90s, measured
+        assert modelmod.default_for("video") == "ltx23"
         r = client.post("/models/video/default", data={"key": "wan22_i2v"})
         assert r.status_code in (200, 303), r.text
         assert modelmod.default_for("video") == "wan22_i2v"
@@ -1598,7 +1600,7 @@ def test_model_default_is_remembered_and_validated():
         assert client.post("/models/video/default",
                            data={"key": "qwen_image_edit_2511"}).status_code == 400
         assert client.post("/models/video/default", data={"key": "nope"}).status_code == 400
-        modelmod.set_default("video", "wan22_s2v")
+        modelmod.set_default("video", "ltx23")
 
 
 def test_tier_wording_matches_the_mpa_and_nudity_is_a_capability():
@@ -1783,30 +1785,59 @@ def test_propose_cast_fills_the_form_and_saves_nothing(patch_stub):
         assert client.post(f"/playlists/{pl['id']}/propose-cast").status_code == 502
 
 
-def test_album_artwork_needs_an_anchor_and_renders_from_it(patch_stub):
+def test_album_artwork_has_three_reference_modes(patch_stub):
+    """Neither reference, the anchor, or the existing cover to modify. None of
+    them is required -- with no reference the model is a plain t2i model."""
     seen = []
-    patch_stub("pipeline", gen_artwork=lambda slug, prompt, anchor_path, progress=None,
-                                        guard="", n=1, size=1024: (
-        seen.append({"prompt": prompt, "anchor": anchor_path, "guard": guard}) or []))
+    patch_stub("pipeline", gen_artwork=lambda slug, prompt, progress=None, anchor_path=None,
+                                        source_path=None, guard="", n=1, size=1024: (
+        seen.append({"prompt": prompt, "anchor": anchor_path, "source": source_path,
+                     "guard": guard}) or []))
+
+    def run(client, pl, **data):
+        r = client.post(f"/playlists/{pl['id']}/artwork", data=data)
+        assert r.status_code in (200, 303), r.text
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='artwork' ORDER BY id DESC")["id"])
+        return seen[-1]
+
     with TestClient(appmod.app) as client:
         pl = _album_with_cover(client, "Art Album")
-        # the cover is rendered FROM the anchor, so this is refused up front
-        assert client.post(f"/playlists/{pl['id']}/artwork").status_code == 400
 
+        # 1. pure prompt -- no anchor needed, and none attached
+        got = run(client, pl)
+        assert got["anchor"] is None and got["source"] is None
+        assert "Art Album" in got["prompt"]
+        assert "no text" in got["prompt"], "an album cover must not render lettering"
+        # No anchor means no TIER, so no tier wording -- and that is the safe
+        # direction: tier text grants permissions. PINNED is attached by
+        # guardrail.build_prompt regardless of what is passed here.
+        assert got["guard"] == "", got["guard"]
+
+        # 2. from the album anchor -- which carries a tier, so its wording applies
         _chosen_anchor("Art Album", "r", path="/tmp/art_anchor.png")
-        r = client.post(f"/playlists/{pl['id']}/artwork")
-        assert r.status_code in (200, 303), r.text
-        job = db.one("SELECT * FROM jobs WHERE kind='artwork' ORDER BY id DESC")
-        wait_job(job["id"])
-        assert seen, "the artwork job never reached the pipeline"
-        assert seen[-1]["anchor"] == "/tmp/art_anchor.png"
-        assert "Art Album" in seen[-1]["prompt"]
-        assert "no text" in seen[-1]["prompt"], "an album cover must not render lettering"
-        assert tiers.PINNED in seen[-1]["guard"]
+        got = run(client, pl, use_anchor="true")
+        assert got["anchor"] == "/tmp/art_anchor.png"
+        assert "protagonist" in got["prompt"]
+        assert tiers.PINNED in got["guard"] and "graphic nudity" in got["guard"]
 
-        # an unwired model is refused rather than silently rendering as another
+        # 3. modifying the existing cover, with extra direction
+        got = run(client, pl, from_cover="true", instruction="colder blue key light")
+        assert got["source"] == pl["image_path"]
+        assert "modify it" in got["prompt"]
+        assert "colder blue key light" in got["prompt"]
+
+        # asking for a reference that does not exist is refused, not ignored
+        client.post("/playlists", data={"name": "Bare Album"})
+        bare = db.one("SELECT * FROM playlists WHERE name='Bare Album'")
+        assert client.post(f"/playlists/{bare['id']}/artwork",
+                           data={"from_cover": "true"}).status_code == 400
+        assert client.post(f"/playlists/{bare['id']}/artwork",
+                           data={"use_anchor": "true"}).status_code == 400
+        # ...as is an unknown model, and an instruction referencing minors
         assert client.post(f"/playlists/{pl['id']}/artwork",
                            data={"model": "nope"}).status_code == 400
+        assert client.post(f"/playlists/{pl['id']}/artwork",
+                           data={"instruction": "a schoolgirl on the cover"}).status_code == 400
 
 
 def test_anchor_repair_lands_as_a_new_candidate_in_the_same_group(patch_stub):
@@ -1877,6 +1908,131 @@ def test_album_anchors_group_by_tier_with_versions_and_opposite_views():
         page = client.get("/playlists").text
         assert "tier-tab" in page and "anchor-tile" in page
         assert "v2" in page, "version numbers are not shown"
+
+
+def test_publishing_never_sends_an_adult_tier_somewhere_that_forbids_it():
+    """The one rule this whole surface exists for. It fails CLOSED, so an
+    unknown service, a disabled target and an unmarked destination all refuse."""
+    import publish
+    with TestClient(appmod.app) as client:
+        client.post("/config/targets", data={"service": "reddit", "name": "MeowPSFW"})
+        client.post("/config/targets", data={"service": "reddit", "name": "MeowPNSFW",
+                                             "adult_ok": "true"})
+        client.post("/config/targets", data={"service": "youtube", "name": "UC_meowp"})
+        sfw = db.one("SELECT * FROM publish_targets WHERE name='MeowPSFW'")
+        nsfw = db.one("SELECT * FROM publish_targets WHERE name='MeowPNSFW'")
+        yt = db.one("SELECT * FROM publish_targets WHERE name='UC_meowp'")
+
+        # non-adult tiers go anywhere that is enabled
+        for tier in ("g", "pg13"):
+            for t in (sfw, nsfw, yt):
+                assert publish.allowed(t, tier), publish.refusal(t, tier)
+
+        # adult tiers reach ONLY the NSFW subreddit
+        for tier in ("r", "xxx"):
+            assert publish.allowed(nsfw, tier), publish.refusal(nsfw, tier)
+            assert not publish.allowed(sfw, tier), f"{tier} reached a non-NSFW subreddit"
+            assert not publish.allowed(yt, tier), f"{tier} reached YouTube"
+
+        # a YouTube target cannot be MARKED adult-ok, by the route or the module
+        assert client.post(f"/config/targets/{yt['id']}/adult",
+                           data={"adult_ok": 1}).status_code == 400
+        assert client.post("/config/targets", data={"service": "youtube", "name": "UC_x",
+                                                    "adult_ok": "true"}).status_code == 400
+
+        # disabling a target refuses everything, not just adult work
+        client.post(f"/config/targets/{nsfw['id']}/toggle")
+        off = db.one("SELECT * FROM publish_targets WHERE id=?", nsfw["id"])
+        assert not publish.allowed(off, "xxx") and not publish.allowed(off, "g")
+
+        page = client.get("/config").text
+        assert "YouTube" in page and "Reddit" in page
+        assert "no adult content" in page, "the service policy is not shown"
+        assert "blocked" in page, "the per-tier verdict is not shown"
+
+
+def test_config_page_explains_how_to_set_each_service_up():
+    import publish
+    with TestClient(appmod.app) as client:
+        page = client.get("/config").text
+        for key, svc in publish.SERVICES.items():
+            assert svc["label"] in page, key
+            # the info button's content: signup link and the API docs
+            assert svc["signup"] in page, f"{key} has no signup link"
+            assert svc["docs"] in page, f"{key} has no docs link"
+        assert publish.RECHECK in page, "no date on the policy claims"
+
+
+def test_sets_page_lists_rendered_sets_and_deleting_one_keeps_the_songs():
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Set Album"})
+        pl = db.one("SELECT * FROM playlists WHERE name='Set Album'")
+        d = os.path.join(db.DATA, "sets")
+        os.makedirs(d, exist_ok=True)
+        path = os.path.join(d, "Set Album_r.mp4")
+        open(path, "wb").write(b"x" * 32)
+        db.run("""INSERT INTO assets (song_id, kind, path, meta_json, created)
+                  VALUES (NULL,'set',?,?,?)""", path,
+               json.dumps({"playlist_id": pl["id"], "mode": "video", "tier": "r"}), time.time())
+
+        page = client.get("/sets").text
+        assert "Set Album" in page and "Set Album_r.mp4" in page
+        assert ">R<" in page or "R</span>" in page, "the tier is not shown"
+
+        asset = db.one("SELECT * FROM assets WHERE kind='set' AND path=?", path)
+        client.post(f"/sets/{asset['id']}/delete")
+        assert db.one("SELECT id FROM assets WHERE id=?", asset["id"]) is None
+        assert not os.path.isfile(path)
+        assert db.one("SELECT id FROM playlists WHERE id=?", pl["id"]) is not None
+
+
+def test_new_playlist_accepts_a_cover_at_creation():
+    with TestClient(appmod.app) as client:
+        r = client.post("/playlists", data={"name": "Cover At Create"},
+                        files={"image": ("c.png", _png_bytes(), "image/png")})
+        assert r.status_code in (200, 303), r.text
+        pl = db.one("SELECT * FROM playlists WHERE name='Cover At Create'")
+        assert pl["image_path"] and os.path.isfile(pl["image_path"])
+        # ...and it is still optional
+        client.post("/playlists", data={"name": "No Cover At Create"})
+        assert db.one("SELECT image_path FROM playlists WHERE name='No Cover At Create'"
+                      )["image_path"] is None
+
+
+def test_ltx_is_the_default_video_model_and_renders_the_same_chunk():
+    """LTX cannot produce 77 frames -- its length must be 8n+1. It renders 81 at
+    16.8312 fps, which is the SAME 4.8125s chunk, so the clip allocation is
+    identical whichever model renders it."""
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import build_song as B
+    import models as modelmod
+
+    assert modelmod.default_for("video") == "ltx23"
+    assert modelmod.renderable("video")["ltx23"] == "ltx"
+
+    assert (B.LTX_LEN - 1) % 8 == 0, "LTX length must be 8n+1"
+    assert (77 - 1) % 8 != 0, "77 is not a legal LTX length -- that is why 81 is used"
+    assert abs(B.LTX_LEN / B.LTX_FPS - B.CHUNK) < 1e-9, "LTX clip is not exactly CHUNK long"
+
+    scene = {"scene_number": 1, "name": "s", "camera": "wide", "lighting": "neon",
+             "video_motion_prompt": "she walks", "negative_prompt": "",
+             "duration_guidance": "5 sec", "image_prompt": "x"}
+    wf = B.workflow(0, scene, "clip_000.png", "song.mp3", "a black cat", "an alley",
+                    "tier wording", video_model="ltx")
+    # the audio CONDITIONS the motion...
+    assert wf["17"]["class_type"] == "LTXVConcatAVLatent"
+    assert wf["18"]["inputs"]["latent_image"] == ["17", 0]
+    # ...but only the VIDEO half is decoded: the master mp3 is laid over the
+    # assembled timeline once, so per-clip audio cannot drift
+    assert wf["19"]["class_type"] == "LTXVSeparateAVLatent"
+    assert wf["20"]["inputs"]["samples"] == ["19", 0]
+    # the approved reference frame is still what carries the character in
+    assert wf["9"]["class_type"] == "LTXVImgToVideo"
+    assert wf["7"]["inputs"]["image"] == "clip_000.png"
+    # and the guardrail lands exactly once, as everywhere else
+    import guardrail as g
+    prompt = wf["4"]["inputs"]["text"]
+    assert g.PINNED.strip() in prompt and prompt.count("No minors") == 1
 
 
 if __name__ == "__main__":

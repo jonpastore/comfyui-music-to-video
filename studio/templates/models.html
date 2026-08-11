@@ -10,7 +10,7 @@
 
 {% for role, role_label in roles.items() %}
 <section class="card">
-  <h2>{{ role }}</h2>
+  <h2>{{ role_labels.get(role, role) }}</h2>
   <p class="muted">{{ role_label }}</p>
 
   {% for m in by_role.get(role, []) %}
@@ -64,12 +64,22 @@
       {% if chat_error %}<span class="tag warn-tag">unreachable</span>
       {% else %}<span class="tag done">{{ chat | length }} available</span>{% endif %}
     </header>
-    <p>Writes the shot list from the lyrics. Picked per storyboard on the song page;
-      &ldquo;highest available&rdquo; resolves to <code>{{ chat_best or "nothing" }}</code>.</p>
+    <p>Writes the shot list from the lyrics. This is the DEFAULT; the song page's
+      storyboard form can override it per storyboard.</p>
     {% if chat_error %}
     <p class="warn">{{ chat_error }}</p>
     {% else %}
-    <p class="meta">{{ chat | join(", ") }}</p>
+    <form method="post" action="/models/storyboard/default" class="inline-form">
+      <label class="inline-label">Default
+        <select name="key">
+          <option value="">highest available{% if chat_best %} ({{ chat_best }}){% endif %}</option>
+          {% for m in chat %}
+          <option value="{{ m }}" {% if m == chat_default %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit">Set default</button>
+    </form>
     <ul class="model-notes">
       <li>Multi-agent ids are excluded: <code>/chat/completions</code> refuses them outright
         with <code>400 Multi Agent requests are not allowed</code>, and one of them sorted

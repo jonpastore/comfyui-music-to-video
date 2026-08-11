@@ -24,6 +24,7 @@ import models
 import vision
 import lyrics
 import mixer
+import publish
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(ROOT, "static")
@@ -589,20 +590,30 @@ def h_artwork(args, progress):
     # the cover is a composed piece of artwork, so the theme and world lead and
     # the character follows -- the reverse of a character sheet, where the
     # character is the whole subject
-    prompt = " ".join(x for x in (
-        f"Album cover artwork for the release \"{p['name']}\".",
-        prof["style_text"], prof["world"],
-        f"It depicts the album's protagonist: {prof['identity']}",
-        prof["wardrobe"], prof["body"],
-        "Striking single composition, square format, no text, no lettering, no logo, "
-        "no typography, no border.",
-        prof["render_tail"]) if x and x.strip())
+    # What is said depends on which references are attached. Naming an image
+    # that is not there is how a model gets told to invent one.
+    parts = [f"Album cover artwork for the release \"{p['name']}\".", prof["style_text"],
+             prof["world"]]
+    if args.get("source_path"):
+        parts.append("Start from the existing cover supplied as a reference image and modify "
+                     "it, keeping its overall composition and palette.")
+    if args.get("anchor_path"):
+        parts.append(f"It depicts the album's protagonist: {prof['identity']} "
+                     f"{prof['wardrobe']} {prof['body']}")
+    else:
+        parts.append(f"{prof['identity']} {prof['wardrobe']}")
+    if args.get("instruction"):
+        parts.append(args["instruction"])
+    parts += ["Striking single composition, square format, no text, no lettering, no logo, "
+              "no typography, no border.", prof["render_tail"]]
+    prompt = " ".join(x for x in parts if x and x.strip())
     # An album cover carries no tier of its own. It uses the tier of whichever
     # anchor it is rendered from, so a cover generated from an explicit anchor
     # is permitted what that tier permits -- and PINNED applies either way.
     guard = tiers.compose_guardrail(args["tier"]) if args.get("tier") else ""
-    paths = pipeline.gen_artwork(safe_name(p["name"]), prompt, args["anchor_path"],
-                                  progress, guard=guard)
+    paths = pipeline.gen_artwork(safe_name(p["name"]), prompt, progress,
+                                  anchor_path=args.get("anchor_path"),
+                                  source_path=args.get("source_path"), guard=guard)
     if not paths:
         raise RuntimeError("the artwork render produced no image")
     db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
@@ -1385,7 +1396,10 @@ def start_storyboard(id: int, tier: str = Form(...), model: str = Form(""),
     if not math.isfinite(scene_seconds):
         raise HTTPException(400, "scene_seconds must be a finite number")
     scene_seconds = min(max(scene_seconds, 1.0), 60.0)
-    jobs.enqueue("storyboard", {"song_id": id, "tier": tier, "model": model or None,
+    # blank means "use the studio default", which /models sets; blank there too
+    # means grok.best_model() picks the highest available
+    jobs.enqueue("storyboard", {"song_id": id, "tier": tier,
+                                 "model": (model or models.chat_default()) or None,
                                  "scene_seconds": scene_seconds, "direction": direction},
                  song_id=id)
     return RedirectResponse(f"/songs/{id}", status_code=303)
@@ -2132,6 +2146,8 @@ def playlist_detail(p):
     for c in album_cast(p["name"]):
         n = db.one("SELECT COUNT(*) n FROM anchors WHERE character_id=? AND chosen=1", c["id"])["n"]
         cast.append({"c": c, "anchors": n})
+    has_anchor = bool(db.one("""SELECT id FROM anchors WHERE scope_kind='album' AND scope_value=?
+                                 AND chosen=1 AND character_id IS NULL""", p["name"]))
     artwork_default = models.default_for("artwork")
     artwork_models = [{"key": e["key"], "label": e["label"], "available": e["available"],
                        "default": e["key"] == artwork_default}
@@ -2142,7 +2158,7 @@ def playlist_detail(p):
             "anchor_count": len(all_anchors),
             "anchor_characters": sorted(per_character.items()),
             "character_count": len(per_character) or 1,
-            "artwork_models": artwork_models,
+            "artwork_models": artwork_models, "has_anchor": has_anchor,
             "cast": cast, "character_fields": CHARACTER_FIELDS,
             "partial_tiers": sorted(t for t in tiers_with_video if t not in ready)}
 
@@ -2159,7 +2175,8 @@ def playlists_page(request: Request):
 
 
 @app.post("/playlists")
-def create_playlist(name: str = Form(...), kind: str = Form("playlist")):
+async def create_playlist(name: str = Form(...), kind: str = Form("playlist"),
+                           image: Optional[UploadFile] = File(None)):
     # Genres are set on the song at upload now (genre/subgenre/genre2/subgenre2
     # columns) -- 'genre' is no longer a creatable playlist kind.
     if kind != "playlist":
@@ -2168,9 +2185,15 @@ def create_playlist(name: str = Form(...), kind: str = Form("playlist")):
     if not name:
         raise HTTPException(400, "name required")
     try:
-        db.run("INSERT INTO playlists (name, kind, created) VALUES (?,?,?)", name, kind, time.time())
+        pid = db.run("INSERT INTO playlists (name, kind, created) VALUES (?,?,?)",
+                     name, kind, time.time())
     except sqlite3.IntegrityError:
         raise HTTPException(400, f"playlist '{name}' ({kind}) already exists")
+    # the cover at creation, so setting one is not a second trip through the page
+    if image is not None and image.filename:
+        dest = await save_upload(image, MAX_IMAGE, os.path.join(db.DATA, "playlists", str(pid)),
+                                  "image", prefix="cover")
+        db.run("UPDATE playlists SET image_path=? WHERE id=?", dest, pid)
     return RedirectResponse("/playlists", status_code=303)
 
 
@@ -2287,7 +2310,8 @@ def propose_cast(request: Request, id: int):
 
 
 @app.post("/playlists/{id}/artwork")
-def create_album_artwork(id: int, model: str = Form("")):
+def create_album_artwork(id: int, model: str = Form(""), use_anchor: bool = Form(False),
+                          from_cover: bool = Form(False), instruction: str = Form("")):
     """Generate a new album cover from the album look.
 
     The reverse of Fill: those fields were written to describe the character,
@@ -2300,18 +2324,35 @@ def create_album_artwork(id: int, model: str = Form("")):
     key = model or models.default_for("artwork")
     if key not in wired:
         raise HTTPException(400, f"'{key}' is not an artwork model that can render yet")
-    prof = album_profile(p["name"])
+    instruction = (instruction or "").strip()
+    if len(instruction) > MAX_INSTRUCTION:
+        raise HTTPException(400, f"the instruction is {len(instruction)} characters; keep it "
+                                  f"under {MAX_INSTRUCTION}")
+    try:
+        tiers.check_text(instruction, "artwork instruction")
+        tiers.check_override(instruction)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     anchor = db.one("""SELECT * FROM anchors WHERE scope_kind='album' AND scope_value=?
                        AND chosen=1 AND character_id IS NULL
                        ORDER BY (view='front') DESC, id DESC LIMIT 1""", p["name"])
-    if not anchor:
-        # the cover shows this album's protagonist, so it is rendered FROM the
-        # anchor -- there is no text-only path, and saying so here beats a
-        # failure forty seconds into a ComfyUI submit
-        raise HTTPException(400, "this album has no chosen anchor yet, and the cover is "
-                                  "rendered from it. Generate and pick one on /anchors first.")
-    jobs.enqueue("artwork", {"playlist_id": id, "model": key,
-                             "anchor_path": anchor["path"], "tier": anchor["tier"]})
+    # THREE modes, and none of them is required:
+    #   use_anchor  the cover shows this album's actual protagonist
+    #   from_cover  the existing cover is a second reference, so the prompt
+    #               MODIFIES it rather than starting over
+    #   neither     plain text-to-image from the album look alone
+    anchor_path = anchor["path"] if (anchor and use_anchor) else None
+    source_path = p["image_path"] if (from_cover and p["image_path"]
+                                       and os.path.isfile(p["image_path"])) else None
+    if from_cover and not source_path:
+        raise HTTPException(400, "there is no existing cover to modify -- upload one, or "
+                                  "untick 'modify the current cover'")
+    if use_anchor and not anchor:
+        raise HTTPException(400, "this album has no chosen anchor yet -- generate and pick "
+                                  "one on /anchors, or untick 'use the album anchor'")
+    jobs.enqueue("artwork", {"playlist_id": id, "model": key, "anchor_path": anchor_path,
+                             "source_path": source_path, "instruction": instruction,
+                             "tier": anchor["tier"] if anchor else ""})
     return RedirectResponse("/playlists", status_code=303)
 
 
@@ -2456,6 +2497,121 @@ def remove_tier(name: str):
     return RedirectResponse("/tiers", status_code=303)
 
 
+# ------------------------------------------------------------------ config --
+
+@app.get("/config", response_class=HTMLResponse)
+def config_page(request: Request):
+    """Where finished work may be published, and what each destination permits.
+
+    Nothing uploads yet. What this page does is record the destinations and
+    their policies, and show -- per tier -- exactly which ones would accept a
+    render and which would refuse it and why.
+    """
+    all_tiers = tiers.all_tiers()
+    rows = []
+    for t in publish.targets():
+        svc = publish.service(t["service"]) or {}
+        rows.append({"t": t, "svc": svc,
+                     "verdicts": [{"tier": x["name"], "refusal": publish.refusal(t, x["name"])}
+                                  for x in all_tiers]})
+    return templates.TemplateResponse(request, "config.html", {
+        "services": publish.SERVICES, "targets": rows, "tiers": all_tiers,
+        "recheck": publish.RECHECK,
+        "adult_tiers": [t["name"] for t in all_tiers if tiers.allows_nudity(t["name"])],
+        "FORBIDDEN": publish.FORBIDDEN, "TAGGED": publish.TAGGED,
+        "OPEN": publish.OPEN, "UNKNOWN": publish.UNKNOWN})
+
+
+@app.post("/config/targets")
+def add_publish_target(service: str = Form(...), name: str = Form(...),
+                        adult_ok: bool = Form(False), note: str = Form("")):
+    try:
+        publish.add_target(service, name, adult_ok, note[:500])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except sqlite3.IntegrityError:
+        raise HTTPException(400, f"{name} is already a target for {service}")
+    return RedirectResponse("/config", status_code=303)
+
+
+@app.post("/config/targets/{id}/toggle")
+def toggle_publish_target(id: int):
+    row = db.one("SELECT * FROM publish_targets WHERE id=?", id)
+    if not row:
+        raise HTTPException(404, "no such target")
+    db.run("UPDATE publish_targets SET enabled=? WHERE id=?", 0 if row["enabled"] else 1, id)
+    return RedirectResponse("/config", status_code=303)
+
+
+@app.post("/config/targets/{id}/adult")
+def set_target_adult(id: int, adult_ok: int = Form(...)):
+    """Whether THIS destination accepts adult material.
+
+    Refused outright when the service itself forbids it -- a target must never
+    be able to claim a permission its service does not grant.
+    """
+    row = db.one("SELECT * FROM publish_targets WHERE id=?", id)
+    if not row:
+        raise HTTPException(404, "no such target")
+    svc = publish.service(row["service"]) or {}
+    if adult_ok and svc.get("adult") == publish.FORBIDDEN:
+        raise HTTPException(400, f"{svc.get('label', row['service'])} forbids adult content, "
+                                  f"so this target cannot accept it")
+    db.run("UPDATE publish_targets SET adult_ok=? WHERE id=?", 1 if adult_ok else 0, id)
+    return RedirectResponse("/config", status_code=303)
+
+
+@app.post("/config/targets/{id}/delete")
+def delete_publish_target(id: int):
+    db.run("DELETE FROM publish_targets WHERE id=?", id)
+    return RedirectResponse("/config", status_code=303)
+
+
+# -------------------------------------------------------------------- sets --
+
+@app.get("/sets", response_class=HTMLResponse)
+def sets_page(request: Request):
+    """Every rendered set, audio and video.
+
+    They were only ever listed inside the playlist card that produced them, so
+    a set you made last week was three clicks and a guess away. This is the
+    shelf: what exists, from which playlist, at which tier, how long.
+    """
+    names = {p["id"]: p["name"] for p in db.q("SELECT id, name FROM playlists")}
+    rows = []
+    for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC"):
+        meta = db.jset(a)
+        size = duration = None
+        if a["path"] and os.path.isfile(a["path"]):
+            size = os.path.getsize(a["path"])
+            try:
+                duration = mixer.probe(a["path"])["duration"]
+            except Exception:
+                pass
+        rows.append({"asset": a, "mode": meta.get("mode", "video"), "tier": meta.get("tier"),
+                     "playlist": names.get(meta.get("playlist_id"), "(deleted playlist)"),
+                     "playlist_id": meta.get("playlist_id"),
+                     "missing": not (a["path"] and os.path.isfile(a["path"])),
+                     "size": size, "duration": duration})
+    return templates.TemplateResponse(request, "sets.html", {"sets": rows})
+
+
+@app.post("/sets/{asset_id}/delete")
+def delete_set(asset_id: int):
+    """Remove a rendered set, row and file. The songs and their own renders are
+    untouched -- a set is an assembly of them, not the material."""
+    a = db.one("SELECT * FROM assets WHERE id=? AND kind='set'", asset_id)
+    if not a:
+        raise HTTPException(404, "no such set")
+    if _within_data(a["path"]) and os.path.isfile(a["path"]):
+        try:
+            os.remove(a["path"])
+        except OSError:
+            pass
+    db.run("DELETE FROM assets WHERE id=?", asset_id)
+    return RedirectResponse("/sets", status_code=303)
+
+
 # ------------------------------------------------------------------ models --
 
 @app.get("/models", response_class=HTMLResponse)
@@ -2478,11 +2634,34 @@ def models_page(request: Request):
         chat, chat_best, chat_error = [], None, str(e)
     return templates.TemplateResponse(request, "models.html", {
         "roles": models.ROLES, "by_role": by_role,
+        "role_labels": {r: r.replace("_", " ").title() for r in models.ROLES},
+        "chat_default": models.chat_default(),
         "defaults": {r: models.default_for(r) for r in models.ROLES},
         "reachable": models.installed() is not None,
         "chat": chat, "chat_best": chat_best, "chat_error": chat_error,
         "vision_model": grok.VISION_MODEL,
     })
+
+
+@app.post("/models/storyboard/default")
+def set_storyboard_default(key: str = Form("")):
+    """The xAI chat model storyboards are written with.
+
+    Its own route because a storyboard model is an xAI model ID discovered at
+    runtime, not a key in the local catalogue -- there is nothing to validate it
+    against but the live list. Blank means "highest available", which is what
+    grok.best_model() resolves.
+    """
+    key = (key or "").strip()
+    if key:
+        try:
+            available = grok.list_models()
+        except Exception as e:
+            raise HTTPException(502, f"could not reach xAI to check that model: {e}") from None
+        if key not in available:
+            raise HTTPException(400, f"xAI does not list a chat model called {key!r}")
+    models.set_chat_default(key)
+    return RedirectResponse("/models", status_code=303)
 
 
 @app.post("/models/{role}/default")

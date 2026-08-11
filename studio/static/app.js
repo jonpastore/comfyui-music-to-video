@@ -90,6 +90,16 @@ document.addEventListener("submit", function (e) {
     e.preventDefault();
     return;
   }
+  var targetForm = e.target.closest(".delete-target");
+  if (targetForm && !confirm("Remove this publishing destination?")) {
+    e.preventDefault();
+    return;
+  }
+  var setForm = e.target.closest(".delete-set");
+  if (setForm && !confirm("Delete this rendered set? The songs and their own videos stay.")) {
+    e.preventDefault();
+    return;
+  }
   var charForm = e.target.closest(".delete-character");
   if (charForm && !confirm("Delete character " + charForm.dataset.name +
                            "? Their anchor rows go too; the image files stay on disk.")) {

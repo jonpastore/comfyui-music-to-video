@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Publishing</h1>
+<p class="hint">Where finished work may go, and what each destination permits.
+  <strong>Nothing uploads yet</strong> &mdash; this records the destinations and enforces the
+  one rule that must not be got wrong: a tier that permits nudity
+  ({{ adult_tiers | map("upper") | join(", ") or "none" }}) never reaches a destination that
+  forbids adult content. The check fails closed, so an unknown service or an unmarked target
+  refuses.</p>
+
+<section class="card">
+  <h2>Destinations</h2>
+  {% if not targets %}
+  <p class="empty">None yet. Add one below.</p>
+  {% else %}
+  <div class="table-scroll">
+    <table class="list">
+      <thead><tr><th>Service</th><th>Destination</th><th>Accepts adult</th>
+                 <th>What each tier would do</th><th></th></tr></thead>
+      <tbody>
+      {% for r in targets %}
+        <tr class="{% if not r.t.enabled %}muted-row{% endif %}">
+          <td><strong>{{ r.svc.label or r.t.service }}</strong></td>
+          <td>
+            {{ r.t.name }}
+            {% if r.t.note %}<br><span class="muted">{{ r.t.note }}</span>{% endif %}
+            {% if not r.t.enabled %}<br><span class="tag">off</span>{% endif %}
+          </td>
+          <td>
+            {% if r.svc.adult == FORBIDDEN %}
+            <span class="muted">service forbids it</span>
+            {% else %}
+            <form method="post" action="/config/targets/{{ r.t.id }}/adult">
+              <input type="hidden" name="adult_ok" value="{{ 0 if r.t.adult_ok else 1 }}">
+              <button type="submit" class="toggle {{ 'on' if r.t.adult_ok else 'off' }}">
+                {{ "yes" if r.t.adult_ok else "no" }}
+              </button>
+            </form>
+            {% endif %}
+          </td>
+          <td>
+            {% for v in r.verdicts %}
+            {% if v.refusal %}
+            <span class="tag warn-tag" title="{{ v.refusal }}">{{ v.tier | tiername }} blocked</span>
+            {% else %}
+            <span class="tag done">{{ v.tier | tiername }}</span>
+            {% endif %}
+            {% endfor %}
+          </td>
+          <td class="nowrap">
+            <form method="post" action="/config/targets/{{ r.t.id }}/toggle">
+              <button type="submit">{{ "Disable" if r.t.enabled else "Enable" }}</button>
+            </form>
+            <form method="post" action="/config/targets/{{ r.t.id }}/delete" class="delete-target">
+              <button type="submit" class="thumb-btn-danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <h3>Add a destination</h3>
+  <form method="post" action="/config/targets" class="stack-form">
+    <div class="field-row">
+      <label>Service
+        <select name="service">
+          {% for key, s in services.items() %}
+          <option value="{{ key }}">{{ s.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Name <input type="text" name="name" required placeholder="channel id, subreddit, handle"></label>
+    </div>
+    <label>Note (optional) <input type="text" name="note" placeholder="what you post here"></label>
+    <label class="check"><input type="checkbox" name="adult_ok" value="true">
+      This destination accepts adult content (an NSFW subreddit, an instance that allows it)</label>
+    <button type="submit">Add destination</button>
+  </form>
+  <p class="hint">One row per DESTINATION, not per service: every subreddit and every Mastodon
+    instance has its own rules. Ticking the box on a service that forbids adult content is
+    refused rather than ignored.</p>
+</section>
+
+<h2>Services</h2>
+<p class="hint">Policies checked against each service's own documentation on
+  <strong>{{ recheck }}</strong>. Platform rules change &mdash; re-check before trusting these.</p>
+
+{% for key, s in services.items() %}
+<section class="card">
+  <header class="model-head">
+    <strong>{{ s.label }}</strong>
+    {% if s.adult == FORBIDDEN %}
+      <span class="tag warn-tag">no adult content</span>
+    {% elif s.adult == TAGGED %}
+      <span class="tag">adult allowed, must be tagged</span>
+    {% elif s.adult == OPEN %}
+      <span class="tag done">adult allowed</span>
+    {% else %}
+      <span class="tag warn-tag">policy unknown &mdash; refuses adult</span>
+    {% endif %}
+    {% for m in s.media %}<span class="tag">{{ m }}</span>{% endfor %}
+    <button type="button" class="help-btn" title="How to set this up"
+            onclick="document.getElementById('svc-{{ key }}').showModal()">?</button>
+  </header>
+  <p>{{ s.adult_note }}</p>
+  <p class="meta">{{ s.api }} &middot; {{ s.auth }}</p>
+
+  <dialog class="help-modal" id="svc-{{ key }}">
+    <div class="modal-bar">
+      <strong>Setting up {{ s.label }}</strong>
+      <button type="button" onclick="this.closest('dialog').close()">Close</button>
+    </div>
+    <p><strong>Adult content:</strong> {{ s.adult_note }}</p>
+    <p><strong>API:</strong> {{ s.api }}<br>
+       <strong>Credential:</strong> {{ s.auth }}</p>
+    <ol>
+      {% for step in s.steps %}<li>{{ step }}</li>{% endfor %}
+    </ol>
+    <p>
+      <a href="{{ s.signup }}" target="_blank" rel="noopener">Sign up / create credentials &rarr;</a><br>
+      <a href="{{ s.docs }}" target="_blank" rel="noopener">API documentation &rarr;</a>
+    </p>
+    <p class="hint">A destination here is a <strong>{{ s.target_label }}</strong>.
+      {{ s.target_hint }}</p>
+  </dialog>
+</section>
+{% endfor %}
+{% endblock %}

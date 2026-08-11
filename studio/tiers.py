@@ -52,6 +52,12 @@ MAX_TIER_GUARDRAIL = 500
 #
 # (guardrail, allow_nudity)
 BUILTIN = {
+    "g": (
+        "General-audience music-video tone: bright, energetic performance, everyday settings "
+        "and nothing a parent would object to. Ordinary streetwear and stage wear, fully "
+        "covered. No sensuality, no innuendo and no suggestive posing. No nudity.",
+        0,
+    ),
     "pg13": (
         "Mainstream music-video tone: confident, stylish, energetic performance and "
         "nightlife atmosphere. Flirtatious attitude and sensuality are fine as mood, "
@@ -97,6 +103,8 @@ LEGACY_BUILTIN = {
 # Shown on /tiers beside each built-in, so the rating a tier is named after is
 # not something you have to take on trust.
 MPA_NOTE = {
+    "g": ("Matches the MPA's G -- General Audiences, all ages admitted: nothing that would "
+          "offend parents for viewing by children. No sexual content of any kind."),
     "pg13": ("Matches the MPA's PG-13: sexual content is muted, brief or infrequent, not "
              "graphic, and does not involve nudity."),
     "r": ("Matches the MPA's R: adult sexual content, and nudity -- including graphic "

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Sets</h1>
+<p class="hint">Every rendered set. A set is an assembly of songs that already exist &mdash;
+  deleting one here removes only the assembled file, never the songs or their own videos.
+  Render a new one from a playlist's card.</p>
+
+{% if not sets %}
+<p class="empty">No sets rendered yet. Open a playlist and use <strong>Render set</strong>.</p>
+{% else %}
+<div class="set-grid">
+  {% for s in sets %}
+  <section class="card set-card">
+    <header class="model-head">
+      <strong>{{ s.playlist }}</strong>
+      <span class="tag">{{ s.mode }}</span>
+      {% if s.tier %}<span class="tag">{{ s.tier | tiername }}</span>{% endif %}
+      {% if s.missing %}<span class="tag warn-tag">file missing</span>{% endif %}
+    </header>
+    <p class="meta">
+      <code>{{ s.asset.path.split('/')[-1] }}</code><br>
+      <time class="local-time muted" datetime="{{ s.asset.created | isotime }}">
+        {{ s.asset.created | isotime }}</time>
+      {% if s.duration %}&middot; {{ s.duration | hms }}{% endif %}
+      {% if s.size %}&middot; {{ "%.0f"|format(s.size / 1048576) }} MB{% endif %}
+    </p>
+
+    {% if not s.missing %}
+      {% if s.mode == "audio" %}
+      <audio controls preload="none" src="{{ media_url(s.asset.path) }}"></audio>
+      {% else %}
+      <video controls preload="metadata" src="{{ media_url(s.asset.path) }}"></video>
+      {% endif %}
+    {% endif %}
+
+    <div class="button-row">
+      {% if not s.missing %}
+      <a class="linkish" href="{{ media_url(s.asset.path) }}" download>Download</a>
+      {% endif %}
+      {% if s.playlist_id %}
+      <a class="linkish" href="/playlists">Playlist &rarr;</a>
+      {% endif %}
+      <form method="post" action="/sets/{{ s.asset.id }}/delete" class="delete-set">
+        <button type="submit" class="thumb-btn-danger">Delete</button>
+      </form>
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

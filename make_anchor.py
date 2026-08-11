@@ -112,8 +112,12 @@ def prompt_for(view, anchor=None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--face", required=True, help="identity source, as named in ComfyUI/input")
-    ap.add_argument("--outfit", required=True, help="wardrobe source, as named in ComfyUI/input")
+    # Optional: a character sheet always has both, but album ARTWORK may have
+    # neither (pure text-to-image) or only a source cover to modify. Every image
+    # input on TextEncodeQwenImageEditPlus is optional, so no reference simply
+    # means text-to-image -- see build_refs.workflow.
+    ap.add_argument("--face", default="", help="identity source, as named in ComfyUI/input")
+    ap.add_argument("--outfit", default="", help="wardrobe source, as named in ComfyUI/input")
     ap.add_argument("--outdir", required=True)
     ap.add_argument("--n", type=int, default=6)
     ap.add_argument("--width", type=int, default=896)
@@ -140,7 +144,7 @@ def main():
         # same chokepoint every other prompt goes through. It used to be called
         # with guard="" here, so an anchor got PINNED but never its TIER's
         # wording -- which is what a nude anchor needs to be permitted at all.
-        wf = workflow(scene, args.face, args.outfit, "empty",
+        wf = workflow(scene, args.face, args.outfit or None, "empty",
                       args.width, args.height, seed, "", args.guardrail)
         wf["18"] = {"class_type": "SaveImage", "inputs": {
             "images": ["17", 0],

@@ -6,7 +6,10 @@
   and cannot be removed here or by editing a row.</p>
 
 <table class="list">
-  <thead><tr><th>Name</th><th>Guardrail</th><th class="num">Nudity</th><th>Built-in</th><th></th></tr></thead>
+  {# every column left-aligned and TOP-aligned. The guardrail cell is a
+     paragraph and the others are one word, so vertically centring them floated
+     them into the middle of a tall row, away from their own headers. #}
+  <thead><tr><th>Name</th><th>Guardrail</th><th>Nudity</th><th>Built-in</th><th></th></tr></thead>
   <tbody>
   {% for t in tiers %}
     <tr>
@@ -40,20 +43,6 @@
   {% endfor %}
   </tbody>
 </table>
-
-<section class="card">
-  <h2>Where these definitions come from</h2>
-  <p class="hint"><strong>PG-13</strong> and <strong>R</strong> are worded from the Motion
-    Picture Association's own rating definitions. The MPA's R says outright: <em>&ldquo;May
-    contain nudity, including graphic nudity&rdquo;</em> &mdash; so an R tier that only
-    permitted revealing clubwear was stricter than a real R rating, and has been widened.
-    PG-13's own definition says sexual activity <em>&ldquo;does not involve nudity&rdquo;</em>.</p>
-  <p class="hint"><strong>XXX is not an MPA rating.</strong> X was one until 26 September 1990,
-    when NC-17 replaced it &mdash; X had never been trademarked, so the adult industry adopted
-    X and XXX as self-applied labels and the MPA lost control of the mark. NC-17 is the real
-    top rating and is considerably tamer than this tier. The <code>XXX</code> wording here is
-    the owner's own and is deliberately not an MPA definition.</p>
-</section>
 
 <section class="card">
   <h2>Add a custom tier</h2>

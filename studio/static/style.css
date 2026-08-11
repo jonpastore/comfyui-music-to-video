@@ -715,3 +715,27 @@ button.toggle.off { color: var(--muted); }
 .anchor-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .anchor-actions form { margin: 0; }
 .anchor-actions button { font-size: 0.75rem; padding: 0.25rem 0.5rem; }
+
+/* Tier table: the guardrail cell is a paragraph and the rest are one word, so
+   every cell aligns to the TOP or the short ones float away from their header. */
+table.list th, table.list td { vertical-align: top; text-align: left; }
+table.list td.num, table.list th.num { text-align: right; }
+
+/* ---- sets shelf ---- */
+.set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 1rem; }
+.set-card { margin-bottom: 0; }
+.set-card video, .set-card audio { width: 100%; border-radius: 6px; margin: 0.5rem 0; }
+.set-card video { max-height: 240px; background: #000; }
+.linkish {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+}
+
+/* ---- publishing config ---- */
+.muted-row td { opacity: 0.55; }
+.table-scroll td form { display: inline-block; margin: 0 0.2rem 0 0; }
