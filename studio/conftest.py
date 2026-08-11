@@ -218,7 +218,13 @@ def _set_duration(items, key="video"):
     return max(0.0, running_dur)
 
 
+# _XFADE_NAMES is READ by mixadvice.transitions() to decide what a model is
+# allowed to suggest, so the stub has to carry it or every suggest 500s with
+# "module 'mixer' has no attribute". Same real values as mixer.py.
+_XFADE_NAMES = {"fade": "fade", "dissolve": "dissolve", "wipe": "wipeleft"}
+
 _stub("mixer",
+      _XFADE_NAMES=_XFADE_NAMES,
       probe=lambda p: {"duration": _STUB_ITEM_DUR},
       assemble_song=lambda clip_paths, mp3, out, progress, fade: open(out, "w").close(),
       edit_audio=lambda *a, **k: None,
@@ -232,6 +238,24 @@ _stub("mixer",
       can_beatmatch=_stub_can_beatmatch,
       plan_tempo_ramp=_stub_plan_tempo_ramp,
       suggest_running_order=_beatmatch_for_stub.suggest_order)
+
+# ---- mixadvice -----------------------------------------------------------
+# The REAL clean()/set_summary are used: they are the trust boundary and pure.
+# Only suggest() is stubbed, because that is the part that calls xAI.
+import mixadvice as _real_mixadvice          # noqa: E402
+suggest_calls = []
+
+
+def _suggest(items, direction="", only_id=None, model=None, progress=None):
+    suggest_calls.append({"items": [i["id"] for i in items], "direction": direction,
+                          "only_id": only_id})
+    reply = {"items": [{"id": i["id"], "transition": "dissolve", "secs": 3.5,
+                        "beatmatch": True, "effects": {"eq_kill": {"low_db": -6}},
+                        "why": "stub"} for i in items]}
+    return _real_mixadvice.clean(reply, {i["id"] for i in items}, only_id)
+
+
+_real_mixadvice.suggest = _suggest
 
 # ---- pipeline ------------------------------------------------------------
 _PIPE_DIR = tempfile.mkdtemp(prefix="studio_pipeline_")

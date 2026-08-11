@@ -212,6 +212,10 @@ MIGRATIONS = [
     # (SETS_MIXING_PLAN.md phase 3). Default 0: an existing set's transitions
     # keep behaving exactly as rendered until a user turns this on.
     "ALTER TABLE set_items ADD COLUMN beatmatch INTEGER DEFAULT 0",
+    # Plain-language mixing note for this handover, kept beside the JSON it
+    # produces. The JSON stays the source of truth -- this records what was
+    # ASKED for, so a re-suggest starts from the intent rather than the output.
+    "ALTER TABLE set_items ADD COLUMN mix_direction TEXT",
 ]
 
 

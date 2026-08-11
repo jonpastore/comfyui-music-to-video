@@ -84,6 +84,23 @@
 </table>
 <p class="muted">Drag a row to reorder. Order saves on drop.</p>
 
+<section class="card">
+  <h3>Suggest a mix</h3>
+  <form method="post" action="/sets/{{ set.id }}/suggest" class="stack-form">
+    <label>Direction for the whole set &mdash; optional
+      <textarea name="mix_direction" rows="2"
+        placeholder="keep it moving, no long breakdowns until the last two"></textarea>
+    </label>
+    <p class="hint">The model is shown every track's tempo, key and energy in running order,
+      because what happens at item three depends on what item two did. It proposes transitions,
+      lengths, beat-matching and effects for all of them at once; each item's own Suggest
+      re-rolls one handover against that same whole-set context. Nothing is saved until you
+      press Save on an item.</p>
+    <button type="submit">Suggest for the whole set</button>
+  </form>
+  {% if suggest_note %}<p class="hint"><strong>{{ suggest_note }}</strong></p>{% endif %}
+</section>
+
 <h3>Item settings</h3>
 <p class="hint">Trim, gain and transition, per song. In/out blank means the whole track.</p>
 {% for it in items %}
@@ -113,10 +130,30 @@
       Beatmatch into next <span class="muted">(snaps this transition to the beat)</span></label>
   </div>
   <div class="field-row">
+    <label style="flex: 1 1 100%">Mix direction &mdash; plain language
+      <textarea name="mix_direction" rows="2"
+        placeholder="bring the bass in slowly and keep it dark">{{ it.mix_direction or "" }}</textarea>
+    </label>
+  </div>
+  <div class="form-actions">
+    <p class="hint">Describe the handover and let the model write the JSON below. It is
+      validated against exactly what the renderer accepts, so a suggestion can never set
+      something you would have been refused for typing.</p>
+    {# formaction, not a nested form: this posts the same fields to the suggest
+       route, which fills the boxes in and saves nothing #}
+    <button type="submit" formnovalidate
+            formaction="/sets/{{ set.id }}/items/{{ it.id }}/suggest">Suggest</button>
+  </div>
+  <div class="field-row">
     <label style="flex: 1 1 100%">Effects (JSON, optional)
+      {% if "effects_json" in (it.suggested or []) %}<span class="tag">suggested</span>{% endif %}
       <textarea name="effects_json" rows="2" placeholder='{"eq_kill": {"low_db": -6, "mid_db": 0, "high_db": 2}}'>{{ it.effects_json or "" }}</textarea>
     </label>
   </div>
+  {% if it.suggest_why %}
+  <p class="hint"><strong>Why:</strong> {{ it.suggest_why }}
+    <span class="muted">&mdash; not saved until you press Save</span></p>
+  {% endif %}
   <p class="hint">Loudness matching is always on. Optional keys: sweep, eq_kill, echo_out, phaser,
     flanger, gain_db (audio); grade, glitch (video).</p>
   {% if beatmatch_plan.get(it.id) %}

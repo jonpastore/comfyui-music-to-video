@@ -28,6 +28,12 @@ CONTRAST_RANGE = (0.0, 3.0)      # 1.0 = identity
 SATURATION_RANGE = (0.0, 3.0)    # 1.0 = identity, 0 = grayscale
 HUE_RANGE = (-180.0, 180.0)      # degrees, hue filter's h=
 
+# The keys this module owns. effects.parse_effects IGNORES keys it does not
+# recognise; parse_effects_json REFUSES them, so a caller holding one blob for
+# both must hand this module only its own subset. Named here so the split is
+# defined once rather than retyped by every caller that does it.
+VIDEO_KEYS = ("grade", "glitch")
+
 GLITCH_KINDS = ("rgba", "chroma")
 GLITCH_AMOUNT_RANGE = (0, 40)    # pixel shift -- rgbashift/chromashift take ints
 

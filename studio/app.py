@@ -25,6 +25,7 @@ import models
 import vision
 import lyrics
 import mixer
+import mixadvice
 import publish
 import analyse
 import effects    # per-item audio DJ effects -- pure, no deps, validated for real (not stubbed)
@@ -452,7 +453,7 @@ def clamp_set_item_params(in_secs, out_secs, gain_db, transition, secs):
 # accepting-and-ignoring matches the rest of this codebase's own rule: a
 # choice that looks available but does nothing is worse than one that
 # doesn't exist (see the anchor-view trap in CONTINUATION-*.md).
-_UNSUPPORTED_EFFECT_KEYS = ("duck", "layer")
+_UNSUPPORTED_EFFECT_KEYS = effects.UNSUPPORTED_KEYS
 
 
 def clamp_set_item_effects(effects_json):
@@ -480,9 +481,17 @@ def clamp_set_item_effects(effects_json):
     unsupported = [k for k in _UNSUPPORTED_EFFECT_KEYS if k in data]
     if unsupported:
         raise HTTPException(400, f"not supported in set rendering yet: {', '.join(unsupported)}")
+    # parse_effects ignores keys it does not know, so a typo like "eq_kil" would
+    # be stored and then silently do nothing at render. Accepted-and-ignored is
+    # the one outcome this form must not have.
+    known = set(effects.AUDIO_KEYS) | set(video_fx.VIDEO_KEYS)
+    unknown = sorted(set(data) - known)
+    if unknown:
+        raise HTTPException(400, f"unknown effect keys: {', '.join(unknown)}. "
+                                  f"Known: {', '.join(sorted(known))}")
     try:
         effects.parse_effects(data)
-        video_only = {k: v for k, v in data.items() if k in ("grade", "glitch")}
+        video_only = {k: v for k, v in data.items() if k in video_fx.VIDEO_KEYS}
         if video_only:
             video_fx.parse_effects_json(video_only)
     except ValueError as e:
@@ -3283,6 +3292,85 @@ def set_edit_page(request: Request, id: int):
     return templates.TemplateResponse(request, "set_edit.html", ctx)
 
 
+def _suggest_ctx(request, id, suggested, note=""):
+    """Re-render the editor with a suggestion filled into the form fields.
+
+    A suggestion POPULATES; it does not save. Writing straight to the database
+    would make an AI proposal indistinguishable from a decision, and there would
+    be nothing to compare it against. The values sit in the form until the human
+    presses Save, exactly as if they had typed them.
+    """
+    row = get_set_or_404(id)
+    ctx = {**set_detail(row), "songs": db.q("SELECT id, title FROM songs ORDER BY title"),
+           "all_tiers": tiers.all_tiers(), "transitions": SET_TRANSITIONS,
+           "suggest_note": note}
+    items = []
+    for it in ctx["items"]:
+        d = dict(it)
+        s = suggested.get(d["id"]) or {}
+        d["suggested"] = sorted(k for k in s if k != "why")
+        d["suggest_why"] = s.get("why", "")
+        for k in ("transition", "secs", "effects_json"):
+            if k in s:
+                d[k] = s[k]
+        if "beatmatch" in s:
+            d["beatmatch"] = 1 if s["beatmatch"] else 0
+        items.append(d)
+    ctx["items"] = items
+    return templates.TemplateResponse(request, "set_edit.html", ctx)
+
+
+def _suggest_items(id):
+    """The set's items in the shape mixadvice wants: the analysis a mixing
+    decision depends on, in running order."""
+    return [dict(r) for r in db.q(
+        """SELECT si.id, s.title, s.bpm, s.key, s.energy
+           FROM set_items si JOIN songs s ON s.id = si.song_id
+           WHERE si.set_id=? ORDER BY si.position""", id)]
+
+
+@app.post("/sets/{id}/suggest", response_class=HTMLResponse)
+async def suggest_set(request: Request, id: int):
+    """Suggest settings for the WHOLE set at once.
+
+    Mixing is relational -- what happens at item 3 depends on item 2 -- so the
+    whole-order pass is the one that can be coherent. The per-item button below
+    exists to re-roll one handover without disturbing the rest.
+    """
+    get_set_or_404(id)
+    form = await request.form()
+    items = _suggest_items(id)
+    try:
+        sug = mixadvice.suggest(items, (form.get("mix_direction") or "").strip())
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(502, f"the model could not be reached: {e}") from None
+    note = (f"suggested settings for {len(sug)} of {len(items)} items -- nothing is saved until "
+            f"you press Save on an item") if sug else "the model returned nothing usable"
+    return _suggest_ctx(request, id, sug, note)
+
+
+@app.post("/sets/{id}/items/{item_id}/suggest", response_class=HTMLResponse)
+async def suggest_set_item(request: Request, id: int, item_id: int):
+    """Suggest one item's settings, judged against the whole running order."""
+    get_set_or_404(id)
+    if not db.one("SELECT id FROM set_items WHERE id=? AND set_id=?", item_id, id):
+        raise HTTPException(404, "no such item in this set")
+    form = await request.form()
+    items = _suggest_items(id)
+    try:
+        sug = mixadvice.suggest(items, (form.get("mix_direction") or "").strip(),
+                                 only_id=item_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(502, f"the model could not be reached: {e}") from None
+    note = ("suggested -- press Save to keep it" if sug
+            else "the model returned nothing usable for that item")
+    return _suggest_ctx(request, id, sug, note)
+
+
 @app.post("/sets/{id}")
 def update_set(id: int, name: str = Form(...), mode: str = Form("video"), tier: str = Form("")):
     get_set_or_404(id)
@@ -3331,13 +3419,28 @@ def add_set_item(id: int, song_id: int = Form(...), transition: str = Form("fade
 def edit_set_item(id: int, item_id: int, in_secs: BlankFloat = Form(None),
                   out_secs: BlankFloat = Form(None), gain_db: float = Form(0.0),
                   transition: str = Form("fade"), secs: float = Form(2.0),
-                  beatmatch: bool = Form(False), effects_json: str = Form("")):
+                  beatmatch: bool = Form(False), effects_json: str = Form(""),
+                  mix_direction: str = Form("")):
     get_set_or_404(id)
     if not db.one("SELECT id FROM set_items WHERE id=? AND set_id=?", item_id, id):
         raise HTTPException(404, "no such item")
     in_secs, out_secs, gain_db, transition, secs = clamp_set_item_params(
         in_secs, out_secs, gain_db, transition, secs)
     effects_json = clamp_set_item_effects(effects_json)
+    # The mixing note is free text that will be handed to a model, so it is
+    # screened exactly like the anchor prompt, the tier wording and the
+    # storyboard direction. Kept beside the JSON it produced: the JSON stays
+    # the source of truth, this records what was asked for.
+    mix_direction = (mix_direction or "").strip()
+    if mix_direction:
+        if len(mix_direction) > mixadvice.MAX_DIRECTION:
+            raise HTTPException(400, f"mix direction is {len(mix_direction)} characters; keep it "
+                                      f"under {mixadvice.MAX_DIRECTION}")
+        try:
+            tiers.check_text(mix_direction, "mix direction")
+            tiers.check_override(mix_direction)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
     # The trim slider is exactly how this state gets reached one drag away
     # (SETS_MIXING_PLAN.md): shortening THIS item's out_secs can leave its
     # own already-stored transition too long to fit. Check before writing.
@@ -3345,8 +3448,9 @@ def edit_set_item(id: int, item_id: int, in_secs: BlankFloat = Form(None),
         item_id: {"transition": transition, "secs": secs, "in_secs": in_secs, "out_secs": out_secs,
                   "beatmatch": int(beatmatch)}}))
     db.run("""UPDATE set_items SET in_secs=?, out_secs=?, gain_db=?, transition=?, secs=?,
-              beatmatch=?, effects_json=? WHERE id=?""", in_secs, out_secs, gain_db, transition,
-           secs, int(beatmatch), effects_json, item_id)
+              beatmatch=?, effects_json=?, mix_direction=? WHERE id=?""",
+           in_secs, out_secs, gain_db, transition, secs, int(beatmatch), effects_json,
+           mix_direction or None, item_id)
     db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
     return RedirectResponse(f"/sets/{id}", status_code=303)
 

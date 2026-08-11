@@ -152,6 +152,17 @@ def loudnorm_filter():
 # What a set_item gets when effects_json is empty. loudnorm on, everything
 # creative off -- Phase 4 of the plan calls level matching "the unglamorous
 # one that matters most" and every other effect "per-item and off by default".
+# Validated by this module but NOT wired into render_set/mix_audio: both need a
+# second input stream (a sidechain, a second video). Refused at every entry
+# point rather than accepted and silently ignored.
+UNSUPPORTED_KEYS = ("duck", "layer")
+
+# The keys THIS module owns. parse_effects deliberately ignores anything it
+# does not recognise, so callers that want "unknown key is a mistake" -- the
+# set editor and the mix suggester both do -- check against this plus
+# video_fx.VIDEO_KEYS rather than relying on the parser to complain.
+AUDIO_KEYS = ("sweep", "eq_kill", "echo_out", "phaser", "flanger", "gain_db", "loudnorm")
+
 DEFAULT_EFFECTS = {
     "loudnorm": True,
     "gain_db": 0.0,
