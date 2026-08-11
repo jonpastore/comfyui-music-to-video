@@ -137,28 +137,44 @@ def build_scenes(sections, profile, dur, target):
 
 
 def to_md(sb):
-    L = [f"# {sb['album']} — Track {sb['track_number']}: {sb['title']}",
+    """Render a storyboard as markdown.
 
-         f"**Scenes: {len(sb['scenes'])}** — {sb['storyboard_strategy']['note']}", "",
-         "## Concept", "", sb["concept"], "",
+    Every field is read with .get(): this is a PRESENTATION function and the
+    storyboards it is handed are not all ours. The `*_comfy.json` schema has no
+    `energy`, `palette` or `storyboard_strategy`; a hand-edited file can be
+    missing anything. Subscripting raised KeyError on all of those, which turned
+    "regenerate the markdown" -- both `--md-only` and the studio's in-place scene
+    edit -- into a 500 on exactly the third-party files this format is supposed
+    to tolerate. A missing field renders blank; it does not take the file down.
+    """
+    strategy = sb.get("storyboard_strategy") or {}
+    scenes = sb.get("scenes") or []
+    L = [f"# {sb.get('album', '')} — Track {sb.get('track_number', 0)}: {sb.get('title', '')}",
+
+         f"**Scenes: {len(scenes)}** — {strategy.get('note', '')}", "",
+         "## Concept", "", sb.get("concept", ""), "",
          "## Character / world lock", "",
-         f"**Character:** `{sb['character_reference']}`", "",
-         f"**Album world:** `{sb['album_world_reference']}`", "",
+         f"**Character:** `{sb.get('character_reference', '')}`", "",
+         f"**Album world:** `{sb.get('album_world_reference', '')}`", "",
          "_Content guardrail is applied in code by `build_refs.py` / "
          "`build_song.py` when the prompt is built (see `guardrail.py`). It is "
          "deliberately absent from this file, which may be third-party generated._", "",
          "## Scenes", ""]
-    for s in sb["scenes"]:
-        L += [f"### Scene {s['scene_number']} — {s['name']}  ({s['cue']}, {s['energy']})",
+    for s in scenes:
+        # 'palette' and 'lighting' are the same field under two names across the
+        # schemas this repo has accumulated; prefer whichever is populated.
+        lighting = s.get("palette") or s.get("lighting") or ""
+        L += [f"### Scene {s.get('scene_number', '?')} — {s.get('name', '')}  "
+              f"({s.get('cue', '')}, {s.get('energy', '')})",
               "",
-              f"- **Duration:** {s['duration_guidance']}",
-              f"- **Lyric:** {s['lyric'] or '_instrumental_'}",
-              f"- **Location:** {s['location']}",
-              f"- **Camera:** {s['camera']}",
-              f"- **Lighting:** {s['palette']}",
-              f"- **Motion:** {s['motion']}", "",
-              "```text", s["image_prompt"], "```", ""]
-    L += ["## Audio reference — lyrics", "", "```text", sb["audio_lyrics"], "```", ""]
+              f"- **Duration:** {s.get('duration_guidance', '')}",
+              f"- **Lyric:** {s.get('lyric') or '_instrumental_'}",
+              f"- **Location:** {s.get('location', '')}",
+              f"- **Camera:** {s.get('camera', '')}",
+              f"- **Lighting:** {lighting}",
+              f"- **Motion:** {s.get('motion', '')}", "",
+              "```text", s.get("image_prompt", ""), "```", ""]
+    L += ["## Audio reference — lyrics", "", "```text", sb.get("audio_lyrics", ""), "```", ""]
     return "\n".join(L)
 
 
