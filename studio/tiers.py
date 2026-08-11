@@ -11,7 +11,11 @@ import time
 
 import db
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# STUDIO_SCRIPTS on a deployed box; the repo root when run from a checkout.
+# Using only the parent dir looked right locally and broke the service on
+# cerberus, where scripts/ is a sibling of app/, not its parent.
+sys.path.insert(0, os.environ.get("STUDIO_SCRIPTS") or
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from guardrail import (  # noqa: E402,F401  (re-exported: callers use tiers.X)
     PINNED, MINOR_TERMS, ContentRefused, check_text, compose,
     _SINGLE, _PHRASES, _ALLOW, _normalize, _tokens,

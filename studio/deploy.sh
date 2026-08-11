@@ -23,6 +23,7 @@ rsync -a --delete \
 echo "== syncing pipeline scripts"
 rsync -a "$REPO"/build_refs.py "$REPO"/build_song.py "$REPO"/build_storyboard.py \
          "$REPO"/make_anchor.py "$REPO"/reroll_refs.py "$REPO"/make_contact_sheet.py \
+         "$REPO"/guardrail.py \
          "$R:$DEST/scripts/"
 rsync -a "$REPO"/profiles/ "$R:$DEST/scripts/profiles/" 2>/dev/null || true
 
@@ -37,7 +38,7 @@ if [ -f "$REPO/$EX_DIR/rear_entrance_explicit.json" ]; then
   rsync -a "$REPO/$EX_DIR/rear_entrance_explicit.json" \
            "$REPO/$EX_DIR/rear_entrance_explicit.md" "$R:$DEST/scripts/$EX_DIR/"
 else
-  echo "  WARNING: storyboard exemplar missing; grok will use the inline placeholder"
+  echo "  ERROR: storyboard exemplar missing; grok now FAILS rather than degrading."; exit 1
 fi
 
 echo "== venv"
