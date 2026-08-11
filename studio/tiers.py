@@ -37,6 +37,11 @@ BUILTIN = {
         "as atmosphere. Revealing club wear is in scope -- harnesses, bikini tops, "
         "high-cut bottoms, thigh straps, boots -- as is bare midriff, back and legs."
     ),
+    "xxx": (
+        "Explicit adult content is permitted. Full nudity, sexual acts between consenting "
+        "adults, and graphic sexual imagery are in scope. Keep the same adult character "
+        "identity and nightlife world; never introduce minors or juvenile settings."
+    ),
 }
 
 
