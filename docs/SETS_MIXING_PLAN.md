@@ -47,8 +47,11 @@ The UI the screenshot asks for, with nothing clever underneath.
 - `/sets/new`, `/sets/{id}` — pick **audio** or **audio + video**, pick a tier,
   add songs from the library, drag to reorder. The drag-to-reorder handler in
   `app.js` for playlist rows is already generic; reuse it.
-- Per item: in/out trim, gain, transition type and length. Every `xfade`
-  transition ffmpeg offers is already reachable through `_XFADE_NAMES`.
+- Per item: in/out trim, gain, transition type and length. **Correction:** this
+  said every `xfade` transition ffmpeg offers was already reachable through
+  `_XFADE_NAMES`. It never was. `_XFADE_NAMES` has three entries and
+  `SET_TRANSITIONS` offers four choices including `cut`. Adding more is a line
+  each; the claim was simply wrong when written.
 - A running total: set length, computed by `mixer.set_duration()`, which is
   already pure arithmetic and already accounts for crossfade overlap.
 - Render button → the existing job. Audio-only and video from one form.
@@ -156,15 +159,47 @@ audio one rather than grow its own.
 
 ---
 
-## Open questions
+## Open questions — answered
 
-1. **Where does analysis run?** It is CPU work, but the box's CPU is already
-   busy feeding the GPU during a render. Either it goes through the same
-   serialized worker (simple, blocks renders) or it gets a second lane (correct,
-   more machinery). Phase 2 should start simple and measure.
-2. **Is `mode` per set or per render?** A playlist rendered audio-only and again
-   with video is arguably one set with two outputs. Two rows is simpler and
-   matches how tiers already work.
-3. **How much tempo stretch is acceptable** before a transition should refuse to
-   beatmatch and just crossfade? Mixxx uses a configurable range; pick one after
-   listening, not before.
+1. **Where does analysis run?** In the existing serialized worker. `h_analyse`
+   is an ordinary job handler beside `h_render_song`, so analysis queues behind
+   renders on the one thread. Measured before choosing: 19s for an eight-minute
+   track against ~50s for a single clip render, so a second lane would have been
+   machinery for a cost that does not show. Revisit only if a library-wide
+   re-analysis becomes routine.
+
+2. **Is `mode` per set or per render?** Per SET (`sets.mode`). Two rows is
+   simpler than one row with two outputs, and it matches how tiers already work
+   — the same playlist rendered at two tiers is two sets, not one set with two
+   faces.
+
+3. **How much tempo stretch is acceptable?** `MAX_TEMPO_STRETCH = 1.16` and it
+   is still a guess, deliberately. Nothing had ever rendered a ramp when the
+   number was picked, so there was nothing to listen to; the comment in
+   `mixer.py` says so. Now that ramps actually render, this is the one open
+   question that remains genuinely open — pick the number by listening to a
+   128→140 pair, not by reasoning about it.
+
+---
+
+## What was built, and what was not
+
+Implemented and reachable: phases 1 and 2 in full; phase 3's snap on BOTH sides
+plus the tempo ramp on the audio path and harmonic ordering; phase 4 except
+`duck`; phase 5's beat-aligned cuts and per-item look.
+
+Not implemented, and refused at every entry point rather than accepted and
+ignored:
+
+- **`duck`** — sidechaincompress needs a second input. At the join both streams
+  exist, but `running_a` is the ACCUMULATED chain rather than the outgoing item,
+  and it is not time-aligned with `nxt_a` before the `acrossfade`. A correct
+  duck needs `adelay` + `asplit` and a change to the join graph, not another
+  filter fragment.
+- **`layer`** — the same shape on the video side: `xfade` has no blend modes, so
+  a screen/overlay/difference blend across the overlap means trimming the
+  overlap from both streams, blending, and splicing back.
+
+Both are per-TRANSITION effects that were filed as per-ITEM ones, which is why
+each looked like it merely "needs a second input". Build layer first: video has
+no time-alignment problem because `xfade` already positions both streams.

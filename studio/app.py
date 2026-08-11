@@ -1291,6 +1291,23 @@ async def _save_anchor_refs(album, character_id, uploads):
     return saved
 
 
+def _anchor_ctx_from_form(form, album, character_id):
+    """Rebuild the generate form from what was SUBMITTED, not from defaults.
+
+    The htmx branches used to call anchor_form_ctx(album) and let every other
+    argument default, which silently reset the ticked tiers, the chosen views,
+    every typed per-tier prompt and (on delete) the selected character. The
+    page did not reload, as asked -- so the state loss was invisible instead of
+    being announced by a navigation, which is worse than the reload it replaced.
+
+    hx-include sends the whole form with both requests, so all of it is here.
+    """
+    tiers_sel = [t for t in form.getlist("tier") if t]
+    views_sel = [v for v in form.getlist("view") if v] or ["front"]
+    prompts = {k[len("prompt_"):]: v for k, v in form.items() if k.startswith("prompt_")}
+    return anchor_form_ctx(album, tiers_sel, views_sel, character_id, prompts)
+
+
 @app.post("/anchors/refs")
 async def add_anchor_refs(request: Request, album: str = Form(...),
                            character_id: CharacterId = Form(None)):
@@ -1316,13 +1333,14 @@ async def add_anchor_refs(request: Request, album: str = Form(...),
     # htmx swaps the form back in with the new thumbnails; a plain browser still
     # gets the redirect, so this works with JavaScript off exactly as before
     if request.headers.get("HX-Request"):
-        return templates.TemplateResponse(request, "_anchor_form.html",
-                                           anchor_form_ctx(album, character_id=character_id))
+        return templates.TemplateResponse(
+            request, "_anchor_form.html",
+            _anchor_ctx_from_form(await request.form(), album, character_id))
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 
 @app.post("/anchors/refs/{asset_id}/delete")
-def delete_anchor_ref(request: Request, asset_id: int):
+async def delete_anchor_ref(request: Request, asset_id: int):
     """Remove a saved base image, row and file. Anchors already generated from
     it are untouched -- they are their own images, not references to this one."""
     a = db.one("SELECT * FROM assets WHERE id=? AND kind='anchor_ref'", asset_id)
@@ -1336,8 +1354,14 @@ def delete_anchor_ref(request: Request, asset_id: int):
             pass
     db.run("DELETE FROM assets WHERE id=?", asset_id)
     if request.headers.get("HX-Request"):
+        form = await request.form()
+        # the character too: deleting one of a CHARACTER's base images used to
+        # swap the form back to the protagonist and show the protagonist's
+        # gallery, because character_id defaulted to None
+        cid = form.get("character_id")
+        cid = int(cid) if cid not in (None, "") else None
         return templates.TemplateResponse(request, "_anchor_form.html",
-                                           anchor_form_ctx(album))
+                                           _anchor_ctx_from_form(form, album, cid))
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 
@@ -3142,7 +3166,7 @@ def _beatmatch_plan(items, songs, mode):
         entry["out_secs"] = snapped_out
         plan.setdefault(nxt["id"], {})["in_secs"] = snapped_in
         if mode != "audio":
-            entry["note"] = "snapped to the beat (video isn't tempo-stretched)"
+            entry["note"] = "snapped to the beat, both sides (video isn't tempo-stretched)"
             continue
         out_bpm, in_bpm = song["bpm"], next_song["bpm"]
         if not mixer.can_beatmatch(out_bpm, in_bpm):
@@ -3162,10 +3186,10 @@ def _beatmatch_plan(items, songs, mode):
             # within mp3 frame padding). mix_audio renders the ramp before
             # anything probes, which is what makes the prediction true rather
             # than a claim.
-            entry["note"] = (f"snapped to the beat, and tempo-ramped {out_bpm:.0f}→{in_bpm:.0f} BPM "
-                              f"over {len(ratios)} bars")
+            entry["note"] = (f"snapped to the beat on both sides, and tempo-ramped "
+                              f"{out_bpm:.0f}→{in_bpm:.0f} BPM over {len(ratios)} bars")
         else:
-            entry["note"] = "snapped only — not enough bars before the transition to ramp"
+            entry["note"] = "snapped on both sides — not enough bars before the transition to ramp"
     return plan
 
 
@@ -3330,21 +3354,43 @@ def set_edit_page(request: Request, id: int):
     return templates.TemplateResponse(request, "set_edit.html", ctx)
 
 
-def _suggest_ctx(request, id, suggested, note=""):
+def _suggest_ctx(request, id, suggested, note="", form=None, item_id=None):
     """Re-render the editor with a suggestion filled into the form fields.
 
     A suggestion POPULATES; it does not save. Writing straight to the database
     would make an AI proposal indistinguishable from a decision, and there would
     be nothing to compare it against. The values sit in the form until the human
     presses Save, exactly as if they had typed them.
+
+    `form` is what was submitted, and it is layered UNDER the suggestion and
+    OVER the database. Rebuilding purely from the database discarded whatever
+    was typed but not yet saved -- including the mix_direction that had just
+    been typed to DRIVE the suggestion, which then vanished from the box that
+    produced it, and the whole-set direction, which came back blank every time.
     """
     row = get_set_or_404(id)
     ctx = {**set_detail(row), "songs": db.q("SELECT id, title FROM songs ORDER BY title"),
            "all_tiers": tiers.all_tiers(), "transitions": SET_TRANSITIONS,
-           "suggest_note": note}
+           "suggest_note": note,
+           # the box that drove this, still holding what was typed in it
+           "set_direction": (form.get("mix_direction") if form else "") or ""}
+    # A per-item suggest posts THAT item's form; a whole-set suggest posts only
+    # the direction. Either way, only the submitting item's typed values are in
+    # hand, so they are applied to that item alone.
+    typed = {}
+    if form is not None and item_id is not None:
+        for k in ("transition", "secs", "in_secs", "out_secs", "gain_db",
+                  "effects_json", "mix_direction"):
+            if k in form:
+                typed[k] = form.get(k)
+        typed["beatmatch"] = 1 if form.get("beatmatch") else 0
     items = []
     for it in ctx["items"]:
         d = dict(it)
+        if d["id"] == item_id:
+            for k, v in typed.items():
+                if v != "" or k in ("effects_json", "mix_direction"):
+                    d[k] = v
         s = suggested.get(d["id"]) or {}
         d["suggested"] = sorted(k for k in s if k != "why")
         d["suggest_why"] = s.get("why", "")
@@ -3386,7 +3432,7 @@ async def suggest_set(request: Request, id: int):
         raise HTTPException(502, f"the model could not be reached: {e}") from None
     note = (f"suggested settings for {len(sug)} of {len(items)} items -- nothing is saved until "
             f"you press Save on an item") if sug else "the model returned nothing usable"
-    return _suggest_ctx(request, id, sug, note)
+    return _suggest_ctx(request, id, sug, note, form=form)
 
 
 @app.post("/sets/{id}/items/{item_id}/suggest", response_class=HTMLResponse)
@@ -3406,7 +3452,7 @@ async def suggest_set_item(request: Request, id: int, item_id: int):
         raise HTTPException(502, f"the model could not be reached: {e}") from None
     note = ("suggested -- press Save to keep it" if sug
             else "the model returned nothing usable for that item")
-    return _suggest_ctx(request, id, sug, note)
+    return _suggest_ctx(request, id, sug, note, form=form, item_id=item_id)
 
 
 @app.post("/sets/{id}")

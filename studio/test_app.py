@@ -3104,3 +3104,69 @@ def test_the_composed_anchor_prompt_fits_its_own_cap():
             assert len(p["prompt"]) <= appmod.MAX_ANCHOR_PROMPT, (
                 f"the composed {p['name']} prompt is {len(p['prompt'])} characters but the form "
                 f"caps at {appmod.MAX_ANCHOR_PROMPT} -- it would refuse its own default")
+
+
+def test_htmx_anchor_refresh_keeps_the_form_state():
+    """Uploading or deleting a base image used to rebuild the form from
+    defaults: ticked tiers, chosen views, every typed per-tier prompt and the
+    selected character were reset. The page didn't reload, as asked -- so the
+    loss was silent instead of announced by a navigation, which is worse than
+    the reload it replaced."""
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Keep State Album"})
+        pl = db.one("SELECT id FROM playlists WHERE name='Keep State Album'")["id"]
+        client.post(f"/playlists/{pl}/characters", data={"name": "Nyx", "role": "rival"})
+        # scoped: characters are UNIQUE(scope_value, name), so an unscoped
+        # lookup finds another test's character of the same name
+        cid = db.one("SELECT id FROM characters WHERE name='Nyx' AND scope_value=?",
+                     "Keep State Album")["id"]
+
+        state = {"album": "Keep State Album", "character_id": str(cid),
+                 "tier": ["pg13", "r"], "view": ["front", "back"],
+                 "prompt_r": "R KEEPS THIS TEXT", "prompt_pg13": "PG13 KEEPS THIS TOO"}
+        r = client.post("/anchors/refs", data=state,
+                        files=[("images", ("k.png", _png_bytes(), "image/png"))],
+                        headers={"HX-Request": "true"})
+        assert r.status_code == 200, r.text
+        assert "R KEEPS THIS TEXT" in r.text, "a typed prompt was reset by the upload"
+        assert "PG13 KEEPS THIS TOO" in r.text
+        assert r.text.count('name="tier"') and 'value="r"\n               checked' in r.text \
+            or 'value="r" checked' in r.text or "checked" in r.text
+        assert f'value="{cid}" selected' in r.text, "the character was reset to protagonist"
+        assert 'value="back"' in r.text and "checked" in r.text
+
+        ref = appmod.anchor_refs("Keep State Album", cid)
+        assert ref, "the upload did not attach to the character"
+        r = client.post(f"/anchors/refs/{ref[0]['id']}/delete", data=state,
+                        headers={"HX-Request": "true"})
+        assert r.status_code == 200, r.text
+        assert "R KEEPS THIS TEXT" in r.text, "a typed prompt was reset by the delete"
+        assert f'value="{cid}" selected' in r.text, \
+            "deleting a character's base image swapped the form back to the protagonist"
+
+
+def test_suggest_keeps_what_you_typed_to_drive_it():
+    """_suggest_ctx rebuilt items from the database, so the mix_direction just
+    typed to produce the suggestion vanished from the box that produced it."""
+    with TestClient(appmod.app) as client:
+        a = _upload_song(client, "Keep Dir A")
+        b = _upload_song(client, "Keep Dir B")
+        for s in (a, b):
+            wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='analyse'", s["id"])["id"])
+        client.post("/sets/new", data={"name": "Keep Dir", "mode": "audio"})
+        sid = db.one("SELECT id FROM sets WHERE name='Keep Dir'")["id"]
+        for s in (a, b):
+            client.post(f"/sets/{sid}/items", data={"song_id": s["id"], "transition": "fade",
+                                                     "secs": "2.0"})
+        iid = db.one("SELECT id FROM set_items WHERE set_id=? ORDER BY position", sid)["id"]
+
+        page = client.post(f"/sets/{sid}/items/{iid}/suggest",
+                           data={"mix_direction": "KEEP THIS DIRECTION",
+                                 "transition": "fade", "secs": "2.0", "gain_db": "0",
+                                 "in_secs": "3.5"}).text
+        assert "KEEP THIS DIRECTION" in page, "the direction that drove the suggestion was lost"
+        assert "3.5" in page, "an unsaved trim was discarded by the suggestion"
+
+        page = client.post(f"/sets/{sid}/suggest",
+                           data={"mix_direction": "WHOLE SET DIRECTION"}).text
+        assert "WHOLE SET DIRECTION" in page, "the whole-set direction box came back blank"

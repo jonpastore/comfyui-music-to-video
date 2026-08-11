@@ -277,13 +277,24 @@ def _audio_chain(gain_db, effects_json):
     field, applied first and separately from effects_json's -- effects_json
     never carries its own "gain_db" from this caller, so parse_effects's
     internal gain stage stays inert unless a set item's JSON explicitly asks
-    for one. duck is validated by parse_effects but never read here: it
-    needs a second (sidechain) input this per-item chain doesn't have."""
+    for one.
+
+    A duck is REFUSED here, not dropped. sidechaincompress needs a second input
+    this per-item chain does not have, so parse_effects returns it under its own
+    key and nothing consumes it -- which meant a row stored before the editor
+    began refusing duck rendered as a silent no-op. Accepted-and-ignored is the
+    one outcome this codebase does not allow, so a legacy row fails loudly and
+    can be fixed rather than quietly producing the wrong mix."""
     frags = []
     gain_db = float(gain_db or 0.0)
     if gain_db:
         frags.append(f"volume={gain_db:.3f}dB")
-    frags += effects.parse_effects(effects_json)["chain"]
+    parsed = effects.parse_effects(effects_json)
+    if parsed.get("duck"):
+        raise ValueError("this item asks for duck, which is not wired into set rendering "
+                          "(sidechaincompress needs a second input). Remove it from the "
+                          "item's effects to render.")
+    frags += parsed["chain"]
     return ",".join(frags)
 
 
@@ -304,7 +315,7 @@ def _apply_beatmatch(items, ramp=False):
     preview can never disagree about where the cut lands. No source to
     probe and no out_secs already set means there's nothing to snap
     around -- the item passes through untouched, same as no beat_grid."""
-    out = []
+    out, pending_in = [], {}
     for idx, it in enumerate(items):
         if it.get("beatmatch"):
             out_point = it.get("out_secs")
@@ -326,16 +337,18 @@ def _apply_beatmatch(items, ramp=False):
                 # render_set and mix_audio all run, so the length the editor
                 # predicts and the length that renders come from the same
                 # numbers. Planning it anywhere else is how the two drift.
-                # ramp=False for the VIDEO path: render_set has no counterpart
-                # to mix_audio's ramp-rendering loop, so planning one there
-                # priced a stretch that never happened and pushed every xfade
-                # offset off by it. app._beatmatch_plan already refuses to ramp
-                # video ("video isn't tempo-stretched"); this is mixer's matching
-                # gate, which was missing.
-                nxt = items[idx + 1] if idx + 1 < len(items) and ramp else None
+                nxt = items[idx + 1] if idx + 1 < len(items) else None
                 out_bpm, in_bpm = it.get("bpm"), (nxt or {}).get("bpm")
                 exit_at = it.get("out_secs")
-                if nxt is not None and can_beatmatch(out_bpm, in_bpm) and exit_at is not None:
+                # SNAPPING applies to both paths -- it moves a cut, it does not
+                # stretch anything. RAMPING is audio only: render_set has no
+                # counterpart to mix_audio's ramp-rendering loop, so planning one
+                # there priced a stretch that never happened and pushed every
+                # xfade offset off by it. app._beatmatch_plan already refuses to
+                # ramp video ("video isn't tempo-stretched"); this is mixer's
+                # matching gate, which was missing.
+                if ramp and nxt is not None and can_beatmatch(out_bpm, in_bpm) \
+                        and exit_at is not None:
                     bar_times, ratios = plan_tempo_ramp(
                         it.get("beat_grid") or [], it.get("downbeat_offset") or 0,
                         exit_at, out_bpm, in_bpm)
@@ -347,7 +360,26 @@ def _apply_beatmatch(items, ramp=False):
                         in_s = float(it.get("in_secs") or 0.0)
                         it["_ramp"] = {"bar_times": [b - in_s for b in bar_times],
                                         "ratios": ratios}
+                # THE IN SIDE. snap_transition has always done both sides and
+                # never had a caller, so "snapped to the beat" described only
+                # where the outgoing track handed off -- the incoming one still
+                # entered wherever its raw in_secs happened to fall, which is
+                # the half that makes two grids line up.
+                #
+                # The next item's in_secs moves, which changes ITS duration --
+                # and that is fine, because _item_duration prices in_secs and
+                # every path reaches it through this same pass.
+                if nxt is not None:
+                    nxt_in = nearest_downbeat(nxt.get("beat_grid") or [],
+                                               nxt.get("downbeat_offset") or 0,
+                                               float(nxt.get("in_secs") or 0.0))
+                    if nxt_in is not None:
+                        pending_in[idx + 1] = nxt_in
         out.append(it)
+    # applied after the walk: rewriting items[idx+1] mid-loop would have the
+    # next iteration read a value this one just changed
+    for i, in_secs in pending_in.items():
+        out[i] = dict(out[i], in_secs=in_secs)
     return out
 
 
@@ -928,6 +960,13 @@ def demo():
             "video path planned a ramp render_set will not apply"
         assert not _apply_beatmatch([dict(i) for i in _it])[0].get("_ramp"), \
             "the default must be the safe one"
+
+        # a stored duck fails loudly rather than rendering as a no-op
+        try:
+            _audio_chain(0, json.dumps({"duck": 0.5}))
+            raise AssertionError("a duck was accepted and silently dropped")
+        except ValueError as e:
+            assert "not wired" in str(e)
 
         # aecho APPENDS its delay, and _item_duration is otherwise pure trim
         # arithmetic -- the editor was short by exactly the delay, up to 2s.

@@ -111,7 +111,7 @@
   <form method="post" action="/sets/{{ set.id }}/suggest" class="stack-form">
     <label>Direction for the whole set &mdash; optional
       <textarea name="mix_direction" rows="2"
-        placeholder="keep it moving, no long breakdowns until the last two"></textarea>
+        placeholder="keep it moving, no long breakdowns until the last two">{{ set_direction or "" }}</textarea>
     </label>
     <p class="hint">The model is shown every track's tempo, key and energy in running order,
       because what happens at item three depends on what item two did. It proposes transitions,

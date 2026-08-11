@@ -112,7 +112,7 @@
         <button type="submit" class="thumb-btn-danger delete-ref" formnovalidate
                 formaction="/anchors/refs/{{ r.id }}/delete"
                 hx-post="/anchors/refs/{{ r.id }}/delete" hx-target="#anchor-form"
-                hx-swap="outerHTML">Delete</button>
+                hx-swap="outerHTML" hx-include="#anchor-form">Delete</button>
       </div>
       {% endfor %}
     </div>
