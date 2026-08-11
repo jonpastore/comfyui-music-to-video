@@ -175,6 +175,31 @@ DEFAULT_EFFECTS = {
 }
 
 
+def duration_delta(effects_json):
+    """Seconds this effect chain ADDS to an item's length.
+
+    aecho appends its delay to the stream: a 2000ms echo makes a 30s item run
+    32s. mixer._item_duration is pure trim arithmetic and cannot know that, so
+    without this the editor's predicted length is short by exactly the delay --
+    and the same wrong duration feeds the crossfade offsets and the transition
+    fit guard. Measured against real ffmpeg: drift equals the delay, exactly.
+
+    Only echo_out extends anything today. Every other filter here is
+    length-preserving; loudnorm, the equalizers, the sweeps and the modulation
+    effects all return a stream as long as they were given.
+    """
+    if not effects_json:
+        return 0.0
+    data = effects_json if isinstance(effects_json, dict) else json.loads(effects_json)
+    echo = data.get("echo_out")
+    if not isinstance(echo, dict):
+        return 0.0
+    try:
+        return _range("delay", echo["delay"], ECHO_DELAY_MIN_MS, ECHO_DELAY_MAX_MS) / 1000.0
+    except (KeyError, ValueError):
+        return 0.0
+
+
 def parse_effects(effects_json):
     """The one entry point that turns a set_item's effects_json into
     validated fragments. Accepts JSON text, an already-parsed dict, or
@@ -360,6 +385,15 @@ def demo():
          "-map", "[out]", "-f", "null", "-"],
         capture_output=True, text=True)
     assert r2.returncode == 0, r2.stderr
+
+    # duration_delta: only echo_out extends anything, and by exactly its delay
+    assert duration_delta(None) == 0.0 and duration_delta("") == 0.0
+    assert duration_delta(json.dumps({"eq_kill": {"low_db": -6}})) == 0.0
+    assert duration_delta(json.dumps({"echo_out": {"decay": 0.5, "delay": 2000}})) == 2.0
+    assert duration_delta(json.dumps({"echo_out": {"decay": 0.5, "delay": 300}})) == 0.3
+    assert duration_delta({"echo_out": {"decay": 0.5, "delay": 1000}}) == 1.0
+    assert duration_delta(json.dumps({"echo_out": "nonsense"})) == 0.0
+    assert duration_delta(json.dumps({"echo_out": {"decay": 0.5}})) == 0.0
 
     print("effects.py demo OK")
 

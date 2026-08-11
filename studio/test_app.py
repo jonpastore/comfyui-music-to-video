@@ -2566,7 +2566,12 @@ def test_tempo_ramp_is_reachable_from_the_render_route_not_just_present():
                           **appmod._beatmatch_fields(it, song)})
 
         assert build[0].get("bpm"), "_beatmatch_fields dropped bpm; the ramp is unreachable again"
-        enriched = real_mixer._apply_beatmatch([dict(i) for i in build])
+        # ramp=True is the AUDIO path; render_set passes False because it has no
+        # ramp-rendering loop, and pricing one there predicted a stretch nothing
+        # performed
+        enriched = real_mixer._apply_beatmatch([dict(i) for i in build], ramp=True)
+        assert not real_mixer._apply_beatmatch([dict(i) for i in build])[0].get("_ramp"), \
+            "the video/default path planned a ramp render_set will not apply"
         assert enriched[0].get("_ramp"), (
             "no ramp planned from a route-shaped item -- apply_tempo_ramp is unreachable "
             "while the editor's note still promises one")

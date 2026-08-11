@@ -205,16 +205,23 @@ def _item_duration(info, it):
     # point, so its output length replaces the trim arithmetic rather than
     # adjusting it. _apply_beatmatch plans the ramp before anything reads a
     # duration, so prediction and render read the same plan.
+    # Computed ONCE, before the ramp branch: that branch returns early, so an
+    # echo tail on a ramped item was silently dropped and the mix came out
+    # longer than predicted by exactly the delay. Both paths add it.
+    extra = effects.duration_delta(it.get("effects_json"))
     ramp = it.get("_ramp")
     if ramp:
         rl = ramped_duration(ramp["bar_times"], ramp["ratios"])
         if rl is not None:
-            return max(0.0, rl)
+            return max(0.0, rl) + extra
     full = info["duration"]
     in_s = float(it.get("in_secs") or 0.0)
     out_s = it.get("out_secs")
     out_s = float(out_s) if out_s is not None else full
-    return max(0.0, min(out_s, full) - in_s)
+    # aecho appends its delay to the stream, so a trimmed length alone is short
+    # by exactly that -- and the same number drives the crossfade offsets and the
+    # fit guard, not just the total shown in the editor.
+    return max(0.0, min(out_s, full) - in_s) + extra
 
 
 def _trim_input_args(it):
@@ -280,7 +287,7 @@ def _audio_chain(gain_db, effects_json):
     return ",".join(frags)
 
 
-def _apply_beatmatch(items):
+def _apply_beatmatch(items, ramp=False):
     """Items with beatmatch=1 get out_secs/secs recomputed from their OWN
     beat grid (video_fx.beat_cut_offsets) before anything else runs. Both
     render_set's xfade offset and mix_audio's acrossfade read out_secs/secs
@@ -319,7 +326,13 @@ def _apply_beatmatch(items):
                 # render_set and mix_audio all run, so the length the editor
                 # predicts and the length that renders come from the same
                 # numbers. Planning it anywhere else is how the two drift.
-                nxt = items[idx + 1] if idx + 1 < len(items) else None
+                # ramp=False for the VIDEO path: render_set has no counterpart
+                # to mix_audio's ramp-rendering loop, so planning one there
+                # priced a stretch that never happened and pushed every xfade
+                # offset off by it. app._beatmatch_plan already refuses to ramp
+                # video ("video isn't tempo-stretched"); this is mixer's matching
+                # gate, which was missing.
+                nxt = items[idx + 1] if idx + 1 < len(items) and ramp else None
                 out_bpm, in_bpm = it.get("bpm"), (nxt or {}).get("bpm")
                 exit_at = it.get("out_secs")
                 if nxt is not None and can_beatmatch(out_bpm, in_bpm) and exit_at is not None:
@@ -465,7 +478,7 @@ def mix_audio(items, out_path, progress=None):
     progress = progress or _NOOP
     if not items:
         raise ValueError("items is empty")
-    items = _apply_beatmatch(items)
+    items = _apply_beatmatch(items, ramp=True)
     # Render the tempo ramps FIRST, so what follows sees ordinary audio files.
     # _item_duration already predicted these lengths analytically; rendering
     # them here is what makes that prediction true rather than a claim. Once an
@@ -544,7 +557,9 @@ def set_duration(items, key="video"):
     mp3 mix, key='video' the rendered set."""
     if not items:
         return 0.0
-    items = _apply_beatmatch(items)
+    # ramp only when pricing the AUDIO mix -- mix_audio renders ramps, render_set
+    # does not, so pricing one for video would predict a length nothing produces
+    items = _apply_beatmatch(items, ramp=(key == "audio"))
     durations = [_item_duration(probe(it[key]), it) for it in items]
     running_dur = durations[0]
     for i in range(len(items) - 1):
@@ -897,6 +912,33 @@ def demo():
         assert can_beatmatch(174.0, 128.0) is False, "refusal is symmetric"
         assert can_beatmatch(0, 120.0) is False
         assert can_beatmatch(120.0, None) is False
+
+        # The ramp is AUDIO-ONLY. render_set has no ramp-rendering loop, so
+        # planning one for video priced a stretch nothing performed and pushed
+        # every xfade offset off by it. Measured before the gate: video set
+        # predicted 30.807s, rendered 31.000s.
+        _g = [i * 0.5 for i in range(120)]
+        _it = [{"beatmatch": 1, "bpm": 120.0, "beat_grid": _g, "downbeat_offset": 0,
+                "out_secs": 20.0, "secs": 3.0},
+               {"beatmatch": 0, "bpm": 126.0, "beat_grid": _g, "downbeat_offset": 0,
+                "out_secs": 15.0, "secs": 0.0}]
+        assert _apply_beatmatch([dict(i) for i in _it], ramp=True)[0].get("_ramp"), \
+            "audio path stopped planning ramps"
+        assert not _apply_beatmatch([dict(i) for i in _it], ramp=False)[0].get("_ramp"), \
+            "video path planned a ramp render_set will not apply"
+        assert not _apply_beatmatch([dict(i) for i in _it])[0].get("_ramp"), \
+            "the default must be the safe one"
+
+        # aecho APPENDS its delay, and _item_duration is otherwise pure trim
+        # arithmetic -- the editor was short by exactly the delay, up to 2s.
+        _fake = {"duration": 30.0}
+        _echo = json.dumps({"echo_out": {"decay": 0.5, "delay": 2000}})
+        assert abs(_item_duration(_fake, {"out_secs": 30.0}) - 30.0) < 1e-6
+        assert abs(_item_duration(_fake, {"out_secs": 30.0, "effects_json": _echo}) - 32.0) < 1e-6
+        # and it must survive the ramp branch's early return
+        _ramped = {"_ramp": {"bar_times": [0.0, 2.0], "ratios": [1.0]}, "effects_json": _echo}
+        assert abs(_item_duration(_fake, _ramped) - 4.0) < 1e-6, \
+            "an echo tail on a ramped item was dropped by the early return"
 
         # plan_tempo_ramp: refused pair -> nothing to render
         assert plan_tempo_ramp(grid, 0, 4.0, 128.0, 174.0) == ([], [])
