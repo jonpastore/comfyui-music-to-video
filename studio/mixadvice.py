@@ -158,7 +158,11 @@ def suggest(items, direction="", only_id=None, model=None, progress=None):
         return {}
     messages = [{"role": "system", "content": _system_prompt()},
                 {"role": "user", "content": _user_prompt(set_summary(items), direction, only_id)}]
-    content = grok._chat(model, messages, progress=progress)
+    # _resolve_model, not the raw argument: _chat puts whatever it is given
+    # straight into the request body, and a null model is a 422 from xAI with
+    # "Failed to deserialize the JSON body" -- which reads like a bug in the
+    # prompt rather than a missing model name. Every other caller resolves.
+    content = grok._chat(grok._resolve_model(model), messages, progress=progress)
     try:
         raw = json.loads(content[content.index("{"):content.rindex("}") + 1])
     except (ValueError, json.JSONDecodeError) as e:

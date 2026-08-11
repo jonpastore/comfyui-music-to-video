@@ -262,6 +262,24 @@ if video_fx:
     check("video_fx.beat_cut_offsets", lambda: sig(
         video_fx, "beat_cut_offsets", ["beat_grid", "downbeat_offset", "want_secs"]))
 
+# mixadvice reaches into grok's INTERNALS (_chat, _resolve_model) rather than a
+# public helper, so a rename there breaks suggestions at request time with a 502
+# instead of at import. Passing the raw model= instead of resolving it already
+# cost one live 422 that read like a malformed prompt.
+mixadvice = optional_import("mixadvice")
+grok_mod = optional_import("grok")
+if mixadvice and grok_mod:
+    check("grok._chat and _resolve_model exist for mixadvice", lambda: (
+        None if callable(getattr(grok_mod, "_chat", None))
+        and callable(getattr(grok_mod, "_resolve_model", None))
+        else (_ for _ in ()).throw(AssertionError("mixadvice depends on both"))))
+    check("mixadvice resolves the model before calling _chat", lambda: (
+        None if "_resolve_model(" in inspect.getsource(mixadvice.suggest)
+        else (_ for _ in ()).throw(AssertionError("a null model is a 422 from xAI"))))
+    check("mixadvice.clean refuses an invented transition", lambda: (
+        None if mixadvice.clean({"items": [{"id": 1, "transition": "teleport"}]}, {1}) == {}
+        else (_ for _ in ()).throw(AssertionError("the trust boundary let one through"))))
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILED")
