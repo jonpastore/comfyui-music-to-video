@@ -1,22 +1,108 @@
-<div id="clip-{{ clip.idx }}" class="clip-tile {% if clip.approved %}approved{% endif %}">
-  <h4>Clip {{ clip.idx }}{% if clip.approved %} &#10003;{% endif %}</h4>
+{# One clip: its candidates, and every way to change it without losing it.
+
+   A re-roll is a new seed and throws the composition away. Repair keeps the
+   frame and changes the part you point at. Both land as extra candidates, so
+   neither destroys what is already here. #}
+<div id="clip-{{ clip.idx }}" class="clip-tile {% if clip.approved %}approved{% endif %}
+            {% if clip.flag %}flagged{% endif %}" tabindex="0" data-clip="{{ clip.idx }}">
+  <h4>
+    Clip {{ clip.idx }}{% if clip.approved %} &#10003;{% endif %}
+    {% if clip.flag %}
+    <span class="tag warn-tag" title="{{ clip.flag.reason }}">{{ clip.flag.issue }}</span>
+    {% endif %}
+  </h4>
+
   <div class="candidates">
     {% for c in clip.candidates %}
     <div class="candidate {% if c.approved %}picked{% endif %}">
-      <img src="{{ media_url(c.path) }}" alt="clip {{ clip.idx }} candidate">
-      <form hx-post="/songs/{{ song.id }}/refs/{{ clip.idx }}/approve" hx-target="#clip-{{ clip.idx }}" hx-swap="outerHTML">
+      <img src="{{ media_url(c.path) }}" alt="clip {{ clip.idx }} candidate" loading="lazy">
+      <p class="muted cand-meta">
+        {# the seed was always stored and never shown. A composition you liked
+           is unrecoverable once re-rolled unless you can read its seed. #}
+        seed <code>{{ c.seed if c.seed is not none else "?" }}</code>
+        <span class="tag">{{ c.origin or "gen" }}</span>
+      </p>
+      <form hx-post="/songs/{{ song.id }}/refs/{{ clip.idx }}/approve"
+            hx-target="#clip-{{ clip.idx }}" hx-swap="outerHTML">
         <input type="hidden" name="tier" value="{{ tier }}">
         <input type="hidden" name="ref_id" value="{{ c.id }}">
-        <button type="submit">{{ "Unapprove" if c.approved else "Approve" }}</button>
+        <button type="submit" class="js-approve">{{ "Unapprove" if c.approved else "Approve" }}</button>
       </form>
+
+      <details class="fix-block">
+        <summary>Fix this frame</summary>
+
+        {# ---- face swap ---- #}
+        <form method="post" action="/songs/{{ song.id }}/refs/{{ clip.idx }}/fix"
+              enctype="multipart/form-data" class="stack-form">
+          <input type="hidden" name="tier" value="{{ tier }}">
+          <input type="hidden" name="ref_id" value="{{ c.id }}">
+          <input type="hidden" name="mode" value="face">
+          <label>Face from
+            <select name="face_from">
+              {% for value, label in faces %}
+              <option value="{{ value }}">{{ label }}'s anchor</option>
+              {% endfor %}
+              <option value="">an image I upload</option>
+            </select>
+          </label>
+          <label>...or upload one <input type="file" name="face" accept="image/*"></label>
+          <label>Instruction
+            <textarea name="instruction" rows="3">Replace the face of the person in image 1 with the face of the person in image 2. Keep the head shape, hair and body of image 1. Do not change pose, clothing, framing, background or lighting.</textarea>
+          </label>
+          <p class="hint">Naming &ldquo;image 1&rdquo; and &ldquo;image 2&rdquo; is what steers the
+            edit model &mdash; an unnamed reference is just extra conditioning. The
+            &ldquo;do not change&rdquo; clause is the documented cure for it restyling the whole
+            frame while it is in there.</p>
+          <button type="submit">Swap face</button>
+        </form>
+
+        {# ---- inpaint: paint the region, then submit ---- #}
+        <form method="post" action="/songs/{{ song.id }}/refs/{{ clip.idx }}/fix"
+              class="stack-form mask-form" data-src="{{ media_url(c.path) }}">
+          <input type="hidden" name="tier" value="{{ tier }}">
+          <input type="hidden" name="ref_id" value="{{ c.id }}">
+          <input type="hidden" name="mode" value="inpaint">
+          <input type="hidden" name="mask_data" value="">
+          <label>Instruction
+            <textarea name="instruction" rows="2">Repair only the masked region of image 1 so it matches the rest of the frame. Do not change pose, clothing, framing, background or lighting outside the masked region.</textarea>
+          </label>
+          <button type="button" class="js-paint-mask">Paint the area to repair</button>
+          <span class="muted js-mask-state">nothing painted yet</span>
+          <button type="submit" class="js-mask-submit" disabled>Repair the painted area</button>
+        </form>
+
+        {# ---- outpaint ---- #}
+        <form method="post" action="/songs/{{ song.id }}/refs/{{ clip.idx }}/fix"
+              class="stack-form">
+          <input type="hidden" name="tier" value="{{ tier }}">
+          <input type="hidden" name="ref_id" value="{{ c.id }}">
+          <input type="hidden" name="mode" value="outpaint">
+          <div class="field-row">
+            <label>left <input type="number" name="pad_left" value="0" min="0" max="1024" step="8"></label>
+            <label>top <input type="number" name="pad_top" value="0" min="0" max="1024" step="8"></label>
+            <label>right <input type="number" name="pad_right" value="0" min="0" max="1024" step="8"></label>
+            <label>bottom <input type="number" name="pad_bottom" value="0" min="0" max="1024" step="8"></label>
+          </div>
+          <label>Instruction
+            <textarea name="instruction" rows="2">Extend image 1 into the new empty area, continuing the same scene, perspective and lighting. Do not change anything in the original area.</textarea>
+          </label>
+          <button type="submit">Extend the frame</button>
+        </form>
+      </details>
     </div>
     {% else %}
     <p class="empty">no candidates yet</p>
     {% endfor %}
   </div>
-  <form method="post" action="/songs/{{ song.id }}/reroll">
+
+  <form method="post" action="/songs/{{ song.id }}/reroll" class="stack-form reroll-form">
     <input type="hidden" name="tier" value="{{ tier }}">
     <input type="hidden" name="clip_idx" value="{{ clip.idx }}">
-    <button type="submit">Reroll this clip</button>
+    <input type="text" name="note" maxlength="400" class="js-reroll-note"
+           placeholder="what to change (optional) &mdash; e.g. she is facing away, turn her toward the camera">
+    <button type="submit" class="js-reroll">Reroll this clip</button>
   </form>
+  <p class="hint">A reroll is four new seeds. Without a note it is a blind gamble on the same
+    prompt; with one, the note is appended to this clip's prompt only.</p>
 </div>

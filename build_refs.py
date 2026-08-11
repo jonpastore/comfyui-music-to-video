@@ -69,14 +69,77 @@ def tighten_for_detail(scene, world="", character=""):
 DETAIL_SHOTS = ("EXTREME CLOSE-UP", "CLOSE-UP SHOT")
 
 
+def scene_cast(scene, cast):
+    """[(name, image, desc)] for the supporting characters THIS scene names.
+
+    `cast` holds only characters that have a chosen anchor, so a scene naming
+    an extra, a background character, or somebody nobody anchored simply gets
+    nothing attached -- which is the intended behaviour. Only a main actor
+    needs an anchor, and the storyboard is told exactly that.
+    """
+    out = []
+    for name in (scene.get("characters") or []):
+        entry = cast.get(name)
+        if entry and entry.get("image"):
+            out.append((name, entry["image"], entry.get("desc", "")))
+    return out
+
+
+# Qwen-Image-Edit 2511 is documented as working with 1 to 3 reference images,
+# and TextEncodeQwenImageEditPlus exposes exactly image1/image2/image3. The
+# anchor always holds slot 1 (it is the identity lock), so at most two more
+# references -- a base plate, or cast members -- can be attached.
+MAX_REF_IMAGES = 3
+
+
+def assign_ref_slots(base, extra_refs):
+    """[(slot, name, comfy_filename, description)] for the cast members that fit.
+
+    The anchor is always image1 -- it is the identity lock and must not be
+    displaced. A base plate, when given, takes image2. Whatever is left goes to
+    the cast, and anything past MAX_REF_IMAGES is DROPPED rather than silently
+    overwriting a slot: four named actors in one scene is a storyboard problem,
+    and the caller reports it (see pipeline.gen_refs).
+    """
+    slot = 3 if base else 2
+    out = []
+    for name, img, desc in list(extra_refs or []):
+        if slot > MAX_REF_IMAGES:
+            break
+        out.append((slot, name, img, desc))
+        slot += 1
+    return out
+
+
+def cast_clause(slots):
+    """Name each extra reference by its SLOT NUMBER.
+
+    Qwen's multi-image mode is steered by referring to "image 1", "image 2" in
+    the instruction itself -- an unreferenced image is just extra conditioning
+    and the model decides for itself what to do with it. Naming who is in which
+    slot is what turns two anchors into two specific characters rather than one
+    blended one.
+    """
+    out = []
+    for slot, name, _img, desc in slots:
+        who = f"The character in image {slot} is {name}"
+        out.append(f"{who}: {desc}." if desc else f"{who}.")
+    return (" " + " ".join(out)) if out else ""
+
+
 def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
-             guard="", world="", character="", body=""):
+             guard="", world="", character="", body="", extra_refs=()):
     """guard: tier wording. The pinned clause is appended regardless, HERE --
     this is the chokepoint every storyboard reaches on its way to the image
     model, whoever generated it. Storing the clause in the storyboard JSON only
     covered files our own composer produced; it did nothing for the ones already
     in this repo, for `*_comfy.json` from another tool, or for a hand-edited
-    file -- and editing prompts is the documented workflow."""
+    file -- and editing prompts is the documented workflow.
+
+    extra_refs: [(name, comfy_input_filename, description)] for the cast members
+    this scene needs beyond the protagonist. They become image2/image3 and are
+    named in the prompt by slot -- see cast_clause.
+    """
     # shot directive goes FIRST -- framing is ignored when buried mid-prompt
     if shot.startswith(DETAIL_SHOTS):
         pos = shot + " " + tighten_for_detail(scene, world, character)
@@ -90,6 +153,13 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
     # (negatives are inert at cfg 1.0).
     if body:
         pos += " " + body.strip()
+    # Slots are assigned BEFORE the prompt is sealed. The cast clause names who
+    # is in image 2 and image 3, so it is prompt text like any other and has to
+    # go through build_prompt with everything else -- appending it afterwards
+    # would put unscreened character prose into the prompt AND leave it sitting
+    # after the pinned clause, which is required to come last.
+    slots = assign_ref_slots(base, extra_refs)
+    pos += cast_clause(slots)
     pos = guardrail.build_prompt(pos, guard, f"scene {scene.get('scene_number','?')}")
     neg = scene.get("negative_prompt", "")
 
@@ -110,12 +180,20 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
     }
 
     # Conditioning: anchor is image1 (identity). A base plate, when supplied, is
-    # image2 and sets composition/aspect.
+    # image2 and sets composition/aspect. Cast members fill whatever slots are
+    # left, up to MAX_REF_IMAGES.
     enc = {"clip": ["5", 0], "vae": ["6", 0], "image1": ["8", 0]}
     if base:
         wf["9"] = {"class_type": "LoadImage", "inputs": {"image": base}}
         wf["10"] = {"class_type": "FluxKontextImageScale", "inputs": {"image": ["9", 0]}}
         enc["image2"] = ["10", 0]
+    # node ids from 22 up (slot*2+16): 18 is the SaveImage callers append, and
+    # 9/10 belong to the base plate.
+    for slot, name, img, desc in slots:
+        load_id, scale_id = str(slot * 2 + 16), str(slot * 2 + 17)
+        wf[load_id] = {"class_type": "LoadImage", "inputs": {"image": img}}
+        wf[scale_id] = {"class_type": "FluxKontextImageScale", "inputs": {"image": [load_id, 0]}}
+        enc[f"image{slot}"] = [scale_id, 0]
 
     wf["11"] = {"class_type": "TextEncodeQwenImageEditPlus", "inputs": dict(enc, prompt=pos)}
     wf["12"] = {"class_type": "TextEncodeQwenImageEditPlus", "inputs": dict(enc, prompt=neg)}
@@ -157,9 +235,13 @@ def main():
                                                 "(colouring per body part); goes into every prompt")
     ap.add_argument("--guardrail", default="", help="tier wording; the pinned clause is "
                                                     "appended regardless and cannot be disabled")
+    ap.add_argument("--cast", help="json file: {name: {image, desc}} of anchored supporting "
+                                    "characters. A scene attaches the ones its 'characters' "
+                                    "list names; extras and background need no anchor.")
     ap.add_argument("--outdir", required=True)
     args = ap.parse_args()
 
+    cast = json.load(open(args.cast)) if args.cast else {}
     sb = normalize(json.load(open(args.storyboard)))
     scenes = sb["scenes"]
     world = sb.get("album_world_reference") or sb.get("world_reference", "")
@@ -176,7 +258,8 @@ def main():
             # scene, with the anchor still pinning the character
             wf = workflow(scene, args.anchor, args.base, args.latent,
                           args.width, args.height, 7000 + ci,
-                          shot, args.guardrail, world, character, args.body)
+                          shot, args.guardrail, world, character, args.body,
+                          extra_refs=scene_cast(scene, cast))
             wf["18"] = {"class_type": "SaveImage", "inputs": {
                 "images": ["17", 0],
                 "filename_prefix": f"refs_{args.slug}/clip_{ci:03d}"}}
@@ -198,7 +281,7 @@ def main():
         wf = workflow(scene, args.anchor, args.base, args.latent,
                       args.width, args.height, 7000 + num,
                       shot_directive(scene, num), args.guardrail, world, character,
-                      args.body)
+                      args.body, extra_refs=scene_cast(scene, cast))
         wf["18"] = {"class_type": "SaveImage", "inputs": {
             "images": ["17", 0],
             "filename_prefix": f"refs_{args.slug}/scene_{num:02d}"}}

@@ -27,6 +27,14 @@
         <option value="back">back</option>
       </select>
     </label>
+    <label>Character
+      <select name="character_id">
+        <option value="">protagonist (the album look)</option>
+        {% for c in characters %}
+        <option value="{{ c.id }}">{{ c.name }}{% if c.role %} &mdash; {{ c.role }}{% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
     <label>Face <input type="file" name="face" accept="image/*" required></label>
     <label>Outfit <input type="file" name="outfit" accept="image/*" required></label>
     <label>Candidates <input type="number" name="n" value="4" min="1" max="8"></label>
@@ -45,7 +53,8 @@
 {% else %}
 {% for g in groups %}
 <section class="card">
-  <h3>{{ g.scope_kind }}: {{ g.scope_value }} &middot; {{ g.tier }} &middot; {{ g.view }}</h3>
+  <h3>{{ g.scope_kind }}: {{ g.scope_value }} &middot; {{ g.character_name or "protagonist" }}
+      &middot; {{ g.tier }} &middot; {{ g.view }}</h3>
   <div class="candidate-grid">
     {% for c in g.candidates %}
     <div class="candidate {% if c.chosen %}picked{% endif %}">

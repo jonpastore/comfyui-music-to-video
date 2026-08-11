@@ -77,7 +77,32 @@ CREATE TABLE IF NOT EXISTS jobs (
   status TEXT DEFAULT 'queued', progress TEXT, log_path TEXT,
   song_id INTEGER, created REAL, started REAL, finished REAL, error TEXT);
 
+-- The CAST of an album. The album profile (playlists.identity/wardrobe/body)
+-- describes the protagonist and keeps doing so; these are the OTHER named
+-- characters -- a duet partner, an antagonist -- each with its own anchors.
+-- Scoped by album NAME, exactly as anchors.scope_value already is, so nothing
+-- new has to be linked up.
+--
+-- Extras and background characters deliberately have no row: the storyboard is
+-- told to name only main actors, because only a main actor needs an anchor to
+-- stay consistent across 50 frames.
+CREATE TABLE IF NOT EXISTS characters (
+  id INTEGER PRIMARY KEY,
+  scope_value TEXT NOT NULL,         -- album name
+  name TEXT NOT NULL,
+  role TEXT,                         -- free text: "antagonist", "duet partner"
+  identity TEXT, wardrobe TEXT, body TEXT,
+  created REAL,
+  UNIQUE(scope_value, name));
+
+-- Remembered per-role model choices (see models.py). Not per song: picking
+-- a renderer is a studio-wide preference, and a per-song copy would go stale
+-- the moment a model is replaced.
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY, value TEXT);
+
 CREATE INDEX IF NOT EXISTS idx_anchors ON anchors(scope_kind, scope_value, tier, view);
+CREATE INDEX IF NOT EXISTS idx_characters ON characters(scope_value, name);
 CREATE INDEX IF NOT EXISTS idx_refs_song ON refs(song_id, tier, clip_idx);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, id);
 """
@@ -118,6 +143,19 @@ MIGRATIONS = [
     "ALTER TABLE playlists ADD COLUMN body TEXT",         # colouring, consistency
     "ALTER TABLE playlists ADD COLUMN world TEXT",
     "ALTER TABLE playlists ADD COLUMN render_tail TEXT",
+    # The DIRECTION the storyboard was generated from: the editable prompt, as
+    # sent. Stored so re-opening a storyboard shows what produced it -- the
+    # composed prompt was previously invisible, which is why a bad storyboard
+    # could not be diagnosed without reading grok.py.
+    "ALTER TABLE storyboards ADD COLUMN prompt TEXT",
+    # How a reference frame came to exist: gen | reroll | face | inpaint |
+    # outpaint. Existing rows read NULL, which the UI shows as 'gen' -- they
+    # all predate repair and were all generated.
+    "ALTER TABLE refs ADD COLUMN origin TEXT",
+    # WHICH character an anchor depicts. NULL = the album's protagonist, which
+    # is every row that existed before the cast did -- so chosen_anchor() and
+    # every refs job keep working untouched.
+    "ALTER TABLE anchors ADD COLUMN character_id INTEGER",
 ]
 
 

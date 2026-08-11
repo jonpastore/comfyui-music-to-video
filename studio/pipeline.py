@@ -204,20 +204,39 @@ def _clip_records(paths, seed_re=r"clip_(\d+)"):
 
 
 def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
-             limit=None, guard="", body=""):
+             limit=None, guard="", body="", cast=None):
     """limit=N renders only the first N clips.
 
     A full song is 40-80 references at ~15 s each, so committing to the whole
     set costs 10-20 minutes of the single GPU. limit lets you look at the first
     few and judge the storyboard before spending that.
+
+    cast: {name: {"path": local anchor path, "desc": one line}} for the album's
+    anchored supporting characters. Each anchor is copied into ComfyUI's input
+    dir here -- build_refs.py names images, it does not move them.
     """
     bs = _slug_tier(slug, tier)
+    args = ["--storyboard", storyboard_json, "--slug", bs,
+            "--anchor", anchor_name, "--audio", mp3_path,
+            "--guardrail", guard, "--body", body]
     with tempfile.TemporaryDirectory() as wf_dir:
-        _run_script("build_refs.py", [
-            "--storyboard", storyboard_json, "--slug", bs,
-            "--anchor", anchor_name, "--audio", mp3_path, "--outdir", wf_dir,
-            "--guardrail", guard, "--body", body,
-        ], progress)
+        cast_path = None
+        if cast:
+            staged = {name: {"image": install_input(c["path"]), "desc": c.get("desc", "")}
+                      for name, c in cast.items() if c.get("path")}
+            # the cast file must live OUTSIDE wf_dir: submit_dir() posts every
+            # *.json in there as a workflow, and this one is not one.
+            fd, cast_path = tempfile.mkstemp(suffix=".json", prefix="cast_")
+            with os.fdopen(fd, "w") as f:
+                json.dump(staged, f)
+            args += ["--cast", cast_path]
+            if progress:
+                progress(f"cast anchors staged: {', '.join(sorted(staged)) or 'none'}")
+        try:
+            _run_script("build_refs.py", [*args, "--outdir", wf_dir], progress)
+        finally:
+            if cast_path:
+                os.remove(cast_path)
         if limit:
             keep = sorted(f for f in os.listdir(wf_dir) if f.endswith(".json"))[:int(limit)]
             for f in os.listdir(wf_dir):
@@ -230,14 +249,38 @@ def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
             for p, m in _clip_records(paths)]
 
 
-def reroll(slug, tier, storyboard_json, anchor_name, mp3_path, clip_indices, progress=None):
+def reroll(slug, tier, storyboard_json, anchor_name, mp3_path, clip_indices, progress=None,
+           guard="", body="", note="", cast=None):
+    """guard/body are NOT optional in practice, whatever the defaults say.
+
+    They were absent entirely until now, so every re-rolled frame was built
+    without the tier's wording and without the album's body-consistency
+    wording -- the frame you re-rolled to fix came back with the very drift the
+    body text exists to prevent.
+
+    note is the per-clip correction: "she is facing away, turn her toward the
+    camera". It is appended to THIS clip's prompt only, which is what makes a
+    re-roll a correction rather than another spin of the same wheel.
+    """
     bs = _slug_tier(slug, tier)
-    with tempfile.TemporaryDirectory() as wf_dir:
-        _run_script("reroll_refs.py", [
-            "--storyboard", storyboard_json, "--slug", bs,
+    args = ["--storyboard", storyboard_json, "--slug", bs,
             "--audio", mp3_path, "--anchor", anchor_name,
-            "--clips", ",".join(str(c) for c in clip_indices), "--outdir", wf_dir,
-        ], progress)
+            "--clips", ",".join(str(c) for c in clip_indices),
+            "--guardrail", guard, "--body", body, "--note", note]
+    with tempfile.TemporaryDirectory() as wf_dir:
+        cast_path = None
+        if cast:
+            staged = {name: {"image": install_input(c["path"]), "desc": c.get("desc", "")}
+                      for name, c in cast.items() if c.get("path")}
+            fd, cast_path = tempfile.mkstemp(suffix=".json", prefix="cast_")
+            with os.fdopen(fd, "w") as f:
+                json.dump(staged, f)
+            args += ["--cast", cast_path]
+        try:
+            _run_script("reroll_refs.py", [*args, "--outdir", wf_dir], progress)
+        finally:
+            if cast_path:
+                os.remove(cast_path)
         paths = _submit_and_collect(wf_dir, f"reroll_{bs}", "*.png", progress)
     return [{"clip_idx": int(m.group(1)), "path": p, "seed": int(m.group(2))}
             for p, m in _clip_records(paths, r"clip_(\d+)_s(\d+)")]
@@ -252,17 +295,27 @@ def stage_refs(slug, tier, ref_paths):
             for rec in ref_paths]
 
 
-def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None, limit=None):
+def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None, limit=None,
+              video_model="s2v", ref_motion=None, control_video=None, refine=False):
+    """video_model: 's2v' (default, audio-driven) or 'i2v' (prompt-driven, no
+    audio at all). See studio/models.py for what each is designed for."""
     # ref_paths must be staged before build_song.py runs -- it references
     # them by name inside the workflow, it doesn't take them as CLI input.
     stage_refs(slug, tier, ref_paths)
     install_input(mp3_path)  # WanSoundImageToVideo's LoadAudio needs it in COMFY_INPUT too
     bs = _slug_tier(slug, tier)
+    args = ["--storyboard", storyboard_json, "--audio", mp3_path,
+            "--slug", bs, "--video-model", video_model]
+    # driving clips are read by PATH (LoadVideosFromFolder takes a string), so
+    # unlike the images they are not installed into COMFY_INPUT
+    if ref_motion:
+        args += ["--ref-motion", ref_motion]
+    if control_video:
+        args += ["--control-video", control_video]
+    if refine:
+        args.append("--refine")
     with tempfile.TemporaryDirectory() as wf_dir:
-        _run_script("build_song.py", [
-            "--storyboard", storyboard_json, "--audio", mp3_path,
-            "--slug", bs, "--outdir", wf_dir,
-        ], progress)
+        _run_script("build_song.py", [*args, "--outdir", wf_dir], progress)
         if limit:
             # a full song is 40-80 clips at ~90s each on one GPU; limit lets you
             # confirm the chain end to end before committing an hour to it
@@ -274,6 +327,32 @@ def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None, l
                 progress(f"limited to first {len(keep)} clips")
         paths = _submit_and_collect(wf_dir, f"{bs}", "*.mp4", progress)
     return [{"clip_idx": int(m.group(1)), "path": p} for p, m in _clip_records(paths)]
+
+
+def fix_ref(slug, tier, clip_idx, mode, image_path, seed, progress=None,
+            face_path=None, mask_path=None, pad=(0, 0, 0, 0), instruction="",
+            guard="", body="", feathering=40):
+    """Repair one reference frame: face swap, inpaint or outpaint.
+
+    Returns the same [{clip_idx, path, seed}] shape gen_refs/reroll return, so
+    the caller inserts it as another candidate for that clip and the existing
+    approve flow needs no change.
+    """
+    bs = _slug_tier(slug, tier)
+    image_name = install_input(image_path)
+    args = ["--mode", mode, "--image", image_name, "--slug", bs,
+            "--clip", str(clip_idx), "--seed", str(seed),
+            "--instruction", instruction, "--guardrail", guard, "--body", body,
+            "--pad", ",".join(str(int(p)) for p in pad), "--feathering", str(int(feathering))]
+    if face_path:
+        args += ["--face", install_input(face_path)]
+    if mask_path:
+        args += ["--mask", install_input(mask_path)]
+    with tempfile.TemporaryDirectory() as wf_dir:
+        _run_script("fix_ref.py", [*args, "--outdir", wf_dir], progress)
+        paths = _submit_and_collect(wf_dir, f"fix_{bs}", "*.png", progress)
+    return [{"clip_idx": int(m.group(1)), "path": p, "seed": int(m.group(2))}
+            for p, m in _clip_records(paths, r"clip_(\d+)_s(\d+)")]
 
 
 def contact_sheet(src_dir, out_jpg, cols=6):

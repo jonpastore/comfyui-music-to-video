@@ -1,0 +1,87 @@
+{# One scene: when it plays, what it says, and the frames rendered from it.
+
+   Its own partial so saving a scene swaps just that scene back in (htmx) --
+   a full page reload on a 49-scene storyboard loses your scroll position and
+   every other box you were part-way through. #}
+<section class="scene" id="scene-{{ r.num }}">
+  <header class="scene-head">
+    <h3>{{ r.num }}. {{ r.name }}</h3>
+    <span class="timing num">
+      {% if r.start is not none %}
+        {{ r.start | hms }} &rarr; {{ r.end | hms }}
+        <span class="muted">({{ "%.1f"|format(r.length) }}s &middot;
+          {{ r.clips | length }} clip{{ "" if r.clips|length == 1 else "s" }})</span>
+      {% else %}
+        <span class="muted">no clips allocated</span>
+      {% endif %}
+    </span>
+  </header>
+
+  <p class="meta">
+    {% if r.scene.cue %}<span class="tag">{{ r.scene.cue }}</span>{% endif %}
+    {% if r.scene.location %}{{ r.scene.location }} &middot; {% endif %}
+    {% if r.scene.lighting %}{{ r.scene.lighting }} &middot; {% endif %}
+    camera: {{ r.scene.camera or "unset" }}
+    <span class="muted">&middot; asks for {{ "%.0f"|format(r.guidance) }}s</span>
+  </p>
+
+  {% if r.cast %}
+  <p class="cast-chips">
+    <span class="muted">main actors:</span>
+    {% for c in r.cast %}
+    <span class="tag {{ 'done' if c.anchored else 'warn-tag' }}"
+          title="{{ 'anchored -- attached to this scene as a reference image'
+                    if c.anchored else
+                    'no anchor at this tier -- rendered from scene text alone' }}">
+      {{ c.name }}{% if not c.anchored %} &middot; no anchor{% endif %}
+    </span>
+    {% endfor %}
+  </p>
+  {% endif %}
+
+  {% if r.shots %}
+  <details class="shot-detail">
+    <summary>framing actually sent ({{ r.shots | length }})</summary>
+    <ul>{% for s in r.shots %}<li>{{ s }}</li>{% endfor %}</ul>
+    <p class="hint">Derived from <code>camera</code> by build_song.SHOT_RULES and prepended to
+      the prompt. Framing is ignored unless it leads &mdash; that is why it is not in the box
+      below. Change <code>camera</code> in the storyboard JSON to change it.</p>
+  </details>
+  {% endif %}
+
+  <form class="scene-form stack-form"
+        hx-post="/songs/{{ song.id }}/storyboard/{{ tier }}/scene/{{ r.num }}"
+        hx-target="#scene-{{ r.num }}" hx-swap="outerHTML">
+    {% for f in fields %}
+    <label>{{ f.replace("_", " ") }}
+      <textarea name="{{ f }}" rows="{{ 5 if f == 'image_prompt' else 2 }}">{{ r.scene[f] or "" }}</textarea>
+    </label>
+    {% endfor %}
+    <button type="submit">Save scene {{ r.num }}</button>
+  </form>
+
+  {% if r.refs %}
+  <div class="scene-refs">
+    {% for c in r.refs %}
+    <figure class="ref-frame {% if c.approved %}approved{% endif %} {% if c.stale %}stale{% endif %}">
+      {% if c.candidates %}
+      <img src="{{ media_url(c.candidates[-1].path) }}" alt="clip {{ c.idx }}" loading="lazy">
+      {% else %}
+      <div class="ref-empty">not rendered</div>
+      {% endif %}
+      <figcaption>
+        clip {{ c.idx }}
+        <span class="muted num">{{ (c.idx * chunk) | hms }}</span>
+        {% if c.approved %}<span class="tag done">approved</span>{% endif %}
+        {% if c.stale %}<span class="tag warn-tag" title="rendered before this scene's text was last edited">stale</span>{% endif %}
+        {% if c.candidates | length > 1 %}
+        <span class="muted">{{ c.candidates | length }} candidates</span>
+        {% endif %}
+      </figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">No reference frames for this scene yet.</p>
+  {% endif %}
+</section>

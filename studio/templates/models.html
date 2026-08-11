@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Models</h1>
+<p class="hint">Every model this studio can use, grouped by what it is chosen <em>for</em>.
+  Availability is read live from ComfyUI's own <code>/object_info</code> &mdash; the same list
+  the loader node validates against &mdash; so a model that is not on the box says so here
+  instead of failing forty minutes into a render.
+  {% if not reachable %}<strong class="warn">ComfyUI did not answer, so availability is
+  unknown below.</strong>{% endif %}</p>
+
+{% for role, role_label in roles.items() %}
+<section class="card">
+  <h2>{{ role }}</h2>
+  <p class="muted">{{ role_label }}</p>
+
+  {% for m in by_role.get(role, []) %}
+  <article class="model-card {% if m.available is false %}unavailable{% endif %}">
+    <header class="model-head">
+      <strong>{{ m.label }}</strong>
+      {% if m.available is none %}
+        <span class="tag">availability unknown</span>
+      {% elif m.available %}
+        <span class="tag done">installed</span>
+      {% else %}
+        <span class="tag warn-tag">not installed</span>
+      {% endif %}
+      {% if defaults.get(role) == m.key %}<span class="tag">default</span>{% endif %}
+    </header>
+
+    <p>{{ m.purpose }}</p>
+    <p class="meta"><code>{{ m.file }}</code> &middot; loaded by <code>{{ m.loader }}</code></p>
+
+    {% if m.missing %}
+    <p class="warn">Missing companion files it needs:
+      {% for f in m.missing %}<code>{{ f }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+      It will load and render badly rather than refuse.</p>
+    {% endif %}
+
+    {% if m.notes %}
+    <ul class="model-notes">
+      {% for n in m.notes %}<li>{{ n }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if role == "video" and not m.cli %}
+    <p class="hint">Catalogued for evaluation only &mdash; not wired to the renderer, so it is
+      not offered as a render choice and cannot be made the default.</p>
+    {% elif defaults.get(role) != m.key and m.available is not false %}
+    <form method="post" action="/models/{{ role }}/default">
+      <input type="hidden" name="key" value="{{ m.key }}">
+      <button type="submit">Make this the default for {{ role }}</button>
+    </form>
+    {% endif %}
+  </article>
+  {% else %}
+  <p class="empty">Nothing catalogued for this role yet.</p>
+  {% endfor %}
+
+  {# the two roles that are not ComfyUI models at all #}
+  {% if role == "storyboard" %}
+  <article class="model-card">
+    <header class="model-head">
+      <strong>xAI chat models</strong>
+      {% if chat_error %}<span class="tag warn-tag">unreachable</span>
+      {% else %}<span class="tag done">{{ chat | length }} available</span>{% endif %}
+    </header>
+    <p>Writes the shot list from the lyrics. Picked per storyboard on the song page;
+      &ldquo;highest available&rdquo; resolves to <code>{{ chat_best or "nothing" }}</code>.</p>
+    {% if chat_error %}
+    <p class="warn">{{ chat_error }}</p>
+    {% else %}
+    <p class="meta">{{ chat | join(", ") }}</p>
+    <ul class="model-notes">
+      <li>Multi-agent ids are excluded: <code>/chat/completions</code> refuses them outright
+        with <code>400 Multi Agent requests are not allowed</code>, and one of them sorted
+        highest so auto-select kept picking it.</li>
+      <li>Image models (<code>grok-imagine-*</code>) are excluded &mdash; they are not chat
+        models and picking one only produces a confusing failure.</li>
+    </ul>
+    {% endif %}
+  </article>
+  {% endif %}
+
+  {% if role == "vision" %}
+  <article class="model-card">
+    <header class="model-head">
+      <strong>qwen3-vl (local, via the litellm gateway)</strong>
+      <span class="tag done">free</span>
+    </header>
+    <p>Reviews the contact sheet of approved frames, and drafts the album's identity /
+      wardrobe / body text by looking at the anchor.</p>
+    <ul class="model-notes">
+      <li>Runs locally at no cost; xAI (<code>{{ vision_model }}</code>) is only the fallback.</li>
+      <li>Its flags are ADVISORY. It has false positives, which is why a flagged clip is
+        offered as a one-click reroll rather than re-rolled automatically.</li>
+    </ul>
+  </article>
+  {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

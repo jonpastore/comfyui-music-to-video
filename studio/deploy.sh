@@ -23,7 +23,7 @@ rsync -a --delete \
 echo "== syncing pipeline scripts"
 rsync -a "$REPO"/build_refs.py "$REPO"/build_song.py "$REPO"/build_storyboard.py \
          "$REPO"/make_anchor.py "$REPO"/reroll_refs.py "$REPO"/make_contact_sheet.py \
-         "$REPO"/guardrail.py \
+         "$REPO"/guardrail.py "$REPO"/fix_ref.py \
          "$R:$DEST/scripts/"
 rsync -a "$REPO"/profiles/ "$R:$DEST/scripts/profiles/" 2>/dev/null || true
 
@@ -96,7 +96,7 @@ IP=$(ssh $R 'tailscale ip -4 2>/dev/null | head -1')
 # app imports its modules and renders. Hit the real pages and fail loudly.
 echo "== smoke test"
 FAIL=0
-for P in / /playlists /tiers /jobs; do
+for P in / /playlists /tiers /jobs /models /anchors; do
   CODE=$(ssh $R "curl -s -o /dev/null -w '%{http_code}' -m 15 http://127.0.0.1:8000$P" || echo 000)
   printf "  %-12s %s\n" "$P" "$CODE"
   [ "$CODE" = "200" ] || FAIL=1

@@ -82,6 +82,142 @@ document.addEventListener("submit", function (e) {
                          "? Songs and rendered videos are kept.")) {
     e.preventDefault();
   }
+  var charForm = e.target.closest(".delete-character");
+  if (charForm && !confirm("Delete character " + charForm.dataset.name +
+                           "? Their anchor rows go too; the image files stay on disk.")) {
+    e.preventDefault();
+  }
+});
+
+// Switching the storyboard tier re-defaults the direction box from that tier's
+// wording, which would throw away a brief you had already written. htmx fires
+// htmx:confirm before every request, so the swap is held until the question is
+// answered -- and only asked when the text is actually dirty (a textarea's
+// defaultValue is exactly what the server rendered).
+document.body.addEventListener("htmx:confirm", function (e) {
+  var sel = e.target;
+  if (!sel.matches || !sel.matches("#sb-form select[name=tier]")) return;
+  var ta = document.querySelector("#sb-form textarea[name=direction]");
+  if (!ta || ta.value === ta.defaultValue) return;      // untouched: just swap
+  e.preventDefault();
+  if (confirm("Switching tier reloads the default direction and discards your edits. Continue?")) {
+    e.detail.issueRequest();
+  } else {
+    sel.value = sel.dataset.current;                     // put the select back
+  }
+});
+
+// ---- inpaint mask painter -------------------------------------------------
+// Paint white where the model may repaint, on black. The mask is produced at
+// the image's NATURAL size, not the size it happens to be displayed at, because
+// the workflow feeds it to InpaintModelConditioning alongside the unscaled
+// frame -- a mask at CSS pixel size would be offset from the pixels it masks.
+function paintMask(form) {
+  var src = form.dataset.src;
+  var img = new Image();
+  img.onload = function () {
+    var dlg = document.createElement("dialog");
+    dlg.className = "mask-dialog";
+    var canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    var ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+
+    // the mask itself, kept separate from what is shown: the visible canvas is
+    // the frame plus a red overlay so you can see where you are painting.
+    var mask = document.createElement("canvas");
+    mask.width = canvas.width;
+    mask.height = canvas.height;
+    var mctx = mask.getContext("2d");
+    mctx.fillStyle = "#000";
+    mctx.fillRect(0, 0, mask.width, mask.height);
+
+    var bar = document.createElement("div");
+    bar.className = "modal-bar";
+    bar.innerHTML = "<strong>Paint the area to repair</strong>";
+    var size = document.createElement("input");
+    size.type = "range"; size.min = "8"; size.max = "200"; size.value = "48";
+    var clear = document.createElement("button");
+    clear.type = "button"; clear.textContent = "Clear";
+    var done = document.createElement("button");
+    done.type = "button"; done.textContent = "Use this mask";
+    var cancel = document.createElement("button");
+    cancel.type = "button"; cancel.textContent = "Cancel";
+    bar.append(size, clear, done, cancel);
+    dlg.append(bar, canvas);
+    document.body.appendChild(dlg);
+    dlg.showModal();
+
+    var painting = false;
+    function at(e) {
+      var r = canvas.getBoundingClientRect();
+      return {x: (e.clientX - r.left) * (canvas.width / r.width),
+              y: (e.clientY - r.top) * (canvas.height / r.height)};
+    }
+    function dab(e) {
+      if (!painting) return;
+      var p = at(e), r = Number(size.value);
+      mctx.fillStyle = "#fff";
+      mctx.beginPath(); mctx.arc(p.x, p.y, r, 0, Math.PI * 2); mctx.fill();
+      ctx.fillStyle = "rgba(247, 118, 142, 0.5)";
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+    }
+    canvas.addEventListener("pointerdown", function (e) { painting = true; dab(e); });
+    canvas.addEventListener("pointermove", dab);
+    window.addEventListener("pointerup", function () { painting = false; });
+
+    clear.addEventListener("click", function () {
+      mctx.fillStyle = "#000"; mctx.fillRect(0, 0, mask.width, mask.height);
+      ctx.drawImage(img, 0, 0);
+    });
+    cancel.addEventListener("click", function () { dlg.close(); dlg.remove(); });
+    done.addEventListener("click", function () {
+      form.querySelector("[name=mask_data]").value = mask.toDataURL("image/png");
+      form.querySelector(".js-mask-state").textContent = "mask ready";
+      form.querySelector(".js-mask-submit").disabled = false;
+      dlg.close(); dlg.remove();
+    });
+  };
+  img.src = src;
+}
+
+document.addEventListener("click", function (e) {
+  var btn = e.target.closest(".js-paint-mask");
+  if (btn) paintMask(btn.closest(".mask-form"));
+});
+
+// ---- keyboard review ------------------------------------------------------
+// Fifty frames is a lot of mousing. J/K move, A approves the focused clip, R
+// rerolls it. Ignored while typing, or the reroll note would trigger both.
+document.addEventListener("keydown", function (e) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  var t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" ||
+            t.isContentEditable)) return;
+  var tiles = Array.prototype.slice.call(document.querySelectorAll(".clip-tile"));
+  if (!tiles.length) return;
+  var cur = document.activeElement && document.activeElement.closest(".clip-tile");
+  var i = cur ? tiles.indexOf(cur) : -1;
+  var key = e.key.toLowerCase();
+
+  if (key === "j" || key === "k") {
+    e.preventDefault();
+    var next = tiles[Math.min(tiles.length - 1, Math.max(0, i + (key === "j" ? 1 : -1)))];
+    if (i === -1) next = tiles[0];
+    next.focus();
+    next.scrollIntoView({block: "nearest"});
+  } else if (key === "a" && cur) {
+    e.preventDefault();
+    var approve = cur.querySelector(".js-approve");
+    if (approve) approve.click();
+  } else if (key === "r" && cur) {
+    e.preventDefault();
+    // focus the note rather than firing immediately: a reroll costs GPU, and a
+    // stray keypress that silently queues four renders is a bad trade
+    var note = cur.querySelector(".js-reroll-note");
+    if (note) note.focus();
+  }
 });
 
 // Subgenre select filtered by the chosen genre, driven by the #genre-data

@@ -1,0 +1,56 @@
+{# The storyboard direction form, for ONE tier.
+
+   Its own partial because the tier select swaps it (hx-get /storyboard-form):
+   the prefill is per tier, so the prompt has to follow the tier rather than
+   silently belonging to whichever one was selected when the page loaded. #}
+<form id="sb-form" method="post" action="/songs/{{ song.id }}/storyboard" class="stack-form">
+  <div class="field-row">
+    <label>Tier
+      <select name="tier" data-current="{{ tier }}"
+              hx-get="/songs/{{ song.id }}/storyboard-form"
+              hx-target="#sb-form" hx-swap="outerHTML" hx-trigger="change">
+        {% for t in tiers %}
+        <option value="{{ t.name }}" {% if t.name == tier %}selected{% endif %}>{{ t.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Model
+      <select name="model">
+        <option value="">(highest available{% if best_model %}: {{ best_model }}{% endif %})</option>
+        {% for m in models %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+
+  {# ---- the limits, stated ABOVE the box they apply to ---- #}
+  <div class="guardrail-panel">
+    <h3>What applies to this prompt</h3>
+
+    <p class="rule pinned"><strong>Always, and not editable here.</strong>
+      Sent as its own instruction before anything below, and attached again to
+      every image and video prompt at render time by
+      <code>guardrail.build_prompt()</code>:</p>
+    <blockquote>{{ pinned }}</blockquote>
+
+    <p class="rule"><strong>The <code>{{ tier }}</code> tier's wording.</strong>
+      Prefilled into the box below so you can tune it for this song. Editing it
+      here changes only what the <em>storyboard writer</em> is told &mdash; the
+      renderer re-applies the tier's own wording to every frame regardless:</p>
+    <blockquote>{{ tier_text or "(this tier adds no wording of its own)" }}</blockquote>
+
+    <p class="rule"><strong>Limits.</strong> Up to {{ max_direction }} characters.
+      Refused outright if it references minors, or if it tries to instruct the
+      model about its own rules (&ldquo;ignore the above&rdquo;,
+      &ldquo;no restrictions&rdquo;) &mdash; the same two checks that screen a
+      custom tier's wording.</p>
+  </div>
+
+  <label>Direction &mdash; the brief the storyboard is written from
+    <textarea name="direction" rows="14" maxlength="{{ max_direction }}">{{ direction }}</textarea>
+  </label>
+
+  <p class="hint">Scene count and pacing stay the model's call &mdash; it has the lyrics and
+    the track length. A scene longer than one 4.8125s clip is cut into consecutive clips and
+    merged automatically, so nothing has to be trimmed to fit.</p>
+  <button type="submit">Generate storyboard</button>
+</form>

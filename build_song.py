@@ -156,7 +156,7 @@ def allocate(scenes, nclips):
     return counts
 
 
-def clip_plan(scenes, audio_path):
+def clip_plan(scenes, audio_path=None, nclips=None):
     """[(clip_index, scene, shot_directive)] for every clip in the song.
 
     THE definition of which clip belongs to which scene. build_refs.py,
@@ -166,8 +166,14 @@ def clip_plan(scenes, audio_path):
     drifted, re-rolling clip 17 would silently regenerate a different scene than
     the one you rejected, which is the kind of bug nobody traces back to an
     allocation loop.
+
+    `nclips` skips the ffprobe when the caller already knows the count -- the
+    studio's web layer renders this on every page view and has the duration in
+    the songs row. It is an ALTERNATIVE INPUT, not a second implementation:
+    everything below is still the one allocation.
     """
-    nclips = math.ceil(audio_duration(audio_path) / CHUNK)
+    if nclips is None:
+        nclips = math.ceil(audio_duration(audio_path) / CHUNK)
     counts = allocate(scenes, nclips)
     plan, i = [], 0
     for scene, n in zip(scenes, counts):
@@ -177,35 +183,131 @@ def clip_plan(scenes, audio_path):
     return plan
 
 
-def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard):
+# The two video paths. s2v is the default and the only one driven by the audio;
+# see studio/models.py for what each is designed for.
+S2V_MODEL = "wan2.2_s2v_14B_fp8_scaled.safetensors"
+I2V_HIGH = "Wan2.2/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
+I2V_LOW = "Wan2.2/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"
+LIGHTX2V_LORA = "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors"
+
+# Wan 2.2's two experts are one model split at a denoise boundary of 0.900: the
+# high-noise expert lays down motion and structure, the low-noise one refines.
+# With STEPS_I2V total steps the switch lands at this step index.
+STEPS_I2V = 8
+I2V_BOUNDARY = 0.900
+I2V_SWITCH = max(1, round(STEPS_I2V * (1.0 - I2V_BOUNDARY)))
+
+# The optional refiner pass over an s2v clip: re-sample at low denoise with the
+# i2v low-noise expert. UNPROVEN -- both share wan_2.1_vae so the latents are
+# compatible, but nothing has measured whether it helps. Off by default.
+REFINE_DENOISE = 0.25
+REFINE_STEPS = 6
+
+
+def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
+             video_model="s2v", ref_motion=None, control_video=None, refine=False):
     """Same rule as build_refs.workflow: the pinned clause is attached HERE, at
-    the point the prompt is built, not read out of the storyboard JSON."""
+    the point the prompt is built, not read out of the storyboard JSON.
+
+    video_model:
+      "s2v"  WanSoundImageToVideo -- the prompt, the reference frame AND this
+             clip's 4.8125s of audio. The only path with beat sync and mouth
+             movement, which is why it is the default.
+      "i2v"  WanImageToVideo with the high->low expert pair. No audio input at
+             all: prompt-driven motion only.
+
+    ref_motion / control_video are s2v's two optional inputs, unused until now:
+    a motion-style reference clip, and a driving clip for pose or structure.
+
+    refine=True adds a low-denoise second pass with the i2v low-noise expert.
+    """
     motion = scene.get("video_motion_prompt") or scene.get("motion", "")
     pos = f"{shot_directive(scene, i)} {char_lock} {world_lock} Motion: {motion} Camera: {scene.get('camera','')} Lighting: {scene.get('lighting','')}"
     pos = guardrail.build_prompt(pos, guard, f"scene {i}")
     neg = scene.get("negative_prompt", "")
     start = round(i * CHUNK, 4)
-    return {
-        "1":  {"class_type": "UNETLoader", "inputs": {"unet_name": "wan2.2_s2v_14B_fp8_scaled.safetensors", "weight_dtype": "default"}},
-        "2":  {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["1", 0], "lora_name": "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors", "strength_model": 1.0}},
-        "3":  {"class_type": "ModelSamplingSD3", "inputs": {"model": ["2", 0], "shift": 8.0}},
+
+    wf = {
         "4":  {"class_type": "CLIPLoader", "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan", "device": "default"}},
         "5":  {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 0], "text": pos}},
         "6":  {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 0], "text": neg}},
         "7":  {"class_type": "VAELoader", "inputs": {"vae_name": "wan_2.1_vae.safetensors"}},
-        "8":  {"class_type": "AudioEncoderLoader", "inputs": {"audio_encoder_name": "wav2vec2_large_english_fp16.safetensors"}},
-        "9":  {"class_type": "LoadAudio", "inputs": {"audio": audio_file}},
-        "10": {"class_type": "TrimAudioDuration", "inputs": {"audio": ["9", 0], "start_index": start, "duration": round(CHUNK, 4)}},
-        "11": {"class_type": "AudioEncoderEncode", "inputs": {"audio_encoder": ["8", 0], "audio": ["10", 0]}},
         "12": {"class_type": "LoadImage", "inputs": {"image": ref_image}},
         "13": {"class_type": "ImageScale", "inputs": {"image": ["12", 0], "upscale_method": "lanczos", "width": W, "height": H, "crop": "center"}},
-        "14": {"class_type": "WanSoundImageToVideo", "inputs": {"positive": ["5", 0], "negative": ["6", 0], "vae": ["7", 0], "width": W, "height": H, "length": LEN, "batch_size": 1, "audio_encoder_output": ["11", 0], "ref_image": ["13", 0]}},
-        "15": {"class_type": "KSampler", "inputs": {"model": ["3", 0], "seed": 1000 + i, "steps": 4, "cfg": 1.0, "sampler_name": "uni_pc", "scheduler": "simple", "positive": ["14", 0], "negative": ["14", 1], "latent_image": ["14", 2], "denoise": 1.0}},
-        "16": {"class_type": "VAEDecode", "inputs": {"samples": ["15", 0], "vae": ["7", 0]}},
-        # silent: the master mp3 is laid over the assembled timeline once, so
-        # per-clip audio cannot drift.
-        "17": {"class_type": "CreateVideo", "inputs": {"images": ["16", 0], "fps": FPS}},
     }
+
+    if video_model == "i2v":
+        # two experts, two KSamplerAdvanced stages, one latent handed between
+        # them. add_noise=disable on the second: the noise is already there.
+        wf["1"] = {"class_type": "UNETLoader", "inputs": {"unet_name": I2V_HIGH, "weight_dtype": "default"}}
+        wf["2"] = {"class_type": "UNETLoader", "inputs": {"unet_name": I2V_LOW, "weight_dtype": "default"}}
+        wf["3"] = {"class_type": "ModelSamplingSD3", "inputs": {"model": ["1", 0], "shift": 8.0}}
+        wf["3b"] = {"class_type": "ModelSamplingSD3", "inputs": {"model": ["2", 0], "shift": 8.0}}
+        wf["14"] = {"class_type": "WanImageToVideo", "inputs": {
+            "positive": ["5", 0], "negative": ["6", 0], "vae": ["7", 0],
+            "width": W, "height": H, "length": LEN, "batch_size": 1,
+            "start_image": ["13", 0]}}
+        wf["15"] = {"class_type": "KSamplerAdvanced", "inputs": {
+            "model": ["3", 0], "add_noise": "enable", "noise_seed": 1000 + i,
+            "steps": STEPS_I2V, "cfg": 1.0, "sampler_name": "uni_pc", "scheduler": "simple",
+            "positive": ["14", 0], "negative": ["14", 1], "latent_image": ["14", 2],
+            "start_at_step": 0, "end_at_step": I2V_SWITCH, "return_with_leftover_noise": "enable"}}
+        wf["15b"] = {"class_type": "KSamplerAdvanced", "inputs": {
+            "model": ["3b", 0], "add_noise": "disable", "noise_seed": 1000 + i,
+            "steps": STEPS_I2V, "cfg": 1.0, "sampler_name": "uni_pc", "scheduler": "simple",
+            "positive": ["14", 0], "negative": ["14", 1], "latent_image": ["15", 0],
+            "start_at_step": I2V_SWITCH, "end_at_step": STEPS_I2V,
+            "return_with_leftover_noise": "disable"}}
+        sampled = ["15b", 0]
+    else:
+        wf["1"] = {"class_type": "UNETLoader", "inputs": {"unet_name": S2V_MODEL, "weight_dtype": "default"}}
+        wf["2"] = {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["1", 0], "lora_name": LIGHTX2V_LORA, "strength_model": 1.0}}
+        wf["3"] = {"class_type": "ModelSamplingSD3", "inputs": {"model": ["2", 0], "shift": 8.0}}
+        wf["8"] = {"class_type": "AudioEncoderLoader", "inputs": {"audio_encoder_name": "wav2vec2_large_english_fp16.safetensors"}}
+        wf["9"] = {"class_type": "LoadAudio", "inputs": {"audio": audio_file}}
+        wf["10"] = {"class_type": "TrimAudioDuration", "inputs": {"audio": ["9", 0], "start_index": start, "duration": round(CHUNK, 4)}}
+        wf["11"] = {"class_type": "AudioEncoderEncode", "inputs": {"audio_encoder": ["8", 0], "audio": ["10", 0]}}
+        s2v = {"positive": ["5", 0], "negative": ["6", 0], "vae": ["7", 0],
+               "width": W, "height": H, "length": LEN, "batch_size": 1,
+               "audio_encoder_output": ["11", 0], "ref_image": ["13", 0]}
+        # The node's two optional inputs, left empty until now. Both are IMAGE
+        # (a frame batch), NOT the VIDEO type -- so the loader has to be one that
+        # decodes to frames. LoadVideo returns VIDEO and would be rejected at
+        # submit; LoadVideosFromFolder (kjnodes) takes a path and returns IMAGE.
+        # frame_load_cap = LEN because the clip is exactly that many frames and
+        # loading a whole 4-minute driving video per clip is wasted decode.
+        for node_id, path, key in (("20", ref_motion, "ref_motion"),
+                                    ("21", control_video, "control_video")):
+            if not path:
+                continue
+            wf[node_id] = {"class_type": "LoadVideosFromFolder", "inputs": {
+                "video": path, "force_rate": FPS, "custom_width": W, "custom_height": H,
+                "frame_load_cap": LEN, "skip_first_frames": 0, "select_every_nth": 1,
+                "output_type": "batch", "grid_max_columns": 4, "add_label": False}}
+            s2v[key] = [node_id, 0]
+        wf["14"] = {"class_type": "WanSoundImageToVideo", "inputs": s2v}
+        wf["15"] = {"class_type": "KSampler", "inputs": {"model": ["3", 0], "seed": 1000 + i, "steps": 4, "cfg": 1.0, "sampler_name": "uni_pc", "scheduler": "simple", "positive": ["14", 0], "negative": ["14", 1], "latent_image": ["14", 2], "denoise": 1.0}}
+        sampled = ["15", 0]
+
+    if refine:
+        # low-denoise second pass with the i2v LOW-noise expert. It re-samples
+        # the latent s2v produced, so the audio-driven motion is preserved and
+        # only detail is touched. Both models use wan_2.1_vae, which is what
+        # makes handing the latent over valid at all.
+        wf["30"] = {"class_type": "UNETLoader", "inputs": {"unet_name": I2V_LOW, "weight_dtype": "default"}}
+        wf["31"] = {"class_type": "ModelSamplingSD3", "inputs": {"model": ["30", 0], "shift": 8.0}}
+        wf["32"] = {"class_type": "KSampler", "inputs": {
+            "model": ["31", 0], "seed": 2000 + i, "steps": REFINE_STEPS, "cfg": 1.0,
+            "sampler_name": "uni_pc", "scheduler": "simple",
+            "positive": ["14", 0], "negative": ["14", 1], "latent_image": sampled,
+            "denoise": REFINE_DENOISE}}
+        sampled = ["32", 0]
+
+    wf["16"] = {"class_type": "VAEDecode", "inputs": {"samples": sampled, "vae": ["7", 0]}}
+    # silent: the master mp3 is laid over the assembled timeline once, so
+    # per-clip audio cannot drift.
+    wf["17"] = {"class_type": "CreateVideo", "inputs": {"images": ["16", 0], "fps": FPS}}
+    return wf
 
 
 def main():
@@ -214,6 +316,13 @@ def main():
     ap.add_argument("--audio", required=True, help="path to the mp3 (for duration)")
     ap.add_argument("--audio-name", help="filename as it appears in ComfyUI/input (defaults to basename of --audio)")
     ap.add_argument("--slug", required=True, help="short song id, e.g. rear_entrance")
+    ap.add_argument("--video-model", choices=["s2v", "i2v"], default="s2v",
+                    help="s2v (default) is driven by the audio -- beat sync and mouth "
+                          "movement. i2v is prompt-driven only and has NO audio input.")
+    ap.add_argument("--ref-motion", help="s2v only: a motion-style reference clip (path)")
+    ap.add_argument("--control-video", help="s2v only: a driving clip for pose/structure (path)")
+    ap.add_argument("--refine", action="store_true",
+                    help="add an unproven low-denoise pass with the i2v low-noise expert")
     ap.add_argument("--outdir", required=True)
     args = ap.parse_args()
 
@@ -235,7 +344,9 @@ def main():
         # one reference per clip (build_refs.py --audio), so consecutive clips in
         # a scene are different compositions rather than the same still
         ref = f"{args.slug}_clip_{i:03d}.png"
-        wf = workflow(i, scene, ref, audio_name, char, world, guard)
+        wf = workflow(i, scene, ref, audio_name, char, world, guard,
+                      video_model=args.video_model, ref_motion=args.ref_motion,
+                      control_video=args.control_video, refine=args.refine)
         wf["18"] = {"class_type": "SaveVideo", "inputs": {
             "video": ["17", 0],
             "filename_prefix": f"{args.slug}/clip_{i:03d}",
@@ -247,10 +358,81 @@ def main():
     plan = [(num, sname(next(s for _, s, _ in plan_clips if s["scene_number"] == num)), n, ref)
             for num, (n, ref) in per_scene.items()]
 
-    print(f"{args.slug} {dur:.1f}s -> {nclips} clips of {CHUNK:.4f}s")
+    print(f"{args.slug} {dur:.1f}s -> {nclips} clips of {CHUNK:.4f}s "
+          f"[{args.video_model}{', refined' if args.refine else ''}]")
+    if args.video_model == "i2v":
+        print("  NOTE: i2v has no audio input -- no beat sync, no mouth movement on vocals.")
     for num, name, n, ref in plan:
         print(f"  scene {num:2d} {name[:28]:<30} {n} clip(s)  <- {ref}")
 
 
+def demo():
+    """Self-check: both video paths wire up, and the guardrail lands once."""
+    import guardrail as g
+
+    scene = {"scene_number": 1, "name": "s", "camera": "wide", "lighting": "neon",
+             "video_motion_prompt": "she walks", "negative_prompt": "", "duration_guidance": "5 sec",
+             "image_prompt": "a rooftop"}
+
+    # --- s2v: audio in, one sampler, the reference frame as ref_image ---
+    wf = workflow(0, scene, "clip_000.png", "song.mp3", "a black cat", "a neon alley",
+                  "tier wording")
+    s2v = wf["14"]
+    assert s2v["class_type"] == "WanSoundImageToVideo"
+    assert s2v["inputs"]["audio_encoder_output"] == ["11", 0], "the audio was disconnected"
+    assert s2v["inputs"]["ref_image"] == ["13", 0]
+    assert wf["1"]["inputs"]["unet_name"] == S2V_MODEL
+    assert wf["15"]["class_type"] == "KSampler"
+    assert wf["16"]["inputs"]["samples"] == ["15", 0]
+    prompt = wf["5"]["inputs"]["text"]
+    assert g.PINNED.strip() in prompt and prompt.count("No minors") == 1
+    assert "she walks" in prompt and "a black cat" in prompt
+
+    # the two optional inputs stay ABSENT unless asked for -- an empty string
+    # would be a filename ComfyUI then fails to open
+    assert "ref_motion" not in s2v["inputs"] and "control_video" not in s2v["inputs"]
+    driven = workflow(0, scene, "c.png", "song.mp3", "c", "w", "", ref_motion="/m.mp4",
+                      control_video="/c.mp4")["14"]["inputs"]
+    assert driven["ref_motion"] == ["20", 0] and driven["control_video"] == ["21", 0]
+
+    # --- i2v: NO audio, two experts, the boundary between them ---
+    iw = workflow(0, scene, "clip_000.png", "song.mp3", "c", "w", "", video_model="i2v")
+    assert iw["14"]["class_type"] == "WanImageToVideo"
+    assert "audio_encoder_output" not in iw["14"]["inputs"], "i2v has no audio input at all"
+    assert iw["14"]["inputs"]["start_image"] == ["13", 0]
+    assert iw["1"]["inputs"]["unet_name"] == I2V_HIGH
+    assert iw["2"]["inputs"]["unet_name"] == I2V_LOW
+    hi, lo = iw["15"]["inputs"], iw["15b"]["inputs"]
+    assert hi["add_noise"] == "enable" and lo["add_noise"] == "disable", \
+        "the second expert must not re-noise a latent that already carries it"
+    assert hi["end_at_step"] == lo["start_at_step"] == I2V_SWITCH, "the experts do not meet"
+    assert lo["end_at_step"] == STEPS_I2V
+    assert lo["latent_image"] == ["15", 0], "the low-noise pass did not receive the high-noise latent"
+    assert iw["16"]["inputs"]["samples"] == ["15b", 0]
+
+    # --- refiner: appended AFTER whichever path ran, at low denoise ---
+    rw = workflow(0, scene, "c.png", "song.mp3", "c", "w", "", refine=True)
+    assert rw["32"]["inputs"]["latent_image"] == ["15", 0], "the refiner did not receive the clip"
+    assert rw["32"]["inputs"]["denoise"] == REFINE_DENOISE
+    assert 0 < REFINE_DENOISE < 1, "a refiner at denoise 1.0 is not a refiner"
+    assert rw["30"]["inputs"]["unet_name"] == I2V_LOW
+    assert rw["16"]["inputs"]["samples"] == ["32", 0], "the refined latent was not the one decoded"
+    # ...and it still carries the audio-driven motion it is refining
+    assert rw["14"]["inputs"]["audio_encoder_output"] == ["11", 0]
+
+    # --- allocation: every clip belongs to exactly one scene, none lost ---
+    scenes = [dict(scene, scene_number=n, duration_guidance=f"{n*4}-{n*4+2} sec")
+              for n in (1, 2, 3)]
+    for nclips in (3, 7, 41, 50):
+        plan = clip_plan(scenes, nclips=nclips)
+        assert [ci for ci, _, _ in plan] == list(range(nclips)), nclips
+        assert len({s["scene_number"] for _, s, _ in plan}) == 3, "a scene got no clips"
+
+    print("build_song.py OK")
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 1:
+        demo()
+    else:
+        main()

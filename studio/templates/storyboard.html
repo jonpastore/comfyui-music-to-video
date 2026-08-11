@@ -1,7 +1,96 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Storyboard — {{ song.title }} ({{ tier }})</h1>
-<p><a href="/songs/{{ song.id }}">&larr; back to song</a> &middot;
+<h1>Storyboard &mdash; {{ song.title }} <span class="tag">{{ tier }}</span></h1>
+<p class="meta"><a href="/songs/{{ song.id }}">&larr; back to song</a> &middot;
+   <a href="/songs/{{ song.id }}/approve/{{ tier }}">approve grid</a> &middot;
    <a href="{{ media_url(row.json_path) }}">download json</a></p>
-<pre class="storyboard-md">{{ md }}</pre>
+
+{# ---- the character this storyboard is for, at the top: a scene is read
+       against the anchor it will be rendered from ---- #}
+<section class="card">
+  <h2>Anchors for this tier</h2>
+  {% if anchors %}
+  <div class="anchor-strip">
+    {% for a in anchors %}
+    <figure>
+      <img src="{{ media_url(a.path) }}" alt="{{ a.view }} anchor" loading="lazy">
+      <figcaption>{{ a.view }}{% if a.character_name %} &middot; {{ a.character_name }}{% endif %}</figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">No chosen anchor for the <code>{{ tier }}</code> tier &mdash;
+    reference generation cannot run without one.
+    <a href="/anchors?scope_kind=album&amp;scope_value={{ song.album | urlencode }}">create one</a>.</p>
+  {% endif %}
+  {% if unanchored %}
+  <p class="warn">Named in scenes but not anchored at this tier:
+    <strong>{{ unanchored | join(", ") }}</strong>.
+    They will be rendered from scene text alone, so their look can drift frame to frame.
+    <a href="/anchors?scope_kind=album&amp;scope_value={{ song.album | urlencode }}">anchor them</a>,
+    or edit the scenes to stop naming them.</p>
+  {% endif %}
+  {% if sb.character_reference %}
+  <p class="hint"><strong>Character reference:</strong> {{ sb.character_reference }}</p>
+  {% endif %}
+  {% if sb.album_world_reference %}
+  <p class="hint"><strong>World:</strong> {{ sb.album_world_reference }}</p>
+  {% endif %}
+</section>
+
+{# ---- did the model write too much or too little for this track? ---- #}
+<section class="card">
+  <h2>Coverage</h2>
+  <div class="meter {% if coverage.ok %}ok{% else %}off{% endif %}">
+    <div class="meter-bar">
+      <div class="meter-fill" style="width: {{ [100, (coverage.intent / coverage.rendered * 100) if coverage.rendered else 0] | min }}%"></div>
+    </div>
+    <p class="meter-text">
+      {{ coverage.scenes }} scenes ask for <strong>{{ coverage.intent | hms }}</strong>;
+      the track is <strong>{{ coverage.rendered | hms }}</strong>
+      ({{ coverage.nclips }} clips of {{ "%.4f"|format(chunk) }}s).
+      {% if coverage.ratio %}
+        Each scene is played <strong>&times;{{ "%.2f"|format(coverage.ratio) }}</strong>
+        its written length.
+      {% endif %}
+    </p>
+    <p class="hint">
+      {% if coverage.ok %}
+      Pacing matches the track. The render is always exactly the length of the song &mdash;
+      what this measures is whether each scene runs near the length it was written for.
+      {% else %}
+      The storyboard's pacing was written for a different length of song, so every scene is
+      stretched or compressed to fit. Regenerate, or edit
+      <code>duration_guidance</code> in the JSON, if scenes feel wrong-length.
+      {% endif %}
+    </p>
+  </div>
+</section>
+
+{% if row.prompt %}
+<section class="card">
+  <h2>Direction this was generated from</h2>
+  <pre class="storyboard-md">{{ row.prompt }}</pre>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Scenes</h2>
+  <p class="hint">Times come from <code>build_song.clip_plan()</code> &mdash; the same mapping
+    the renderer uses, so what is listed here is what will be rendered. Editing a scene
+    rewrites the storyboard JSON in place; frames already rendered from the old text are
+    marked <span class="tag warn-tag">stale</span> rather than thrown away.</p>
+  {% for r in scene_rows %}
+    {% include "_scene_row.html" %}
+  {% else %}
+    <p class="empty">This storyboard has no scenes.</p>
+  {% endfor %}
+</section>
+
+<section class="card">
+  <details>
+    <summary>Markdown</summary>
+    <pre class="storyboard-md">{{ md }}</pre>
+  </details>
+</section>
 {% endblock %}

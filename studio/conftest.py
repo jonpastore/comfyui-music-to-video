@@ -39,20 +39,32 @@ def _stub(name, **attrs):
 grok_calls = {}
 
 
-def _generate_storyboard(lyrics_text, tier, guardrail, style_note, song, model, scene_seconds, progress):
+def _generate_storyboard(lyrics_text, tier, guardrail, style_note, song, model, scene_seconds,
+                          progress, direction="", cast=()):
     grok_calls["guardrail"] = guardrail
     grok_calls["args"] = dict(lyrics=lyrics_text, tier=tier, style_note=style_note,
-                               song=song, model=model, scene_seconds=scene_seconds)
+                               song=song, model=model, scene_seconds=scene_seconds,
+                               direction=direction, cast=list(cast))
     return {"scenes": [{"scene_number": 1}, {"scene_number": 2}]}
 
 
 def _write_storyboard(sb, outdir, slug, tier):
+    """Same contract as the real grok.write_storyboard, and it renders the REAL
+    markdown.
+
+    grok is stubbed to keep xAI out of the tests, but write_storyboard makes no
+    network call -- it is json.dump plus build_storyboard.to_md. Writing a
+    placeholder "# storyboard" here stubbed out a seam that genuinely needs
+    testing: the storyboard page rewrites the JSON in place, and the markdown
+    beside it has to be regenerated or the two silently drift apart.
+    """
+    from build_storyboard import to_md
     os.makedirs(outdir, exist_ok=True)
     json_path = os.path.join(outdir, f"{slug}_{tier}.json")
     md_path = os.path.join(outdir, f"{slug}_{tier}.md")
     json.dump(sb, open(json_path, "w"))
     with open(md_path, "w") as f:
-        f.write("# storyboard\n")
+        f.write(to_md(sb))
     return json_path, md_path
 
 
@@ -80,6 +92,8 @@ _stub("vision",
                "fade_in": 0.0, "fade_out": 0.0}, "cut the first 4s", "qwen-stub")))
 
 _stub("grok",
+      MAX_DIRECTION=4000,
+      VISION_MODEL="grok-vision-stub",
       list_models=lambda: ["grok-x", "grok-2"],
       best_model=lambda models: max(models) if models else None,
       generate_storyboard=_generate_storyboard,
@@ -144,7 +158,7 @@ _stub("pipeline",
       submit_dir=lambda wf_dir, progress=None: [],
       collect=lambda prefix_dir, pattern="*.png": [],
       gen_anchor=lambda face, outfit, view="front", n=4, progress=None, prefix=None, profile=None: anchor_calls.append(profile) or [],
-      gen_refs=lambda slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="": refs_calls.append({"guard": guard, "body": body}) or [],
+      gen_refs=lambda slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="", cast=None: refs_calls.append({"guard": guard, "body": body, "cast": cast}) or [],
       reroll=lambda slug, tier, sb, anchor, mp3, idxs, progress=None: [],
       stage_refs=lambda slug, tier, ref_paths: [],
       gen_clips=lambda slug, tier, sb, mp3, ref_paths, progress=None: [],

@@ -124,15 +124,68 @@
   <p class="muted">&#10024; drafts a field by looking at this album's anchor image. It fills
     the box only &mdash; nothing is saved until you press Save album look.</p>
 
+  <h3>Cast</h3>
+  <p class="muted">The album look above describes the <strong>protagonist</strong>. These are the
+    other NAMED characters &mdash; a duet partner, an antagonist. The storyboard is told who
+    exists and names the main actors per scene, and each named character's anchor is attached
+    to those scenes as an extra reference image. Extras and background crowd are deliberately
+    not listed: they need no anchor, and each one would spend a reference slot
+    (three images total, and the protagonist holds the first).</p>
+
+  {% if d.cast %}
+  {% for m in d.cast %}
+  <form method="post" action="/characters/{{ m.c.id }}/save" class="stack-form character-row">
+    <div class="field-row">
+      <strong>{{ m.c.name }}</strong>
+      {% if m.anchors %}
+      <span class="tag done">{{ m.anchors }} chosen anchor{{ "" if m.anchors == 1 else "s" }}</span>
+      {% else %}
+      <span class="warn">no anchor &mdash; naming this character in a scene does nothing yet</span>
+      {% endif %}
+      <a href="/anchors?scope_kind=album&amp;scope_value={{ d.playlist.name | urlencode }}">anchor &rarr;</a>
+    </div>
+    {% for f in d.character_fields %}
+    <label>{{ f }}
+      <textarea name="{{ f }}" rows="2">{{ m.c[f] or "" }}</textarea>
+    </label>
+    {% endfor %}
+    <div class="field-row">
+      <button type="submit">Save {{ m.c.name }}</button>
+    </div>
+  </form>
+  <form method="post" action="/characters/{{ m.c.id }}/delete" class="delete-character"
+        data-name="{{ m.c.name }}">
+    <button type="submit">Delete {{ m.c.name }}</button>
+  </form>
+  {% endfor %}
+  {% else %}
+  <p class="empty">No named characters besides the protagonist.</p>
+  {% endif %}
+
+  <form method="post" action="/playlists/{{ d.playlist.id }}/characters" class="stack-form">
+    <div class="field-row">
+      <label>Name <input type="text" name="name" required placeholder="e.g. Nyx"></label>
+      <label>Role <input type="text" name="role" placeholder="antagonist"></label>
+    </div>
+    <label>identity <textarea name="identity" rows="2"></textarea></label>
+    <label>wardrobe <textarea name="wardrobe" rows="2"></textarea></label>
+    <label>body <textarea name="body" rows="2"></textarea></label>
+    <button type="submit">Add character</button>
+  </form>
+  <p class="hint">Blank fields fall back to the album look above, so a supporting character
+    still inherits its body-consistency wording &mdash; the one thing that must never be
+    missing from a prompt.</p>
+
   <h3>Anchors</h3>
-  <p class="muted">Character sheets for this album, one per tier and view. Every song on
+  <p class="muted">Character sheets for this album, one per character, tier and view. Every song on
     the album renders against these.</p>
   {% if d.anchors %}
   <div class="clip-tile candidates">
     {% for a in d.anchors %}
     <div class="candidate {% if a.chosen %}picked{% endif %}">
       <img src="{{ media_url(a.path) }}" alt="{{ a.tier }} {{ a.view }} anchor">
-      <p class="muted">{{ a.tier }} &middot; {{ a.view }}{% if a.chosen %} &check;{% endif %}</p>
+      <p class="muted">{{ a.character_name or "protagonist" }} &middot;
+        {{ a.tier }} &middot; {{ a.view }}{% if a.chosen %} &check;{% endif %}</p>
       {% if not a.chosen %}
       <form method="post" action="/anchors/{{ a.id }}/pick"><button type="submit">Use this</button></form>
       {% endif %}
