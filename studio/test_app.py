@@ -3,7 +3,7 @@ owned by other modules and stubbed here via sys.modules so the app is
 testable in isolation (no real ComfyUI/whisper/xAI/ffmpeg required, except
 ffmpeg to synthesize a tiny real mp3 fixture).
 """
-import json, os, subprocess, sys, tempfile, time, types
+import asyncio, json, os, subprocess, sys, tempfile, time, types
 
 import pytest
 
@@ -54,11 +54,19 @@ _stub("lyrics",
       to_sections=lambda result, gap=3.0: "[Section 1]\nhi\n",
       estimate_duration=lambda mp3: 12.3)
 
+def _fake_render_set(items, out, progress):
+    # mixer.render_set reads it["video"] (mixer.py) -- assert the real key
+    # shape here so a route that sends the wrong key fails loudly, not silently.
+    for it in items:
+        assert "video" in it, f"render_set item missing 'video' key: {it}"
+    open(out, "w").close()
+
+
 _stub("mixer",
       probe=lambda p: {"duration": 12.3},
       assemble_song=lambda clip_paths, mp3, out, progress, fade: open(out, "w").close(),
       edit_audio=lambda *a, **k: None,
-      render_set=lambda items, out, progress: open(out, "w").close(),
+      render_set=_fake_render_set,
       set_duration=lambda items: items)
 
 PIPE_DIR = tempfile.mkdtemp()
@@ -72,7 +80,7 @@ _stub("pipeline",
       submit_dir=lambda wf_dir, progress=None: [],
       collect=lambda prefix_dir, pattern="*.png": [],
       gen_anchor=lambda face, outfit, view="front", n=4, progress=None, prefix=None: [],
-      gen_refs=lambda slug, tier, sb, anchor, mp3, progress=None: [],
+      gen_refs=lambda slug, tier, sb, anchor, mp3, progress=None, limit=None: [],
       reroll=lambda slug, tier, sb, anchor, mp3, idxs, progress=None: [],
       stage_refs=lambda slug, tier, ref_paths: [],
       gen_clips=lambda slug, tier, sb, mp3, ref_paths, progress=None: [],

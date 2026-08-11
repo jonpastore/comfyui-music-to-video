@@ -104,8 +104,19 @@ ssh $R 'test -s ~/.config/morpheus/grok-mcp.env && grep -q "^XAI_API_KEY=." ~/.c
        echo "               fix: scp ~/.config/morpheus/grok-mcp.env $R:~/.config/morpheus/"; FAIL=1; }
 
 echo
+# Report the bind honestly. STUDIO_HOST defaults to 0.0.0.0, which is every
+# interface -- tailnet, LAN and any docker bridge -- not the tailnet alone.
+# That is a fine choice on a trusted home network, but the banner should not
+# claim an isolation the service is not enforcing.
+BIND=$(ssh $R "systemctl --user show meowp-studio -p Environment --value 2>/dev/null | tr ' ' '\n' | grep '^STUDIO_HOST=' | cut -d= -f2")
 if [ "$FAIL" = 0 ]; then
-  echo "studio: http://${IP:-cerberus-ai}:8000   (tailnet only)"
+  echo "studio: http://${IP:-cerberus-ai}:8000"
+  if [ "${BIND:-0.0.0.0}" = "0.0.0.0" ]; then
+    echo "        bound to 0.0.0.0 -- reachable on tailnet, LAN and docker bridges."
+    echo "        for tailnet-only: set STUDIO_HOST to the tailscale IP in the unit."
+  else
+    echo "        bound to $BIND"
+  fi
 else
   echo "DEPLOYED BUT NOT HEALTHY -- see the failures above."
   echo "url:    http://${IP:-cerberus-ai}:8000"

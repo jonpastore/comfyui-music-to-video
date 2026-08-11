@@ -12,7 +12,7 @@
       <td>{{ "yes" if t.builtin else "" }}</td>
       <td>
         {% if not t.builtin %}
-        <form method="post" action="/tiers/{{ t.name }}/delete" onsubmit="return confirm('Delete tier {{ t.name }}?');">
+        <form method="post" action="/tiers/{{ t.name }}/delete" class="delete-tier" data-tier="{{ t.name }}">
           <button type="submit">Delete</button>
         </form>
         {% endif %}

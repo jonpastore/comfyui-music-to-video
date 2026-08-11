@@ -14,3 +14,13 @@ function watchJob(jobId, targetId) {
   };
   es.onerror = function () { es.close(); };
 }
+
+// Delegated confirm for tier deletion -- kept out of an inline onsubmit="..."
+// attribute so a tier name can never be interpreted as JS (add_tier restricts
+// names to isidentifier(), which still allows Unicode identifier chars).
+document.addEventListener("submit", function (e) {
+  var form = e.target.closest(".delete-tier");
+  if (form && !confirm("Delete tier " + form.dataset.tier + "?")) {
+    e.preventDefault();
+  }
+});

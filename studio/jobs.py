@@ -109,9 +109,18 @@ def start():
     return _worker
 
 
-def stream(jid):
+async def stream(jid):
     """SSE body for one job. Polls sqlite -- fine at this scale.
-    ponytail: 0.5s poll, swap for a condition variable if the job list gets long."""
+
+    MUST stay an async generator with an awaited sleep. As a sync generator
+    Starlette drives it through iterate_in_threadpool, where each open stream
+    holds one of the 40 anyio worker tokens ~100% of the time; every sync route
+    shares that pool, so 41 concurrent viewers wedged the whole app and did not
+    recover when the clients disconnected. Awaiting yields the thread.
+
+    ponytail: 0.5s poll, swap for a condition variable if the job list gets long.
+    """
+    import asyncio
     last = None
     while True:
         row = get(jid)
@@ -126,7 +135,7 @@ def stream(jid):
             last = blob
         if row["status"] in ("done", "failed", "cancelled"):
             return
-        time.sleep(0.5)
+        await asyncio.sleep(0.5)
 
 
 def demo():
@@ -171,6 +180,26 @@ def demo():
         raise AssertionError("unregistered kind was accepted")
     except ValueError:
         pass
+
+    # stream() must be an ASYNC generator. As a sync one it burns an anyio
+    # threadpool worker per open viewer and 41 of them deadlock every route.
+    import asyncio, inspect
+    assert inspect.isasyncgenfunction(stream), \
+        "jobs.stream must be an async generator or SSE viewers exhaust the threadpool"
+
+    async def _drain():
+        out = []
+        async for chunk in stream(a):      # job a is already 'done'
+            out.append(chunk)
+        return out
+
+    frames = asyncio.run(_drain())
+    assert frames and any('"status": "done"' in f for f in frames), frames
+
+    async def _gone():
+        return [c async for c in stream(999999)]
+    assert asyncio.run(_gone()) == ["event: gone\ndata: {}\n\n"], "unknown id must terminate"
+
     print("jobs.py OK")
 
 

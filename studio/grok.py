@@ -126,6 +126,27 @@ def _chat(model, messages):
             timeout=httpx.Timeout(CHAT_TIMEOUT, connect=30.0),
         )
         resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        # The bare status is useless in a job log -- "403 Forbidden" plus an MDN
+        # link told us nothing, while the response body said the account was out
+        # of credits. Surface the body, which is where xAI puts the real reason.
+        detail = ""
+        try:
+            body = e.response.json()
+            detail = body.get("error") or body.get("message") or ""
+        except Exception:
+            detail = (e.response.text or "")[:300]
+        code = e.response.status_code
+        if code in (401, 403) and "credit" in detail.lower():
+            raise RuntimeError(f"xAI rejected the request: {detail} "
+                               "Add credits or raise the spending limit at console.x.ai, "
+                               "then retry this job.") from None
+        if code in (401, 403):
+            raise RuntimeError(f"xAI auth/permission error ({code}): "
+                               f"{_scrub(detail, key) or 'no detail returned'}") from None
+        if code == 429:
+            raise RuntimeError(f"xAI rate limited: {_scrub(detail, key)}") from None
+        raise RuntimeError(f"xAI chat request failed ({code}): {_scrub(detail, key)}") from None
     except httpx.HTTPError as e:
         raise RuntimeError(f"xAI chat request failed: {_scrub(str(e), key)}") from None
     data = resp.json()

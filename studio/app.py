@@ -2,7 +2,7 @@
 in db/tiers/jobs/pipeline/grok/lyrics/mixer; this file wires HTTP to them and
 does upload validation + path-traversal-safe media serving.
 """
-import json, os, re, time
+import json, math, os, re, sqlite3, time
 from contextlib import asynccontextmanager
 from typing import List
 from urllib.parse import quote
@@ -31,6 +31,7 @@ PORT = int(os.environ.get("STUDIO_PORT", "8000"))
 MAX_MP3 = 50 * 1024 * 1024
 MAX_IMAGE = 20 * 1024 * 1024
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+MAX_REROLL_CLIPS = 64
 
 # Anything servable over /media must resolve inside one of these -- reuses
 # pipeline's own ComfyUI paths rather than inventing a parallel config knob.
@@ -48,6 +49,29 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 templates.env.globals["media_url"] = lambda p: media_url(p)
+
+
+@app.middleware("http")
+async def limit_upload_size(request: Request, call_next):
+    """Reject oversized uploads by Content-Length before the multipart body is
+    parsed -- File(...)/Form(...) params are resolved before the route function
+    runs, so a check inside the handler happens after the whole body (up to
+    several GB) is already spooled to disk."""
+    if request.method == "POST":
+        path = request.url.path
+        if path == "/songs":
+            cap = MAX_MP3 + 8192
+        elif path.endswith("/style"):
+            cap = MAX_IMAGE + 8192
+        elif path.endswith("/anchor"):
+            cap = 2 * MAX_IMAGE + 8192
+        else:
+            cap = None
+        if cap is not None:
+            cl = request.headers.get("content-length")
+            if cl and cl.isdigit() and int(cl) > cap:
+                return PlainTextResponse("upload too large", status_code=413)
+    return await call_next(request)
 
 
 # ---------------------------------------------------------------- helpers --
@@ -69,7 +93,7 @@ def unique_slug(title):
 def safe_name(name):
     name = os.path.basename(name or "")
     name = re.sub(r"[^A-Za-z0-9._-]", "_", name)
-    return name or "file"
+    return name[:200] or "file"
 
 
 def media_url(path):
@@ -98,15 +122,19 @@ def valid_tier_or_400(name):
     return name
 
 
-async def save_upload(upload: UploadFile, cap: int, dest_dir: str, kind: str):
+async def save_upload(upload: UploadFile, cap: int, dest_dir: str, kind: str, prefix=None):
     """kind: 'mp3' or 'image'. Validates ext + content-type + size, writes
-    under dest_dir with a sanitized name, returns the saved path."""
+    under dest_dir with a sanitized name, returns the saved path. `prefix` (e.g.
+    "face_1699999999999") avoids two same-named uploads in one dir silently
+    overwriting each other -- face.png and outfit.png would otherwise collide."""
     data = await upload.read(cap + 1)
     if len(data) > cap:
         raise HTTPException(413, f"{kind} file too large (max {cap // (1024 * 1024)}MB)")
     if not data:
         raise HTTPException(400, f"{kind} file is empty")
     name = safe_name(upload.filename)
+    if prefix:
+        name = safe_name(f"{prefix}_{name}")
     ext = os.path.splitext(name)[1].lower()
     ct = (upload.content_type or "").lower()
     if kind == "mp3":
@@ -252,6 +280,8 @@ def h_render_set(args, progress):
 
 @app.get("/media/{path:path}")
 def media(path: str):
+    if "\x00" in path:
+        raise HTTPException(400, "invalid path")
     real = os.path.realpath("/" + path)
     if not any(real == root or real.startswith(root + os.sep) for root in MEDIA_ROOTS):
         raise HTTPException(403, "path not allowed")
@@ -327,7 +357,8 @@ async def upload_style(id: int, image: UploadFile = File(...), note: str = Form(
         tiers.check_text(note, "style note")
     except ValueError as e:
         raise HTTPException(400, str(e))
-    dest = await save_upload(image, MAX_IMAGE, upload_dir(song["slug"]), "image")
+    dest = await save_upload(image, MAX_IMAGE, upload_dir(song["slug"]), "image",
+                              prefix=f"style_{int(time.time() * 1000)}")
     db.run("UPDATE songs SET style_path=? WHERE id=?", dest, id)
     db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
            id, "style", dest, json.dumps({"note": note}), time.time())
@@ -338,8 +369,10 @@ async def upload_style(id: int, image: UploadFile = File(...), note: str = Form(
 async def start_anchor(id: int, face: UploadFile = File(...), outfit: UploadFile = File(...),
                         view: str = Form("front"), n: int = Form(4)):
     song = get_song_or_404(id)
-    face_path = await save_upload(face, MAX_IMAGE, upload_dir(song["slug"]), "image")
-    outfit_path = await save_upload(outfit, MAX_IMAGE, upload_dir(song["slug"]), "image")
+    face_path = await save_upload(face, MAX_IMAGE, upload_dir(song["slug"]), "image",
+                                   prefix=f"face_{int(time.time() * 1000)}")
+    outfit_path = await save_upload(outfit, MAX_IMAGE, upload_dir(song["slug"]), "image",
+                                     prefix=f"outfit_{int(time.time() * 1000)}")
     n = max(1, min(int(n), 8))
     jobs.enqueue("anchor", {"song_id": id, "face": face_path, "outfit": outfit_path,
                              "view": view, "n": n}, song_id=id)
@@ -362,6 +395,9 @@ def start_storyboard(id: int, tier: str = Form(...), model: str = Form(""),
                       scene_seconds: float = Form(4.0)):
     get_song_or_404(id)
     valid_tier_or_400(tier)
+    if not math.isfinite(scene_seconds):
+        raise HTTPException(400, "scene_seconds must be a finite number")
+    scene_seconds = min(max(scene_seconds, 1.0), 60.0)
     jobs.enqueue("storyboard", {"song_id": id, "tier": tier, "model": model or None,
                                  "scene_seconds": scene_seconds}, song_id=id)
     return RedirectResponse(f"/songs/{id}", status_code=303)
@@ -388,6 +424,7 @@ def start_refs(id: int, tier: str = Form(...), limit: int = Form(0)):
         raise HTTPException(400, "pick an anchor image first")
     if not db.one("SELECT id FROM storyboards WHERE song_id=? AND tier=?", id, tier):
         raise HTTPException(400, "generate a storyboard for this tier first")
+    limit = max(0, limit)
     jobs.enqueue("refs", {"song_id": id, "tier": tier, "limit": limit or None}, song_id=id)
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
@@ -428,9 +465,16 @@ def approve_ref(request: Request, id: int, clip_idx: int, tier: str = Form(...),
 @app.post("/songs/{id}/reroll")
 def start_reroll(id: int, tier: str = Form(...), clip_idx: List[int] = Form(...)):
     get_song_or_404(id)
-    if not db.one("SELECT id FROM storyboards WHERE song_id=? AND tier=?", id, tier):
+    sb = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
+    if not sb:
         raise HTTPException(400, "generate a storyboard for this tier first")
-    jobs.enqueue("reroll", {"song_id": id, "tier": tier, "clip_indices": clip_idx}, song_id=id)
+    scene_count = sb["scene_count"] or 0
+    idxs = sorted({i for i in clip_idx if 0 <= i < scene_count})
+    if not idxs:
+        raise HTTPException(400, "no valid clip indices given")
+    if len(idxs) > MAX_REROLL_CLIPS:
+        raise HTTPException(400, f"too many clips to reroll at once (max {MAX_REROLL_CLIPS})")
+    jobs.enqueue("reroll", {"song_id": id, "tier": tier, "clip_indices": idxs}, song_id=id)
     return RedirectResponse(f"/songs/{id}/approve/{tier}", status_code=303)
 
 
@@ -453,6 +497,7 @@ def start_clips(id: int, tier: str = Form(...)):
 @app.post("/songs/{id}/render")
 def start_render(id: int, tier: str = Form(...), fade: float = Form(0.0)):
     get_song_or_404(id)
+    valid_tier_or_400(tier)
     jobs.enqueue("render_song", {"song_id": id, "tier": tier, "fade": fade}, song_id=id)
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
@@ -479,7 +524,10 @@ def create_playlist(name: str = Form(...), kind: str = Form("playlist")):
     name = name.strip()
     if not name:
         raise HTTPException(400, "name required")
-    pid = db.run("INSERT INTO playlists (name, kind) VALUES (?,?)", name, kind)
+    try:
+        db.run("INSERT INTO playlists (name, kind) VALUES (?,?)", name, kind)
+    except sqlite3.IntegrityError:
+        raise HTTPException(400, f"playlist '{name}' ({kind}) already exists")
     return RedirectResponse("/playlists", status_code=303)
 
 
@@ -513,7 +561,7 @@ def render_playlist(id: int):
                              it["song_id"], it["tier"])
         if not render_row:
             raise HTTPException(400, f"song {it['song_id']} tier {it['tier']} has no render yet")
-        build_items.append({"path": render_row["path"], "transition": it["transition"], "secs": it["secs"]})
+        build_items.append({"video": render_row["path"], "transition": it["transition"], "secs": it["secs"]})
     jobs.enqueue("render_set", {"playlist_id": id, "items": build_items})
     return RedirectResponse("/playlists", status_code=303)
 
@@ -551,7 +599,7 @@ def jobs_page(request: Request):
 
 
 @app.get("/jobs/{id}/stream")
-def job_stream(id: int):
+async def job_stream(id: int):
     if jobs.get(id) is None:
         raise HTTPException(404, "no such job")
     return StreamingResponse(jobs.stream(id), media_type="text/event-stream")
