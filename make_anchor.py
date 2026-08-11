@@ -97,10 +97,10 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
     for k in range(args.n):
         seed = 4200 + k * 137
-        # version "clean" so apply_outfit leaves the prompt alone; shot "" so no
-        # framing directive is prepended over the character-sheet instruction
+        # shot "" so no framing directive is prepended over the character-sheet
+        # instruction; the anchor prompt is self-contained
         wf = workflow(scene, args.face, args.outfit, "empty",
-                      args.width, args.height, seed, "clean", "")
+                      args.width, args.height, seed, "")
         wf["18"] = {"class_type": "SaveImage", "inputs": {
             "images": ["17", 0],
             "filename_prefix": f"{args.prefix}/{args.view}_s{seed}"}}

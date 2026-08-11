@@ -616,7 +616,7 @@ def demo():
         foreign = {"scene_number": 1, "image_prompt": "a rooftop at night",
                    "negative_prompt": "", "story": "s", "name": "n"}
         wf = build_refs.workflow(foreign, "a.png", None, "empty", 1280, 720, 7000,
-                                  "clean", "WIDE SHOT.", "tier wording")
+                                  "WIDE SHOT.", "tier wording")
         built = wf["11"]["inputs"]["prompt"]
         assert _g.PINNED in built, "prompt builder did not attach the pinned clause"
         assert "tier wording" in built, "prompt builder dropped the tier wording"
@@ -771,7 +771,7 @@ def demo():
     refs_outdir = os.path.join(tmpdir, "refs")
     result = subprocess.run(
         [sys.executable, os.path.join(repo_root, "build_refs.py"),
-         "--storyboard", json_path, "--audio", mp3_path, "--version", "clean",
+         "--storyboard", json_path, "--audio", mp3_path,
          "--slug", "t", "--anchor", "x.png", "--outdir", refs_outdir],
         capture_output=True, text=True,
     )

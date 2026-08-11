@@ -11,7 +11,7 @@ less than the song; the ratio is what carries the pacing intent.
 
 usage:
   build_song.py --storyboard rear_entrance_explicit.json \
-                --audio "Rear Entrance .mp3" --version explicit \
+                --audio "Rear Entrance .mp3" \
                 --slug rear_entrance --outdir ~/shots/rear_entrance_explicit
 """
 import argparse, json, math, os, re, subprocess, sys
@@ -23,21 +23,6 @@ FPS = 16.0
 LEN = 77                 # WAN 2.2 S2V chunk; needs >= 73
 CHUNK = LEN / FPS        # 4.8125s
 W, H = 832, 480          # 16:9, divisible by 16
-
-
-# The storyboards lock the outfit as a jacket, which matches the clean anchor.
-# The explicit anchor is the Street Cats cover look (harness top, no jacket), so
-# the wording is swapped for that cut -- otherwise the prompt argues with the
-# reference image and the jacket flickers in and out between scenes.
-OUTFIT_EXPLICIT = ("black leather harness top, black leather pants with gold buckles and straps, "
-                   "black thigh-high lace-up boots")
-OUTFIT_JACKET_PHRASES = [
-    "black leather street/club jacket, fitted black pants, black boots",
-    "black leather street/club jacket, fitted black pants",
-    "black futuristic clubwear with gold hardware, black boots",   # Catatonic wording
-    "black futuristic clubwear with gold hardware",
-    "fully clothed black leather streetwear",
-]
 
 
 def sname(scene):
@@ -121,14 +106,6 @@ def shot_directive(scene, i):
         if re.search(r"\b" + re.escape(key) + r"\b", cam):
             return directive
     return SHOT_CYCLE[i % len(SHOT_CYCLE)]
-
-
-def apply_outfit(text, version):
-    if version != "explicit":
-        return text
-    for phrase in OUTFIT_JACKET_PHRASES:
-        text = text.replace(phrase, OUTFIT_EXPLICIT)
-    return text
 
 
 def audio_duration(path):
@@ -221,7 +198,6 @@ def main():
     ap.add_argument("--storyboard", required=True)
     ap.add_argument("--audio", required=True, help="path to the mp3 (for duration)")
     ap.add_argument("--audio-name", help="filename as it appears in ComfyUI/input (defaults to basename of --audio)")
-    ap.add_argument("--version", required=True, choices=["clean", "explicit"])
     ap.add_argument("--slug", required=True, help="short song id, e.g. rear_entrance")
     ap.add_argument("--outdir", required=True)
     args = ap.parse_args()
@@ -233,7 +209,7 @@ def main():
     nclips = len(plan_clips)
 
     audio_name = args.audio_name or os.path.basename(args.audio)
-    char = apply_outfit(sb.get("character_reference", ""), args.version)
+    char = sb.get("character_reference", "")
     # newer album-wide storyboards renamed this field
     world = sb.get("album_world_reference") or sb.get("world_reference", "")
     guard = sb.get("global_guardrail", "")
@@ -243,11 +219,11 @@ def main():
     for i, scene, _shot in plan_clips:
         # one reference per clip (build_refs.py --audio), so consecutive clips in
         # a scene are different compositions rather than the same still
-        ref = f"{args.slug}_{args.version}_clip_{i:03d}.png"
+        ref = f"{args.slug}_clip_{i:03d}.png"
         wf = workflow(i, scene, ref, audio_name, char, world, guard)
         wf["18"] = {"class_type": "SaveVideo", "inputs": {
             "video": ["17", 0],
-            "filename_prefix": f"{args.slug}_{args.version}/clip_{i:03d}",
+            "filename_prefix": f"{args.slug}/clip_{i:03d}",
             "format": "auto", "codec": "auto"}}
         with open(f"{args.outdir}/clip_{i:03d}.json", "w") as f:
             json.dump(wf, f)
@@ -256,7 +232,7 @@ def main():
     plan = [(num, sname(next(s for _, s, _ in plan_clips if s["scene_number"] == num)), n, ref)
             for num, (n, ref) in per_scene.items()]
 
-    print(f"{args.slug} [{args.version}] {dur:.1f}s -> {nclips} clips of {CHUNK:.4f}s")
+    print(f"{args.slug} {dur:.1f}s -> {nclips} clips of {CHUNK:.4f}s")
     for num, name, n, ref in plan:
         print(f"  scene {num:2d} {name[:28]:<30} {n} clip(s)  <- {ref}")
 

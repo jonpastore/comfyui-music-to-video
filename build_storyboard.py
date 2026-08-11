@@ -74,14 +74,14 @@ def slug_of(title):
     return re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")
 
 
-def build_scenes(sections, profile, version, dur, target):
+def build_scenes(sections, profile, dur, target):
     """One or more scenes per section; count proportional to lyric weight."""
     weights = [len(s["lines"]) or 2 for s in sections]
     # reuse build_song's largest-remainder allocator (it reads a "N sec" string)
     counts = allocate([{"duration_guidance": f"{w} sec"} for w in weights], target)
 
     locs, pals = profile["locations"], profile["palettes"]
-    char = profile["character_base"].replace("{outfit}", profile["outfit"][version])
+    char = profile["character_base"].replace("{outfit}", profile["outfit"])
     total_w = sum(weights)
 
     scenes, n = [], 0
@@ -139,7 +139,7 @@ def build_scenes(sections, profile, version, dur, target):
 
 def to_md(sb):
     L = [f"# {sb['album']} — Track {sb['track_number']}: {sb['title']}",
-         f"## {sb['version'].upper()} CUT", "",
+
          f"**Scenes: {len(sb['scenes'])}** — {sb['storyboard_strategy']['note']}", "",
          "## Concept", "", sb["concept"], "",
          "## Character / world lock", "",
@@ -199,35 +199,34 @@ def main():
     nclips = math.ceil(dur / CHUNK)
     os.makedirs(args.outdir, exist_ok=True)
 
-    for version in ("clean", "explicit"):
-        scenes = build_scenes(sections, profile, version, dur, target)
-        sb = {
-            "project": profile.get("project", "Music Video Storyboard"),
-            "album": profile["album"],
-            "track_number": args.track,
-            "title": args.title,
-            "version": version,
-            "storyboard_strategy": {
-                "scene_count": len(scenes),
-                "coverage_model": "coverage-based; scenes are shot opportunities, not final clips",
-                "note": (f"{dur:.0f}s track -> {nclips} clips of {CHUNK:.2f}s; "
-                         f"build_refs.py --audio spreads them over these scenes"),
-            },
-            "concept": args.concept,
-            "audio_lyrics": lyrics,
-            "character_reference": profile["character_base"].replace(
-                "{outfit}", profile["outfit"][version]),
-            "album_world_reference": profile["world"],
-            "global_negative_prompt": profile["negative_prompt"],
-            "scenes": scenes,
-        }
-        base = os.path.join(args.outdir, f"{slug}_{version}")
-        json.dump(sb, open(base + ".json", "w"), indent=1)
-        open(base + ".md", "w").write(to_md(sb))
-        print(f"{base}.json / .md — {len(scenes)} scenes")
+    scenes = build_scenes(sections, profile, dur, target)
+    sb = {
+        "project": profile.get("project", "Music Video Storyboard"),
+        "album": profile["album"],
+        "track_number": args.track,
+        "title": args.title,
+        
+        "storyboard_strategy": {
+            "scene_count": len(scenes),
+            "coverage_model": "coverage-based; scenes are shot opportunities, not final clips",
+            "note": (f"{dur:.0f}s track -> {nclips} clips of {CHUNK:.2f}s; "
+                     f"build_refs.py --audio spreads them over these scenes"),
+        },
+        "concept": args.concept,
+        "audio_lyrics": lyrics,
+        "character_reference": profile["character_base"].replace(
+            "{outfit}", profile["outfit"]),
+        "album_world_reference": profile["world"],
+        "global_negative_prompt": profile["negative_prompt"],
+        "scenes": scenes,
+    }
+    base = os.path.join(args.outdir, slug)
+    json.dump(sb, open(base + ".json", "w"), indent=1)
+    open(base + ".md", "w").write(to_md(sb))
+    print(f"{base}.json / .md — {len(scenes)} scenes")
 
     print(f"{args.title}: {dur:.0f}s, {len(sections)} lyric sections -> "
-          f"{target} scenes, {nclips} clips per cut")
+          f"{target} scenes, {nclips} clips")
 
 
 if __name__ == "__main__":

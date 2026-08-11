@@ -11,14 +11,14 @@ template subgraph (ModelSamplingAuraFlow 3.1 / CFGNorm / FluxKontext scaling),
 so it matches what the model was packaged to run.
 
 usage:
-  build_refs.py --storyboard rear_entrance_explicit.json --version explicit \
+  build_refs.py --storyboard rear_entrance_explicit.json \
       --slug rear_entrance --anchor meow_p_anchor.png --outdir ~/refs/re_explicit
 """
 import argparse, json, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import guardrail  # noqa: E402  (applied here, NOT stored in the storyboard)
-from build_song import (allocate, audio_duration, apply_outfit, shot_directive, sname,
+from build_song import (allocate, audio_duration, shot_directive, sname,
                         normalize, clip_plan, CHUNK)  # noqa: E402  (shared allocation)
 
 # Lightning LoRA settings: 4 steps at cfg 1.0. NOTE: at cfg 1.0 ComfyUI skips
@@ -35,32 +35,29 @@ SINGLE = (" Exactly one Meow P in the frame: a single black feline woman protago
           "no twin, no duplicate, no second copy of her.")
 
 
-def tighten_for_detail(image_prompt, scene, version, world=""):
+def tighten_for_detail(scene, world="", character=""):
     """Detail/macro framing loses to a prompt that enumerates her boots.
 
     The head-to-toe character lock is what keeps her consistent in shots where
     she is the subject, but on an insert shot she may only be a hand -- or
     absent. So for close framings the lock is replaced by a short identity hint
     and the scene's own action becomes the subject.
+
+    Both the world and the identity hint come from the storyboard being rendered.
+    They used to be one album's wardrobe hardcoded here, selected by a
+    clean/explicit switch -- two ways to describe wardrobe, neither of them the
+    tier that is supposed to own it.
     """
-    # world comes from the storyboard being rendered. It used to be one album's
-    # description hardcoded here, so every OTHER album's detail shots inherited
-    # Street Cats' warehouse -- data baked into a generic script, the same fault
-    # as storing the guardrail in the storyboard.
-    world = world or "photorealistic cinematic 3D frame, high detail, 16:9"
     action = scene.get("story_action") or scene.get("story") or ""
-    hint = ("If any part of her is visible it is a black-furred feline woman with "
-            "yellow-green eyes and gold jewelry" +
-            (", black leather harness and gold buckles" if version == "explicit"
-             else ", black leather jacket sleeve") + ".")
-    return f"Subject of this shot: {action} {world} {hint}"
+    hint = f"If any part of her is visible: {character}" if character else ""
+    return " ".join(p for p in (f"Subject of this shot: {action}", world, hint) if p.strip())
 
 
 DETAIL_SHOTS = ("EXTREME CLOSE-UP", "CLOSE-UP SHOT")
 
 
-def workflow(scene, anchor, base, latent_mode, w, h, seed, version="clean", shot="",
-             guard="", world=""):
+def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
+             guard="", world="", character=""):
     """guard: tier wording. The pinned clause is appended regardless, HERE --
     this is the chokepoint every storyboard reaches on its way to the image
     model, whoever generated it. Storing the clause in the storyboard JSON only
@@ -69,9 +66,9 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, version="clean", shot
     file -- and editing prompts is the documented workflow."""
     # shot directive goes FIRST -- framing is ignored when buried mid-prompt
     if shot.startswith(DETAIL_SHOTS):
-        pos = shot + " " + tighten_for_detail(scene["image_prompt"], scene, version, world)
+        pos = shot + " " + tighten_for_detail(scene, world, character)
     else:
-        pos = (shot + " " if shot else "") + apply_outfit(scene["image_prompt"], version) + SINGLE
+        pos = (shot + " " if shot else "") + scene["image_prompt"] + SINGLE
     pos = guardrail.build_prompt(pos, guard, f"scene {scene.get('scene_number','?')}")
     neg = scene.get("negative_prompt", "")
 
@@ -125,7 +122,6 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, version="clean", shot
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--storyboard", required=True)
-    ap.add_argument("--version", required=True, choices=["clean", "explicit"])
     ap.add_argument("--slug", required=True)
     ap.add_argument("--anchor", required=True, help="identity reference, as named in ComfyUI/input")
     ap.add_argument("--base", help="optional 16:9 composition base, as named in ComfyUI/input")
@@ -144,6 +140,7 @@ def main():
     sb = normalize(json.load(open(args.storyboard)))
     scenes = sb["scenes"]
     world = sb.get("album_world_reference") or sb.get("world_reference", "")
+    character = sb.get("character_reference", "")
     os.makedirs(args.outdir, exist_ok=True)
 
     if args.audio:
@@ -155,14 +152,14 @@ def main():
             # distinct seed per clip -> a different composition of the same
             # scene, with the anchor still pinning the character
             wf = workflow(scene, args.anchor, args.base, args.latent,
-                          args.width, args.height, 7000 + ci, args.version,
-                          shot, args.guardrail, world)
+                          args.width, args.height, 7000 + ci,
+                          shot, args.guardrail, world, character)
             wf["18"] = {"class_type": "SaveImage", "inputs": {
                 "images": ["17", 0],
-                "filename_prefix": f"refs_{args.slug}_{args.version}/clip_{ci:03d}"}}
+                "filename_prefix": f"refs_{args.slug}/clip_{ci:03d}"}}
             with open(f"{args.outdir}/clip_{ci:03d}.json", "w") as f:
                 json.dump(wf, f)
-        print(f"{args.slug} [{args.version}] {dur:.1f}s -> {i} reference images "
+        print(f"{args.slug} {dur:.1f}s -> {i} reference images "
               f"across {len(scenes)} scenes ({args.width}x{args.height}), "
               f"~{i*15/60:.0f} min to render")
         for scene, n in zip(scenes, counts):
@@ -176,15 +173,15 @@ def main():
         if want and num not in want:
             continue
         wf = workflow(scene, args.anchor, args.base, args.latent,
-                      args.width, args.height, 7000 + num, args.version,
-                      shot_directive(scene, num), args.guardrail, world)
+                      args.width, args.height, 7000 + num,
+                      shot_directive(scene, num), args.guardrail, world, character)
         wf["18"] = {"class_type": "SaveImage", "inputs": {
             "images": ["17", 0],
-            "filename_prefix": f"refs_{args.slug}_{args.version}/scene_{num:02d}"}}
+            "filename_prefix": f"refs_{args.slug}/scene_{num:02d}"}}
         with open(f"{args.outdir}/scene_{num:02d}.json", "w") as f:
             json.dump(wf, f)
         n += 1
-    print(f"{args.slug} [{args.version}] wrote {n} reference-image workflows to {args.outdir} "
+    print(f"{args.slug} wrote {n} reference-image workflows to {args.outdir} "
           f"(latent={args.latent} {args.width}x{args.height})")
 
 

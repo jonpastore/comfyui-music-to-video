@@ -30,15 +30,6 @@ SUBMIT_TIMEOUT = float(os.environ.get("SUBMIT_TIMEOUT", 1800))
 SCRIPT_TIMEOUT = float(os.environ.get("SCRIPT_TIMEOUT", 600))
 MAX_POLL_ERRORS = 3  # consecutive connection failures before giving up on a poll
 
-# build_refs.py / build_song.py take --version {clean,explicit}; apply_outfit()
-# in build_song.py is the ONLY thing --version affects, and it's a no-op
-# unless version == "explicit" (see build_song.apply_outfit). Our tiers
-# (pg13/r/custom, from studio/tiers.py) are a separate axis -- guardrail
-# wording, not wardrobe -- so we always pass "clean" here and fold the tier
-# into the --slug we pass instead, keeping it in paths/filenames only.
-VERSION = "clean"
-
-
 def _slug_tier(slug, tier):
     return f"{slug}_{tier}"
 
@@ -173,7 +164,7 @@ def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
     bs = _slug_tier(slug, tier)
     with tempfile.TemporaryDirectory() as wf_dir:
         _run_script("build_refs.py", [
-            "--storyboard", storyboard_json, "--version", VERSION, "--slug", bs,
+            "--storyboard", storyboard_json, "--slug", bs,
             "--anchor", anchor_name, "--audio", mp3_path, "--outdir", wf_dir,
             "--guardrail", guard,
         ], progress)
@@ -184,7 +175,7 @@ def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
                     os.remove(os.path.join(wf_dir, f))
             if progress:
                 progress(f"limited to first {len(keep)} of the song's clips")
-        paths = _submit_and_collect(wf_dir, f"refs_{bs}_{VERSION}", "*.png", progress)
+        paths = _submit_and_collect(wf_dir, f"refs_{bs}", "*.png", progress)
     return [{"clip_idx": int(m.group(1)), "path": p, "seed": 7000 + int(m.group(1))}
             for p, m in _clip_records(paths)]
 
@@ -193,11 +184,11 @@ def reroll(slug, tier, storyboard_json, anchor_name, mp3_path, clip_indices, pro
     bs = _slug_tier(slug, tier)
     with tempfile.TemporaryDirectory() as wf_dir:
         _run_script("reroll_refs.py", [
-            "--storyboard", storyboard_json, "--version", VERSION, "--slug", bs,
+            "--storyboard", storyboard_json, "--slug", bs,
             "--audio", mp3_path, "--anchor", anchor_name,
             "--clips", ",".join(str(c) for c in clip_indices), "--outdir", wf_dir,
         ], progress)
-        paths = _submit_and_collect(wf_dir, f"reroll_{bs}_{VERSION}", "*.png", progress)
+        paths = _submit_and_collect(wf_dir, f"reroll_{bs}", "*.png", progress)
     return [{"clip_idx": int(m.group(1)), "path": p, "seed": int(m.group(2))}
             for p, m in _clip_records(paths, r"clip_(\d+)_s(\d+)")]
 
@@ -207,7 +198,7 @@ def stage_refs(slug, tier, ref_paths):
     build_song.py's clip loop expects: <slug>_<tier>_<version>_clip_NNN.png
     (see build_song.main: ref = f"{args.slug}_{args.version}_clip_{i:03d}.png")."""
     bs = _slug_tier(slug, tier)
-    return [install_input(rec["path"], f"{bs}_{VERSION}_clip_{rec['clip_idx']:03d}.png")
+    return [install_input(rec["path"], f"{bs}_clip_{rec['clip_idx']:03d}.png")
             for rec in ref_paths]
 
 
@@ -219,10 +210,10 @@ def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None):
     bs = _slug_tier(slug, tier)
     with tempfile.TemporaryDirectory() as wf_dir:
         _run_script("build_song.py", [
-            "--storyboard", storyboard_json, "--audio", mp3_path, "--version", VERSION,
+            "--storyboard", storyboard_json, "--audio", mp3_path,
             "--slug", bs, "--outdir", wf_dir,
         ], progress)
-        paths = _submit_and_collect(wf_dir, f"{bs}_{VERSION}", "*.mp4", progress)
+        paths = _submit_and_collect(wf_dir, f"{bs}", "*.mp4", progress)
     return [{"clip_idx": int(m.group(1)), "path": p} for p, m in _clip_records(paths)]
 
 

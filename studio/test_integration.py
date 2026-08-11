@@ -139,7 +139,7 @@ if grok:
 
         # a storyboard from ANYWHERE still gets the clause at build time
         wf = build_refs.workflow(sb["scenes"][0], "a.png", None, "empty",
-                                 1280, 720, 7000, "clean", "WIDE SHOT.", guard)
+                                 1280, 720, 7000, "WIDE SHOT.", guard)
         built = wf["11"]["inputs"]["prompt"]
         assert g.PINNED in built, "prompt builder did not attach the pinned clause"
         assert built.count("No nudity") == 1, "clause attached more than once"
@@ -149,7 +149,7 @@ if grok:
         bad = dict(sb["scenes"][0], image_prompt="a child in the crowd")
         try:
             build_refs.workflow(bad, "a.png", None, "empty", 1280, 720, 7000,
-                                "clean", "WIDE SHOT.", guard)
+                                "WIDE SHOT.", guard)
             raise AssertionError("builder accepted a minor reference")
         except g.ContentRefused:
             pass
