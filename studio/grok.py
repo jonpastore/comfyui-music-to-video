@@ -537,24 +537,21 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
 VISION_MODEL = os.environ.get("XAI_VISION_MODEL") or PREFERRED_MODEL
 
 _CLASSIFY_SYSTEM = (
-    "You are a content reviewer for AI-generated music-video frames. You are shown "
+    "You are a content reviewer for AI-generated frames. You are shown "
     "ONE contact sheet: a grid of frames, each labelled 'clip N' in the top-left "
     "corner of its cell. Judge only what is visible in the frames.\n\n"
     "Flag a cell ONLY for:\n"
-    "  minor    - the depicted character reads as a child or adolescent rather "
-    "than a clearly adult woman (face, body proportions, or a school/nursery/"
-    "playground setting).\n"
-    "  nudity   - exposed genitals, exposed breasts, or a sexual act.\n"
+    "  minor    - any depicted character that reads as a child or adolescent "
+    "(face, body proportions, or a school/nursery/playground setting).\n"
     "  broken   - the frame is unusable: duplicated or merged characters, extra "
     "limbs, melted anatomy, or unreadable garbage.\n\n"
-    "The subject is a stylised anthropomorphic adult cat character in a nightlife "
-    "setting; dark clubwear, confident posing and suggestive framing are IN SCOPE "
-    "and must NOT be flagged. Flag only what actually matches a category above.\n\n"
-    'Answer with JSON only: {"flagged": [{"clip": <int>, "issue": "minor"|"nudity"'
-    '|"broken", "reason": "<short>"}], "cells_seen": <int>}. '
+    "Adult characters, partial or full nudity, and sexual content between "
+    "consenting adults are IN SCOPE and must NOT be flagged. "
+    "Flag only what actually matches a category above.\n\n"
+    'Answer with JSON only: {"flagged": [{"clip": <int>, "issue": "minor"|"broken", '
+    '"reason": "<short>"}], "cells_seen": <int>}. '
     'An empty "flagged" list is the expected answer for a clean sheet.'
 )
-
 
 def _data_url(path):
     with open(path, "rb") as f:
