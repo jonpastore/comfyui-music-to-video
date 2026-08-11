@@ -205,6 +205,38 @@ document.addEventListener("click", function (e) {
   if (btn) paintMask(btn.closest(".mask-form"));
 });
 
+// ---- click a column heading to sort a list table --------------------------
+// data-k on a cell when the sort key is not what the cell reads: seconds behind
+// "3:04", a unix time behind a formatted date. Empty cells always sort LAST in
+// both directions -- otherwise sorting by length buries every song that has one
+// under the ones that do not.
+document.addEventListener("click", function (e) {
+  var th = e.target.closest("table.sortcols th[data-sort]");
+  if (!th) return;
+  var table = th.closest("table");
+  var idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+  var dir = th.classList.contains("sort-asc") ? -1 : 1;
+  table.querySelectorAll("th").forEach(function (h) {
+    h.classList.remove("sort-asc", "sort-desc");
+  });
+  th.classList.add(dir === 1 ? "sort-asc" : "sort-desc");
+  var body = table.tBodies[0];
+  var rows = Array.prototype.slice.call(body.rows);
+  rows.sort(function (a, b) {
+    var x = a.cells[idx], y = b.cells[idx];
+    var xk = x.dataset.k, yk = y.dataset.k;
+    if (xk !== undefined && yk !== undefined) {
+      var xn = parseFloat(xk), yn = parseFloat(yk);
+      if (isNaN(xn) !== isNaN(yn)) return isNaN(xn) ? 1 : -1;
+      if (!isNaN(xn)) return (xn - yn) * dir;
+    }
+    var xt = x.textContent.trim().toLowerCase(), yt = y.textContent.trim().toLowerCase();
+    if (!xt !== !yt) return xt ? -1 : 1;
+    return xt.localeCompare(yt) * dir;
+  });
+  rows.forEach(function (r) { body.appendChild(r); });
+});
+
 // ---- anchor sheets: tabs, filter, viewer, repair --------------------------
 document.addEventListener("click", function (e) {
   // tier tabs: the panels are already rendered, so this is a class swap

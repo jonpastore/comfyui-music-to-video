@@ -10,7 +10,8 @@
 {% else %}
 <div class="set-grid">
   {% for s in sets %}
-  <section class="card set-card">
+  {# id so the Library's Sets column can link straight to this card #}
+  <section class="card set-card" id="set-{{ s.asset.id }}">
     <header class="model-head">
       <strong>{{ s.playlist }}</strong>
       <span class="tag">{{ s.mode }}</span>

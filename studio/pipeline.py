@@ -110,6 +110,28 @@ def free_vram(progress=None):
     return True
 
 
+def comfy_queue():
+    """{"running": n, "pending": n} from ComfyUI's own /queue, or None if it did
+    not answer.
+
+    The studio's queue is NOT ComfyUI's. This app serialises its own jobs
+    through one worker because the card fits one render at a time -- but ComfyUI
+    is unauthenticated and anyone on the tailnet can submit to it directly, and
+    the studio would then submit alongside them onto a card already holding a
+    23.5 GB transformer. "Nothing running" on the Jobs page has only ever meant
+    "nothing of OURS is running"; this is the other half of the answer.
+
+    Attribution is deliberately not attempted: ComfyUI's queue entries carry no
+    identity, so a count that claimed to know whose work it was would be made up.
+    """
+    try:
+        q = _get(f"{COMFY}/queue")
+    except Exception:
+        return None
+    return {"running": len(q.get("queue_running") or []),
+            "pending": len(q.get("queue_pending") or [])}
+
+
 def submit_dir(wf_dir, progress=None):
     progress = progress or (lambda msg: None)
     files = sorted(f for f in os.listdir(wf_dir) if f.endswith(".json"))

@@ -6,38 +6,56 @@
 
 <section class="card">
   <h2>Upload a song</h2>
-  <form method="post" action="/songs" enctype="multipart/form-data">
-    <label>Title <input type="text" name="title" required></label>
-    <label>Album <input type="text" name="album"></label>
-    <label>MP3 <input type="file" name="mp3" accept="audio/mpeg,.mp3" required></label>
-    <label>Genre
-      <select name="genre" id="genre-select">
-        <option value="">(none)</option>
-        {% for g in genre_data %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
-      </select>
-    </label>
-    <label>Subgenre
-      <select name="subgenre" id="subgenre-select"><option value="">(none)</option></select>
-    </label>
-    <label>Secondary genre
-      <select name="genre2" id="genre2-select">
-        <option value="">(none)</option>
-        {% for g in genre_data %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
-      </select>
-    </label>
-    <label>Secondary subgenre
-      <select name="subgenre2" id="subgenre2-select"><option value="">(none)</option></select>
-    </label>
-    <label><input type="checkbox" name="explicit" value="true"> Explicit lyrics</label>
-    <button type="submit">Upload</button>
+  <form method="post" action="/songs" enctype="multipart/form-data" class="stack-form">
+    <div class="field-row">
+      <label>Title <input type="text" name="title" required></label>
+      <label>Album <input type="text" name="album"></label>
+      <label>MP3 <input type="file" name="mp3" accept="audio/mpeg,.mp3" required></label>
+    </div>
+    {# the four genre fields are one decision, so they read as one row rather
+       than four full-width stacked selects #}
+    <div class="field-row">
+      <label>Genre
+        <select name="genre" id="genre-select">
+          <option value="">(none)</option>
+          {% for g in genre_data %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Subgenre
+        <select name="subgenre" id="subgenre-select"><option value="">(none)</option></select>
+      </label>
+      <label>Secondary genre
+        <select name="genre2" id="genre2-select">
+          <option value="">(none)</option>
+          {% for g in genre_data %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Secondary subgenre
+        <select name="subgenre2" id="subgenre2-select"><option value="">(none)</option></select>
+      </label>
+    </div>
+    <div class="form-actions">
+      <label class="check"><input type="checkbox" name="explicit" value="true"> Explicit lyrics</label>
+      <button type="submit">Upload</button>
+    </div>
   </form>
 </section>
 
 {% if not songs %}
 <p class="empty">No songs yet. Upload one above.</p>
 {% else %}
-<table class="list">
-  <thead><tr><th>Title</th><th>Album</th><th>Genre</th><th></th></tr></thead>
+<div class="table-scroll">
+<table class="list sortcols">
+  <thead><tr>
+    <th data-sort>Title</th>
+    <th data-sort>Album</th>
+    <th data-sort>Genre</th>
+    <th data-sort class="num">Length</th>
+    <th data-sort>Added</th>
+    <th data-sort>Video</th>
+    <th data-sort>Sets</th>
+    <th></th>
+  </tr></thead>
   <tbody>
   {% for e in songs %}
     <tr>
@@ -50,6 +68,30 @@
         {{ e.song.genre or "" }}{% if e.song.subgenre %} / {{ e.song.subgenre }}{% endif %}
         {% if e.song.genre2 %}<br>{{ e.song.genre2 }}{% if e.song.subgenre2 %} / {{ e.song.subgenre2 }}{% endif %}{% endif %}
       </td>
+      <td class="num" data-k="{{ e.song.duration or '' }}">
+        {% if e.song.duration %}{{ e.song.duration | hms }}{% endif %}
+      </td>
+      <td data-k="{{ e.song.created or '' }}">
+        {% if e.song.created %}
+        <time class="local-time" datetime="{{ e.song.created | isotime }}">
+          {{ e.song.created | isotime }}</time>
+        {% endif %}
+      </td>
+      {# one modal per song rather than per render: the tiers of a song are
+         watched against each other, and a row of buttons is not a column #}
+      <td data-k="{{ e.videos | length }}">
+        {% if e.videos %}
+        <button type="button" class="linkish"
+                onclick="document.getElementById('vid-{{ e.song.id }}').showModal()">
+          {% for v in e.videos %}{{ v.tier | tiername }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </button>
+        {% endif %}
+      </td>
+      <td data-k="{{ e.sets | length }}">
+        {% for s in e.sets %}
+        <a href="/sets#set-{{ s.id }}">{{ s.label }}</a>{% if not loop.last %}<br>{% endif %}
+        {% else %}<span class="muted">&mdash;</span>{% endfor %}
+      </td>
       <td>
         <form method="post" action="/songs/{{ e.song.id }}/delete" class="delete-song">
           <input type="hidden" name="confirm" value="DELETE">
@@ -60,5 +102,22 @@
   {% endfor %}
   </tbody>
 </table>
+</div>
+
+{% for e in songs %}{% if e.videos %}
+<dialog class="video-modal" id="vid-{{ e.song.id }}">
+  <div class="modal-bar">
+    <strong>{{ e.song.title }}</strong>
+    <button type="button" onclick="this.closest('dialog').close()">Close</button>
+  </div>
+  {% for v in e.videos %}
+  <p class="meta">{{ v.tier | tiername }} &middot;
+    <time class="local-time" datetime="{{ v.created | isotime }}">{{ v.created | isotime }}</time>
+  </p>
+  {# preload=none so 31 rows of modals cost nothing until one is opened #}
+  <video controls preload="none" src="{{ media_url(v.path) }}"></video>
+  {% endfor %}
+</dialog>
+{% endif %}{% endfor %}
 {% endif %}
 {% endblock %}

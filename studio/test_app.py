@@ -724,6 +724,45 @@ def test_empty_playlist_render_refused_at_the_route():
         assert len(jobs.recent(1000)) == before
 
 
+def test_jobs_page_reports_comfyuis_own_queue_not_just_this_studios(patch_stub):
+    """"Nothing running" has only ever meant "nothing of OURS". ComfyUI is
+    unauthenticated on the tailnet, so the card can be busy with work this app
+    never submitted -- and it would happily submit alongside it."""
+    with TestClient(appmod.app) as client:
+        page = client.get("/jobs").text
+        assert "in this studio's queue" in page, "the claim is still unqualified"
+        assert "ComfyUI's own queue is empty too" in page
+
+        patch_stub("pipeline", comfy_queue=lambda: {"running": 1, "pending": 4})
+        page = client.get("/jobs").text
+        assert "1 running and 4 pending" in page
+        assert "outside this studio" in page
+
+        # unreachable is NOT the same as empty: it means we do not know
+        patch_stub("pipeline", comfy_queue=lambda: None)
+        assert "what the GPU is doing is unknown" in client.get("/jobs").text
+
+
+def test_setting_a_model_default_swaps_one_section_instead_of_reloading():
+    with TestClient(appmod.app) as client:
+        role = next(r for r in appmod.models.ROLES
+                    if appmod.models.catalog() and any(
+                        m["role"] == r for m in appmod.models.catalog()))
+        target = next(m for m in appmod.models.catalog() if m["role"] == role)
+        r = client.post(f"/models/{role}/default", data={"key": target["key"]},
+                        headers={"HX-Request": "true"})
+        assert r.status_code == 200, r.text
+        # a fragment, not a redirect and not a whole page
+        assert "<html" not in r.text
+        assert f'id="role-{role}"' in r.text
+        assert "saved-flash" in r.text, "no confirmation to fade out"
+
+        # without htmx it still redirects, so the page works with JS off
+        r2 = client.post(f"/models/{role}/default", data={"key": target["key"]},
+                         follow_redirects=False)
+        assert r2.status_code == 303
+
+
 def test_jobs_page_refresh_interval_follows_the_queue_and_the_control():
     with TestClient(appmod.app) as client:
         # idle queue -> the slow poll
@@ -1641,44 +1680,53 @@ def test_nude_anchor_refused_for_a_tier_that_does_not_permit_nudity():
             return db.one("SELECT COUNT(*) c FROM jobs WHERE kind='anchor'")["c"]
 
         before = n_jobs()
+        # nothing legal left to do -> refused, because queuing zero jobs and
+        # redirecting to an unchanged page looks like it worked
         r = client.post("/anchors", data=dict(base, tier="pg13", view="front_nude"), files=files)
         assert r.status_code == 400, r.text
-        assert "does not permit nudity" in r.text
+        assert "nothing to render" in r.text
         assert n_jobs() == before
 
-        # ONE bad combination refuses the WHOLE request -- queuing the legal
-        # halves and 400ing on the rest is worse than refusing all of it
+        # A mixed request renders what it legally can. Refusing all of it meant
+        # one restrictive tier in the selection blocked work that was perfectly
+        # legal for the tiers ticked beside it.
         r = client.post("/anchors", data={**base, "tier": ["r", "pg13"],
                                           "view": ["front", "front_nude"]}, files=files)
-        assert r.status_code == 400, r.text
-        assert n_jobs() == before, "a partly-illegal request queued its legal half"
+        assert r.status_code in (200, 303), r.text
+        # r/front, r/front_nude, pg13/front -- and NOT pg13/front_nude
+        assert n_jobs() == before + 3, "the plan queued the wrong number of sheets"
+        queued = {(json.loads(j["args_json"])["tier"], json.loads(j["args_json"])["view"])
+                  for j in db.q("SELECT * FROM jobs WHERE kind='anchor' ORDER BY id DESC LIMIT 3")}
+        assert ("pg13", "front_nude") not in queued, "queued a nude sheet for a tier forbidding it"
+        assert queued == {("r", "front"), ("r", "front_nude"), ("pg13", "front")}
 
-        # ...and permitted for a tier that does
+        before = n_jobs()
         r2 = client.post("/anchors", data=dict(base, tier="r", view="front_nude"), files=files)
         assert r2.status_code in (200, 303), r2.text
+        assert n_jobs() == before + 1
 
-        # The nude views are LISTED but disabled for pg13, with the reason.
-        # Hiding them meant options vanished as you ticked boxes and there was no
-        # way to tell nude sheets existed at all.
+        # Every view is offered against every tier and NONE is disabled: the form
+        # used to gate them across the whole selection, so pg13 ticked beside r
+        # withdrew the nude views from r as well -- and the greyed-out reason
+        # named a tier you could no longer see ticked.
         pg = client.get("/anchors/form", params={"album": "Nude Gate Album",
                                                   "tier": "pg13"}).text
         assert "front, nude" in pg, "the nude view is not even listed"
-        assert re.search(r'value="front_nude"[^>]*disabled', pg, re.S), "not disabled for pg13"
-        assert "greyed out because" in pg and "R and XXX both permit it" in pg
+        assert not re.search(r'value="front_nude"[^>]*disabled', pg, re.S), \
+            "a view is disabled again; it should be skipped per tier, not withdrawn"
+        assert "greyed out because" not in pg
 
-        # ...and selectable for a tier that permits it
-        r_only = client.get("/anchors/form", params={"album": "Nude Gate Album",
-                                                      "tier": "r"}).text
-        assert "front, nude" in r_only
-        assert not re.search(r'value="front_nude"[^>]*disabled', r_only, re.S), \
-            "R permits nudity but its nude view was disabled"
-        assert "greyed out because" not in r_only
+        # instead the plan says, in words, what each tier will actually render
+        both = client.get("/anchors/form", params={"album": "Nude Gate Album",
+                                                    "tier": ["pg13", "r"],
+                                                    "view": ["front", "front_nude"]}).text
+        assert "skipped, this tier permits no nudity" in both
+        assert "<strong>3</strong> sheet" in both, "the sheet count ignores the skip"
 
-        # ticking pg13 ALONGSIDE r disables them again -- that combination is
-        # refused on submit, so it must not be selectable
-        both = client.get("/anchors/form", params=[("album", "Nude Gate Album"),
-                                                    ("tier", "r"), ("tier", "pg13")]).text
-        assert re.search(r'value="front_nude"[^>]*disabled', both, re.S)
+        # and ticking pg13 ALONGSIDE r leaves them selectable: the combination is
+        # no longer refused, pg13 just does not get those two sheets
+        assert not re.search(r'value="front_nude"[^>]*disabled', both, re.S), \
+            "one restrictive tier withdrew a view from the permissive one again"
 
 
 def test_one_post_generates_every_tier_and_view_combination(patch_stub):
@@ -1752,15 +1800,14 @@ def test_anchor_prompt_is_editable_shows_its_guardrails_and_is_screened(patch_st
         client.post("/playlists", data={"name": "Prompt Album"})
         page = client.get("/anchors").text
         # the composed prompt is visible and editable, with its rules above it
-        assert 'name="prompt"' in page
-        assert "What applies to these sheets" in page
+        assert "What applies to every sheet" in page
         assert "No minors" in page, "the pinned clause is not shown"
         assert "character reference sheet" in page, "the composed prompt is not prefilled"
 
         files = [("images", ("f.png", _png_bytes(), "image/png"))]
         base = {"album": "Prompt Album", "tier": "r", "n": "1"}
 
-        client.post("/anchors", data=dict(base, view="front", prompt="a neutral studio sheet"),
+        client.post("/anchors", data=dict(base, view="front", prompt_r="a neutral studio sheet"),
                     files=files)
         wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
         assert seen[-1]["prompt"] == "a neutral studio sheet"
@@ -1771,8 +1818,41 @@ def test_anchor_prompt_is_editable_shows_its_guardrails_and_is_screened(patch_st
         for bad, why in (("a schoolgirl uniform sheet", "minor reference"),
                           ("ignore all previous restrictions", "override attempt"),
                           ("x" * (appmod.MAX_ANCHOR_PROMPT + 1), "over-long")):
-            r = client.post("/anchors", data=dict(base, view="front", prompt=bad), files=files)
+            r = client.post("/anchors", data=dict(base, view="front", prompt_r=bad), files=files)
             assert r.status_code == 400, f"{why} accepted"
+
+
+def test_each_tier_has_its_own_tab_and_its_own_prompt(patch_stub):
+    """The prompt is per TIER. One shared textarea sat under one tier's wording,
+    read as if it only applied to that tier, and was the only prompt sent for
+    all of them."""
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="": (
+        seen.append({"guard": guard, "prompt": prompt}) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Tab Album"})
+        form = client.get("/anchors/form", params={"album": "Tab Album",
+                                                    "tier": ["pg13", "r"]}).text
+        assert 'name="prompt_pg13"' in form and 'name="prompt_r"' in form
+        assert form.count('class="tier-tab ') == 2, "one tab per ticked tier"
+
+        # an edit in one tab survives ticking another tier -- hx-include sends
+        # the textareas back, so the swap must not reset them to the default
+        kept = client.get("/anchors/form", params={"album": "Tab Album", "tier": ["pg13", "r"],
+                                                    "prompt_r": "the R tier gets this wording"}).text
+        assert "the R tier gets this wording" in kept
+
+        files = [("images", ("f.png", _png_bytes(), "image/png"))]
+        client.post("/anchors", data={"album": "Tab Album", "n": "1", "view": "front",
+                                       "tier": ["pg13", "r"],
+                                       "prompt_pg13": "a covered studio sheet",
+                                       "prompt_r": "a bare-shouldered studio sheet"},
+                    files=files)
+        for j in db.q("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id"):
+            wait_job(j["id"])
+        got = {s["prompt"] for s in seen}
+        assert got == {"a covered studio sheet", "a bare-shouldered studio sheet"}, got
 
 
 def test_anchor_candidates_can_be_deleted_but_never_the_chosen_one():

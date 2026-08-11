@@ -781,15 +781,47 @@ def media(path: str):
 
 # ------------------------------------------------------------------ songs --
 
+def sets_by_song():
+    """{song_id: [{id, label}]} -- the rendered sets each song appears in.
+
+    A set is assembled FROM a playlist, so the songs in it are that playlist's
+    items. Built in three queries for the whole library rather than two per row.
+    """
+    members = {}
+    for it in db.q("SELECT playlist_id, song_id FROM playlist_items"):
+        members.setdefault(it["playlist_id"], []).append(it["song_id"])
+    names = {p["id"]: p["name"] for p in db.q("SELECT id, name FROM playlists")}
+    out = {}
+    for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC"):
+        meta = db.jset(a)
+        pid = meta.get("playlist_id")
+        label = names.get(pid, "(deleted playlist)")
+        if meta.get("tier"):
+            label += f" {meta['tier'].upper()}"
+        if meta.get("mode") == "audio":
+            label += " (audio)"
+        for sid in members.get(pid, []):
+            out.setdefault(sid, []).append({"id": a["id"], "label": label})
+    return out
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     songs = db.q("SELECT * FROM songs ORDER BY created DESC")
+    in_sets = sets_by_song()
     entries = []
     for s in songs:
         board_tiers = {r["tier"] for r in db.q("SELECT DISTINCT tier FROM storyboards WHERE song_id=?", s["id"])}
         rendered_tiers = {r["tier"] for r in db.q("SELECT DISTINCT tier FROM renders WHERE song_id=?", s["id"])}
         tier_status = [{"tier": t, "rendered": t in rendered_tiers} for t in sorted(board_tiers)]
-        entries.append({"song": s, "tiers": tier_status})
+        # newest render per tier: re-assembling a song adds a row, and the
+        # column is "what can I watch", not "everything ever produced"
+        latest = {}
+        for r in db.q("SELECT * FROM renders WHERE song_id=? ORDER BY id DESC", s["id"]):
+            latest.setdefault(r["tier"], r)
+        entries.append({"song": s, "tiers": tier_status,
+                        "videos": [latest[t] for t in sorted(latest)],
+                        "sets": in_sets.get(s["id"], [])})
     return templates.TemplateResponse(request, "index.html", {"songs": entries, "genre_data": GENRE_DATA})
 
 
@@ -980,10 +1012,9 @@ MAX_ANCHOR_UPLOADS = 8
 
 
 @app.post("/anchors")
-async def start_anchor(album: str = Form(...), tier: List[str] = Form([]),
+async def start_anchor(request: Request, album: str = Form(...), tier: List[str] = Form([]),
                         view: List[str] = Form([]), images: List[UploadFile] = File([]),
-                        n: int = Form(4), character_id: Optional[int] = Form(None),
-                        prompt: str = Form("")):
+                        n: int = Form(4), character_id: Optional[int] = Form(None)):
     """Generate anchor candidates for one album, across any number of tiers and
     views, from an unordered set of reference images.
 
@@ -996,6 +1027,13 @@ async def start_anchor(album: str = Form(...), tier: List[str] = Form([]),
     want rendering several ways at once: front and back, clothed and nude, at
     every tier the album ships. One job per combination, so each is separately
     cancellable and a failure in one does not lose the rest.
+
+    Each tier carries its OWN prompt, arriving as prompt_<tier> -- the field
+    names are not known until the tiers are, so they are read off the raw form
+    rather than declared. A nude view asked of a tier that forbids nudity is
+    skipped for that tier and rendered for the ones that permit it; refusing the
+    whole request meant a single restrictive tier in the selection blocked work
+    that was perfectly legal for the others.
     """
     album = (album or "").strip()
     if not album:
@@ -1013,27 +1051,30 @@ async def start_anchor(album: str = Form(...), tier: List[str] = Form([]),
         if v not in ANCHOR_VIEWS:
             raise HTTPException(400, f"view must be one of {', '.join(ANCHOR_VIEWS)}")
 
-    # Validate the WHOLE request before enqueuing any of it: a nude view against
-    # a tier that forbids it must refuse the request, not queue the legal
-    # combinations and fail partway through.
-    combos = []
-    for t in selected_tiers:
-        for v in selected_views:
-            if v in NUDE_VIEWS and not tiers.allows_nudity(t):
-                raise HTTPException(400, f"the '{t}' tier does not permit nudity, so it cannot "
-                                          f"have a {ANCHOR_VIEWS[v]} anchor. Turn nudity on for "
-                                          f"that tier, or untick that view.")
-            combos.append((t, v))
+    # Same plan the form displayed, from the same function -- what it said would
+    # render is what renders.
+    plan = anchor_plan(selected_tiers, selected_views)
+    combos = [(p["tier"], v) for p in plan for v in p["views"]]
+    if not combos:
+        raise HTTPException(400, "every view you picked is a nude one and no tier you picked "
+                                  "permits nudity, so there is nothing to render. Tick a clothed "
+                                  "view, or turn nudity on for a tier under Tiers.")
 
-    prompt = (prompt or "").strip()
-    if len(prompt) > MAX_ANCHOR_PROMPT:
-        raise HTTPException(400, f"the anchor prompt is {len(prompt)} characters; keep it under "
-                                  f"{MAX_ANCHOR_PROMPT}")
-    try:
-        tiers.check_text(prompt, "anchor prompt")
-        tiers.check_override(prompt)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
+    # One prompt per tier, named prompt_<tier>. Every one is screened: a tier's
+    # own box is a free-text field like any other.
+    form = await request.form()
+    prompts = {}
+    for t in selected_tiers:
+        text = (form.get(f"prompt_{t}") or "").strip()
+        if len(text) > MAX_ANCHOR_PROMPT:
+            raise HTTPException(400, f"the {t.upper()} prompt is {len(text)} characters; keep it "
+                                      f"under {MAX_ANCHOR_PROMPT}")
+        try:
+            tiers.check_text(text, f"{t.upper()} anchor prompt")
+            tiers.check_override(text)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        prompts[t] = text
 
     if character_id is not None:
         # a character belongs to the album it was defined on; anchoring one
@@ -1058,7 +1099,7 @@ async def start_anchor(album: str = Form(...), tier: List[str] = Form([]),
     for t, v in combos:
         jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": album, "tier": t,
                                  "view": v, "images": paths, "n": n,
-                                 "character_id": character_id, "prompt": prompt})
+                                 "character_id": character_id, "prompt": prompts[t]})
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 
@@ -1156,14 +1197,38 @@ def default_anchor_prompt(scope_value, view, character_id=None):
     return make_anchor.prompt_for(view, make_anchor.load_anchor(None) | fields)
 
 
-def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), character_id=None):
+def anchor_plan(selected_tiers, selected_views):
+    """What each ticked tier will actually render: [{tier, views, skipped}].
+
+    A nude view against a tier that forbids nudity is SKIPPED for that tier. It
+    is not withdrawn from the form and it does not refuse the request -- the
+    views used to be gated across the whole selection, so one restrictive tier
+    made nude sheets unreachable for the permissive ones ticked beside it, and
+    the greyed-out explanation named a tier that was no longer ticked.
+
+    One place decides it, shared by the form's count and the POST that enqueues.
+    """
+    plan = []
+    for t in selected_tiers:
+        ok = tiers.allows_nudity(t)
+        keep = [v for v in selected_views if ok or v not in NUDE_VIEWS]
+        plan.append({"tier": t, "views": keep,
+                     "skipped": [v for v in selected_views if v not in keep]})
+    return plan
+
+
+def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), character_id=None,
+                    prompts=None):
     """The generate form for one album, across any number of tiers and views.
 
-    The offered VIEWS depend on the selected TIERS: a nude view is not merely
-    disabled for a tier that forbids nudity, it is absent -- and with several
-    tiers selected it is offered only if EVERY one of them permits it, because
-    the request is refused otherwise and a checkbox that guarantees a 400 is
-    not a choice.
+    Every view is offered against every tier; see anchor_plan() for what gets
+    dropped and why. Each ticked tier gets its own TAB carrying that tier's
+    wording and its own prompt: one shared textarea sitting under one tier's
+    rules read as though it applied only to that tier, and it was in fact the
+    only prompt sent for all of them.
+
+    prompts: {tier: text} to redisplay after a rejected submit, so an edit is
+    not thrown away by the error.
     """
     all_t = tiers.all_tiers()
     albums = [p["name"] for p in
@@ -1186,28 +1251,26 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
             x["name"] == last["tier"] for x in all_t) else []
     if not selected and all_t:
         selected = [all_t[0]["name"]]
-    blocking = [t for t in selected if not tiers.allows_nudity(t)]
-    nude_ok = bool(selected) and not blocking
-    # Every view is always LISTED; a nude one is disabled, with the reason, when
-    # a ticked tier forbids it. Hiding them was wrong: the view is perfectly
-    # usable, just not with what is currently ticked, so options vanished as you
-    # clicked and there was no way to tell nude sheets existed at all. A tier
-    # with no storyboard is genuinely unusable and stays hidden elsewhere -- this
-    # is not that.
-    views = [{"key": k, "label": v, "nude": k in NUDE_VIEWS,
-              "enabled": nude_ok or k not in NUDE_VIEWS}
+    # Every view is always offered, against every tier. Nothing here is disabled
+    # or hidden: a view a tier cannot use is simply not rendered for that tier,
+    # and the plan below says so in words.
+    views = [{"key": k, "label": v, "nude": k in NUDE_VIEWS}
              for k, v in ANCHOR_VIEWS.items()]
-    chosen_views = [v["key"] for v in views
-                    if v["enabled"] and v["key"] in set(selected_views)] or ["front"]
+    chosen_views = [v["key"] for v in views if v["key"] in set(selected_views)] or ["front"]
+    plan = anchor_plan(selected, chosen_views)
     # the prompt is composed for the FIRST chosen view; the others differ only
     # in their framing sentence, which make_anchor swaps in per view
+    default_prompt = default_anchor_prompt(album, chosen_views[0], character_id)
+    prompts = prompts or {}
     return {
         "tiers": all_t, "albums": albums, "form_album": album,
         "selected_tiers": selected, "views": views, "selected_views": chosen_views,
-        "nude_ok": nude_ok, "blocking_tiers": blocking,
-        "anchor_prompt": default_anchor_prompt(album, chosen_views[0], character_id),
+        "plan": plan, "sheet_count": sum(len(p["views"]) for p in plan),
+        "view_labels": ANCHOR_VIEWS,
         "pinned": tiers.PINNED.strip(),
-        "tier_texts": [(t, tier_tone(t)) for t in selected],
+        # one panel per ticked tier: its wording, and its own prompt
+        "tier_panels": [{"name": t, "text": tier_tone(t),
+                         "prompt": prompts.get(t, default_prompt)} for t in selected],
         "max_anchor_prompt": MAX_ANCHOR_PROMPT, "max_uploads": MAX_ANCHOR_UPLOADS,
         "max_refs": pipeline.MAX_ANCHOR_REFS,
         "character_id": character_id,
@@ -1221,14 +1284,18 @@ def anchor_form(request: Request, album: str = "", tier: List[str] = Query([]),
                  view: List[str] = Query([]), character_id: Optional[int] = None):
     """The generate form, re-rendered when the album, tiers or views change.
 
-    Its own route because the offered views and the guardrail panel both depend
-    on which tiers are ticked -- a tier that forbids nudity must not leave a
-    nude view on screen, and the guardrail shown has to be the one that will
-    actually apply.
+    Its own route because the tabs below depend on which tiers are ticked, and
+    the wording shown in each has to be the one that will actually apply.
+
+    The prompt textareas come back in the query string (hx-include sends the
+    whole form), so ticking a second tier does not discard a prompt already
+    written for the first.
     """
+    prompts = {k[len("prompt_"):]: v for k, v in request.query_params.items()
+               if k.startswith("prompt_")}
     return templates.TemplateResponse(request, "_anchor_form.html",
                                        anchor_form_ctx(album, tier, view or ["front"],
-                                                       character_id))
+                                                       character_id, prompts))
 
 
 @app.post("/anchors/{id}/delete")
@@ -2691,13 +2758,12 @@ def delete_set(asset_id: int):
 
 # ------------------------------------------------------------------ models --
 
-@app.get("/models", response_class=HTMLResponse)
-def models_page(request: Request):
-    """Every model this studio can use, what each one is designed for, and
-    whether it is actually on the box.
+def models_ctx(saved=""):
+    """Everything both the whole page and one role's section need.
 
-    The point is that adding a model is a catalogue entry, not a code edit, and
-    that nobody has to read build_song.py to find out what renders the clips.
+    Shared because setting a default swaps just that section back in: the
+    'default' tag moves to another card and disappears from the old one, so the
+    fragment has to be rendered from the same data the page was.
     """
     entries = models.catalog()
     by_role = {}
@@ -2709,19 +2775,38 @@ def models_page(request: Request):
         chat_error = ""
     except Exception as e:
         chat, chat_best, chat_error = [], None, str(e)
-    return templates.TemplateResponse(request, "models.html", {
+    return {
         "roles": models.ROLES, "by_role": by_role,
         "role_labels": {r: r.replace("_", " ").title() for r in models.ROLES},
         "chat_default": models.chat_default(),
         "defaults": {r: models.default_for(r) for r in models.ROLES},
         "reachable": models.installed() is not None,
         "chat": chat, "chat_best": chat_best, "chat_error": chat_error,
-        "vision_model": grok.VISION_MODEL,
-    })
+        "vision_model": grok.VISION_MODEL, "saved": saved,
+    }
+
+
+@app.get("/models", response_class=HTMLResponse)
+def models_page(request: Request):
+    """Every model this studio can use, what each one is designed for, and
+    whether it is actually on the box.
+
+    The point is that adding a model is a catalogue entry, not a code edit, and
+    that nobody has to read build_song.py to find out what renders the clips.
+    """
+    return templates.TemplateResponse(request, "models.html", models_ctx())
+
+
+def role_section(request, role, saved=""):
+    """One role's section, for an htmx swap. A full-page reload to move a tag
+    scrolled the page back to the top and lost which section you were reading."""
+    return templates.TemplateResponse(request, "_model_section.html",
+                                       dict(models_ctx(saved), role=role,
+                                            role_label=models.ROLES[role]))
 
 
 @app.post("/models/storyboard/default")
-def set_storyboard_default(key: str = Form("")):
+def set_storyboard_default(request: Request, key: str = Form("")):
     """The xAI chat model storyboards are written with.
 
     Its own route because a storyboard model is an xAI model ID discovered at
@@ -2738,15 +2823,21 @@ def set_storyboard_default(key: str = Form("")):
         if key not in available:
             raise HTTPException(400, f"xAI does not list a chat model called {key!r}")
     models.set_chat_default(key)
+    # htmx swaps the section back in; a plain browser still gets the redirect,
+    # so the page works with JavaScript off exactly as it did before
+    if request.headers.get("HX-Request"):
+        return role_section(request, "storyboard", saved=key or "highest available")
     return RedirectResponse("/models", status_code=303)
 
 
 @app.post("/models/{role}/default")
-def set_model_default(role: str, key: str = Form(...)):
+def set_model_default(request: Request, role: str, key: str = Form(...)):
     try:
         models.set_default(role, key)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    if request.headers.get("HX-Request"):
+        return role_section(request, role, saved=key)
     return RedirectResponse("/models", status_code=303)
 
 
@@ -2791,7 +2882,11 @@ def jobs_page(request: Request, refresh: str = "auto", partial: int = 0):
         refresh = "auto"
     ctx = {"jobs": entries, "active": jobs.active(), "refresh": refresh,
            "refresh_secs": jobs_refresh_secs(refresh, busy),
-           "refresh_choices": JOBS_REFRESH_CHOICES}
+           "refresh_choices": JOBS_REFRESH_CHOICES,
+           # ComfyUI's OWN queue, which this app does not control: it is
+           # unauthenticated on the tailnet, so work can arrive there from
+           # anywhere and "nothing running" here never meant the card was idle
+           "comfy": pipeline.comfy_queue()}
     # the poll swaps the panel only -- returning the whole page would nest a
     # second <html> inside the one already on screen
     return templates.TemplateResponse(request, "_jobs_panel.html" if partial else "jobs.html", ctx)

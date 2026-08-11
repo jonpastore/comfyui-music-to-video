@@ -21,12 +21,28 @@
   {% if active %}
   <p>Running: <strong>{{ active.kind }}</strong> (#{{ active.id }}) — {{ active.progress or "" }}</p>
   {% else %}
-  <p class="empty">Nothing running.</p>
+  <p class="empty">Nothing running <span class="muted">in this studio's queue.</span></p>
+  {% endif %}
+
+  {# ComfyUI's queue is not this one. It is unauthenticated on the tailnet, so
+     anyone can submit to it directly and the card can be busy while everything
+     above says idle. No attribution: its entries carry no identity. #}
+  {% if comfy is none %}
+  <p class="hint warn">ComfyUI did not answer, so what the GPU is doing is unknown.</p>
+  {% elif comfy.running or comfy.pending %}
+  <p class="hint"><strong>ComfyUI itself</strong> has
+    {{ comfy.running }} running and {{ comfy.pending }} pending
+    &mdash; including anything submitted outside this studio.</p>
+  {% else %}
+  <p class="hint">ComfyUI's own queue is empty too, so the card is free.</p>
   {% endif %}
 
   {% if not jobs %}
   <p class="empty">No jobs yet.</p>
   {% else %}
+  {# capped to the viewport so the page does not grow without limit: the list is
+     a hundred rows deep after one album and the controls above scroll away #}
+  <div class="jobs-scroll">
   <table class="list">
     <thead><tr><th>ID</th><th>Job</th><th>Status</th><th>Elapsed</th><th>Progress</th><th></th></tr></thead>
     <tbody>
@@ -49,5 +65,6 @@
     {% endfor %}
     </tbody>
   </table>
+  </div>
   {% endif %}
 </div>

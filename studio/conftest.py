@@ -172,6 +172,9 @@ _stub("pipeline",
       install_input=lambda local_path, name=None: (name or os.path.basename(local_path)),
       free_vram=lambda progress=None: free_vram_calls.append(True) or True,
       submit_dir=lambda wf_dir, progress=None: [],
+      # ComfyUI's OWN queue, which the studio reads but does not control. An
+      # empty one is the honest default here: there is no ComfyUI in tests.
+      comfy_queue=lambda: {"running": 0, "pending": 0},
       collect=lambda prefix_dir, pattern="*.png": [],
       MAX_ANCHOR_REFS=3,
       gen_anchor=lambda images, view="front", n=4, progress=None, prefix=None, profile=None, guard="", prompt="": anchor_calls.append({"profile": profile, "view": view, "guard": guard, "prompt": prompt, "images": list(images)}) or [],
