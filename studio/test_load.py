@@ -1,7 +1,8 @@
 """Load / concurrency and end-to-end flow tests for studio/.
 
-Stubs pipeline, grok, lyrics, mixer via sys.modules *before* app.py is
-imported, so this needs no GPU, no network and no ComfyUI. Uses a temp
+pipeline/grok/lyrics/mixer are stubbed once for the whole session in
+conftest.py (which pytest always imports before this file) -- see its
+docstring for why that has to be the one place it happens. Uses a temp
 STUDIO_DATA sqlite db (real db.py/jobs.py/tiers.py -- those are cheap and
 worth exercising for real).
 
@@ -9,126 +10,21 @@ Run: python3 -m pytest test_load.py -q
 """
 import asyncio
 import itertools
-import os
 import socket
-import sys
-import tempfile
 import threading
 import time
-import types
 
 import httpx
 import pytest
 import uvicorn
 
-STUDIO_DIR = os.path.dirname(os.path.abspath(__file__))
-if STUDIO_DIR not in sys.path:
-    sys.path.insert(0, STUDIO_DIR)
+from conftest import render_set_calls  # noqa: F401 (read by GAP2 render tests)
 
-_DATA_DIR = tempfile.mkdtemp(prefix="studio_test_load_")
-os.environ["STUDIO_DATA"] = _DATA_DIR
+import db
+import jobs
+import app as app_module
 
-
-_OURS = {}
-
-
-def _stub(name, **attrs):
-    """Install a stub module.
-
-    Overwrites any module of the same name that another test file already put in
-    sys.modules. Both test files stub at import time, so whichever pytest
-    imported FIRST used to win: running test_app.py and test_load.py together
-    left this file's recording stubs uninstalled and two tests failed, while each
-    file passed alone. Import order must not decide which stub is live.
-    """
-
-    mod = types.ModuleType(name)
-    for k, v in attrs.items():
-        setattr(mod, k, v)
-    sys.modules[name] = mod
-    _OURS[name] = attrs
-    return mod
-
-
-_stub(
-    "pipeline",
-    COMFY_INPUT=os.path.join(_DATA_DIR, "comfy_input"),
-    COMFY_OUTPUT=os.path.join(_DATA_DIR, "comfy_output"),
-    install_input=lambda path, name=None: os.path.basename(path),
-    gen_anchor=lambda *a, **k: [],
-    gen_refs=lambda *a, **k: [],
-    reroll=lambda *a, **k: [],
-    gen_clips=lambda *a, **k: [],
-)
-_stub(
-    "grok",
-    list_models=lambda: [],
-    generate_storyboard=lambda *a, **k: {"scenes": []},
-    write_storyboard=lambda *a, **k: ("/fake/sb.json", "/fake/sb.md"),
-)
-_stub(
-    "lyrics",
-    available=lambda: (True, ""),
-    transcribe=lambda *a, **k: {},
-    to_sections=lambda *a, **k: "",
-    estimate_duration=lambda *a, **k: 120.0,
-)
-
-# render_set contract worth pinning: real mixer.render_set raises on empty
-# items and every item must carry "video" (a past bug passed "path", which
-# would KeyError here exactly like it would against the real function).
-_render_set_calls = []
-
-
-@pytest.fixture
-def recording_render_set():
-    """Patch mixer.render_set for the duration of ONE test.
-
-    Installing stubs at import time made the suite import-order dependent:
-    running test_app.py and test_load.py together left whichever file pytest
-    imported second with its stubs uninstalled, and tests that passed alone
-    failed together. Patching the live object per test is immune to that.
-    """
-    live = getattr(app_module, "mixer")
-    prev = getattr(live, "render_set", None)
-    _render_set_calls.clear()
-
-    def _rec(items, out_path, progress=None):
-        _render_set_calls.append(items)
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        open(out_path, "wb").write(b"\x00")
-        return out_path
-
-    live.render_set = _rec
-    try:
-        yield _render_set_calls
-    finally:
-        if prev is not None:
-            live.render_set = prev
-
-
-def _fake_render_set(items, out_path, progress=None):
-    if not items:
-        raise ValueError("items is empty")
-    for it in items:
-        _ = it["video"]
-    _render_set_calls.append(items)
-    with open(out_path, "wb") as f:
-        f.write(b"fake-video")
-    return out_path
-
-
-_stub(
-    "mixer",
-    render_set=_fake_render_set,
-    assemble_song=lambda *a, **k: None,
-)
-
-import db  # noqa: E402
-import jobs  # noqa: E402
-import app as app_module  # noqa: E402
-
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
 _song_counter = itertools.count(1)
 
@@ -304,7 +200,7 @@ def test_playlist_and_genre_flow_ordering(client):
     assert client.get("/playlists").status_code == 200
 
 
-def test_render_set_receives_video_key_not_path(client, recording_render_set):
+def test_render_set_receives_video_key_not_path(client):
     s1, s2 = _make_song("rs"), _make_song("rs")
     db.run("INSERT INTO renders (song_id, tier, path, created) VALUES (?,?,?,?)",
            s1, "pg13", "/fake/renders/one.mp4", time.time())
@@ -322,8 +218,8 @@ def test_render_set_receives_video_key_not_path(client, recording_render_set):
     job = _wait_new_job("render_set", before_max)
     assert job["status"] == "done", (job["status"], job["error"])
 
-    assert _render_set_calls, "mixer.render_set was never called"
-    called_items = _render_set_calls[-1]
+    assert render_set_calls, "mixer.render_set was never called"
+    called_items = render_set_calls[-1]
     assert len(called_items) == 2
     for it in called_items:
         assert "video" in it, f"render_set item missing 'video' key: {it!r}"
@@ -351,7 +247,7 @@ def test_render_refused_cleanly_when_playlist_empty(client):
     assert client.get("/playlists").status_code == 200
 
 
-def test_render_refused_cleanly_when_song_has_no_finished_render(client, recording_render_set):
+def test_render_refused_cleanly_when_song_has_no_finished_render(client):
     s1 = _make_song("norender")
     pl = db.run("INSERT INTO playlists (name, kind) VALUES (?, 'playlist')", "NoRenderPL")
     client.post(f"/playlists/{pl}/items", data={"song_id": s1, "tier": "pg13"}, follow_redirects=False)

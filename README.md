@@ -35,7 +35,7 @@ maps them all onto the keys the builders read.
     app.py       FastAPI routes                   templates/, static/   server-rendered UI
 
 Run `python3 <module>.py` for any of them — each carries its own self-check.
-`test_integration.py` checks the seams; `test_app.py` covers the web layer.
+`check_integration.py` checks the seams (run directly, not under pytest); `test_app.py` covers the web layer.
 
 ### Deploy
 

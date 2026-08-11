@@ -6,7 +6,7 @@ survives the whole path from tier definition to the text an image model is
 finally handed. The guardrail check is the one that must never be allowed to rot:
 it is the only thing standing between a custom tier and unrestricted output.
 
-Run: python3 test_integration.py     (no GPU, no network, no ComfyUI)
+Run: python3 check_integration.py     (no GPU, no network, no ComfyUI)
 """
 import inspect, os, sys, tempfile
 
@@ -198,4 +198,4 @@ if FAILURES:
     for n, e in FAILURES:
         print(f"  - {n}: {e}")
     sys.exit(1)
-print("test_integration.py OK")
+print("check_integration.py OK")

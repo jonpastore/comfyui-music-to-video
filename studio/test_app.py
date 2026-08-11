@@ -3,88 +3,14 @@ owned by other modules and stubbed here via sys.modules so the app is
 testable in isolation (no real ComfyUI/whisper/xAI/ffmpeg required, except
 ffmpeg to synthesize a tiny real mp3 fixture).
 """
-import asyncio, json, os, subprocess, sys, tempfile, time, types
+import asyncio, json, os, subprocess, sys, tempfile, time
 
 import pytest
 
-# --- point db at a scratch dir BEFORE any project module (which imports db) loads ---
-TMP = tempfile.mkdtemp()
-os.environ["STUDIO_DATA"] = TMP
-
-ROOT = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, ROOT)
-
-
-def _stub(name, **attrs):
-    mod = types.ModuleType(name)
-    for k, v in attrs.items():
-        setattr(mod, k, v)
-    sys.modules[name] = mod
-    return mod
-
-
-grok_calls = {}
-
-
-def _fake_generate_storyboard(lyrics_text, tier, guardrail, style_note, song, model, scene_seconds, progress):
-    grok_calls["guardrail"] = guardrail
-    grok_calls["args"] = dict(lyrics=lyrics_text, tier=tier, style_note=style_note,
-                               song=song, model=model, scene_seconds=scene_seconds)
-    return {"scenes": [{"scene_number": 1}, {"scene_number": 2}]}
-
-
-def _fake_write_storyboard(sb, outdir, slug, tier):
-    os.makedirs(outdir, exist_ok=True)
-    json_path = os.path.join(outdir, f"{slug}_{tier}.json")
-    md_path = os.path.join(outdir, f"{slug}_{tier}.md")
-    json.dump(sb, open(json_path, "w"))
-    with open(md_path, "w") as f:
-        f.write("# storyboard\n")
-    return json_path, md_path
-
-
-_stub("grok",
-      list_models=lambda: ["grok-x"],
-      generate_storyboard=_fake_generate_storyboard,
-      write_storyboard=_fake_write_storyboard)
-
-_stub("lyrics",
-      available=lambda: (True, "stub ready"),
-      transcribe=lambda mp3, progress=None: {"segments": [{"start": 0, "end": 1, "text": "hi"}]},
-      to_sections=lambda result, gap=3.0: "[Section 1]\nhi\n",
-      estimate_duration=lambda mp3: 12.3)
-
-def _fake_render_set(items, out, progress):
-    # mixer.render_set reads it["video"] (mixer.py) -- assert the real key
-    # shape here so a route that sends the wrong key fails loudly, not silently.
-    for it in items:
-        assert "video" in it, f"render_set item missing 'video' key: {it}"
-    open(out, "w").close()
-
-
-_stub("mixer",
-      probe=lambda p: {"duration": 12.3},
-      assemble_song=lambda clip_paths, mp3, out, progress, fade: open(out, "w").close(),
-      edit_audio=lambda *a, **k: None,
-      render_set=_fake_render_set,
-      set_duration=lambda items: items)
-
-PIPE_DIR = tempfile.mkdtemp()
-os.makedirs(os.path.join(PIPE_DIR, "input"), exist_ok=True)
-os.makedirs(os.path.join(PIPE_DIR, "output"), exist_ok=True)
-
-_stub("pipeline",
-      COMFY_INPUT=os.path.join(PIPE_DIR, "input"),
-      COMFY_OUTPUT=os.path.join(PIPE_DIR, "output"),
-      install_input=lambda local_path, name=None: (name or os.path.basename(local_path)),
-      submit_dir=lambda wf_dir, progress=None: [],
-      collect=lambda prefix_dir, pattern="*.png": [],
-      gen_anchor=lambda face, outfit, view="front", n=4, progress=None, prefix=None: [],
-      gen_refs=lambda slug, tier, sb, anchor, mp3, progress=None, limit=None: [],
-      reroll=lambda slug, tier, sb, anchor, mp3, idxs, progress=None: [],
-      stage_refs=lambda slug, tier, ref_paths: [],
-      gen_clips=lambda slug, tier, sb, mp3, ref_paths, progress=None: [],
-      contact_sheet=lambda src, out, cols=6: out)
+# pipeline/grok/lyrics/mixer are stubbed once for the whole session in
+# conftest.py (which pytest always imports before this file) -- see its
+# docstring for why that has to be the one place it happens.
+from conftest import grok_calls  # noqa: F401  (read by test_guardrail_sent_to_grok_contains_pinned)
 
 import db      # real
 import tiers   # real
