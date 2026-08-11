@@ -24,6 +24,10 @@ POLL_SECS = 2.0
 # not a render-time budget. There is exactly ONE job worker (studio/jobs.py),
 # so a submit that never resolves wedges the whole queue -- must not hang.
 SUBMIT_TIMEOUT = float(os.environ.get("SUBMIT_TIMEOUT", 1800))
+# The poll loop is bounded by SUBMIT_TIMEOUT, but the CLI script run was not.
+# A child blocking forever wedges the single worker, and per jobs._loop nothing
+# else is coming to rescue the queue.
+SCRIPT_TIMEOUT = float(os.environ.get("SCRIPT_TIMEOUT", 600))
 MAX_POLL_ERRORS = 3  # consecutive connection failures before giving up on a poll
 
 # build_refs.py / build_song.py take --version {clean,explicit}; apply_outfit()
@@ -43,8 +47,10 @@ def _run_script(script, args, progress=None):
     progress = progress or (lambda msg: None)
     path = os.path.join(SCRIPTS, script)
     try:
-        r = subprocess.run([sys.executable, path, *args],
-                            check=True, capture_output=True, text=True)
+        r = subprocess.run([sys.executable, path, *args], check=True,
+                            capture_output=True, text=True, timeout=SCRIPT_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"{script} did not finish within {SCRIPT_TIMEOUT:.0f}s") from None
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"{script} failed: {e.stderr.strip()[-2000:]}") from e
     for line in r.stdout.splitlines():

@@ -235,6 +235,97 @@ def test_playlist_crud_smoke():
         assert "My Set" in r3.text
 
 
+def test_job_stream_route_is_async():
+    # Regression for the anyio-threadpool-exhaustion finding: a sync `def`
+    # here gets driven through iterate_in_threadpool, and every open SSE
+    # viewer parks a worker thread in time.sleep for the life of the stream --
+    # 41 concurrent viewers wedged every other route in the app and it did not
+    # recover after the clients disconnected. Must stay async.
+    assert asyncio.iscoroutinefunction(appmod.job_stream), \
+        "job_stream must be async def or SSE viewers exhaust the threadpool"
+
+
+def test_render_set_uses_video_key():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Set Song")
+        sid = song["id"]
+        db.run("INSERT INTO renders (song_id, tier, path, created) VALUES (?,?,?,?)",
+               sid, "pg13", song["mp3_path"], time.time())
+
+        client.post("/playlists", data={"name": "Set A", "kind": "playlist"})
+        pl = db.one("SELECT * FROM playlists WHERE name='Set A'")
+        client.post(f"/playlists/{pl['id']}/items",
+                    data={"song_id": sid, "tier": "pg13", "transition": "fade", "secs": "1.0"})
+
+        r = client.post(f"/playlists/{pl['id']}/render")
+        assert r.status_code in (200, 303), r.text
+        job = db.one("SELECT * FROM jobs WHERE kind='render_set' ORDER BY id DESC")
+        row = wait_job(job["id"])
+        # the render_set stub asserts on the real "video" key itself; a status
+        # of "done" (not "failed") proves the route sent the right shape
+        assert row["status"] == "done", row
+
+
+def test_reroll_clamps_range_and_caps_count():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Reroll Song")
+        sid = song["id"]
+        client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13"})
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
+        wait_job(job["id"])  # scene_count == 2, from the storyboard stub
+
+        # negative / out-of-range indices are dropped, valid ones kept
+        r = client.post(f"/songs/{sid}/reroll", data={"tier": "pg13", "clip_idx": ["-5", "0", "999"]})
+        assert r.status_code in (200, 303), r.text
+        job2 = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='reroll' ORDER BY id DESC", sid)
+        assert json.loads(job2["args_json"])["clip_indices"] == [0]
+
+        # nothing valid -> 400, no job enqueued
+        before = len(jobs.recent(1000))
+        r2 = client.post(f"/songs/{sid}/reroll", data={"tier": "pg13", "clip_idx": ["-1", "999"]})
+        assert r2.status_code == 400, r2.text
+        assert len(jobs.recent(1000)) == before
+
+        # a big storyboard + a big request -> capped, not fanned out unbounded
+        db.run("UPDATE storyboards SET scene_count=? WHERE song_id=? AND tier='pg13'", 1000, sid)
+        r3 = client.post(f"/songs/{sid}/reroll",
+                          data={"tier": "pg13", "clip_idx": [str(i) for i in range(100)]})
+        assert r3.status_code == 400, r3.text
+
+
+def test_scene_seconds_clamped():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Scene Seconds Song")
+        sid = song["id"]
+
+        client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13", "scene_seconds": "0.0001"})
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
+        assert json.loads(job["args_json"])["scene_seconds"] == 1.0  # floor
+
+        client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13", "scene_seconds": "500"})
+        job2 = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
+        assert json.loads(job2["args_json"])["scene_seconds"] == 60.0  # ceiling
+
+        r3 = client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13", "scene_seconds": "nan"})
+        assert r3.status_code in (400, 422), r3.text  # rejected, not a 500 / not silently billed
+
+
+def test_refs_limit_clamped():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Limit Song")
+        sid = song["id"]
+        client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13"})
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
+        wait_job(job["id"])
+        db.run("UPDATE songs SET anchor_path=? WHERE id=?", "anchor.png", sid)
+
+        r = client.post(f"/songs/{sid}/refs", data={"tier": "pg13", "limit": "-100"})
+        assert r.status_code in (200, 303), r.text
+        job2 = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='refs' ORDER BY id DESC", sid)
+        # -100 clamped to 0, and 0 is falsy -> stored as None (unlimited), never negative
+        assert json.loads(job2["args_json"])["limit"] is None
+
+
 if __name__ == "__main__":
     # plain-script fallback if pytest is unavailable
     import traceback

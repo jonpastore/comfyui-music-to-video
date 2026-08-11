@@ -5,7 +5,9 @@ wording. What a tier cannot do is switch off PINNED -- compose_guardrail always
 appends it, so no tier, custom or built-in, produces sexually explicit output.
 Keep that append unconditional; it is the reason custom tiers are safe to allow.
 """
+import re
 import time
+import unicodedata
 
 import db
 
@@ -37,51 +39,115 @@ PINNED = (
 # negative pass entirely -- a "no children" negative prompt is literally inert on
 # this stack (see build_refs.py). Positive-text steering plus refusing the input
 # are therefore the only controls that actually do anything here.
+# Matched as substrings of a FLATTENED string (see _flatten), so each entry also
+# covers its morphology: "child" catches child's/childlike/childhood, "underage"
+# catches underaged, "loli" catches lolicon, "teen" catches teenage/teenaged.
+# Bare "baby", "kid" and "cp" are deliberately ABSENT -- they are ordinary set
+# dressing ("baby blue neon", "baby grand", "kid gloves", "cp lens") and this
+# filter runs on model OUTPUT across every scene, so one of them would fail a
+# whole 40-scene storyboard. Their genuinely-referential phrase forms are listed.
 MINOR_TERMS = (
-    "child", "children", "kid", "kids", "infant", "baby", "babies", "toddler",
-    "minor", "minors", "underage", "teen", "teens", "teenage", "teenager",
-    "adolescent", "preteen", "pre-teen", "tween", "juvenile", "schoolgirl",
-    "schoolboy", "school girl", "school boy", "loli", "lolita", "shota",
-    "jailbait", "young girl", "young boy", "little girl", "little boy",
-    "prepubescent", "pubescent", "cp", "csam",
-)
-SEXUAL_TERMS = (
-    "nude", "nudity", "naked", "topless", "bottomless", "genital", "genitalia",
-    "penis", "vagina", "vulva", "nipple", "areola", "sex", "sexual", "sexy",
-    "erotic", "porn", "pornographic", "nsfw", "fetish", "lewd", "explicit",
-    "seductive", "provocative", "suggestive", "intimate", "aroused", "orgasm",
+    "child", "infant", "toddler", "newborn", "minors", "underage", "teen",
+    "adolescent", "preteen", "tween", "juvenile", "schoolgirl", "schoolboy",
+    "school girl", "school boy", "loli", "lolita", "shota", "jailbait",
+    "young girl", "young boy", "little girl", "little boy", "baby girl",
+    "baby boy", "baby face", "little kid", "girlish", "prepubescent",
+    "pubescent", "csam", "kindergarten", "nursery", "playground",
+    "elementary school", "middle school", "primary school", "grade school",
+    "youthful",   # PINNED already forbids "youthful-looking"; allowing it as
+                  # input would be inconsistent, and "youthful face, small frame"
+                  # is exactly the ambiguity this filter exists to remove
 )
 
-_WORD = None
+# KNOWN GAP, stated rather than papered over: this is an English word list.
+# "ein Kind im Hintergrund" and "a niña in the alley" are not caught, and adding
+# them is not free -- German "Kind" collides with English "kind", "nina"/"nino"
+# are common names, so a naive multilingual list would refuse ordinary prose and
+# fail whole storyboard jobs (this runs on model output across every scene).
+# The realistic threat here is model output drifting or a casual attempt, not an
+# adversary who controls the input and knows the list; for that, English coverage
+# plus the normalisation above is effective. Revisit with a classifier, not more
+# words, if that threat model ever changes.
+
+# Words that legitimately contain a blocked substring. Removed before matching
+# rather than dropping the term -- "canteen" must not cost us "teenage".
+_ALLOW = ("canteen", "protein", "umpteen", "minorca", "minority", "minoritie")
+
+# "12 year old", "16-year-old", "9 yr old" -- digits survive no flattening, so
+# this runs on the raw text. Pure-numeric age was the cleanest bypass of a
+# word-list filter: it contains no blocked word at all.
+_AGE_RE = re.compile(r"\b(\d{1,2})\s*-?\s*(?:year|yr)s?\s*-?\s*old\b")
+
+# Cyrillic and Greek letters that render identically to Latin ones. Folded to
+# their Latin twin before the ascii step; without this a single substituted
+# character hides any blocked word.
+_CONFUSABLES = str.maketrans(
+    "абвгдезкмнорстуxхіѕјαβεικνορστυχ",
+    "abbrdeskmhopctyxxisjabeikvopctyx",
+)
 
 
-def _tokens(text):
-    global _WORD
-    if _WORD is None:
-        import re
-        _WORD = re.compile(r"[a-z']+")
-    return set(_WORD.findall((text or "").lower()))
+class ContentRefused(ValueError):
+    """Terminal refusal: the text references minors.
+
+    A distinct type because it must NEVER be retried. grok.py's generate_storyboard
+    retries on ValueError and feeds the failure text back to the model as "fix
+    every problem and resend" -- for an ordinary schema complaint that is useful,
+    but for this check it would hand the model the block list and ask it to
+    rephrase around it. Callers must let this one propagate.
+    """
+
+
+def _flatten(text):
+    """Fold text to bare ascii letters so morphology and evasion both collapse.
+
+    Exact token matching was trivially defeated by things that occur in ordinary
+    prose, never mind adversarial input: "child's" tokenises as one word that is
+    not "child"; "ch-ild", "c h i l d" and "ch1ld" split or mutate the token; and
+    a single Cyrillic 'с' made the whole word invisible to an ASCII \\w regex.
+    Normalising to NFKD, dropping non-ascii, then removing every non-letter turns
+    all of those into the same flat string, which a substring test then catches.
+    """
+    t = unicodedata.normalize("NFKD", (text or "").lower())
+    # Homoglyphs must be folded BEFORE the ascii encode. NFKD does not relate
+    # Cyrillic 'с' (U+0441) to Latin 'c' -- they are genuinely different letters --
+    # so encode(errors="ignore") simply deletes it and "сhild" becomes "hild".
+    # One substituted character was enough to make any term invisible.
+    t = t.translate(_CONFUSABLES)
+    t = t.encode("ascii", "ignore").decode()
+    for w in _ALLOW:
+        t = t.replace(w, " ")
+    # Map leet digits to letters BEFORE stripping non-letters -- deleting them
+    # instead turns "ch1ld" into "chld", which matches nothing. The numeric-age
+    # regex has already run on the raw text, so real digits are not lost here.
+    t = t.translate(str.maketrans("013456789@$", "oieasgtbgas"))
+    return re.sub(r"[^a-z]", "", t)
 
 
 def check_text(text, where="input"):
-    """Refuse user-supplied text that references minors at all in this context.
+    """Refuse text that references minors. Raises ContentRefused (terminal).
 
     Deliberately blunt: this is a character generator for adult-themed music
-    videos, so there is no legitimate reason for a tier definition or style note
-    to mention children. Raising on ANY minor term -- rather than only on a
-    minor term co-occurring with a sexual one -- removes the whole category of
-    prompt that a sexualising instruction could hide inside, and costs the user
-    nothing they actually need.
+    videos, so there is no legitimate reason for a tier definition, style note or
+    generated scene to reference children. Refusing on ANY minor reference --
+    rather than only on one co-occurring with a sexual term -- removes the whole
+    category of prompt that a sexualising instruction could hide inside, and
+    costs nothing anyone actually needs.
     """
-    toks = _tokens(text)
     raw = (text or "").lower()
-    hits = sorted(t for t in MINOR_TERMS if (t in toks) or (" " in t and t in raw))
+    m = _AGE_RE.search(raw)
+    if m and int(m.group(1)) < 18:
+        raise ContentRefused(
+            f"This text specifies an age under 18 ({m.group(0).strip()}) in {where}. "
+            "Every character in this pipeline is an adult; remove it and try again.")
+    flat = _flatten(text)
+    hits = sorted({t for t in MINOR_TERMS
+                   if t.replace(" ", "").replace("-", "") in flat})
     if hits:
-        raise ValueError(
-            "This text refers to minors and cannot be used in a character or scene "
-            f"definition: {', '.join(hits)}. Every character in this pipeline is an "
-            "adult; remove the reference and try again."
-        )
+        raise ContentRefused(
+            f"This text refers to minors and cannot be used in {where}: "
+            f"{', '.join(hits)}. Every character in this pipeline is an adult; "
+            "remove the reference and try again.")
     return text
 
 BUILTIN = {
@@ -178,12 +244,45 @@ def demo():
         "CHILDREN playing",           # case-insensitive
         "petite teen dancer",
     ]
+    # Every one of these defeated the original exact-token matcher. Verified by
+    # a security review executing the matcher against them; they are regression
+    # tests now. The apostrophe and morphology cases need no adversarial intent
+    # and WILL occur in ordinary model output.
+    blocked += [
+        "a child's bedroom, toys on the floor",   # apostrophe joined the token
+        "12 year old girl", "16-year-old", "9 yr old",   # pure numeric age
+        "underaged dancer", "teenaged dancer",    # morphology
+        "childlike features", "girlish figure",
+        "elementary school student", "kindergarten",
+        "lolicon aesthetic", "shotacon aesthetic",
+        "ch1ld", "c h i l d", "ch-ild",           # leet / spacing / punctuation
+        "сhild in the crowd",                # Cyrillic es homoglyph
+        "playground at dusk",
+    ]
     for text in blocked:
         try:
             add_tier("probe", text)
             raise AssertionError(f"minor-referencing tier text was accepted: {text!r}")
-        except ValueError as e:
-            assert "minors" in str(e), e
+        except ContentRefused as e:
+            assert "adult" in str(e), e
+
+    # refusals must be a DISTINCT type: grok retries on plain ValueError and
+    # feeds the message back to the model, which would coach it around the filter
+    assert issubclass(ContentRefused, ValueError)
+    try:
+        check_text("a child in the alley")
+    except ContentRefused:
+        pass
+
+    # ...and these must NOT be blocked: ordinary storyboard vocabulary. A false
+    # positive here fails a whole 40-scene job, because this runs on model output.
+    for ok in ("baby blue neon lighting", "a baby grand piano", "kid gloves",
+               "shot with a cp lens", "the canteen at the back of the warehouse",
+               "protein shake on the bar", "Minorca street market at night",
+               "a minority of the crowd", "kidnapping-thriller narrative for adults",
+               "Revealing club wear, harness top, high-cut bottoms, bare thighs",
+               "she is 25 years old"):
+        check_text(ok)
     # the tier name itself is checked too
     try:
         add_tier("teen", "ordinary text")

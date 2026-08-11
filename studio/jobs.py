@@ -89,13 +89,32 @@ def _run_one(row):
 
 
 def _loop():
+    """Must never exit. start() runs once from the FastAPI lifespan hook, so if
+    this thread dies nothing restarts it: every later job sits 'queued' forever,
+    the UI shows no error, and the app looks merely slow. _run_one catches
+    Exception, but the log-file open sits outside its try and a BaseException
+    (SystemExit, KeyboardInterrupt) passes straight through -- hence the belt
+    here as well as the braces there."""
+    row = None
     while True:
-        row = _claim()
-        if row is None:
-            _wake.wait(2.0)
-            _wake.clear()
-            continue
-        _run_one(row)
+        try:
+            row = _claim()
+            if row is None:
+                _wake.wait(2.0)
+                _wake.clear()
+                continue
+            _run_one(row)
+        except BaseException as e:  # noqa: BLE001 -- deliberate, see docstring
+            try:
+                if row is not None:
+                    db.run("UPDATE jobs SET status='failed', finished=?, error=? WHERE id=?",
+                           time.time(), f"worker error: {type(e).__name__}: {e}"[:2000],
+                           row["id"])
+            except Exception:
+                pass
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            time.sleep(1.0)  # don't spin if the failure is immediate and repeating
 
 
 def start():

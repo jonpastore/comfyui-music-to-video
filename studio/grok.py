@@ -23,6 +23,8 @@ sys.path.insert(0, _REPO_ROOT)
 from build_storyboard import parse_sections, to_md, energy  # noqa: E402
 from build_song import SHOT_RULES, CHUNK  # noqa: E402
 
+import tiers  # noqa: E402  (ContentRefused must be catchable by type)
+
 BASE_URL = "https://api.x.ai/v1"
 # A 25-50 scene storyboard is a very large single completion; the default
 # 120s read timeout expires mid-generation and wastes the whole call.
@@ -387,14 +389,18 @@ def validate(sb, exemplar=None):
     # Output-side minor check. The input filter in tiers.check_text() screens what
     # the user supplies; this screens what the MODEL returns, which is a separate
     # channel -- lyrics or a style note can steer it somewhere the input filter had
-    # no reason to reject. A hit here is not repaired or retried, it fails hard.
+    # no reason to reject.
+    #
+    # This raises IMMEDIATELY rather than joining `problems`, and that is the whole
+    # point. `problems` feeds the retry loop, which sends the failure text back to
+    # the model as "fix every problem and resend" -- and check_text names the terms
+    # that matched. Routing a content refusal through there would hand the model the
+    # block list and ask it to rephrase until it passes ("child" -> "childlike").
+    # ContentRefused is terminal and its text never reaches a model.
     import tiers as _tiers
     for s in scenes:
         for field in ("image_prompt", "story", "name", "video_motion_prompt"):
-            try:
-                _tiers.check_text(s.get(field), f"scene {s.get('scene_number','?')} {field}")
-            except ValueError as e:
-                problems.append(f"scene {s.get('scene_number', '?')} {field}: {e}")
+            _tiers.check_text(s.get(field), f"scene {s.get('scene_number','?')} {field}")
 
     cams = {(s.get("camera") or "").strip().lower() for s in scenes}
     if len(scenes) > 1 and len(cams) <= 1:
@@ -454,6 +460,10 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
                           world_reference=obj.get("world_reference"))
             validate(sb, exemplar)
             return sb
+        except tiers.ContentRefused:
+            # terminal: never retried, and its message is never fed back to the
+            # model (that would be a rephrase-until-it-passes coaching loop)
+            raise
         except (ValueError, json.JSONDecodeError) as e:
             errors = str(e).split("; ")
 

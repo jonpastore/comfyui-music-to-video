@@ -154,7 +154,7 @@ def edit_audio(mp3_path, out_path, trim_start=0.0, trim_end=None, gain_db=0.0,
 
     filters = []
     if gain_db:
-        filters.append(f"volume={gain_db}dB")
+        filters.append(f"volume={float(gain_db):.3f}dB")
     if fade_in > 0:
         filters.append(f"afade=t=in:st=0:d={fade_in:.3f}")
     if fade_out > 0:
