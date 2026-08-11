@@ -5,6 +5,7 @@ gets back a storyboard dict in the exact schema build_storyboard.py writes --
 see build_storyboard.build_scenes()/to_md() for the canonical shape. That
 schema is what build_refs.py and build_song.py already consume unmodified.
 """
+import base64
 import json
 import math
 import os
@@ -518,6 +519,82 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
     raise RuntimeError(f"grok storyboard generation failed after 3 attempts: {errors}")
 
 
+# --------------------------------------------------------- image review --
+#
+# Nothing else in this pipeline looks at what was actually RENDERED: the
+# guardrail only ever sees prompt text. This is the one check on the pixels.
+#
+# One call per CONTACT SHEET, not per image: a song is 41 references and 41
+# clips, and a labelled grid is a single upload the model can answer about in
+# one pass. Per-image would be 41 calls for the same verdict.
+#
+# NOTE: this prompt names the forbidden categories out loud, which is exactly
+# what guardrail.check_text() matches on. It must never be routed through the
+# guardrail -- it is a REVIEW instruction sent to the reviewer, not a render
+# prompt. Same strip-then-check trap that bit three times; here the answer is
+# simply that it never goes near build_prompt().
+
+VISION_MODEL = os.environ.get("XAI_VISION_MODEL") or PREFERRED_MODEL
+
+_CLASSIFY_SYSTEM = (
+    "You are a content reviewer for AI-generated music-video frames. You are shown "
+    "ONE contact sheet: a grid of frames, each labelled 'clip N' in the top-left "
+    "corner of its cell. Judge only what is visible in the frames.\n\n"
+    "Flag a cell ONLY for:\n"
+    "  minor    - the depicted character reads as a child or adolescent rather "
+    "than a clearly adult woman (face, body proportions, or a school/nursery/"
+    "playground setting).\n"
+    "  nudity   - exposed genitals, exposed breasts, or a sexual act.\n"
+    "  broken   - the frame is unusable: duplicated or merged characters, extra "
+    "limbs, melted anatomy, or unreadable garbage.\n\n"
+    "The subject is a stylised anthropomorphic adult cat character in a nightlife "
+    "setting; dark clubwear, confident posing and suggestive framing are IN SCOPE "
+    "and must NOT be flagged. Flag only what actually matches a category above.\n\n"
+    'Answer with JSON only: {"flagged": [{"clip": <int>, "issue": "minor"|"nudity"'
+    '|"broken", "reason": "<short>"}], "cells_seen": <int>}. '
+    'An empty "flagged" list is the expected answer for a clean sheet.'
+)
+
+
+def _data_url(path):
+    with open(path, "rb") as f:
+        raw = f.read()
+    kind = "png" if path.lower().endswith(".png") else "jpeg"
+    return f"data:image/{kind};base64," + base64.b64encode(raw).decode()
+
+
+def classify_sheet(sheet_path, note="", model=None, progress=None):
+    """Review one contact sheet. Returns {"flagged": [...], "cells_seen": int}.
+
+    Flags are ADVISORY -- they name a clip to look at, they do not delete or
+    block anything. A vision model is not a censor and a false positive on
+    frame 23 must not silently drop a third of a song.
+    """
+    content = [{"type": "text",
+                "text": ("Review this contact sheet." + (f" Context: {note}" if note else ""))},
+               {"type": "image_url",
+                "image_url": {"url": _data_url(sheet_path), "detail": "high"}}]
+    out = _chat(_resolve_model(model or VISION_MODEL),
+                [{"role": "system", "content": _CLASSIFY_SYSTEM},
+                 {"role": "user", "content": content}], progress)
+    try:
+        obj = json.loads(_FENCE.sub("", out).strip())
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"vision review returned non-JSON: {e}") from None
+    flagged = []
+    for f in obj.get("flagged") or []:
+        if not isinstance(f, dict) or "clip" not in f:
+            continue
+        try:
+            clip = int(f["clip"])
+        except (TypeError, ValueError):
+            continue
+        flagged.append({"clip": clip, "issue": str(f.get("issue", "other"))[:20],
+                        "reason": str(f.get("reason", ""))[:200]})
+    flagged.sort(key=lambda f: f["clip"])
+    return {"flagged": flagged, "cells_seen": int(obj.get("cells_seen") or 0)}
+
+
 def write_storyboard(sb, outdir, slug, tier):
     os.makedirs(outdir, exist_ok=True)
     base = os.path.join(outdir, f"{slug}_{tier}")
@@ -804,6 +881,38 @@ def demo():
     for name in written:
         with open(os.path.join(refs_outdir, name)) as f:
             json.load(f)  # every workflow file must itself be valid JSON
+
+    # --- classify_sheet: real jpeg in, parsed verdict out, junk rejected ---
+    with tempfile.TemporaryDirectory() as d:
+        sheet = os.path.join(d, "sheet.jpg")
+        subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=gray:s=64x64",
+                        "-frames:v", "1", sheet], check=True, capture_output=True)
+        sent = {}
+
+        def capture_stream(method, url, headers=None, json=None, timeout=None):
+            sent["body"] = json
+            return queued([__import__("json").dumps({
+                "flagged": [{"clip": "7", "issue": "minor", "reason": "looks young"},
+                            {"clip": 2, "issue": "broken", "reason": "two of her"},
+                            {"issue": "nudity"}],          # no clip -> dropped
+                "cells_seen": 41,
+            })])(method, url, headers=headers, json=json, timeout=timeout)
+
+        httpx.stream = capture_stream
+        v = classify_sheet(sheet, note="T Song (r tier)")
+        assert [f["clip"] for f in v["flagged"]] == [2, 7], v          # sorted, junk dropped
+        assert v["flagged"][1]["issue"] == "minor", v                  # "7" coerced to int
+        assert v["cells_seen"] == 41, v
+        img = sent["body"]["messages"][1]["content"][1]["image_url"]["url"]
+        assert img.startswith("data:image/jpeg;base64,") and len(img) > 100, img[:40]
+
+        httpx.stream = queued(["not json at all"])
+        try:
+            classify_sheet(sheet)
+            raise AssertionError("non-JSON verdict did not raise")
+        except RuntimeError as e:
+            assert "non-JSON" in str(e), e
+    httpx.post, httpx.get, httpx.stream = orig_post, orig_get, orig_stream
 
     print("grok.py OK")
 

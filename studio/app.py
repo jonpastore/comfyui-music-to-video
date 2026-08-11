@@ -2,7 +2,7 @@
 in db/tiers/jobs/pipeline/grok/lyrics/mixer; this file wires HTTP to them and
 does upload validation + path-traversal-safe media serving.
 """
-import json, math, os, re, sqlite3, time
+import json, math, os, re, shutil, sqlite3, tempfile, time
 from contextlib import asynccontextmanager
 from typing import List, Optional
 from urllib.parse import quote
@@ -359,6 +359,41 @@ def h_clips(args, progress):
     return {"count": len(results)}
 
 
+@jobs.handler("classify")
+def h_classify(args, progress):
+    """Vision review of the approved references for one tier.
+
+    The approved refs are scattered across the refs/ and reroll/ output dirs, so
+    they are copied into one scratch dir under the clip_NNN name
+    make_contact_sheet.py globs for -- the sheet must show the frames actually
+    approved, not everything ever rendered for this song.
+    """
+    sid, tier = args["song_id"], args["tier"]
+    song = db.one("SELECT * FROM songs WHERE id=?", sid)
+    rows = db.q("""SELECT clip_idx, path FROM refs WHERE song_id=? AND tier=? AND approved=1
+                   ORDER BY clip_idx""", sid, tier)
+    if not rows:
+        raise RuntimeError(f"no approved references for tier '{tier}' to review")
+    outdir = os.path.join(db.DATA, "review", song["slug"])
+    os.makedirs(outdir, exist_ok=True)
+    sheet = os.path.join(outdir, f"{song['slug']}_{tier}_sheet.jpg")
+    with tempfile.TemporaryDirectory() as staged:
+        for r in rows:
+            if os.path.isfile(r["path"]):
+                shutil.copy(r["path"], os.path.join(staged, f"clip_{r['clip_idx']:03d}.png"))
+        progress(f"contact sheet: {len(os.listdir(staged))} approved frames")
+        pipeline.contact_sheet(staged, sheet)
+    verdict = grok.classify_sheet(sheet, note=f"{song['title']} ({tier} tier)", progress=progress)
+    verdict["sheet"] = sheet
+    db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+           sid, "review", sheet, json.dumps({"tier": tier, **verdict}), time.time())
+    flagged = verdict["flagged"]
+    progress(f"reviewed {len(rows)} frames: "
+             + (", ".join(f"clip {f['clip']} {f['issue']}" for f in flagged) if flagged
+                else "nothing flagged"))
+    return {"flagged": len(flagged), "clips": [f["clip"] for f in flagged]}
+
+
 @jobs.handler("edit_audio")
 def h_edit_audio(args, progress):
     sid = args["song_id"]
@@ -487,8 +522,19 @@ def song_page(request: Request, id: int):
                           db.q("SELECT clip_idx FROM refs WHERE song_id=? AND tier=? AND approved=1", id, t)}
         if all(i in approved_idxs for i in range(n_clips)):
             clips_ready_tiers.append(t)
+    # tiers with ANY approved ref can be image-reviewed; that is a weaker
+    # condition than clips_ready_tiers on purpose -- reviewing early is the
+    # point, waiting for all 41 to be approved defeats it.
+    approved_tiers = sorted({r["tier"] for r in
+                             db.q("SELECT DISTINCT tier FROM refs WHERE song_id=? AND approved=1", id)})
+    reviews = []
+    for a in db.q("SELECT * FROM assets WHERE song_id=? AND kind='review' ORDER BY id DESC LIMIT 4", id):
+        meta = json.loads(a["meta_json"] or "{}")
+        reviews.append({"tier": meta.get("tier", "?"), "flagged": meta.get("flagged", []),
+                        "path": a["path"]})
     return templates.TemplateResponse(request, "song.html", {
         "song": song, "tiers": tiers.all_tiers(), "storyboards": storyboards,
+        "approved_tiers": approved_tiers, "reviews": reviews,
         "style_assets": style_assets, "chosen_anchors": chosen_anchors,
         "clips_ready_tiers": clips_ready_tiers,
         "renders": renders, "song_jobs": song_jobs, "active_job": active_job, "models": models,
@@ -684,6 +730,18 @@ def start_reroll(id: int, tier: str = Form(...), clip_idx: List[int] = Form(...)
         raise HTTPException(400, f"too many clips to reroll at once (max {MAX_REROLL_CLIPS})")
     jobs.enqueue("reroll", {"song_id": id, "tier": tier, "clip_indices": idxs}, song_id=id)
     return RedirectResponse(f"/songs/{id}/approve/{tier}", status_code=303)
+
+
+@app.post("/songs/{id}/classify")
+def start_classify(id: int, tier: str = Form(...)):
+    """Vision review of a tier's approved references. Advisory only: it reports
+    clips to look at, it never unapproves or deletes anything."""
+    get_song_or_404(id)
+    valid_tier_or_400(tier)
+    if not db.one("SELECT id FROM refs WHERE song_id=? AND tier=? AND approved=1", id, tier):
+        raise HTTPException(400, f"no approved references for tier '{tier}' yet")
+    jobs.enqueue("classify", {"song_id": id, "tier": tier}, song_id=id)
+    return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
 @app.post("/songs/{id}/clips")

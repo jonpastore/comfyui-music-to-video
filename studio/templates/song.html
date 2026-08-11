@@ -146,6 +146,26 @@
 </section>
 
 <section class="card">
+  <h2>Review frames</h2>
+  <form method="post" action="/songs/{{ song.id }}/classify">
+    <label>Tier
+      <select name="tier">
+        {% for t in approved_tiers %}<option value="{{ t }}">{{ t }}</option>
+        {% else %}<option value="" disabled selected>no approved refs yet</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Check the images</button>
+  </form>
+  {% for rv in reviews %}
+  <p>
+    {{ rv.tier }}: {% if rv.flagged %}<strong>{{ rv.flagged|length }} flagged</strong> --
+      {% for f in rv.flagged %}clip {{ f.clip }} ({{ f.issue }}){% if not loop.last %}, {% endif %}{% endfor %}
+    {% else %}nothing flagged{% endif %}
+    &middot; <a href="{{ media_url(rv.path) }}">contact sheet</a>
+  </p>
+  {% endfor %}
+
   <h2>Clips &amp; render</h2>
   <form method="post" action="/songs/{{ song.id }}/clips">
     <label>Tier

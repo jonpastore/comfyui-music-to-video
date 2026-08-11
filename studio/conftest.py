@@ -56,9 +56,19 @@ def _write_storyboard(sb, outdir, slug, tier):
     return json_path, md_path
 
 
+classify_calls = []
+
+
+def _classify_sheet(sheet_path, note="", model=None, progress=None):
+    classify_calls.append({"sheet": sheet_path, "note": note})
+    return {"flagged": [{"clip": 1, "issue": "broken", "reason": "two of her"}],
+            "cells_seen": 2}
+
+
 _stub("grok",
       list_models=lambda: ["grok-x"],
       generate_storyboard=_generate_storyboard,
+      classify_sheet=_classify_sheet,
       write_storyboard=_write_storyboard)
 
 # ---- lyrics ------------------------------------------------------------
@@ -95,6 +105,17 @@ _PIPE_DIR = tempfile.mkdtemp(prefix="studio_pipeline_")
 os.makedirs(os.path.join(_PIPE_DIR, "input"), exist_ok=True)
 os.makedirs(os.path.join(_PIPE_DIR, "output"), exist_ok=True)
 
+contact_sheet_calls = []
+
+
+def _contact_sheet(src, out, cols=6):
+    # records exactly which frames were staged -- the point of the review job
+    # is that the sheet shows the APPROVED refs, nothing else
+    contact_sheet_calls.append(sorted(os.listdir(src)))
+    open(out, "w").close()
+    return out
+
+
 _stub("pipeline",
       COMFY_INPUT=os.path.join(_PIPE_DIR, "input"),
       COMFY_OUTPUT=os.path.join(_PIPE_DIR, "output"),
@@ -106,7 +127,7 @@ _stub("pipeline",
       reroll=lambda slug, tier, sb, anchor, mp3, idxs, progress=None: [],
       stage_refs=lambda slug, tier, ref_paths: [],
       gen_clips=lambda slug, tier, sb, mp3, ref_paths, progress=None: [],
-      contact_sheet=lambda src, out, cols=6: out)
+      contact_sheet=_contact_sheet)
 
 
 _MISSING = object()

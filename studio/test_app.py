@@ -479,6 +479,46 @@ def test_refs_tier_without_chosen_anchor_400_names_tier_and_enqueues_nothing():
         assert len(jobs.recent(1000)) == before
 
 
+def test_classify_reviews_only_approved_refs_and_reports_flags():
+    from conftest import classify_calls, contact_sheet_calls
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Review Song")
+        sid = song["id"]
+
+        # nothing approved yet -> refused at the route, no job
+        before = len(jobs.recent(1000))
+        r = client.post(f"/songs/{sid}/classify", data={"tier": "pg13"})
+        assert r.status_code == 400, r.text
+        assert len(jobs.recent(1000)) == before
+
+        d = tempfile.mkdtemp()
+        for i in range(3):
+            open(os.path.join(d, f"src{i}.png"), "w").close()
+        # clips 0 and 1 approved, clip 2 NOT -- the sheet must show two frames
+        for i in range(3):
+            db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created)
+                      VALUES (?,'pg13',?,?,?,?,?)""",
+                   sid, i, os.path.join(d, f"src{i}.png"), i, 1 if i < 2 else 0, time.time())
+
+        n_sheets = len(contact_sheet_calls)
+        r2 = client.post(f"/songs/{sid}/classify", data={"tier": "pg13"})
+        assert r2.status_code in (200, 303), r2.text
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='classify' ORDER BY id DESC", sid)
+        row = wait_job(job["id"])
+        assert row["status"] == "done", row
+
+        assert contact_sheet_calls[n_sheets:] == [["clip_000.png", "clip_001.png"]]
+        assert classify_calls[-1]["note"] == "Review Song (pg13 tier)"
+
+        asset = db.one("SELECT * FROM assets WHERE song_id=? AND kind='review'", sid)
+        meta = json.loads(asset["meta_json"])
+        assert meta["tier"] == "pg13"
+        assert meta["flagged"] == [{"clip": 1, "issue": "broken", "reason": "two of her"}]
+
+        page = client.get(f"/songs/{sid}").text
+        assert "1 flagged" in page and "clip 1 (broken)" in page
+
+
 def test_clips_form_offers_only_tiers_with_full_approved_refs():
     with TestClient(appmod.app) as client:
         song = _upload_song(client, "Ready Tier Song")
