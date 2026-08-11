@@ -21,12 +21,11 @@ import unicodedata
 
 
 PINNED = (
-    "Every character is an adult woman or man of at least 25 years, with fully adult "
+    "Every character is an adult woman or man of at least 21 years, with fully adult "
     "face, body and proportions. No minors, no children, no infants, no teenagers, no "
     "adolescent or childlike or youthful-looking characters, no small or underdeveloped "
     "bodies, no school, playground, nursery or juvenile settings, and no school uniforms "
     "or other juvenile costuming. "
-    "No nudity, no exposed genitalia, and no depicted or simulated sex acts."
 )
 
 # Terms whose presence in USER-SUPPLIED text (a custom tier's guardrail, a style
