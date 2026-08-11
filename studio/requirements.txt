@@ -1,0 +1,20 @@
+# Studio app deps. Deliberately NOT installed into ComfyUI's venv -- ComfyUI runs
+# on aiohttp and its own torch build, and nothing here should be able to disturb
+# a working renderer. This list installs into a separate venv (see deploy.sh).
+#
+# faster-whisper is chosen over openai-whisper because it runs on CTranslate2 and
+# needs no torch at all: the studio venv stays ~1GB instead of ~6GB, and there is
+# no second CUDA/torch stack sitting next to ComfyUI's.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+jinja2>=3.1
+httpx>=0.27
+pillow>=10.0
+faster-whisper>=1.0
+# CTranslate2 (faster-whisper's backend) talks to CUDA directly and does NOT
+# need torch -- but the CUDA 12 runtime libs are not pulled in automatically.
+# Without these, transcription silently falls back to CPU: ~4 min per track
+# instead of ~20 s on the 5090.
+nvidia-cublas-cu12
+nvidia-cudnn-cu12

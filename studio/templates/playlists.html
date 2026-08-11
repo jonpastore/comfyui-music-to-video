@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Playlists &amp; genres</h1>
+
+<section class="card">
+  <h2>New playlist</h2>
+  <form method="post" action="/playlists">
+    <label>Name <input type="text" name="name" required></label>
+    <label>Kind
+      <select name="kind">
+        <option value="playlist">playlist</option>
+        <option value="genre">genre</option>
+      </select>
+    </label>
+    <button type="submit">Create</button>
+  </form>
+</section>
+
+{% if not playlists %}
+<p class="empty">No playlists yet.</p>
+{% else %}
+{% for d in playlists %}
+<section class="card">
+  <h2>{{ d.playlist.name }} <span class="tag">{{ d.playlist.kind }}</span></h2>
+
+  {% if not d.playlist_items %}
+  <p class="empty">No songs added yet.</p>
+  {% else %}
+  <table class="list">
+    <thead><tr><th>#</th><th>Song</th><th>Tier</th><th>Transition</th><th>Secs</th></tr></thead>
+    <tbody>
+    {% for it in d.playlist_items %}
+      <tr>
+        <td>{{ it.position }}</td>
+        <td><a href="/songs/{{ it.song_id }}">{{ it.song_title }}</a></td>
+        <td>{{ it.tier }}</td>
+        <td>{{ it.transition }}</td>
+        <td>{{ it.secs }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <form method="post" action="/playlists/{{ d.playlist.id }}/reorder">
+    <label>New order (comma-separated item ids)
+      <input type="text" name="order" placeholder="{{ d.playlist_items | map(attribute='id') | join(',') }}">
+    </label>
+    <button type="submit">Reorder</button>
+  </form>
+  {% endif %}
+
+  <form method="post" action="/playlists/{{ d.playlist.id }}/items">
+    <label>Song
+      <select name="song_id" required>
+        {% for s in songs %}<option value="{{ s.id }}">{{ s.title }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Tier <input type="text" name="tier" required></label>
+    <label>Transition
+      <select name="transition">
+        <option value="fade">fade</option>
+        <option value="cut">cut</option>
+      </select>
+    </label>
+    <label>Secs <input type="number" step="0.1" name="secs" value="2.0"></label>
+    <button type="submit">Add song</button>
+  </form>
+
+  <form method="post" action="/playlists/{{ d.playlist.id }}/render">
+    <button type="submit">Render set</button>
+  </form>
+</section>
+{% endfor %}
+{% endif %}
+{% endblock %}

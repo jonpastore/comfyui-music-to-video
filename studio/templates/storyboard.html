@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Storyboard — {{ song.title }} ({{ tier }})</h1>
+<p><a href="/songs/{{ song.id }}">&larr; back to song</a> &middot;
+   <a href="{{ media_url(row.json_path) }}">download json</a></p>
+<pre class="storyboard-md">{{ md }}</pre>
+{% endblock %}

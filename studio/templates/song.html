@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ song.title }}</h1>
+<p class="meta">{{ song.album or "" }} {% if song.genre %}&middot; {{ song.genre }}{% endif %}
+   {% if song.duration %}&middot; {{ "%.0f"|format(song.duration) }}s{% endif %}</p>
+
+{% if active_job %}
+<div id="job-status" class="job-status">job #{{ active_job.id }} ({{ active_job.kind }}): {{ active_job.progress or "queued" }}</div>
+<script>watchJob({{ active_job.id }}, "job-status");</script>
+{% endif %}
+
+<section class="card">
+  <h2>Lyrics</h2>
+  <form method="post" action="/songs/{{ song.id }}/lyrics">
+    <textarea name="lyrics_text" rows="10">{{ song.lyrics or "" }}</textarea>
+    <button type="submit">Save lyrics</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Style guide</h2>
+  {% if song.style_path %}<img class="thumb" src="{{ media_url(song.style_path) }}" alt="style guide">{% endif %}
+  <form method="post" action="/songs/{{ song.id }}/style" enctype="multipart/form-data">
+    <label>Image <input type="file" name="image" accept="image/*" required></label>
+    <label>Style note <input type="text" name="note"></label>
+    <button type="submit">Upload style</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Anchor</h2>
+  {% if song.anchor_path %}<p>Selected anchor: <code>{{ song.anchor_path }}</code></p>{% endif %}
+  <form method="post" action="/songs/{{ song.id }}/anchor" enctype="multipart/form-data">
+    <label>Face <input type="file" name="face" accept="image/*" required></label>
+    <label>Outfit <input type="file" name="outfit" accept="image/*" required></label>
+    <label>View
+      <select name="view">
+        <option value="front">front</option>
+        <option value="back">back</option>
+      </select>
+    </label>
+    <label>Candidates <input type="number" name="n" value="4" min="1" max="8"></label>
+    <button type="submit">Generate anchors</button>
+  </form>
+
+  {% if anchor_candidates %}
+  <div class="candidate-grid">
+    {% for a in anchor_candidates %}
+    <div class="candidate">
+      <img class="thumb" src="{{ media_url(a.path) }}" alt="anchor candidate">
+      <form method="post" action="/songs/{{ song.id }}/anchor/pick">
+        <input type="hidden" name="asset_id" value="{{ a.id }}">
+        <button type="submit">Pick</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Storyboard</h2>
+  <form method="post" action="/songs/{{ song.id }}/storyboard">
+    <label>Tier
+      <select name="tier">
+        {% for t in tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Model
+      <select name="model">
+        <option value="">(default)</option>
+        {% for m in models %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Scene seconds <input type="number" step="0.5" name="scene_seconds" value="4.0"></label>
+    <button type="submit">Generate storyboard</button>
+  </form>
+
+  {% if storyboards %}
+  <ul class="tier-links">
+    {% for t, sb in storyboards.items() %}
+    <li>
+      <a href="/songs/{{ song.id }}/storyboard/{{ t }}">{{ t }}</a>
+      ({{ sb.scene_count or "?" }} scenes)
+      &middot; <a href="/songs/{{ song.id }}/approve/{{ t }}">approve refs</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Reference images</h2>
+  <form method="post" action="/songs/{{ song.id }}/refs">
+    <label>Tier
+      <select name="tier">
+        {% for t in tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit">Generate refs</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Clips &amp; render</h2>
+  <form method="post" action="/songs/{{ song.id }}/clips">
+    <label>Tier
+      <select name="tier">
+        {% for t in tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit">Render clips</button>
+  </form>
+
+  <form method="post" action="/songs/{{ song.id }}/render">
+    <label>Tier
+      <select name="tier">
+        {% for t in tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Crossfade secs <input type="number" step="0.1" name="fade" value="0"></label>
+    <button type="submit">Assemble &amp; mux</button>
+  </form>
+
+  {% if renders %}
+  <ul class="tier-links">
+    {% for r in renders %}
+    <li>{{ r.tier }}: <a href="{{ media_url(r.path) }}">{{ r.path.split('/')[-1] }}</a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Recent jobs for this song</h2>
+  {% if not song_jobs %}
+  <p class="empty">None yet.</p>
+  {% else %}
+  <table class="list">
+    <thead><tr><th>ID</th><th>Kind</th><th>Status</th><th>Progress</th></tr></thead>
+    <tbody>
+    {% for j in song_jobs %}
+      <tr><td>{{ j.id }}</td><td>{{ j.kind }}</td><td>{{ j.status }}</td><td>{{ j.progress or "" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

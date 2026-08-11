@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Jobs</h1>
+
+{% if active %}
+<p>Running: <strong>{{ active.kind }}</strong> (#{{ active.id }}) — {{ active.progress or "" }}</p>
+{% else %}
+<p class="empty">Nothing running.</p>
+{% endif %}
+
+{% if not jobs %}
+<p class="empty">No jobs yet.</p>
+{% else %}
+<table class="list">
+  <thead><tr><th>ID</th><th>Kind</th><th>Status</th><th>Progress</th><th>Song</th><th></th></tr></thead>
+  <tbody>
+  {% for j in jobs %}
+    <tr>
+      <td>{{ j.id }}</td>
+      <td>{{ j.kind }}</td>
+      <td>{{ j.status }}</td>
+      <td>{{ j.progress or "" }}</td>
+      <td>{% if j.song_id %}<a href="/songs/{{ j.song_id }}">#{{ j.song_id }}</a>{% endif %}</td>
+      <td><a href="/jobs/{{ j.id }}/log">log</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

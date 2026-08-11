@@ -1,0 +1,22 @@
+<div id="clip-{{ clip.idx }}" class="clip-tile {% if clip.approved %}approved{% endif %}">
+  <h4>Clip {{ clip.idx }}{% if clip.approved %} &#10003;{% endif %}</h4>
+  <div class="candidates">
+    {% for c in clip.candidates %}
+    <div class="candidate {% if c.approved %}picked{% endif %}">
+      <img src="{{ media_url(c.path) }}" alt="clip {{ clip.idx }} candidate">
+      <form hx-post="/songs/{{ song.id }}/refs/{{ clip.idx }}/approve" hx-target="#clip-{{ clip.idx }}" hx-swap="outerHTML">
+        <input type="hidden" name="tier" value="{{ tier }}">
+        <input type="hidden" name="ref_id" value="{{ c.id }}">
+        <button type="submit">{{ "Unapprove" if c.approved else "Approve" }}</button>
+      </form>
+    </div>
+    {% else %}
+    <p class="empty">no candidates yet</p>
+    {% endfor %}
+  </div>
+  <form method="post" action="/songs/{{ song.id }}/reroll">
+    <input type="hidden" name="tier" value="{{ tier }}">
+    <input type="hidden" name="clip_idx" value="{{ clip.idx }}">
+    <button type="submit">Reroll this clip</button>
+  </form>
+</div>

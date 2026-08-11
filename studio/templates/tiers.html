@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Content tiers</h1>
+
+<table class="list">
+  <thead><tr><th>Name</th><th>Guardrail</th><th>Built-in</th><th></th></tr></thead>
+  <tbody>
+  {% for t in tiers %}
+    <tr>
+      <td>{{ t.name }}</td>
+      <td class="guardrail">{{ t.guardrail }}</td>
+      <td>{{ "yes" if t.builtin else "" }}</td>
+      <td>
+        {% if not t.builtin %}
+        <form method="post" action="/tiers/{{ t.name }}/delete" onsubmit="return confirm('Delete tier {{ t.name }}?');">
+          <button type="submit">Delete</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<section class="card">
+  <h2>Add a custom tier</h2>
+  <p class="hint">The non-explicit guardrail clause is always appended and cannot be removed.</p>
+  <form method="post" action="/tiers">
+    <label>Name <input type="text" name="name" pattern="[a-zA-Z_][a-zA-Z0-9_]*" required></label>
+    <label>Guardrail text <textarea name="guardrail" rows="3"></textarea></label>
+    <button type="submit">Add tier</button>
+  </form>
+</section>
+{% endblock %}

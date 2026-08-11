@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Approve refs — {{ song.title }} ({{ tier }})</h1>
+<p><a href="/songs/{{ song.id }}">&larr; back to song</a></p>
+
+{% if not clips %}
+<p class="empty">No storyboard/refs yet for this tier.</p>
+{% else %}
+<div class="clip-grid">
+  {% for clip in clips %}
+    {% include "_clip_tile.html" %}
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

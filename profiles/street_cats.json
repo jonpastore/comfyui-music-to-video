@@ -1,0 +1,100 @@
+{
+  "album": "Street Cats",
+  "project": "Meow P — ComfyUI Music Video Storyboard",
+
+  "_comment": "Copy this file per album and edit. Everything the storyboard generator can vary lives here; build_storyboard.py contains no album content.",
+
+  "character_base": "adult anthropomorphic black feline woman DJ, sleek black fur, yellow-green almond eyes, long wavy black hair with subtle purple highlights, feline ears and tail, gold ear piercings, layered gold jewelry, {outfit}, confident mysterious expression, consistent face and proportions",
+
+  "outfit": {
+    "clean": "black leather street/club jacket, fitted black pants, black boots, gold hardware and chains",
+    "explicit": "black leather harness top, black leather pants with gold buckles and straps, black thigh-high lace-up boots"
+  },
+
+  "world": "Street Cats visual world: neon-noir industrial warehouse district, wet concrete, black steel, chain-link fencing, exposed pipes, service corridors, loading docks, stairwells, cinematic cyberpunk realism, premium underground electronic-music video, 16:9",
+
+  "render_tail": "photorealistic cinematic 3D frame, premium music video still, high detail, 16:9",
+
+  "guardrail": {
+    "clean": "Mature nightlife tone: confident, self-possessed body language and knowing attitude; adults only, fully clothed at all times, tasteful and non-graphic, no innuendo staging, no nudity, no body-part emphasis, no explicit gestures.",
+    "explicit": "Mature after-hours nightlife tone: confident, sensual, self-possessed body language, flirtatious eye contact and a sultry knowing attitude, adult innuendo carried purely as atmosphere and mood; adults only, fully clothed at all times, tasteful and non-graphic, no nudity, no exposed intimate anatomy, no explicit sexual activity, no simulated sex, no fetish acts, no explicit gestures, no coercion."
+  },
+
+  "negative_prompt": "nudity, topless, exposed breasts, exposed genitals, lingerie focus, pornographic framing, sexual act, simulated sex, fetish pose, bondage, restraints, explicit gesture, coercion, crotch focus, breast focus, buttocks focus, child, teen, underage, young-looking, drug paraphernalia, needle, graphic violence, gore, weapon focus, extra limbs, extra fingers, malformed hands, duplicate face, inconsistent fur color, wrong eye color, text artifacts, watermark, logo artifacts, low resolution, blurry face",
+
+  "_locations": "Rotated one per scene. This is the fix for 'every frame is Meow P in a purple corridor' — add or reorder to change where the video goes.",
+  "locations": [
+    "wet street outside the warehouse's public entrance, rain sheen on asphalt, shuttered roll-door behind",
+    "narrow service alley between two brick buildings, fire escape ladders, steam from a floor vent",
+    "chain-link gate and a security camera on a bent pole, gravel lot beyond",
+    "steel freight elevator interior, scuffed diamond-plate floor, cage gate, single caged bulb",
+    "concrete stairwell with painted handrails, landing numbers stencilled on the wall",
+    "long back-of-house corridor lined with electrical conduit and breaker panels",
+    "loading dock with the roll-door half up, empty pallets and strapping on the deck",
+    "cluttered backstage green room, road cases, a rack of cables, gaffer tape on the floor",
+    "DJ booth from behind the decks, mixer faders and CDJ screens glowing, monitors flanking",
+    "packed dance floor seen from the stage lip, raised hands and phone screens in the dark",
+    "elevated catwalk above the floor, truss and moving heads at eye level",
+    "rooftop with HVAC units and the city skyline low on the horizon",
+    "tiled washroom with a cracked mirror and a flickering strip light",
+    "small hidden side room, low couches, a beaded curtain, other felines lounging",
+    "underground car park, painted bay lines, a lone sodium fixture overhead",
+    "bar counter in profile, bottles backlit, condensation rings on black laminate"
+  ],
+
+  "_palettes": "Rotated one per scene, offset from locations so pairings never repeat. Keeps the whole song off a single hue.",
+  "palettes": [
+    "cold blue-black night with red utility lights and small gold accents",
+    "deep magenta and violet club spill through atmospheric haze",
+    "sodium-amber streetlight and hard black shadow, no magenta",
+    "sickly green fluorescent tube light, pale and even",
+    "hard white service lighting with cyan bounce off wet concrete",
+    "warm tungsten pools in an otherwise unlit space",
+    "electric cyan and teal laser haze, black surroundings",
+    "orange-red emergency lighting, heavy smoke, silhouettes"
+  ],
+
+  "_cameras": "Grouped by section energy. Strings must contain the keywords build_song.SHOT_RULES matches on (wide, medium, close, detail, macro, low, crane, overhead, top-down, pov, crowd pov, orbit, rear, follow, tilt up, pullback, long lens, push, dolly, over-shoulder, tight) or the shot directive falls back to a generic rotation.",
+  "cameras": {
+    "low": [
+      "wide establishing exterior",
+      "slow push toward the subject",
+      "long lens from across the street",
+      "tilt up from floor to ceiling",
+      "overhead looking straight down",
+      "slow pullback",
+      "macro detail insert"
+    ],
+    "mid": [
+      "medium hero waist-up",
+      "dolly profile past foreground pipes",
+      "follow behind through the space",
+      "over-shoulder toward what she sees",
+      "close on face",
+      "orbit around the subject",
+      "wide of the room"
+    ],
+    "high": [
+      "crane sweeping above the floor",
+      "crowd pov from inside the crowd",
+      "low angle from the ground looking up",
+      "detail insert on hands",
+      "close reaction",
+      "wide of the full room",
+      "overhead of the floor"
+    ]
+  },
+
+  "motion": {
+    "low": "slow drift, minimal movement, atmosphere and haze shifting",
+    "mid": "steady walk, purposeful movement through the space, fabric and hair in motion",
+    "high": "fast energy, bodies moving on the beat, lights strobing and sweeping"
+  },
+
+  "_mood": "First sentence of image_prompt, by energy. Sets the emotional read before the character lock.",
+  "mood": {
+    "low": "Quiet, watchful after-hours mood, the space breathing before anything happens.",
+    "mid": "Momentum and intent, moving deeper into the building.",
+    "high": "Peak-hour release, the room fully alive."
+  }
+}

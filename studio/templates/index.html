@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Library</h1>
+
+<section class="card">
+  <h2>Upload a song</h2>
+  <form method="post" action="/songs" enctype="multipart/form-data">
+    <label>Title <input type="text" name="title" required></label>
+    <label>Album <input type="text" name="album"></label>
+    <label>Genre <input type="text" name="genre"></label>
+    <label>MP3 <input type="file" name="mp3" accept="audio/mpeg,.mp3" required></label>
+    <button type="submit">Upload</button>
+  </form>
+</section>
+
+{% if not songs %}
+<p class="empty">No songs yet. Upload one above.</p>
+{% else %}
+<table class="list">
+  <thead><tr><th>Title</th><th>Album</th><th>Genre</th><th>Tiers</th></tr></thead>
+  <tbody>
+  {% for e in songs %}
+    <tr>
+      <td><a href="/songs/{{ e.song.id }}">{{ e.song.title }}</a></td>
+      <td>{{ e.song.album or "" }}</td>
+      <td>{{ e.song.genre or "" }}</td>
+      <td>
+        {% for t in e.tiers %}
+          <span class="tag {% if t.rendered %}done{% endif %}">{{ t.tier }}{% if t.rendered %} &#10003;{% endif %}</span>
+        {% else %}
+          <span class="empty">none</span>
+        {% endfor %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

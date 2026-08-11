@@ -1,0 +1,55 @@
+# ---------------------------------------------------------------------------
+# This repo holds the CODE only. Two categories are deliberately excluded:
+#
+#  1. Media (758MB of source audio and generated frames) -- regenerable output
+#     or user-owned masters.
+#  2. The album/song directories. Their storyboard .json/.md embed full song
+#     lyrics for unreleased tracks. grok.py can use one as a few-shot template
+#     via STUDIO_TEMPLATE_JSON / STUDIO_TEMPLATE_MD pointing at a local path;
+#     it falls back to a built-in placeholder exemplar when absent, so a clean
+#     clone still runs.
+# ---------------------------------------------------------------------------
+
+# Album / song working directories (lyrics, storyboards, renders)
+/Street Cats/
+/Catatonic/
+/Get Feral Tonight/
+/Nine Lives After Dark/
+/reroll/
+/anchor_v2/
+/anchor_v3/
+/anchor_v4/
+
+# Media
+*.mp3
+*.wav
+*.flac
+*.mp4
+*.mov
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.zip
+
+# Studio runtime state: sqlite db, uploads, job logs, generated output
+studio/data/
+studio/venv/
+
+# Credentials -- never commit, wherever they land
+*.env
+!*.env.example
+grok-mcp.env
+
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+# Agent / session scratch state
+.omc/
+CONTINUATION-*.md
+
+# Session scratch and unreleased track names -- not code
+prompt.txt
+MeowP_Albums_Track_Lists.md
