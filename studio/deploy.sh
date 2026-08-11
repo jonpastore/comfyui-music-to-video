@@ -42,8 +42,28 @@ else
 fi
 
 echo "== venv"
-ssh $R "test -d $DEST/venv || python3 -m venv $DEST/venv; \
-        $DEST/venv/bin/pip -q install --upgrade pip; \
+# Built with an EXPLICIT interpreter, never bare `python3`: the render box's
+# default python3 is 3.10 while 3.12 sits beside it, and librosa needs 3.12 to
+# reach its current release. A bare `python3 -m venv` silently produced a 3.10
+# venv that could not install requirements.txt at all.
+#
+# `test -d` alone would keep a stale interpreter forever, so the version is
+# checked and the venv rebuilt when it is too old. Rebuilding happens IN PLACE:
+# a venv is NOT relocatable -- every script in bin/ carries a shebang with the
+# venv's absolute path, so building elsewhere and renaming produces a venv whose
+# uvicorn points at a directory that no longer exists, and the service will not
+# start. Cost of learning that: about 90 seconds of downtime.
+PY=python3.12
+ssh $R "set -e
+        command -v $PY >/dev/null || { echo '  ERROR: $PY is not on the render box'; exit 1; }
+        if [ -x $DEST/venv/bin/python ] && \
+           ! $DEST/venv/bin/python -c 'import sys; sys.exit(0 if sys.version_info[:2] >= (3,12) else 1)'; then
+          echo '  existing venv predates 3.12 -- rebuilding it in place'
+          systemctl --user stop meowp-studio 2>/dev/null || true
+          rm -rf $DEST/venv
+        fi
+        test -d $DEST/venv || $PY -m venv $DEST/venv
+        $DEST/venv/bin/pip -q install --upgrade pip
         $DEST/venv/bin/pip -q install -r $DEST/app/requirements.txt"
 
 echo "== systemd unit"
