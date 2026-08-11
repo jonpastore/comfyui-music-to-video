@@ -109,31 +109,123 @@ SERVICES = {
         "target_label": "Handle",
         "target_hint": "e.g. meowp.bsky.social",
     },
-    "mastodon": {
-        "label": "Mastodon",
-        "media": ("video", "audio", "image", "link"),
+    "x": {
+        "label": "X (Twitter)",
+        "media": ("video", "image", "link"),
         "adult": TAGGED,
         "adult_note": (
-            "Policy is PER INSTANCE, not global -- some instances welcome adult content, "
-            "many forbid it, and a few forbid it only when unmarked. Posts support a "
-            "'sensitive' flag plus a content warning. Because the rule lives on the "
-            "instance, each instance is its own target here and you set its policy."),
-        "api": "Mastodon REST API, POST /api/v1/statuses with sensitive=true",
-        "auth": "Access token from the instance",
-        # Mastodon has no central signup: an application is created on the
-        # instance you are actually on, so this points at the server list and
-        # the per-instance path is the first step below.
-        "signup": "https://joinmastodon.org/servers",
-        "docs": "https://docs.joinmastodon.org/methods/statuses/",
+            "The only mainstream destination here that permits explicit material, and the "
+            "one with the most conditions attached. The posting account must be enrolled in "
+            "the Adult Content Creator programme (verified ID), the account's own 'sensitive "
+            "media' setting must be on, and every post must carry the right one of three "
+            "labels: Sensitive, Adult or Explicit. Since Feb 2026 AI-GENERATED adult content "
+            "must ALSO carry an AI-content disclosure label -- which is everything this "
+            "studio produces, so that label is not optional for us."),
+        "api": "X API v2, POST /2/media/upload (INIT/APPEND/FINALIZE) then POST /2/tweets",
+        "auth": "OAuth 2.0 with PKCE, user context",
+        "signup": "https://developer.x.com/en/portal/dashboard",
+        "docs": "https://docs.x.com/x-api/media/quickstart/media-upload-chunked",
         "steps": [
-            "There is no central signup -- the application is created on YOUR instance: "
-            "Preferences -> Development -> New application.",
-            "Give it write:statuses and write:media scopes; copy the access token.",
-            "READ THAT INSTANCE'S RULES before setting its policy here. This is the one "
-            "service where the answer genuinely differs per server.",
+            "Video upload is CHUNKED: init, append segments under 5 MB, finalize, then poll "
+            "processing before the media_id can be attached to a post.",
+            "Enrol the account in the Adult Content Creator programme before posting anything "
+            "from an adult tier; without it the correct label is not even available.",
+            "This is the one PAID API here. Since Feb 2026 new developers land on pay-per-use "
+            "(about $0.01 a post); the old Basic/Pro tiers are closed to new signups.",
         ],
-        "target_label": "Instance",
-        "target_hint": "e.g. mastodon.social. Set the adult policy from ITS rules.",
+        "target_label": "Account",
+        "target_hint": "The @handle posts go to. Tick adult only if it is ACC-enrolled.",
+    },
+    "tiktok": {
+        "label": "TikTok",
+        "media": ("video",),
+        "adult": FORBIDDEN,
+        "adult_note": (
+            "Sexually explicit content is prohibited, and TikTok moderates far more "
+            "aggressively than its written policy implies. Nothing above the clean tiers "
+            "should be pointed at it."),
+        "api": "TikTok Content Posting API, /v2/post/publish/video/init/",
+        "auth": "OAuth 2.0 (TikTok for Developers app, video.publish scope)",
+        "signup": "https://developers.tiktok.com/",
+        "docs": "https://developers.tiktok.com/doc/content-sharing-guidelines",
+        "steps": [
+            "An UNAUDITED app can only post SELF_ONLY (private), to at most 5 users per 24 "
+            "hours, and the account must itself be private at the time. Public posting needs "
+            "the app to pass TikTok's audit -- plan for that, it is not a formality.",
+            "The API requires the posting UI to show a preview and take explicit consent "
+            "before upload, and to collect the commercial-content disclosure. An uploader "
+            "that silently posts does not meet their terms.",
+            "Vertical video only, in practice. A 16:9 music video will be letterboxed.",
+        ],
+        "target_label": "Account",
+        "target_hint": "The TikTok account videos are posted to.",
+    },
+    "vimeo": {
+        "label": "Vimeo",
+        "media": ("video",),
+        "adult": TAGGED,
+        "adult_note": (
+            "Pornography and sexually explicit content are prohibited, but non-sexual nudity "
+            "and sexuality with a clear creative or narrative purpose ARE allowed when the "
+            "video is rated correctly. So an R render can go here rated mature; an XXX one "
+            "cannot go here at all. THE STUDIO CANNOT TELL THOSE APART -- adult_ok is a "
+            "single switch and tiers are not ranked -- so ticking it on a Vimeo target trusts "
+            "you to keep explicit renders off it."),
+        "api": "Vimeo API, POST /me/videos with tus resumable upload",
+        "auth": "OAuth 2.0, personal access token with upload scope",
+        "signup": "https://developer.vimeo.com/apps",
+        "docs": "https://developer.vimeo.com/api/upload/videos",
+        "steps": [
+            "Upload access is not granted by default: request it on the app, and it is "
+            "reviewed. A free account also has a weekly upload quota.",
+            "Set the content rating on the video (nudity / drugs / language / violence) at "
+            "upload. An unrated video that needs a rating is a guidelines violation, not a "
+            "detail -- this is the switch that makes an R render acceptable here.",
+        ],
+        "target_label": "Account",
+        "target_hint": "The Vimeo account videos are uploaded to.",
+    },
+    "dailymotion": {
+        "label": "Dailymotion",
+        "media": ("video",),
+        "adult": FORBIDDEN,
+        "adult_note": (
+            "Pornographic and sexually explicit content is prohibited outright. There is a "
+            "sensitive-content restriction for borderline material, applied BY Dailymotion, "
+            "and it is not a switch that makes explicit uploads acceptable."),
+        "api": "Dailymotion Data API, POST /me/videos",
+        "auth": "OAuth 2.0 (API key + secret)",
+        "signup": "https://www.dailymotion.com/partner/developer",
+        "docs": "https://developers.dailymotion.com/api/platform-api/reference/",
+        "steps": [
+            "Create an API key in the partner space; upload needs the 'manage_videos' scope.",
+            "Upload is two steps: GET an upload URL from /file/upload, PUT the file to it, "
+            "then create the video from the returned url.",
+        ],
+        "target_label": "Channel",
+        "target_hint": "The Dailymotion channel videos are uploaded to.",
+    },
+    "odysee": {
+        "label": "Odysee",
+        "media": ("video", "audio"),
+        "adult": FORBIDDEN,
+        "adult_note": (
+            "Worth stating because its reputation says otherwise: Odysee's community "
+            "guidelines prohibit pornographic material. NSFW content generally must be "
+            "tagged mature and is then unlisted, but explicit material is not permitted at "
+            "all, so this fails closed like the rest."),
+        "api": "LBRY SDK (lbrynet) publish -- Odysee is a front end to the LBRY network",
+        "auth": "A local lbrynet daemon holding your channel's key",
+        "signup": "https://odysee.com/$/signup",
+        "docs": "https://lbry.tech/api/sdk",
+        "steps": [
+            "There is no simple upload REST endpoint: publishing means running lbrynet "
+            "locally and calling its publish method with your channel's claim.",
+            "That daemon holds a wallet key. Treat it like a credential, not a config file.",
+            "The heaviest lift of any destination here -- take it last, if at all.",
+        ],
+        "target_label": "Channel",
+        "target_hint": "The @channel name claims are published under.",
     },
     "soundcloud": {
         "label": "SoundCloud",

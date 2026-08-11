@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY, value TEXT);
 
 -- Where finished work may be published. One row per DESTINATION, not per
--- service: each subreddit and each Mastodon instance has its own rules and its
+-- service: each subreddit has its own rules and its own NSFW status, and its
 -- own adult policy, and that is exactly the distinction that must not be lost.
 -- adult_ok is the per-target switch (an NSFW subreddit vs an ordinary one);
 -- publish.SERVICES holds the policy of the service itself, which a target can
