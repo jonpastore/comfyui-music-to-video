@@ -45,6 +45,21 @@ Rsyncs to the render box, builds a **separate venv** (ComfyUI's is left untouche
 installs a `systemd --user` unit, and smoke-tests the live endpoints plus ComfyUI
 reachability and API-key presence. Binds to the tailnet only.
 
+### ComfyUI service
+
+ComfyUI runs under `systemd --user` on the render box, bound to `0.0.0.0:8188`,
+so it is reachable both on the tailnet and at `127.0.0.1` where the studio app
+expects it. `--listen` takes a single address, so binding tailnet-only would cut
+off the studio.
+
+    ~/.config/systemd/user/comfyui.service
+    ExecStart=%h/ComfyUI/venv/bin/python main.py --listen 0.0.0.0 --port 8188
+
+`systemctl --user enable --now comfyui` plus `loginctl enable-linger` means it
+survives logout and reboot -- it previously ran from a `nohup` one-liner that did
+not. Note it is unauthenticated and can read and write files and execute
+workflows, so the network it is bound to is the only thing gating it.
+
 ### Configuration
 
 | Env | Meaning |
