@@ -32,10 +32,18 @@ ROLES = {
     "reference": "Reference stills -- one image per clip, from the anchor",
     "video": "Clips -- the animated 4.8125s segments",
     "refine": "Optional second pass over a rendered clip",
+    "artwork": "Album covers, generated from the album look",
     "storyboard": "Writing the shot list from the lyrics",
     "vision": "Reviewing rendered frames, and describing an anchor",
     "audio": "Generative audio repair",
 }
+
+# Roles where a model has to be WIRED to a renderer before it can be chosen.
+# A model in one of these is catalogued the moment it is worth documenting, but
+# only becomes selectable once it carries a "cli" value naming what the renderer
+# accepts -- see renderable(). Roles outside this set (storyboard, vision) are
+# resolved by their own module at call time and have nothing to wire.
+WIRED_ROLES = ("video", "artwork")
 
 # loader class -> the input whose enum lists installed files
 LOADER_FIELD = {
@@ -163,6 +171,29 @@ CATALOG = {
             "compare, before committing a song to it.",
         ],
         "companions": {"wan_2.1_vae.safetensors": "VAELoader"},
+    },
+    "qwen_artwork": {
+        "role": "artwork",
+        "label": "Qwen-Image-Edit 2511 (local, free)",
+        "file": "qwen_image_edit_2511_fp8mixed.safetensors",
+        "loader": "UNETLoader",
+        "default": True,
+        "cli": "qwen",
+        "purpose": (
+            "Generates the album cover from the album look, on the same model that renders "
+            "every reference frame. Given a chosen anchor it uses it as a reference, so the "
+            "cover shows the actual protagonist rather than a lookalike."),
+        "notes": [
+            "Free and local. Runs on the box that is already loaded with this model, so "
+            "there is nothing extra to download.",
+            "With no anchor it still works as plain text-to-image -- every image input on "
+            "TextEncodeQwenImageEditPlus is optional.",
+            "Portrait 1024x1024 by default; an album cover is square.",
+        ],
+        "companions": {
+            "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors": "LoraLoaderModelOnly",
+            "qwen_2.5_vl_7b_fp8_scaled.safetensors": "CLIPLoader",
+            "qwen_image_vae.safetensors": "VAELoader"},
     },
     "ace_step_v1": {
         "role": "audio",
@@ -310,7 +341,7 @@ def set_default(role, key):
     # A catalogued-but-unwired model has no renderer value, so making it the
     # default would set a preference the render form cannot honour -- it would
     # quietly fall back to whichever option the browser selected first.
-    if role in ("video",) and not CATALOG[key].get("cli"):
+    if role in WIRED_ROLES and not CATALOG[key].get("cli"):
         raise ValueError(f"{key} is catalogued for evaluation but not wired to the "
                           f"renderer yet, so it cannot be the default")
     db.run("INSERT INTO settings (key, value) VALUES (?,?) "
@@ -393,9 +424,14 @@ def demo():
     # song page used to map "anything that is not s2v" to i2v, so adding a third
     # video model would silently have rendered it as i2v.
     assert renderable("video") == {"wan22_s2v": "s2v", "wan22_i2v": "i2v"}
+    assert renderable("artwork") == {"qwen_artwork": "qwen"}
     for key, m in CATALOG.items():
         if m.get("cli"):
-            assert m["role"] == "video", f"{key} has a cli value but is not a video model"
+            assert m["role"] in WIRED_ROLES, f"{key} has a cli value but {m['role']} has no renderer"
+        elif m["role"] in WIRED_ROLES:
+            # catalogued for evaluation only -- must not be selectable as a
+            # render choice or made the default
+            assert key not in renderable(m["role"])
 
     # defaults: the marked one, then a remembered override, then rejection of junk
     assert default_for("video") == "wan22_s2v"

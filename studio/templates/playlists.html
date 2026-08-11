@@ -10,6 +10,68 @@
   </form>
 </section>
 
+{# ---- shared viewers, one per page rather than one per tile ---- #}
+<dialog class="lightbox" id="anchor-lightbox">
+  <div class="modal-bar">
+    <strong id="lightbox-label"></strong>
+    <button type="button" onclick="this.closest('dialog').close()">Close</button>
+  </div>
+  {# front and back side by side; the CSS stacks them on a narrow screen #}
+  <div class="lightbox-pair" id="lightbox-pair"></div>
+</dialog>
+
+<dialog class="fix-modal" id="anchor-fix">
+  <div class="modal-bar">
+    <strong>Fix <span id="fix-label"></span></strong>
+    <button type="button" onclick="this.closest('dialog').close()">Close</button>
+  </div>
+  <div class="fix-modal-body">
+    <img id="fix-preview" alt="the sheet being repaired">
+    <div class="fix-forms">
+      <p class="hint">Every repair runs on Qwen-Image-Edit 2511 &mdash; the model that
+        rendered the sheet &mdash; and lands as a NEW candidate in the same group. The one
+        you are fixing stays until you pick the fix.</p>
+
+      <form method="post" class="stack-form fix-face" enctype="multipart/form-data">
+        <h4>Swap the face</h4>
+        <input type="hidden" name="mode" value="face">
+        <label>Face to swap in <input type="file" name="face" accept="image/*" required></label>
+        <label>Instruction
+          <textarea name="instruction" rows="3">Replace the face of the person in image 1 with the face of the person in image 2. Keep the head shape, hair and body of image 1. Do not change pose, clothing, framing, background or lighting.</textarea>
+        </label>
+        <button type="submit">Swap face</button>
+      </form>
+
+      <form method="post" class="stack-form fix-inpaint mask-form">
+        <h4>Repair an area</h4>
+        <input type="hidden" name="mode" value="inpaint">
+        <input type="hidden" name="mask_data" value="">
+        <label>Instruction &mdash; describe what it should be
+          <textarea name="instruction" rows="3">Repair only the masked region of image 1 so it matches the rest of the frame. Do not change pose, clothing, framing, background or lighting outside the masked region.</textarea>
+        </label>
+        <button type="button" class="js-paint-mask">Paint the area to repair</button>
+        <span class="muted js-mask-state">nothing painted yet</span>
+        <button type="submit" class="js-mask-submit" disabled>Repair the painted area</button>
+      </form>
+
+      <form method="post" class="stack-form fix-outpaint">
+        <h4>Extend the frame</h4>
+        <input type="hidden" name="mode" value="outpaint">
+        <div class="field-row">
+          <label>left <input type="number" name="pad_left" value="0" min="0" max="1024" step="8"></label>
+          <label>top <input type="number" name="pad_top" value="0" min="0" max="1024" step="8"></label>
+          <label>right <input type="number" name="pad_right" value="0" min="0" max="1024" step="8"></label>
+          <label>bottom <input type="number" name="pad_bottom" value="0" min="0" max="1024" step="8"></label>
+        </div>
+        <label>Instruction
+          <textarea name="instruction" rows="2">Extend image 1 into the new empty area, continuing the same scene, perspective and lighting. Do not change anything in the original area.</textarea>
+        </label>
+        <button type="submit">Extend the sheet</button>
+      </form>
+    </div>
+  </div>
+</dialog>
+
 {% if not playlists %}
 <p class="empty">No playlists yet.</p>
 {% else %}
@@ -109,22 +171,66 @@
   </ul>
   {% endif %}
 
-  <h3>Album look</h3>
+  <div class="section-head">
+    <h3>Album look</h3>
+    <span class="section-actions">
+      {# Fill READS the cover; Create WRITES a new one from these fields. Two
+         directions through the same pair of things, so they sit together. #}
+      <form method="post" action="/playlists/{{ d.playlist.id }}/fill"
+            hx-post="/playlists/{{ d.playlist.id }}/fill"
+            hx-target="#album-look-{{ d.playlist.id }}" hx-swap="outerHTML"
+            hx-disabled-elt="find button" hx-indicator="#fill-busy-{{ d.playlist.id }}">
+        <button type="submit" {% if not d.playlist.image_path %}disabled
+                title="Upload an album cover first"{% else %}
+                title="Read the album cover and fill the boxes below"{% endif %}>
+          Fill from cover
+        </button>
+      </form>
+      <span class="htmx-indicator muted" id="fill-busy-{{ d.playlist.id }}">
+        reading the cover&hellip;</span>
+      <form method="post" action="/playlists/{{ d.playlist.id }}/artwork" class="inline-form">
+        <label class="inline-label">Model
+          <select name="model">
+            {% for m in d.artwork_models %}
+            <option value="{{ m.key }}" {% if m.default %}selected{% endif %}
+                    {% if m.available is false %}disabled{% endif %}>{{ m.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="submit" title="Generate new album art from the boxes below">
+          Create album art
+        </button>
+      </form>
+    </span>
+  </div>
   <p class="muted">Every description the pipeline uses for this album. These used to be
     written into make_anchor.py and build_refs.py, which made one album part of the code;
-    a new album is now these boxes. Blank means "use the default shown".</p>
-  <form method="post" action="/playlists/{{ d.playlist.id }}/profile" class="stack-form">
-    {% for f in d.profile_fields %}
-      {# the partial is also rendered on its own by the wand route, where the
-         playlist is the top-level context -- bind the same name here #}
-      {% with playlist = d.playlist %}{% include "_album_field.html" %}{% endwith %}
-    {% endfor %}
-    <button type="submit">Save album look</button>
-  </form>
-  <p class="muted">&#10024; drafts a field by looking at this album's anchor image. It fills
-    the box only &mdash; nothing is saved until you press Save album look.</p>
+    a new album is now these boxes. Blank means &ldquo;use the default shown&rdquo;.
+    Each box explains itself under <strong>?</strong>, and &#10024; drafts one from the
+    album's anchor.</p>
+  {# the partial is also rendered on its own by the wand and fill routes, where
+     the playlist is the top-level context -- bind the same names here #}
+  {% with playlist = d.playlist, profile_fields = d.profile_fields %}
+    {% include "_album_look_form.html" %}
+  {% endwith %}
 
-  <h3>Cast</h3>
+  <div class="section-head">
+    <h3>Cast</h3>
+    <span class="section-actions">
+      <form method="post" action="/playlists/{{ d.playlist.id }}/propose-cast"
+            hx-post="/playlists/{{ d.playlist.id }}/propose-cast"
+            hx-target="#cast-form-{{ d.playlist.id }}" hx-swap="outerHTML"
+            hx-disabled-elt="find button" hx-indicator="#cast-busy-{{ d.playlist.id }}">
+        <button type="submit" {% if not d.playlist.image_path %}disabled
+                title="Upload an album cover first"{% else %}
+                title="Look at the album cover and propose a supporting character"{% endif %}>
+          Propose a character from the cover
+        </button>
+      </form>
+      <span class="htmx-indicator muted" id="cast-busy-{{ d.playlist.id }}">
+        looking at the cover&hellip;</span>
+    </span>
+  </div>
   <p class="muted">The album look above describes the <strong>protagonist</strong>. These are the
     other NAMED characters &mdash; a duet partner, an antagonist. The storyboard is told who
     exists and names the main actors per scene, and each named character's anchor is attached
@@ -162,51 +268,146 @@
   <p class="empty">No named characters besides the protagonist.</p>
   {% endif %}
 
-  <form method="post" action="/playlists/{{ d.playlist.id }}/characters" class="stack-form">
-    <div class="field-row">
-      <label>Name <input type="text" name="name" required placeholder="e.g. Nyx"></label>
-      <label>Role <input type="text" name="role" placeholder="antagonist"></label>
-    </div>
-    <label>identity <textarea name="identity" rows="2"></textarea></label>
-    <label>wardrobe <textarea name="wardrobe" rows="2"></textarea></label>
-    <label>body <textarea name="body" rows="2"></textarea></label>
-    <button type="submit">Add character</button>
-  </form>
+  {% with playlist = d.playlist, proposed = none %}
+    {% include "_cast_form.html" %}
+  {% endwith %}
   <p class="hint">Blank fields fall back to the album look above, so a supporting character
     still inherits its body-consistency wording &mdash; the one thing that must never be
     missing from a prompt.</p>
 
-  <h3>Anchors</h3>
-  <p class="muted">Character sheets for this album, one per character, tier and view. Every song on
-    the album renders against these.</p>
-  {% if d.anchors %}
-  <div class="clip-tile candidates">
-    {% for a in d.anchors %}
-    <div class="candidate {% if a.chosen %}picked{% endif %}">
-      <img src="{{ media_url(a.path) }}" alt="{{ a.tier | tiername }} {{ a.view | viewname }} anchor">
-      <p class="muted">{{ a.character_name or "protagonist" }} &middot;
-        {{ a.tier | tiername }} &middot; {{ a.view | viewname }}{% if a.chosen %} &check;{% endif %}</p>
-      {% if not a.chosen %}
-      <form method="post" action="/anchors/{{ a.id }}/pick"><button type="submit">Use this</button></form>
-      {% endif %}
+  <div class="section-head">
+    <h3>Anchors</h3>
+    <span class="section-actions">
+      <span class="muted">{{ d.anchor_count }} anchor{{ "" if d.anchor_count == 1 else "s" }}
+        across {{ d.character_count }} character{{ "" if d.character_count == 1 else "s" }}</span>
+      <label class="inline-label">Character
+        {# filters the tiles client-side: the anchors are already on the page,
+           and a round trip to hide half of them would be wasted #}
+        <select class="anchor-character-filter" data-album="{{ d.playlist.id }}">
+          <option value="">all characters</option>
+          {% for name, n in d.anchor_characters %}
+          <option value="{{ name }}">{{ name }} ({{ n }})</option>
+          {% endfor %}
+        </select>
+      </label>
+    </span>
+  </div>
+  <p class="muted">Character sheets for this album, one per character, tier and view. Every song
+    on the album renders against the CHOSEN one for its tier. Click any sheet to see it full
+    size beside its opposite view.</p>
+
+  {% if d.anchor_tiers %}
+  <div class="tier-tabs" data-album="{{ d.playlist.id }}">
+    {% for t in d.anchor_tiers %}
+    <button type="button" class="tier-tab {% if loop.first %}active{% endif %}"
+            data-tier="{{ t.name }}">
+      {{ t.name | tiername }} <span class="muted">({{ t.count }})</span>
+    </button>
+    {% endfor %}
+  </div>
+
+  {% for t in d.anchor_tiers %}
+  <div class="tier-panel {% if not loop.first %}hidden{% endif %}"
+       data-album="{{ d.playlist.id }}" data-tier="{{ t.name }}">
+    {% for group in t.rows %}
+    <h4 class="anchor-row-head">
+      {{ group.label }}
+      {% if group.nude %}<span class="tag">nudity permitted by this tier</span>{% endif %}
+    </h4>
+    <div class="anchor-row">
+      {% for a in group.anchors %}
+      <figure class="anchor-tile {% if a.chosen %}picked{% endif %}"
+              data-character="{{ a.character_name or 'protagonist' }}">
+        <img src="{{ media_url(a.path) }}" loading="lazy"
+             alt="{{ a.character_name or 'protagonist' }}, {{ a.tier | tiername }}, {{ a.view | viewname }}"
+             class="anchor-open" data-full="{{ media_url(a.path) }}"
+             data-opposite="{{ media_url(a.opposite) if a.opposite else '' }}"
+             data-label="{{ a.character_name or 'protagonist' }} &middot; {{ a.tier | tiername }} &middot; {{ a.view | viewname }}">
+        <figcaption>
+          <strong>{{ a.character_name or "protagonist" }}</strong>
+          &middot; {{ a.view | viewname }}
+          &middot; v{{ a.version }}
+          {% if a.chosen %}<span class="tag done">in use</span>{% endif %}
+          <br>
+          {# rendered in the BROWSER's timezone: the server is UTC and the
+             studio is used from a machine that is not #}
+          <time class="local-time muted" datetime="{{ a.created | isotime }}">
+            {{ a.created | isotime }}</time>
+        </figcaption>
+        <div class="anchor-actions">
+          {% if not a.chosen %}
+          <form method="post" action="/anchors/{{ a.id }}/pick">
+            <button type="submit">Use this</button>
+          </form>
+          {% endif %}
+          <button type="button" class="anchor-edit"
+                  data-anchor="{{ a.id }}"
+                  data-label="{{ a.character_name or 'protagonist' }} &middot; {{ a.tier | tiername }} &middot; {{ a.view | viewname }}"
+                  data-src="{{ media_url(a.path) }}">Edit</button>
+          <form method="post" action="/anchors/{{ a.id }}/delete" class="delete-anchor">
+            <button type="submit" class="thumb-btn-danger"
+                    {% if a.chosen %}disabled title="pick another sheet first"{% endif %}>
+              Delete
+            </button>
+          </form>
+        </div>
+      </figure>
+      {% endfor %}
     </div>
     {% endfor %}
   </div>
+  {% endfor %}
   {% else %}
   <p class="empty">None yet.</p>
   {% endif %}
   <p><a href="/anchors?scope_kind=album&amp;scope_value={{ d.playlist.name | urlencode }}">Manage anchors for this album &rarr;</a></p>
 
-  <h3>Card</h3>
-  <form method="post" action="/playlists/{{ d.playlist.id }}/image" enctype="multipart/form-data">
+  <h3>Album cover</h3>
+  <p class="muted">Shown on this card, and what <strong>Fill from cover</strong> and
+    <strong>Propose a character</strong> read.</p>
+  <form method="post" action="/playlists/{{ d.playlist.id }}/image" enctype="multipart/form-data"
+        class="stack-form">
     <label>Album image <input type="file" name="image" accept="image/*" required></label>
-    <button type="submit">Set image</button>
+    <div class="button-row">
+      <button type="submit">Set image</button>
+    </div>
   </form>
-  <form method="post" action="/playlists/{{ d.playlist.id }}/delete" class="delete-playlist"
-        data-name="{{ d.playlist.name }}">
-    <input type="hidden" name="confirm" value="DELETE">
-    <button type="submit">Delete playlist</button>
-  </form>
+
+  <div class="button-row danger-row">
+    <button type="button" class="secondary"
+            onclick="document.getElementById('del-pl-{{ d.playlist.id }}').showModal()">
+      Delete playlist&hellip;
+    </button>
+  </div>
+
+  <dialog class="confirm-modal" id="del-pl-{{ d.playlist.id }}">
+    <div class="modal-bar">
+      <strong>Delete &ldquo;{{ d.playlist.name }}&rdquo;?</strong>
+      <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+    </div>
+    <p><strong>This deletes:</strong></p>
+    <ul>
+      <li>the playlist itself and its ordering of {{ d.count }}
+        song{{ "" if d.count == 1 else "s" }}</li>
+      <li>its album cover image</li>
+    </ul>
+    <p><strong>This keeps:</strong></p>
+    <ul>
+      <li>every song, its audio, lyrics, storyboards, reference frames and rendered videos</li>
+      <li>the {{ d.anchor_count }} anchor{{ "" if d.anchor_count == 1 else "s" }} and
+        {{ d.character_count }} character{{ "" if d.character_count == 1 else "s" }} &mdash;
+        they are scoped by album NAME, so re-creating a playlist with the same name picks
+        them up again</li>
+      <li>the album look wording, for the same reason</li>
+    </ul>
+    <form method="post" action="/playlists/{{ d.playlist.id }}/delete" class="stack-form">
+      <input type="hidden" name="confirm" value="DELETE">
+      <div class="button-row">
+        <button type="submit" class="thumb-btn-danger">Delete this playlist</button>
+        <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+      </div>
+    </form>
+  </dialog>
 </details>
 {% endfor %}
 {% endif %}

@@ -1,0 +1,38 @@
+{# The add-a-character form. Its own partial because "propose from the cover"
+   swaps it whole, filled in -- the proposal lands in the boxes for editing and
+   nothing is saved until Add character is pressed, exactly like the wand. #}
+<form id="cast-form-{{ playlist.id }}" method="post"
+      action="/playlists/{{ playlist.id }}/characters" class="stack-form">
+  {% if proposed %}
+  <p class="hint">Drafted from the album cover{% if proposed_backend %}
+    by {{ proposed_backend }}{% endif %}. Nothing is saved until you press
+    <strong>Add character</strong> &mdash; edit anything first.</p>
+  {% endif %}
+  <div class="field-row">
+    <label>Name <input type="text" name="name" required placeholder="e.g. Nyx"
+                       value="{{ proposed.name if proposed else '' }}"></label>
+    <label>Role <input type="text" name="role" placeholder="antagonist"
+                       value="{{ proposed.role if proposed else '' }}"></label>
+  </div>
+  <div class="field-grid">
+    <div class="album-field">
+      <div class="field-head"><label for="c-identity-{{ playlist.id }}">Identity</label></div>
+      <textarea id="c-identity-{{ playlist.id }}" name="identity" rows="5"
+        placeholder="Face, eyes, ears, hair, markings, build -- whatever must not drift between frames."
+        >{{ proposed.identity if proposed else "" }}</textarea>
+    </div>
+    <div class="album-field">
+      <div class="field-head"><label for="c-wardrobe-{{ playlist.id }}">Wardrobe</label></div>
+      <textarea id="c-wardrobe-{{ playlist.id }}" name="wardrobe" rows="5"
+        placeholder="What is WORN, never what is absent -- negatives are inert at cfg 1.0."
+        >{{ proposed.wardrobe if proposed else "" }}</textarea>
+    </div>
+    <div class="album-field">
+      <div class="field-head"><label for="c-body-{{ playlist.id }}">Body consistency</label></div>
+      <textarea id="c-body-{{ playlist.id }}" name="body" rows="5"
+        placeholder="Colouring PER BODY PART. Leave blank to inherit the album's, which is the safe default."
+        >{{ proposed.body if proposed else "" }}</textarea>
+    </div>
+  </div>
+  <button type="submit">Add character</button>
+</form>

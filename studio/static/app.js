@@ -77,11 +77,8 @@ document.addEventListener("submit", function (e) {
   if (songForm && !confirm("Permanently delete this song and all its generated files?")) {
     e.preventDefault();
   }
-  var plForm = e.target.closest(".delete-playlist");
-  if (plForm && !confirm("Delete playlist " + plForm.dataset.name +
-                         "? Songs and rendered videos are kept.")) {
-    e.preventDefault();
-  }
+  // Deleting a playlist is behind a real modal now (playlists.html), which
+  // lists what goes and what stays -- a one-line confirm() could not.
   var groupForm = e.target.closest(".delete-anchor-group");
   if (groupForm && !confirm("Delete every unpicked candidate in this group? " +
                             "The chosen one is kept.")) {
@@ -196,6 +193,89 @@ function paintMask(form) {
 document.addEventListener("click", function (e) {
   var btn = e.target.closest(".js-paint-mask");
   if (btn) paintMask(btn.closest(".mask-form"));
+});
+
+// ---- anchor sheets: tabs, filter, viewer, repair --------------------------
+document.addEventListener("click", function (e) {
+  // tier tabs: the panels are already rendered, so this is a class swap
+  var tab = e.target.closest(".tier-tab");
+  if (tab) {
+    var album = tab.closest(".tier-tabs").dataset.album;
+    document.querySelectorAll('.tier-tab').forEach(function (t) {
+      if (t.closest(".tier-tabs").dataset.album === album) t.classList.remove("active");
+    });
+    tab.classList.add("active");
+    document.querySelectorAll('.tier-panel[data-album="' + album + '"]').forEach(function (p) {
+      p.classList.toggle("hidden", p.dataset.tier !== tab.dataset.tier);
+    });
+    return;
+  }
+
+  // a sheet opens beside its opposite view -- a character sheet is read as a
+  // pair, front checked against back
+  var img = e.target.closest(".anchor-open");
+  if (img) {
+    var dlg = document.getElementById("anchor-lightbox");
+    var pair = document.getElementById("lightbox-pair");
+    document.getElementById("lightbox-label").textContent =
+      (img.dataset.label || "").replace(/&middot;/g, "·");
+    pair.innerHTML = "";
+    [img.dataset.full, img.dataset.opposite].forEach(function (src) {
+      if (!src) return;
+      var full = document.createElement("img");
+      full.src = src;
+      pair.appendChild(full);
+    });
+    dlg.showModal();
+    return;
+  }
+
+  var edit = e.target.closest(".anchor-edit");
+  if (edit) {
+    var fix = document.getElementById("anchor-fix");
+    document.getElementById("fix-label").textContent =
+      (edit.dataset.label || "").replace(/&middot;/g, "·");
+    var preview = document.getElementById("fix-preview");
+    preview.src = edit.dataset.src;
+    // every form in the modal posts to THIS anchor
+    fix.querySelectorAll("form").forEach(function (f) {
+      f.action = "/anchors/" + edit.dataset.anchor + "/fix";
+    });
+    // the mask painter reads the source off the form it belongs to
+    var maskForm = fix.querySelector(".mask-form");
+    if (maskForm) {
+      maskForm.dataset.src = edit.dataset.src;
+      maskForm.querySelector("[name=mask_data]").value = "";
+      maskForm.querySelector(".js-mask-state").textContent = "nothing painted yet";
+      maskForm.querySelector(".js-mask-submit").disabled = true;
+    }
+    fix.showModal();
+  }
+});
+
+// show only one character's sheets. They are already on the page, so hiding is
+// cheaper and more responsive than re-querying for a subset.
+document.addEventListener("change", function (e) {
+  var sel = e.target.closest(".anchor-character-filter");
+  if (!sel) return;
+  var scope = sel.closest("details") || document;
+  scope.querySelectorAll(".anchor-tile").forEach(function (tile) {
+    tile.classList.toggle("hidden", sel.value && tile.dataset.character !== sel.value);
+  });
+});
+
+// Timestamps are rendered as UTC and converted HERE. The server runs UTC and
+// this is read from a machine that does not, so formatting server-side would
+// show a time nobody is in.
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll("time.local-time").forEach(function (el) {
+    var d = new Date(el.getAttribute("datetime"));
+    if (isNaN(d)) return;
+    el.textContent = d.toLocaleString(undefined, {
+      year: "numeric", month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit"});
+    el.title = el.getAttribute("datetime") + " (UTC)";
+  });
 });
 
 // ---- keyboard review ------------------------------------------------------

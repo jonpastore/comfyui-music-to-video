@@ -94,6 +94,68 @@ ANCHOR_VIEWS = {
 }
 NUDE_VIEWS = {"front_nude", "back_nude"}
 templates.env.filters["viewname"] = lambda v: ANCHOR_VIEWS.get(v, v or "")
+# UTC ISO-8601 with the Z. The server runs UTC and the studio is used from a
+# machine that does not, so the BROWSER converts this to local time (app.js).
+# Formatting it server-side would show whichever timezone cerberus happens to
+# be in, which is never the one the reader is in.
+templates.env.filters["isotime"] = lambda t: (
+    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else "")
+
+
+def opposite_view(view):
+    """The other side of the same sheet: front <-> back, keeping clothed/nude.
+
+    A character sheet is read as a PAIR -- you check the back against the front
+    -- so the viewer opens both at once.
+    """
+    return {"front": "back", "back": "front",
+            "front_nude": "back_nude", "back_nude": "front_nude"}.get(view)
+
+
+def album_anchor_tiers(album):
+    """Anchors for one album, grouped tier -> clothed/nude row -> sheets.
+
+    Each sheet carries its version (its position within its own character +
+    tier + view group, oldest first) and the path of its opposite view, so the
+    viewer can show front and back together without another query.
+    """
+    rows = db.q("""SELECT a.*, c.name AS character_name
+                   FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
+                   WHERE a.scope_kind='album' AND a.scope_value=?
+                   ORDER BY a.tier, c.name, a.view, a.created, a.id""", album or "")
+    # version numbering and opposite-view lookup both key off the same group
+    by_group, version = {}, {}
+    for r in rows:
+        key = (r["tier"], r["character_id"], r["view"])
+        by_group.setdefault(key, []).append(r)
+    for key, group in by_group.items():
+        for i, r in enumerate(group, 1):
+            version[r["id"]] = i
+
+    def opposite_path(r):
+        other = by_group.get((r["tier"], r["character_id"], opposite_view(r["view"])))
+        if not other:
+            return None
+        return next((o["path"] for o in other if o["chosen"]), other[-1]["path"])
+
+    out = []
+    for tier in sorted({r["tier"] for r in rows}):
+        allows = tiers.allows_nudity(tier)
+        tier_rows, count = [], 0
+        for nude, label in ((False, "Clothed"), (True, "Nude")):
+            # a nude row is only shown for a tier that permits nudity -- but if
+            # sheets exist from before the flag was turned off, they are still
+            # listed rather than becoming invisible and undeletable
+            group = [r for r in rows
+                     if r["tier"] == tier and ((r["view"] in NUDE_VIEWS) == nude)]
+            if not group or (nude and not allows and not group):
+                continue
+            tier_rows.append({"label": label, "nude": nude, "anchors": [
+                dict(r, version=version[r["id"]], opposite=opposite_path(r)) for r in group]})
+            count += len(group)
+        if tier_rows:
+            out.append({"name": tier, "count": count, "rows": tier_rows})
+    return out, rows
 templates.env.filters["ts"] = lambda t: (
     time.strftime("%Y-%m-%d", time.localtime(t)) if t else "date unknown")
 # time of day for job rows: a date is useless for telling this render from the
@@ -515,6 +577,41 @@ def h_reroll(args, progress):
                   VALUES (?,?,?,?,?,0,?,'reroll')""",
                sid, tier, r["clip_idx"], r["path"], r.get("seed"), now)
     return {"count": len(results)}
+
+
+@jobs.handler("artwork")
+def h_artwork(args, progress):
+    """Render an album cover from the album look."""
+    p = db.one("SELECT * FROM playlists WHERE id=?", args["playlist_id"])
+    if not p:
+        return
+    prof = album_profile(p["name"])
+    # the cover is a composed piece of artwork, so the theme and world lead and
+    # the character follows -- the reverse of a character sheet, where the
+    # character is the whole subject
+    prompt = " ".join(x for x in (
+        f"Album cover artwork for the release \"{p['name']}\".",
+        prof["style_text"], prof["world"],
+        f"It depicts the album's protagonist: {prof['identity']}",
+        prof["wardrobe"], prof["body"],
+        "Striking single composition, square format, no text, no lettering, no logo, "
+        "no typography, no border.",
+        prof["render_tail"]) if x and x.strip())
+    # An album cover carries no tier of its own. It uses the tier of whichever
+    # anchor it is rendered from, so a cover generated from an explicit anchor
+    # is permitted what that tier permits -- and PINNED applies either way.
+    guard = tiers.compose_guardrail(args["tier"]) if args.get("tier") else ""
+    paths = pipeline.gen_artwork(safe_name(p["name"]), prompt, args["anchor_path"],
+                                  progress, guard=guard)
+    if not paths:
+        raise RuntimeError("the artwork render produced no image")
+    db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+           None, "artwork", paths[0],
+           json.dumps({"playlist_id": args["playlist_id"], "model": args.get("model"),
+                       "prompt": prompt}), time.time())
+    progress(f"{len(paths)} cover candidate(s); using the first")
+    db.run("UPDATE playlists SET image_path=? WHERE id=?", paths[0], args["playlist_id"])
+    return {"path": paths[0]}
 
 
 @jobs.handler("fix_ref")
@@ -1091,6 +1188,89 @@ def delete_unpicked_anchors(scope_kind: str = Form(...), scope_value: str = Form
         db.run("DELETE FROM anchors WHERE id=?", r["id"])
     return RedirectResponse(
         f"/anchors?scope_kind={scope_kind}&scope_value={quote(scope_value)}", status_code=303)
+
+
+@jobs.handler("fix_anchor")
+def h_fix_anchor(args, progress):
+    """Repair an anchor sheet. Same engine as a reference frame's repair --
+    fix_ref.py does not care whether the image it is given is a sheet or a
+    frame, so a second repair path would be a second thing to keep correct."""
+    row = db.one("SELECT * FROM anchors WHERE id=?", args["anchor_id"])
+    if not row:
+        return
+    prof = album_profile(row["scope_value"] if row["scope_kind"] == "album" else "")
+    if row["character_id"]:
+        char = db.one("SELECT * FROM characters WHERE id=?", row["character_id"])
+        if char and char["body"]:
+            prof = dict(prof, body=char["body"])
+    results = pipeline.fix_ref(
+        f"anchor_{row['id']}", row["tier"], 0, args["mode"], row["path"], args["seed"],
+        progress, face_path=args.get("face_path"), mask_path=args.get("mask_path"),
+        pad=args.get("pad", (0, 0, 0, 0)), instruction=args.get("instruction", ""),
+        guard=tiers.compose_guardrail(row["tier"]), body=prof["body"])
+    now = time.time()
+    for r in results:
+        # a NEW candidate in the same group, never a replacement: the sheet you
+        # were fixing stays until you pick the fix
+        db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen,
+                                        created, character_id)
+                  VALUES (?,?,?,?,?,0,?,?)""",
+               row["scope_kind"], row["scope_value"], row["tier"], row["view"],
+               r["path"], now, row["character_id"])
+    return {"count": len(results), "mode": args["mode"]}
+
+
+@app.post("/anchors/{id}/fix")
+async def start_fix_anchor(id: int, mode: str = Form(...), instruction: str = Form(""),
+                            face: Optional[UploadFile] = File(None), mask_data: str = Form(""),
+                            pad_left: int = Form(0), pad_top: int = Form(0),
+                            pad_right: int = Form(0), pad_bottom: int = Form(0)):
+    """Face swap, inpaint or outpaint an anchor sheet.
+
+    The same three repairs a reference frame gets, on the same model, because a
+    bad anchor is worse than a bad frame: every frame in the song is rendered
+    from it.
+    """
+    row = db.one("SELECT * FROM anchors WHERE id=?", id)
+    if not row:
+        raise HTTPException(404, "no such anchor")
+    if mode not in FIX_MODES:
+        raise HTTPException(400, f"mode must be one of {', '.join(FIX_MODES)}")
+    if not os.path.isfile(row["path"]):
+        raise HTTPException(400, "that anchor's file is missing on disk")
+
+    instruction = (instruction or "").strip()
+    if len(instruction) > MAX_INSTRUCTION:
+        raise HTTPException(400, f"instruction is {len(instruction)} characters; keep it under "
+                                  f"{MAX_INSTRUCTION}")
+    try:
+        tiers.check_text(instruction, "anchor repair instruction")
+        tiers.check_override(instruction)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    work_dir = os.path.join(db.DATA, "fixes", "anchors")
+    stamp = int(time.time() * 1000)
+    face_path = mask_path = None
+    if mode == "face":
+        if not (face and face.filename):
+            raise HTTPException(400, "a face swap needs a face image to swap in")
+        face_path = await save_upload(face, MAX_IMAGE, work_dir, "image", prefix=f"face_{stamp}")
+    elif mode == "inpaint":
+        mask_path = save_mask_data_url(mask_data, work_dir, f"amask_{id}_{stamp}")
+    else:
+        if not any((pad_left, pad_top, pad_right, pad_bottom)):
+            raise HTTPException(400, "outpainting needs a non-zero pad on at least one side")
+        for name, v in (("left", pad_left), ("top", pad_top),
+                         ("right", pad_right), ("bottom", pad_bottom)):
+            if v < 0:
+                raise HTTPException(400, f"pad {name} must be >= 0")
+
+    jobs.enqueue("fix_anchor", {
+        "anchor_id": id, "mode": mode, "face_path": face_path, "mask_path": mask_path,
+        "pad": (pad_left, pad_top, pad_right, pad_bottom), "instruction": instruction,
+        "seed": stamp % 2_000_000_000})
+    return RedirectResponse("/playlists", status_code=303)
 
 
 @app.post("/anchors/{id}/pick")
@@ -1939,19 +2119,31 @@ def playlist_detail(p):
     profile_fields = [{"key": k, "label": ALBUM_FIELDS[k][0], "value": prof[k],
                        "hint": ALBUM_FIELDS[k][2], "wand": k in DESCRIBABLE}
                       for k in ALBUM_FIELDS]
-    anchors = db.q("""SELECT a.*, c.name AS character_name
-                      FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
-                      WHERE a.scope_kind='album' AND a.scope_value=?
-                      ORDER BY a.tier, a.view, a.id DESC""", p["name"])
+    anchor_tiers, all_anchors = album_anchor_tiers(p["name"])
+    # how many sheets each character has, for the filter -- an anchor you cannot
+    # find among fifty is one you will regenerate rather than reuse
+    per_character = {}
+    for a in all_anchors:
+        per_character[a["character_name"] or "protagonist"] = \
+            per_character.get(a["character_name"] or "protagonist", 0) + 1
     # the cast, with how many anchors each has -- an unanchored character is the
     # thing worth seeing here, since naming one in a scene achieves nothing
     cast = []
     for c in album_cast(p["name"]):
         n = db.one("SELECT COUNT(*) n FROM anchors WHERE character_id=? AND chosen=1", c["id"])["n"]
         cast.append({"c": c, "anchors": n})
+    artwork_default = models.default_for("artwork")
+    artwork_models = [{"key": e["key"], "label": e["label"], "available": e["available"],
+                       "default": e["key"] == artwork_default}
+                      for e in models.catalog(role="artwork")]
     return {"playlist": p, "rows": rows, "count": len(items), "total_secs": total,
             "video_tiers": ready, "sets": sets, "profile_fields": profile_fields,
-            "anchors": anchors, "cast": cast, "character_fields": CHARACTER_FIELDS,
+            "anchors": all_anchors, "anchor_tiers": anchor_tiers,
+            "anchor_count": len(all_anchors),
+            "anchor_characters": sorted(per_character.items()),
+            "character_count": len(per_character) or 1,
+            "artwork_models": artwork_models,
+            "cast": cast, "character_fields": CHARACTER_FIELDS,
             "partial_tiers": sorted(t for t in tiers_with_video if t not in ready)}
 
 
@@ -2035,6 +2227,92 @@ def describe_album_field(request: Request, id: int, field: str = Form(...)):
     return templates.TemplateResponse(request, "_album_field.html", {
         "playlist": p,
         "f": {"key": field, "label": label, "value": text, "hint": hint, "wand": True}})
+
+
+@app.post("/playlists/{id}/fill", response_class=HTMLResponse)
+def fill_album_look(request: Request, id: int):
+    """Draft every describable field at once by reading the album COVER.
+
+    The wand does one field from the anchor; this does the set from the cover,
+    which is the image that exists first. Nothing is saved -- the text lands in
+    the boxes and the existing Save button is still what writes it.
+    """
+    p = get_playlist_or_404(id)
+    if not p["image_path"] or not os.path.isfile(p["image_path"]):
+        raise HTTPException(400, "this album has no cover image yet -- upload one first")
+    prof = album_profile(p["name"])
+    fields = []
+    for key in ALBUM_FIELDS:
+        label, _default, hint = ALBUM_FIELDS[key]
+        value = prof[key]
+        if key in DESCRIBABLE:
+            try:
+                drafted = vision.describe_cover(p["image_path"], key)
+            except Exception as e:
+                raise HTTPException(502, f"could not read the cover: {e}") from None
+            # an empty answer means the cover does not show it -- keep what is
+            # already there rather than blanking a field that was filled in
+            value = drafted or value
+        fields.append({"key": key, "label": label, "value": value, "hint": hint,
+                       "wand": key in DESCRIBABLE})
+    return templates.TemplateResponse(request, "_album_look_form.html",
+                                       {"playlist": p, "profile_fields": fields})
+
+
+@app.post("/playlists/{id}/propose-cast", response_class=HTMLResponse)
+def propose_cast(request: Request, id: int):
+    """Look at the album cover and draft ONE supporting character.
+
+    One, not a whole cast: each named character costs a reference slot at render
+    time (three images total, the protagonist holds the first), so proposing
+    five would be proposing three that can never be attached.
+    """
+    p = get_playlist_or_404(id)
+    if not p["image_path"] or not os.path.isfile(p["image_path"]):
+        raise HTTPException(400, "this album has no cover image yet -- upload one first")
+    try:
+        proposed = vision.propose_character(p["image_path"])
+    except Exception as e:
+        raise HTTPException(502, f"could not read the cover: {e}") from None
+    # screened before it reaches a form, exactly as typed text is on submit
+    try:
+        for k, v in proposed.items():
+            tiers.check_text(v, f"proposed character {k}")
+    except ValueError as e:
+        raise HTTPException(502, f"the model proposed something that cannot be used: {e}") from None
+    where, _detail = vision.available()
+    return templates.TemplateResponse(request, "_cast_form.html",
+                                       {"playlist": p, "proposed": proposed,
+                                        "proposed_backend": where})
+
+
+@app.post("/playlists/{id}/artwork")
+def create_album_artwork(id: int, model: str = Form("")):
+    """Generate a new album cover from the album look.
+
+    The reverse of Fill: those fields were written to describe the character,
+    and this renders them. Uses the album's chosen anchor as a reference when
+    there is one, so the cover shows the actual protagonist rather than a
+    lookalike the model invented from the same words.
+    """
+    p = get_playlist_or_404(id)
+    wired = models.renderable("artwork")
+    key = model or models.default_for("artwork")
+    if key not in wired:
+        raise HTTPException(400, f"'{key}' is not an artwork model that can render yet")
+    prof = album_profile(p["name"])
+    anchor = db.one("""SELECT * FROM anchors WHERE scope_kind='album' AND scope_value=?
+                       AND chosen=1 AND character_id IS NULL
+                       ORDER BY (view='front') DESC, id DESC LIMIT 1""", p["name"])
+    if not anchor:
+        # the cover shows this album's protagonist, so it is rendered FROM the
+        # anchor -- there is no text-only path, and saying so here beats a
+        # failure forty seconds into a ComfyUI submit
+        raise HTTPException(400, "this album has no chosen anchor yet, and the cover is "
+                                  "rendered from it. Generate and pick one on /anchors first.")
+    jobs.enqueue("artwork", {"playlist_id": id, "model": key,
+                             "anchor_path": anchor["path"], "tier": anchor["tier"]})
+    return RedirectResponse("/playlists", status_code=303)
 
 
 @app.post("/playlists/{id}/delete")

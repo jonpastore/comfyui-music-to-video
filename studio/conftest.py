@@ -80,8 +80,24 @@ def _classify_sheet(sheet_path, note="", model=None, progress=None):
             "cells_seen": 2}
 
 
+cover_calls = []
+
+
+def _describe_cover(image_path, field, progress=None):
+    cover_calls.append((image_path, field))
+    return f"drafted {field} from the cover"
+
+
+def _propose_character(image_path, progress=None):
+    cover_calls.append((image_path, "cast"))
+    return {"name": "Vex", "role": "rival DJ", "identity": "a white-furred rival",
+            "wardrobe": "a long grey coat", "body": "white fur on every limb"}
+
+
 _stub("vision",
       classify_sheet=_classify_sheet,
+      describe_cover=_describe_cover,
+      propose_character=_propose_character,
       describe_anchor=lambda image_path, field, model=None, progress=None: (
           describe_calls.append((image_path, field))
           or f"drafted {field} from the anchor"),
@@ -161,6 +177,8 @@ _stub("pipeline",
       gen_refs=lambda slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="", cast=None: refs_calls.append({"guard": guard, "body": body, "cast": cast}) or [],
       reroll=lambda slug, tier, sb, anchor, mp3, idxs, progress=None: [],
       stage_refs=lambda slug, tier, ref_paths: [],
+      gen_artwork=lambda slug, prompt, anchor_path, progress=None, guard="", n=1, size=1024: [],
+      fix_ref=lambda *a, **kw: [],
       gen_clips=lambda slug, tier, sb, mp3, ref_paths, progress=None: [],
       contact_sheet=_contact_sheet)
 

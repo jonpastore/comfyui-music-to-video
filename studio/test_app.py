@@ -1729,6 +1729,156 @@ def test_all_four_anchor_views_compose_a_prompt_and_nude_drops_the_wardrobe():
             assert "a red leather harness" in p, view
 
 
+def _album_with_cover(client, name="Cover Album"):
+    client.post("/playlists", data={"name": name})
+    pl = db.one("SELECT * FROM playlists WHERE name=?", name)
+    d = os.path.join(db.DATA, "covers")
+    os.makedirs(d, exist_ok=True)
+    cover = os.path.join(d, f"{pl['id']}.png")
+    open(cover, "wb").write(_png_bytes(64, 64))
+    db.run("UPDATE playlists SET image_path=? WHERE id=?", cover, pl["id"])
+    return db.one("SELECT * FROM playlists WHERE id=?", pl["id"])
+
+
+def test_fill_from_cover_drafts_the_look_without_saving_it():
+    from conftest import cover_calls
+    with TestClient(appmod.app) as client:
+        pl = _album_with_cover(client, "Fill Album")
+        cover_calls.clear()
+
+        r = client.post(f"/playlists/{pl['id']}/fill")
+        assert r.status_code == 200, r.text
+        assert "drafted identity from the cover" in r.text
+        assert "drafted wardrobe from the cover" in r.text
+        assert "drafted body from the cover" in r.text
+        # only the DESCRIBABLE fields are read; theme/world/render style are not
+        # things a cover can tell you
+        assert {f for _p, f in cover_calls} == set(appmod.DESCRIBABLE), cover_calls
+
+        # nothing is saved -- the boxes are filled and Save is still what writes
+        row = db.one("SELECT identity FROM playlists WHERE id=?", pl["id"])
+        assert not row["identity"], "fill wrote to the database"
+
+
+def test_fill_and_propose_refuse_without_a_cover():
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "No Cover Album"})
+        pl = db.one("SELECT * FROM playlists WHERE name='No Cover Album'")
+        assert client.post(f"/playlists/{pl['id']}/fill").status_code == 400
+        assert client.post(f"/playlists/{pl['id']}/propose-cast").status_code == 400
+
+
+def test_propose_cast_fills_the_form_and_saves_nothing(patch_stub):
+    with TestClient(appmod.app) as client:
+        pl = _album_with_cover(client, "Propose Album")
+        r = client.post(f"/playlists/{pl['id']}/propose-cast")
+        assert r.status_code == 200, r.text
+        assert 'value="Vex"' in r.text and "a white-furred rival" in r.text
+        assert "Nothing is saved" in r.text
+        assert db.one("SELECT id FROM characters WHERE name='Vex'") is None
+
+        # a proposal that references minors is refused, not put in a form
+        patch_stub("vision", propose_character=lambda p, progress=None: {
+            "name": "Kid", "role": "schoolgirl", "identity": "", "wardrobe": "", "body": ""})
+        assert client.post(f"/playlists/{pl['id']}/propose-cast").status_code == 502
+
+
+def test_album_artwork_needs_an_anchor_and_renders_from_it(patch_stub):
+    seen = []
+    patch_stub("pipeline", gen_artwork=lambda slug, prompt, anchor_path, progress=None,
+                                        guard="", n=1, size=1024: (
+        seen.append({"prompt": prompt, "anchor": anchor_path, "guard": guard}) or []))
+    with TestClient(appmod.app) as client:
+        pl = _album_with_cover(client, "Art Album")
+        # the cover is rendered FROM the anchor, so this is refused up front
+        assert client.post(f"/playlists/{pl['id']}/artwork").status_code == 400
+
+        _chosen_anchor("Art Album", "r", path="/tmp/art_anchor.png")
+        r = client.post(f"/playlists/{pl['id']}/artwork")
+        assert r.status_code in (200, 303), r.text
+        job = db.one("SELECT * FROM jobs WHERE kind='artwork' ORDER BY id DESC")
+        wait_job(job["id"])
+        assert seen, "the artwork job never reached the pipeline"
+        assert seen[-1]["anchor"] == "/tmp/art_anchor.png"
+        assert "Art Album" in seen[-1]["prompt"]
+        assert "no text" in seen[-1]["prompt"], "an album cover must not render lettering"
+        assert tiers.PINNED in seen[-1]["guard"]
+
+        # an unwired model is refused rather than silently rendering as another
+        assert client.post(f"/playlists/{pl['id']}/artwork",
+                           data={"model": "nope"}).status_code == 400
+
+
+def test_anchor_repair_lands_as_a_new_candidate_in_the_same_group(patch_stub):
+    seen = []
+
+    def _fix(slug, tier, clip_idx, mode, image_path, seed, progress=None, **kw):
+        seen.append(dict(kw, mode=mode, image_path=image_path))
+        out = os.path.join(db.DATA, "fixtures", f"anchorfix_{seed}.png")
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        open(out, "wb").write(_png_bytes())
+        return [{"clip_idx": 0, "path": out, "seed": seed}]
+
+    patch_stub("pipeline", fix_ref=_fix)
+    with TestClient(appmod.app) as client:
+        album = "Anchor Fix Album"
+        _chosen_anchor(album, "r", path=os.path.join(db.DATA, "fixtures", "afix.png"))
+        row = db.one("SELECT * FROM anchors WHERE scope_value=?", album)
+        os.makedirs(os.path.join(db.DATA, "fixtures"), exist_ok=True)
+        open(row["path"], "wb").write(_png_bytes())
+
+        r = client.post(f"/anchors/{row['id']}/fix",
+                        data={"mode": "face", "instruction": "swap the face"},
+                        files={"face": ("f.png", _png_bytes(), "image/png")})
+        assert r.status_code in (200, 303), r.text
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='fix_anchor' ORDER BY id DESC")["id"])
+
+        assert seen and seen[-1]["mode"] == "face"
+        assert tiers.PINNED in seen[-1]["guard"], "the tier guardrail was not passed"
+        rows = db.q("SELECT * FROM anchors WHERE scope_value=? ORDER BY id", album)
+        assert len(rows) == 2, "the repair did not land as a new candidate"
+        # same group, and the original is still the chosen one
+        assert rows[1]["tier"] == "r" and rows[1]["view"] == "front"
+        assert rows[0]["chosen"] == 1 and rows[1]["chosen"] == 0
+
+        # a repair instruction is screened like any other prompt text
+        assert client.post(f"/anchors/{row['id']}/fix",
+                           data={"mode": "face", "instruction": "make her a schoolgirl"},
+                           files={"face": ("f.png", _png_bytes(), "image/png")}).status_code == 400
+        assert client.post(f"/anchors/{row['id']}/fix", data={"mode": "face"}).status_code == 400
+
+
+def test_album_anchors_group_by_tier_with_versions_and_opposite_views():
+    with TestClient(appmod.app) as client:
+        album = "Grouped Album"
+        client.post("/playlists", data={"name": album})
+        # r permits nudity; two front versions, one back, plus a nude front
+        for view, path, chosen in (("front", "f1.png", 0), ("front", "f2.png", 1),
+                                    ("back", "b1.png", 1), ("front_nude", "n1.png", 1)):
+            db.run("""INSERT INTO anchors (scope_kind,scope_value,tier,view,path,chosen,created)
+                      VALUES ('album',?,'r',?,?,?,?)""", album, view, path, chosen, time.time())
+
+        tiers_out, all_rows = appmod.album_anchor_tiers(album)
+        assert len(all_rows) == 4
+        assert [t["name"] for t in tiers_out] == ["r"]
+        rows = {g["label"]: g for g in tiers_out[0]["rows"]}
+        assert set(rows) == {"Clothed", "Nude"}, rows
+
+        clothed = {a["path"]: a for a in rows["Clothed"]["anchors"]}
+        # version counts WITHIN character+tier+view, oldest first
+        assert clothed["f1.png"]["version"] == 1 and clothed["f2.png"]["version"] == 2
+        assert clothed["b1.png"]["version"] == 1, "back view numbered against the front's"
+        # a front sheet opens beside the chosen back, and vice versa
+        assert clothed["f1.png"]["opposite"] == "b1.png"
+        assert clothed["b1.png"]["opposite"] == "f2.png", "did not prefer the chosen front"
+        # a nude front has no nude back, so there is nothing to pair with
+        assert rows["Nude"]["anchors"][0]["opposite"] is None
+
+        page = client.get("/playlists").text
+        assert "tier-tab" in page and "anchor-tile" in page
+        assert "v2" in page, "version numbers are not shown"
+
+
 if __name__ == "__main__":
     # plain-script fallback if pytest is unavailable
     import traceback

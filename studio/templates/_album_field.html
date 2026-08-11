@@ -1,19 +1,44 @@
 {# One album-profile field. Swapped whole by the wand, so the hx-* attributes
-   have to live on this wrapper: the replacement is what keeps working. #}
+   have to live on this wrapper: the replacement is what keeps working.
+
+   The explanatory text is the field's PLACEHOLDER and its help modal, not a
+   paragraph above the box -- as a paragraph it pushed the boxes apart and
+   still had to be re-read every time. The modal keeps every word of it. #}
 <div class="album-field" id="album-field-{{ f.key }}">
-  <label for="f-{{ f.key }}">{{ f.label }}</label>
-  {% if f.wand %}
-  <button type="button" class="wand"
-          title="Describe this from the album's anchor image"
-          aria-label="Describe {{ f.label }} from the album's anchor image"
-          hx-post="/playlists/{{ playlist.id }}/describe"
-          hx-vals='{"field": "{{ f.key }}"}'
-          hx-target="#album-field-{{ f.key }}"
-          hx-swap="outerHTML"
-          hx-disabled-elt="this"
-          hx-indicator="#wand-busy-{{ f.key }}">&#10024;</button>
-  <span class="htmx-indicator muted" id="wand-busy-{{ f.key }}">looking at the anchor&hellip;</span>
-  {% endif %}
-  <p class="hint">{{ f.hint }}</p>
-  <textarea id="f-{{ f.key }}" name="{{ f.key }}" rows="3">{{ f.value }}</textarea>
+  <div class="field-head">
+    <label for="f-{{ f.key }}">{{ f.label }}</label>
+    <span class="field-actions">
+      {% if f.wand %}
+      <button type="button" class="wand"
+              title="Draft this field by looking at this album's anchor image. It fills the box only -- nothing is saved until you press Save album look."
+              aria-label="Draft {{ f.label }} from the album's anchor image"
+              hx-post="/playlists/{{ playlist.id }}/describe"
+              hx-vals='{"field": "{{ f.key }}"}'
+              hx-target="#album-field-{{ f.key }}"
+              hx-swap="outerHTML"
+              hx-disabled-elt="this"
+              hx-indicator="#wand-busy-{{ f.key }}">&#10024;</button>
+      <span class="htmx-indicator muted" id="wand-busy-{{ f.key }}">looking&hellip;</span>
+      {% endif %}
+      <button type="button" class="help-btn" title="What is this field for?"
+              aria-label="Help for {{ f.label }}"
+              onclick="document.getElementById('help-{{ f.key }}').showModal()">?</button>
+    </span>
+  </div>
+
+  <textarea id="f-{{ f.key }}" name="{{ f.key }}" rows="7"
+            placeholder="{{ f.hint }}">{{ f.value }}</textarea>
+
+  <dialog class="help-modal" id="help-{{ f.key }}">
+    <div class="modal-bar">
+      <strong>{{ f.label }}</strong>
+      <button type="button" onclick="this.closest('dialog').close()">Close</button>
+    </div>
+    <p>{{ f.hint }}</p>
+    {% if f.wand %}
+    <p class="hint">The &#10024; button drafts this field by looking at the album's anchor
+      image. It fills the box only &mdash; nothing is saved until you press
+      <strong>Save album look</strong>.</p>
+    {% endif %}
+  </dialog>
 </div>

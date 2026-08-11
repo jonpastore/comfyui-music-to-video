@@ -256,6 +256,62 @@ def describe_anchor(image_path, field, model=None, progress=None):
     return " ".join(str(text).split()).strip()
 
 
+def describe_cover(image_path, field, progress=None):
+    """Draft one album-profile field by looking at the album COVER.
+
+    Same fields as describe_anchor, different subject: a cover is a composed
+    piece of artwork, not a neutral character sheet, so the instruction says to
+    read the character out of it and ignore the composition. Without that it
+    describes the poster -- the type, the border, the lighting design -- none of
+    which belongs in a character-continuity field.
+    """
+    if field not in grok._DESCRIBE:
+        raise ValueError(f"nothing to describe for {field!r}")
+    out = ask(image_path, None,
+              grok._DESCRIBE[field] + " You are looking at an ALBUM COVER for an adult "
+              "fictional music project. Describe only the main character depicted on it. "
+              "Ignore the artwork itself -- no typography, no logos, no borders, no framing "
+              "or poster composition. If the cover does not show the character clearly "
+              'enough for this field, reply with an empty string. Answer as ONE plain '
+              "sentence or two, present tense, no preamble, no markdown -- the text goes "
+              'straight into an image prompt. Reply as JSON: {"text": "<the description>"}',
+              progress)
+    text = _json(out, "describe cover").get("text", "")
+    return " ".join(str(text).split()).strip()
+
+
+CAST_SYSTEM = (
+    "You are looking at an ALBUM COVER for an adult fictional music project and proposing "
+    "ONE named supporting character for its music videos -- not the lead, who already "
+    "exists, but a second character who would fit this world: a duet partner, a rival, an "
+    "antagonist.\n\n"
+    "Base it on what the cover actually shows -- its setting, palette, era and mood. If a "
+    "second figure is visible, describe THAT figure. Otherwise invent one that belongs in "
+    "the same world.\n\n"
+    "Every character is an adult. Describe appearance only.\n\n"
+    'Reply with JSON only: {"name": "<a short name>", "role": "<two or three words, e.g. '
+    '\\"rival DJ\\">", "identity": "<face, eyes, ears, hair, markings, build -- the traits '
+    'that must not drift between frames>", "wardrobe": "<what is WORN: garments, cut, '
+    'materials, hardware. Never what is absent>", "body": "<colouring and texture PER BODY '
+    'PART: shoulders, arms, torso, hips, thighs, calves, naming the colour each time>"}. '
+    "Each value is one or two plain sentences, present tense, no markdown."
+)
+
+
+def propose_character(image_path, progress=None):
+    """Look at the album cover and draft one supporting character.
+
+    Returns a dict of the same fields the add-character form has, so the
+    proposal lands in the boxes for editing. Nothing is saved by this -- it is
+    the wand for a whole character rather than for one field.
+    """
+    out = ask(image_path, CAST_SYSTEM, "Propose one supporting character for this album.",
+              progress)
+    obj = _json(out, "cast proposal")
+    keys = ("name", "role", "identity", "wardrobe", "body")
+    return {k: " ".join(str(obj.get(k, "") or "").split()).strip()[:1000] for k in keys}
+
+
 # ----------------------------------------------------------- audio edits --
 
 EDIT_SYSTEM = (

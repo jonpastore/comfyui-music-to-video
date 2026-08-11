@@ -362,6 +362,31 @@ def fix_ref(slug, tier, clip_idx, mode, image_path, seed, progress=None,
             for p, m in _clip_records(paths, r"clip_(\d+)_s(\d+)")]
 
 
+def gen_artwork(slug, prompt, anchor_path, progress=None, guard="", n=1, size=1024):
+    """Album cover from the album look, on the reference model.
+
+    make_anchor.py is reused rather than a fourth script written: an album cover
+    and a character sheet are the same request -- this prompt, these reference
+    images, this size -- and it already takes --prompt and --guardrail.
+
+    anchor_path is REQUIRED. The cover is supposed to show this album's
+    protagonist, and the workflow's node 7 is a LoadImage either way, so there
+    is no text-only path here to fall back to -- an empty filename would be
+    rejected at submit rather than producing a picture.
+    """
+    if not anchor_path:
+        raise ValueError("album artwork needs a chosen anchor to render the character from")
+    prefix = f"artwork_{slug}"
+    name = install_input(anchor_path)
+    with tempfile.TemporaryDirectory() as wf_dir:
+        _run_script("make_anchor.py", [
+            "--n", str(n), "--prefix", prefix, "--view", "front",
+            "--width", str(size), "--height", str(size),
+            "--face", name, "--outfit", name,
+            "--prompt", prompt, "--guardrail", guard, "--outdir", wf_dir], progress)
+        return _submit_and_collect(wf_dir, prefix, "*.png", progress)
+
+
 def contact_sheet(src_dir, out_jpg, cols=6):
     _run_script("make_contact_sheet.py", [src_dir, out_jpg, str(cols)])
     return out_jpg

@@ -1,0 +1,12 @@
+{# The album look fields. Its own partial because "Fill from cover" swaps the
+   whole set at once -- the wand replaces one field, this replaces all of them.
+   Nothing is saved either way until Save album look is pressed. #}
+<form id="album-look-{{ playlist.id }}"
+      method="post" action="/playlists/{{ playlist.id }}/profile" class="stack-form">
+  <div class="field-grid">
+    {% for f in profile_fields %}
+      {% include "_album_field.html" %}
+    {% endfor %}
+  </div>
+  <button type="submit">Save album look</button>
+</form>
