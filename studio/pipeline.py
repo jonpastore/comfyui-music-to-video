@@ -204,7 +204,7 @@ def _clip_records(paths, seed_re=r"clip_(\d+)"):
 
 
 def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
-             limit=None, guard=""):
+             limit=None, guard="", body=""):
     """limit=N renders only the first N clips.
 
     A full song is 40-80 references at ~15 s each, so committing to the whole
@@ -216,7 +216,7 @@ def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
         _run_script("build_refs.py", [
             "--storyboard", storyboard_json, "--slug", bs,
             "--anchor", anchor_name, "--audio", mp3_path, "--outdir", wf_dir,
-            "--guardrail", guard,
+            "--guardrail", guard, "--body", body,
         ], progress)
         if limit:
             keep = sorted(f for f in os.listdir(wf_dir) if f.endswith(".json"))[:int(limit)]

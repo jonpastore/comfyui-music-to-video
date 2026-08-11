@@ -70,7 +70,7 @@ DETAIL_SHOTS = ("EXTREME CLOSE-UP", "CLOSE-UP SHOT")
 
 
 def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
-             guard="", world="", character=""):
+             guard="", world="", character="", body=""):
     """guard: tier wording. The pinned clause is appended regardless, HERE --
     this is the chokepoint every storyboard reaches on its way to the image
     model, whoever generated it. Storing the clause in the storyboard JSON only
@@ -82,6 +82,14 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
         pos = shot + " " + tighten_for_detail(scene, world, character)
     else:
         pos = (shot + " " if shot else "") + scene["image_prompt"] + single_subject(character)
+    # The body lock goes in EVERY frame, not just the anchor. Colouring stated
+    # once at the top of a prompt does not hold below the waist -- that is why
+    # frames came back with pale limbs, and with one glute black and the other
+    # white, while the anchor itself was fine: this text only ever reached
+    # make_anchor. It is the album's `body` field, per body part, positive
+    # (negatives are inert at cfg 1.0).
+    if body:
+        pos += " " + body.strip()
     pos = guardrail.build_prompt(pos, guard, f"scene {scene.get('scene_number','?')}")
     neg = scene.get("negative_prompt", "")
 
@@ -145,6 +153,8 @@ def main():
     ap.add_argument("--audio", help="mp3 path. Given this, emit one reference per CLIP "
                                     "instead of one per scene, so no two consecutive clips "
                                     "animate the same still.")
+    ap.add_argument("--body", default="", help="body-consistency wording for the album "
+                                                "(colouring per body part); goes into every prompt")
     ap.add_argument("--guardrail", default="", help="tier wording; the pinned clause is "
                                                     "appended regardless and cannot be disabled")
     ap.add_argument("--outdir", required=True)
@@ -166,7 +176,7 @@ def main():
             # scene, with the anchor still pinning the character
             wf = workflow(scene, args.anchor, args.base, args.latent,
                           args.width, args.height, 7000 + ci,
-                          shot, args.guardrail, world, character)
+                          shot, args.guardrail, world, character, args.body)
             wf["18"] = {"class_type": "SaveImage", "inputs": {
                 "images": ["17", 0],
                 "filename_prefix": f"refs_{args.slug}/clip_{ci:03d}"}}
@@ -187,7 +197,8 @@ def main():
             continue
         wf = workflow(scene, args.anchor, args.base, args.latent,
                       args.width, args.height, 7000 + num,
-                      shot_directive(scene, num), args.guardrail, world, character)
+                      shot_directive(scene, num), args.guardrail, world, character,
+                      args.body)
         wf["18"] = {"class_type": "SaveImage", "inputs": {
             "images": ["17", 0],
             "filename_prefix": f"refs_{args.slug}/scene_{num:02d}"}}

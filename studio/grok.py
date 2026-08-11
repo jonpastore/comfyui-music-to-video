@@ -44,6 +44,12 @@ _KEY_FILE = os.path.expanduser("~/.config/morpheus/grok-mcp.env")
 # only when auto-picking a default (see _resolve_model).
 _NON_CHAT_PREFIXES = ("grok-imagine",)
 _DEFAULT_SKIP_PREFIXES = _NON_CHAT_PREFIXES + ("grok-build",)
+# Substrings that mark a model the chat-completions endpoint refuses outright.
+# grok-4.20-multi-agent-0309 sorts highest by version, so auto-select picked it
+# and every storyboard died with 400 "Multi Agent requests are not allowed on
+# chat completions". A prefix list could not catch it -- the marker is in the
+# middle of the id.
+_NON_CHAT_MARKERS = ("multi-agent",)
 
 # real, working exemplar from this repo, used as a few-shot template. Overridable
 # for testing / other albums; resolved relative to the repo root so it still
@@ -182,7 +188,9 @@ def list_models():
     except httpx.HTTPError as e:
         raise RuntimeError(f"xAI models request failed: {_scrub(str(e), key)}") from None
     ids = (m["id"] for m in resp.json().get("data", []))
-    return sorted(i for i in ids if not i.startswith(_NON_CHAT_PREFIXES))
+    return sorted(i for i in ids
+                  if not i.startswith(_NON_CHAT_PREFIXES)
+                  and not any(k in i.lower() for k in _NON_CHAT_MARKERS))
 
 
 def _version_key(name):
@@ -201,9 +209,16 @@ def _version_key(name):
     return (1, (int(m.group(1)), int(m.group(2) or 0)), name)
 
 
+def usable_chat_models(models):
+    """The ids /chat/completions will actually accept."""
+    return [m for m in models
+            if not m.startswith(_DEFAULT_SKIP_PREFIXES)
+            and not any(k in m.lower() for k in _NON_CHAT_MARKERS)]
+
+
 def best_model(models):
     """Highest-versioned usable chat model. The UI's "(highest available)"."""
-    usable = [m for m in models if not m.startswith(_DEFAULT_SKIP_PREFIXES)] or list(models)
+    usable = usable_chat_models(models)
     return max(usable, key=_version_key) if usable else None
 
 
@@ -963,6 +978,21 @@ def demo():
     for name in written:
         with open(os.path.join(refs_outdir, name)) as f:
             json.load(f)  # every workflow file must itself be valid JSON
+
+    # --- a model the chat endpoint refuses is never auto-picked -----------
+    # grok-4.20-multi-agent-0309 sorts highest and 400s with "Multi Agent
+    # requests are not allowed on chat completions" -- it killed a storyboard.
+    listing = ["grok-4.20-0309-non-reasoning", "grok-4.20-0309-reasoning",
+               "grok-4.20-multi-agent-0309", "grok-4.3", "grok-4.5", "grok-build-0.1"]
+    assert "multi-agent" not in best_model(listing), best_model(listing)
+    assert best_model(listing) == "grok-4.20-0309-reasoning", best_model(listing)
+    assert not any("multi-agent" in m for m in usable_chat_models(listing))
+    # ...and the dropdown does not offer it either
+    httpx.get = lambda url, headers=None, timeout=None: type("R", (), {
+        "raise_for_status": staticmethod(lambda: None),
+        "json": staticmethod(lambda: {"data": [{"id": i} for i in listing]})})
+    assert not any("multi-agent" in m for m in list_models()), list_models()
+    httpx.get = orig_get
 
     # --- classify_sheet: real jpeg in, parsed verdict out, junk rejected ---
     with tempfile.TemporaryDirectory() as d:

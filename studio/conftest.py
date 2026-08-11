@@ -59,6 +59,7 @@ def _write_storyboard(sb, outdir, slug, tier):
 classify_calls = []
 describe_calls = []
 edit_prompt_calls = []
+refs_calls = []
 
 
 def _classify_sheet(sheet_path, note="", model=None, progress=None):
@@ -143,7 +144,7 @@ _stub("pipeline",
       submit_dir=lambda wf_dir, progress=None: [],
       collect=lambda prefix_dir, pattern="*.png": [],
       gen_anchor=lambda face, outfit, view="front", n=4, progress=None, prefix=None, profile=None: anchor_calls.append(profile) or [],
-      gen_refs=lambda slug, tier, sb, anchor, mp3, progress=None, limit=None: [],
+      gen_refs=lambda slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="": refs_calls.append({"guard": guard, "body": body}) or [],
       reroll=lambda slug, tier, sb, anchor, mp3, idxs, progress=None: [],
       stage_refs=lambda slug, tier, ref_paths: [],
       gen_clips=lambda slug, tier, sb, mp3, ref_paths, progress=None: [],

@@ -368,9 +368,12 @@ def h_refs(args, progress):
     # resolve the chosen anchor candidate (an output image) into a name usable
     # as ComfyUI input -- start_refs already checked one is chosen for this tier
     anchor_name = pipeline.install_input(args["anchor_path"])
+    # the album's body-consistency wording goes into EVERY frame's prompt, not
+    # just the anchor's -- see build_refs.workflow
+    body = album_profile(song["album"] or "")["body"]
     results = pipeline.gen_refs(song["slug"], tier, sb["json_path"], anchor_name,
                                  song["mp3_path"], progress, limit=args.get("limit"),
-                                 guard=tiers.compose_guardrail(tier))
+                                 guard=tiers.compose_guardrail(tier), body=body)
     now = time.time()
     for r in results:
         db.run("""INSERT OR IGNORE INTO refs (song_id, tier, clip_idx, path, seed, approved, created)

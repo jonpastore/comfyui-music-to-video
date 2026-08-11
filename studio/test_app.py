@@ -372,8 +372,9 @@ def test_explicit_flag_set_at_upload_and_toggled_and_shown():
 def test_explicit_not_passed_to_grok_or_pipeline(patch_stub):
     gen_refs_calls = []
 
-    def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None, guard=""):
-        gen_refs_calls.append(dict(slug=slug, tier=tier, anchor=anchor, limit=limit, guard=guard))
+    def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body=""):
+        gen_refs_calls.append(dict(slug=slug, tier=tier, anchor=anchor, limit=limit,
+                                    guard=guard, body=body))
         return []
 
     patch_stub("pipeline", gen_refs=_gen_refs)
@@ -480,6 +481,43 @@ def test_refs_tier_without_chosen_anchor_400_names_tier_and_enqueues_nothing():
         assert r.status_code == 400, r.text
         assert "pg13" in r.text
         assert len(jobs.recent(1000)) == before
+
+
+def test_body_consistency_wording_reaches_every_reference_prompt(patch_stub):
+    """Colouring stated once at the top of a prompt does not hold below the
+    waist -- pale limbs, and one glute black and the other white. The album's
+    body text has to be in EVERY frame's prompt, not only the anchor's."""
+    seen = []
+
+    def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body=""):
+        seen.append(body)
+        return []
+
+    patch_stub("pipeline", gen_refs=_gen_refs)
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Body Lock Song", album="Body Album")
+        sid = song["id"]
+        pl = db.run("INSERT INTO playlists (name, kind, created) VALUES (?,'playlist',?)",
+                    "Body Album", time.time())
+        client.post(f"/playlists/{pl}/profile",
+                    data={"body": "black-furred thighs and glutes, no human skin anywhere"})
+        client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13"})
+        wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC",
+                        sid)["id"])
+        _chosen_anchor("Body Album", "pg13")
+
+        client.post(f"/songs/{sid}/refs", data={"tier": "pg13"})
+        wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='refs' ORDER BY id DESC",
+                        sid)["id"])
+        assert seen and "no human skin anywhere" in seen[-1], seen
+
+    # and it lands in the prompt the image model is actually handed
+    import build_refs
+    scene = {"scene_number": 1, "image_prompt": "she crosses the alley", "negative_prompt": ""}
+    wf = build_refs.workflow(scene, "a.png", None, "empty", 1280, 720, 7000, "WIDE SHOT.",
+                             "tier wording", "world", "a black feline woman",
+                             "black-furred thighs and glutes, no human skin anywhere")
+    assert "no human skin anywhere" in wf["11"]["inputs"]["prompt"]
 
 
 def test_storyboard_style_note_comes_from_the_album():
