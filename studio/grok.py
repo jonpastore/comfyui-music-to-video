@@ -29,6 +29,11 @@ BASE_URL = "https://api.x.ai/v1"
 # A 25-50 scene storyboard is a very large single completion; the default
 # 120s read timeout expires mid-generation and wastes the whole call.
 CHAT_TIMEOUT = float(os.environ.get("XAI_TIMEOUT", 900))
+# Per-CHUNK timeout for the streamed response, not a whole-generation budget.
+# Streaming means the socket is never idle for long, so this can be tight: it
+# now detects a genuinely stalled connection instead of capping how long a big
+# storyboard is allowed to take.
+STREAM_TIMEOUT = float(os.environ.get("XAI_STREAM_TIMEOUT", 120))
 DEFAULT_MODEL = os.environ.get("XAI_MODEL") or None  # unset by default; UI picks from list_models()
 PREFERRED_MODEL = "grok-4.5"  # used only when model= and DEFAULT_MODEL are both unset
 
@@ -118,44 +123,82 @@ def _scrub(text, key):
     return text.replace(key, "<redacted>") if key else text
 
 
-def _chat(model, messages):
+def _http_error(code, detail, key):
+    """One place to turn an xAI status + body into something a job log can use.
+
+    The bare status is useless -- "403 Forbidden" plus an MDN link told us
+    nothing, while the response body said the account was out of credits.
+    """
+    if code in (401, 403) and "credit" in detail.lower():
+        return RuntimeError(f"xAI rejected the request: {detail} "
+                            "Add credits or raise the spending limit at console.x.ai, "
+                            "then retry this job.")
+    if code in (401, 403):
+        return RuntimeError(f"xAI auth/permission error ({code}): "
+                            f"{_scrub(detail, key) or 'no detail returned'}")
+    if code == 429:
+        return RuntimeError(f"xAI rate limited: {_scrub(detail, key)}")
+    return RuntimeError(f"xAI chat request failed ({code}): {_scrub(detail, key)}")
+
+
+def _chat(model, messages, progress=None):
+    """Streamed completion.
+
+    A 20-50 scene storyboard is a single very large completion. Non-streamed, the
+    read timeout covers the WHOLE generation, so the only knob is an ever-larger
+    ceiling -- and a timeout throws away everything produced so far (this cost a
+    full run at 120s). xAI has no callback/webhook API, so streaming is the actual
+    fix: STREAM_TIMEOUT applies per chunk rather than to the whole response, the
+    connection is never idle long enough to trip it, and the UI gets live progress
+    instead of staring at one opaque call for six minutes.
+    """
     key = _api_key()
+    body = {"model": model, "messages": messages,
+            "response_format": {"type": "json_object"}, "stream": True}
+    parts, chars, ticks = [], 0, 0
     try:
-        resp = httpx.post(
-            f"{BASE_URL}/chat/completions",
+        with httpx.stream(
+            "POST", f"{BASE_URL}/chat/completions",
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            json={"model": model, "messages": messages, "response_format": {"type": "json_object"}},
-            timeout=httpx.Timeout(CHAT_TIMEOUT, connect=30.0),
-        )
-        resp.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        # The bare status is useless in a job log -- "403 Forbidden" plus an MDN
-        # link told us nothing, while the response body said the account was out
-        # of credits. Surface the body, which is where xAI puts the real reason.
-        detail = ""
-        try:
-            body = e.response.json()
-            detail = body.get("error") or body.get("message") or ""
-        except Exception:
-            detail = (e.response.text or "")[:300]
-        code = e.response.status_code
-        if code in (401, 403) and "credit" in detail.lower():
-            raise RuntimeError(f"xAI rejected the request: {detail} "
-                               "Add credits or raise the spending limit at console.x.ai, "
-                               "then retry this job.") from None
-        if code in (401, 403):
-            raise RuntimeError(f"xAI auth/permission error ({code}): "
-                               f"{_scrub(detail, key) or 'no detail returned'}") from None
-        if code == 429:
-            raise RuntimeError(f"xAI rate limited: {_scrub(detail, key)}") from None
-        raise RuntimeError(f"xAI chat request failed ({code}): {_scrub(detail, key)}") from None
+            json=body, timeout=httpx.Timeout(STREAM_TIMEOUT, connect=30.0),
+        ) as resp:
+            if resp.status_code >= 400:
+                raw = resp.read()  # streamed responses must be read before .text
+                try:
+                    err = json.loads(raw)
+                    detail = err.get("error") or err.get("message") or ""
+                    if isinstance(detail, dict):
+                        detail = detail.get("message", str(detail))
+                except Exception:
+                    detail = raw.decode(errors="replace")[:300]
+                raise _http_error(resp.status_code, str(detail), key)
+
+            for line in resp.iter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload == "[DONE]":
+                    break
+                try:
+                    delta = json.loads(payload)["choices"][0].get("delta", {}).get("content")
+                except (KeyError, IndexError, ValueError, TypeError):
+                    continue
+                if not delta:
+                    continue
+                parts.append(delta)
+                chars += len(delta)
+                # report occasionally, not per token -- progress() writes to the
+                # job log and does a db UPDATE on every call
+                if progress and chars // 2000 > ticks:
+                    ticks = chars // 2000
+                    progress(f"grok: streaming, {chars // 1000}k chars")
     except httpx.HTTPError as e:
         raise RuntimeError(f"xAI chat request failed: {_scrub(str(e), key)}") from None
-    data = resp.json()
-    try:
-        return data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError):
-        raise RuntimeError(f"unexpected xAI response shape: {_scrub(str(data)[:300], key)}") from None
+
+    out = "".join(parts)
+    if not out.strip():
+        raise RuntimeError("xAI returned an empty completion (no content in the stream)")
+    return out
 
 
 def list_models():
@@ -470,7 +513,7 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
             messages.append({"role": "user", "content":
                 "The last response was rejected. Fix every problem and resend the full "
                 "corrected JSON (same schema, all scenes):\n- " + "\n- ".join(errors)})
-        content = _chat(model, messages)
+        content = _chat(model, messages, progress)
         try:
             obj = _parse_response(content)
             sb = _compose(song, tier, guardrail, style_note, lyrics, obj["scenes"], n_scenes, scene_seconds,
@@ -524,26 +567,46 @@ def demo():
     bad_guard = [scene(1, "wide establishing", "Verse"), scene(2, "close-up", "Chorus", guard=False)]
     same_cam = [scene(1, "medium", "Verse"), scene(2, "medium", "Chorus")]
 
-    orig_post, orig_get = httpx.post, httpx.get
+    orig_post, orig_get, orig_stream = httpx.post, httpx.get, httpx.stream
 
-    def queued(contents):
+    def queued(contents, status=200, error_body=None):
+        """Stub httpx.stream. Chunks the content so the SSE parsing, the
+        [DONE] sentinel and the progress ticks are all actually exercised --
+        a single-chunk stub would not have caught a broken line parser."""
         it = iter(contents)
 
-        def fake_post(url, headers=None, json=None, timeout=None):
-            content = next(it)
+        class _Resp:
+            def __init__(self, content):
+                self.status_code = status
+                self._content = content
 
-            class R:
-                def raise_for_status(self):
-                    pass
+            def read(self):
+                return (error_body or b"")
 
-                def json(self):
-                    return {"choices": [{"message": {"content": content}}]}
-            return R()
-        return fake_post
+            def iter_lines(self):
+                if status >= 400:
+                    return
+                body = self._content
+                for i in range(0, len(body), 64):
+                    piece = body[i:i + 64]
+                    yield "data: " + json.dumps(
+                        {"choices": [{"delta": {"content": piece}}]})
+                    yield ""          # blank lines between SSE events
+                yield "data: [DONE]"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_stream(method, url, headers=None, json=None, timeout=None):
+            return _Resp(next(it) if status < 400 else "")
+        return fake_stream
 
     try:
         # 1. well-formed storyboard round-trips through generate_storyboard
-        httpx.post = queued([json.dumps({"scenes": good})])
+        httpx.stream = queued([json.dumps({"scenes": good})])
         sb = generate_storyboard(LYRICS, "pg13", GUARD, "neon world lock", SONG, model="grok-test")
         assert [s["scene_number"] for s in sb["scenes"]] == [1, 2], sb["scenes"]
         assert sb["global_guardrail"] == GUARD
@@ -551,7 +614,7 @@ def demo():
 
         # 1b. distinct character_reference/world_reference from the model are
         # used as-is, not collapsed into style_note; omitted ones fall back to it
-        httpx.post = queued([json.dumps({
+        httpx.stream = queued([json.dumps({
             "character_reference": "a sleek black feline DJ", "world_reference": "neon warehouse",
             "scenes": good,
         })])
@@ -559,7 +622,7 @@ def demo():
         assert sb1b["character_reference"] == "a sleek black feline DJ", sb1b["character_reference"]
         assert sb1b["album_world_reference"] == "neon warehouse", sb1b["album_world_reference"]
 
-        httpx.post = queued([json.dumps({"scenes": good})])  # both omitted -> style_note fallback
+        httpx.stream = queued([json.dumps({"scenes": good})])  # both omitted -> style_note fallback
         sb1c = generate_storyboard(LYRICS, "pg13", GUARD, "neon world lock", SONG, model="grok-test")
         assert sb1c["character_reference"] == "neon world lock"
         assert sb1c["album_world_reference"] == "neon world lock"
@@ -580,7 +643,7 @@ def demo():
         # where every scene carries it, using ZERO retries -- enforcement is by
         # construction in _compose, not by retrying until the model complies.
         calls = []
-        httpx.post = queued([json.dumps({"scenes": bad_guard})])
+        httpx.stream = queued([json.dumps({"scenes": bad_guard})])
         sb2 = generate_storyboard(LYRICS, "pg13", GUARD, "neon world lock", SONG,
                                    model="grok-test", progress=calls.append)
         assert len(calls) == 1, f"expected no retries, model was called {len(calls)}x"
@@ -589,7 +652,7 @@ def demo():
         validate(sb2)
 
         # 3. fenced ```json output still parses
-        httpx.post = queued(["```json\n" + json.dumps({"scenes": good}) + "\n```"])
+        httpx.stream = queued(["```json\n" + json.dumps({"scenes": good}) + "\n```"])
         sb3 = generate_storyboard(LYRICS, "pg13", GUARD, "neon world lock", SONG, model="grok-test")
         validate(sb3)
 
@@ -680,7 +743,7 @@ def demo():
             assert fallback_md == _INLINE_EXEMPLAR_MD
 
             fallback_notes = []
-            httpx.post = queued([json.dumps({"scenes": good})])
+            httpx.stream = queued([json.dumps({"scenes": good})])
             sb_fb = generate_storyboard(LYRICS, "pg13", GUARD, "neon world lock", SONG,
                                          model="grok-test", progress=fallback_notes.append)
             validate(sb_fb)
@@ -688,14 +751,28 @@ def demo():
         finally:
             TEMPLATE_JSON, TEMPLATE_MD = orig_tj, orig_tm
 
+        # 4b. a streamed HTTP error surfaces the response BODY, not the status.
+        # A bare "403 Forbidden" told us nothing when the real cause was an
+        # exhausted account; the body carried the actual reason.
+        httpx.stream = queued([], status=403, error_body=json.dumps(
+            {"code": "permission-denied",
+             "error": "Your team has either used all available credits or "
+                      "reached its monthly spending limit."}).encode())
+        try:
+            _chat("grok-test", [{"role": "user", "content": "hi"}])
+            raise AssertionError("a 403 did not raise")
+        except RuntimeError as e:
+            assert "credits" in str(e), e
+            assert "console.x.ai" in str(e), "no actionable remedy in the message"
+
         # 5. the API key never leaks into a raised exception, even on an HTTP failure
         fake_key = "sk-super-secret-fake-key-999"
         old_env = os.environ.get(_KEY_ENV)
         os.environ[_KEY_ENV] = fake_key
 
-        def raising_post(url, headers=None, json=None, timeout=None):
+        def raising_stream(method, url, headers=None, json=None, timeout=None):
             raise httpx.ConnectError("connection refused")
-        httpx.post = raising_post
+        httpx.stream = raising_stream
         try:
             _chat("grok-test", [{"role": "user", "content": "hi"}])
             raise AssertionError("expected a RuntimeError from the failing request")
@@ -707,7 +784,7 @@ def demo():
             else:
                 os.environ[_KEY_ENV] = old_env
     finally:
-        httpx.post, httpx.get = orig_post, orig_get
+        httpx.post, httpx.get, httpx.stream = orig_post, orig_get, orig_stream
 
     # 6. write_storyboard produces a loadable json and a non-empty md
     tmpdir = tempfile.mkdtemp()
