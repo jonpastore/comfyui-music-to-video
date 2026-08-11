@@ -999,24 +999,49 @@ def sets_by_song():
     return out
 
 
+def wants_json(request):
+    """True when the caller asked for JSON rather than a redirect.
+
+    The Library's buttons all go through app.js's api() helper, which sets this
+    header; the same routes still answer a plain form post with a redirect, so
+    the page keeps working with JavaScript off. One convention, both paths --
+    rather than a parallel /api/* tree that would double every route here.
+    """
+    return "application/json" in (request.headers.get("accept") or "")
+
+
+def song_entry(s, in_sets=None):
+    """One Library row's worth of context. Extracted so the row can be rendered
+    on its own after an async upload -- the alternative was building the markup
+    a second time in JavaScript, which is how the two drift apart."""
+    in_sets = sets_by_song() if in_sets is None else in_sets
+    board_tiers = {r["tier"] for r in db.q("SELECT DISTINCT tier FROM storyboards WHERE song_id=?", s["id"])}
+    rendered_tiers = {r["tier"] for r in db.q("SELECT DISTINCT tier FROM renders WHERE song_id=?", s["id"])}
+    tier_status = [{"tier": t, "rendered": t in rendered_tiers} for t in sorted(board_tiers)]
+    # newest render per tier: re-assembling a song adds a row, and the
+    # column is "what can I watch", not "everything ever produced"
+    latest = {}
+    for r in db.q("SELECT * FROM renders WHERE song_id=? ORDER BY id DESC", s["id"]):
+        latest.setdefault(r["tier"], r)
+    return {"song": s, "tiers": tier_status,
+            "videos": [latest[t] for t in sorted(latest)],
+            "sets": in_sets.get(s["id"], [])}
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     songs = db.q("SELECT * FROM songs ORDER BY created DESC")
     in_sets = sets_by_song()
-    entries = []
-    for s in songs:
-        board_tiers = {r["tier"] for r in db.q("SELECT DISTINCT tier FROM storyboards WHERE song_id=?", s["id"])}
-        rendered_tiers = {r["tier"] for r in db.q("SELECT DISTINCT tier FROM renders WHERE song_id=?", s["id"])}
-        tier_status = [{"tier": t, "rendered": t in rendered_tiers} for t in sorted(board_tiers)]
-        # newest render per tier: re-assembling a song adds a row, and the
-        # column is "what can I watch", not "everything ever produced"
-        latest = {}
-        for r in db.q("SELECT * FROM renders WHERE song_id=? ORDER BY id DESC", s["id"]):
-            latest.setdefault(r["tier"], r)
-        entries.append({"song": s, "tiers": tier_status,
-                        "videos": [latest[t] for t in sorted(latest)],
-                        "sets": in_sets.get(s["id"], [])})
+    entries = [song_entry(s, in_sets) for s in songs]
     return templates.TemplateResponse(request, "index.html", {"songs": entries, "genre_data": GENRE_DATA})
+
+
+@app.get("/songs/{id}/row", response_class=HTMLResponse)
+def song_row(request: Request, id: int):
+    """The Library row for one song, rendered by the SAME partial the table uses.
+    Asked for after an async upload so a new song appears without a reload."""
+    return templates.TemplateResponse(request, "_song_row.html",
+                                       {"e": song_entry(get_song_or_404(id))})
 
 
 @app.post("/songs")
@@ -1390,9 +1415,17 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = ""):
                   for k, v in groups.items()]
     albums = sorted({s["album"] for s in db.q("SELECT DISTINCT album FROM songs") if s["album"]})
     playlists = db.q("SELECT id, name FROM playlists WHERE kind='playlist' ORDER BY name")
+    # Failures belong on the page the work was STARTED from. Nine sheets died to
+    # a five-second ComfyUI restart and the only trace was on /jobs -- from here
+    # it looked as though the button had done nothing at all, which is exactly
+    # what the user reported.
+    failed = [j for j in db.q("""SELECT * FROM jobs WHERE kind='anchor' AND status='failed'
+                                 ORDER BY id DESC LIMIT 20""")]
+    fresh = [j for j in failed if (time.time() - (j["finished"] or 0)) < 86400]
     return templates.TemplateResponse(request, "anchors.html", dict(
         anchor_form_ctx(scope_value),
-        groups=group_list, known_albums=albums, playlists=playlists))
+        groups=group_list, known_albums=albums, playlists=playlists,
+        failed_jobs=fresh))
 
 
 MAX_ANCHOR_UPLOADS = 8
@@ -3939,6 +3972,28 @@ def jobs_page(request: Request, refresh: str = "auto", partial: int = 0):
     # the poll swaps the panel only -- returning the whole page would nest a
     # second <html> inside the one already on screen
     return templates.TemplateResponse(request, "_jobs_panel.html" if partial else "jobs.html", ctx)
+
+
+@app.post("/jobs/{id}/retry")
+def retry_job(id: int):
+    """Re-queue a failed job with its own stored arguments.
+
+    There was no way to recover a failed batch except to fill the form in again
+    from memory. Nine anchor sheets were lost to a five-second ComfyUI restart,
+    and every one of them still had its exact arguments -- album, tier, view,
+    image paths, prompt -- sitting in args_json.
+
+    A NEW row, not a reset of the old one: the failure is part of the record,
+    and overwriting it would erase the evidence of what went wrong.
+    """
+    row = jobs.get(id)
+    if not row:
+        raise HTTPException(404, "no such job")
+    if row["status"] not in ("failed", "cancelled"):
+        raise HTTPException(400, f"job #{id} is {row['status']}, not failed -- nothing to retry")
+    args = json.loads(row["args_json"] or "{}")
+    new_id = jobs.enqueue(row["kind"], args, song_id=row["song_id"])
+    return RedirectResponse(f"/jobs#job-{new_id}", status_code=303)
 
 
 @app.post("/jobs/{id}/cancel")

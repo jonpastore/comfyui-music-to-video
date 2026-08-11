@@ -14,6 +14,20 @@ import db
 LOGS = os.path.join(db.DATA, "logs")
 _handlers = {}
 _wake = threading.Event()
+
+# A ComfyUI restart takes a few seconds; a batch should survive one.
+MAX_ATTEMPTS = 3
+RETRY_BACKOFF_SECS = 5.0
+# Matched on the message pipeline._get/_post raise, not on the exception type:
+# both come back as RuntimeError, and only the unreachable one is worth retrying.
+_TRANSIENT = ("cannot reach comfyui", "connection refused", "connection reset",
+              "temporarily unavailable", "timed out")
+
+
+def _is_transient(exc):
+    """Whether a failure is worth retrying. Deliberately narrow: a workflow
+    ComfyUI REFUSED is a real error, and retrying it just fails more slowly."""
+    return any(t in str(exc).lower() for t in _TRANSIENT)
 _worker = None
 
 
@@ -144,7 +158,7 @@ def _claim():
         raise
 
 
-def _run_one(row):
+def _run_one(row, attempt=1):
     jid = row["id"]
     os.makedirs(LOGS, exist_ok=True)
     log_path = os.path.join(LOGS, f"job_{jid}.log")
@@ -172,8 +186,28 @@ def _run_one(row):
                time.time(), "cancelled by user", jid)
         log.write("cancelled by user\n")
     except Exception as e:
+        # A TRANSIENT failure is retried in place. ComfyUI is restarted often
+        # (a deploy, a model change, a crash) and a restart takes seconds -- but
+        # the worker takes the next job immediately, fails to reach it, and
+        # moves on, so ONE restart window destroys a whole batch in about a
+        # second. Nine anchor sheets were lost to a five-second gap this way:
+        # every job failed at 19:01:58, ComfyUI answered again at 19:02:03.
+        #
+        # Only "cannot reach" is retried. A workflow ComfyUI actively REFUSED is
+        # a real error and retrying it just fails three times more slowly.
+        msg = f"{type(e).__name__}: {e}"
+        if attempt < MAX_ATTEMPTS and _is_transient(e):
+            wait = RETRY_BACKOFF_SECS * attempt
+            log.write(f"{msg}\n-- transient, retrying in {wait:.0f}s "
+                      f"(attempt {attempt + 1} of {MAX_ATTEMPTS})\n")
+            db.run("UPDATE jobs SET progress=? WHERE id=?",
+                   f"unreachable, retrying in {wait:.0f}s "
+                   f"({attempt + 1}/{MAX_ATTEMPTS})", jid)
+            log.close()
+            time.sleep(wait)
+            return _run_one(row, attempt=attempt + 1)
         db.run("UPDATE jobs SET status='failed', finished=?, error=? WHERE id=?",
-               time.time(), f"{type(e).__name__}: {e}"[:2000], jid)
+               time.time(), msg[:2000], jid)
         log.write(traceback.format_exc())
     finally:
         log.close()

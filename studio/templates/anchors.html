@@ -6,6 +6,34 @@
   Reference generation cannot run without a chosen anchor for the tier. An album and a
   playlist are the same record, so there is no separate scope to pick.</p>
 
+{% if failed_jobs %}
+{# a failed batch used to be invisible from here: the button appeared to do
+   nothing, and the only evidence was on /jobs #}
+<section class="card">
+  <h3><span class="tag warn-tag">{{ failed_jobs | length }} failed</span>
+    anchor job{{ "" if failed_jobs | length == 1 else "s" }} in the last day</h3>
+  <p class="hint">Their settings are kept, so retrying costs one click rather than
+    filling the form in again.</p>
+  <table class="list">
+    <thead><tr><th>Job</th><th>Why it failed</th><th></th></tr></thead>
+    <tbody>
+    {% for j in failed_jobs %}
+      <tr>
+        <td>#{{ j.id }}</td>
+        <td class="muted">{{ (j.error or "")[:110] }}</td>
+        <td>
+          <form method="post" action="/jobs/{{ j.id }}/retry" style="display:inline">
+            <button type="submit">Retry</button>
+          </form>
+          <a class="linkish" href="/jobs/{{ j.id }}/log">log</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
 <section class="card">
   <h2>Generate anchor candidates</h2>
   {% include "_anchor_form.html" %}

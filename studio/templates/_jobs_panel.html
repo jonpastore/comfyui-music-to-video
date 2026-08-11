@@ -55,6 +55,13 @@
         <td>{{ e.job.progress or "" }}</td>
         <td>
           <a href="/jobs/{{ e.job.id }}/log">log</a>
+          {% if e.job.status in ("failed", "cancelled") %}
+          {# its arguments are still in args_json, so recovering a lost batch is
+             a click rather than filling the form in again from memory #}
+          <form method="post" action="/jobs/{{ e.job.id }}/retry" style="display:inline">
+            <button type="submit">Retry</button>
+          </form>
+          {% endif %}
           {% if e.cancelable %}
           <form method="post" action="/jobs/{{ e.job.id }}/cancel" style="display:inline">
             <button type="submit">Cancel</button>

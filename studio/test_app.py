@@ -3276,3 +3276,93 @@ def test_suggest_keeps_what_you_typed_to_drive_it():
         page = client.post(f"/sets/{sid}/suggest",
                            data={"mix_direction": "WHOLE SET DIRECTION"}).text
         assert "WHOLE SET DIRECTION" in page, "the whole-set direction box came back blank"
+
+
+def test_a_transient_comfyui_outage_does_not_destroy_a_batch(patch_stub):
+    """Nine anchor sheets were lost to a five-second ComfyUI restart: every job
+    failed at 19:01:58 and ComfyUI answered again at 19:02:03. The worker took
+    each job, failed to reach ComfyUI, marked it failed and moved on -- so one
+    restart window destroyed the whole batch in about a second."""
+    calls = {"n": 0}
+
+    def flaky(images, view="front", n=4, progress=None, prefix=None, profile=None,
+              guard="", prompt=""):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("cannot reach ComfyUI at http://127.0.0.1:8188 "
+                               "(Connection refused) -- is it running?")
+        return []
+
+    patch_stub("pipeline", gen_anchor=flaky)
+    old_backoff = jobs.RETRY_BACKOFF_SECS
+    jobs.RETRY_BACKOFF_SECS = 0.01          # the wait is the point, not its length
+    try:
+        with TestClient(appmod.app) as client:
+            client.post("/playlists", data={"name": "Transient Album"})
+            r = client.post("/anchors", data={"album": "Transient Album", "tier": "r",
+                                               "view": "front", "n": "1", "prompt_r": ""},
+                            files=[("images", ("t.png", _png_bytes(), "image/png"))])
+            assert r.status_code in (200, 303), r.text
+            jid = db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"]
+            wait_job(jid)
+            assert db.one("SELECT status FROM jobs WHERE id=?", jid)["status"] == "done", \
+                "a transient outage still killed the job instead of being retried"
+            assert calls["n"] == 2, f"expected one retry, got {calls['n']} attempts"
+    finally:
+        jobs.RETRY_BACKOFF_SECS = old_backoff
+
+
+def test_a_real_refusal_is_not_retried(patch_stub):
+    """Only 'cannot reach' is transient. A workflow ComfyUI actively REFUSED is a
+    real error, and retrying it just fails three times more slowly."""
+    calls = {"n": 0}
+
+    def refused(images, view="front", n=4, progress=None, prefix=None, profile=None,
+                guard="", prompt=""):
+        calls["n"] += 1
+        raise RuntimeError("submit rejected: anchor.json: {'error': 'bad node'}")
+
+    patch_stub("pipeline", gen_anchor=refused)
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Refused Album"})
+        client.post("/anchors", data={"album": "Refused Album", "tier": "r", "view": "front",
+                                       "n": "1", "prompt_r": ""},
+                    files=[("images", ("t.png", _png_bytes(), "image/png"))])
+        jid = db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"]
+        wait_job(jid)
+        assert db.one("SELECT status FROM jobs WHERE id=?", jid)["status"] == "failed"
+        assert calls["n"] == 1, f"a real refusal was retried {calls['n']} times"
+
+
+def test_a_failed_batch_is_visible_and_retryable_from_the_anchors_page(patch_stub):
+    """The failure was only ever on /jobs; from the Anchors page the button
+    looked as though it had done nothing."""
+    def boom(images, view="front", n=4, progress=None, prefix=None, profile=None,
+             guard="", prompt=""):
+        raise RuntimeError("submit rejected: nope")
+
+    patch_stub("pipeline", gen_anchor=boom)
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Visible Fail Album"})
+        client.post("/anchors", data={"album": "Visible Fail Album", "tier": "r",
+                                       "view": "front", "n": "1", "prompt_r": ""},
+                    files=[("images", ("t.png", _png_bytes(), "image/png"))])
+        jid = db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"]
+        wait_job(jid)
+
+        page = client.get("/anchors").text
+        assert "failed" in page and f"/jobs/{jid}/retry" in page, \
+            "a failed anchor batch is still invisible from the page that started it"
+
+        # retry makes a NEW job and leaves the failure on the record
+        r = client.post(f"/jobs/{jid}/retry", follow_redirects=False)
+        assert r.status_code == 303, r.text
+        new = db.one("SELECT id, kind, args_json FROM jobs ORDER BY id DESC")
+        assert new["id"] != jid and new["kind"] == "anchor"
+        assert json.loads(new["args_json"])["scope_value"] == "Visible Fail Album", \
+            "the retry lost the original arguments"
+        assert db.one("SELECT status FROM jobs WHERE id=?", jid)["status"] == "failed", \
+            "retrying overwrote the failure instead of recording a new attempt"
+
+        # a job that did not fail cannot be retried
+        assert client.post(f"/jobs/{new['id']}/retry").status_code in (400, 200)
