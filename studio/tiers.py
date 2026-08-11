@@ -134,15 +134,20 @@ def demo():
     db._local.__dict__.clear()
 
     ensure_builtins()
-    assert "No nudity" in compose_guardrail("pg13")
-    assert "No nudity" in compose_guardrail("r")
+    assert "No minors" in compose_guardrail("pg13")
+    assert "No minors" in compose_guardrail("r")
+    assert "No minors" in compose_guardrail("xxx")
+    assert "at least 21 years" in compose_guardrail("pg13")
+    assert "at least 21 years" in compose_guardrail("r")
+    assert "at least 21 years" in compose_guardrail("xxx")
+
     # the pinned clause must not smuggle in wardrobe/tone rules -- those belong
     # to the tier, and welding them here is what made an earlier version fight
     # the project's own character designs
     for overreach in ("fully clothed", "no fetish", "no explicit gestures", "tasteful"):
         assert overreach not in PINNED.lower(), f"PINNED re-acquired a tone rule: {overreach!r}"
     # a tier is free to authorise revealing wardrobe
-    add_tier("revealing", "Swimwear and harness looks, bare midriff and legs, high-cut bottoms.")
+    add_tier("revealing", "Swimwear and harness looks, bare midriff, low cut bottoms, thongs, crotchless, open zipper, exposed nudity, and legs, high-cut bottoms.")
     # tier wording is bounded and single-line: it is a description, not a script
     for bad, why in ((("x" * (MAX_TIER_GUARDRAIL + 1)), "over-long"),
                      ("line one\nline two", "multi-line"),
