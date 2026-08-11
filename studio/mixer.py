@@ -107,6 +107,12 @@ def assemble_song(clip_paths, mp3_path, out_path, progress=None, fade=0.0):
     if not clip_paths:
         raise ValueError("clip_paths is empty")
     progress(f"probing {len(clip_paths)} clips + audio")
+    # The song is as long as the TRACK. Clips are quantised to 4.8125s so the
+    # video always overruns -- 50 clips of Back Alley Pussy are 240.63s against
+    # a 237.67s song, and the first complete render ended with 3 seconds of
+    # silent picture. -shortest was supposed to prevent exactly that and did
+    # not (it is unreliable when the video is re-encoded from a concat
+    # demuxer), so the length is stated outright as well.
     audio_dur = probe(mp3_path)["duration"]
 
     tmp = _atomic_out(out_path)
@@ -120,7 +126,7 @@ def assemble_song(clip_paths, mp3_path, out_path, progress=None, fade=0.0):
             args = ["-f", "concat", "-safe", "0", "-i", list_path, "-i", mp3_path,
                     "-map", "0:v", "-map", "1:a",
                     "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
-                    "-c:a", "aac", "-b:a", "192k", "-shortest", tmp]
+                    "-c:a", "aac", "-b:a", "192k", "-shortest", "-t", f"{audio_dur:.3f}", tmp]
         else:
             durations = [probe(p)["duration"] for p in clip_paths]
             lines, vlabel, _ = _crossfade_chain(len(clip_paths), durations, fade)
@@ -131,7 +137,7 @@ def assemble_song(clip_paths, mp3_path, out_path, progress=None, fade=0.0):
             args = inputs + ["-filter_complex", ";\n".join(lines),
                               "-map", f"[{vlabel}]", "-map", f"{len(clip_paths)}:a",
                               "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
-                              "-c:a", "aac", "-b:a", "192k", "-shortest", tmp]
+                              "-c:a", "aac", "-b:a", "192k", "-shortest", "-t", f"{audio_dur:.3f}", tmp]
         progress("assembling")
         _run_ffmpeg(args, progress, total_duration=audio_dur, stage="assemble")
         os.replace(tmp, out_path)
@@ -412,6 +418,20 @@ def demo():
         assert len(lines) == 2
         assert "xfade=transition=fade:duration=0.250:offset=0.750" in lines[0]
         assert label == "vx2"
+
+        # the assembled song is as long as the TRACK, not the clip total. Clips
+        # are quantised, so three 1s clips over a 2.5s song overrun by 0.5s --
+        # the same shape as 50 clips overrunning Back Alley Pussy by 3s.
+        short_mp3 = os.path.join(tmpdir, "short.mp3")
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+                        "-i", "sine=frequency=440:duration=2.5", "-c:a", "libmp3lame", short_mp3],
+                       capture_output=True, check=True)
+        out_quant = os.path.join(tmpdir, "quantised.mp4")
+        assemble_song([clip_a, clip_b, clip_a], short_mp3, out_quant)
+        iq = probe(out_quant)
+        assert abs(iq["duration"] - probe(short_mp3)["duration"]) <= 0.2, \
+            f"assembled to {iq['duration']:.2f}s, track is {probe(short_mp3)['duration']:.2f}s"
+        assert iq["duration"] < 2.9, f"clip overrun survived: {iq['duration']:.2f}s"
 
         # mix_audio: crossfaded mp3 set, same overlap arithmetic as render_set
         mp3_b = os.path.join(tmpdir, "second track.mp3")
