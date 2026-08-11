@@ -711,9 +711,13 @@ def demo():
         wf = build_refs.workflow(foreign, "a.png", None, "empty", 1280, 720, 7000,
                                   "WIDE SHOT.", "tier wording")
         built = wf["11"]["inputs"]["prompt"]
-        assert _g.PINNED in built, "prompt builder did not attach the pinned clause"
+        # .strip() on both: build_prompt strips the assembled prompt, so the
+        # clause loses PINNED's trailing space when it lands last. "No nudity"
+        # is no longer in PINNED at all (it moved into the tiers), so count a
+        # phrase the clause still carries.
+        assert _g.PINNED.strip() in built, "prompt builder did not attach the pinned clause"
         assert "tier wording" in built, "prompt builder dropped the tier wording"
-        assert built.count("No nudity") == 1, "guardrail attached more than once"
+        assert built.count("No minors") == 1, "guardrail attached more than once"
 
         # 3. fenced ```json output still parses
         httpx.stream = queued(["```json\n" + json.dumps({"scenes": good}) + "\n```"])

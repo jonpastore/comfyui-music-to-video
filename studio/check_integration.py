@@ -151,7 +151,11 @@ if grok:
         wf = build_refs.workflow(sb["scenes"][0], "a.png", None, "empty",
                                  1280, 720, 7000, "WIDE SHOT.", guard)
         built = wf["11"]["inputs"]["prompt"]
-        assert g.PINNED in built, "prompt builder did not attach the pinned clause"
+        # .strip(): build_prompt strips the whole prompt, which eats PINNED's
+        # trailing space when the clause lands last. Matching the exact string
+        # only ever passed because the clause was being attached TWICE, leaving
+        # a mid-string copy that kept its space.
+        assert g.PINNED.strip() in built, "prompt builder did not attach the pinned clause"
         assert built.count("No minors") == 1, "clause attached more than once"
 
         # and the builder refuses model-authored minor references at that point,

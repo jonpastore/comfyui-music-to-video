@@ -173,7 +173,10 @@ def demo():
     assert "high-cut" in g and PINNED in g
 
     # --- minor-protection: input is refused, and the pinned clause says it too ---
-    for phrase in ("no minors", "childlike", "school uniform", "at least 25"):
+    # 21 to match PINNED (c193a40 "fixed limits" set it). A minor is under 18;
+    # this is the project's own stricter line, and the assertion tracks the
+    # clause rather than the other way round.
+    for phrase in ("no minors", "childlike", "school uniform", "at least 21"):
         assert phrase in PINNED.lower(), f"PINNED lost its minor-protection wording: {phrase!r}"
 
     blocked = [
