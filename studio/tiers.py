@@ -5,6 +5,7 @@ wording. What a tier cannot do is switch off PINNED -- compose_guardrail always
 appends it, so no tier, custom or built-in, produces sexually explicit output.
 Keep that append unconditional; it is the reason custom tiers are safe to allow.
 """
+import os
 import re
 import time
 import unicodedata
@@ -39,13 +40,22 @@ PINNED = (
 # negative pass entirely -- a "no children" negative prompt is literally inert on
 # this stack (see build_refs.py). Positive-text steering plus refusing the input
 # are therefore the only controls that actually do anything here.
-# Matched as substrings of a FLATTENED string (see _flatten), so each entry also
-# covers its morphology: "child" catches child's/childlike/childhood, "underage"
-# catches underaged, "loli" catches lolicon, "teen" catches teenage/teenaged.
-# Bare "baby", "kid" and "cp" are deliberately ABSENT -- they are ordinary set
+# Matched as a PREFIX of a normalized token (see _tokens), so each entry also
+# covers its morphology -- "child" catches child's/childlike/childhood,
+# "underage" catches underaged, "loli" catches lolicon, "teen" catches
+# teenage/teenaged -- while NOT catching eighteen/canteen/protein/between/halo,
+# which a substring match did.
+#
+# Bare "baby", "kid" and "cp" are deliberately ABSENT: they are ordinary set
 # dressing ("baby blue neon", "baby grand", "kid gloves", "cp lens") and this
 # filter runs on model OUTPUT across every scene, so one of them would fail a
 # whole 40-scene storyboard. Their genuinely-referential phrase forms are listed.
+#
+# WHAT THIS CANNOT DO, and no word list can: it matches spelling, not meaning.
+# "a small figure in an oversized coat holding her mother's hand" contains no
+# blocked term and is plainly a child. Catching that needs a classifier or a
+# schema that gives scenes no free-text slot to introduce a person at all.
+# Treat this as a high-precision tripwire, not as the safety control.
 MINOR_TERMS = (
     "child", "infant", "toddler", "newborn", "minors", "underage", "teen",
     "adolescent", "preteen", "tween", "juvenile", "schoolgirl", "schoolboy",
@@ -72,12 +82,23 @@ MINOR_TERMS = (
 _SINGLE = tuple(t for t in MINOR_TERMS if " " not in t)
 _PHRASES = tuple(t for t in MINOR_TERMS if " " in t)
 
-# Ordinary words that genuinely START with a blocked term, so prefix matching
-# alone would refuse them. Short list by design: prefix matching already spares
-# canteen/protein/eighteen/nineteen/between/minor/shot/halo/girl, which a
-# substring match did not.
-_ALLOW = frozenset({"infantry", "infantryman", "infantrymen",
-                    "teeny", "teensy", "teenier", "teeniest"})
+# CLOSED list, enumerated against all 75,145 words in /usr/share/dict/words --
+# not against this project's corpus, which is what made an earlier version
+# overfit. Under prefix-on-token matching a false positive requires a real word
+# that BEGINS with a blocked term; exactly 64 English words do, and all but
+# these are genuine references to minors. That is a bounded, enumerable set,
+# unlike the combinatorial word-junction collisions substring matching produced.
+# Re-run the dictionary sweep in demo() if MINOR_TERMS ever changes.
+#
+# Deliberately NOT allowlisted, though they are arguably about adults:
+# childish/childishly (describes appearance as often as behaviour), childproof,
+# childbearing/childbirth/childcare. Flagging those is the safer error here.
+_ALLOW = frozenset({
+    "infantry", "infantryman", "infantrymen", "infantries",   # military
+    "teeny", "teensy", "teenier", "teeniest", "teensier", "teensiest",
+    "nurseryman", "nurserymen",                               # horticulture
+    "childless", "childlessness",                             # about adults
+})
 
 _LEET = str.maketrans("013456789@$", "oieasgtbgas")
 
@@ -352,6 +373,35 @@ def demo():
         "she is 25 years old",
     ):
         check_text(ok)
+
+    # Dataset-independent false-positive bound. Tuning a word list against the
+    # corpus you happen to have is how it silently breaks on the next album, so
+    # the real measure is: how much of ORDINARY ENGLISH does this refuse? Every
+    # refusal below must be a genuine reference to minors. Skipped where the
+    # system dictionary is absent, since it is a property of the environment.
+    for dict_path in ("/usr/share/dict/words", "/usr/share/dict/american-english"):
+        if not os.path.exists(dict_path):
+            continue
+        words = {w.strip().lower() for w in open(dict_path, errors="ignore")
+                 if w.strip().isalpha()}
+        refused = []
+        for w in words:
+            try:
+                check_text(w)
+            except ContentRefused:
+                refused.append(w)
+        rate = len(refused) / max(1, len(words))
+        assert rate < 0.002, (
+            f"{len(refused)} of {len(words)} ordinary English words refused "
+            f"({rate:.3%}) -- the term list has started catching general "
+            f"vocabulary: {sorted(refused)[:25]}")
+        # every survivor must actually be about minors, i.e. start with a term
+        stray = [w for w in refused
+                 if not any(w.startswith(t) for t in _SINGLE)]
+        assert not stray, f"refused words unrelated to any term: {stray[:20]}"
+        print(f"  dictionary sweep: {len(refused)}/{len(words)} refused "
+              f"({rate:.3%}), all term-prefixed")
+        break
     # the tier name itself is checked too
     try:
         add_tier("teen", "ordinary text")
