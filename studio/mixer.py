@@ -200,6 +200,16 @@ def _item_duration(info, it):
     file's own probed length. Shared by render_set, mix_audio and set_duration
     so the three never disagree about how long a trimmed item runs -- the same
     reason they already share their overlap arithmetic."""
+    # A ramped item is exactly as long as apply_tempo_ramp will make it: the
+    # ramp both stretches the closing bars AND drops everything past the exit
+    # point, so its output length replaces the trim arithmetic rather than
+    # adjusting it. _apply_beatmatch plans the ramp before anything reads a
+    # duration, so prediction and render read the same plan.
+    ramp = it.get("_ramp")
+    if ramp:
+        rl = ramped_duration(ramp["bar_times"], ramp["ratios"])
+        if rl is not None:
+            return max(0.0, rl)
     full = info["duration"]
     in_s = float(it.get("in_secs") or 0.0)
     out_s = it.get("out_secs")
@@ -288,7 +298,7 @@ def _apply_beatmatch(items):
     probe and no out_secs already set means there's nothing to snap
     around -- the item passes through untouched, same as no beat_grid."""
     out = []
-    for it in items:
+    for idx, it in enumerate(items):
         if it.get("beatmatch"):
             out_point = it.get("out_secs")
             if out_point is None:
@@ -305,8 +315,49 @@ def _apply_beatmatch(items):
                 it = dict(it, secs=secs)
                 if out_secs is not None:
                     it["out_secs"] = out_secs
+                # The tempo ramp is planned HERE, in the one pass set_duration,
+                # render_set and mix_audio all run, so the length the editor
+                # predicts and the length that renders come from the same
+                # numbers. Planning it anywhere else is how the two drift.
+                nxt = items[idx + 1] if idx + 1 < len(items) else None
+                out_bpm, in_bpm = it.get("bpm"), (nxt or {}).get("bpm")
+                exit_at = it.get("out_secs")
+                if nxt is not None and can_beatmatch(out_bpm, in_bpm) and exit_at is not None:
+                    bar_times, ratios = plan_tempo_ramp(
+                        it.get("beat_grid") or [], it.get("downbeat_offset") or 0,
+                        exit_at, out_bpm, in_bpm)
+                    if ratios:
+                        # SEEK-RELATIVE, because apply_tempo_ramp seeks in_secs
+                        # first and reads bar_times against that point while
+                        # plan_tempo_ramp returns raw-file coordinates. Getting
+                        # this wrong is silently wrong by exactly in_secs.
+                        in_s = float(it.get("in_secs") or 0.0)
+                        it["_ramp"] = {"bar_times": [b - in_s for b in bar_times],
+                                        "ratios": ratios}
         out.append(it)
     return out
+
+
+def ramped_duration(bar_times, ratios):
+    """How long apply_tempo_ramp's OUTPUT runs, without rendering it.
+
+    bar_times are SEEK-RELATIVE, the same convention apply_tempo_ramp
+    documents: everything before bar_times[0] is copied untouched and each
+    segment after it is divided by its own tempo ratio. Everything after
+    bar_times[-1] is dropped, which is why this is the whole length and not a
+    delta.
+
+    Analytic on purpose. Pre-rendering to measure would mean an ffmpeg call
+    inside set_duration, which the editor calls on every page load -- and
+    set_duration promises "no ffmpeg call beyond ffprobe". Verified against
+    real renders to within mp3 frame padding (~40ms) across faster, slower,
+    trimmed and untrimmed cases.
+    """
+    if not ratios or len(bar_times) != len(ratios) + 1:
+        return None
+    head = max(0.0, bar_times[0])
+    return head + sum((bar_times[i + 1] - bar_times[i]) / r
+                      for i, r in enumerate(ratios) if r)
 
 
 def _check_transition_fits(secs, running_dur):
@@ -415,6 +466,30 @@ def mix_audio(items, out_path, progress=None):
     if not items:
         raise ValueError("items is empty")
     items = _apply_beatmatch(items)
+    # Render the tempo ramps FIRST, so what follows sees ordinary audio files.
+    # _item_duration already predicted these lengths analytically; rendering
+    # them here is what makes that prediction true rather than a claim. Once an
+    # item is ramped its trim is spent (apply_tempo_ramp seeks in_secs and drops
+    # everything past the exit point), so the trim args must not be applied a
+    # second time.
+    ramp_dir = None
+    ramped = []
+    for i, it in enumerate(items):
+        if not it.get("_ramp"):
+            ramped.append(it)
+            continue
+        if ramp_dir is None:
+            ramp_dir = tempfile.mkdtemp(prefix="setramp_")
+        dst = os.path.join(ramp_dir, f"ramp{i}.mp3")
+        progress(f"tempo ramp for item {i + 1}")
+        apply_tempo_ramp(it["audio"], dst, float(it.get("in_secs") or 0.0),
+                          it["_ramp"]["bar_times"], it["_ramp"]["ratios"], progress)
+        nit = dict(it, audio=dst)
+        nit.pop("_ramp", None)
+        nit["in_secs"] = None
+        nit["out_secs"] = None
+        ramped.append(nit)
+    items = ramped
     progress(f"probing {len(items)} tracks")
     infos = [probe(it["audio"]) for it in items]
     missing = [it["audio"] for it, i in zip(items, infos) if not i["has_audio"]]

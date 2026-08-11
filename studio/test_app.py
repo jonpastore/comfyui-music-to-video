@@ -2513,7 +2513,7 @@ def test_set_item_beatmatch_toggle_persists_and_shows_its_plan():
         assert db.one("SELECT beatmatch FROM set_items WHERE id=?", item1["id"])["beatmatch"] == 0
 
 
-def test_beatmatch_note_never_claims_a_tempo_ramp_the_render_does_not_apply():
+def test_tempo_ramp_is_wired_and_the_note_matches_what_renders():
     """The editor may only promise what the renderer produces.
 
     mixer.apply_tempo_ramp exists and works, but nothing calls it from the
@@ -2528,17 +2528,18 @@ def test_beatmatch_note_never_claims_a_tempo_ramp_the_render_does_not_apply():
     # a CALL site, not a mention: this file and app.py both name the function in
     # prose, and matching the bare name made this test fail on its own comment
     here = os.path.dirname(appmod.__file__)
-    ramp_is_wired = any(
-        re.search(r"\bmixer\.apply_tempo_ramp\s*\(", open(os.path.join(here, f)).read())
-        for f in ("app.py", "jobs.py"))
-    assert not ramp_is_wired, \
-        "apply_tempo_ramp now has a caller -- wire it into set_duration's accounting and update this test"
+    # read the file, not the module: conftest replaces mixer with a synthetic
+    # stub that has no __file__
+    src = open(os.path.join(here, "mixer.py")).read()
+    assert re.search(r"apply_tempo_ramp\(\s*it\[.audio.\]", src), \
+        "mix_audio no longer renders the ramp, so the note would be a promise again"
+    assert "ramped_duration(" in src, "nothing prices the ramp, so prediction will drift"
 
     import inspect
-    src = inspect.getsource(appmod._beatmatch_plan)
-    assert "not applied" in src, "the beatmatch note no longer says the ramp is unapplied"
-    assert "snapped + tempo ramp" not in src, \
-        "the note claims a tempo ramp is applied; nothing applies one at render time"
+    note_src = inspect.getsource(appmod._beatmatch_plan)
+    assert "not applied" not in note_src, \
+        "the note still says the ramp is unapplied, but mix_audio renders it"
+    assert "tempo-ramped" in note_src
 
 
 def test_set_item_edit_and_reorder_feed_beatmatch_fields_to_set_duration(patch_stub):
@@ -3015,3 +3016,50 @@ def test_timeline_widths_come_from_the_same_helper_the_renderer_uses():
         import mixer as _m
         info = _m.probe(db.one("SELECT mp3_path FROM songs WHERE id=?", a["id"])["mp3_path"])
         assert abs(trimmed[0] - _m._item_duration(info, {"in_secs": 1.0, "out_secs": 4.0})) < 0.01
+
+
+def test_the_chosen_anchor_can_be_deleted():
+    """Disabling Delete on the chosen candidate said 'pick another candidate
+    first', which is impossible advice for a group with only ONE -- the only
+    anchor could never be removed. The server always allowed it; the button
+    was the block."""
+    with TestClient(appmod.app) as client:
+        album = "Only Anchor Album"
+        d = os.path.join(db.DATA, "onlyanchor")
+        os.makedirs(d, exist_ok=True)
+        p = os.path.join(d, "solo.png")
+        open(p, "wb").write(_png_bytes())
+        db.run("""INSERT INTO anchors (scope_kind,scope_value,tier,view,path,chosen,created)
+                  VALUES ('album',?,'r','front',?,1,?)""", album, p, time.time())
+        aid = db.one("SELECT id FROM anchors WHERE path=?", p)["id"]
+
+        page = client.get("/anchors").text
+        assert 'data-chosen="1"' in page, "the chosen one is not marked for the confirm"
+        # scope to THAT form: a bare .*?disabled with re.S matches any later
+        # disabled anywhere on the page
+        form = re.search(r'<form[^>]*action="/anchors/%d/delete".*?</form>' % aid, page, re.S)
+        assert form, "the delete form for the chosen anchor is missing"
+        assert "disabled" not in form.group(0), \
+            "Delete is still disabled on the chosen anchor"
+
+        assert client.post(f"/anchors/{aid}/delete").status_code in (200, 303)
+        assert db.one("SELECT id FROM anchors WHERE id=?", aid) is None
+        assert not os.path.isfile(p), "the file was left behind"
+
+
+def test_the_composed_anchor_prompt_fits_its_own_cap():
+    """The form shipped a default prompt longer than it would accept: a rich
+    album profile composes past 2000 characters (XXX measured 2157), so
+    submitting the form unedited answered with a raw JSON 400."""
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Long Prompt Album"})
+        pl = db.one("SELECT id FROM playlists WHERE name='Long Prompt Album'")["id"]
+        # a profile as wordy as a real one
+        long_text = ("black-furred shoulders, black-furred arms, black-furred torso, " * 12)[:900]
+        client.post(f"/playlists/{pl}/look", data={"identity": long_text, "wardrobe": long_text,
+                                                    "body": long_text})
+        ctx = appmod.anchor_form_ctx("Long Prompt Album", ["r"])
+        for p in ctx["tier_panels"]:
+            assert len(p["prompt"]) <= appmod.MAX_ANCHOR_PROMPT, (
+                f"the composed {p['name']} prompt is {len(p['prompt'])} characters but the form "
+                f"caps at {appmod.MAX_ANCHOR_PROMPT} -- it would refuse its own default")

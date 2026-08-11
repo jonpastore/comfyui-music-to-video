@@ -33,13 +33,14 @@
         <form method="post" action="/anchors/{{ c.id }}/pick">
           <button type="submit" {% if c.chosen %}disabled{% endif %}>{{ "Chosen" if c.chosen else "Pick" }}</button>
         </form>
-        <form method="post" action="/anchors/{{ c.id }}/delete" class="delete-anchor">
-          {# the chosen one is not deletable from here: removing it would leave
-             the tier with no anchor and silently block every refs job for it #}
-          <button type="submit" class="thumb-btn-danger"
-                  {% if c.chosen %}disabled title="pick another candidate first"{% endif %}>
-            Delete
-          </button>
+        {# The chosen one IS deletable. Disabling it said "pick another candidate
+           first", which is impossible advice for a group with only one -- the
+           only anchor could never be removed. The confirm states the cost
+           instead, and reference generation already refuses a tier with no
+           chosen anchor with its own clear message. #}
+        <form method="post" action="/anchors/{{ c.id }}/delete" class="delete-anchor"
+              {% if c.chosen %}data-chosen="1"{% endif %}>
+          <button type="submit" class="thumb-btn-danger">Delete</button>
         </form>
       </div>
     </div>

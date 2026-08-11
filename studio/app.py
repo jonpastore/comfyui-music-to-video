@@ -1313,11 +1313,16 @@ async def add_anchor_refs(request: Request, album: str = Form(...),
         if char["scope_value"] != album:
             raise HTTPException(400, f"character {char['name']!r} belongs to {char['scope_value']!r}")
     await _save_anchor_refs(album, character_id, uploads)
+    # htmx swaps the form back in with the new thumbnails; a plain browser still
+    # gets the redirect, so this works with JavaScript off exactly as before
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(request, "_anchor_form.html",
+                                           anchor_form_ctx(album, character_id=character_id))
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 
 @app.post("/anchors/refs/{asset_id}/delete")
-def delete_anchor_ref(asset_id: int):
+def delete_anchor_ref(request: Request, asset_id: int):
     """Remove a saved base image, row and file. Anchors already generated from
     it are untouched -- they are their own images, not references to this one."""
     a = db.one("SELECT * FROM assets WHERE id=? AND kind='anchor_ref'", asset_id)
@@ -1330,6 +1335,9 @@ def delete_anchor_ref(asset_id: int):
         except OSError:
             pass
     db.run("DELETE FROM assets WHERE id=?", asset_id)
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(request, "_anchor_form.html",
+                                           anchor_form_ctx(album))
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 
@@ -1518,7 +1526,12 @@ def delete_character(cid: int):
     return RedirectResponse("/playlists", status_code=303)
 
 
-MAX_ANCHOR_PROMPT = 2000
+# The prompt is COMPOSED from the album's identity, wardrobe and body wording
+# plus a per-view framing sentence, and a detailed album profile runs past 2000
+# on its own -- the XXX default measured 2157, so the form shipped a prompt it
+# would then refuse to accept. This is a sanity bound, not a safety one: what
+# makes a prompt safe is tiers.check_text/check_override, which run regardless.
+MAX_ANCHOR_PROMPT = 4000
 
 
 def default_anchor_prompt(scope_value, view, character_id=None):
@@ -3142,19 +3155,15 @@ def _beatmatch_plan(items, songs, mode):
             in_secs = it["in_secs"] or 0.0
             entry["ramp"] = {"in_secs": in_secs,
                               "bar_times": [b - in_secs for b in bar_times], "ratios": ratios}
-            # The plan is real and mixer.apply_tempo_ramp renders it, but NOTHING
-            # calls that from the render path yet, so the note must not claim a
-            # ramp the output will not contain -- a set editor that promises
-            # what the renderer does not produce is the same defect as a length
-            # prediction for a set that will not render.
-            #
-            # Wiring it is not a one-liner: stretching the closing bars changes
-            # the item's DURATION, so set_duration and _check_transition_fits
-            # have to account for it or the prediction gap reopens. Until that
-            # is done the honest note is what is actually applied.
-            entry["note"] = (f"snapped to the beat — a {out_bpm:.0f}→{in_bpm:.0f} BPM ramp over "
-                              f"{len(ratios)} bars is possible, but tempo ramping is not applied "
-                              f"at render yet")
+            # Applied for real now: mixer._apply_beatmatch plans the ramp in the
+            # ONE pass set_duration, render_set and mix_audio all share, and
+            # _item_duration prices it via ramped_duration(), so the length the
+            # editor predicts is the length that renders (verified end to end to
+            # within mp3 frame padding). mix_audio renders the ramp before
+            # anything probes, which is what makes the prediction true rather
+            # than a claim.
+            entry["note"] = (f"snapped to the beat, and tempo-ramped {out_bpm:.0f}→{in_bpm:.0f} BPM "
+                              f"over {len(ratios)} bars")
         else:
             entry["note"] = "snapped only — not enough bars before the transition to ramp"
     return plan

@@ -117,9 +117,15 @@ document.addEventListener("submit", function (e) {
     return;
   }
   var anchorForm = e.target.closest(".delete-anchor");
-  if (anchorForm && !confirm("Delete this anchor candidate? The file is removed too.")) {
-    e.preventDefault();
-    return;
+  if (anchorForm) {
+    // The CHOSEN one is deletable -- refusing it was impossible advice for a
+    // group with only one candidate -- but the cost is stated, because
+    // reference generation for that tier stops until another is chosen.
+    var msg = anchorForm.dataset.chosen
+      ? "Delete the CHOSEN anchor? The file is removed too, and reference " +
+        "generation for this tier will refuse until you pick or generate another."
+      : "Delete this anchor candidate? The file is removed too.";
+    if (!confirm(msg)) { e.preventDefault(); return; }
   }
   var targetForm = e.target.closest(".delete-target");
   if (targetForm && !confirm("Remove this publishing destination?")) {
@@ -414,4 +420,30 @@ function initGenreSelects(genreId, subgenreId) {
 document.addEventListener("DOMContentLoaded", function () {
   initGenreSelects("genre-select", "subgenre-select");
   initGenreSelects("genre2-select", "subgenre2-select");
+});
+
+// ---- live character count against a field's own cap -------------------------
+// The composed anchor prompt can start out longer than the cap, so the count has
+// to be visible while typing; arriving as a raw JSON error after submit was how
+// this was found.
+document.addEventListener("input", function (e) {
+  var ta = e.target;
+  if (!ta.classList || !ta.classList.contains("counted")) return;
+  updateCount(ta);
+});
+
+function updateCount(ta) {
+  var max = parseInt(ta.dataset.max, 10) || 0;
+  var out = document.querySelector('.char-count[data-for="' + ta.name + '"]');
+  if (!out) return;
+  out.textContent = ta.value.length + " / " + max;
+  out.classList.toggle("over", max > 0 && ta.value.length > max);
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll("textarea.counted").forEach(updateCount);
+});
+// htmx swaps the anchor form wholesale, so the counts have to be re-attached
+document.body.addEventListener("htmx:afterSwap", function () {
+  document.querySelectorAll("textarea.counted").forEach(updateCount);
 });

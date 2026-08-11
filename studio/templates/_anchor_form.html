@@ -91,6 +91,11 @@
   {% if saved_refs %}
   <fieldset>
     <legend>Base images &mdash; tick the ones to build from</legend>
+    <p class="hint">The model conditions on {{ max_refs }}, so at most {{ max_refs }} may be
+      ticked &mdash; more is refused rather than silently narrowed to whichever three came
+      first. They are an unordered SET, not face-then-outfit: one photograph carrying both is
+      fine, and with several the prompt tells the model they are the same character rather
+      than several to line up side by side.</p>
     <div class="ref-gallery">
       {% for r in saved_refs %}
       <div class="ref-thumb">
@@ -105,15 +110,12 @@
            HTML and browsers drop it. formnovalidate so deleting never trips the
            generate form's own required fields. #}
         <button type="submit" class="thumb-btn-danger delete-ref" formnovalidate
-                formaction="/anchors/refs/{{ r.id }}/delete">Delete</button>
+                formaction="/anchors/refs/{{ r.id }}/delete"
+                hx-post="/anchors/refs/{{ r.id }}/delete" hx-target="#anchor-form"
+                hx-swap="outerHTML">Delete</button>
       </div>
       {% endfor %}
     </div>
-    <p class="hint">The model conditions on {{ max_refs }}, so at most {{ max_refs }} may be
-      ticked &mdash; more is refused rather than silently narrowed to whichever three came
-      first. They are an unordered SET, not face-then-outfit: one photograph carrying both is
-      fine, and with several the prompt tells the model they are the same character rather
-      than several to line up side by side.</p>
   </fieldset>
   {% endif %}
 
@@ -130,7 +132,9 @@
       face-then-outfit &mdash; one photograph carrying both is fine.{% endif %}</p>
     {# Save keeps the images without generating anything, so a set of references
        can be built up and come back to. Same form, different action. #}
-    <button type="submit" formnovalidate formaction="/anchors/refs">Save</button>
+    <button type="submit" formnovalidate formaction="/anchors/refs"
+            hx-post="/anchors/refs" hx-target="#anchor-form" hx-swap="outerHTML"
+            hx-encoding="multipart/form-data" hx-include="#anchor-form">Upload</button>
   </div>
 
   {# ---- the rules that apply, above the box they govern ---- #}
@@ -160,8 +164,10 @@
       attached on top of the pinned text for this tier's sheets:</p>
     <blockquote>{{ p.text or "(this tier adds no wording of its own)" }}</blockquote>
     <label>Prompt &mdash; what {{ p.name | tiername }}'s character sheets are built from
-      <textarea name="prompt_{{ p.name }}" rows="8"
+      <textarea name="prompt_{{ p.name }}" rows="8" class="counted"
+                data-max="{{ max_anchor_prompt }}"
                 maxlength="{{ max_anchor_prompt }}">{{ p.prompt }}</textarea>
+      <span class="char-count muted" data-for="prompt_{{ p.name }}"></span>
     </label>
   </div>
   {% endfor %}
