@@ -592,6 +592,52 @@ def classify_sheet(sheet_path, note="", model=None, progress=None):
     return {"flagged": flagged, "cells_seen": int(obj.get("cells_seen") or 0)}
 
 
+_DESCRIBE = {
+    "identity": (
+        "Describe ONLY the character's fixed identity: face shape and features, eye colour "
+        "and shape, ear shape, hair length, colour and styling, any markings, and build. "
+        "These are the traits that must not drift between frames."),
+    "wardrobe": (
+        "Describe ONLY what the character is WEARING: each garment, its cut and colour, "
+        "materials, and the hardware and accessories. Never describe absent clothing -- "
+        "say what is worn, not what is missing."),
+    "body": (
+        "Describe ONLY the colouring and texture of the body, part by part: shoulders, arms, "
+        "torso, hips, thighs, calves. State explicitly that every part matches the face, "
+        "naming the colour each time. This wording exists to stop a dark-furred character "
+        "rendering with human-toned legs, so be repetitive and specific rather than brief."),
+}
+
+
+def describe_anchor(image_path, field, model=None, progress=None):
+    """Draft one album-profile field by LOOKING at that album's anchor image.
+
+    A continuity description is a transcription job -- the anchor already shows
+    what must stay the same, and typing it out by hand is where drift creeps in.
+    One call per field, per album, when the album is set up; nothing per frame.
+    """
+    if field not in _DESCRIBE:
+        raise ValueError(f"nothing to describe for {field!r}")
+    content = [
+        {"type": "text",
+         "text": (_DESCRIBE[field] + " This is a character reference sheet for an adult "
+                  "fictional character in a music video. Answer as ONE plain sentence or "
+                  "two, present tense, no preamble, no markdown, no bullet points -- the "
+                  "text goes straight into an image prompt. "
+                  'Reply as JSON: {"text": "<the description>"}')},
+        {"type": "image_url", "image_url": {"url": _data_url(image_path), "detail": "high"}},
+    ]
+    out = _chat(_resolve_model(model or VISION_MODEL),
+                [{"role": "user", "content": content}], progress)
+    try:
+        text = json.loads(_FENCE.sub("", out).strip()).get("text", "")
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"describe returned non-JSON: {e}") from None
+    # single line: album profile fields are one-line prompt fragments, and a
+    # newline in a prompt fragment is how message structure gets faked
+    return " ".join(str(text).split()).strip()
+
+
 def write_storyboard(sb, outdir, slug, tier):
     os.makedirs(outdir, exist_ok=True)
     base = os.path.join(outdir, f"{slug}_{tier}")
@@ -890,6 +936,14 @@ def demo():
                         "-frames:v", "1", sheet], check=True, capture_output=True)
         sent = {}
 
+        def capture_stream_json(payload):
+            """Stub that records the request and returns one JSON object."""
+            def _stream(method, url, headers=None, json=None, timeout=None):
+                sent["body"] = json
+                return queued([__import__("json").dumps(payload)])(
+                    method, url, headers=headers, json=json, timeout=timeout)
+            return _stream
+
         def capture_stream(method, url, headers=None, json=None, timeout=None):
             sent["body"] = json
             return queued([__import__("json").dumps({
@@ -913,6 +967,26 @@ def demo():
             raise AssertionError("non-JSON verdict did not raise")
         except RuntimeError as e:
             assert "non-JSON" in str(e), e
+
+        # --- describe_anchor: image in, one-line prompt fragment out ---
+        sent.clear()
+        httpx.stream = capture_stream_json({
+            "text": "  Sleek black fur on\nshoulders, arms and thighs,\tmatching the face.  "})
+        text = describe_anchor(sheet, "body")
+        # collapsed to a single line: these are prompt fragments, and a newline
+        # in one is how message structure gets faked
+        assert "\n" not in text and "\t" not in text and "  " not in text, repr(text)
+        assert text.startswith("Sleek black fur") and text.endswith("the face."), repr(text)
+        img = sent["body"]["messages"][0]["content"][1]["image_url"]["url"]
+        assert img.startswith("data:image/jpeg;base64,"), img[:40]
+        instruction = sent["body"]["messages"][0]["content"][0]["text"]
+        assert "part by part" in instruction, instruction[:120]
+
+        try:
+            describe_anchor(sheet, "world")
+            raise AssertionError("described a field with no description prompt")
+        except ValueError as e:
+            assert "world" in str(e), e
     httpx.post, httpx.get, httpx.stream = orig_post, orig_get, orig_stream
 
     print("grok.py OK")

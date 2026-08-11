@@ -324,6 +324,43 @@ def test_audio_only_set_mixes_the_songs_own_mp3s(client):
     assert [i["secs"] for i in args["items"]] == [1.5, 1.5]
 
 
+def test_album_profile_fields_have_hints_and_the_wand_drafts_from_the_anchor(client):
+    from conftest import describe_calls
+    name = "Wand Album"
+    pl = db.run("INSERT INTO playlists (name, kind, created) VALUES (?, 'playlist', ?)",
+                name, time.time())
+
+    page = client.get("/playlists").text
+    # the hard-won rules sit next to the box you type into
+    assert "at cfg 1.0 the negative prompt is skipped" in page
+    assert "PER BODY PART" in page
+    assert 'name="identity"' in page and 'name="body"' in page
+
+    # no anchor yet -> refused, and the reason names the album
+    r = client.post(f"/playlists/{pl}/describe", data={"field": "identity"},
+                    follow_redirects=False)
+    assert r.status_code == 400 and name in r.text
+
+    db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen, created)
+              VALUES ('album',?,?,?,?,?,?)""", name, "r", "front", "/fake/front.png", 1, time.time())
+    db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen, created)
+              VALUES ('album',?,?,?,?,?,?)""", name, "r", "back", "/fake/back.png", 0, time.time())
+
+    n = len(describe_calls)
+    r2 = client.post(f"/playlists/{pl}/describe", data={"field": "body"}, follow_redirects=False)
+    assert r2.status_code == 200, r2.text
+    # the CHOSEN anchor, not just any row
+    assert describe_calls[n:] == [("/fake/front.png", "body")]
+    # a fragment that replaces the field in place, not a whole page
+    assert "<html" not in r2.text and 'id="album-field-body"' in r2.text
+    assert "drafted body from the anchor" in r2.text
+    # drafting must not save: the row is still untouched until Save is pressed
+    assert db.one("SELECT body FROM playlists WHERE id=?", pl)["body"] is None
+
+    r3 = client.post(f"/playlists/{pl}/describe", data={"field": "world"}, follow_redirects=False)
+    assert r3.status_code == 400, "world is not a describable field"
+
+
 def test_playlist_delete_keeps_songs_and_renders(client):
     s1 = _make_song("keepme")
     pl = db.run("INSERT INTO playlists (name, kind) VALUES (?, 'playlist')", f"Doomed-{s1}")

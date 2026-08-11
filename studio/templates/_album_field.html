@@ -1,0 +1,19 @@
+{# One album-profile field. Swapped whole by the wand, so the hx-* attributes
+   have to live on this wrapper: the replacement is what keeps working. #}
+<div class="album-field" id="album-field-{{ f.key }}">
+  <label for="f-{{ f.key }}">{{ f.label }}</label>
+  {% if f.wand %}
+  <button type="button" class="wand"
+          title="Describe this from the album's anchor image"
+          aria-label="Describe {{ f.label }} from the album's anchor image"
+          hx-post="/playlists/{{ playlist.id }}/describe"
+          hx-vals='{"field": "{{ f.key }}"}'
+          hx-target="#album-field-{{ f.key }}"
+          hx-swap="outerHTML"
+          hx-disabled-elt="this"
+          hx-indicator="#wand-busy-{{ f.key }}">&#10024;</button>
+  <span class="htmx-indicator muted" id="wand-busy-{{ f.key }}">looking at the anchor&hellip;</span>
+  {% endif %}
+  <p class="hint">{{ f.hint }}</p>
+  <textarea id="f-{{ f.key }}" name="{{ f.key }}" rows="3">{{ f.value }}</textarea>
+</div>

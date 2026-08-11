@@ -114,13 +114,15 @@
     written into make_anchor.py and build_refs.py, which made one album part of the code;
     a new album is now these boxes. Blank means "use the default shown".</p>
   <form method="post" action="/playlists/{{ d.playlist.id }}/profile" class="stack-form">
-    {% for key, label, value in d.profile_fields %}
-    <label>{{ label }}
-      <textarea name="{{ key }}" rows="3">{{ value }}</textarea>
-    </label>
+    {% for f in d.profile_fields %}
+      {# the partial is also rendered on its own by the wand route, where the
+         playlist is the top-level context -- bind the same name here #}
+      {% with playlist = d.playlist %}{% include "_album_field.html" %}{% endwith %}
     {% endfor %}
     <button type="submit">Save album look</button>
   </form>
+  <p class="muted">&#10024; drafts a field by looking at this album's anchor image. It fills
+    the box only &mdash; nothing is saved until you press Save album look.</p>
 
   <h3>Anchors</h3>
   <p class="muted">Character sheets for this album, one per tier and view. Every song on

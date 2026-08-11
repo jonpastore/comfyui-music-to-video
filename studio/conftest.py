@@ -57,6 +57,7 @@ def _write_storyboard(sb, outdir, slug, tier):
 
 
 classify_calls = []
+describe_calls = []
 
 
 def _classify_sheet(sheet_path, note="", model=None, progress=None):
@@ -69,6 +70,9 @@ _stub("grok",
       list_models=lambda: ["grok-x"],
       generate_storyboard=_generate_storyboard,
       classify_sheet=_classify_sheet,
+      describe_anchor=lambda image_path, field, model=None, progress=None: (
+          describe_calls.append((image_path, field))
+          or f"drafted {field} from the anchor"),
       write_storyboard=_write_storyboard)
 
 # ---- lyrics ------------------------------------------------------------

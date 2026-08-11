@@ -285,3 +285,22 @@ dialog.sheet-modal .modal-bar {
 @media (max-width: 860px) {
   .row-2col, .image-note-row { grid-template-columns: 1fr; }
 }
+
+/* Album profile field: label, wand, hint, then the box. */
+.album-field { display: flex; flex-direction: column; gap: 0.3rem; }
+.album-field label { margin-bottom: 0; font-weight: 600; }
+.album-field .hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  max-width: 70ch;
+}
+.album-field .wand {
+  align-self: flex-start;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+/* htmx toggles .htmx-request on the element named by hx-indicator */
+.htmx-indicator { display: none; }
+.htmx-indicator.htmx-request { display: inline; }

@@ -910,21 +910,45 @@ def delete_song(id: int, confirm: str = Form("")):
 # sheet, not a character. Every field is editable per album in the UI, which is
 # where anything album-specific belongs -- make_anchor.py and build_refs.py used
 # to carry one project's protagonist in their source.
+# (label, default, hint). The hints are the hard-won findings from this
+# project's own render logs, put where the text is actually typed -- every one
+# of them is something that cost a regeneration to learn.
 ALBUM_FIELDS = {
-    "style_text": ("Overarching theme",
-                   "The look and mood of the whole album, in a sentence or two."),
-    "identity": ("Character identity",
-                 "Head, face and hair come from the identity image; keep that identity exactly."),
-    "wardrobe": ("Wardrobe",
-                 "The outfit and accessories of the wardrobe image, same hardware and materials."),
-    "body": ("Body consistency",
-             "Body colouring and texture are identical head to toe, matching the face, with no "
-             "lighter or differently-toned patches anywhere."),
-    "world": ("World",
-              "The recurring places this album's videos happen in."),
-    "render_tail": ("Render style",
-                    "photorealistic cinematic frame, premium music video still, high detail, 16:9"),
+    "style_text": (
+        "Overarching theme",
+        "The look and mood of the whole album, in a sentence or two.",
+        "Not sent to the renderer. Context for you and for storyboard writing."),
+    "identity": (
+        "Character identity",
+        "Head, face and hair come from the identity image; keep that identity exactly.",
+        "Name every feature that must not drift between frames: eye colour and shape, ear "
+        "shape, hair length and colour, markings, build. Anything you leave unsaid is free "
+        "to change from clip to clip."),
+    "wardrobe": (
+        "Wardrobe",
+        "The outfit and accessories of the wardrobe image, same hardware and materials.",
+        "Say what is WORN, never what is absent: at cfg 1.0 the negative prompt is skipped "
+        "entirely, so \"no jacket\" does nothing. Name garments, cut and hardware."),
+    "body": (
+        "Body consistency",
+        "Body colouring and texture are identical head to toe, matching the face, with no "
+        "lighter or differently-toned patches anywhere.",
+        "Re-assert colouring PER BODY PART. One mention at the top does not hold below the "
+        "waist -- this is the fix for a black-furred character rendering with human-toned "
+        "legs, and it has to be positive wording, not a negative."),
+    "world": (
+        "World",
+        "The recurring places this album's videos happen in.",
+        "List real, distinct locations. Scenes rotate through them, which is what stops "
+        "every frame being the same corridor in the same purple light."),
+    "render_tail": (
+        "Render style",
+        "photorealistic cinematic frame, premium music video still, high detail, 16:9",
+        "Appended to every image prompt. Medium, quality and aspect only -- no subject."),
 }
+
+# Fields the wand can draft from a look at the album's anchor image.
+DESCRIBABLE = ("identity", "wardrobe", "body")
 
 
 def album_profile(name):
@@ -936,7 +960,7 @@ def album_profile(name):
     """
     row = db.one("SELECT * FROM playlists WHERE name=? AND kind='playlist'", name or "")
     out = {}
-    for key, (_label, default) in ALBUM_FIELDS.items():
+    for key, (_label, default, _hint) in ALBUM_FIELDS.items():
         value = (row[key] if row and row[key] else "") or default
         out[key] = value
     out["_row"] = row
@@ -969,7 +993,9 @@ def playlist_detail(p):
             if db.jset(a).get("playlist_id") == p["id"]]
     # the album profile, as (key, label, current value) for the form
     prof = album_profile(p["name"])
-    profile_fields = [(k, ALBUM_FIELDS[k][0], prof[k]) for k in ALBUM_FIELDS]
+    profile_fields = [{"key": k, "label": ALBUM_FIELDS[k][0], "value": prof[k],
+                       "hint": ALBUM_FIELDS[k][2], "wand": k in DESCRIBABLE}
+                      for k in ALBUM_FIELDS]
     anchors = db.q("""SELECT * FROM anchors WHERE scope_kind='album' AND scope_value=?
                       ORDER BY tier, view, id DESC""", p["name"])
     return {"playlist": p, "rows": rows, "count": len(items), "total_secs": total,
@@ -1025,13 +1051,39 @@ async def save_album_profile(id: int, request: Request):
     """
     get_playlist_or_404(id)
     form = await request.form()
-    for key, (_label, default) in ALBUM_FIELDS.items():
+    for key, (_label, default, _hint) in ALBUM_FIELDS.items():
         if key not in form:
             continue
         value = (form.get(key) or "").strip()
         db.run(f"UPDATE playlists SET {key}=? WHERE id=?",
                None if not value or value == default else value, id)
     return RedirectResponse("/playlists", status_code=303)
+
+
+@app.post("/playlists/{id}/describe", response_class=HTMLResponse)
+def describe_album_field(request: Request, id: int, field: str = Form(...)):
+    """Wand: draft one profile field by looking at this album's anchor.
+
+    Synchronous rather than a job: it is one call, the user is staring at the
+    box waiting for it, and a queued job would land behind an hour of rendering.
+    Nothing is saved -- the text lands in the textarea for editing, and the
+    existing Save button is still what writes it.
+    """
+    p = get_playlist_or_404(id)
+    if field not in DESCRIBABLE:
+        raise HTTPException(400, f"cannot describe {field!r}")
+    anchor = db.one("""SELECT * FROM anchors WHERE scope_kind='album' AND scope_value=?
+                       ORDER BY chosen DESC, (view='front') DESC, id DESC LIMIT 1""", p["name"])
+    if not anchor:
+        raise HTTPException(400, f"no anchor for album '{p['name']}' yet -- generate one first")
+    try:
+        text = grok.describe_anchor(anchor["path"], field)
+    except Exception as e:
+        raise HTTPException(502, f"could not describe the anchor: {e}") from None
+    label, _default, hint = ALBUM_FIELDS[field]
+    return templates.TemplateResponse(request, "_album_field.html", {
+        "playlist": p,
+        "f": {"key": field, "label": label, "value": text, "hint": hint, "wand": True}})
 
 
 @app.post("/playlists/{id}/delete")
