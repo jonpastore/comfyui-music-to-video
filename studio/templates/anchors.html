@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Anchors</h1>
+<p class="hint">An anchor is the character reference sheet for an ALBUM or PLAYLIST at a given
+  TIER and view -- every track sharing that scope+tier uses the same chosen anchor.</p>
+
+<section class="card">
+  <h2>Generate anchor candidates</h2>
+  <form method="post" action="/anchors" enctype="multipart/form-data">
+    <label>Scope
+      <select name="scope_kind">
+        <option value="album" {% if prefill_scope_kind == "album" %}selected{% endif %}>album</option>
+        <option value="playlist" {% if prefill_scope_kind == "playlist" %}selected{% endif %}>playlist</option>
+      </select>
+    </label>
+    <label>Scope value (album name, or playlist id)
+      <input type="text" name="scope_value" value="{{ prefill_scope_value }}" required>
+    </label>
+    <label>Tier
+      <select name="tier">
+        {% for t in tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>View
+      <select name="view">
+        <option value="front">front</option>
+        <option value="back">back</option>
+      </select>
+    </label>
+    <label>Face <input type="file" name="face" accept="image/*" required></label>
+    <label>Outfit <input type="file" name="outfit" accept="image/*" required></label>
+    <label>Candidates <input type="number" name="n" value="4" min="1" max="8"></label>
+    <button type="submit">Generate anchors</button>
+  </form>
+  {% if albums %}<p class="hint">Known albums: {{ albums | join(", ") }}</p>{% endif %}
+  {% if playlists %}
+  <p class="hint">Playlists:
+    {% for p in playlists %}{{ p.id }}={{ p.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+  </p>
+  {% endif %}
+</section>
+
+{% if not groups %}
+<p class="empty">No anchors generated yet.</p>
+{% else %}
+{% for g in groups %}
+<section class="card">
+  <h3>{{ g.scope_kind }}: {{ g.scope_value }} &middot; {{ g.tier }} &middot; {{ g.view }}</h3>
+  <div class="candidate-grid">
+    {% for c in g.candidates %}
+    <div class="candidate {% if c.chosen %}picked{% endif %}">
+      <img class="thumb" src="{{ media_url(c.path) }}" alt="anchor candidate">
+      <form method="post" action="/anchors/{{ c.id }}/pick">
+        <button type="submit" {% if c.chosen %}disabled{% endif %}>{{ "Chosen" if c.chosen else "Pick" }}</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+{% endif %}
+{% endblock %}

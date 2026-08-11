@@ -44,13 +44,23 @@ def wait_job(jid, timeout=10):
 def _upload_song(client, title, **extra):
     data = _mp3_bytes()
     fields = {"title": title, "album": extra.get("album", ""), "genre": extra.get("genre", "")}
+    if extra.get("explicit"):
+        fields["explicit"] = "true"  # an absent field is what an unchecked checkbox sends
     client.post("/songs", data=fields, files={"mp3": (f"{title}.mp3", data, "audio/mpeg")})
     return db.one("SELECT * FROM songs WHERE title=?", title)
 
 
+def _chosen_anchor(album, tier, path="anchor.png", view="front"):
+    """Insert a chosen anchors row directly -- the pipeline.gen_anchor path is
+    covered by its own test; most refs/reroll tests only need a resolved
+    anchor already in place."""
+    db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen, created)
+              VALUES ('album', ?, ?, ?, ?, 1, ?)""", album, tier, view, path, time.time())
+
+
 def test_empty_state_pages_200():
     with TestClient(appmod.app) as client:
-        for path in ("/", "/playlists", "/tiers", "/jobs"):
+        for path in ("/", "/playlists", "/tiers", "/jobs", "/anchors"):
             r = client.get(path)
             assert r.status_code == 200, (path, r.text)
 
@@ -140,8 +150,9 @@ def test_unknown_id_404_not_500():
         assert client.post("/playlists/999999/items",
                             data={"song_id": 1, "tier": "pg13"}).status_code == 404
         assert client.post("/playlists/999999/render").status_code == 404
-        assert client.post("/songs/999999/tiers", data={"tier": "pg13"}).status_code == 404
-        assert client.post("/songs/999999/tiers/pg13/remove").status_code == 404
+        assert client.post("/songs/999999/refs", data={"tier": "pg13"}).status_code == 404
+        assert client.post("/songs/999999/explicit").status_code == 404
+        assert client.post("/anchors/999999/pick").status_code == 404
         assert client.post("/songs/999999/delete", data={"confirm": "DELETE"}).status_code == 404
 
 
@@ -321,49 +332,170 @@ def test_audio_edit_unknown_song_404():
 
 def test_refs_limit_clamped():
     with TestClient(appmod.app) as client:
-        song = _upload_song(client, "Limit Song")
+        song = _upload_song(client, "Limit Song", album="Limit Album")
         sid = song["id"]
         client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13"})
         job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
         wait_job(job["id"])
-        db.run("UPDATE songs SET anchor_path=? WHERE id=?", "anchor.png", sid)
+        _chosen_anchor("Limit Album", "pg13")
 
         r = client.post(f"/songs/{sid}/refs", data={"tier": "pg13", "limit": "-100"})
         assert r.status_code in (200, 303), r.text
         job2 = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='refs' ORDER BY id DESC", sid)
         # -100 clamped to 0, and 0 is falsy -> stored as None (unlimited), never negative
         assert json.loads(job2["args_json"])["limit"] is None
+        assert json.loads(job2["args_json"])["anchor_path"] == "anchor.png"
 
 
-def test_song_tier_ratings_add_remove_noop_and_independent_of_storyboards():
+def test_explicit_flag_set_at_upload_and_toggled_and_shown():
     with TestClient(appmod.app) as client:
-        song = _upload_song(client, "Rating Song")
+        song = _upload_song(client, "Explicit Song", explicit=True)
+        assert song["explicit"] == 1
+        r = client.get(f"/songs/{song['id']}")
+        assert "EXPLICIT" in r.text
+
+        clean = _upload_song(client, "Clean Song")
+        assert clean["explicit"] == 0
+        r2 = client.get(f"/songs/{clean['id']}")
+        assert "EXPLICIT" not in r2.text
+
+        r3 = client.post(f"/songs/{song['id']}/explicit")
+        assert r3.status_code in (200, 303), r3.text
+        assert db.one("SELECT explicit FROM songs WHERE id=?", song["id"])["explicit"] == 0
+
+        r4 = client.post(f"/songs/{song['id']}/explicit")
+        assert db.one("SELECT explicit FROM songs WHERE id=?", song["id"])["explicit"] == 1
+
+
+def test_explicit_not_passed_to_grok_or_pipeline(patch_stub):
+    gen_refs_calls = []
+
+    def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None, guard=""):
+        gen_refs_calls.append(dict(slug=slug, tier=tier, anchor=anchor, limit=limit, guard=guard))
+        return []
+
+    patch_stub("pipeline", gen_refs=_gen_refs)
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Explicit Content Song", album="Explicit Album", explicit=True)
         sid = song["id"]
 
         client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13"})
         job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
         wait_job(job["id"])
-        assert db.one("SELECT id FROM storyboards WHERE song_id=? AND tier='pg13'", sid)
+        assert "explicit" not in grok_calls["args"]["song"]
 
-        r1 = client.post(f"/songs/{sid}/tiers", data={"tier": "pg13"})
-        assert r1.status_code in (200, 303), r1.text
-        r2 = client.post(f"/songs/{sid}/tiers", data={"tier": "pg13"})  # duplicate add is a no-op
-        assert r2.status_code in (200, 303), r2.text
-        rows = db.q("SELECT * FROM song_tiers WHERE song_id=?", sid)
-        assert len(rows) == 1, rows
-
-        r3 = client.post(f"/songs/{sid}/tiers/pg13/remove")
-        assert r3.status_code in (200, 303), r3.text
-        assert db.one("SELECT tier FROM song_tiers WHERE song_id=? AND tier='pg13'", sid) is None
-        # removing the rating must not cascade into the storyboard generated for that tier
-        assert db.one("SELECT id FROM storyboards WHERE song_id=? AND tier='pg13'", sid) is not None
+        _chosen_anchor("Explicit Album", "pg13")
+        r = client.post(f"/songs/{sid}/refs", data={"tier": "pg13"})
+        assert r.status_code in (200, 303), r.text
+        job2 = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='refs' ORDER BY id DESC", sid)
+        wait_job(job2["id"])
+        assert gen_refs_calls and "explicit" not in gen_refs_calls[0]
 
 
-def test_song_tier_unknown_tier_400():
+def test_anchor_generation_independent_tier_groups_and_picking(patch_stub):
+    n_calls = []
+
+    def _gen_anchor(face, outfit, view="front", n=4, progress=None, prefix=None):
+        n_calls.append(1)
+        return [f"/tmp/anchor_{len(n_calls)}_{i}.png" for i in range(2)]
+
+    patch_stub("pipeline", gen_anchor=_gen_anchor)
     with TestClient(appmod.app) as client:
-        song = _upload_song(client, "Bad Tier Song")
-        r = client.post(f"/songs/{song['id']}/tiers", data={"tier": "not-a-tier"})
+        files = {"face": ("f.png", b"x", "image/png"), "outfit": ("o.png", b"x", "image/png")}
+        base = {"scope_kind": "album", "scope_value": "Street Cats", "view": "front", "n": "2"}
+
+        r1 = client.post("/anchors", data=dict(base, tier="r"), files=files)
+        assert r1.status_code in (200, 303), r1.text
+        job1 = db.one("SELECT * FROM jobs WHERE kind='anchor' ORDER BY id DESC")
+        wait_job(job1["id"])
+
+        r2 = client.post("/anchors", data=dict(base, tier="pg13"), files=files)
+        assert r2.status_code in (200, 303), r2.text
+        job2 = db.one("SELECT * FROM jobs WHERE kind='anchor' ORDER BY id DESC")
+        wait_job(job2["id"])
+
+        r_rows = db.q("""SELECT * FROM anchors WHERE scope_kind='album' AND scope_value='Street Cats'
+                          AND tier='r' ORDER BY id""")
+        pg_rows = db.q("""SELECT * FROM anchors WHERE scope_kind='album' AND scope_value='Street Cats'
+                           AND tier='pg13' ORDER BY id""")
+        assert len(r_rows) == 2 and len(pg_rows) == 2
+
+        client.post(f"/anchors/{r_rows[0]['id']}/pick")
+        r_chosen = db.q("""SELECT id FROM anchors WHERE scope_kind='album' AND scope_value='Street Cats'
+                            AND tier='r' AND chosen=1""")
+        assert [x["id"] for x in r_chosen] == [r_rows[0]["id"]]
+        pg_chosen = db.q("""SELECT id FROM anchors WHERE scope_kind='album' AND scope_value='Street Cats'
+                             AND tier='pg13' AND chosen=1""")
+        assert pg_chosen == []  # other group untouched
+
+        # picking a different candidate in the same group: still exactly one chosen
+        client.post(f"/anchors/{r_rows[1]['id']}/pick")
+        r_chosen2 = db.q("""SELECT id FROM anchors WHERE scope_kind='album' AND scope_value='Street Cats'
+                             AND tier='r' AND chosen=1""")
+        assert [x["id"] for x in r_chosen2] == [r_rows[1]["id"]]
+
+        # picking in the pg13 group doesn't disturb r's chosen candidate
+        client.post(f"/anchors/{pg_rows[0]['id']}/pick")
+        r_chosen3 = db.q("""SELECT id FROM anchors WHERE scope_kind='album' AND scope_value='Street Cats'
+                             AND tier='r' AND chosen=1""")
+        assert [x["id"] for x in r_chosen3] == [r_rows[1]["id"]]
+
+
+def test_refs_two_tiers_enqueues_two_jobs_with_own_anchors():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Two Tier Song", album="Two Tier Album")
+        sid = song["id"]
+        for t in ("pg13", "r"):
+            client.post(f"/songs/{sid}/storyboard", data={"tier": t})
+            job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
+            wait_job(job["id"])
+            _chosen_anchor("Two Tier Album", t, path=f"anchor_{t}.png")
+
+        before = len(jobs.recent(1000))
+        r = client.post(f"/songs/{sid}/refs", data={"tier": ["pg13", "r"], "limit": "0"})
+        assert r.status_code in (200, 303), r.text
+        assert len(jobs.recent(1000)) == before + 2
+
+        refs_jobs = db.q("SELECT * FROM jobs WHERE song_id=? AND kind='refs' ORDER BY id DESC LIMIT 2", sid)
+        by_tier = {json.loads(j["args_json"])["tier"]: json.loads(j["args_json"]) for j in refs_jobs}
+        assert set(by_tier) == {"pg13", "r"}
+        assert by_tier["pg13"]["anchor_path"] == "anchor_pg13.png"
+        assert by_tier["r"]["anchor_path"] == "anchor_r.png"
+
+
+def test_refs_tier_without_chosen_anchor_400_names_tier_and_enqueues_nothing():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "No Anchor Song", album="No Anchor Album")
+        sid = song["id"]
+        client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13"})
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
+        wait_job(job["id"])
+
+        before = len(jobs.recent(1000))
+        r = client.post(f"/songs/{sid}/refs", data={"tier": "pg13"})
         assert r.status_code == 400, r.text
+        assert "pg13" in r.text
+        assert len(jobs.recent(1000)) == before
+
+
+def test_clips_form_offers_only_tiers_with_full_approved_refs():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Ready Tier Song")
+        sid = song["id"]
+        client.post(f"/songs/{sid}/storyboard", data={"tier": "pg13"})
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
+        wait_job(job["id"])  # scene_count == 2, from the storyboard stub
+
+        r = client.get(f"/songs/{sid}")
+        assert "no tier has fully approved refs yet" in r.text
+
+        db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created)
+                  VALUES (?,'pg13',0,'r0.png',1,1,?)""", sid, time.time())
+        db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created)
+                  VALUES (?,'pg13',1,'r1.png',2,1,?)""", sid, time.time())
+
+        r2 = client.get(f"/songs/{sid}")
+        assert "no tier has fully approved refs yet" not in r2.text
 
 
 def test_delete_song_requires_confirm():

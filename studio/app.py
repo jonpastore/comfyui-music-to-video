@@ -69,7 +69,7 @@ async def limit_upload_size(request: Request, call_next):
             cap = MAX_MP3 + 8192
         elif path.endswith("/style"):
             cap = MAX_IMAGE + 8192
-        elif path.endswith("/anchor"):
+        elif path == "/anchors":
             cap = 2 * MAX_IMAGE + 8192
         else:
             cap = None
@@ -126,6 +126,13 @@ def valid_tier_or_400(name):
     if not db.one("SELECT id FROM tiers WHERE name=?", name):
         raise HTTPException(400, f"no such tier: {name}")
     return name
+
+
+def chosen_anchor(scope_kind, scope_value, tier, view="front"):
+    """The anchors row picked for this scope+tier+view, or None. Reference/clip
+    generation always resolves anchors this way -- never by song."""
+    return db.one("""SELECT * FROM anchors WHERE scope_kind=? AND scope_value=? AND tier=? AND view=?
+                      AND chosen=1""", scope_kind, scope_value, tier, view)
 
 
 def valid_genre_or_400(genre, subgenre, field):
@@ -249,13 +256,15 @@ def h_transcribe(args, progress):
 
 @jobs.handler("anchor")
 def h_anchor(args, progress):
-    sid = args["song_id"]
-    paths = pipeline.gen_anchor(args["face"], args["outfit"], args.get("view", "front"),
-                                 args.get("n", 4), progress)
+    # anchors are scoped to an ALBUM/PLAYLIST and a TIER, never a song -- see
+    # db.py's anchors table. Not tied to any song_id.
+    view = args.get("view", "front")
+    paths = pipeline.gen_anchor(args["face"], args["outfit"], view, args.get("n", 4), progress)
     now = time.time()
     for p in paths:
-        db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
-               sid, "anchor_candidate", p, None, now)
+        db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen, created)
+                  VALUES (?,?,?,?,?,0,?)""",
+               args["scope_kind"], args["scope_value"], args["tier"], view, p, now)
     return {"n": len(paths)}
 
 
@@ -266,8 +275,13 @@ def h_storyboard(args, progress):
     guardrail = tiers.compose_guardrail(tier)
     style_row = db.one("SELECT * FROM assets WHERE song_id=? AND kind='style' ORDER BY id DESC LIMIT 1", sid)
     style_note = db.jset(style_row).get("note", "") if style_row else ""
+    # `explicit` is a fact about the LYRICS, not a rendering instruction -- the
+    # tier picked for this storyboard already carries the tone/wardrobe choice.
+    # Passing both to the model is exactly the conflation this rework removes.
+    song_fields = dict(song)
+    song_fields.pop("explicit", None)
     sb = grok.generate_storyboard(song["lyrics"] or "", tier, guardrail, style_note,
-                                   dict(song), args.get("model"), args.get("scene_seconds"), progress)
+                                   song_fields, args.get("model"), args.get("scene_seconds"), progress)
     outdir = os.path.join(db.DATA, "storyboards", song["slug"])
     os.makedirs(outdir, exist_ok=True)
     json_path, md_path = grok.write_storyboard(sb, outdir, song["slug"], tier)
@@ -285,7 +299,10 @@ def h_refs(args, progress):
     sid, tier = args["song_id"], args["tier"]
     song = db.one("SELECT * FROM songs WHERE id=?", sid)
     sb = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", sid, tier)
-    results = pipeline.gen_refs(song["slug"], tier, sb["json_path"], song["anchor_path"],
+    # resolve the chosen anchor candidate (an output image) into a name usable
+    # as ComfyUI input -- start_refs already checked one is chosen for this tier
+    anchor_name = pipeline.install_input(args["anchor_path"])
+    results = pipeline.gen_refs(song["slug"], tier, sb["json_path"], anchor_name,
                                  song["mp3_path"], progress, limit=args.get("limit"),
                                  guard=tiers.compose_guardrail(tier))
     now = time.time()
@@ -301,7 +318,11 @@ def h_reroll(args, progress):
     sid, tier = args["song_id"], args["tier"]
     song = db.one("SELECT * FROM songs WHERE id=?", sid)
     sb = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", sid, tier)
-    results = pipeline.reroll(song["slug"], tier, sb["json_path"], song["anchor_path"],
+    anchor = chosen_anchor("album", song["album"] or "", tier)
+    if not anchor:
+        raise RuntimeError(f"no chosen anchor for tier '{tier}' on this album")
+    anchor_name = pipeline.install_input(anchor["path"])
+    results = pipeline.reroll(song["slug"], tier, sb["json_path"], anchor_name,
                                song["mp3_path"], args["clip_indices"], progress)
     now = time.time()
     for r in results:
@@ -393,16 +414,14 @@ def index(request: Request):
         board_tiers = {r["tier"] for r in db.q("SELECT DISTINCT tier FROM storyboards WHERE song_id=?", s["id"])}
         rendered_tiers = {r["tier"] for r in db.q("SELECT DISTINCT tier FROM renders WHERE song_id=?", s["id"])}
         tier_status = [{"tier": t, "rendered": t in rendered_tiers} for t in sorted(board_tiers)]
-        ratings = [r["tier"] for r in db.q("SELECT tier FROM song_tiers WHERE song_id=? ORDER BY tier", s["id"])]
-        entries.append({"song": s, "tiers": tier_status, "ratings": ratings})
-    return templates.TemplateResponse(request, "index.html",
-        {"songs": entries, "genre_data": GENRE_DATA, "all_tiers": tiers.all_tiers()})
+        entries.append({"song": s, "tiers": tier_status})
+    return templates.TemplateResponse(request, "index.html", {"songs": entries, "genre_data": GENRE_DATA})
 
 
 @app.post("/songs")
 async def create_song(title: str = Form(...), album: str = Form(""), genre: str = Form(""),
                        subgenre: str = Form(""), genre2: str = Form(""), subgenre2: str = Form(""),
-                       mp3: UploadFile = File(...)):
+                       explicit: bool = Form(False), mp3: UploadFile = File(...)):
     genre, subgenre = valid_genre_or_400(genre, subgenre, "genre")
     genre2, subgenre2 = valid_genre_or_400(genre2, subgenre2, "genre2")
     slug = unique_slug(title)
@@ -414,7 +433,7 @@ async def create_song(title: str = Form(...), album: str = Form(""), genre: str 
         pass
     sid = db.upsert_song(slug, title=title.strip() or slug, album=album.strip(), genre=genre,
                           subgenre=subgenre, genre2=genre2, subgenre2=subgenre2,
-                          mp3_path=dest, duration=duration)
+                          mp3_path=dest, duration=duration, explicit=int(explicit))
     jobs.enqueue("transcribe", {"song_id": sid}, song_id=sid)
     return RedirectResponse(f"/songs/{sid}", status_code=303)
 
@@ -423,8 +442,6 @@ async def create_song(title: str = Form(...), album: str = Form(""), genre: str 
 def song_page(request: Request, id: int):
     song = get_song_or_404(id)
     storyboards = {r["tier"]: r for r in db.q("SELECT * FROM storyboards WHERE song_id=?", id)}
-    anchor_candidates = db.q(
-        "SELECT * FROM assets WHERE song_id=? AND kind='anchor_candidate' ORDER BY id DESC", id)
     style_assets = db.q("SELECT * FROM assets WHERE song_id=? AND kind='style' ORDER BY id DESC", id)
     renders = db.q("SELECT * FROM renders WHERE song_id=? ORDER BY id DESC", id)
     song_jobs = db.q("SELECT * FROM jobs WHERE song_id=? ORDER BY id DESC LIMIT 20", id)
@@ -441,14 +458,39 @@ def song_page(request: Request, id: int):
             pass
     audio_edits = db.q("SELECT * FROM assets WHERE song_id=? AND kind='audio_edit' ORDER BY id DESC", id)
     audio_original = db.one("SELECT * FROM assets WHERE song_id=? AND kind='audio_original'", id)
-    ratings = [r["tier"] for r in db.q("SELECT tier FROM song_tiers WHERE song_id=? ORDER BY tier", id)]
+    # anchors belong to the song's ALBUM, not the song -- this is a read-only
+    # summary for convenience; management happens on /anchors.
+    chosen_anchors = db.q(
+        """SELECT * FROM anchors WHERE scope_kind='album' AND scope_value=? AND chosen=1
+           ORDER BY tier, view""", song["album"] or "")
+    # a tier is offered for clip generation only once every scene of its
+    # storyboard has an approved reference -- otherwise start_clips just 400s
+    # one click later.
+    clips_ready_tiers = []
+    for t, sb in storyboards.items():
+        scene_count = sb["scene_count"] or 0
+        if not scene_count:
+            continue
+        approved_idxs = {r["clip_idx"] for r in
+                          db.q("SELECT clip_idx FROM refs WHERE song_id=? AND tier=? AND approved=1", id, t)}
+        if all(i in approved_idxs for i in range(scene_count)):
+            clips_ready_tiers.append(t)
     return templates.TemplateResponse(request, "song.html", {
         "song": song, "tiers": tiers.all_tiers(), "storyboards": storyboards,
-        "anchor_candidates": anchor_candidates, "style_assets": style_assets,
+        "style_assets": style_assets, "chosen_anchors": chosen_anchors,
+        "clips_ready_tiers": clips_ready_tiers,
         "renders": renders, "song_jobs": song_jobs, "active_job": active_job, "models": models,
         "audio_duration": audio_duration, "audio_edits": audio_edits, "audio_original": audio_original,
-        "ratings": ratings,
     })
+
+
+@app.post("/songs/{id}/explicit")
+def toggle_explicit(id: int):
+    """Toggle whether this track's LYRICS are explicit. Metadata about the
+    lyrics only -- never gates or selects a tier, see h_storyboard's comment."""
+    song = get_song_or_404(id)
+    db.run("UPDATE songs SET explicit=? WHERE id=?", 0 if song["explicit"] else 1, id)
+    return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
 @app.post("/songs/{id}/lyrics")
@@ -475,29 +517,57 @@ async def upload_style(id: int, image: UploadFile = File(...), note: str = Form(
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
-@app.post("/songs/{id}/anchor")
-async def start_anchor(id: int, face: UploadFile = File(...), outfit: UploadFile = File(...),
-                        view: str = Form("front"), n: int = Form(4)):
-    song = get_song_or_404(id)
-    face_path = await save_upload(face, MAX_IMAGE, upload_dir(song["slug"]), "image",
-                                   prefix=f"face_{int(time.time() * 1000)}")
-    outfit_path = await save_upload(outfit, MAX_IMAGE, upload_dir(song["slug"]), "image",
+@app.get("/anchors", response_class=HTMLResponse)
+def anchors_page(request: Request, scope_kind: str = "", scope_value: str = ""):
+    rows = db.q("SELECT * FROM anchors ORDER BY scope_kind, scope_value, tier, view, id DESC")
+    groups = {}
+    for r in rows:
+        key = (r["scope_kind"], r["scope_value"], r["tier"], r["view"])
+        groups.setdefault(key, []).append(r)
+    group_list = [{"scope_kind": k[0], "scope_value": k[1], "tier": k[2], "view": k[3], "candidates": v}
+                  for k, v in groups.items()]
+    albums = sorted({s["album"] for s in db.q("SELECT DISTINCT album FROM songs") if s["album"]})
+    playlists = db.q("SELECT id, name FROM playlists WHERE kind='playlist' ORDER BY name")
+    return templates.TemplateResponse(request, "anchors.html", {
+        "groups": group_list, "tiers": tiers.all_tiers(), "albums": albums, "playlists": playlists,
+        "prefill_scope_kind": scope_kind or "album", "prefill_scope_value": scope_value})
+
+
+@app.post("/anchors")
+async def start_anchor(scope_kind: str = Form(...), scope_value: str = Form(...), tier: str = Form(...),
+                        view: str = Form("front"), face: UploadFile = File(...),
+                        outfit: UploadFile = File(...), n: int = Form(4)):
+    if scope_kind not in ("album", "playlist"):
+        raise HTTPException(400, "scope_kind must be 'album' or 'playlist'")
+    scope_value = scope_value.strip()
+    if not scope_value:
+        raise HTTPException(400, "scope_value is required")
+    valid_tier_or_400(tier)
+    if view not in ("front", "back"):
+        raise HTTPException(400, "view must be 'front' or 'back'")
+    dest_dir = os.path.join(db.DATA, "uploads", "anchors", safe_name(scope_kind), safe_name(scope_value))
+    face_path = await save_upload(face, MAX_IMAGE, dest_dir, "image", prefix=f"face_{int(time.time() * 1000)}")
+    outfit_path = await save_upload(outfit, MAX_IMAGE, dest_dir, "image",
                                      prefix=f"outfit_{int(time.time() * 1000)}")
     n = max(1, min(int(n), 8))
-    jobs.enqueue("anchor", {"song_id": id, "face": face_path, "outfit": outfit_path,
-                             "view": view, "n": n}, song_id=id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    jobs.enqueue("anchor", {"scope_kind": scope_kind, "scope_value": scope_value, "tier": tier,
+                             "view": view, "face": face_path, "outfit": outfit_path, "n": n})
+    return RedirectResponse(f"/anchors?scope_kind={scope_kind}&scope_value={quote(scope_value)}",
+                             status_code=303)
 
 
-@app.post("/songs/{id}/anchor/pick")
-def pick_anchor(id: int, asset_id: int = Form(...)):
-    get_song_or_404(id)
-    asset = db.one("SELECT * FROM assets WHERE id=? AND song_id=? AND kind='anchor_candidate'", asset_id, id)
-    if not asset:
+@app.post("/anchors/{id}/pick")
+def pick_anchor(id: int):
+    row = db.one("SELECT * FROM anchors WHERE id=?", id)
+    if not row:
         raise HTTPException(404, "no such anchor candidate")
-    name = pipeline.install_input(asset["path"])
-    db.run("UPDATE songs SET anchor_path=? WHERE id=?", name, id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    # exactly one chosen per (scope_kind, scope_value, tier, view) group
+    db.run("UPDATE anchors SET chosen=0 WHERE scope_kind=? AND scope_value=? AND tier=? AND view=?",
+           row["scope_kind"], row["scope_value"], row["tier"], row["view"])
+    db.run("UPDATE anchors SET chosen=1 WHERE id=?", id)
+    return RedirectResponse(
+        f"/anchors?scope_kind={row['scope_kind']}&scope_value={quote(row['scope_value'])}",
+        status_code=303)
 
 
 @app.post("/songs/{id}/storyboard")
@@ -528,14 +598,33 @@ def view_storyboard(request: Request, id: int, tier: str):
 
 
 @app.post("/songs/{id}/refs")
-def start_refs(id: int, tier: str = Form(...), limit: int = Form(0)):
+def start_refs(id: int, tier: List[str] = Form([]), limit: int = Form(0)):
+    # Form([]) not Form(...): an unticked checkbox group is simply absent from
+    # the POST, and a required field turns that into FastAPI's raw 422 validation
+    # blob. Defaulting to empty lets the handler answer "select at least one
+    # tier" instead.
     song = get_song_or_404(id)
-    if not song["anchor_path"]:
-        raise HTTPException(400, "pick an anchor image first")
-    if not db.one("SELECT id FROM storyboards WHERE song_id=? AND tier=?", id, tier):
-        raise HTTPException(400, "generate a storyboard for this tier first")
+    selected = sorted(set(tier))
+    if not selected:
+        raise HTTPException(400, "select at least one tier")
+    # resolve every tier's anchor up front -- one bad tier must refuse the
+    # whole request, not enqueue the good ones and 400 partway through
+    anchors = {}
+    for t in selected:
+        valid_tier_or_400(t)
+        if not db.one("SELECT id FROM storyboards WHERE song_id=? AND tier=?", id, t):
+            raise HTTPException(400, f"generate a storyboard for tier '{t}' first")
+        anchor = chosen_anchor("album", song["album"] or "", t)
+        if not anchor:
+            raise HTTPException(400, f"no chosen anchor for tier '{t}' on this album "
+                                      f"-- generate and pick one on /anchors first")
+        anchors[t] = anchor
     limit = max(0, limit)
-    jobs.enqueue("refs", {"song_id": id, "tier": tier, "limit": limit or None}, song_id=id)
+    for t in selected:
+        # one refs job per tier, each carrying that tier's own chosen anchor --
+        # this is what makes two tiers yield two independent reference sets
+        jobs.enqueue("refs", {"song_id": id, "tier": t, "limit": limit or None,
+                               "anchor_path": anchors[t]["path"]}, song_id=id)
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
@@ -648,26 +737,6 @@ def revert_audio(id: int):
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
-@app.post("/songs/{id}/tiers")
-def add_song_tier(id: int, tier: str = Form(...), from_index: str = Form("")):
-    get_song_or_404(id)
-    valid_tier_or_400(tier)
-    # PK on (song_id, tier) makes a duplicate add a no-op.
-    db.run("INSERT OR IGNORE INTO song_tiers (song_id, tier, created) VALUES (?,?,?)",
-           id, tier, time.time())
-    return RedirectResponse("/" if from_index else f"/songs/{id}", status_code=303)
-
-
-@app.post("/songs/{id}/tiers/{tier}/remove")
-def remove_song_tier(id: int, tier: str, from_index: str = Form("")):
-    get_song_or_404(id)
-    # A rating is just a label on the title. Storyboards/refs/clips for this
-    # tier are independent rows keyed by (song_id, tier) -- this must never
-    # cascade into deleting them.
-    db.run("DELETE FROM song_tiers WHERE song_id=? AND tier=?", id, tier)
-    return RedirectResponse("/" if from_index else f"/songs/{id}", status_code=303)
-
-
 @app.post("/songs/{id}/delete")
 def delete_song(id: int, confirm: str = Form("")):
     get_song_or_404(id)
@@ -694,7 +763,7 @@ def delete_song(id: int, confirm: str = Form("")):
                 except OSError:
                     pass          # not empty: leave it, deleting more is not our call
 
-    for table in ("song_tiers", "storyboards", "refs", "clips", "renders", "assets", "playlist_items"):
+    for table in ("storyboards", "refs", "clips", "renders", "assets", "playlist_items"):
         db.run(f"DELETE FROM {table} WHERE song_id=?", id)
     db.run("DELETE FROM songs WHERE id=?", id)
     return RedirectResponse("/", status_code=303)

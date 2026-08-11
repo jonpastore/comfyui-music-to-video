@@ -1,31 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>{{ song.title }}</h1>
+<h1>{{ song.title }} {% if song.explicit %}<span class="tag explicit">EXPLICIT</span>{% endif %}</h1>
 <p class="meta">{{ song.album or "" }}
    {% if song.genre %}&middot; {{ song.genre }}{% if song.subgenre %} / {{ song.subgenre }}{% endif %}{% endif %}
    {% if song.genre2 %}&middot; {{ song.genre2 }}{% if song.subgenre2 %} / {{ song.subgenre2 }}{% endif %}{% endif %}
    {% if song.duration %}&middot; {{ "%.0f"|format(song.duration) }}s{% endif %}</p>
-
-<section class="card">
-  <h2>Ratings</h2>
-  {% for r in ratings %}
-    <span class="tag">{{ r }}
-      <form method="post" action="/songs/{{ song.id }}/tiers/{{ r }}/remove" style="display:inline">
-        <button type="submit" title="remove rating">&times;</button>
-      </form>
-    </span>
-  {% else %}
-    <span class="empty">none</span>
-  {% endfor %}
-  <form method="post" action="/songs/{{ song.id }}/tiers" style="display:inline">
-    <label>Add
-      <select name="tier">
-        {% for t in tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
-      </select>
-    </label>
-    <button type="submit">Add rating</button>
-  </form>
-</section>
+<form method="post" action="/songs/{{ song.id }}/explicit">
+  <button type="submit">{{ "Mark clean" if song.explicit else "Mark explicit" }}</button>
+</form>
 
 {% if active_job %}
 <div id="job-status" class="job-status">job #{{ active_job.id }} ({{ active_job.kind }}) [{{ active_job.status }}]: {{ active_job.progress or "queued" }}</div>
@@ -102,33 +84,21 @@
 </section>
 
 <section class="card">
-  <h2>Anchor</h2>
-  {% if song.anchor_path %}<p>Selected anchor: <code>{{ song.anchor_path }}</code></p>{% endif %}
-  <form method="post" action="/songs/{{ song.id }}/anchor" enctype="multipart/form-data">
-    <label>Face <input type="file" name="face" accept="image/*" required></label>
-    <label>Outfit <input type="file" name="outfit" accept="image/*" required></label>
-    <label>View
-      <select name="view">
-        <option value="front">front</option>
-        <option value="back">back</option>
-      </select>
-    </label>
-    <label>Candidates <input type="number" name="n" value="4" min="1" max="8"></label>
-    <button type="submit">Generate anchors</button>
-  </form>
-
-  {% if anchor_candidates %}
+  <h2>Anchors</h2>
+  <p class="hint">Anchors belong to this song's ALBUM, not the song -- every track on
+    "{{ song.album or "(no album)" }}" shares one look per tier.</p>
+  <a href="/anchors?scope_kind=album&scope_value={{ song.album | urlencode }}">Manage anchors for this album &rarr;</a>
+  {% if chosen_anchors %}
   <div class="candidate-grid">
-    {% for a in anchor_candidates %}
+    {% for a in chosen_anchors %}
     <div class="candidate">
-      <img class="thumb" src="{{ media_url(a.path) }}" alt="anchor candidate">
-      <form method="post" action="/songs/{{ song.id }}/anchor/pick">
-        <input type="hidden" name="asset_id" value="{{ a.id }}">
-        <button type="submit">Pick</button>
-      </form>
+      <img class="thumb" src="{{ media_url(a.path) }}" alt="chosen anchor">
+      <p class="meta">{{ a.tier }} &middot; {{ a.view }}</p>
     </div>
     {% endfor %}
   </div>
+  {% else %}
+  <p class="empty">no chosen anchor yet for this album</p>
   {% endif %}
 </section>
 
@@ -166,11 +136,11 @@
 <section class="card">
   <h2>Reference images</h2>
   <form method="post" action="/songs/{{ song.id }}/refs">
-    <label>Tier
-      <select name="tier">
-        {% for t in tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
-      </select>
-    </label>
+    <fieldset>
+      <legend>Tiers (select one or more -- each yields an independent set)</legend>
+      {% for t in tiers %}<label><input type="checkbox" name="tier" value="{{ t.name }}"> {{ t.name }}</label>{% endfor %}
+    </fieldset>
+    <label>Limit (0 = all) <input type="number" name="limit" value="0" min="0"></label>
     <button type="submit">Generate refs</button>
   </form>
 </section>
@@ -180,7 +150,9 @@
   <form method="post" action="/songs/{{ song.id }}/clips">
     <label>Tier
       <select name="tier">
-        {% for t in tiers %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}
+        {% for t in clips_ready_tiers %}<option value="{{ t }}">{{ t }}</option>
+        {% else %}<option value="" disabled selected>no tier has fully approved refs yet</option>
+        {% endfor %}
       </select>
     </label>
     <button type="submit">Render clips</button>
@@ -232,8 +204,8 @@
 
 <section class="card">
   <h2>Delete this song</h2>
-  <p class="hint">Removes the song, its ratings, storyboards, refs, clips and renders --
-    row and files -- permanently.</p>
+  <p class="hint">Removes the song, its storyboards, refs, clips and renders --
+    row and files -- permanently. Anchors belong to the album/playlist and are not touched.</p>
   <form method="post" action="/songs/{{ song.id }}/delete" class="delete-song">
     <input type="hidden" name="confirm" value="DELETE">
     <button type="submit">Delete song</button>

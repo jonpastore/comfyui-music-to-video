@@ -15,12 +15,19 @@ CREATE TABLE IF NOT EXISTS songs (
   slug TEXT UNIQUE NOT NULL, mp3_path TEXT, duration REAL, lyrics TEXT,
   anchor_path TEXT, style_path TEXT, bpm REAL, created REAL);
 
--- Ratings applied to a title in the library. Distinct from the `tier` column on
--- storyboards/refs/clips, which records which tier an ARTIFACT was generated
--- for; a song can carry ratings before anything has been generated.
-CREATE TABLE IF NOT EXISTS song_tiers (
-  song_id INTEGER NOT NULL, tier TEXT NOT NULL, created REAL,
-  PRIMARY KEY (song_id, tier));
+-- Anchor character sheets. Scoped to an ALBUM or PLAYLIST and a TIER, not to a
+-- song: every track on Street Cats shares one look, and the clean and explicit
+-- cuts differ only in wardrobe. One row per generated candidate; chosen=1 marks
+-- the one that reference rendering will use for that scope+tier+view.
+CREATE TABLE IF NOT EXISTS anchors (
+  id INTEGER PRIMARY KEY,
+  scope_kind TEXT NOT NULL,          -- 'album' | 'playlist'
+  scope_value TEXT NOT NULL,         -- album name, or playlist id as text
+  tier TEXT NOT NULL,
+  view TEXT DEFAULT 'front',         -- front | back
+  path TEXT NOT NULL,
+  chosen INTEGER DEFAULT 0,
+  created REAL);
 
 CREATE TABLE IF NOT EXISTS tiers (
   id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, guardrail TEXT NOT NULL,
@@ -64,7 +71,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   status TEXT DEFAULT 'queued', progress TEXT, log_path TEXT,
   song_id INTEGER, created REAL, started REAL, finished REAL, error TEXT);
 
-CREATE INDEX IF NOT EXISTS idx_song_tiers ON song_tiers(song_id);
+CREATE INDEX IF NOT EXISTS idx_anchors ON anchors(scope_kind, scope_value, tier, view);
 CREATE INDEX IF NOT EXISTS idx_refs_song ON refs(song_id, tier, clip_idx);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, id);
 """
@@ -76,6 +83,11 @@ MIGRATIONS = [
     "ALTER TABLE songs ADD COLUMN subgenre TEXT",
     "ALTER TABLE songs ADD COLUMN genre2 TEXT",
     "ALTER TABLE songs ADD COLUMN subgenre2 TEXT",
+    # Does the TRACK contain explicit lyrics. Nothing to do with which tier a
+    # video is rendered at -- that is chosen per render, not stored per song.
+    "ALTER TABLE songs ADD COLUMN explicit INTEGER DEFAULT 0",
+    # song_tiers was a modelling mistake: ratings are not a property of a title.
+    "DROP TABLE IF EXISTS song_tiers",
 ]
 
 
