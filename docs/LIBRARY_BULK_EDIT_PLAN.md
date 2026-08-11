@@ -51,6 +51,73 @@ does not queue behind a render. An audio classifier (CLAP, MERT, Essentia) would
 be a new dependency, a GPU tenant on a card that is already the bottleneck, and
 **less accurate than reading the label off the tin**.
 
+### MEASURED, not assumed — 31/31 on the real data
+
+Run against all 31 deployed rows through the local gateway (`qwen3.6-coder`),
+taxonomy and all 31 style_texts in **one** call, prompt ≈ 11.9k chars (~3k tokens):
+
+| | |
+|---|---|
+| classified | 31/31 |
+| every value inside `genres.json` | **31/31** |
+| `evidence` string verbatim in that song's `style_text` | **31/31** |
+
+Zero fabrication, zero out-of-vocabulary values. The closed taxonomy in the
+prompt does the work the validator was written to backstop.
+
+**The `evidence` field is required, and it is not a nicety.** Asked for the four
+values alone, the model *judged* instead of *read* and inverted the primary on 3
+of the first 10:
+
+    "Chunky tech house / UK garage-infused bass house"  -> Bass House   (wrong)
+    "Playful global house / indie dance"                -> Indie Dance  (wrong)
+    "Deep dub-tech / warehouse house"                   -> House        (wrong)
+
+Adding *"first COPY the exact style phrase before the first comma; the FIRST
+style named there is always the primary — do not reorder by what seems more
+specific"* and an `evidence` field in the response schema fixed all three, with
+no other change. Copying the span before choosing keeps it reading.
+
+So the server-side check is **two** assertions, not one:
+
+1. every non-empty value appears in `genres.json` (closed vocabulary), and
+2. `evidence` is a **verbatim substring of that song's `style_text`**.
+
+The second is the cheap oracle — it catches a confident answer about a track the
+model never actually looked at, which no taxonomy check can see. A row failing
+either is dropped, not written.
+
+The prompt that produced those numbers, in full — the ordering sentence and the
+`evidence` key are the tuned parts, the rest is scaffolding:
+
+    You classify electronic music tracks into a CLOSED taxonomy.
+
+    TAXONOMY (genre -> allowed subgenres). You may ONLY use these exact strings:
+    {json.dumps(genres_json)}
+
+    For each track below you are given its production style prompt, which usually
+    names the genre directly. Where the prompt names two styles (often separated
+    by a slash), the first is the primary and the second goes in genre2/subgenre2.
+
+    First COPY the exact style phrase before the first comma. The FIRST style
+    named there is always the primary -- do not reorder by what seems more
+    specific.
+
+    Return ONLY a JSON array, one object per track, no prose, no markdown fence:
+    [{"id": 1, "evidence": "<the copied phrase>", "genre": "...",
+      "subgenre": "...", "genre2": "...", "subgenre2": "..."}]
+
+    Use "" for genre2/subgenre2 when there is only one style. Every non-empty
+    value MUST appear verbatim in the taxonomy above.
+
+    TRACKS:
+    <id>. "<title>" :: <style_text[:240]>
+
+`style_text` is clipped to 240 characters — the genre clause is always in the
+opening sentence, and sending three-minute production prompts in full is the
+obvious way to make this expensive for no gain. Keep the prompt and both
+assertions together; the numbers above only hold with both.
+
 ### It suggests, it does not apply
 
 The AI fills the genre bar; the user reviews and presses Save. Two reasons, and
