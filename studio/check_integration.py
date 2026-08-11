@@ -152,7 +152,7 @@ if grok:
                                  1280, 720, 7000, "WIDE SHOT.", guard)
         built = wf["11"]["inputs"]["prompt"]
         assert g.PINNED in built, "prompt builder did not attach the pinned clause"
-        assert built.count("No nudity") == 1, "clause attached more than once"
+        assert built.count("No minors") == 1, "clause attached more than once"
 
         # and the builder refuses model-authored minor references at that point,
         # whatever produced the storyboard

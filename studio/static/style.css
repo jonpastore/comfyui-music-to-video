@@ -35,7 +35,7 @@ a { color: var(--accent); }
 .topbar nav a { text-decoration: none; color: var(--muted); }
 .topbar nav a:hover { color: var(--text); }
 
-main { max-width: 960px; margin: 0 auto; padding: 1.5rem; }
+main { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
 
 h1, h2, h3, h4 { font-weight: 600; }
 
@@ -65,7 +65,7 @@ input, select, textarea, button {
   padding: 0.4rem 0.6rem;
 }
 
-textarea { resize: vertical; }
+textarea { resize: vertical; width: 100%; }
 
 button {
   cursor: pointer;
@@ -173,3 +173,115 @@ table.list th, table.list td {
 /* Drag handle and the row being dragged. */
 table.sortable td.grip { cursor: grab; color: var(--muted); user-select: none; }
 table.sortable tr.dragging { opacity: 0.45; }
+
+/* Two cards side by side (Lyrics / Style prompt). */
+.row-2col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.row-2col > .card { margin-bottom: 0; }
+
+/* Form children stack, so a Save button sits BELOW its textarea, not beside it. */
+.stack-form { display: flex; flex-direction: column; gap: 0.6rem; }
+.stack-form button { align-self: flex-start; }
+
+/* N small fields in one row instead of N full-width rows. auto-fit reflows
+   without needing a breakpoint. */
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+}
+.field-row label { margin-bottom: 0; }
+
+/* Image with its note beside it, and controls over the image itself. */
+.image-note-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.thumb-wrap { position: relative; display: inline-block; }
+.thumb-wrap .thumb { margin: 0; }
+.thumb-controls {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  display: flex;
+  gap: 0.35rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+/* focus-within, not only hover: the controls stay in the tab order and show
+   themselves the moment Tab reaches them */
+.thumb-wrap:hover .thumb-controls,
+.thumb-wrap:focus-within .thumb-controls { opacity: 1; }
+.thumb-controls form { margin: 0; }
+.thumb-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.thumb-btn:hover { border-color: var(--accent); color: var(--accent); }
+.thumb-btn-danger:hover { border-color: var(--danger); color: var(--danger); }
+
+/* Long job tables scroll inside the card instead of stretching the page. */
+.table-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+.table-scroll table.list { margin-bottom: 0; }
+.table-scroll table.list thead th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 1;
+}
+.table-scroll td.truncate {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.table-scroll td.nowrap { white-space: nowrap; }
+
+/* Contact sheet viewer: a real <dialog>, so Esc closes it and the browser
+   handles focus instead of hand-written JS. */
+dialog.sheet-modal {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  max-width: 95vw;
+  max-height: 92vh;
+}
+dialog.sheet-modal::backdrop { background: rgba(0, 0, 0, 0.7); }
+dialog.sheet-modal img { max-width: 100%; max-height: 78vh; object-fit: contain; }
+dialog.sheet-modal .modal-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.6rem;
+}
+
+@media (max-width: 860px) {
+  .row-2col, .image-note-row { grid-template-columns: 1fr; }
+}

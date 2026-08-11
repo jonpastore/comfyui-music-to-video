@@ -222,7 +222,13 @@ def compose(tier_text=""):
     # already-composed guardrail (studio/app.py hands build_refs the output of
     # tiers.compose_guardrail). Without this the clause landed twice in every
     # real prompt.
-    if PINNED in tier_text:
+    #
+    # Compare on STRIPPED text. PINNED ends in a trailing space, and the line
+    # above strips its own input -- so compose(compose(x)) no longer matched
+    # its own output and appended the clause a second time. Every prompt the
+    # studio rendered carried it twice; the seam check that exists to catch
+    # exactly this was looking for wording PINNED no longer contains.
+    if PINNED.strip() in tier_text:
         return tier_text
     return tier_text + " " + PINNED
 
@@ -240,7 +246,12 @@ def strip(text, also=""):
     third-party file's wording is removed as well as ours.
     """
     text = text or ""
-    for clause in (PINNED, (also or "").strip()):
+    # PINNED.strip() as well as PINNED: any copy that has been through a
+    # .strip() -- stored in a database column, round-tripped through JSON,
+    # pasted by hand -- would otherwise survive, and since it ENUMERATES the
+    # forbidden terms the very next check_text() call refuses the scene. That
+    # is the self-trip that has already cost this project three outages.
+    for clause in (PINNED, PINNED.strip(), (also or "").strip()):
         if clause:
             text = text.replace(clause, " ")
     return re.sub(r"\s{2,}", " ", text).strip()
@@ -268,4 +279,6 @@ def build_prompt(text, tier_text="", where="prompt"):
     # that and refused every scene.
     text = strip(text)
     check_text(text, where)
-    return text if PINNED in text else (text + " " + compose(tier_text)).strip()
+    # stripped comparison, same reason as compose(): a trailing space must not
+    # decide whether the clause is attached twice
+    return text if PINNED.strip() in text else (text + " " + compose(tier_text)).strip()
