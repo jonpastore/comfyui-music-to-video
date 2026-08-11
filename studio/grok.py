@@ -397,10 +397,22 @@ def validate(sb, exemplar=None):
     # that matched. Routing a content refusal through there would hand the model the
     # block list and ask it to rephrase until it passes ("child" -> "childlike").
     # ContentRefused is terminal and its text never reaches a model.
+    #
+    # The guardrail must be REMOVED from the text before scanning. PINNED spells
+    # out what is forbidden -- "no minors, no children, no infants ... no
+    # playground, nursery or juvenile settings" -- and _compose appends it to
+    # every image_prompt, so scanning the composed string made our own safety
+    # clause trip our own filter and refused every storyboard ever generated.
+    # Only the model-authored remainder is scanned.
     import tiers as _tiers
+    guard = (sb.get("global_guardrail") or "").strip()
     for s in scenes:
         for field in ("image_prompt", "story", "name", "video_motion_prompt"):
-            _tiers.check_text(s.get(field), f"scene {s.get('scene_number','?')} {field}")
+            text = s.get(field) or ""
+            for own in (guard, _tiers.PINNED):
+                if own:
+                    text = text.replace(own, " ")
+            _tiers.check_text(text, f"scene {s.get('scene_number','?')} {field}")
 
     cams = {(s.get("camera") or "").strip().lower() for s in scenes}
     if len(scenes) > 1 and len(cams) <= 1:

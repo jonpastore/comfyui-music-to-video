@@ -135,6 +135,46 @@ if grok:
     check("guardrail is forced into every scene by construction",
           _guardrail_forced_into_every_scene)
 
+    def _own_guardrail_does_not_trip_the_minor_filter():
+        """The guardrail SPELLS OUT the forbidden terms ("no minors, no children
+        ... no playground, nursery or juvenile settings") and _compose appends it
+        to every image_prompt. Scanning the composed text therefore made our own
+        safety clause trip our own filter and refused every storyboard that could
+        ever be generated. Caught only by a real end-to-end run. Never again."""
+        guard = tiers.compose_guardrail("r")
+        assert "minors" in guard and "playground" in guard, \
+            "test is meaningless unless PINNED still names the forbidden terms"
+        scenes = [
+            {"scene_number": 1, "name": "Loading Bay", "cue": "intro",
+             "duration_guidance": "5-9 sec", "story": "she crosses the wet loading bay",
+             "camera": "wide establishing", "motion": "slow drift", "lighting": "red utility",
+             "image_prompt": "a wet loading bay at night", "video_motion_prompt": "slow drift",
+             "negative_prompt": "blurry"},
+            {"scene_number": 2, "name": "Booth Detail", "cue": "drop",
+             "duration_guidance": "4-6 sec", "story": "hands on the mixer faders",
+             "camera": "detail insert", "motion": "fast cuts", "lighting": "magenta spill",
+             "image_prompt": "close on the mixer faders", "video_motion_prompt": "fast cuts",
+             "negative_prompt": "blurry"},
+        ]
+        sb = grok._compose({"title": "T", "album": "A"}, "r", guard, "style",
+                           "[Intro]\na line\n", scenes, 2, 8.0)
+        assert all(guard in s["image_prompt"] for s in sb["scenes"])
+        grok.validate(sb)          # must NOT raise ContentRefused on our own text
+
+        # and it must still catch genuinely model-authored content
+        sb2 = grok._compose({"title": "T", "album": "A"}, "r", guard, "style",
+                            "[Intro]\na line\n",
+                            [dict(scenes[0], image_prompt="a child in the crowd"),
+                             dict(scenes[1])], 2, 8.0)
+        try:
+            grok.validate(sb2)
+            raise AssertionError("model-authored minor reference was not caught")
+        except tiers.ContentRefused:
+            pass
+
+    check("our own guardrail text does not trip the minor filter",
+          _own_guardrail_does_not_trip_the_minor_filter)
+
 lyrics = optional_import("lyrics")
 if lyrics:
     check("lyrics.available returns a 2-tuple and never raises",
