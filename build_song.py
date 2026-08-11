@@ -46,6 +46,16 @@ def normalize(sb):
         s.setdefault("camera", "")
         if "duration_guidance" not in s and "chunks" in s:
             s["duration_guidance"] = f"{s['chunks']} sec"
+    # Strip any guardrail baked into the scene text. It belongs in code now, and
+    # leaving a legacy copy in the prompt both duplicates it and trips the minor
+    # filter on its own "no children ..." wording.
+    embedded = sb.get("global_guardrail", "")
+    for s_ in sb.get("scenes", []):
+        for f in ("image_prompt", "story", "video_motion_prompt"):
+            if s_.get(f):
+                s_[f] = guardrail.strip(s_[f], embedded)
+    sb.pop("global_guardrail", None)
+
     sb.setdefault("character_reference", sb.get("style_lock", ""))
     sb.setdefault("album_world_reference", sb.get("style_lock", ""))
     return sb

@@ -28,6 +28,52 @@
 </section>
 
 <section class="card">
+  <h2>Edit audio</h2>
+  <p class="meta">Current track: <code>{{ song.mp3_path.split('/')[-1] if song.mp3_path else "none" }}</code>
+    {% if audio_duration %}&middot; {{ "%.1f"|format(audio_duration) }}s{% endif %}</p>
+  <form method="post" action="/songs/{{ song.id }}/audio">
+    <label>Trim start (s) <input type="number" step="0.1" min="0" name="trim_start" value="0"></label>
+    <label>Trim end (s, blank = end) <input type="number" step="0.1" min="0" name="trim_end"></label>
+    <label>Gain (dB) <input type="number" step="0.5" name="gain_db" value="0" min="-30" max="30"></label>
+    <label>Fade in (s) <input type="number" step="0.1" min="0" name="fade_in" value="0"></label>
+    <label>Fade out (s) <input type="number" step="0.1" min="0" name="fade_out" value="0"></label>
+    <button type="submit">Create edit</button>
+  </form>
+
+  {% if audio_original %}
+  <form method="post" action="/songs/{{ song.id }}/audio/revert">
+    <button type="submit" {% if song.mp3_path == audio_original.path %}disabled{% endif %}>
+      Revert to original
+    </button>
+  </form>
+  {% endif %}
+
+  {% if audio_edits %}
+  <table class="list">
+    <thead><tr><th>Created</th><th>Params</th><th>Active</th><th></th></tr></thead>
+    <tbody>
+    {% for a in audio_edits %}
+      {% set p = jset(a) %}
+      <tr>
+        <td>{{ a.id }}</td>
+        <td>trim {{ p.trim_start }}&ndash;{{ p.trim_end or "end" }}, gain {{ p.gain_db }}dB,
+            fade {{ p.fade_in }}/{{ p.fade_out }}</td>
+        <td>{{ "yes" if song.mp3_path == a.path else "" }}</td>
+        <td>
+          {% if song.mp3_path != a.path %}
+          <form method="post" action="/songs/{{ song.id }}/audio/{{ a.id }}/use">
+            <button type="submit">Use this edit</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<section class="card">
   <h2>Anchor</h2>
   {% if song.anchor_path %}<p>Selected anchor: <code>{{ song.anchor_path }}</code></p>{% endif %}
   <form method="post" action="/songs/{{ song.id }}/anchor" enctype="multipart/form-data">

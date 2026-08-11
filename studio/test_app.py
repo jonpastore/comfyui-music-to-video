@@ -310,6 +310,86 @@ def test_scene_seconds_clamped():
         assert r3.status_code in (400, 422), r3.text  # rejected, not a 500 / not silently billed
 
 
+def test_audio_edit_valid_creates_asset_and_keeps_original():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Edit Song")
+        sid = song["id"]
+        original_path = song["mp3_path"]
+
+        before = len(jobs.recent(1000))
+        r = client.post(f"/songs/{sid}/audio",
+                         data={"trim_start": "0.5", "trim_end": "2.5", "gain_db": "-3",
+                               "fade_in": "0.2", "fade_out": "0.2"})
+        assert r.status_code in (200, 303), r.text
+        assert len(jobs.recent(1000)) == before + 1
+
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='edit_audio' ORDER BY id DESC", sid)
+        row = wait_job(job["id"])
+        assert row["status"] == "done", row
+
+        asset = db.one("SELECT * FROM assets WHERE song_id=? AND kind='audio_edit'", sid)
+        assert asset is not None
+        meta = json.loads(asset["meta_json"])
+        assert meta["gain_db"] == -3.0
+
+        # the original upload must still exist untouched -- edit_audio always
+        # writes to a fresh path, never overwrites mp3_path in place
+        assert os.path.isfile(original_path)
+        song2 = db.one("SELECT * FROM songs WHERE id=?", sid)
+        assert song2["mp3_path"] == original_path  # not swapped until "use" is called
+
+
+@pytest.mark.parametrize("bad_fields", [
+    {"trim_start": "nan"},
+    {"trim_start": "inf"},
+    {"trim_start": "-1"},
+    {"trim_end": "0.1", "trim_start": "5"},   # trim_end <= trim_start
+    {"trim_end": "5", "trim_start": "5"},     # trim_end == trim_start
+    {"gain_db": "9999"},
+    {"gain_db": "-9999"},
+    {"fade_in": "-0.5"},
+    {"fade_out": "-0.5"},
+])
+def test_audio_edit_rejects_hostile_params(bad_fields):
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, f"Hostile {bad_fields}")
+        sid = song["id"]
+        before = len(jobs.recent(1000))
+        r = client.post(f"/songs/{sid}/audio", data=bad_fields)
+        assert r.status_code == 400, r.text
+        assert len(jobs.recent(1000)) == before, "a job was enqueued despite an invalid param"
+        assert db.one("SELECT id FROM assets WHERE song_id=? AND kind='audio_edit'", sid) is None
+
+
+def test_audio_edit_use_and_revert():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Use Revert Song")
+        sid = song["id"]
+        original_path = song["mp3_path"]
+
+        r = client.post(f"/songs/{sid}/audio", data={"trim_start": "0", "gain_db": "2"})
+        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='edit_audio' ORDER BY id DESC", sid)
+        wait_job(job["id"])
+        asset = db.one("SELECT * FROM assets WHERE song_id=? AND kind='audio_edit'", sid)
+
+        r2 = client.post(f"/songs/{sid}/audio/{asset['id']}/use")
+        assert r2.status_code in (200, 303), r2.text
+        song2 = db.one("SELECT * FROM songs WHERE id=?", sid)
+        assert song2["mp3_path"] == asset["path"]
+
+        r3 = client.post(f"/songs/{sid}/audio/revert")
+        assert r3.status_code in (200, 303), r3.text
+        song3 = db.one("SELECT * FROM songs WHERE id=?", sid)
+        assert song3["mp3_path"] == original_path
+
+
+def test_audio_edit_unknown_song_404():
+    with TestClient(appmod.app) as client:
+        assert client.post("/songs/999999/audio", data={"gain_db": "1"}).status_code == 404
+        assert client.post("/songs/999999/audio/1/use").status_code == 404
+        assert client.post("/songs/999999/audio/revert").status_code == 404
+
+
 def test_refs_limit_clamped():
     with TestClient(appmod.app) as client:
         song = _upload_song(client, "Limit Song")

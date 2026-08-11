@@ -4,7 +4,7 @@ does upload validation + path-traversal-safe media serving.
 """
 import json, math, os, re, sqlite3, time
 from contextlib import asynccontextmanager
-from typing import List
+from typing import List, Optional
 from urllib.parse import quote
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile, File
@@ -32,6 +32,7 @@ MAX_MP3 = 50 * 1024 * 1024
 MAX_IMAGE = 20 * 1024 * 1024
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 MAX_REROLL_CLIPS = 64
+GAIN_DB_RANGE = (-30.0, 30.0)
 
 # Anything servable over /media must resolve inside one of these -- reuses
 # pipeline's own ComfyUI paths rather than inventing a parallel config knob.
@@ -49,6 +50,7 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 templates.env.globals["media_url"] = lambda p: media_url(p)
+templates.env.globals["jset"] = db.jset
 
 
 @app.middleware("http")
@@ -158,6 +160,32 @@ def upload_dir(slug):
     return os.path.join(db.DATA, "uploads", slug)
 
 
+def clamp_audio_edit_params(trim_start, trim_end, gain_db, fade_in, fade_out):
+    """Reject (400) anything hostile before it reaches mixer.edit_audio or the
+    job queue -- a prior review found scene_seconds unvalidated let nan/inf
+    reach the db. These are all plain floats off a form, so every one gets
+    the same finite check, then range checks straight from the ffmpeg args
+    they end up in (-ss/-to offsets, volume=NdB, afade durations)."""
+    for name, v in (("trim_start", trim_start), ("gain_db", gain_db),
+                     ("fade_in", fade_in), ("fade_out", fade_out)):
+        if not math.isfinite(v):
+            raise HTTPException(400, f"{name} must be a finite number")
+    if trim_end is not None and not math.isfinite(trim_end):
+        raise HTTPException(400, "trim_end must be a finite number")
+    if trim_start < 0:
+        raise HTTPException(400, "trim_start must be >= 0")
+    if trim_end is not None and trim_end <= trim_start:
+        raise HTTPException(400, "trim_end must be greater than trim_start")
+    lo, hi = GAIN_DB_RANGE
+    if not (lo <= gain_db <= hi):
+        raise HTTPException(400, f"gain_db must be between {lo} and {hi}")
+    if fade_in < 0:
+        raise HTTPException(400, "fade_in must be >= 0")
+    if fade_out < 0:
+        raise HTTPException(400, "fade_out must be >= 0")
+    return trim_start, trim_end, gain_db, fade_in, fade_out
+
+
 # ------------------------------------------------------------- job handlers --
 
 @jobs.handler("transcribe")
@@ -253,6 +281,25 @@ def h_clips(args, progress):
     return {"count": len(results)}
 
 
+@jobs.handler("edit_audio")
+def h_edit_audio(args, progress):
+    sid = args["song_id"]
+    song = db.one("SELECT * FROM songs WHERE id=?", sid)
+    if not song:
+        return
+    # always a fresh file -- never the same path as song["mp3_path"], so the
+    # original upload (and whatever edit is currently in use) is untouched.
+    outdir = os.path.join(db.DATA, "audio", song["slug"])
+    os.makedirs(outdir, exist_ok=True)
+    out = os.path.join(outdir, f"edit_{int(time.time() * 1000)}.mp3")
+    mixer.edit_audio(song["mp3_path"], out, args["trim_start"], args["trim_end"],
+                      args["gain_db"], args["fade_in"], args["fade_out"], progress)
+    meta = {k: args[k] for k in ("trim_start", "trim_end", "gain_db", "fade_in", "fade_out")}
+    db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+           sid, "audio_edit", out, json.dumps(meta), time.time())
+    return {"path": out}
+
+
 @jobs.handler("render_song")
 def h_render_song(args, progress):
     sid, tier = args["song_id"], args["tier"]
@@ -335,10 +382,19 @@ def song_page(request: Request, id: int):
         models = grok.list_models()
     except Exception:
         models = []
+    audio_duration = None
+    if song["mp3_path"]:
+        try:
+            audio_duration = mixer.probe(song["mp3_path"])["duration"]
+        except Exception:
+            pass
+    audio_edits = db.q("SELECT * FROM assets WHERE song_id=? AND kind='audio_edit' ORDER BY id DESC", id)
+    audio_original = db.one("SELECT * FROM assets WHERE song_id=? AND kind='audio_original'", id)
     return templates.TemplateResponse(request, "song.html", {
         "song": song, "tiers": tiers.all_tiers(), "storyboards": storyboards,
         "anchor_candidates": anchor_candidates, "style_assets": style_assets,
         "renders": renders, "song_jobs": song_jobs, "active_job": active_job, "models": models,
+        "audio_duration": audio_duration, "audio_edits": audio_edits, "audio_original": audio_original,
     })
 
 
@@ -500,6 +556,42 @@ def start_render(id: int, tier: str = Form(...), fade: float = Form(0.0)):
     get_song_or_404(id)
     valid_tier_or_400(tier)
     jobs.enqueue("render_song", {"song_id": id, "tier": tier, "fade": fade}, song_id=id)
+    return RedirectResponse(f"/songs/{id}", status_code=303)
+
+
+@app.post("/songs/{id}/audio")
+def edit_song_audio(id: int, trim_start: float = Form(0.0), trim_end: Optional[float] = Form(None),
+                     gain_db: float = Form(0.0), fade_in: float = Form(0.0), fade_out: float = Form(0.0)):
+    song = get_song_or_404(id)
+    trim_start, trim_end, gain_db, fade_in, fade_out = clamp_audio_edit_params(
+        trim_start, trim_end, gain_db, fade_in, fade_out)
+    # record the true original exactly once, before mp3_path can ever move --
+    # this is what "revert to original" restores.
+    if not db.one("SELECT id FROM assets WHERE song_id=? AND kind='audio_original'", id):
+        db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+               id, "audio_original", song["mp3_path"], None, time.time())
+    jobs.enqueue("edit_audio", {"song_id": id, "trim_start": trim_start, "trim_end": trim_end,
+                                 "gain_db": gain_db, "fade_in": fade_in, "fade_out": fade_out}, song_id=id)
+    return RedirectResponse(f"/songs/{id}", status_code=303)
+
+
+@app.post("/songs/{id}/audio/{asset_id}/use")
+def use_audio_edit(id: int, asset_id: int):
+    get_song_or_404(id)
+    asset = db.one("SELECT * FROM assets WHERE id=? AND song_id=? AND kind='audio_edit'", asset_id, id)
+    if not asset:
+        raise HTTPException(404, "no such audio edit")
+    db.run("UPDATE songs SET mp3_path=? WHERE id=?", asset["path"], id)
+    return RedirectResponse(f"/songs/{id}", status_code=303)
+
+
+@app.post("/songs/{id}/audio/revert")
+def revert_audio(id: int):
+    get_song_or_404(id)
+    original = db.one("SELECT * FROM assets WHERE song_id=? AND kind='audio_original' ORDER BY id LIMIT 1", id)
+    if not original:
+        raise HTTPException(400, "no original recorded for this song")
+    db.run("UPDATE songs SET mp3_path=? WHERE id=?", original["path"], id)
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 

@@ -202,7 +202,7 @@ def stage_refs(slug, tier, ref_paths):
             for rec in ref_paths]
 
 
-def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None):
+def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None, limit=None):
     # ref_paths must be staged before build_song.py runs -- it references
     # them by name inside the workflow, it doesn't take them as CLI input.
     stage_refs(slug, tier, ref_paths)
@@ -213,6 +213,15 @@ def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None):
             "--storyboard", storyboard_json, "--audio", mp3_path,
             "--slug", bs, "--outdir", wf_dir,
         ], progress)
+        if limit:
+            # a full song is 40-80 clips at ~90s each on one GPU; limit lets you
+            # confirm the chain end to end before committing an hour to it
+            keep = sorted(f for f in os.listdir(wf_dir) if f.endswith(".json"))[:int(limit)]
+            for f in os.listdir(wf_dir):
+                if f.endswith(".json") and f not in keep:
+                    os.remove(os.path.join(wf_dir, f))
+            if progress:
+                progress(f"limited to first {len(keep)} clips")
         paths = _submit_and_collect(wf_dir, f"{bs}", "*.mp4", progress)
     return [{"clip_idx": int(m.group(1)), "path": p} for p, m in _clip_records(paths)]
 

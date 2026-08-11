@@ -228,6 +228,25 @@ def compose(tier_text=""):
     return tier_text + " " + PINNED
 
 
+def strip(text, also=""):
+    """Remove any guardrail clause already embedded in storyboard text.
+
+    Older storyboards -- and anything generated before the clause moved into
+    code -- carry it inside image_prompt. That text ENUMERATES the forbidden
+    terms ("no minors, no children ... no playground, nursery or juvenile
+    settings"), so check_text matches it and refuses the scene. The guardrail
+    would refuse its own wording and make every legacy file unrenderable.
+
+    `also` is the storyboard's own declared guardrail, if it has one, so a
+    third-party file's wording is removed as well as ours.
+    """
+    text = text or ""
+    for clause in (PINNED, (also or "").strip()):
+        if clause:
+            text = text.replace(clause, " ")
+    return re.sub(r"\s{2,}", " ", text).strip()
+
+
 def build_prompt(text, tier_text="", where="prompt"):
     """THE entry point. Every prompt sent to an image or video model goes through
     this one function, and nothing else needs to know how the guardrail works.
