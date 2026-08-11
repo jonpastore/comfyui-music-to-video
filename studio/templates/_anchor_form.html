@@ -1,15 +1,11 @@
 {# Generate anchor candidates.
 
-   Its own partial because the ticked TIERS decide two things: which views are
-   offered (a nude view is absent, not disabled, when a selected tier forbids
-   it) and which guardrail wording is shown. Changing the album, a tier or a
-   view re-fetches the form. #}
+   Its own partial because the ticked TIERS decide two things: whether the nude
+   views are selectable (they are always LISTED, and disabled with the reason
+   when a ticked tier forbids nudity) and which guardrail wording is shown.
+   Changing the album, a tier or a view re-fetches the form. #}
 <form id="anchor-form" method="post" action="/anchors" enctype="multipart/form-data"
       class="stack-form">
-  {% set swap = {"hx-get": "/anchors/form", "hx-target": "#anchor-form",
-                 "hx-swap": "outerHTML", "hx-trigger": "change",
-                 "hx-include": "#anchor-form"} %}
-
   <div class="field-row">
     <label>Album
       {# An album IS a playlist -- the same record, matched by the name songs
@@ -58,24 +54,27 @@
   <fieldset>
     <legend>Views &mdash; one sheet per view, per tier</legend>
     <div class="check-row">
-      {% for key, label in views %}
-      <label class="check">
-        <input type="checkbox" name="view" value="{{ key }}"
-               {% if key in selected_views %}checked{% endif %}
+      {% for v in views %}
+      <label class="check {% if not v.enabled %}disabled-choice{% endif %}"
+             {% if not v.enabled %}title="Untick {{ blocking_tiers | map('upper') | join(', ') }} -- {{ 'it does' if blocking_tiers | length == 1 else 'they do' }} not permit nudity"{% endif %}>
+        <input type="checkbox" name="view" value="{{ v.key }}"
+               {% if v.key in selected_views %}checked{% endif %}
+               {% if not v.enabled %}disabled{% endif %}
                hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
                hx-trigger="change" hx-include="#anchor-form">
-        {{ label }}
+        {{ v.label }}
       </label>
       {% endfor %}
     </div>
     {% if not nude_ok and blocking_tiers %}
-    <p class="hint">No nude view is offered because
+    <p class="hint">The nude views are greyed out because
       {% if blocking_tiers | length == 1 %}the
       <code>{{ blocking_tiers[0] | tiername }}</code> tier does not permit nudity{% else %}
       these tiers do not permit nudity:
       {% for t in blocking_tiers %}<code>{{ t | tiername }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
       {% endif %}. Untick {{ "it" if blocking_tiers | length == 1 else "them" }},
-      or turn nudity on under <a href="/tiers">Tiers</a>.</p>
+      or turn nudity on under <a href="/tiers">Tiers</a>.
+      R and XXX both permit it.</p>
     {% endif %}
     <p class="hint">{{ selected_tiers | length }} tier{{ "" if selected_tiers|length == 1 else "s" }}
       &times; {{ selected_views | length }} view{{ "" if selected_views|length == 1 else "s" }}

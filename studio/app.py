@@ -1170,18 +1170,41 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
               db.q("SELECT name FROM playlists WHERE kind='playlist' ORDER BY name")]
     album = album if album in albums else (albums[0] if albums else "")
     selected = [t for t in selected_tiers if any(x["name"] == t for x in all_t)]
+    if not selected:
+        # Open on the tiers this ALBUM already works in, not on the first tier
+        # alphabetically. Adding G made that first tier G, so the form landed on
+        # the most restrictive rating in the studio and greeted you with a
+        # nudity refusal for an album whose every anchor is R.
+        # The tier of the MOST RECENT anchor -- where you left off. Not every
+        # tier the album has ever used: Street Cats has both pg13 and r, and
+        # opening on both withdrew the nude views, because a combination that
+        # would be refused is not offered. One tier is also the honest default
+        # for a form whose whole job is picking which rating to render at.
+        last = db.one("""SELECT tier FROM anchors WHERE scope_kind='album' AND scope_value=?
+                         ORDER BY created DESC, id DESC LIMIT 1""", album)
+        selected = [last["tier"]] if last and any(
+            x["name"] == last["tier"] for x in all_t) else []
     if not selected and all_t:
         selected = [all_t[0]["name"]]
-    nude_ok = bool(selected) and all(tiers.allows_nudity(t) for t in selected)
-    views = [(k, v) for k, v in ANCHOR_VIEWS.items() if nude_ok or k not in NUDE_VIEWS]
-    chosen_views = [v for v, _ in views if v in set(selected_views)] or ["front"]
+    blocking = [t for t in selected if not tiers.allows_nudity(t)]
+    nude_ok = bool(selected) and not blocking
+    # Every view is always LISTED; a nude one is disabled, with the reason, when
+    # a ticked tier forbids it. Hiding them was wrong: the view is perfectly
+    # usable, just not with what is currently ticked, so options vanished as you
+    # clicked and there was no way to tell nude sheets existed at all. A tier
+    # with no storyboard is genuinely unusable and stays hidden elsewhere -- this
+    # is not that.
+    views = [{"key": k, "label": v, "nude": k in NUDE_VIEWS,
+              "enabled": nude_ok or k not in NUDE_VIEWS}
+             for k, v in ANCHOR_VIEWS.items()]
+    chosen_views = [v["key"] for v in views
+                    if v["enabled"] and v["key"] in set(selected_views)] or ["front"]
     # the prompt is composed for the FIRST chosen view; the others differ only
     # in their framing sentence, which make_anchor swaps in per view
     return {
         "tiers": all_t, "albums": albums, "form_album": album,
         "selected_tiers": selected, "views": views, "selected_views": chosen_views,
-        "nude_ok": nude_ok,
-        "blocking_tiers": [t for t in selected if not tiers.allows_nudity(t)],
+        "nude_ok": nude_ok, "blocking_tiers": blocking,
         "anchor_prompt": default_anchor_prompt(album, chosen_views[0], character_id),
         "pinned": tiers.PINNED.strip(),
         "tier_texts": [(t, tier_tone(t)) for t in selected],

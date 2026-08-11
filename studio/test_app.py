@@ -3,7 +3,7 @@ owned by other modules and stubbed here via sys.modules so the app is
 testable in isolation (no real ComfyUI/whisper/xAI/ffmpeg required, except
 ffmpeg to synthesize a tiny real mp3 fixture).
 """
-import asyncio, json, os, subprocess, sys, tempfile, threading, time
+import asyncio, json, os, re, subprocess, sys, tempfile, threading, time
 
 import pytest
 
@@ -1657,14 +1657,28 @@ def test_nude_anchor_refused_for_a_tier_that_does_not_permit_nudity():
         r2 = client.post("/anchors", data=dict(base, tier="r", view="front_nude"), files=files)
         assert r2.status_code in (200, 303), r2.text
 
-        # the form does not even OFFER a nude view for pg13
-        pg = client.get("/anchors/form", params={"tier": "pg13"}).text
-        assert "front, nude" not in pg
-        assert "does not permit nudity" in pg
-        assert "front, nude" in client.get("/anchors/form", params={"tier": "r"}).text
-        # nor when pg13 is ticked ALONGSIDE a tier that permits it
-        both = client.get("/anchors/form", params=[("tier", "r"), ("tier", "pg13")]).text
-        assert "front, nude" not in both, "a nude view survived a tier that forbids it"
+        # The nude views are LISTED but disabled for pg13, with the reason.
+        # Hiding them meant options vanished as you ticked boxes and there was no
+        # way to tell nude sheets existed at all.
+        pg = client.get("/anchors/form", params={"album": "Nude Gate Album",
+                                                  "tier": "pg13"}).text
+        assert "front, nude" in pg, "the nude view is not even listed"
+        assert re.search(r'value="front_nude"[^>]*disabled', pg, re.S), "not disabled for pg13"
+        assert "greyed out because" in pg and "R and XXX both permit it" in pg
+
+        # ...and selectable for a tier that permits it
+        r_only = client.get("/anchors/form", params={"album": "Nude Gate Album",
+                                                      "tier": "r"}).text
+        assert "front, nude" in r_only
+        assert not re.search(r'value="front_nude"[^>]*disabled', r_only, re.S), \
+            "R permits nudity but its nude view was disabled"
+        assert "greyed out because" not in r_only
+
+        # ticking pg13 ALONGSIDE r disables them again -- that combination is
+        # refused on submit, so it must not be selectable
+        both = client.get("/anchors/form", params=[("album", "Nude Gate Album"),
+                                                    ("tier", "r"), ("tier", "pg13")]).text
+        assert re.search(r'value="front_nude"[^>]*disabled', both, re.S)
 
 
 def test_one_post_generates_every_tier_and_view_combination(patch_stub):
@@ -1688,6 +1702,31 @@ def test_one_post_generates_every_tier_and_view_combination(patch_stub):
             (t, v) for t in ("r", "xxx") for v in ("front", "back", "front_nude")}
         assert all(a["scope_kind"] == "album" and a["scope_value"] == "Combo Album"
                    for a in args)
+
+
+def test_anchor_form_opens_on_the_tier_the_album_already_works_in():
+    """Adding G made it the first tier alphabetically, so the form landed on the
+    most restrictive rating in the studio and opened with a nudity refusal --
+    for an album whose every anchor is R."""
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Default Tier Album"})
+
+        # a brand-new album has nothing to go on, so the first tier stands
+        fresh = client.get("/anchors/form", params={"album": "Default Tier Album"}).text
+        assert 'value="g"\n               checked' in fresh or 'value="g"' in fresh
+
+        # An album with BOTH pg13 and r anchors must open on ONE of them -- the
+        # most recent. Opening on both withdrew the nude views, because a
+        # combination that would be refused is not offered.
+        _chosen_anchor("Default Tier Album", "pg13", path="/tmp/dta_pg.png")
+        time.sleep(0.01)
+        _chosen_anchor("Default Tier Album", "r", path="/tmp/dta.png")
+        page = client.get("/anchors/form", params={"album": "Default Tier Album"}).text
+        import re
+        assert re.search(r'name="tier" value="r"\s+checked', page), "did not open on R"
+        assert not re.search(r'name="tier" value="g"\s+checked', page), "still opened on G"
+        assert 'value="front_nude"' in page, "R permits nudity but no nude view was offered"
+        assert "No nude view is offered because" not in page
 
 
 def test_anchor_form_needs_a_real_album_and_at_least_one_image():
