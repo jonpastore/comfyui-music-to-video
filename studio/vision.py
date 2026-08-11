@@ -130,8 +130,18 @@ def ask(image_path, system, user_text, progress=None, prefer_local=True):
 
 
 def _json(out, what):
+    text = _FENCE.sub("", out or "").strip()
     try:
-        return json.loads(_FENCE.sub("", out).strip())
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # Local models echo the cell label back as a number: the sheet says
+    # "clip 003" and qwen3-vl answers {"clip": 003}, which is not legal JSON.
+    # Repair only after a straight parse has failed, so valid output is never
+    # touched, and only leading zeros on a value -- nothing inside a string.
+    repaired = re.sub(r'(:\s*)0+(\d)', r"\1\2", text)
+    try:
+        return json.loads(repaired)
     except json.JSONDecodeError as e:
         raise RuntimeError(f"{what} returned non-JSON: {e}") from None
 
@@ -378,6 +388,17 @@ def demo():
             assert any("falling back to xAI" in n for n in notes), notes
         finally:
             grok._chat = real_chat
+
+    # --- leading-zero ints from a local model still parse ------------------
+    # qwen3-vl echoes the sheet's own label: {"clip": 003}
+    assert _json('{"clip": 003, "ok": 1}', "t") == {"clip": 3, "ok": 1}
+    assert _json('{"a": 0, "b": 10}', "t") == {"a": 0, "b": 10}, "valid JSON must be untouched"
+    assert _json('{"s": "id 007"}', "t") == {"s": "id 007"}, "must not rewrite inside strings"
+    try:
+        _json("not json", "t")
+        raise AssertionError("garbage parsed")
+    except RuntimeError:
+        pass
 
     # --- an instruction becomes clamped, reversible ffmpeg params ---------
     httpx.get = lambda url, headers=None, timeout=None: R({"data": [{"id": "qwen3.6:27b"},
