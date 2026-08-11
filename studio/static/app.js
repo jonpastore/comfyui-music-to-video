@@ -102,6 +102,15 @@ document.addEventListener("submit", function (e) {
     e.preventDefault();
     return;
   }
+  // Deleting a base image is a submit with formaction rather than its own form
+  // -- a nested form inside the generate form is invalid HTML -- so the check
+  // is on the SUBMITTER, not on the form.
+  if (e.submitter && e.submitter.classList.contains("delete-ref") &&
+      !confirm("Delete this base image? The file is removed too. Sheets already " +
+               "generated from it are not affected.")) {
+    e.preventDefault();
+    return;
+  }
   var charForm = e.target.closest(".delete-character");
   if (charForm && !confirm("Delete character " + charForm.dataset.name +
                            "? Their anchor rows go too; the image files stay on disk.")) {

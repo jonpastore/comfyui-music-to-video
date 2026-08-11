@@ -1229,9 +1229,104 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = ""):
 MAX_ANCHOR_UPLOADS = 8
 
 
+def form_files(form, field):
+    """The genuinely-uploaded files under `field`, from an already-parsed form.
+
+    NOT `List[UploadFile] = File([])`. A browser with an EMPTY file input still
+    sends a part for it, with filename="", and python-multipart hands that back
+    as a str -- which fails UploadFile validation with a 422 before any handler
+    code runs. That made "generate from saved base images without adding a new
+    one" impossible, which is the whole point of keeping them. Reading the parsed
+    form instead accepts both encodings and filters on what actually matters:
+    whether a part carries a filename.
+    """
+    return [f for f in form.getlist(field)
+            if hasattr(f, "filename") and (f.filename or "").strip()]
+
+
+def anchor_refs(album, character_id=None):
+    """The saved base images for one album and character, newest first.
+
+    Reference images used to be uploaded per generation and then forgotten: the
+    files stayed on disk, nothing recorded them, and the same photographs had to
+    be picked off the filesystem again for every sheet. They are kept now, in
+    the `assets` bag that already holds sets, style images and reviews, so a
+    kind is all this needed rather than a table of its own.
+
+    Scoped to album AND character, exactly as anchors are -- a cast member's
+    reference photographs are not the protagonist's, and pooling them would
+    condition one character's sheet on another's face.
+    """
+    out = []
+    for a in db.q("SELECT * FROM assets WHERE kind='anchor_ref' ORDER BY id DESC"):
+        meta = db.jset(a)
+        if meta.get("scope_value") != album:
+            continue
+        if (meta.get("character_id") or None) != (character_id or None):
+            continue
+        out.append(a)
+    return out
+
+
+async def _save_anchor_refs(album, character_id, uploads):
+    """Persist uploaded base images and return their asset rows."""
+    dest_dir = os.path.join(db.DATA, "uploads", "anchors", "album", safe_name(album))
+    stamp = int(time.time() * 1000)
+    saved = []
+    for i, f in enumerate(uploads):
+        path = await save_upload(f, MAX_IMAGE, dest_dir, "image", prefix=f"ref{i}_{stamp}")
+        db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+               None, "anchor_ref", path,
+               json.dumps({"scope_value": album, "character_id": character_id}), time.time())
+        saved.append(db.one("SELECT * FROM assets WHERE path=? AND kind='anchor_ref'", path))
+    return saved
+
+
+@app.post("/anchors/refs")
+async def add_anchor_refs(request: Request, album: str = Form(...),
+                           character_id: CharacterId = Form(None)):
+    """Save base images WITHOUT generating anything.
+
+    Uploading and generating were one action, so there was no way to build up a
+    set of references and come back to it -- and every re-generation meant
+    finding the same photographs again.
+    """
+    album = (album or "").strip()
+    if not db.one("SELECT id FROM playlists WHERE name=? AND kind='playlist'", album):
+        raise HTTPException(400, f"no album called {album!r}")
+    uploads = form_files(await request.form(), "images")
+    if not uploads:
+        raise HTTPException(400, "choose at least one image to save")
+    if len(uploads) > MAX_ANCHOR_UPLOADS:
+        raise HTTPException(400, f"that is {len(uploads)} images; {MAX_ANCHOR_UPLOADS} at a time")
+    if character_id is not None:
+        char = get_character_or_404(character_id)
+        if char["scope_value"] != album:
+            raise HTTPException(400, f"character {char['name']!r} belongs to {char['scope_value']!r}")
+    await _save_anchor_refs(album, character_id, uploads)
+    return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
+
+
+@app.post("/anchors/refs/{asset_id}/delete")
+def delete_anchor_ref(asset_id: int):
+    """Remove a saved base image, row and file. Anchors already generated from
+    it are untouched -- they are their own images, not references to this one."""
+    a = db.one("SELECT * FROM assets WHERE id=? AND kind='anchor_ref'", asset_id)
+    if not a:
+        raise HTTPException(404, "no such reference image")
+    album = db.jset(a).get("scope_value", "")
+    if _within_data(a["path"]) and os.path.isfile(a["path"]):
+        try:
+            os.remove(a["path"])
+        except OSError:
+            pass
+    db.run("DELETE FROM assets WHERE id=?", asset_id)
+    return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
+
+
 @app.post("/anchors")
 async def start_anchor(request: Request, album: str = Form(...), tier: List[str] = Form([]),
-                        view: List[str] = Form([]), images: List[UploadFile] = File([]),
+                        view: List[str] = Form([]),
                         n: int = Form(4), character_id: CharacterId = Form(None)):
     """Generate anchor candidates for one album, across any number of tiers and
     views, from an unordered set of reference images.
@@ -1302,16 +1397,35 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
             raise HTTPException(400, f"character {char['name']!r} belongs to album "
                                       f"{char['scope_value']!r}, not to {album!r}")
 
-    uploads = [f for f in (images or []) if f and f.filename]
-    if not uploads:
-        raise HTTPException(400, "upload at least one reference image")
+    # References now come from two places: images already saved for this album
+    # and character (ticked in the gallery) and anything uploaded in this same
+    # submit, which is saved too rather than used once and forgotten.
+    uploads = form_files(form, "images")
     if len(uploads) > MAX_ANCHOR_UPLOADS:
         raise HTTPException(400, f"that is {len(uploads)} reference images; {MAX_ANCHOR_UPLOADS} "
                                   f"is the most this form accepts")
-    dest_dir = os.path.join(db.DATA, "uploads", "anchors", "album", safe_name(album))
-    stamp = int(time.time() * 1000)
-    paths = [await save_upload(f, MAX_IMAGE, dest_dir, "image", prefix=f"ref{i}_{stamp}")
-             for i, f in enumerate(uploads)]
+    picked = []
+    for rid in form.getlist("ref_id"):
+        row = db.one("SELECT * FROM assets WHERE id=? AND kind='anchor_ref'", int(rid))
+        if not row:
+            raise HTTPException(400, "a reference image you picked no longer exists")
+        meta = db.jset(row)
+        if meta.get("scope_value") != album or (meta.get("character_id") or None) != (character_id or None):
+            raise HTTPException(400, "a reference image you picked belongs to another album "
+                                      "or character")
+        picked.append(row["path"])
+    picked += [a["path"] for a in await _save_anchor_refs(album, character_id, uploads)]
+
+    if not picked:
+        raise HTTPException(400, "pick at least one saved reference image, or upload one")
+    # The model conditions on MAX_ANCHOR_REFS and pipeline.gen_anchor silently
+    # drops the rest. That was tolerable when the form was "upload some, the
+    # first three win" and invisible; with a saved gallery it would mean an
+    # arbitrary three of eight, chosen by row id. Refuse instead of guessing.
+    if len(picked) > pipeline.MAX_ANCHOR_REFS:
+        raise HTTPException(400, f"{len(picked)} reference images selected; the model conditions "
+                                  f"on {pipeline.MAX_ANCHOR_REFS}. Untick some.")
+    paths = picked
 
     n = max(1, min(int(n), 8))
     for t, v in combos:
@@ -1489,6 +1603,9 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
         # one panel per ticked tier: its wording, and its own prompt
         "tier_panels": [{"name": t, "text": tier_tone(t),
                          "prompt": prompts.get(t, default_prompt)} for t in selected],
+        # the album+character's saved base images, so a sheet can be generated
+        # from photographs already here instead of finding them again
+        "saved_refs": anchor_refs(album, character_id),
         "max_anchor_prompt": MAX_ANCHOR_PROMPT, "max_uploads": MAX_ANCHOR_UPLOADS,
         "max_refs": pipeline.MAX_ANCHOR_REFS,
         "character_id": character_id,

@@ -780,6 +780,20 @@ table.sortcols th.sort-desc::after { content: " \2193"; color: var(--accent); }
   z-index: 1;
 }
 
+/* Saved base images: a picker, so the thumbnail IS the checkbox target. */
+.ref-gallery { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.4rem; }
+.ref-thumb { display: flex; flex-direction: column; gap: 0.3rem; align-items: center; }
+.ref-thumb .check { flex-direction: column; align-items: center; gap: 0.3rem; margin: 0; }
+.ref-thumb img {
+  width: 108px;
+  height: 108px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 2px solid var(--border);
+}
+/* a ticked image reads as ticked at a glance, not only by its small box */
+.ref-thumb .check input:checked + img { border-color: var(--accent); }
+
 /* what each ticked tier will actually render, one line per tier */
 .plan-list { list-style: none; padding: 0; margin: 0.5rem 0 0; }
 .plan-list li { margin-bottom: 0.2rem; }

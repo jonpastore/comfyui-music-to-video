@@ -87,17 +87,51 @@
       to render, each with its own candidates.</p>
   </fieldset>
 
-  <label>Reference images
+  {# ---- base images: kept, not re-uploaded every time ---- #}
+  {% if saved_refs %}
+  <fieldset>
+    <legend>Base images &mdash; tick the ones to build from</legend>
+    <div class="ref-gallery">
+      {% for r in saved_refs %}
+      <div class="ref-thumb">
+        <label class="check">
+          <input type="checkbox" name="ref_id" value="{{ r.id }}"
+                 {% if loop.index <= max_refs %}checked{% endif %}>
+          <img src="{{ media_url(r.path) }}" alt="reference image" loading="lazy">
+        </label>
+        <time class="local-time muted" datetime="{{ r.created | isotime }}">
+          {{ r.created | isotime }}</time>
+        {# formaction, not a nested <form>: a form inside this form is invalid
+           HTML and browsers drop it. formnovalidate so deleting never trips the
+           generate form's own required fields. #}
+        <button type="submit" class="thumb-btn-danger delete-ref" formnovalidate
+                formaction="/anchors/refs/{{ r.id }}/delete">Delete</button>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="hint">The model conditions on {{ max_refs }}, so at most {{ max_refs }} may be
+      ticked &mdash; more is refused rather than silently narrowed to whichever three came
+      first. They are an unordered SET, not face-then-outfit: one photograph carrying both is
+      fine, and with several the prompt tells the model they are the same character rather
+      than several to line up side by side.</p>
+  </fieldset>
+  {% endif %}
+
+  <label>Add reference images
     {# hx-preserve: the whole form is swapped whenever a tier or view changes,
        and without this the chosen files are silently dropped on every tick #}
     <input type="file" id="anchor-images" hx-preserve="true" name="images"
-           accept="image/*" multiple required>
+           accept="image/*" multiple>
   </label>
-  <p class="hint">Upload as many as you like, up to {{ max_uploads }}; the first
-    {{ max_refs }} are attached, which is what the model conditions on. They are an
-    unordered SET, not face-then-outfit &mdash; one photograph carrying both is fine, and
-    with several the prompt tells the model they are the same character rather than
-    several to line up side by side.</p>
+  <div class="form-actions">
+    <p class="hint">Up to {{ max_uploads }} at a time. Anything added here is KEPT for this
+      album and character, so the next sheet can be built from it without finding the
+      photographs again.{% if not saved_refs %} They are an unordered SET, not
+      face-then-outfit &mdash; one photograph carrying both is fine.{% endif %}</p>
+    {# Save keeps the images without generating anything, so a set of references
+       can be built up and come back to. Same form, different action. #}
+    <button type="submit" formnovalidate formaction="/anchors/refs">Save</button>
+  </div>
 
   {# ---- the rules that apply, above the box they govern ---- #}
   <div class="guardrail-panel">

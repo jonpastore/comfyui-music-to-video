@@ -2816,3 +2816,93 @@ if __name__ == "__main__":
     if failed:
         sys.exit(1)
     print("test_app.py OK")
+
+
+def test_base_images_are_kept_picked_and_deletable(patch_stub):
+    """Reference images used to be uploaded per generation and forgotten: the
+    files stayed on disk, nothing recorded them, and the same photographs had to
+    be found again for every sheet."""
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="": (
+        seen.append(list(images)) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Refs Album"})
+        files = [("images", ("a.png", _png_bytes(), "image/png")),
+                 ("images", ("b.png", _png_bytes(), "image/png"))]
+
+        # Save keeps them WITHOUT generating anything
+        # a DELTA, not a global count: the suite shares one database and other
+        # tests queue anchor jobs, so an absolute zero here passes alone and
+        # fails in the suite
+        before = db.one("SELECT COUNT(*) c FROM jobs WHERE kind='anchor'")["c"]
+        r = client.post("/anchors/refs", data={"album": "Refs Album"}, files=files)
+        assert r.status_code in (200, 303), r.text
+        assert db.one("SELECT COUNT(*) c FROM jobs WHERE kind='anchor'")["c"] == before, \
+            "saving base images generated a sheet"
+        saved = appmod.anchor_refs("Refs Album")
+        assert len(saved) == 2
+
+        # they appear in the form as a pickable gallery
+        page = client.get("/anchors/form", params={"album": "Refs Album", "tier": "r"}).text
+        assert 'name="ref_id"' in page and "Base images" in page
+
+        # generating from a SAVED image needs no upload at all
+        r = client.post("/anchors", data={"album": "Refs Album", "tier": "r", "view": "front",
+                                           "n": "1", "prompt_r": "", "ref_id": str(saved[0]["id"])},
+                         files=[("images", ("", b"", "application/octet-stream"))])
+        assert r.status_code in (200, 303), r.text
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert seen[-1] == [saved[0]["path"]]
+
+        # more than the model conditions on is REFUSED, not silently narrowed
+        third = client.post("/anchors/refs", data={"album": "Refs Album"},
+                            files=[("images", ("c.png", _png_bytes(), "image/png"))])
+        allr = appmod.anchor_refs("Refs Album")
+        assert len(allr) == 3
+        # httpx wants a DICT for data when files are also present; duplicate
+        # keys go as a list value, which is what a browser sends for N checkboxes
+        r = client.post("/anchors",
+                        data={"album": "Refs Album", "tier": "r", "view": "front", "n": "1",
+                              "prompt_r": "",
+                              "ref_id": [str(a["id"]) for a in allr] + [str(allr[0]["id"])]},
+                        files=[("images", ("", b"", "application/octet-stream"))])
+        assert r.status_code == 400 and "conditions on" in r.text
+
+        # picking nothing at all is refused rather than rendering from no reference
+        r = client.post("/anchors", data={"album": "Refs Album", "tier": "r", "view": "front",
+                                           "n": "1", "prompt_r": ""}, files=[("images", ("", b"", "application/octet-stream"))])
+        assert r.status_code == 400 and "pick at least one" in r.text
+
+        # delete removes the row AND the file; other albums are unaffected
+        path = allr[0]["path"]
+        assert client.post(f"/anchors/refs/{allr[0]['id']}/delete").status_code in (200, 303)
+        assert db.one("SELECT id FROM assets WHERE id=?", allr[0]["id"]) is None
+        assert not os.path.isfile(path), "the file was left behind"
+        assert len(appmod.anchor_refs("Refs Album")) == 2
+
+
+def test_base_images_do_not_leak_between_characters(patch_stub):
+    """A cast member's photographs are not the protagonist's -- pooling them
+    would condition one character's sheet on another's face."""
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Cast Refs Album"})
+        pl = db.one("SELECT id FROM playlists WHERE name='Cast Refs Album'")["id"]
+        client.post(f"/playlists/{pl}/characters", data={"name": "Vex", "role": "rival"})
+        cid = db.one("SELECT id FROM characters WHERE name='Vex'")["id"]
+        png = [("images", ("p.png", _png_bytes(), "image/png"))]
+        client.post("/anchors/refs", data={"album": "Cast Refs Album"}, files=png)
+        client.post("/anchors/refs", data={"album": "Cast Refs Album", "character_id": str(cid)},
+                    files=[("images", ("v.png", _png_bytes(), "image/png"))])
+
+        prot = appmod.anchor_refs("Cast Refs Album")
+        vex = appmod.anchor_refs("Cast Refs Album", cid)
+        assert len(prot) == 1 and len(vex) == 1
+        assert prot[0]["id"] != vex[0]["id"]
+
+        # and one character cannot generate from another's reference
+        r = client.post("/anchors", data={"album": "Cast Refs Album", "tier": "r",
+                                           "view": "front", "n": "1", "prompt_r": "",
+                                           "character_id": str(cid),
+                                           "ref_id": str(prot[0]["id"])}, files=[("images", ("", b"", "application/octet-stream"))])
+        assert r.status_code == 400 and "another album" in r.text
