@@ -3412,3 +3412,57 @@ def test_a_failed_batch_is_visible_and_retryable_from_the_anchors_page(patch_stu
 
         # a job that did not fail cannot be retried
         assert client.post(f"/jobs/{new['id']}/retry").status_code in (400, 200)
+
+
+def test_each_view_composes_its_own_prompt_unless_you_edit_it(patch_stub):
+    """make_anchor.py:169 is `args.prompt.strip() or prompt_for(view, ...)`, so an
+    explicit prompt REPLACES the per-view composition. The form always prefilled
+    the box, so a prompt was always sent -- and twelve tier/view combinations
+    received one identical prompt beginning "FRONT VIEW". Every back sheet
+    looked like the front, and no nude sheet was nude, because prompt_for's
+    NUDE_WARDROBE swap never ran."""
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="": (
+        seen.append({"view": view, "prompt": prompt}) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Per View Album"})
+        default = appmod.default_anchor_prompt("Per View Album", "front", None)
+        assert default, "no composed default to test against"
+
+        # UNEDITED -> empty, so make_anchor composes per view
+        seen.clear()
+        r = client.post("/anchors", data={"album": "Per View Album", "tier": "r", "n": "1",
+                                           "view": ["front", "back", "front_nude"],
+                                           "prompt_r": default},
+                        files=[("images", ("p.png", _png_bytes(), "image/png"))])
+        assert r.status_code in (200, 303), r.text
+        for j in db.q("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC LIMIT 3"):
+            wait_job(j["id"])
+        assert len(seen) == 3
+        assert all(s["prompt"] == "" for s in seen), (
+            "an untouched prompt was still sent verbatim, so every view gets the same "
+            f"framing: {[s['prompt'][:40] for s in seen]}")
+
+        # EDITED -> honoured, verbatim, for every view of that tier
+        seen.clear()
+        client.post("/anchors", data={"album": "Per View Album", "tier": "r", "n": "1",
+                                       "view": ["front", "back"],
+                                       "prompt_r": default + " Wearing a red coat."},
+                    files=[("images", ("p.png", _png_bytes(), "image/png"))])
+        for j in db.q("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC LIMIT 2"):
+            wait_job(j["id"])
+        assert len(seen) == 2 and all("red coat" in s["prompt"] for s in seen), \
+            "a deliberate edit was discarded"
+
+
+def test_the_form_does_not_promise_a_view_swap_it_cannot_make():
+    """The hint said "Each view swaps in its own framing sentence" while the
+    prompt was sent verbatim to every view -- a promise the renderer did not
+    keep, in the one place where getting it wrong wastes twelve GPU renders."""
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Hint Album"})
+        page = client.get("/anchors/form", params={"album": "Hint Album", "tier": "r"}).text
+        assert "Leave it untouched and each view composes its own" in page
+        assert "used verbatim for every view" in page, \
+            "the form no longer warns that an edit overrides the per-view framing"

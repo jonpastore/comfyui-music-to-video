@@ -890,3 +890,8 @@ tr.suggested td.cell-genre {
   font-style: italic;
   cursor: help;
 }
+
+/* Failed-job list: collapsed by default. A dozen failures is a wall of text
+   above the form you came to the page to use. */
+.failed-jobs > summary { cursor: pointer; user-select: none; }
+.failed-jobs > summary::marker { color: var(--muted); }

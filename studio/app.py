@@ -1615,6 +1615,15 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     # One prompt per tier, named prompt_<tier>. Every one is screened: a tier's
     # own box is a free-text field like any other.
     form = await request.form()
+    # what the form prefilled, so an untouched box can be told apart from a
+    # deliberate edit -- composed for the first selected view, exactly as
+    # anchor_form_ctx does it
+    # the SAME view anchor_form_ctx prefills from: ANCHOR_VIEWS order, not the
+    # alphabetical order selected_views happens to be in. Using the wrong one
+    # compares against a prompt the form never showed, so every prompt looks
+    # edited and the per-view composition never happens.
+    _first_view = next((k for k in ANCHOR_VIEWS if k in set(selected_views)), "front")
+    unedited_default = default_anchor_prompt(album, _first_view, character_id)
     prompts = {}
     for t in selected_tiers:
         text = (form.get(f"prompt_{t}") or "").strip()
@@ -1667,10 +1676,27 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     paths = picked
 
     n = max(1, min(int(n), 8))
+    # An UNEDITED prompt is sent as empty so make_anchor composes it PER VIEW.
+    #
+    # make_anchor.py:169 is `args.prompt.strip() or prompt_for(view, ...)`, so an
+    # explicit prompt REPLACES the per-view composition entirely -- and the form
+    # always prefills the box, so a prompt was always sent. The consequences were
+    # exactly what a user reported after rendering twelve sheets: every "back"
+    # sheet carried the FRONT VIEW sentence and looked like the front, and no
+    # nude sheet was nude, because prompt_for's NUDE_WARDROBE swap
+    # ("the album's wardrobe wording is the one thing that must NOT be used")
+    # never ran. Twelve tier/view combinations received one identical prompt.
+    #
+    # An EDITED prompt is still honoured, and still applies to every view of its
+    # tier -- the form says so, because that edit does override the framing and
+    # the nude swap.
     for t, v in combos:
+        text = prompts[t]
+        if text and text.strip() == (unedited_default or "").strip():
+            text = ""
         jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": album, "tier": t,
                                  "view": v, "images": paths, "n": n,
-                                 "character_id": character_id, "prompt": prompts[t]})
+                                 "character_id": character_id, "prompt": text})
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 

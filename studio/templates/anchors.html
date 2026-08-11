@@ -10,8 +10,12 @@
 {# a failed batch used to be invisible from here: the button appeared to do
    nothing, and the only evidence was on /jobs #}
 <section class="card">
-  <h3><span class="tag warn-tag">{{ failed_jobs | length }} failed</span>
-    anchor job{{ "" if failed_jobs | length == 1 else "s" }} in the last day</h3>
+  {# collapsed by default: twelve failures is a wall of text above the form you
+     came here to use, and the count in the summary is the part that matters #}
+  <details class="failed-jobs">
+    <summary><span class="tag warn-tag">{{ failed_jobs | length }} failed</span>
+      anchor job{{ "" if failed_jobs | length == 1 else "s" }} in the last day
+      <span class="muted">&mdash; click to see why, and to retry</span></summary>
   <p class="hint">Their settings are kept, so retrying costs one click rather than
     filling the form in again.</p>
   <table class="list">
@@ -31,6 +35,7 @@
     {% endfor %}
     </tbody>
   </table>
+  </details>
 </section>
 {% endif %}
 

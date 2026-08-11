@@ -172,9 +172,13 @@
   </div>
   {% endfor %}
   <p class="hint">Composed from this album's identity, wardrobe and body wording plus the
-    chosen view. Each tier starts from the same text and is edited separately &mdash; what is
-    in a tab is what gets sent for that tier. Each view swaps in its own framing sentence,
-    so this shows the first one selected.</p>
+    chosen view, shown for the first view selected.
+    <strong>Leave it untouched and each view composes its own</strong> &mdash; the back views
+    get a BACK VIEW sentence, and a nude view drops the album's wardrobe wording entirely,
+    which is the only way a nude sheet comes out nude.
+    <strong>Edit it and that text is used verbatim for every view of this tier</strong>,
+    which means it overrides both of those. Edit it to describe the character, not the
+    pose &mdash; a prompt beginning "FRONT VIEW" renders a front view on the back sheet.</p>
   {% else %}
   <p class="hint">Tick at least one tier.</p>
   {% endif %}
