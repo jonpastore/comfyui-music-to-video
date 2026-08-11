@@ -34,6 +34,14 @@ from build_storyboard import to_md  # noqa: E402
 
 SCENE_FIELDS = ("image_prompt", "story", "video_motion_prompt", "name")
 
+# Top-level keys dropped outright from any file that has a "scenes" list.
+# "negative" is the *_comfy.json spelling of a negative prompt -- inert at
+# cfg 1.0 like the rest, and it enumerates the minor terms. Only files with
+# scenes are touched, so a ComfyUI workflow JSON (where "negative" is a node
+# WIRE, not text) is never rewritten.
+DROP_KEYS = ("global_guardrail", "global_negative_prompt", "negative",
+             "suno_style_reference")
+
 MIN_BOILERPLATE = 120   # chars; shorter shared tails are legitimate style wording
 
 
@@ -149,14 +157,16 @@ def clean_file(path):
                 hit = True
         touched += 1 if hit else 0
 
-    had_field = "global_guardrail" in sb
-    sb.pop("global_guardrail", None)
     # Negative prompts are INERT on this stack: the image and video passes both
     # run at cfg 1.0, where ComfyUI skips the negative conditioning entirely.
     # They enumerate the same policy terms, once per scene, and do nothing.
     # build_refs/build_song already default the field to "" when absent.
-    had_field = sb.pop("global_negative_prompt", None) is not None or had_field
+    had_field = False
+    for key in DROP_KEYS:
+        had_field = sb.pop(key, None) is not None or had_field
     for scene in scenes:
+        if scene.pop("negative", None) is not None:
+            touched += 1
         if scene.pop("negative_prompt", None) is not None:
             touched += 1 if not scene.get("_np_counted") else 0
     saved = before - len(json.dumps(sb))
@@ -199,6 +209,22 @@ def main():
         md = p[:-5] + ".md"
         if os.path.exists(md) and clean_md(md, shared_for_md):
             md_written += 1
+
+    # .md sheets with no .json sibling (Back_Alley_Pussy_Storyboard.md) are never
+    # reached by the loop above, so their policy sections survived every earlier
+    # pass. Only files that actually carry such a section are opened -- clean_md
+    # also squeezes whitespace, which would rewrite unrelated docs.
+    if args.all:
+        for m in sorted(glob.glob(os.path.join(repo, "**", "*.md"), recursive=True)):
+            if "/studio/" in m or "/.git/" in m or os.path.exists(m[:-3] + ".json"):
+                continue
+            with open(m) as f:
+                if not re.search(r"\n#+ (Global negative prompt|Guardrail)\n", f.read()):
+                    continue
+            print(f"  {'rewrite' if args.apply else 'would clean'} "
+                  f"{os.path.relpath(m, repo)}  [policy section]")
+            if args.apply and clean_md(m, ""):
+                md_written += 1
 
     print(f"\n{changed} of {len(paths)} files carried guardrail text "
           f"({total_scenes} scenes, {total_saved // 1024} KB)")
