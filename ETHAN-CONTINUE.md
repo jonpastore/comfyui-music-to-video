@@ -80,8 +80,14 @@ When it is up, these must both be true:
 
     ssh jon@ethan-wsl 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8188/object_info'
     # -> 200
-    ssh jon@ethan-wsl 'curl -s http://127.0.0.1:8188/object_info | grep -c "\"Swarm"'
-    # -> 59   (cerberus reports 59; anything less means the node packs did not load)
+    ssh jon@ethan-wsl 'curl -s http://127.0.0.1:8188/object_info | python3 -c "
+    import sys,json; d=json.load(sys.stdin)
+    print(len([k for k in d if k.startswith(\"Swarm\")]))"'
+    # -> ~59  (cerberus reports 59, gamingpc 60; far fewer means the packs did not load)
+    #
+    # Parse the JSON, do NOT use `grep -c "\"Swarm"`. Recent ComfyUI returns
+    # /object_info as a SINGLE line, so grep -c counts lines and reports 1 for a
+    # perfectly healthy backend. That cost a wrong diagnosis on gamingpc.
 
 ## Then register it on cerberus
 

@@ -243,8 +243,23 @@ plan is self-contained.
        ln -sfn <swarm>/src/BuiltinExtensions/ComfyUIBackend/ExtraNodes/SwarmComfyExtra \
                ~/ComfyUI/custom_nodes/SwarmComfyExtra
 
-   Verify with `curl -s <box>:8188/object_info | grep -c '"Swarm'` — cerberus
-   reports 59, and the backend's feature count goes 10 → 14 once they load.
+   A clean ComfyUI does NOT install what those packs import. They need `cv2`,
+   `imageio_ffmpeg` and `OpenGL_accelerate`, and declare `dill`, `rembg`,
+   `ultralytics`; without them the backend registers and runs **degraded**, and
+   cerberus only works because other custom node packs happened to drag opencv
+   in. Install `opencv-python-headless imageio-ffmpeg PyOpenGL-accelerate dill
+   rembg ultralytics` alongside them.
+
+   Verify by PARSING the JSON — cerberus reports 59 node types, gamingpc 60, and
+   the backend's feature count goes 10 → 14 once they load:
+
+       curl -s <box>:8188/object_info | python3 -c "
+       import sys,json; d=json.load(sys.stdin)
+       print(len([k for k in d if k.startswith('Swarm')]))"
+
+   **Not `grep -c '\"Swarm'`.** Recent ComfyUI returns `/object_info` as a single
+   line, so `grep -c` counts lines and reports `1` for a perfectly healthy
+   backend. That produced a wrong diagnosis on gamingpc.
    **Note the symlinks point into the SwarmUI checkout**, so a `git pull` there
    changes the nodes under a renderer without a ComfyUI restart being involved.
    Copies decouple them at the cost of manual sync.
