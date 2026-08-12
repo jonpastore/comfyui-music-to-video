@@ -3387,9 +3387,21 @@ def view_arc(request: Request, id: int):
     titles = {r["id"]: r["title"] for r in db.q(
         """SELECT s.id, s.title FROM playlist_items pi JOIN songs s ON s.id = pi.song_id
            WHERE pi.playlist_id=? ORDER BY pi.position""", id)}
+    # Every chat model each backend will actually accept, so the arc is not
+    # locked to whatever is pinned beside the key. The pinned one is shown as
+    # the default rather than hidden, because "which model wrote this" is the
+    # first question asked of any arc that reads badly.
+    have = chat.available()
+    models = {b: chat.list_models(b) for b in have}
+    defaults = {}
+    for b in have:
+        try:
+            defaults[b] = chat.openai_model() if b == "openai" else grok._resolve_model(None)
+        except Exception:
+            defaults[b] = ""
     return templates.TemplateResponse(request, "arc.html", {
         "playlist": pl, "arc": data, "row": row, "md": md, "titles": titles,
-        "backends": chat.available()})
+        "backends": have, "models": models, "defaults": defaults})
 
 
 @app.post("/playlists/{id}/render")

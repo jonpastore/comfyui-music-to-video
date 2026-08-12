@@ -32,8 +32,15 @@ BASE_URL = "https://api.x.ai/v1"
 # now detects a genuinely stalled connection instead of capping how long a big
 # storyboard is allowed to take.
 STREAM_TIMEOUT = float(os.environ.get("XAI_STREAM_TIMEOUT", 120))
-DEFAULT_MODEL = os.environ.get("XAI_MODEL") or None  # unset by default; UI picks from list_models()
-PREFERRED_MODEL = "grok-4.5"  # used only when model= and DEFAULT_MODEL are both unset
+# Read at CALL time by _resolve_model, not bound here: the model belongs beside
+# the key (XAI_MODEL in ~/.config/morpheus/grok-mcp.env), so the box that holds
+# the credential is the box that says which model it can reach -- the same rule
+# chat.openai_model() follows. Bound at import, a rotated pin needed a restart.
+def default_model():
+    import creds
+    return creds.setting("XAI_MODEL", "xai")
+
+PREFERRED_MODEL = "grok-4.5"  # only when model= and the XAI_MODEL pin are both unset
 
 _KEY_ENV = "XAI_API_KEY"
 _KEY_FILE = os.path.expanduser("~/.config/morpheus/grok-mcp.env")
@@ -225,13 +232,20 @@ def best_model(models):
 def _resolve_model(model):
     if model:
         return model
-    if DEFAULT_MODEL:
-        return DEFAULT_MODEL
+    pinned = default_model()
+    if pinned:
+        return pinned
     models = list_models()
     if not models:
         raise RuntimeError("xAI /v1/models returned no chat models; pass model= explicitly")
-    # highest available, not a pinned name: PREFERRED_MODEL goes stale the day
-    # a newer one ships, and this default is what the UI advertises
+    # Highest available, not a pinned name: PREFERRED_MODEL goes stale the day a
+    # newer one ships, and this default is what the UI advertises.
+    #
+    # MEASURED 2026-08-12: this picked grok-4.20-0309-reasoning over grok-4.5,
+    # because _version_key reads "4.20" as (4, 20) and 20 > 5. Whether 4.20 is
+    # genuinely newer than 4.5 is xAI's business and not something to guess at
+    # here, so the fix is the pin above rather than a reordering of everyone's
+    # version comparison on a hunch.
     return best_model(models) or models[0]
 
 

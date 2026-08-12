@@ -37,6 +37,50 @@ def openai_model():
     return creds.setting("STUDIO_OPENAI_MODEL", "openai") or OPENAI_MODEL_FALLBACK
 
 
+# Ids on /v1/models that are NOT chat-completions models. The dropdown must not
+# offer one: a control that looks available and 404s is the failure this codebase
+# refuses everywhere else.
+#
+# MEASURED 2026-08-12, and worth the specificity -- gpt-5.5-pro-2026-04-23 was
+# what OpenAI itself recommended for this exact task when asked, and it answers
+# "This is not a chat model and thus not supported in the v1/chat/completions
+# endpoint" in 0.5s. The -pro line uses a different endpoint. Asking a model
+# which model to use is not the same as checking that the answer works.
+_OPENAI_NOT_CHAT = ("embedding", "whisper", "tts", "dall-e", "sora", "moderation",
+                    "realtime", "audio", "image", "transcribe", "search", "instruct",
+                    "computer-use", "-pro", "codex", "moderation")
+
+
+def list_models(backend=None):
+    """Chat models this backend will actually accept, newest-looking last.
+
+    Empty rather than raising when the provider cannot be reached: a model
+    dropdown that cannot be populated is a smaller problem than a page that
+    will not render, and every caller already handles "no list" by using the
+    default.
+    """
+    backend = resolve(backend)
+    if backend == "xai":
+        import grok
+        try:
+            return sorted(grok.usable_chat_models(grok.list_models()))
+        except Exception:
+            return []
+    import httpx
+    key = creds.get("openai")
+    if not key:
+        return []
+    try:
+        r = httpx.get(f"{OPENAI_BASE}/models",
+                      headers={"Authorization": f"Bearer {key}"}, timeout=30)
+        r.raise_for_status()
+        ids = [m["id"] for m in r.json().get("data", [])]
+    except Exception:
+        return []
+    return sorted(i for i in ids
+                  if i.startswith("gpt-") and not any(x in i for x in _OPENAI_NOT_CHAT))
+
+
 def available():
     """Backends that have a key right now, in preference order. Read at call
     time, so storing a key on the Config page takes effect immediately."""
@@ -160,6 +204,33 @@ def demo():
                 sys.modules["grok"] = real_grok
             else:
                 del sys.modules["grok"]
+        # --- list_models offers only what the endpoint accepts ---
+        import httpx
+        real_httpx_get = httpx.get
+
+        class _R:
+            status_code = 200
+            def raise_for_status(self): pass
+            def json(self):
+                return {"data": [{"id": i} for i in (
+                    "gpt-5.6-sol", "gpt-5.5", "gpt-5.5-pro", "gpt-5.5-pro-2026-04-23",
+                    "gpt-5.4-nano", "text-embedding-3-large", "whisper-1",
+                    "gpt-4o-realtime-preview", "gpt-5-search-api", "dall-e-3")]}
+
+        httpx.get = lambda *a, **k: _R()
+        try:
+            got = list_models("openai")
+        finally:
+            httpx.get = real_httpx_get
+        assert "gpt-5.6-sol" in got and "gpt-5.5" in got, got
+        # -pro is NOT a chat-completions model. Measured: gpt-5.5-pro-2026-04-23,
+        # which OpenAI itself recommended for storyboard writing when asked,
+        # answers "This is not a chat model" in 0.5s. Offering it in a dropdown
+        # would be a control that looks available and 404s.
+        assert not [g for g in got if "-pro" in g], got
+        for junk in ("text-embedding-3-large", "whisper-1", "dall-e-3",
+                     "gpt-4o-realtime-preview", "gpt-5-search-api"):
+            assert junk not in got, f"{junk} was offered as a chat model"
     finally:
         creds.get = real_get
     print("chat.py OK")

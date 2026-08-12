@@ -31,6 +31,21 @@
           {% for b in backends %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
         </select>
       </label>
+      {# Every model the backend will actually accept. Ones the completions
+         endpoint refuses are not listed at all rather than offered and 404ing. #}
+      <label>Model
+        <select name="model">
+          <option value="">the pinned default{% for b, m in defaults.items() %}
+            {% if m %} &middot; {{ b }}: {{ m }}{% endif %}{% endfor %}</option>
+          {% for b in backends %}
+          <optgroup label="{{ b }}">
+            {% for m in models.get(b, []) %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+      </label>
       <button type="submit" {% if not backends %}disabled{% endif %}>
         {{ "Rewrite the arc" if arc else "Write the arc" }}</button>
     </div>
