@@ -45,10 +45,32 @@ clip costs 6.2x to redo, and identity drift *within* a clip is not something the
 reference-frame mechanism can correct — today drift is bounded by re-anchoring
 every 4.8 seconds.
 
-**Decision required before the sets/DAW TRD is written**, because clip length
-determines what the timeline is made of. The options are: leave CHUNK alone and
-treat 30s as an experiment; make CHUNK per-model catalogue data; or make it
-per-song. No TRD in this program is safe to finalise while this is open.
+**DECIDED 2026-08-12 by Jon: clip length is PER SONG, defined by the storyboard,
+and scenes are the unit.** A scene becomes one clip. A scene longer than the
+render ceiling is split, and the split is stitched by using **the last frame of
+clip N as the first frame of clip N+1**.
+
+The cost of the change is near zero and the reason is worth recording: nothing
+downstream is solidified. No anchor has been chosen, no reference image approved.
+The clip-merging design existed to stitch 7-8 short clips into one 30-second
+scene "and hope they align" — the measurement removes the need for that entirely.
+Greenfield, so the constant moves.
+
+**Three consequences that follow, and they are not all free:**
+
+1. **Scene-internal clips SERIALISE.** Chaining last-frame-to-first-frame means
+   clip N+1 cannot start until clip N has finished — it needs the frame. Clips
+   *within* a scene are a chain; different scenes stay parallel. The queue model
+   (below) handles this correctly as long as a chained clip is not enqueued until
+   its predecessor lands.
+2. **Drift is now scene-scoped rather than clip-scoped.** At 4.8s every clip was
+   re-anchored to an approved reference. With chaining, only the first clip of a
+   scene is anchored and each subsequent clip starts from a *generated* frame, so
+   error compounds along the chain. This is not an argument against the change —
+   it is the specific thing QC tier 2 has to watch, and the reason a compliance
+   score per clip matters more now than it did.
+3. **A failed clip costs 6.2x more to redo.** Retry policy should reflect that a
+   30s clip is not a cheap thing to re-roll.
 
 ---
 
@@ -243,11 +265,43 @@ nine APIs decide the shape), **garbage collection** (needs the manifest schema,
 which TRD-3's artefact model largely defines), **audio buildout / media menu**
 (shares the timeline model with TRD-1 and should not be specified before it).
 
-## Decisions needed
+## Decisions — all three answered 2026-08-12
 
-1. **CHUNK.** Fixed at 4.8125s, per-model, or per-song? Nothing downstream is
-   safe to specify until this is answered.
-2. **Fan-out floor.** Encode "do not spread fewer than 3 clips across the fleet"
-   as a scheduling rule, or leave routing as it is?
-3. **gamingpc.** Leave on WSL2+Docker at 2.59x the cost, or move it to native
-   Linux and roughly triple its contribution?
+**1. Clip length is per song, from the storyboard. Scenes are the unit.** Split a
+scene that exceeds the ceiling and stitch by last-frame-to-first-frame. See the
+fork section above for the three consequences.
+
+**2. Scheduling is a WAIT STATE, not a timing match.** When a resource frees, it
+takes the next queued item that matches it. Jon's words: *"we should not be
+trying to match timing, that's how race conditions happen."*
+
+This replaces the fan-out floor this document originally proposed, and it is a
+better answer. A floor of three was a heuristic derived from *predicted* render
+times — scheduling by prediction, which is precisely the failure being named. A
+pull model needs no prediction and dissolves the straggler problem on its own:
+if cerberus is 2.59x faster it simply takes 2.59x more items, and the 291.6s vs
+378.2s inversion never arises because nothing was ever split by a forecast.
+
+Design notes that follow:
+- Workers pull; the studio does not assign. A backend that is slow, off, or
+  behind a VPN self-corrects by pulling less.
+- **A chained clip is not enqueueable until its predecessor lands**, because it
+  needs that last frame. The queue must express "ready" separately from "queued",
+  or scene chains will be handed out in the wrong order.
+- Match on capability, not on identity: an item requires a model, and
+  `models.where()` already answers which boxes hold it with which spelling and
+  whether it fits in that card.
+
+**3. gamingpc stays on WSL2 + Docker.** Not a choice — it is somebody's Windows
+desktop. It contributes at 2.59x the cost of cerberus and that is worth having.
+Recorded so nobody re-derives the 2.59x as a bug and goes looking for a fix that
+does not exist.
+
+## Still open
+
+The **render ceiling above 30s has not been found.** The ladder that produced the
+30s result descended from 505 frames and 505 succeeded on the first attempt, so
+the true maximum is untested. Now that scene length drives storyboarding, clip
+count, reference approval and the timeline, the ceiling is a load-bearing number
+rather than a curiosity. An upward ladder (561 / 673 / 841 / 1009 frames =
+33s / 40s / 50s / 60s) is running.
