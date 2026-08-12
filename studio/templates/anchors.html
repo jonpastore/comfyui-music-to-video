@@ -74,60 +74,7 @@
 <p class="empty">No anchors generated yet.</p>
 {% else %}
 {% for g in groups %}
-<section class="card">
-  {# scope_kind is not shown: an album IS a playlist, so "album:" on every
-     heading was a distinction with nothing on the other side of it #}
-  <h3>{{ g.scope_value }} &middot; {{ g.character_name or "protagonist" }}
-      &middot; {{ g.tier | tiername }} &middot; {{ g.view | viewname }}</h3>
-  {# One bar per GROUP, not one for the page: a candidate only ever competes
-     with its own scope+tier+view+character, and a selection spanning groups
-     would delete across sheets that have nothing to do with each other. #}
-  <div class="candidate-bar" data-group>
-    <label class="check"><input type="checkbox" class="pick-all-anchors"> Select all</label>
-    <span class="muted anchor-count">none selected</span>
-    <button type="button" class="thumb-btn-danger delete-selected" hidden>Delete selected</button>
-  </div>
-  <div class="candidate-grid">
-    {% for c in g.candidates %}
-    <div class="candidate {% if c.chosen %}picked{% endif %}" data-anchor="{{ c.id }}">
-      <label class="candidate-pick">
-        <input type="checkbox" class="pick-anchor" value="{{ c.id }}"
-               aria-label="select this candidate">
-      </label>
-      {# click to see it full size: a character sheet is judged on the face and
-         the hands, and neither is legible in a grid thumbnail #}
-      <img class="thumb" src="{{ media_url(c.path) }}" alt="anchor candidate" loading="lazy"
-           data-full="{{ media_url(c.path) }}" tabindex="0" role="button"
-           title="Click to view full size">
-      <div class="candidate-actions">
-        <form method="post" action="/anchors/{{ c.id }}/pick" class="pick-anchor-form">
-          <button type="submit" {% if c.chosen %}disabled{% endif %}>{{ "Chosen" if c.chosen else "Pick" }}</button>
-        </form>
-        {# The chosen one IS deletable. Disabling it said "pick another candidate
-           first", which is impossible advice for a group with only one -- the
-           only anchor could never be removed. The confirm states the cost
-           instead, and reference generation already refuses a tier with no
-           chosen anchor with its own clear message. #}
-        <form method="post" action="/anchors/{{ c.id }}/delete" class="delete-anchor"
-              {% if c.chosen %}data-chosen="1"{% endif %}>
-          <button type="submit" class="thumb-btn-danger">Delete</button>
-        </form>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% if g.unpicked %}
-  <form method="post" action="/anchors/delete-unpicked" class="delete-anchor-group"
-        data-unpicked="{{ g.unpicked }}">
-    <input type="hidden" name="scope_kind" value="{{ g.scope_kind }}">
-    <input type="hidden" name="scope_value" value="{{ g.scope_value }}">
-    <input type="hidden" name="tier" value="{{ g.tier }}">
-    <input type="hidden" name="view" value="{{ g.view }}">
-    {% if g.character_id %}<input type="hidden" name="character_id" value="{{ g.character_id }}">{% endif %}
-    <button type="submit">Delete the {{ g.unpicked }} unpicked candidate{{ "" if g.unpicked == 1 else "s" }}</button>
-  </form>
-  {% endif %}
-</section>
+{% include "_anchor_group.html" %}
 {% endfor %}
 {% endif %}
 

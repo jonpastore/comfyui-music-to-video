@@ -2845,6 +2845,58 @@ def test_api_keys_are_write_only_and_never_rendered(monkeypatch):
                            data={"name": "not-a-provider", "value": "x"}).status_code == 400
 
 
+def test_a_finished_sheet_can_be_dropped_into_the_page_without_a_reload(patch_stub):
+    """The batch panel watches each sheet over SSE; when one finishes its
+    candidates should appear without a reload. The fragment comes from the SAME
+    partial the page renders, so a fresh sheet carries the working pick and
+    delete forms rather than a JavaScript lookalike."""
+    made = []
+
+    def _sheets(images, view="front", n=4, progress=None, prefix=None, profile=None,
+                guard="", prompt="", render=None):
+        out = [os.path.join(db.DATA, f"live_{view}_{i}.png") for i in range(2)]
+        for f in out:
+            open(f, "wb").write(_png_bytes())
+        made.extend(out)
+        return out
+
+    patch_stub("pipeline", gen_anchor=_sheets)
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Live Sheet Album"})
+        # nothing rendered yet -> empty, so the caller leaves the page alone
+        r = client.get("/anchors/group", params={"scope_value": "Live Sheet Album",
+                                                  "tier": "r", "view": "front"})
+        assert r.status_code == 200 and r.text.strip() == ""
+
+        client.post("/anchors", data={"album": "Live Sheet Album", "tier": "r",
+                                       "view": "front", "n": "2", "prompt_r": ""},
+                    files=[("images", ("s.png", _png_bytes(), "image/png"))])
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+
+        r = client.get("/anchors/group", params={"scope_value": "Live Sheet Album",
+                                                  "tier": "r", "view": "front"})
+        assert r.status_code == 200
+        frag = r.text
+        # the candidates, and the controls that make them usable
+        ids = [a["id"] for a in db.q(
+            "SELECT id FROM anchors WHERE scope_value='Live Sheet Album'")]
+        assert ids, "nothing rendered"
+        for i in ids:
+            assert f'data-anchor="{i}"' in frag
+            assert f'/anchors/{i}/pick' in frag and f'/anchors/{i}/delete' in frag
+        # a fragment, not a whole page -- it is inserted into the live one
+        assert "<html" not in frag.lower() and "<body" not in frag.lower()
+
+        # and it is the SAME markup the page itself renders
+        page = client.get("/anchors").text
+        assert f'data-anchor="{ids[0]}"' in page
+
+        # an unknown tier is refused rather than rendering an empty section
+        assert client.get("/anchors/group",
+                          params={"scope_value": "Live Sheet Album", "tier": "nope",
+                                  "view": "front"}).status_code == 400
+
+
 def test_an_arc_model_must_belong_to_the_backend_it_is_sent_to(monkeypatch):
     """The arc form offers both backends' models in one select. Picking xai
     beside an OpenAI model would send that name straight to xAI --

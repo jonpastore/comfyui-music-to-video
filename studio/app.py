@@ -1821,6 +1821,31 @@ def build_refs_negative_applies(settings):
         return False
 
 
+@app.get("/anchors/group", response_class=HTMLResponse)
+def anchor_group(request: Request, scope_value: str, tier: str, view: str,
+                 character_id: CharacterId = None):
+    """One group's candidates, as the same fragment the page renders.
+
+    So a sheet that finishes can appear WITHOUT a reload -- the batch panel
+    watches each job over SSE and pulls this in when one is done. Rendered from
+    the shared partial rather than rebuilt in JavaScript: a second copy of this
+    markup is a second copy that drifts from the pick and delete forms, and
+    those are the controls that make a candidate usable.
+    """
+    valid_tier_or_400(tier)
+    rows = db.q("""SELECT a.*, c.name AS character_name
+                   FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
+                   WHERE a.scope_kind='album' AND a.scope_value=? AND a.tier=? AND a.view=?
+                     AND a.character_id IS ?
+                   ORDER BY a.id DESC""", scope_value, tier, view, character_id)
+    if not rows:
+        return HTMLResponse("")          # nothing yet: the caller leaves the page alone
+    g = {"scope_kind": "album", "scope_value": scope_value, "tier": tier, "view": view,
+         "character_id": character_id, "character_name": rows[0]["character_name"],
+         "candidates": rows, "unpicked": sum(1 for c in rows if not c["chosen"])}
+    return templates.TemplateResponse(request, "_anchor_group.html", {"g": g})
+
+
 @app.post("/anchors/preview")
 async def anchor_preview(request: Request):
     """The assembled prompts for every tier/view the form currently selects."""

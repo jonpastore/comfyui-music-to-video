@@ -543,6 +543,46 @@ function initAnchorBatch() {
       : "";
   }
 
+  // A finished sheet, dropped into the page as its own group. The markup comes
+  // from the SERVER (the same partial the page renders), so the pick and delete
+  // forms on a fresh sheet are the ones that already work -- rebuilding this in
+  // JavaScript would be a second copy to keep in step.
+  function showFinishedSheet(li) {
+    var album = (document.querySelector("#anchor-form [name=album]") || {}).value;
+    if (!album || !li.dataset.tier) return;
+    var cid = (document.querySelector("#anchor-form [name=character_id]") || {}).value;
+    var url = "/anchors/group?scope_value=" + encodeURIComponent(album) +
+              "&tier=" + encodeURIComponent(li.dataset.tier) +
+              "&view=" + encodeURIComponent(li.dataset.view) +
+              (cid ? "&character_id=" + encodeURIComponent(cid) : "");
+    fetch(url, {headers: {"Accept": "text/html"}}).then(function (r) {
+      return r.ok ? r.text() : "";
+    }).then(function (html) {
+      if (!html.trim()) return;
+      var holder = document.createElement("div");
+      holder.innerHTML = html;
+      var fresh = holder.firstElementChild;
+      if (!fresh) return;
+      // replace the group if it is already on the page (a re-roll adds
+      // candidates to an existing sheet), otherwise append it
+      var existing = null;
+      document.querySelectorAll("section.card h3").forEach(function (h) {
+        if (!existing && h.textContent.replace(/\s+/g, " ").trim() ===
+            fresh.querySelector("h3").textContent.replace(/\s+/g, " ").trim()) {
+          existing = h.closest("section.card");
+        }
+      });
+      if (existing) existing.replaceWith(fresh);
+      else {
+        var empty = document.querySelector("p.empty");
+        if (empty) empty.remove();
+        document.body.querySelector("main, .content, body").appendChild(fresh);
+      }
+      var bar = fresh.querySelector(".candidate-bar");
+      if (bar) initAnchors();      // re-attach selection for the new section
+    }).catch(function () { /* the line already reports the job; leave the page */ });
+  }
+
   // One line per sheet, filled from the job's own SSE stream rather than a
   // poll -- /jobs/{id}/stream already carries status, progress and error.
   function watch(li) {
@@ -555,8 +595,12 @@ function initAnchorBatch() {
       li.textContent = label + " — " + (d.error || d.progress || d.status || "");
       if (d.status === "done" || d.status === "failed" || d.status === "cancelled") {
         es.close();
-        if (d.status === "done") { done++; li.className = "batch-done"; }
-        else { failed++; li.className = "batch-failed"; }
+        if (d.status === "done") {
+          done++; li.className = "batch-done";
+          // the sheet is on disk now -- put it on the page rather than making
+          // someone reload to find out what they just rendered
+          showFinishedSheet(li);
+        } else { failed++; li.className = "batch-failed"; }
         var a = document.createElement("a");
         a.className = "linkish";
         a.href = "/jobs/" + id + "/log";
