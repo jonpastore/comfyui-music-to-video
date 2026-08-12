@@ -5611,6 +5611,26 @@ def models_ctx(saved=""):
     }
 
 
+@app.get("/models/fleet", response_class=HTMLResponse)
+def models_fleet(request: Request):
+    """What each RENDER BACKEND holds, which is not the same question as what
+    this box holds.
+
+    Its own endpoint, loaded after the page, rather than part of models_ctx():
+    models_ctx runs again on every role swap, and asking three ComfyUIs for
+    /object_info costs up to OBJECT_INFO_TIMEOUT each when a box is off. Setting
+    a default should not wait on a sleeping gaming PC.
+
+    pipeline supplies the backend list and models does the reading -- pipeline
+    imports models, so the list has to be passed in from here rather than
+    fetched there.
+    """
+    return templates.TemplateResponse(request, "_fleet.html", {
+        "fleet": models.by_backend(pipeline.swarm_backends()),
+        "render_backend": pipeline.RENDER_BACKEND,
+    })
+
+
 @app.get("/models", response_class=HTMLResponse)
 def models_page(request: Request):
     """Every model this studio can use, what each one is designed for, and

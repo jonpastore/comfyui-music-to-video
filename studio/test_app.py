@@ -5774,3 +5774,45 @@ def test_album_profile_is_screened_like_every_other_prompt_path():
         # wardrobe is 961 characters, and a 1000 cap would have been 39 away
         ok = {"wardrobe": "a" * 1200}
         assert client.post(f"/playlists/{pid}/profile", data=ok).status_code in (200, 303)
+
+
+def test_fleet_panel_names_the_spelling_each_box_uses(monkeypatch):
+    """DIFFERENTIAL over the same catalogue, one box against another.
+
+    The same weights are not named the same thing on every backend -- peaches
+    holds ACE-Step as ..._fp16 because a Turing card has no bf16 path. A page
+    that reports availability without reporting the SPELLING sends a workflow
+    naming a file that box does not have, and the loader refuses it. So the
+    panel must say both, and it must not claim anything at all about a backend
+    whose ComfyUI never answered."""
+    import models as modelmod
+    cerberus = {"CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [
+        ["ace_step_v1_3.5b.safetensors"]]}}}}
+    peaches = {"CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [
+        ["ace_step_v1_3.5b_fp16.safetensors"]]}}}}
+    fleet = [{"id": "0", "title": "cerberus", "status": "running",
+              "address": "http://127.0.0.1:8188"},
+             {"id": "2", "title": "peaches", "status": "running",
+              "address": "http://100.95.184.29:8188"},
+             {"id": "9", "title": "ghost", "status": "running",
+              "address": "http://10.0.0.99:8188"}]
+    monkeypatch.setattr(appmod.pipeline, "swarm_backends", lambda: fleet)
+    monkeypatch.setattr(modelmod, "_object_info",
+                        lambda url=None: {"http://127.0.0.1:8188": cerberus,
+                                          "http://100.95.184.29:8188": peaches}.get(url))
+    with TestClient(appmod.app) as client:
+        r = client.get("/models/fleet")
+        assert r.status_code == 200, r.text
+        # the alias is NAMED, on the box that uses it and nowhere else
+        assert "ace_step_v1_3.5b_fp16.safetensors" in r.text
+        assert r.text.count("ace_step_v1_3.5b_fp16.safetensors") >= 1
+        # dependability is not speed and not what the box holds
+        assert "stable" in r.text and "opportunistic" in r.text
+        # a backend that never answered says so instead of reporting "missing"
+        assert "did not answer us" in r.text
+
+    # and Swarm being down is not an error for a studio that renders direct
+    monkeypatch.setattr(appmod.pipeline, "swarm_backends", lambda: None)
+    with TestClient(appmod.app) as client:
+        r = client.get("/models/fleet")
+        assert r.status_code == 200 and "SwarmUI did not answer" in r.text

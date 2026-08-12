@@ -21,6 +21,10 @@
         <span class="tag warn-tag">not installed</span>
       {% endif %}
       {% if defaults.get(role) == m.key %}<span class="tag">default</span>{% endif %}
+      {# installed says the file is there; proven says whether anything here has
+         ever rendered with it. ACE-Step is installed on two boxes and has no
+         workflow written at all. #}
+      {% if m.proven != 'stable' %}<span class="tag warn-tag">unproven</span>{% endif %}
     </header>
 
     <p>{{ m.purpose }}</p>

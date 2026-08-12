@@ -1,0 +1,67 @@
+{# What each RENDER BACKEND holds. Loaded after the page rather than with it:
+   asking three ComfyUIs for /object_info costs up to OBJECT_INFO_TIMEOUT each
+   when a box is off, and setting a default should not wait on a sleeping
+   gaming PC. #}
+<section class="card" id="fleet-panel">
+  <header class="model-head">
+    <h2>Render backends</h2>
+    <span class="tag">rendering through {{ render_backend }}</span>
+  </header>
+
+  {% if not fleet %}
+  <p class="muted">SwarmUI did not answer, so there is nothing to say about the other
+    boxes. Every render still goes to this studio's own ComfyUI, which is what the
+    sections below describe.</p>
+  {% else %}
+  <p class="hint">Read live from each backend's own <code>/object_info</code>, one box at a
+    time. <strong>A listed backend is no proof it can render</strong> &mdash; backend 1 was
+    registered, &ldquo;running&rdquo;, and empty, and failed a real workflow in 0.6s.
+    <em>Stable</em> means the box is always on, not that it is fast: the quickest card here
+    is somebody&rsquo;s desktop.</p>
+
+  {% for b in fleet %}
+  <article class="model-card {% if not b.reachable %}unavailable{% endif %}">
+    <header class="model-head">
+      <strong>[{{ b.id }}] {{ b.title }}</strong>
+      {% if b.stability == 'stable' %}
+        <span class="tag done">stable</span>
+      {% else %}
+        <span class="tag">opportunistic</span>
+      {% endif %}
+      <span class="tag">swarm says {{ b.status }}</span>
+      {% if not b.reachable %}<span class="tag warn-tag">did not answer us</span>{% endif %}
+    </header>
+    <p class="meta"><code>{{ b.address }}</code> &middot; {{ b.stability_why }}</p>
+
+    {% if not b.reachable %}
+      <p class="warn">Its ComfyUI did not answer, so nothing below is known about this box
+        either way. Swarm listing it as {{ b.status }} is not the same claim.</p>
+    {% else %}
+      {% set runnable = b.models | selectattr('available') | list %}
+      {% if not runnable %}
+        <p class="warn">Answered, and holds <strong>none</strong> of the catalogued models.
+          Work pinned here fails in about a second.</p>
+      {% else %}
+      <ul class="model-notes">
+        {% for m in runnable %}
+        <li>
+          <code>{{ m.key }}</code> &mdash; {{ m.label }}
+          {% if m.proven != 'stable' %}<span class="tag">{{ m.proven }}</span>{% endif %}
+          {% if m.file_here and m.file_here != m.file %}
+            <br><strong class="warn">names it <code>{{ m.file_here }}</code></strong>,
+            not <code>{{ m.file }}</code> &mdash; a workflow sent here must load that
+            spelling or the loader refuses it.
+          {% endif %}
+          {% if m.missing %}
+            <br><span class="warn">missing
+            {% for f in m.missing %}<code>{{ f }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    {% endif %}
+  </article>
+  {% endfor %}
+  {% endif %}
+</section>

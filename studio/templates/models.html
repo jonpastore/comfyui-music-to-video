@@ -8,6 +8,8 @@
   {% if not reachable %}<strong class="warn">ComfyUI did not answer, so availability is
   unknown below.</strong>{% endif %}</p>
 
+<div id="fleet-panel" hx-get="/models/fleet" hx-trigger="load" hx-swap="outerHTML"></div>
+
 {% for role, role_label in roles.items() %}
 {% include "_model_section.html" %}
 {% endfor %}

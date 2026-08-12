@@ -15,6 +15,16 @@ the same enum the loader node would validate against -- so a catalogued model
 that is not on the box shows as missing in the UI instead of failing forty
 minutes into a render. Chat models come from grok.list_models() for the same
 reason.
+
+AND THERE IS MORE THAN ONE BOX NOW. Three ComfyUI backends are registered with
+SwarmUI, they do not hold the same files, and the same weights are not even
+named the same thing on each: peaches calls the Z-Image VAE
+`z_image_ae.safetensors` where cerberus calls it `ae.safetensors`, and holds
+ACE-Step as `..._fp16` because a Turing card cannot run the bf16 build. A
+workflow that names one spelling cannot run on the box that uses the other, and
+nothing anywhere said so -- which is how "Z-Image makes the 2080 Ti useful"
+survived as a plan for a box that could not have loaded Wayne's workflow.
+ALIASES records those spellings and availability is answered PER BACKEND.
 """
 import json
 import os
@@ -55,9 +65,56 @@ LOADER_FIELD = {
     "AudioEncoderLoader": "audio_encoder_name",
 }
 
+# The SAME weights under a different filename on a different box. Availability
+# resolves through this, and a workflow targeting a backend must load the name
+# THAT box has -- a loader enum is validated against the literal string.
+#
+# Verified 2026-08-12 by reading /object_info from all three backends directly.
+ALIASES = {
+    # A 2080 Ti is Turing: it has no bf16 path, so peaches holds an fp16 cast of
+    # ACE-Step under its own name. Naming the cerberus spelling in a workflow is
+    # what would make the always-on audio box refuse the job.
+    "ace_step_v1_3.5b.safetensors": ("ace_step_v1_3.5b_fp16.safetensors",),
+    # Z-Image's autoencoder. Cerberus took the upstream name; peaches was
+    # provisioned with the model's own name. This one is load-bearing: Z-Image
+    # is the ONLY image model the 2080 Ti can run, and the workflow that has
+    # actually rendered Z-Image here loads "ae.safetensors".
+    "ae.safetensors": ("z_image_ae.safetensors",),
+    # Cerberus carries the Qwen VAE at the top level AND under QwenImage/. Same
+    # file, two enum entries, and a workflow written against one is refused by a
+    # box that only has the other.
+    "qwen_image_vae.safetensors": ("QwenImage/qwen_image_vae.safetensors",),
+}
+
+# How much a box can be RELIED ON, which is a different question from what it
+# holds. Keyed by host, because Swarm's numeric ids renumber when a backend is
+# added and its titles are edited by hand.
+#
+#   stable         always on, and a job sent here is expected to finish
+#   opportunistic  may be off, in use by a human, or mid-reprovision. Fine to
+#                  send work to; never the only place work can go.
+#
+# This says nothing about SPEED. Backend 1 is the fastest box here and is still
+# opportunistic, because it is somebody's desktop.
+BACKEND_STABILITY = {
+    "127.0.0.1": ("stable", "cerberus, the box the studio itself runs on"),
+    "100.103.148.120": ("stable", "cerberus over the tailnet, same box"),
+    "100.107.235.105": ("opportunistic", "gamingpc -- a desktop somebody uses"),
+    "100.95.184.29": ("opportunistic", "peaches-unraid -- shares a NAS with other services"),
+}
+UNKNOWN_BACKEND = ("opportunistic", "not in BACKEND_STABILITY -- assumed unreliable")
+
+# What a MODEL has been proven to do here, which is a different question again.
+#   stable         has rendered real work on this project, end to end
+#   opportunistic  catalogued and installed, but the path is unproven or unwritten
+# Every catalogue entry must declare one; demo() enforces it, so a model added
+# later cannot quietly arrive claiming to be production-ready.
+PROVEN = ("stable", "opportunistic")
+
 CATALOG = {
     "qwen_image_edit_2511": {
         "role": "reference",
+        "proven": "stable",   # every reference frame and every anchor this project has rendered
         "label": "Qwen-Image-Edit 2511 (fp8 mixed)",
         "file": "qwen_image_edit_2511_fp8mixed.safetensors",
         "loader": "UNETLoader",
@@ -84,6 +141,7 @@ CATALOG = {
     },
     "wan22_s2v": {
         "role": "video",
+        "proven": "stable",   # the original clip path, ~90s per clip on real songs
         "label": "WAN 2.2 S2V 14B (sound to video)",
         "file": "wan2.2_s2v_14B_fp8_scaled.safetensors",
         "loader": "UNETLoader",
@@ -109,6 +167,7 @@ CATALOG = {
     },
     "wan22_i2v": {
         "role": "video",
+        "proven": "opportunistic",   # the installed 4-step LoRA is a t2v LoRA; steps unre-tuned
         "label": "WAN 2.2 I2V 14B (image to video, high+low noise)",
         "file": "Wan2.2/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
         "loader": "UNETLoader",
@@ -131,6 +190,7 @@ CATALOG = {
     },
     "ltx25": {
         "role": "video",
+        "proven": "stable",   # measured on a real clip on two boxes, 2026-08-12
         "label": "LTX-2.5 22B distilled (audio-conditioned, int8-convrot)",
         "file": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
         "loader": "UNETLoader",
@@ -170,6 +230,7 @@ CATALOG = {
     },
     "ltx23": {
         "role": "video",
+        "proven": "stable",   # measured on a real clip, 50s, and kept as the 2.5 fallback
         "label": "LTX-2.3 22B distilled (audio-conditioned, ~2x faster)",
         "file": "ltx-2.3-22b-distilled_transformer_only_fp8_scaled.safetensors",
         "loader": "UNETLoader",
@@ -208,6 +269,7 @@ CATALOG = {
     },
     "wan22_i2v_low": {
         "role": "refine",
+        "proven": "opportunistic",   # nothing here has measured whether it helps s2v output
         "label": "WAN 2.2 I2V 14B low-noise (refiner pass)",
         "file": "Wan2.2/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
         "loader": "UNETLoader",
@@ -227,6 +289,7 @@ CATALOG = {
     },
     "qwen_artwork": {
         "role": "artwork",
+        "proven": "stable",   # same weights as the reference path, already rendering covers
         "label": "Qwen-Image-Edit 2511 (local, free)",
         "file": "qwen_image_edit_2511_fp8mixed.safetensors",
         "loader": "UNETLoader",
@@ -250,6 +313,7 @@ CATALOG = {
     },
     "ace_step_v1": {
         "role": "audio",
+        "proven": "opportunistic",   # downloaded, nodes present, NO WORKFLOW WRITTEN
         "label": "ACE-Step v1 3.5B",
         "file": "ace_step_v1_3.5b.safetensors",
         "loader": "CheckpointLoaderSimple",
@@ -273,34 +337,63 @@ CATALOG = {
 # per request, so a short cache keeps a page render from waiting on the network
 # each time -- including the OBJECT_INFO_TIMEOUT wait when ComfyUI is down.
 _CACHE_TTL = 30.0
-_cache = {"at": 0.0, "info": None, "fetched": False}
+_cache = {}   # url -> {"at": monotonic, "info": dict|None}
 
 
-def _object_info():
-    """The live node/model listing, or None if ComfyUI could not be asked.
+def _object_info(url=None):
+    """The live node/model listing for one ComfyUI, or None if it did not answer.
+
+    Cached PER URL. There are three backends and the whole point of asking each
+    one separately is that their answers differ; one shared slot would have made
+    the last box asked the answer for all of them.
 
     FAILURES are cached too, and deliberately: a down ComfyUI would otherwise
     make every page that names a model pay the connection attempt -- up to
     OBJECT_INFO_TIMEOUT each, on a filtered network -- which turns one dead
-    service into a studio that appears to hang.
+    service into a studio that appears to hang. With three backends that is
+    three times the wait, so it matters more than it did.
     """
+    url = url or COMFY
     now = time.monotonic()
-    if _cache["fetched"] and now - _cache["at"] < _CACHE_TTL:
-        return _cache["info"]
+    hit = _cache.get(url)
+    if hit and now - hit["at"] < _CACHE_TTL:
+        return hit["info"]
     try:
-        with urllib.request.urlopen(f"{COMFY}/object_info", timeout=OBJECT_INFO_TIMEOUT) as r:
+        with urllib.request.urlopen(f"{url}/object_info", timeout=OBJECT_INFO_TIMEOUT) as r:
             info = json.loads(r.read())
     except (urllib.error.URLError, OSError, ValueError):
         # ComfyUI being down is not an error here: the catalogue still lists what
         # each model is for, availability just reads "unknown" instead of a lie
         # in either direction.
         info = None
-    _cache.update(at=now, info=info, fetched=True)
+    _cache[url] = {"at": now, "info": info}
     return info
 
 
-def installed(object_info=None):
+def spellings(name):
+    """Every filename these same weights are known by. Canonical name first."""
+    return (name,) + tuple(ALIASES.get(name, ()))
+
+
+def resolve(name, pool):
+    """The spelling of `name` that THIS box has, or None if it has none.
+
+    A loader enum is validated against the literal string, so knowing a box has
+    the model is not enough -- a workflow sent there has to name the file the
+    way that box names it.
+    """
+    if pool is None:
+        return None
+    for spelling in spellings(name):
+        if spelling in pool:
+            return spelling
+    return None
+
+
+def installed(object_info=None, url=None):
     """{loader_class: {filenames} | None} as ComfyUI itself reports them, or None.
+
+    `url` picks the backend; None means this studio's own COMFY.
 
     Three distinct answers, and conflating any two of them produces a wrong
     signal in a direction that matters:
@@ -314,7 +407,7 @@ def installed(object_info=None):
                              a file that is already there.
       set()                  asked, enumerable, and genuinely nothing installed.
     """
-    info = object_info if object_info is not None else _object_info()
+    info = object_info if object_info is not None else _object_info(url)
     if info is None:
         return None
     out = {}
@@ -327,8 +420,8 @@ def installed(object_info=None):
     return out
 
 
-def catalog(role=None, object_info=None):
-    """The catalogue, annotated with what is actually on the box.
+def catalog(role=None, object_info=None, url=None):
+    """The catalogue, annotated with what is actually on one box.
 
     `available` is True/False when ComfyUI answered and None when it did not,
     or when that loader publishes no enumerable list.
@@ -337,22 +430,81 @@ def catalog(role=None, object_info=None):
     -- an entry whose LoRA is missing renders, badly, at the wrong step count,
     which is far worse than refusing. A companion whose loader cannot be
     enumerated is NOT listed: unknown is not missing.
+
+    `file_here` and `companions_here` give the spellings THIS box uses, which is
+    what a workflow aimed at it has to name. On the studio's own box they are
+    almost always the canonical names; on peaches, three of them are not.
     """
-    have = installed(object_info)
+    have = installed(object_info, url)
     out = []
     for key, m in CATALOG.items():
         if role and m["role"] != role:
             continue
         entry = dict(m, key=key, role_label=ROLES.get(m["role"], m["role"]))
         if have is None:
-            entry["available"], entry["missing"] = None, []
+            entry.update(available=None, missing=[], file_here=None, companions_here={})
         else:
             pool = have.get(m["loader"])
-            entry["available"] = None if pool is None else (m["file"] in pool)
+            found = resolve(m["file"], pool)
+            entry["available"] = None if pool is None else bool(found)
+            entry["file_here"] = found
+            entry["companions_here"] = {
+                name: resolve(name, have.get(loader))
+                for name, loader in m["companions"].items()}
             entry["missing"] = [name for name, loader in m["companions"].items()
-                                if have.get(loader) is not None and name not in have[loader]]
+                                if have.get(loader) is not None
+                                and not resolve(name, have[loader])]
         out.append(entry)
     return out
+
+
+def backend_stability(address):
+    """(stability, why) for a backend address. Unknown boxes are opportunistic:
+    the safe direction to be wrong in is "do not depend on it"."""
+    host = (address or "").split("//")[-1].split(":")[0].split("/")[0]
+    return BACKEND_STABILITY.get(host, UNKNOWN_BACKEND)
+
+
+def by_backend(backends, role=None):
+    """The catalogue answered separately for every backend.
+
+    `backends` is what pipeline.swarm_backends() returns -- [{id, title, status,
+    address}] -- and is passed IN rather than fetched, because pipeline imports
+    this module and the cycle would be real. app.py holds both and wires them.
+
+    Returns [{id, title, status, address, stability, why, reachable, models}],
+    where models is the catalog() list for that box. `reachable` distinguishes
+    "Swarm says running but its ComfyUI would not answer us" from "answered" --
+    a backend can be registered, listed as running, and hold nothing, which is
+    exactly what backend 1 did on 2026-08-12.
+    """
+    out = []
+    for b in (backends or []):
+        info = _object_info(b.get("address") or None)
+        stability, why = backend_stability(b.get("address"))
+        out.append(dict(b, stability=stability, stability_why=why,
+                        reachable=info is not None,
+                        models=catalog(role=role, object_info=info)))
+    return out
+
+
+def where(key, backends):
+    """Which backends can run this model, best first.
+
+    Ordering is the fallback order: stable boxes before opportunistic ones, and
+    within each, the ones that answered before the ones that did not. It is a
+    RECOMMENDATION for pipeline's retry walk, not a schedule -- Swarm decides
+    where an unpinned job lands, and a model being present is not a promise the
+    box is free.
+    """
+    rows = []
+    for b in by_backend(backends):
+        entry = next((e for e in b["models"] if e["key"] == key), None)
+        if not entry or not entry["available"]:
+            continue
+        rows.append({"id": b["id"], "title": b["title"], "address": b["address"],
+                     "stability": b["stability"], "file_here": entry["file_here"]})
+    return sorted(rows, key=lambda r: (r["stability"] != "stable", str(r["id"])))
 
 
 def get(key):
@@ -434,11 +586,15 @@ def demo():
     # every catalogue entry is complete -- a half-filled one renders a blank
     # "what is it for" in the UI, which is the whole point of the module
     for key, m in CATALOG.items():
-        for field in ("role", "label", "file", "loader", "purpose", "notes", "companions"):
+        for field in ("role", "label", "file", "loader", "purpose", "notes",
+                      "companions", "proven"):
             assert m.get(field) is not None, f"{key} has no {field}"
         assert m["role"] in ROLES, f"{key} has unknown role {m['role']}"
         assert m["loader"] in LOADER_FIELD, f"{key} has unknown loader {m['loader']}"
         assert m["purpose"].strip(), f"{key} does not say what it is for"
+        # A model arriving with no honest answer to "has this rendered anything
+        # here" is the one that gets picked as a default and discovered later.
+        assert m["proven"] in PROVEN, f"{key} claims proven={m['proven']!r}"
 
     # exactly one default per role that has one
     for role in ROLES:
@@ -480,12 +636,13 @@ def demo():
     # thing on a laptop and on cerberus.
     global _object_info
     real = _object_info
-    _object_info = lambda: None
+    _object_info = lambda url=None: None
     try:
         assert installed() is None, "an unreachable ComfyUI reported an empty install"
         for e in catalog():
             assert e["available"] is None, e
             assert e["missing"] == [], e
+            assert e["file_here"] is None, e
     finally:
         _object_info = real
 
@@ -530,6 +687,83 @@ def demo():
     # a stale setting pointing at something no longer catalogued falls back
     db.run("UPDATE settings SET value='deleted_model' WHERE key='model.video'")
     assert default_for("video") == "ltx25", "a stale setting wedged the role"
+
+    # --- more than one box -------------------------------------------------
+    # ALIASES exists because the SAME weights are spelled differently per box.
+    # These fixtures are the real enums, trimmed: read from all three backends'
+    # /object_info on 2026-08-12.
+    cerberus = {
+        "UNETLoader": {"input": {"required": {"unet_name": [
+            ["qwen_image_edit_2511_fp8mixed.safetensors", "z_image_turbo_fp8mix.safetensors"]]}}},
+        "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [
+            ["ace_step_v1_3.5b.safetensors"]]}}},
+        "VAELoader": {"input": {"required": {"vae_name": [
+            ["ae.safetensors", "qwen_image_vae.safetensors"]]}}},
+    }
+    peaches = {
+        "UNETLoader": {"input": {"required": {"unet_name": [
+            ["z_image_turbo_fp8mix.safetensors", "flux-2-klein-4b-fp8.safetensors"]]}}},
+        "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [
+            ["ace_step_v1_3.5b_fp16.safetensors"]]}}},
+        "VAELoader": {"input": {"required": {"vae_name": [
+            ["z_image_ae.safetensors", "flux2-vae.safetensors"]]}}},
+    }
+    # The bug this whole section exists to stop: peaches HAS ACE-Step, and a
+    # catalogue that only knows the cerberus spelling reports it missing on the
+    # one box that is always on and can actually run it.
+    assert resolve("ace_step_v1_3.5b.safetensors",
+                   installed(peaches)["CheckpointLoaderSimple"]) == \
+        "ace_step_v1_3.5b_fp16.safetensors"
+    assert resolve("ae.safetensors", installed(peaches)["VAELoader"]) == "z_image_ae.safetensors"
+    assert resolve("ae.safetensors", installed(cerberus)["VAELoader"]) == "ae.safetensors"
+    assert resolve("ae.safetensors", installed(peaches)["UNETLoader"]) is None, \
+        "resolved a VAE out of the UNET enum"
+    assert resolve("nothing_has_this.safetensors", set()) is None
+    assert resolve("anything", None) is None, "an unenumerable loader read as a hit"
+
+    ace_there = next(e for e in catalog(object_info=peaches) if e["key"] == "ace_step_v1")
+    assert ace_there["available"] is True, "the fp16 cast read as a missing model"
+    assert ace_there["file_here"] == "ace_step_v1_3.5b_fp16.safetensors", (
+        "available, but a workflow aimed at that box would still name the file it "
+        "does not have")
+    ace_here = next(e for e in catalog(object_info=cerberus) if e["key"] == "ace_step_v1")
+    assert ace_here["file_here"] == "ace_step_v1_3.5b.safetensors"
+
+    # a box is judged on dependability, not on speed or on what it holds
+    assert backend_stability("http://100.107.235.105:8188")[0] == "opportunistic", \
+        "the fastest box here is somebody's desktop"
+    assert backend_stability("http://127.0.0.1:8188")[0] == "stable"
+    assert backend_stability("http://10.0.0.99:8188") == UNKNOWN_BACKEND, \
+        "an unlisted box was assumed dependable"
+    assert backend_stability(None)[0] == "opportunistic"
+    assert backend_stability("")[0] == "opportunistic"
+
+    # by_backend/where over a stubbed fleet: one stable box with the canonical
+    # spelling, one opportunistic box with the alias, one that does not answer.
+    fleet = [{"id": "0", "title": "cerberus", "status": "running",
+              "address": "http://127.0.0.1:8188"},
+             {"id": "2", "title": "peaches", "status": "running",
+              "address": "http://100.95.184.29:8188"},
+             {"id": "9", "title": "ghost", "status": "running",
+              "address": "http://10.0.0.99:8188"}]
+    _object_info = lambda url=None: {"http://127.0.0.1:8188": cerberus,
+                                     "http://100.95.184.29:8188": peaches}.get(url)
+    try:
+        rows = by_backend(fleet)
+        assert [r["reachable"] for r in rows] == [True, True, False], rows
+        assert rows[2]["models"], "an unreachable box lost the catalogue as well"
+        assert all(e["available"] is None for e in rows[2]["models"]), \
+            "a box that never answered reported models as missing"
+        found = where("ace_step_v1", fleet)
+        assert [r["id"] for r in found] == ["0", "2"], found
+        assert found[0]["stability"] == "stable", "fallback did not put the always-on box first"
+        assert [r["file_here"] for r in found] == [
+            "ace_step_v1_3.5b.safetensors", "ace_step_v1_3.5b_fp16.safetensors"], found
+        # nothing catalogued runs on the ghost, and asking does not raise
+        assert where("qwen_image_edit_2511", [fleet[2]]) == []
+        assert where("qwen_image_edit_2511", None) == []
+    finally:
+        _object_info = real
 
     print("models.py OK")
 
