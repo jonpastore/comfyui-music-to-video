@@ -37,7 +37,7 @@
       </select>
     </label>
     <label>Candidates per sheet
-      <input type="number" name="n" value="4" min="1" max="8">
+      <input type="number" name="n" value="{{ last_n }}" min="1" max="8">
     </label>
   </div>
 
@@ -152,6 +152,22 @@
   {# ---- render settings: the knobs that actually exist for this model ---- #}
   <fieldset>
     <legend>Render &mdash; reference adherence</legend>
+    {# The controls below OPEN on the last generation's settings for this album.
+       Any earlier one can be loaded back here. What is stored is what was
+       CHOSEN, so a control left on "follow the mode" comes back on "follow the
+       mode" rather than pinned to the number it resolved to that day. #}
+    <div class="field-row prompt-versions">
+      <label>Load settings from an earlier run
+        <select id="run-history">
+          <option value="">{% if runs %}last used &mdash; {{ runs[0].summary }}{% else %}no runs yet for this album{% endif %}</option>
+          {% for r in runs %}
+          <option value="{{ r.id }}" data-form="{{ r.form }}" data-n="{{ r.n }}">
+            #{{ r.id }} &middot; {{ r.summary }} &middot; {{ r.created | isotime }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <span class="run-load-note muted row-note"></span>
+    </div>
     <div class="field-row">
       <label>Mode
         {# quality is the default, not fast. Every cfg above 1.0 -- with the
@@ -159,22 +175,22 @@
            drift in the 2026-08-12 sweep, and quality mode is what pulls that
            lever. fast is still here and still fifteen seconds a sheet. #}
         <select name="mode" id="anchor-mode">
-          <option value="quality" selected>quality &mdash; ~28 steps, ~1 min a sheet</option>
-          <option value="fast">fast &mdash; 4 steps, ~15s a sheet</option>
+          <option value="quality" {% if last.get("mode", "quality") == "quality" %}selected{% endif %}>quality &mdash; ~28 steps, ~1 min a sheet</option>
+          <option value="fast" {% if last.get("mode") == "fast" %}selected{% endif %}>fast &mdash; 4 steps, ~15s a sheet</option>
         </select>
       </label>
       <label>Guidance (CFG)
         <select name="cfg" id="anchor-cfg">
           <option value="">follow the mode (quality = 4.5)</option>
           {% for value, label in cfg_choices %}
-          <option value="{{ value }}">{{ label }}</option>
+          <option value="{{ value }}" {% if last.get("cfg") is not none and value | float == last.get("cfg") | float %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
       </label>
       <label>Reference method
         <select name="ref_method">
           <option value="">default (index_timestep_zero)</option>
-          {% for m in ref_methods %}<option value="{{ m }}">{{ m }}{% if m == "uxo/uno" %} — same as offset on this model{% endif %}</option>{% endfor %}
+          {% for m in ref_methods %}<option value="{{ m }}" {% if last.get("ref_method") == m %}selected{% endif %}>{{ m }}{% if m == "uxo/uno" %} — same as offset on this model{% endif %}</option>{% endfor %}
         </select>
       </label>
     </div>
@@ -216,7 +232,7 @@
           <select name="steps">
             <option value="">mode default (quality = 28)</option>
             {% for value, label in steps_choices %}
-            <option value="{{ value }}">{{ label }}</option>
+            <option value="{{ value }}" {% if last.get("steps") is not none and value | float == last.get("steps") | float %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </label>
@@ -224,17 +240,17 @@
           <select name="denoise">
             <option value="">mode default (1.0)</option>
             {% for value, label in denoise_choices %}
-            <option value="{{ value }}">{{ label }}</option>
+            <option value="{{ value }}" {% if last.get("denoise") is not none and value | float == last.get("denoise") | float %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </label>
         <label>Sampler
           <select name="sampler_name"><option value="">mode default (quality = dpmpp_2m)</option>
-            {% for x in samplers %}<option value="{{ x }}">{{ x }}</option>{% endfor %}</select>
+            {% for x in samplers %}<option value="{{ x }}" {% if last.get("sampler_name") == x %}selected{% endif %}>{{ x }}</option>{% endfor %}</select>
         </label>
         <label>Scheduler
           <select name="scheduler"><option value="">mode default (quality = karras)</option>
-            {% for x in schedulers %}<option value="{{ x }}">{{ x }}</option>{% endfor %}</select>
+            {% for x in schedulers %}<option value="{{ x }}" {% if last.get("scheduler") == x %}selected{% endif %}>{{ x }}</option>{% endfor %}</select>
         </label>
       </div>
       {# Quality mode is already DPM++ 2M Karras. The spec asks for it as the
@@ -276,7 +292,12 @@
         <input type="text" class="negative-version-label" maxlength="80"
                placeholder="e.g. after the white-tail run"></label>
       <button type="button" class="negative-save">Save negative</button>
-      <span class="negative-save-note muted"></span>
+      {# Inert until a real saved version is picked: the first option is the
+         album's latest and the last is the generic starting point, and neither
+         is a row that can be deleted. #}
+      <button type="button" class="version-delete danger btn-sm" disabled
+              title="Select a saved version to delete it">Delete version</button>
+      <span class="negative-save-note muted row-note"></span>
     </div>
     <textarea name="negative" rows="3" class="counted" data-max="{{ max_negative }}"
               maxlength="{{ max_negative }}"
@@ -339,13 +360,21 @@
                 >{{ p.text }}</textarea>
       <span class="char-count muted" data-for="tone_{{ p.name }}"></span>
     </label>
+    <div class="field-row prompt-versions">
+      <button type="button" class="tone-save" data-tier="{{ p.name }}">Save wording</button>
+      <span class="tone-save-note muted row-note" data-tier="{{ p.name }}"></span>
+    </div>
     <p class="hint">
-      {% if p.overridden %}<span class="tag">this album's own wording</span>
+      <span class="tag tone-scope" data-tier="{{ p.name }}">{% if p.overridden %}this album's own wording{% else %}the tier's wording{% endif %}</span>
+      {% if p.overridden %}
       {{ form_album }} has its own <code>{{ p.name | tiername }}</code> wording; every other
       album still uses the tier's.
-      {% else %}<span class="tag">the tier's wording</span>
+      {% else %}
       Unchanged from the <code>{{ p.name | tiername }}</code> tier itself.
       {% endif %}
+      <strong>Save wording</strong> keeps an edit without spending a render; pressing Generate
+      saves it too, so what the box shows is always what the sheet is built from. Clear the box
+      to go back to the tier's own wording.
       Editing here and generating stores it <strong>for {{ form_album or "this album" }}
       only</strong> &mdash; it does not touch the tier under
       <a href="/tiers">Tiers</a>, so no other release's sheets change wording.
@@ -373,7 +402,9 @@
         <input type="text" class="prompt-version-label" data-tier="{{ p.name }}"
                maxlength="80" placeholder="e.g. tighter fur wording"></label>
       <button type="button" class="prompt-save" data-tier="{{ p.name }}">Save prompt</button>
-      <span class="prompt-save-note muted" data-tier="{{ p.name }}"></span>
+      <button type="button" class="version-delete danger btn-sm" data-tier="{{ p.name }}"
+              disabled title="Select a saved version to delete it">Delete version</button>
+      <span class="prompt-save-note muted row-note" data-tier="{{ p.name }}"></span>
     </div>
     <label>Prompt &mdash; what {{ p.name | tiername }}'s character sheets are built from
       <textarea name="prompt_{{ p.name }}" rows="8" class="counted"

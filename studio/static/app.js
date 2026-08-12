@@ -427,6 +427,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initAnchorBatch();
   initAnchorPrompts();
   initJobForms();       // every page, not just the ones with an anchor grid
+  initRunHistory();
 });
 
 // ---- Anchors: show exactly what will be sent -------------------------------
@@ -434,13 +435,25 @@ document.addEventListener("DOMContentLoaded", function () {
 // functions the renderer uses. Nothing here rebuilds a prompt in JavaScript:
 // a preview assembled a second way is a preview that can disagree with the
 // render, which is this codebase's oldest defect.
-function initAnchorPrompts() {
-  var form = document.getElementById("anchor-form");
-  if (!form) return;
+// EVERY handler here is delegated on `document` and looks the form up at event
+// time. They used to be bound to the form ELEMENT captured at DOMContentLoaded,
+// and htmx replaces that whole element (hx-swap="outerHTML") the moment you
+// change album, character, tier or view, or upload a reference image -- so the
+// old node was detached and every control on the form went dead: save prompt,
+// save negative, both version pickers and Assemble the prompts. The page opens
+// with a tier already selected, so the first tick killed all of them, which is
+// why "the save buttons do not work" was the whole story rather than one bug.
+function anchorForm() { return document.getElementById("anchor-form"); }
+// assigned by initAnchorPrompts; the run loader calls it to refresh the
+// inert-negative warning after it changes mode or cfg.
+var syncAnchorMode = function () {};
 
+function initAnchorPrompts() {
   // The negative is inert at cfg 1.0, so fast mode says so instead of taking
   // text it will silently drop.
-  function syncMode() {
+  syncAnchorMode = function syncMode() {
+    var form = anchorForm();
+    if (!form) return;
     var mode = form.querySelector("[name=mode]");
     var note = document.getElementById("negative-inert");
     var box = form.querySelector("[name=negative]");
@@ -457,16 +470,22 @@ function initAnchorPrompts() {
     note.hidden = !inert;
     if (box) box.classList.toggle("inert", inert);
   }
-  form.addEventListener("change", function (e) {
-    if (e.target.name === "mode" || e.target.name === "cfg") syncMode();
+  document.addEventListener("change", function (e) {
+    if (!e.target.closest || !e.target.closest("#anchor-form")) return;
+    if (e.target.name === "mode" || e.target.name === "cfg") syncAnchorMode();
   });
-  syncMode();
+  syncAnchorMode();
+  // ...and again after every htmx swap, because the replacement form arrives
+  // with its mode select at whatever the server rendered and no change event
+  // to tell us about it.
+  document.body.addEventListener("htmx:afterSwap", syncAnchorMode);
 
   // Saved prompt versions: pick one to load it, Save to store what is in the box.
-  form.addEventListener("change", function (e) {
-    var pick = e.target.closest(".prompt-version-pick");
+  document.addEventListener("change", function (e) {
+    var pick = e.target.closest && e.target.closest(".prompt-version-pick");
     if (!pick) return;
-    var box = form.querySelector('[name="prompt_' + pick.dataset.tier + '"]');
+    var form = anchorForm();
+    var box = form && form.querySelector('[name="prompt_' + pick.dataset.tier + '"]');
     if (!box) return;
     var opt = pick.options[pick.selectedIndex];
     // the empty option means "the composed default" -- reloading is the honest
@@ -474,21 +493,32 @@ function initAnchorPrompts() {
     if (!opt.value) { location.reload(); return; }
     box.value = opt.dataset.text || "";
     box.dispatchEvent(new Event("input", {bubbles: true}));   // refresh the counter
+    syncVersionDelete(pick);
   });
 
-  form.addEventListener("click", function (e) {
-    var save = e.target.closest(".prompt-save");
+  document.addEventListener("click", function (e) {
+    var save = e.target.closest && e.target.closest(".prompt-save");
     if (!save) return;
+    var form = anchorForm();
+    if (!form) return;
     var tier = save.dataset.tier;
     var box = form.querySelector('[name="prompt_' + tier + '"]');
     var note = form.querySelector('.prompt-save-note[data-tier="' + tier + '"]');
     var label = form.querySelector('.prompt-version-label[data-tier="' + tier + '"]');
     if (!box) return;
+    // A version with no name is a version you cannot find again: the picker
+    // lists them by name, so an unnamed one reads as "unnamed" beside every
+    // other unnamed one. Refused here AND by the route.
+    if (!label || !label.value.trim()) {
+      say2(note, "name this version first", true);
+      if (label) label.focus();
+      return;
+    }
     var body = new FormData();
     body.append("album", (form.querySelector("[name=album]") || {}).value || "");
     body.append("tier", tier);
     body.append("text", box.value);
-    body.append("label", label ? label.value : "");
+    body.append("label", label.value);
     var cid = (form.querySelector("[name=character_id]") || {}).value;
     if (cid) body.append("character_id", cid);
     save.disabled = true;
@@ -518,32 +548,41 @@ function initAnchorPrompts() {
   // The negative prompt saves the same way, per ALBUM: its terms are this
   // release's failure modes and other artwork wants a different list. Same
   // pick-to-load, same version list, no tier -- a negative has none.
-  form.addEventListener("change", function (e) {
-    var pick = e.target.closest(".negative-version-pick");
+  document.addEventListener("change", function (e) {
+    var pick = e.target.closest && e.target.closest(".negative-version-pick");
     if (!pick) return;
-    var box = form.querySelector("[name=negative]");
+    var form = anchorForm();
+    var box = form && form.querySelector("[name=negative]");
     var opt = pick.options[pick.selectedIndex];
     if (!box || !opt.value) return;
     box.value = opt.dataset.text || "";
     box.dispatchEvent(new Event("input", {bubbles: true}));
-    syncMode();
+    syncAnchorMode();
+    syncVersionDelete(pick);
   });
 
-  form.addEventListener("click", function (e) {
-    var save = e.target.closest(".negative-save");
+  document.addEventListener("click", function (e) {
+    var save = e.target.closest && e.target.closest(".negative-save");
     if (!save) return;
+    var form = anchorForm();
+    if (!form) return;
     var box = form.querySelector("[name=negative]");
     var note = form.querySelector(".negative-save-note");
     var label = form.querySelector(".negative-version-label");
     if (!box) return;
+    if (!label || !label.value.trim()) {
+      say2(note, "name this version first", true);
+      if (label) label.focus();
+      return;
+    }
     var body = new FormData();
     body.append("album", (form.querySelector("[name=album]") || {}).value || "");
     body.append("text", box.value);
-    body.append("label", label ? label.value : "");
+    body.append("label", label.value);
     save.disabled = true;
-    if (note) note.textContent = "saving...";
+    say2(note, "saving...");
     api("/anchors/negative", body).then(function (d) {
-      if (note) note.textContent = "saved " + (d.label || "unnamed");
+      say2(note, "saved " + (d.label || "unnamed"));
       var pick = form.querySelector(".negative-version-pick");
       if (pick && d.versions) {
         // the first option (the album's latest) and the last (the generic
@@ -562,15 +601,51 @@ function initAnchorPrompts() {
         pick.value = String(d.id);
       }
       if (label) label.value = "";
+      syncVersionDelete(pick);
     }).catch(function (err) {
-      if (note) note.textContent = "not saved: " + err.message;
+      say2(note, "not saved: " + err.message, true);
     }).then(function () { save.disabled = false; });
   });
 
-  var btn = document.getElementById("anchor-preview-btn");
+  // ---- delete the version currently selected in a picker -------------------
+  // A saved version could be created and never removed, so a picker filled up
+  // with attempts and the one you wanted was somewhere among them. The button
+  // is inert until a real version is selected -- the first option is "the
+  // composed default", which is not a row and cannot be deleted.
+  document.addEventListener("click", function (e) {
+    var del = e.target.closest && e.target.closest(".version-delete");
+    if (!del) return;
+    var form = anchorForm();
+    if (!form) return;
+    var tier = del.dataset.tier || "";
+    var pick = form.querySelector(tier ? '.prompt-version-pick[data-tier="' + tier + '"]'
+                                       : ".negative-version-pick");
+    var note = form.querySelector(tier ? '.prompt-save-note[data-tier="' + tier + '"]'
+                                       : ".negative-save-note");
+    if (!pick || !pick.value || pick.value === "default") return;
+    var opt = pick.options[pick.selectedIndex];
+    if (!confirm("Delete the saved version “" + opt.textContent.trim() + "”?")) return;
+    var body = new FormData();
+    body.append("id", pick.value);
+    del.disabled = true;
+    say2(note, "deleting...");
+    api("/anchors/version/delete", body).then(function () {
+      say2(note, "deleted");
+      opt.remove();
+      pick.selectedIndex = 0;
+      syncVersionDelete(pick);
+    }).catch(function (err) {
+      say2(note, "not deleted: " + err.message, true);
+    }).then(function () { del.disabled = false; });
+  });
+
   var out = document.getElementById("anchor-preview-out");
-  if (!btn || !out) return;
-  btn.addEventListener("click", function () {
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("#anchor-preview-btn");
+    if (!btn) return;
+    var form = anchorForm();
+    out = document.getElementById("anchor-preview-out");
+    if (!form || !out) return;
     btn.disabled = true;
     out.textContent = "assembling...";
     api("/anchors/preview", new FormData(form)).then(function (d) {
@@ -625,6 +700,93 @@ function initAnchorPrompts() {
       out.textContent = "Could not assemble: " + err.message;
     }).then(function () { btn.disabled = false; });
   });
+
+  // ---- the TIER's wording, saved for this album ---------------------------
+  // It saved only as a side effect of pressing Generate, which meant the only
+  // way to keep a wording edit was to spend a render on it.
+  document.addEventListener("click", function (e) {
+    var save = e.target.closest && e.target.closest(".tone-save");
+    if (!save) return;
+    var form = anchorForm();
+    if (!form) return;
+    var tier = save.dataset.tier;
+    var box = form.querySelector('[name="tone_' + tier + '"]');
+    var note = form.querySelector('.tone-save-note[data-tier="' + tier + '"]');
+    if (!box) return;
+    var body = new FormData();
+    body.append("album", (form.querySelector("[name=album]") || {}).value || "");
+    body.append("tier", tier);
+    body.append("text", box.value);
+    save.disabled = true;
+    say2(note, "saving...");
+    api("/anchors/tier-wording", body).then(function (d) {
+      say2(note, d.overridden ? "saved for this album" : "back to the tier's own wording");
+      var tag = form.querySelector('.tone-scope[data-tier="' + tier + '"]');
+      if (tag) tag.textContent = d.overridden ? "this album's own wording" : "the tier's wording";
+    }).catch(function (err) {
+      say2(note, "not saved: " + err.message, true);
+    }).then(function () { save.disabled = false; });
+  });
+}
+
+// ---- load an earlier run's settings back into the form --------------------
+// Sets what that run CHOSE, and clears what it did not: loading a run that left
+// steps on the mode default has to CLEAR a steps value typed since, or you get
+// a hybrid of two runs that was never rendered and is not what the summary
+// beside it says.
+function initRunHistory() {
+  var FIELDS = ["mode", "cfg", "ref_method", "steps", "denoise", "sampler_name", "scheduler"];
+  document.addEventListener("change", function (e) {
+    var pick = e.target.closest && e.target.closest("#run-history");
+    if (!pick) return;
+    var form = anchorForm();
+    if (!form) return;
+    var note = form.querySelector(".run-load-note");
+    var opt = pick.options[pick.selectedIndex];
+    if (!opt.value) { say2(note, ""); return; }
+    var data;
+    try { data = JSON.parse(opt.dataset.form || "{}"); }
+    catch (err) { say2(note, "could not read that run", true); return; }
+    FIELDS.forEach(function (name) {
+      var el = form.querySelector("[name=" + name + "]");
+      if (!el) return;
+      var v = data[name];
+      // a NUMBER back to the string the option carries: 4.5 must match the
+      // option value "4.5", and 28 must match "28", not "28.0"
+      el.value = (v === undefined || v === null) ? ""
+               : (typeof v === "number" ? String(+v.toFixed(4)).replace(/\.0+$/, "") : String(v));
+    });
+    var neg = form.querySelector("[name=negative]");
+    if (neg && typeof data.negative === "string") neg.value = data.negative;
+    var n = form.querySelector("[name=n]");
+    if (n && opt.dataset.n) n.value = opt.dataset.n;
+    say2(note, "loaded run #" + opt.value);
+    if (typeof syncAnchorMode === "function") syncAnchorMode();
+  });
+}
+
+// A save note that says which it is. Success fades (.flash-ok), failure does
+// NOT (.flash-fail) -- "not saved" has to still be on screen when you look back.
+function say2(el, msg, bad) {
+  if (!el) return;
+  el.textContent = msg;
+  el.className = (el.className.replace(/\s*flash-(ok|fail)\b/g, "")) + (bad ? " flash-fail" : " flash-ok");
+}
+
+// The Delete button beside a version picker is inert unless a real saved
+// version is selected. The first option is the composed default and the last
+// (on the negative) is the generic starting point; neither is a row.
+function syncVersionDelete(pick) {
+  if (!pick) return;
+  var tier = pick.dataset.tier || "";
+  var form = anchorForm();
+  var del = form && form.querySelector(tier ? '.version-delete[data-tier="' + tier + '"]'
+                                            : ".version-delete:not([data-tier])");
+  if (!del) return;
+  var real = pick.value && pick.value !== "default";
+  del.disabled = !real;
+  del.title = real ? "Delete this saved version"
+                   : "Select a saved version to delete it";
 }
 
 // ---- Anchors: queue the sheets, say so, and watch them render ---------------

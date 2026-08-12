@@ -247,6 +247,11 @@ MIGRATIONS = [
     # negative row carries tier='' and character_id NULL. NULL reads as
     # 'positive', which is what every row written before this column is.
     "ALTER TABLE anchor_prompts ADD COLUMN kind TEXT DEFAULT 'positive'",
+    # WHICH generation produced this candidate (anchor_runs.id). NULL on every
+    # row that predates the table, which is why render_json below it stays as
+    # the fallback rather than being dropped -- 33 sheets from the first CFG
+    # sweep carry their settings there and nowhere else.
+    "ALTER TABLE anchors ADD COLUMN run_id INTEGER",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and
@@ -270,6 +275,41 @@ CREATE TABLE IF NOT EXISTS anchor_prompts (
 
 CREATE INDEX IF NOT EXISTS idx_anchor_prompts
   ON anchor_prompts(scope_value, tier, character_id, id);
+"""
+
+ANCHOR_RUNS_SCHEMA = """
+-- One row per GENERATION: everything that was sent, once, with the candidates
+-- it produced pointing back at it (anchors.run_id).
+--
+-- Two things this buys that a per-candidate settings blob could not. You can
+-- LOAD a previous run's settings back into the form instead of remembering
+-- what you did an hour ago; and looking at a sheet you can see exactly what
+-- produced it -- prompt, negative, references and sampler together, not just
+-- the numbers. A CFG sweep makes the second one load-bearing: eleven runs land
+-- in one grid and differ only by guidance.
+--
+-- settings_json is the RESOLVED sampler dict, the one build_refs hands the
+-- KSampler, so it already has the mode's defaults folded in. form_json is what
+-- was actually chosen on the form -- keeping both is what makes "leave it on
+-- the mode default" reloadable AS a default rather than as the number it
+-- happened to resolve to that day.
+CREATE TABLE IF NOT EXISTS anchor_runs (
+  id INTEGER PRIMARY KEY,
+  scope_value TEXT NOT NULL,          -- album name, as anchors are scoped
+  tier TEXT NOT NULL,
+  view TEXT NOT NULL,
+  character_id INTEGER,               -- NULL is the protagonist, as everywhere else
+  n INTEGER NOT NULL,
+  prompt TEXT,                        -- "" means make_anchor composed it per view
+  negative TEXT,
+  guardrail TEXT,                     -- the tier wording in force for this album
+  settings_json TEXT NOT NULL,        -- resolved: what the KSampler was built with
+  form_json TEXT NOT NULL,            -- chosen: what the form sent, before resolution
+  refs_json TEXT,                     -- the reference images conditioned on
+  created REAL);
+
+CREATE INDEX IF NOT EXISTS idx_anchor_runs
+  ON anchor_runs(scope_value, tier, character_id, id);
 """
 
 TIER_OVERRIDES_SCHEMA = """
@@ -340,6 +380,7 @@ def conn():
         c.executescript(SCHEMA)
         c.executescript(ANCHOR_PROMPTS_SCHEMA)
         c.executescript(TIER_OVERRIDES_SCHEMA)
+        c.executescript(ANCHOR_RUNS_SCHEMA)
         c.executescript(ARCS_SCHEMA)
         c.executescript(CREDENTIALS_SCHEMA)
         _migrate(c)

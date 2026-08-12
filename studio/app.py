@@ -128,17 +128,43 @@ templates.env.filters["isotime"] = lambda t: (
     time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else "")
 
 
+def candidate_settings(row):
+    """The resolved sampler settings behind one candidate, as a dict.
+
+    The RUN is the source. render_json is read only when there is no run, which
+    means a sheet from before anchor_runs existed -- 33 of them, from the first
+    CFG sweep, carry their settings there and nowhere else. Two readers, one
+    at a time, never both for the same row.
+    """
+    if not row:
+        return {}
+    run_id = row["run_id"] if "run_id" in row.keys() else None
+    if run_id:
+        run = anchor_run(run_id)
+        if run:
+            return db.jset(run, "settings_json")
+    raw = row["render_json"] if "render_json" in row.keys() else None
+    try:
+        return json.loads(raw) if raw else {}
+    except ValueError:
+        return {}
+
+
 def render_tag(render_json):
     """The settings a candidate was rendered at, in one line, or "".
 
-    Empty for every row written before anchors.render_json existed -- an
-    unlabelled thumbnail is honest about knowing nothing, and a guessed default
-    stamped on it would not be.
+    Takes either the stored JSON string or an already-decoded dict, so the
+    template can hand it a candidate's settings from whichever place they live.
+    Empty when nothing is known -- an unlabelled thumbnail is honest about that,
+    and a guessed default stamped on it would not be.
     """
-    try:
-        s = json.loads(render_json) if render_json else {}
-    except ValueError:
-        return ""
+    if isinstance(render_json, dict):
+        s = render_json
+    else:
+        try:
+            s = json.loads(render_json) if render_json else {}
+        except ValueError:
+            return ""
     if not s:
         return ""
     # "cfg 1.0", not "cfg 1" -- the badge has to read as the same value the
@@ -155,6 +181,8 @@ def render_tag(render_json):
 
 
 templates.env.filters["rendertag"] = render_tag
+# a candidate row -> the settings that produced it, run first
+templates.env.filters["runsettings"] = lambda row: candidate_settings(row)
 
 
 def opposite_view(view):
@@ -752,20 +780,23 @@ def h_anchor(args, progress):
                                  guard=tiers.compose_guardrail(args["tier"], album),
                                  prompt=args.get("prompt", ""),
                                  render=render)
-    # What the KSampler was actually built with, resolved the same way the
-    # preview resolves it, stored per candidate. A CFG sweep otherwise leaves a
-    # dozen sheets in one group with nothing on them saying which guidance
-    # produced which -- and an unattributable image cannot settle an argument
-    # about a default.
-    settings = json.dumps(resolved_settings(render))
+    # Each candidate points back at the RUN that made it, so a sheet can always
+    # answer what produced it -- prompt, negative, references and sampler
+    # together, not just the numbers. A CFG sweep makes that load-bearing:
+    # eleven runs land in one grid and differ only by guidance.
+    #
+    # render_json is still written when there is no run, which is only a job
+    # queued before runs existed. New rows leave it NULL and read the run.
+    run_id = args.get("run_id")
+    settings = None if run_id else json.dumps(resolved_settings(render))
     now = time.time()
     for p in paths:
         db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen, created,
-                                        character_id, render_json)
-                  VALUES (?,?,?,?,?,0,?,?,?)""",
+                                        character_id, render_json, run_id)
+                  VALUES (?,?,?,?,?,0,?,?,?,?)""",
                args["scope_kind"], args["scope_value"], args["tier"], view, p, now, cid,
-               settings)
-    return {"n": len(paths)}
+               settings, run_id)
+    return {"n": len(paths), "run_id": run_id}
 
 
 @jobs.handler("arc")
@@ -2004,6 +2035,55 @@ def cfg_sweep_points(form, render, combos):
             "seed": random.randrange(1, 2 ** 31 - 1)}
 
 
+MAX_RUN_HISTORY = 25
+
+
+def create_anchor_run(album, tier, view, character_id, n, prompt, render, refs, guardrail):
+    """Record ONE generation, with everything that was sent, before it is queued.
+
+    Written in the route rather than in the handler so the settings are stored
+    even if the render never happens -- a failed job whose settings vanished
+    with it is exactly how "what did I have set when that worked?" became
+    unanswerable.
+
+    Both dicts are kept. settings_json is RESOLVED, the dict build_refs hands
+    the KSampler, so a candidate can be labelled with the cfg it truly used.
+    form_json is what was CHOSEN, so "leave it on the mode default" reloads as
+    a default rather than as the number it happened to resolve to that day.
+    """
+    return db.run("""INSERT INTO anchor_runs (scope_value, tier, view, character_id, n,
+                                               prompt, negative, guardrail, settings_json,
+                                               form_json, refs_json, created)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                  album, tier, view, character_id, n, prompt or "",
+                  (render or {}).get("negative", ""), guardrail,
+                  json.dumps(resolved_settings(render)), json.dumps(render or {}),
+                  json.dumps(list(refs or [])), time.time())
+
+
+def anchor_run(run_id):
+    return db.one("SELECT * FROM anchor_runs WHERE id=?", run_id) if run_id else None
+
+
+def recent_anchor_runs(album, character_id=None, limit=MAX_RUN_HISTORY):
+    """This album's generation history, newest first, as rows the form can load
+    settings back out of."""
+    if not album:
+        return []
+    return db.q("""SELECT * FROM anchor_runs WHERE scope_value=? AND character_id IS ?
+                   ORDER BY id DESC LIMIT ?""", album, character_id, limit)
+
+
+def run_summary(row):
+    """One line naming a run, for the picker. The numbers first, because that is
+    what you are choosing between."""
+    s = db.jset(row, "settings_json")
+    bits = [f"cfg {float(s.get('cfg', 0)):g}", f"{s.get('steps', '?')} steps",
+            str(s.get("sampler_name", "")), f"{row['n']}x",
+            f"{row['tier']}/{row['view'].replace('_', ' ')}"]
+    return " · ".join(b for b in bits if b)
+
+
 SAMPLER_KEYS = ("steps", "cfg", "sampler_name", "scheduler", "denoise")
 
 
@@ -2087,6 +2167,12 @@ async def save_anchor_prompt(request: Request):
     valid_tier_or_400(tier)
     if not text:
         raise HTTPException(400, "nothing to save -- the prompt is empty")
+    # A version with no name is a version you cannot find again: the picker
+    # lists them BY name, so unnamed ones are indistinguishable from each other
+    # and the one worth going back to is unrecoverable.
+    if not label:
+        raise HTTPException(400, "name this version -- the picker lists saved prompts by "
+                                  "name, and an unnamed one cannot be told from the rest")
     if len(text) > MAX_ANCHOR_PROMPT:
         raise HTTPException(400, f"the prompt is {len(text)} characters; keep it under "
                                   f"{MAX_ANCHOR_PROMPT}")
@@ -2099,6 +2185,63 @@ async def save_anchor_prompt(request: Request):
     return JSONResponse({"id": pid, "label": label, "created": now,
                          "versions": [dict(r) for r in
                                       anchor_prompt_versions(album, tier, cid)]})
+
+
+@app.post("/anchors/tier-wording")
+async def save_tier_wording(request: Request):
+    """Store this ALBUM's own wording for a tier, without spending a render.
+
+    It saved only as a side effect of pressing Generate, so the only way to keep
+    an edit was to render something. Same validation and the same scope as the
+    generate path -- it calls the identical tiers.set_override -- so the button
+    and the render cannot disagree about what was stored.
+
+    Empty text REMOVES the override and the album goes back to the tier's own
+    wording, which is why this cannot be a plain "save": there has to be a way
+    back that is not retyping the tier's text from memory.
+    """
+    form = await request.form()
+    album = (form.get("album") or "").strip()
+    tier = (form.get("tier") or "").strip()
+    text = " ".join((form.get("text") or "").split())
+    if not album:
+        raise HTTPException(400, "an album is needed to store its own tier wording")
+    valid_tier_or_400(tier)
+    # typing the tier's own wording back means "use the tier's", not "store a
+    # copy of it" -- the same rule the generate path applies
+    if text == tiers.tier_text(tier).strip():
+        text = ""
+    try:
+        stored = tiers.set_override(album, tier, text)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return JSONResponse({"album": album, "tier": tier, "overridden": bool(stored),
+                         "text": tiers.tier_text(tier, album)})
+
+
+@app.post("/anchors/version/delete")
+async def delete_prompt_version(request: Request):
+    """Delete one saved prompt or negative version.
+
+    Versions accumulated with no way to remove one, so a picker filled up with
+    attempts and the one you wanted was somewhere among them. Deleting a saved
+    version cannot affect a rendered sheet: an anchor carries the prompt it was
+    rendered with in its own run row, not a reference to this list.
+    """
+    form = await request.form()
+    try:
+        vid = int(form.get("id") or 0)
+    except ValueError:
+        raise HTTPException(400, "which version?")
+    row = db.one("SELECT * FROM anchor_prompts WHERE id=?", vid)
+    if not row:
+        raise HTTPException(404, "that saved version no longer exists")
+    db.run("DELETE FROM anchor_prompts WHERE id=?", vid)
+    kind = row["kind"] if "kind" in row.keys() and row["kind"] else "positive"
+    left = (negative_versions(row["scope_value"]) if kind == "negative"
+            else anchor_prompt_versions(row["scope_value"], row["tier"], row["character_id"]))
+    return JSONResponse({"deleted": vid, "kind": kind,
+                         "versions": [dict(r) for r in left]})
 
 
 @app.post("/anchors/negative")
@@ -2127,6 +2270,9 @@ async def save_anchor_negative(request: Request):
     if len(text) > MAX_NEGATIVE:
         raise HTTPException(400, f"the negative prompt is {len(text)} characters; keep it "
                                   f"under {MAX_NEGATIVE}")
+    if not label:
+        raise HTTPException(400, "name this version -- the picker lists saved negatives by "
+                                  "name, and an unnamed one cannot be told from the rest")
     try:
         tiers.check_text(text, "negative prompt")
         tiers.check_override(text)
@@ -2406,11 +2552,15 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
             text = ""
         this_render = render if cfg is None else dict(render, cfg=cfg, seed=sweep["seed"])
         this_n = n if cfg is None else sweep["n"]
+        # The run row goes in FIRST, so what was sent survives a job that fails.
+        run_id = create_anchor_run(album, t, v, character_id, this_n, text, this_render,
+                                    paths, tiers.compose_guardrail(t, album))
         jid = jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": album, "tier": t,
                                        "view": v, "images": paths, "n": this_n,
                                        "character_id": character_id, "prompt": text,
-                                       "render": this_render})
-        queued.append({"id": jid, "tier": t, "view": v, "prompt": text, "cfg": cfg})
+                                       "render": this_render, "run_id": run_id})
+        queued.append({"id": jid, "tier": t, "view": v, "prompt": text, "cfg": cfg,
+                       "run_id": run_id})
 
     # The async caller paints from THIS, never from what it typed -- and this is
     # the whole answer to "I clicked generate and I don't think it generated any
@@ -2603,6 +2753,12 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
     saved_negatives = negative_versions(album)
     if negative is None:
         negative = saved_negatives[0]["text"] if saved_negatives else DEFAULT_NEGATIVE
+    # LAST USED settings, so the form opens where you left it rather than at the
+    # defaults every time. form_json, not settings_json: what was chosen, so a
+    # control left on "follow the mode" comes back on "follow the mode" instead
+    # of pinned to whatever number it resolved to that day.
+    runs = recent_anchor_runs(album, character_id)
+    last = db.jset(runs[0], "form_json") if runs else {}
     return {
         "tiers": all_t, "albums": albums, "form_album": album,
         "selected_tiers": selected, "views": views, "selected_views": chosen_views,
@@ -2639,6 +2795,13 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
         "sweep_choices": [(c, c * len(CFG_CHOICES)) for c in CFG_SWEEP_CHOICES],
         "sweep_values": [v for v, _ in CFG_CHOICES],
         "max_tier_guardrail": tiers.MAX_TIER_GUARDRAIL,
+        # the last generation's chosen settings, and the history to load any
+        # earlier one back out of
+        "last": last,
+        "last_n": (runs[0]["n"] if runs else 4),
+        "runs": [{"id": r["id"], "summary": run_summary(r), "created": r["created"],
+                  "form": json.dumps(db.jset(r, "form_json")), "n": r["n"]}
+                 for r in runs],
         "character_id": character_id,
         "characters": (album_cast(album) if album
                        else db.q("SELECT * FROM characters ORDER BY scope_value, name")),

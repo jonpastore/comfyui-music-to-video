@@ -263,6 +263,12 @@ table.sortable tr.dragging { opacity: 0.45; }
   gap: 0.75rem;
 }
 .field-row label { margin-bottom: 0; }
+/* Buttons sitting in a row of inputs line up with the INPUTS, not with the top
+   of the labels above them. The base button rule sets align-self:flex-start,
+   which overrode every container that tried to align them -- so a Save beside
+   two labelled selects floated up level with their captions. */
+.field-row button, .field-row .version-delete { align-self: end; }
+.field-row > .row-note { align-self: end; padding-bottom: 0.45rem; }
 
 /* Image with its note beside it, and controls over the image itself. */
 .image-note-row {
@@ -1066,7 +1072,7 @@ textarea.inert { opacity: 0.55; }
    so they sit together rather than stacked with the plan text between them. */
 .side-by-side { display: flex; gap: 1rem; flex-wrap: wrap; }
 .side-by-side > fieldset { flex: 1 1 22rem; min-width: 18rem; }
-.prompt-versions { align-items: flex-end; gap: 0.5rem; }
+.prompt-versions { align-items: end; gap: 0.5rem; }
 .prompt-versions select { min-width: 16rem; }
 
 /* ---- job status, and the vocabulary of work in flight --------------------
