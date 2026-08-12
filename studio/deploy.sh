@@ -112,6 +112,23 @@ Environment=LITELLM_BASE=http://127.0.0.1:4000/v1
 Environment=STUDIO_TEXT_MODEL=qwen3.6
 Environment=COMFY_INPUT=%h/ComfyUI/input
 Environment=COMFY_OUTPUT=%h/ComfyUI/output
+# comfy (this box only) or swarm (SwarmUI picks a backend). Left at comfy: the
+# switch is one word here, and flipping it should be a decision someone makes
+# rather than something a deploy does.
+Environment=RENDER_BACKEND=comfy
+# Where each OTHER backend keeps its ComfyUI input dir. SwarmUI has no upload
+# API -- UploadImage is not registered and answers HTTP 400 -- so a reference
+# image reaching another box is a filesystem problem. Every box that could be
+# handed the job needs the file, because Swarm picks the backend and the studio
+# does not get to know which.
+#
+# Both paths were found the hard way and neither is guessable:
+#   gamingpc  ComfyUI runs out of ~/comfy-backend, NOT ~/ComfyUI.
+#   peaches   ComfyUI runs out of /comfy/mnt/ComfyUI inside the container, so
+#             the /basedir mount (which holds the models) is the WRONG target;
+#             the host path below is the one that appears as its input dir.
+# Verified 2026-08-12 by staging a real ref and having each box LoadImage it.
+Environment=SWARM_INPUT_DIRS=jon@100.107.235.105:/home/jon/comfy-backend/input,root@100.95.184.29:/mnt/user/appdata/comfyui-swarm/mnt/ComfyUI/input
 # Album profile: character, wardrobe, world, locations. The scripts carry no
 # album content, so point this at a different profile for a different project.
 Environment=STUDIO_PROFILE=%h/meowp-studio/scripts/profiles/street_cats.json

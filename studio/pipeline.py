@@ -100,7 +100,14 @@ def install_input(local_path, name=None):
         # remaining boxes can do. A box that is UP and rejects the copy is the
         # case worth having in the journal, which is why this is not silent.
         try:
-            subprocess.run(["rsync", "-a", local_path, f"{dest.rstrip('/')}/{name}"],
+            # --chmod=F664 is not tidiness. peaches runs ComfyUI in Docker as
+            # uid 1025 while this copies as uid 1000, so a file arriving 0600
+            # is unreadable there -- and ComfyUI reports that as
+            # "ModelMMAP allocation failed", which reads as an out-of-memory
+            # error and sent a whole session looking at VRAM. Measured
+            # 2026-08-12; the fix is one flag here.
+            subprocess.run(["rsync", "-a", "--chmod=F664",
+                            local_path, f"{dest.rstrip('/')}/{name}"],
                            check=True, capture_output=True, text=True, timeout=120)
         except (OSError, subprocess.SubprocessError) as e:
             err = getattr(e, "stderr", "") or str(e)
@@ -1447,6 +1454,10 @@ def demo():
             assert os.path.exists(os.path.join(inp, "clip_003.png"))
             assert pushed and pushed[0][:2] == ["rsync", "-a"], pushed
             assert pushed[0][-1] == "box:/comfy/input/clip_003.png", pushed
+            # the mode is load-bearing: peaches' container is uid 1025 and a
+            # file arriving 0600 fails there as "ModelMMAP allocation failed",
+            # which looks like an OOM and is not one
+            assert "--chmod=F664" in pushed[0], pushed
 
             # a box that is off must not fail a render the other boxes can do
             def dead(cmd, **kw):
