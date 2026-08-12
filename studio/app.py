@@ -1172,7 +1172,12 @@ def h_audio(args, progress):
                               denoise=args.get("denoise", 1.0))
     if not took:
         raise RuntimeError("the audio render produced no track")
-    outdir = os.path.join(db.DATA, "audio", slug)
+    # safe_name here as well as on the render prefix above. Nothing can reach
+    # this today -- slugify() collapses a slug to [a-z0-9-] and no route writes
+    # songs.slug directly -- but this function was calling safe_name(slug) for
+    # the prefix on one line and joining the raw slug into a WRITE PATH four
+    # lines later, which is an invariant held in another function's regex.
+    outdir = os.path.join(db.DATA, "audio", safe_name(slug))
     os.makedirs(outdir, exist_ok=True)
     stamp = int(time.time() * 1000)
     span = args.get("bridge")
