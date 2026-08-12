@@ -19,7 +19,7 @@
 <dialog class="lightbox" id="anchor-lightbox">
   <div class="modal-bar">
     <strong id="lightbox-label"></strong>
-    <button type="button" onclick="this.closest('dialog').close()">Close</button>
+    <button type="button" class="secondary" onclick="this.closest('dialog').close()">Close</button>
   </div>
   {# front and back side by side; the CSS stacks them on a narrow screen #}
   <div class="lightbox-pair" id="lightbox-pair"></div>
@@ -28,7 +28,7 @@
 <dialog class="fix-modal" id="anchor-fix">
   <div class="modal-bar">
     <strong>Fix <span id="fix-label"></span></strong>
-    <button type="button" onclick="this.closest('dialog').close()">Close</button>
+    <button type="button" class="secondary" onclick="this.closest('dialog').close()">Close</button>
   </div>
   <div class="fix-modal-body">
     <img id="fix-preview" alt="the sheet being repaired">
@@ -123,7 +123,7 @@
         <td>{{ r.item.transition }} {{ r.item.secs }}s</td>
         <td>
           <form method="post" action="/playlists/{{ d.playlist.id }}/items/{{ r.item.id }}/delete">
-            <button type="submit">Remove</button>
+            <button type="submit" class="danger btn-sm">Remove</button>
           </form>
         </td>
       </tr>
@@ -262,7 +262,7 @@
   </form>
   <form method="post" action="/characters/{{ m.c.id }}/delete" class="delete-character"
         data-name="{{ m.c.name }}">
-    <button type="submit">Delete {{ m.c.name }}</button>
+    <button type="submit" class="danger">Delete {{ m.c.name }}</button>
   </form>
   {% endfor %}
   {% else %}
@@ -366,7 +366,7 @@
   <dialog class="confirm-modal" id="art-{{ d.playlist.id }}">
     <div class="modal-bar">
       <strong>Create album art for &ldquo;{{ d.playlist.name }}&rdquo;</strong>
-      <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+      <button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button>
     </div>
     <form method="post" action="/playlists/{{ d.playlist.id }}/artwork" class="stack-form">
       <p class="hint">Rendered from the album look above. References are optional and
@@ -397,7 +397,7 @@
       </label>
       <div class="button-row">
         <button type="submit">Render the cover</button>
-        <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+        <button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button>
       </div>
       <p class="hint">The result replaces the cover shown on this card. The old file stays
         on disk.</p>
@@ -425,7 +425,7 @@
   <dialog class="confirm-modal" id="del-pl-{{ d.playlist.id }}">
     <div class="modal-bar">
       <strong>Delete &ldquo;{{ d.playlist.name }}&rdquo;?</strong>
-      <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+      <button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button>
     </div>
     <p><strong>This deletes:</strong></p>
     <ul>
@@ -446,7 +446,7 @@
       <input type="hidden" name="confirm" value="DELETE">
       <div class="button-row">
         <button type="submit" class="thumb-btn-danger">Delete this playlist</button>
-        <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+        <button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button>
       </div>
     </form>
   </dialog>

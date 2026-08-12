@@ -42,7 +42,7 @@
 <script>watchJob({{ active_job.id }}, "job-status");</script>
 {% if active_job.status in ("queued", "running") %}
 <form method="post" action="/jobs/{{ active_job.id }}/cancel">
-  <button type="submit">Cancel</button>
+  <button type="submit" class="secondary">Cancel</button>
 </form>
 {% endif %}
 {% endif %}
@@ -219,7 +219,7 @@
       <strong>{{ rv.tier | tiername }} contact sheet</strong>
       <span>
         <a href="{{ media_url(rv.path) }}" download>download</a>
-        <button type="button" onclick="this.closest('dialog').close()">Close</button>
+        <button type="button" class="secondary" onclick="this.closest('dialog').close()">Close</button>
       </span>
     </div>
     <img src="{{ media_url(rv.path) }}" alt="{{ rv.tier | tiername }} contact sheet">
@@ -315,7 +315,7 @@
           <td>
             {% if j.status in ("queued", "running") %}
             <form method="post" action="/jobs/{{ j.id }}/cancel" style="display:inline">
-              <button type="submit">Cancel</button>
+              <button type="submit" class="ghost btn-sm">Cancel</button>
             </form>
             {% endif %}
           </td>
@@ -335,7 +335,7 @@
     <label>Type <code>DELETE</code> to confirm
       <input type="text" name="confirm" placeholder="DELETE" autocomplete="off" required>
     </label>
-    <button type="submit">Delete song</button>
+    <button type="submit" class="danger">Delete song</button>
   </form>
 </section>
 {% endblock %}

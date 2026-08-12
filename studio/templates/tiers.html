@@ -35,7 +35,7 @@
       <td>
         {% if not t.builtin %}
         <form method="post" action="/tiers/{{ t.name }}/delete" class="delete-tier" data-tier="{{ t.name }}">
-          <button type="submit">Delete</button>
+          <button type="submit" class="danger btn-sm">Delete</button>
         </form>
         {% endif %}
       </td>

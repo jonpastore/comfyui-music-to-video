@@ -4695,3 +4695,66 @@ def test_a_song_gets_a_waveform_picture_when_it_is_analysed(patch_stub):
         assert not db.one("SELECT id FROM assets WHERE song_id=? AND kind='waveform'", sid), \
             "the waveform outlived the song it belongs to"
         assert not os.path.isfile(path), "the waveform FILE outlived the song"
+
+
+def test_destructive_buttons_are_not_styled_as_ordinary_ones():
+    """Every button in this app rendered as the same solid-accent block: 75 of
+    111 carried no class at all, so "Save" and "Delete this playlist" shouted
+    equally -- and the destructive ones shouted loudest, because their labels
+    are longer.
+
+    .thumb-btn-danger was worse than useless. It defined ONLY a :hover rule; the
+    base circular look lived in .thumb-btn, which most call sites never added.
+    So nine delete controls rendered as ordinary primaries with a hover tint on
+    a border that was not there.
+
+    This walks the templates rather than the CSS, because the defect was never
+    in one place -- it was a missing class on a call site, nine times.
+    """
+    import glob
+    here = os.path.join(os.path.dirname(appmod.__file__), "templates")
+    css = open(os.path.join(os.path.dirname(appmod.__file__), "static", "style.css")).read()
+
+    # every variant the templates use must actually be defined
+    for cls in ("button.secondary", "button.ghost", "button.danger", "button.btn-sm",
+                ".thumb-btn-danger {", ".button-link {"):
+        assert cls in css, f"{cls} is used but has no rule"
+
+    # a destructive label must carry a destructive class
+    bad = []
+    for path in glob.glob(os.path.join(here, "*.html")):
+        for i, line in enumerate(open(path), 1):
+            m = re.search(r"<button[^>]*>\s*([^<{]{0,60})", line)
+            if not m:
+                continue
+            label = m.group(1).strip().lower()
+            if not re.match(r"^(delete|remove|clear|discard)\b", label):
+                continue
+            if not re.search(r'class="[^"]*(danger|thumb-btn-danger)', m.group(0)):
+                bad.append(f"{os.path.basename(path)}:{i} {label!r}")
+    assert not bad, "destructive buttons styled as ordinary ones:\n  " + "\n  ".join(bad)
+
+    # and no interactive element nested inside another -- invalid HTML that
+    # does not reliably navigate
+    for path in glob.glob(os.path.join(here, "*.html")):
+        body = open(path).read()
+        assert not re.search(r"<a\b[^>]*>\s*<button", body), \
+            f"{os.path.basename(path)} nests a <button> inside an <a>"
+
+
+def test_job_status_classes_have_rules_behind_them():
+    """song.html and _jobs_panel.html emit .status-<state> on every job row and
+    style.css had ZERO rules for any of them -- queued, running, failed and done
+    all rendered as identical plain text, on the page whose entire purpose is
+    telling you which is which."""
+    here = os.path.dirname(appmod.__file__)
+    css = open(os.path.join(here, "static", "style.css")).read()
+    emitted = set()
+    import glob
+    for path in glob.glob(os.path.join(here, "templates", "*.html")):
+        emitted |= set(re.findall(r'class="status-\{\{[^}]*\}\}"', open(path).read()))
+    assert emitted, "no template emits a status class any more -- update this test"
+    for state in ("queued", "running", "failed", "cancelled", "done"):
+        assert f".status-{state}" in css, f".status-{state} is emitted with no rule behind it"
+    # the running marker must not animate for someone who asked it not to
+    assert "prefers-reduced-motion" in css

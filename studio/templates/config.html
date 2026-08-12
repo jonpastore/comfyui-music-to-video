@@ -95,7 +95,7 @@
           </td>
           <td class="nowrap">
             <form method="post" action="/config/targets/{{ r.t.id }}/toggle">
-              <button type="submit">{{ "Disable" if r.t.enabled else "Enable" }}</button>
+              <button type="submit" class="ghost btn-sm">{{ "Disable" if r.t.enabled else "Enable" }}</button>
             </form>
             <form method="post" action="/config/targets/{{ r.t.id }}/delete" class="delete-target">
               <button type="submit" class="thumb-btn-danger">Delete</button>
@@ -158,7 +158,7 @@
   <dialog class="help-modal" id="svc-{{ key }}">
     <div class="modal-bar">
       <strong>Setting up {{ s.label }}</strong>
-      <button type="button" onclick="this.closest('dialog').close()">Close</button>
+      <button type="button" class="secondary" onclick="this.closest('dialog').close()">Close</button>
     </div>
     <p><strong>Adult content:</strong> {{ s.adult_note }}</p>
     <p><strong>API:</strong> {{ s.api }}<br>

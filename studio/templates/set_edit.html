@@ -39,7 +39,7 @@
     Ticked handovers fade it in over the cut and out again; it never changes the
     running length.
     <form method="post" action="/sets/{{ set.id }}/brand/clear" style="display:inline">
-      <button type="submit" class="linkish">Remove</button></form></p>
+      <button type="submit" class="linkish danger">Remove</button></form></p>
   {% else %}
   <p class="hint">No mark yet. Upload one to offer "mark on this handover" per item.</p>
   {% endif %}
@@ -123,7 +123,7 @@
     <td>{{ it.transition }} {{ it.secs }}s</td>
     <td>
       <form method="post" action="/sets/{{ set.id }}/items/{{ it.id }}/delete">
-        <button type="submit">Remove</button>
+        <button type="submit" class="danger btn-sm">Remove</button>
       </form>
     </td>
   </tr>

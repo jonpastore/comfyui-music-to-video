@@ -14,7 +14,7 @@
   </form>
   <form method="post" action="/songs/{{ song.id }}/approve/{{ tier }}/all">
     <input type="hidden" name="replace" value="true">
-    <button type="submit">Approve all, replacing my picks</button>
+    <button type="submit" class="danger">Approve all, replacing my picks</button>
   </form>
   <span class="muted">
     {{ clips | selectattr("approved") | list | length }} of {{ clips | length }} approved

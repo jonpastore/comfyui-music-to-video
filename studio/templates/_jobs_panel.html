@@ -81,12 +81,12 @@
           {# its arguments are still in args_json, so recovering a lost batch is
              a click rather than filling the form in again from memory #}
           <form method="post" action="/jobs/{{ e.job.id }}/retry" style="display:inline">
-            <button type="submit">Retry</button>
+            <button type="submit" class="ghost btn-sm">Retry</button>
           </form>
           {% endif %}
           {% if e.cancelable %}
           <form method="post" action="/jobs/{{ e.job.id }}/cancel" style="display:inline">
-            <button type="submit">Cancel</button>
+            <button type="submit" class="ghost btn-sm">Cancel</button>
           </form>
           {% endif %}
         </td>

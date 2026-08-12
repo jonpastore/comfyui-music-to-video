@@ -59,7 +59,7 @@
     <input type="hidden" name="tier" value="{{ g.tier }}">
     <input type="hidden" name="view" value="{{ g.view }}">
     {% if g.character_id %}<input type="hidden" name="character_id" value="{{ g.character_id }}">{% endif %}
-    <button type="submit">Delete the {{ g.unpicked }} unpicked candidate{{ "" if g.unpicked == 1 else "s" }}</button>
+    <button type="submit" class="danger">Delete the {{ g.unpicked }} unpicked candidate{{ "" if g.unpicked == 1 else "s" }}</button>
   </form>
   {% endif %}
 </section>

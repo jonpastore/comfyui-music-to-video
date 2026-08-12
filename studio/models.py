@@ -129,13 +129,51 @@ CATALOG = {
             "umt5_xxl_fp8_e4m3fn_scaled.safetensors": "CLIPLoader",
             "wan_2.1_vae.safetensors": "VAELoader"},
     },
+    "ltx25": {
+        "role": "video",
+        "label": "LTX-2.5 22B distilled (audio-conditioned, int8-convrot)",
+        "file": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+        "loader": "UNETLoader",
+        "cli": "ltx25",
+        "default": True,
+        "purpose": (
+            "The current audio-conditioned path, and the same contract as 2.3: approved "
+            "reference frame, scene prompt, and the clip's audio fused as a joint AV latent "
+            "so it conditions the motion. 2.5 changed the node graph, not just the weights."),
+        "notes": [
+            "MEASURED 2026-08-12 on a real clip (approved reference frame + the track's "
+            "own audio), 81 frames at 832x480, 8 steps: gamingpc (32 GB desktop 5090) 34.7s "
+            "end to end, 4.9s of that sampling, peak 28.3 GB of 31.8. cerberus (24 GB laptop "
+            "5090) 38.0s, peak 23.4 GB of 23.9 -- 95.8% of the card, so nothing else may be "
+            "resident: run pipeline.free_vram() first, as the clip job already does.",
+            "Needs ComfyUI at 57ce8e1a or later (2026-08-11, 'Add support for LTX 2.5'). "
+            "Nothing older has LTXVDualCFGGuider or LTXVDurationPredictor at all.",
+            "Needs torch built against CUDA 13. comfy/quant_ops.py disables comfy-kitchen's "
+            "CUDA backend when torch.version.cuda < 13, which silently drops the int8-convrot "
+            "and nvfp4 matmuls onto the eager backend -- it still renders, just far slower, "
+            "and nothing in the UI says so. Check the startup log for "
+            "\"comfy_kitchen backend cuda: {'available': True, 'disabled': False}\".",
+            "Unlike 2.3, its text encoder loads through a plain CLIPLoader with type 'ltxv' "
+            "-- the projection is baked into the 'with-proj' encoder, so there is no second "
+            "checkpoints/ file. Its audio VAE likewise loads through a plain VAELoader.",
+            "20.03 GiB of weights. int8 DOES fit the 24 GB laptop card, but at 95.8% peak "
+            "with no headroom; the nvfp4 build (17.4 GiB) is downloaded alongside it as the "
+            "fallback if anything else needs VRAM -- see build_song.LTX25_MODEL_NVFP4.",
+            "Licence: LTX-2.x Community Licence, free commercial use under $10M revenue. "
+            "Its Acceptable Use Policy is incorporated and forbids sexually explicit output; "
+            "tiers.PINNED already sits inside that line.",
+        ],
+        "companions": {
+            "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors": "CLIPLoader",
+            "ltx-2.5-video-vae-bf16.safetensors": "VAELoader",
+            "ltx-2.5-audio-vae-bf16.safetensors": "VAELoader"},
+    },
     "ltx23": {
         "role": "video",
         "label": "LTX-2.3 22B distilled (audio-conditioned, ~2x faster)",
         "file": "ltx-2.3-22b-distilled_transformer_only_fp8_scaled.safetensors",
         "loader": "UNETLoader",
         "cli": "ltx",
-        "default": True,
         "purpose": (
             "The other audio-driven video path. Like s2v it takes the approved reference "
             "frame, the scene prompt AND the clip's audio -- but it fuses audio as a joint "
@@ -348,6 +386,15 @@ def default_for(role):
     return None
 
 
+def default_cli(role):
+    """The value the RENDERER wants for this role's default -- default_for()
+    returns a catalogue key, and the scripts take a "cli" value. Callers that
+    hardcoded one of these drifted from the catalogue the moment a default
+    moved, which is exactly how the song page came to offer a default that
+    /songs/{id}/clips answered with a 400."""
+    return renderable(role).get(default_for(role))
+
+
 def chat_default():
     """The remembered xAI chat model for storyboards, or "" for "highest available".
 
@@ -444,7 +491,12 @@ def demo():
 
     # role filtering
     assert {e["key"] for e in catalog(role="video", object_info=fake)} == {
-        "wan22_s2v", "wan22_i2v", "ltx23"}
+        "wan22_s2v", "wan22_i2v", "ltx23", "ltx25"}
+    # the default is the one the renderer gets told to use, and it must be a
+    # value the renderer actually accepts -- these drifted apart once already
+    assert default_for("video") == "ltx25"
+    assert default_cli("video") == "ltx25"
+    assert default_cli("video") in renderable("video").values()
 
     # Only models the renderer can actually be told to use carry a "cli" value.
     # A catalogued-but-unwired one (ltx23) must NOT reach the clip form -- the
@@ -464,8 +516,9 @@ def demo():
             assert not m.get("cli"), f"{key} has a cli value but {m['role']} has no renderer"
 
     # defaults: the marked one, then a remembered override, then rejection of junk
-    # LTX is the default: measured at ~50s for a real clip against s2v's ~90s
-    assert default_for("video") == "ltx23"
+    # LTX is the default -- 2.5 since the upgrade; 2.3 measured ~50s for a real
+    # clip against s2v's ~90s and stays catalogued as the fallback
+    assert default_for("video") == "ltx25"
     set_default("video", "wan22_i2v")
     assert default_for("video") == "wan22_i2v"
     for bad, why in (("nonexistent_model", "unknown key"), ("qwen_image_edit_2511", "wrong role")):
@@ -476,7 +529,7 @@ def demo():
             pass
     # a stale setting pointing at something no longer catalogued falls back
     db.run("UPDATE settings SET value='deleted_model' WHERE key='model.video'")
-    assert default_for("video") == "ltx23", "a stale setting wedged the role"
+    assert default_for("video") == "ltx25", "a stale setting wedged the role"
 
     print("models.py OK")
 

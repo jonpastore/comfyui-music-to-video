@@ -111,7 +111,7 @@
 <dialog class="video-modal" id="vid-{{ e.song.id }}">
   <div class="modal-bar">
     <strong>{{ e.song.title }}</strong>
-    <button type="button" onclick="this.closest('dialog').close()">Close</button>
+    <button type="button" class="secondary" onclick="this.closest('dialog').close()">Close</button>
   </div>
   {% for v in e.videos %}
   <p class="meta">{{ v.tier | tiername }} &middot;
