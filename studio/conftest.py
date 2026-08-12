@@ -410,6 +410,9 @@ _stub("pipeline",
       # a CALLABLE, so the real-module fallback refuses it by design --
       # letting it through would have the suite polling a live SwarmUI
       swarm_backends=lambda: None,
+      # which backend renders. The jobs panel reads it, and app.py calls it on
+      # THIS module, so the stub needs it -- conftest gaps have bitten five times.
+      RENDER_BACKEND="comfy",
       collect=lambda prefix_dir, pattern="*.png": [],
       MAX_ANCHOR_REFS=3,
       # `render` is the anchor form's sampler settings (mode/negative/steps/cfg

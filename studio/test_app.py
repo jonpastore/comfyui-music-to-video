@@ -2942,6 +2942,29 @@ def test_jobs_page_names_every_swarm_backend_without_claiming_it_works(patch_stu
         assert page.count("ComfyUI") >= 1
 
 
+def test_jobs_page_says_which_backend_actually_renders(patch_stub):
+    """The panel must read RENDER_BACKEND, not a sentence someone typed.
+
+    It said "Nothing routes through Swarm yet -- every render still goes
+    straight to ComfyUI" unconditionally, which was true when it was written and
+    silently stops being true the moment the flag is set. A page describing a
+    render nobody is performing is the defect this codebase keeps making."""
+    backends = lambda: [{"id": "0", "title": "studio ComfyUI", "status": "running",
+                         "address": "http://127.0.0.1:8188"}]
+    patch_stub("pipeline", swarm_backends=backends, RENDER_BACKEND="comfy")
+    with TestClient(appmod.app) as client:
+        flat = " ".join(client.get("/jobs").text.split())
+        assert "Nothing routes through Swarm" in flat, flat[flat.find("SwarmUI"):][:400]
+        assert "RENDER_BACKEND=swarm" in flat, "the page does not say how to turn it on"
+
+    patch_stub("pipeline", swarm_backends=backends, RENDER_BACKEND="swarm")
+    with TestClient(appmod.app) as client:
+        flat = " ".join(client.get("/jobs").text.split())
+        assert "Nothing routes through Swarm" not in flat, \
+            "the panel still claims renders go straight to ComfyUI while Swarm is routing them"
+        assert "through Swarm" in flat and "may get the work" in flat, flat[flat.find("SwarmUI"):][:400]
+
+
 def test_api_keys_are_write_only_and_never_rendered(monkeypatch):
     """ALBUM_ARC_AND_STAGING_PLAN.md sec 5. The studio has no login, so the one
     property that makes storing keys acceptable is that no route ever renders

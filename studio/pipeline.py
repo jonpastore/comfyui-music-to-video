@@ -36,6 +36,9 @@ SUBMIT_TIMEOUT = float(os.environ.get("SUBMIT_TIMEOUT", 1800))
 # else is coming to rescue the queue.
 SCRIPT_TIMEOUT = float(os.environ.get("SCRIPT_TIMEOUT", 600))
 MAX_POLL_ERRORS = 3  # consecutive connection failures before giving up on a poll
+# Attempts per WORKFLOW on the comfy path, for an unreachable ComfyUI only.
+# Two: the point is to survive a restart window, not to keep trying forever.
+COMFY_ATTEMPTS = int(os.environ.get("COMFY_ATTEMPTS", 2))
 
 def _slug_tier(slug, tier):
     return f"{slug}_{tier}"
@@ -289,11 +292,58 @@ def abandon(pid, progress=None):
             _say(progress, f"could not stop ComfyUI prompt {pid}: {e}")
 
 
+def _submit_one(wf, name, progress, cancelled):
+    """POST one workflow and wait for it. Returns its prompt_id.
+
+    Split out of submit_dir so a single workflow can be retried without
+    re-running the eighty that already rendered.
+    """
+    start = time.time()
+    resp = _post(f"{COMFY}/prompt", {"prompt": wf})
+    pid = resp.get("prompt_id")
+    if not pid:
+        raise RuntimeError(f"submit rejected: {name}: {resp}")
+    errors = 0
+    try:
+        while True:
+            if cancelled and cancelled():
+                # jobs.py's progress raises Cancelled here, which is the
+                # normal exit; the handler below then stops ComfyUI. The
+                # raise is for a caller that supplied a checkpoint but a
+                # progress that does not stop the job -- having decided to
+                # abandon the render, never return as though it had run.
+                progress(f"cancelled -- stopping {os.path.splitext(name)[0]} in ComfyUI")
+                raise RuntimeError(f"cancelled while rendering {name}")
+            if time.time() - start > SUBMIT_TIMEOUT:
+                raise RuntimeError(
+                    f"{name} (prompt {pid}) did not finish within {SUBMIT_TIMEOUT:.0f}s")
+            try:
+                hist = _get(f"{COMFY}/history/{pid}")
+                errors = 0
+            except RuntimeError:
+                errors += 1
+                if errors >= MAX_POLL_ERRORS:
+                    raise
+                time.sleep(POLL_SECS)
+                continue
+            if hist:
+                break
+            time.sleep(POLL_SECS)
+    except BaseException:
+        # Stopped waiting, for ANY reason -- cancel, timeout, ComfyUI gone.
+        # Leaving it running means the GPU keeps working on output nothing
+        # will ever collect, and the file it eventually writes is exactly
+        # the orphan that used to be swept up by the NEXT job.
+        abandon(pid, progress)
+        raise
+    return pid
+
+
 def submit_dir(wf_dir, progress=None):
     progress = progress or (lambda msg: None)
     # jobs.py attaches this to the progress it passes in. Without it the poll
-    # loop below has no cancellation checkpoint at all: progress() is the
-    # checkpoint and it is only called once a workflow FINISHES, so a cancel
+    # loop in _submit_one has no cancellation checkpoint at all: progress() is
+    # the checkpoint and it is only called once a workflow FINISHES, so a cancel
     # during a single 90-second render did nothing until that render was done
     # -- and ComfyUI kept the GPU and wrote the file anyway.
     cancelled = getattr(progress, "cancelled", None)
@@ -302,43 +352,26 @@ def submit_dir(wf_dir, progress=None):
     for i, name in enumerate(files, 1):
         wf = json.load(open(os.path.join(wf_dir, name)))
         start = time.time()
-        resp = _post(f"{COMFY}/prompt", {"prompt": wf})
-        pid = resp.get("prompt_id")
-        if not pid:
-            raise RuntimeError(f"submit rejected: {name}: {resp}")
-        errors = 0
-        try:
-            while True:
-                if cancelled and cancelled():
-                    # jobs.py's progress raises Cancelled here, which is the
-                    # normal exit; the handler below then stops ComfyUI. The
-                    # raise is for a caller that supplied a checkpoint but a
-                    # progress that does not stop the job -- having decided to
-                    # abandon the render, never return as though it had run.
-                    progress(f"cancelled -- stopping {os.path.splitext(name)[0]} in ComfyUI")
-                    raise RuntimeError(f"cancelled while rendering {name}")
-                if time.time() - start > SUBMIT_TIMEOUT:
-                    raise RuntimeError(
-                        f"{name} (prompt {pid}) did not finish within {SUBMIT_TIMEOUT:.0f}s")
-                try:
-                    hist = _get(f"{COMFY}/history/{pid}")
-                    errors = 0
-                except RuntimeError:
-                    errors += 1
-                    if errors >= MAX_POLL_ERRORS:
-                        raise
-                    time.sleep(POLL_SECS)
-                    continue
-                if hist:
-                    break
+        for attempt in range(1, COMFY_ATTEMPTS + 1):
+            try:
+                pid = _submit_one(wf, name, progress, cancelled)
+                break
+            except RuntimeError as e:
+                # ONE workflow is retried, not the job. jobs.py already retries
+                # the whole job when ComfyUI is unreachable, and that is the
+                # wrong grain for a render: a five-second restart window during
+                # clip 60 of 80 throws away 59 finished clips and an hour of
+                # GPU to recover ninety seconds of work.
+                #
+                # Narrow on purpose. A cancel is what the user asked for; a
+                # workflow ComfyUI REFUSED (a missing model, a bad graph) is a
+                # real error and retrying it just fails more slowly; a timeout
+                # has already spent SUBMIT_TIMEOUT and would spend it again.
+                # Only "could not reach it" earns another go.
+                if attempt >= COMFY_ATTEMPTS or "cannot reach comfyui" not in str(e).lower():
+                    raise
+                progress(f"{name}: {e} -- retrying ({attempt + 1}/{COMFY_ATTEMPTS})")
                 time.sleep(POLL_SECS)
-        except BaseException:
-            # Stopped waiting, for ANY reason -- cancel, timeout, ComfyUI gone.
-            # Leaving it running means the GPU keeps working on output nothing
-            # will ever collect, and the file it eventually writes is exactly
-            # the orphan that used to be swept up by the NEXT job.
-            abandon(pid, progress)
-            raise
         ids.append(pid)
         progress(f"{i}/{len(files)} {os.path.splitext(name)[0]} {time.time()-start:.0f}s")
     return ids
@@ -922,7 +955,7 @@ def contact_sheet(src_dir, out_jpg, cols=6):
 
 
 def demo():
-    global _post, _get, COMFY_OUTPUT, COMFY_INPUT
+    global _post, _get, COMFY_OUTPUT, COMFY_INPUT, POLL_SECS
 
     # --- submit_dir against a fake ComfyUI server ---
     real_post, real_get = _post, _get
@@ -957,6 +990,48 @@ def demo():
                 assert "clip_bad.json" in str(e), e
     finally:
         _post, _get = real_post, real_get
+
+    # --- one unreachable moment costs ONE workflow, not the whole job -------
+    # jobs.py retries the job; that is the wrong grain for a render. A restart
+    # window during clip 60 of 80 used to throw away 59 finished clips.
+    posts = []
+
+    def flaky_post(url, payload):
+        posts.append(url)
+        if url.endswith("/prompt") and len(posts) == 1:
+            raise RuntimeError("cannot reach ComfyUI at http://x (Connection refused)")
+        return {"prompt_id": "pid-r"}
+
+    real_poll_secs = POLL_SECS
+    POLL_SECS = 0.01
+    _post, _get = flaky_post, (lambda url: {"pid-r": {}})
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            json.dump({"_name": "r"}, open(os.path.join(d, "clip_r.json"), "w"))
+            said = []
+            assert submit_dir(d, said.append) == ["pid-r"]
+            assert any("retrying (2/2)" in m for m in said), said
+
+        # ...but a workflow ComfyUI REFUSED is a real error, not a blip, and
+        # retrying it only fails more slowly
+        refusals = []
+
+        def refusing_post(url, payload):
+            refusals.append(url)
+            return {"error": "invalid prompt"}
+
+        _post = refusing_post
+        with tempfile.TemporaryDirectory() as d:
+            json.dump({"_name": "x"}, open(os.path.join(d, "clip_x.json"), "w"))
+            try:
+                submit_dir(d)
+                raise AssertionError("a refused workflow was accepted")
+            except RuntimeError as e:
+                assert "submit rejected" in str(e), e
+        assert len(refusals) == 1, f"a refusal was retried: {refusals}"
+    finally:
+        _post, _get = real_post, real_get
+        POLL_SECS = real_poll_secs
 
     # --- submit_dir must time out, not hang, if history never fills in ---
     global SUBMIT_TIMEOUT
@@ -1174,7 +1249,7 @@ def demo():
     # The acceptance criterion from SWARM_PIPELINE_PLAN.md phase 2 is that both
     # paths produce the SAME FILENAMES, because _clip_records parses clip_(\d+)
     # and a seed out of basenames and seven wrappers depend on it.
-    global RENDER_BACKEND, POLL_SECS
+    global RENDER_BACKEND
     real_backend, real_poll = RENDER_BACKEND, POLL_SECS
     real_submit_swarm, real_submit = globals()["submit_swarm"], globals()["submit_dir"]
     real_swarm_call = globals()["_swarm_call"]

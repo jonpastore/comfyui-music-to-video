@@ -51,9 +51,15 @@
     {{ b.title }}{% if b.address %} <span class="muted">{{ b.address }}</span>{% endif %}
     {%- if not loop.last %} &middot; {% endif %}
     {% endfor %}
-    <br><span class="muted">Nothing routes through Swarm yet &mdash; every render still goes
-    straight to ComfyUI. A backend listed here is not proof it can run this studio's
-    workflows; it has to hold the models they name.</span></p>
+    <br><span class="muted">
+    {%- if render_backend == "swarm" %}Renders go <strong>through Swarm</strong>, so any
+    of these boxes may get the work.
+    {%- else %}Nothing routes through Swarm &mdash; every render goes straight to ComfyUI
+    on this box. Set <code>RENDER_BACKEND=swarm</code> to use the backends above.
+    {%- endif %}
+    A backend listed here is not proof it can run this studio's workflows; it has to hold
+    the models they name{% if render_backend == "swarm" %}, and one that does not refuses
+    in about a second and the job moves to the next box{% endif %}.</span></p>
   {% endif %}
 
   {% if not jobs %}

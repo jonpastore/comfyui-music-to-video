@@ -5672,7 +5672,13 @@ def jobs_page(request: Request, refresh: str = "auto", partial: int = 0):
            "comfy": pipeline.comfy_queue(),
            # SwarmUI's backends, if it is running. A sibling of the count above,
            # never a replacement: with two backends there are two answers.
-           "swarm": pipeline.swarm_backends()}
+           "swarm": pipeline.swarm_backends(),
+           # WHICH of them actually renders. Read live rather than hardcoded in
+           # the template: this panel told everyone "nothing routes through
+           # Swarm yet" for as long as that was a sentence someone had typed,
+           # and a page that describes a render nobody is performing is the
+           # defect this codebase keeps making.
+           "render_backend": pipeline.RENDER_BACKEND}
     # the poll swaps the panel only -- returning the whole page would nest a
     # second <html> inside the one already on screen
     return templates.TemplateResponse(request, "_jobs_panel.html" if partial else "jobs.html", ctx)
