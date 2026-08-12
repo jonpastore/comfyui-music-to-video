@@ -533,6 +533,65 @@ def _host(url):
     return (url or "").split("//")[-1].split(":")[0].split("/")[0] or None
 
 
+def _retarget(text, pin, progress=None):
+    """Rewrite a workflow's loader filenames to the spellings backend `pin` uses.
+
+    THE MISSING HALF OF THE RETRY WALK. Curating models per box is this
+    project's routing policy, but a loader enum is validated against the literal
+    string, so walking `exactbackendid` over the boxes re-sends a workflow that
+    can only ever name ONE box's spelling. Measured on this fleet: cerberus
+    holds `ace_step_v1_3.5b.safetensors` and peaches holds
+    `..._fp16.safetensors`; cerberus names the Z-Image autoencoder
+    `ae.safetensors` and peaches names it `z_image_ae.safetensors`. Before this,
+    every box after the first was asked a question it could not answer, and
+    answered `not found` in about a second.
+
+    Per LOADER, not per string: models.installed() keys the enums by loader
+    class, so a VAE name can never be resolved out of the UNET list. A loader
+    that publishes no enumerable list is skipped rather than guessed at.
+
+    Only fires on a PINNED attempt. The free draw still goes out byte-identical,
+    so the ordinary path is unchanged -- and a workflow needing no rewrite is
+    returned unchanged rather than re-serialised, because ComfyUI's execution
+    cache keys on the text and a gratuitous edit would re-run finished work.
+
+    LIMIT, and it is silent in the safe direction: a box that will not say what
+    it holds gets the workflow as written. Backend 0's Swarm address is
+    `http://127.0.0.1:8188`, which only resolves FROM the box the studio runs
+    on -- so retargeting to backend 0 works in production and does nothing from
+    a laptop. Proven on the live fleet 2026-08-12 by the mirror case instead:
+    a workflow naming cerberus's `ace_step_v1_3.5b.safetensors`, pinned to
+    peaches, was refused as written and rendered in 9.7s once rewritten to
+    `ace_step_v1_3.5b_fp16.safetensors`.
+    """
+    if pin is None:
+        return text
+    address = next((b.get("address") for b in (swarm_backends() or [])
+                    if str(b.get("id")) == str(pin)), None)
+    have = models.installed(url=address) if address else None
+    if not have:
+        return text     # the box would not say what it holds; send what we have
+    wf = json.loads(text)
+    swaps = []
+    for node in wf.values():
+        if not isinstance(node, dict):
+            continue
+        pool = have.get(node.get("class_type"))
+        if not pool:
+            continue    # unknown loader, or one with no enumerable list
+        for key, value in (node.get("inputs") or {}).items():
+            if not isinstance(value, str) or value in pool:
+                continue
+            alt = models.resolve(value, pool)
+            if alt and alt != value:
+                node["inputs"][key] = alt
+                swaps.append(f"{value} -> {alt}")
+    if not swaps:
+        return text
+    _say(progress, f"backend {pin} names it differently: {', '.join(swaps)}")
+    return json.dumps(wf)
+
+
 def _ran_on(pin):
     """(backend id, host) for the render that just finished, or (None, None).
 
@@ -623,7 +682,8 @@ def submit_swarm(wf_dir, prefix_dir, pattern, progress=None):
         entries, last = None, None
         for pin in _attempt_plan():
             try:
-                entries = _swarm_generate(text, progress, cancelled, pin)
+                entries = _swarm_generate(_retarget(text, pin, progress),
+                                          progress, cancelled, pin)
                 break
             except RuntimeError as e:
                 # A cancel is not a failure to retry, and it is the one thing
@@ -1573,6 +1633,55 @@ def demo():
             assert os.listdir(sheets) == [], os.listdir(sheets)
             assert len(stamped) == before_dead, \
                 f"a render nothing produced was recorded as an artefact: {stamped[before_dead:]}"
+
+            # 5b. AND THE WALK NAMES THE FILE EACH BOX USES. Without this the
+            # walk is theatre for any model spelled differently per box: every
+            # attempt after the first re-sends the first box's filename and is
+            # refused on the literal string, which is what the real fleet does
+            # with ACE-Step (cerberus `ace_step_v1_3.5b`, peaches `..._fp16`).
+            tries.clear()
+            payloads.clear()
+            real_installed = models.installed
+            pools = {"http://box0": {"CheckpointLoaderSimple": {"ace_step_v1_3.5b.safetensors"}},
+                     "http://box1": {"CheckpointLoaderSimple": {"ace_step_v1_3.5b_fp16.safetensors"}}}
+            models.installed = lambda object_info=None, url=None: pools.get(url)
+
+            def named(path, payload, timeout=30):
+                if path.endswith("ListBackends"):
+                    return {str(i): {"status": "running", "title": f"box{i}",
+                                     "settings": {"Address": f"http://box{i}"}}
+                            for i in range(2)}
+                payloads.append(payload)
+                wf = json.loads(payload["comfyworkflowraw"])
+                ckpt = wf["1"]["inputs"]["ckpt_name"]
+                pool = (pools.get(f"http://box{payload.get('exactbackendid')}") or {}
+                        ).get("CheckpointLoaderSimple", set())
+                if payload.get("exactbackendid") is None or ckpt not in pool:
+                    return {"error": f"Model with filename '{ckpt}' not found."}
+                open(os.path.join(sheets, "front_s42_00001_.png"), "w").close()
+                return {"images": ["View/local/raw/2026-08-12/0120001--unknown.png"]}
+
+            json.dump({"1": {"class_type": "CheckpointLoaderSimple",
+                             "inputs": {"ckpt_name": "ace_step_v1_3.5b_fp16.safetensors"}},
+                       "99": {"inputs": {"filename_prefix": "anchor_v2/front_s42"}}},
+                      open(os.path.join(d, "wf.json"), "w"))
+            globals()["_swarm_call"] = named
+            try:
+                got = _submit_and_collect(d, "anchor_v2", "*.png", said.append)
+            finally:
+                models.installed = real_installed
+            assert [os.path.basename(p) for p in got] == ["front_s42_00001_.png"], got
+            # box0 holds the OTHER spelling of the same weights, so the pinned
+            # attempt must have been rewritten to the name box0 actually has
+            assert payloads[1]["exactbackendid"] == "0", payloads
+            sent = json.loads(payloads[1]["comfyworkflowraw"])["1"]["inputs"]["ckpt_name"]
+            assert sent == "ace_step_v1_3.5b.safetensors", \
+                f"the walk re-sent a filename only another box has: {sent}"
+            # ...and the FREE DRAW went out untouched, so the ordinary path is
+            # byte-identical to before and ComfyUI's execution cache still hits
+            assert json.loads(payloads[0]["comfyworkflowraw"])["1"]["inputs"]["ckpt_name"] \
+                == "ace_step_v1_3.5b_fp16.safetensors", payloads[0]
+            os.remove(got[0])
 
             # 6. a cancel MID-GENERATION reaches the render, and is the one
             # failure never retried -- a second attempt hands the GPU straight

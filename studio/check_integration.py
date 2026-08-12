@@ -157,11 +157,17 @@ if pipeline:
         """gen_audio's flags must be ones make_audio.py declares, and the
         checkpoint it names must be the fp16 cast.
 
-        The filename IS the routing policy: a loader enum is validated against
-        the literal string, cerberus holds the bf16 build under a different
-        name, and peaches is the only box with the fp16 one. Rename it here and
-        audio silently goes back to competing with video on a 5090 -- or stops
-        rendering anywhere.
+        The filename is the routing PREFERENCE: a loader enum is validated
+        against the literal string, cerberus holds the bf16 build under a
+        different name, and peaches is the only box with the fp16 one, so this
+        spelling is what keeps audio off a 5090 that is generating video.
+
+        It is no longer the only thing standing between audio and a failed job.
+        Since pipeline._retarget, a pinned attempt rewrites loader filenames to
+        the spellings that box uses, so audio that lands on cerberus renders
+        there rather than being refused -- the fp16 name now expresses where
+        audio SHOULD go, not the only place it CAN go. Renaming it still moves
+        the work; it no longer breaks it.
         """
         import re
         src = open(os.path.join(os.path.dirname(HERE), "make_audio.py")).read()
@@ -240,6 +246,29 @@ if pipeline:
 
     check("post-processing takes real flags and writes a new file",
           _postproc_flags_exist_and_it_never_overwrites)
+
+    def _an_alias_group_reads_both_ways():
+        """models.resolve must answer from EITHER spelling of the same weights.
+
+        This is the seam between the catalogue and the renderer, and it broke in
+        the direction the live workflows use. ALIASES keys on one name and its
+        value holds the others, so reading it literally made
+        resolve("<fp16 name>", cerberus_pool) return None -- "the box holding
+        ACE-Step does not have ACE-Step". make_audio.py names the fp16 spelling
+        deliberately, and pipeline._retarget asks exactly this question of every
+        box it is about to pin, so a one-way answer silently un-does the walk.
+        """
+        import models
+        for canon, alts in models.ALIASES.items():
+            for alt in alts:
+                assert models.resolve(alt, {canon}) == canon, \
+                    f"{alt} does not resolve back to {canon}: the alias group is one-way"
+                assert models.resolve(canon, {alt}) == alt, f"{canon} -> {alt}"
+                # and a box holding BOTH is handed the name that was asked for
+                assert models.resolve(alt, {canon, alt}) == alt, (canon, alt)
+
+    check("an alias group resolves from either spelling", _an_alias_group_reads_both_ways)
+    check("pipeline._retarget", lambda: sig(pipeline, "_retarget", ["text", "pin"]))
 
 grok = optional_import("grok")
 if grok:

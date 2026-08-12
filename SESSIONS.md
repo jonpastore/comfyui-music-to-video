@@ -11,7 +11,8 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
-| `studio/pipeline.py` + `studio/db.py` + `studio/check_integration.py` + `studio/test_selfchecks.py` + `make_postproc.py` | B — **released 16:55** | QC tier 0 (backend stamping) and the post-processing stage | 16:30 |
+| `studio/models.py` + `studio/pipeline.py` + `studio/check_integration.py` | B — **released 17:55** | the retry walk now names the file each box uses | 17:40 |
+| `studio/pipeline.py` + `studio/db.py` + `studio/check_integration.py` + `studio/test_selfchecks.py` + `make_postproc.py` | B — **released 16:55, committed `8a528e7`** | QC tier 0 (backend stamping) and the post-processing stage | 16:30 |
 | `studio/pipeline.py` | B — **released 15:05, committed `6e3ab5a`** | phases 1–4 done | 13:45 |
 | `studio/app.py` + `templates/_jobs_panel.html` + `conftest.py` + `test_app.py` | B — **released 15:05** | phase 4; only B's hunks were staged, A's work left untouched in the tree | 14:45 |
 | `studio/jobs.py` | B — **released 14:20, committed in 7ab2233** | one line: `"cannot reach swarmui"` added to `_TRANSIENT` | 14:05 |
@@ -470,3 +471,42 @@ Append dated one-liners. Newest at the bottom.
   `mixer` for ffprobe, but INSIDE the function, so a broken mixer cannot break
   pipeline's import — if you change `mixer.probe`'s return shape, `fps` and
   `duration` are the two keys it reads.
+- 2026-08-12 17:55 (B) **The retry walk was theatre for any model spelled
+  differently per box, and that is now fixed — `_retarget`.** A pinned attempt
+  rewrites loader filenames to the spellings that box publishes, per LOADER
+  (so a VAE name can never be resolved out of the UNET enum), before the
+  workflow goes out. The free draw still goes out byte-identical, so the
+  ordinary path is unchanged and ComfyUI's execution cache still hits.
+  **This is your item 4, generalised.** A `--model` on the audio CLI would have
+  fixed ACE-Step only; the same bug sits under the Z-Image VAE you found, and
+  under every alias added later. One place, every model.
+- 2026-08-12 17:55 (B) **A REAL BUG IN `models.spellings()`, and it broke in the
+  direction the live workflows ask from.** ALIASES keys on one name with the
+  others in the value, and the function read that literally — so
+  `resolve("ace_step_v1_3.5b_fp16.safetensors", cerberus_pool)` returned None,
+  i.e. *"the box holding ACE-Step does not have ACE-Step"*. It only ever
+  answered outward from the canonical name. `spellings()` is symmetric now
+  (asked-for name still first, so a box holding BOTH spellings gets the one you
+  asked for), `check_integration.py` asserts both directions for every pair in
+  ALIASES, and `models.py` demo covers it. **Your file, your call if you want it
+  shaped differently — say so and I will change it rather than leave two ideas
+  of what an alias is.**
+- 2026-08-12 17:55 (B) Proven on the live fleet, not just in demo: a workflow
+  naming cerberus's `ace_step_v1_3.5b.safetensors`, pinned to peaches, was
+  refused as written and **rendered in 9.7 s once retargeted** — 5.98 s of
+  44.1 kHz stereo. Two operational notes from doing it:
+  - **Retargeting to backend 0 does nothing from a dev box**, because its Swarm
+    address is `127.0.0.1:8188` — exactly the caveat you wrote at 16:05. It
+    resolves from the deployed studio. A box that will not say what it holds
+    gets the workflow as written, which is the safe direction, but it is silent.
+  - **A refused attempt can take a backend out from under the NEXT attempt.**
+    Straight after a validation failure, peaches answered `No backends match the
+    settings of the request given` for about a minute. So the walk can hit a box
+    Swarm has just benched — one more reason retargeting (which stops the
+    refusal happening at all) is worth more than another retry.
+- 2026-08-12 17:55 (B) I also softened one claim in `check_integration.py` that
+  retargeting made untrue: the fp16 filename is the routing PREFERENCE now, not
+  the only place audio CAN run. Renaming it still moves the work; it no longer
+  breaks it. 225 tests, `check_integration.py` OK, `models.py` OK, `pipeline.py` OK.
+- 2026-08-12 17:55 (B) **GPU: peaches, three short ACE-Step submissions** (~20 s
+  total) plus two deliberate refusals. Queues idle before and after.

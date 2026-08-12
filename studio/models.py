@@ -439,8 +439,27 @@ def fits(key, vram_gib):
 
 
 def spellings(name):
-    """Every filename these same weights are known by. Canonical name first."""
-    return (name,) + tuple(ALIASES.get(name, ()))
+    """Every filename these same weights are known by. Canonical name first.
+
+    SYMMETRIC, and it was not until 2026-08-12. ALIASES is written one way round
+    -- canonical key, other spellings in the value -- and reading it literally
+    made this answer depend on which end of the pair you asked from:
+    `resolve("ace_step_v1_3.5b.safetensors", peaches_pool)` found the fp16 cast,
+    while `resolve("ace_step_v1_3.5b_fp16.safetensors", cerberus_pool)` returned
+    None. That is the direction the live workflows actually ask from --
+    make_audio.py names the fp16 spelling on purpose -- so the function was
+    answering "cerberus does not have ACE-Step" about a box that has it.
+
+    An alias group is a set of names for one file. Which one the dict happened
+    to key on is bookkeeping, not a fact about the weights.
+    """
+    for canon, alts in ALIASES.items():
+        group = (canon,) + tuple(alts)
+        if name in group:
+            # asked-for name first: an exact match must still win over an alias,
+            # or a box holding BOTH spellings gets handed the other one.
+            return (name,) + tuple(s for s in group if s != name)
+    return (name,)
 
 
 def resolve(name, pool):
@@ -804,6 +823,27 @@ def demo():
         "resolved a VAE out of the UNET enum"
     assert resolve("nothing_has_this.safetensors", set()) is None
     assert resolve("anything", None) is None, "an unenumerable loader read as a hit"
+
+    # AND THE OTHER DIRECTION, which is the one the live workflows ask from.
+    # make_audio.py names the fp16 spelling deliberately, so asking "can
+    # cerberus run this?" asks from the non-canonical end -- and until this was
+    # symmetric the answer was None, i.e. "the box holding ACE-Step does not
+    # have ACE-Step". ALIASES keys on one name for bookkeeping; the weights do
+    # not know which one that is.
+    assert resolve("ace_step_v1_3.5b_fp16.safetensors",
+                   installed(cerberus)["CheckpointLoaderSimple"]) == \
+        "ace_step_v1_3.5b.safetensors", "an alias group is only readable one way round"
+    assert resolve("z_image_ae.safetensors",
+                   installed(cerberus)["VAELoader"]) == "ae.safetensors"
+    assert set(spellings("ace_step_v1_3.5b_fp16.safetensors")) == \
+        set(spellings("ace_step_v1_3.5b.safetensors")), \
+        "the same two files disagree about how many names they have"
+    # the name you asked for still wins when a box holds both, or a retarget
+    # would rewrite a filename that was already correct
+    assert spellings("ae.safetensors")[0] == "ae.safetensors"
+    assert resolve("z_image_ae.safetensors",
+                   {"ae.safetensors", "z_image_ae.safetensors"}) == "z_image_ae.safetensors"
+    assert spellings("unaliased.safetensors") == ("unaliased.safetensors",)
 
     ace_there = next(e for e in catalog(object_info=peaches) if e["key"] == "ace_step_v1")
     assert ace_there["available"] is True, "the fp16 cast read as a missing model"
