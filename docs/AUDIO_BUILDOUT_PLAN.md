@@ -1,7 +1,73 @@
 # Bringing song generation in-house — plan
 
-> **PENDING APPROVAL.** Nothing here is built. This document specifies the four
-> documents to be written once it is approved, and the phases they cover.
+> **STATUS: ITERATE. Do not build from this document as it stands.** Nothing here
+> is built. It went through Architect and Critic review (`docs/reviews/`), and
+> the review found its central architecture decision was made on a cost estimate
+> that was wrong by an order of magnitude. **Section 1's choice of Option A, and
+> phase 2, are superseded by the section immediately below.** The rest — the
+> verified facts, the pre-mortem, the phasing, the schema, the test plan — stands.
+
+## 0 · What the review changed, and the fact that settled it
+
+**Upstream ACE-Step exposes everything phase 2 planned to fork.** `git clone` and
+a grep of `acestep/inference.py` — ten minutes, no GPU, no weights — which the
+Critic named as the single cheapest thing that could decide the architecture:
+
+    task_type: "text2music" | "cover" | "repaint" | "lego" | "extract" | "complete"
+    repainting_start:  start time in seconds for the region to repaint
+    repainting_end:    end time in seconds (-1 for until end)
+    chunk_mask_mode:   "explicit" = 0/1 mask from the repaint range
+    repaint_latent_crossfade_frames: 10   # 25Hz frames, 10 ≈ 0.4s
+    repaint_wav_crossfade_sec / repaint_mode / repaint_strength
+
+The giggling intro is `task_type="repaint", repainting_start=0, repainting_end=4`
+— **with latent- and waveform-level crossfade controls for the seam**, which is
+the problem both the ComfyUI fork and the `noise_mask` fallback would have left
+to fight. `constants.py:86` also documents `extract` as *"Separate individual
+tracks/stems from audio"*, so **stem separation is in the model**, which may
+delete phase 3's Demucs dependency entirely. `acestep/training*` carries LoRA
+training, and `acestep/api/http/` an HTTP service.
+
+So Option B stops being "a second torch stack to buy one capability". Consequences:
+
+1. **Phase 2 is not a ~100-line node.** Verified in ComfyUI's source: `forward`
+   discards `chunk_masks`/`src_latents` (`ace_step15.py:1119-1120`) *and*
+   `prepare_condition` reassigns `src_latents` in both branches (`:1105-1108`)
+   *and* `extra_conds` forces `is_covers=True` whenever a reference is present
+   (`model_base.py:2313-2315`). That is a ≈120-line fork of three upstream
+   functions with a **silent** failure mode. Do not build it.
+2. **A free middle option exists** that neither reviewer's boundary considered:
+   ComfyUI already does masked latent denoising generically
+   (`samplers.py:634-642`, `utils.py:1315-1316`), blocked only by
+   `SetLatentNoiseMask`'s 4-D reshape (`nodes.py:1560`). A ~10-line node writing
+   `latent["noise_mask"]` as `[1,1,T]` unblocks it. It will seam more than
+   `chunk_masks` would, and that is an afternoon's measurement rather than an
+   argument.
+3. **The boundary to draw is capability, then measurement**: A for what ComfyUI
+   already exposes including `noise_mask`; upstream (B) for repaint, stems and
+   LoRA training, which it supports as an API and ComfyUI does not expose at all.
+4. **Decision driver 3 misquotes `requirements.txt`.** Its stated purpose is
+   protecting *the renderer*; Option A puts three community node packs plus a
+   numerics patch inside the renderer's own venv. That is a real cost of A and
+   the document currently cites the principle as support *for* A.
+5. **Two guards the plan relies on do not guard**: `/object_info` cannot see a
+   monkeypatch that stopped matching upstream, and `RENDERED_ROLES` does not
+   force `build_track.py` to exist (`renderable()` returns exactly the entries
+   that have a `cli`, so the assertion is circular).
+6. **`songs.key` and the proposed `keyscale` are two key columns in two
+   notations with nothing converting between them** — so the SETS amendment's
+   claim that key becomes "known, not detected" is false for key until ~5 lines
+   derive one from the other beside `analyse._CAMELOT`.
+7. **`audio_original` is recorded in the edit-submit route only**
+   (`app.py:2199` vs `:2208-2216`), so a generate → use-take flow would make
+   `revert_audio` raise. It needs extracting to a shared helper.
+
+The full ordered list of required changes is item 9 of `docs/reviews/critic.md`.
+**The one measurement everything else waits on:** download the ACE-Step 1.5
+weights (not on the box; only `ace_step_v1_3.5b.safetensors` is) and generate two
+tracks from one real deployed row — once with `songs.lyrics` as it sits, once
+with bracket tags stripped. That settles peak VRAM, wall-clock, and whether the
+202 arrangement directives in the lyrics column get sung.
 
 Songs arrive as mp3 uploads made in Suno. Whisper transcribes them, and
 everything downstream — storyboard, refs, clips, render, sets, publish — is

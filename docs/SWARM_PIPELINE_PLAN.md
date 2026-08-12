@@ -249,7 +249,24 @@ plan is self-contained.
    changes the nodes under a renderer without a ComfyUI restart being involved.
    Copies decouple them at the cost of manual sync.
 
-2. **Register it**, two API calls against `:7801` (`session_id` from
+2. **Unlock settings first, or the next step answers `{"error":"Settings are
+   locked."}`.** The unit runs SwarmUI with `--lock_settings`, because the
+   instance has no authentication and every visitor on the tailnet is therefore
+   the `local` admin — without it, anyone opening the page can add backends and
+   start model downloads onto the box, which is exactly what the first-run
+   wizard did once already. So adding a backend is a deliberate three-step dance:
+
+       # 1. drop --lock_settings from ExecStart
+       ssh cerberus-ai 'systemctl --user edit --full swarmui.service'   # or sed it
+       ssh cerberus-ai 'systemctl --user daemon-reload && systemctl --user restart swarmui'
+       # 2. register the backend (below)
+       # 3. put the flag back, daemon-reload, restart
+
+   Note that while locked SwarmUI does **not persist settings changes at all**
+   (`Program.cs:694` returns early from `SaveSettingsFile`), so a backend added
+   without unlocking would also not survive a restart even if it were accepted.
+
+3. **Register it**, two API calls against `:7801` (`session_id` from
    `POST /API/GetNewSession`):
 
        POST /API/AddNewBackend  {"type_id": "comfyui_api"}          -> returns id
@@ -260,7 +277,7 @@ plan is self-contained.
    `EditBackend` reads its values from a nested `settings` object; a flat body
    answers `{"error":"Missing settings."}`.
 
-3. **`AllowIdle` must be true.** It is not cosmetic — `ComfyUIAPIBackend.cs:32`
+4. **`AllowIdle` must be true.** It is not cosmetic — `ComfyUIAPIBackend.cs:32`
    is `CanIdle => Settings.AllowIdle`, and phase 3 explains that this is the flag
    deciding whether a connect failure requeues onto another backend or hard-fails.
    It defaults to false.
