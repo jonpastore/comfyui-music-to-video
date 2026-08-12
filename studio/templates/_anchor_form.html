@@ -1,3 +1,4 @@
+{% from "_macros.html" import help, help_dialogs with context %}
 {# Generate anchor candidates.
 
    Its own partial because the ticked TIERS decide what is shown below them:
@@ -41,7 +42,8 @@
         {% endfor %}
       </select>
     </label>
-    <label>Candidates per sheet
+    <label>
+      <span class="label-text">Candidates per sheet{{ help("n") }}</span>
       <input type="number" name="n" value="{{ last_n }}" min="1" max="8">
     </label>
   </div>
@@ -97,12 +99,8 @@
   {# ---- base images: kept, not re-uploaded every time ---- #}
   {% if saved_refs %}
   <fieldset>
-    <legend>Base images &mdash; tick the ones to build from</legend>
-    <p class="hint">The model conditions on {{ max_refs }}, so at most {{ max_refs }} may be
-      ticked &mdash; more is refused rather than silently narrowed to whichever three came
-      first. They are an unordered SET, not face-then-outfit: one photograph carrying both is
-      fine, and with several the prompt tells the model they are the same character rather
-      than several to line up side by side.</p>
+    <legend>Base images{{ help("refs") }}</legend>
+    <p class="hint">Tick up to {{ max_refs }}.</p>
     <div class="ref-gallery">
       {% for r in saved_refs %}
       {# data-ref, plus the img carrying .thumb/data-full/tabindex, are the same
@@ -143,10 +141,7 @@
            accept="image/*" multiple>
   </label>
   <div class="form-actions">
-    <p class="hint">Up to {{ max_uploads }} at a time. Anything added here is KEPT for this
-      album and character, so the next sheet can be built from it without finding the
-      photographs again.{% if not saved_refs %} They are an unordered SET, not
-      face-then-outfit &mdash; one photograph carrying both is fine.{% endif %}</p>
+    <p class="hint">Up to {{ max_uploads }} at a time, and kept for next time.</p>
     {# Save keeps the images without generating anything, so a set of references
        can be built up and come back to. Same form, different action. #}
     <button type="submit" formnovalidate formaction="/anchors/refs"
@@ -174,7 +169,8 @@
       <span class="run-load-note muted row-note"></span>
     </div>
     <div class="field-row">
-      <label>Mode
+      <label>
+        <span class="label-text">Mode{{ help("mode") }}</span>
         {# quality is the default, not fast. Every cfg above 1.0 -- with the
            Lightning LoRA off and the negative live -- fixed the human-skin
            drift in the 2026-08-12 sweep, and quality mode is what pulls that
@@ -184,7 +180,8 @@
           <option value="fast" {% if last.get("mode") == "fast" %}selected{% endif %}>fast &mdash; 4 steps, ~15s a sheet</option>
         </select>
       </label>
-      <label>Guidance (CFG)
+      <label>
+        <span class="label-text">Guidance (CFG){{ help("cfg") }}</span>
         <select name="cfg" id="anchor-cfg">
           <option value="">follow the mode (quality = 4.5)</option>
           {% for value, label in cfg_choices %}
@@ -192,22 +189,19 @@
           {% endfor %}
         </select>
       </label>
-      <label>Reference method
+      <label>
+        <span class="label-text">Reference method{{ help("ref_method") }}</span>
         <select name="ref_method">
           <option value="">default (index_timestep_zero)</option>
           {% for m in ref_methods %}<option value="{{ m }}" {% if last.get("ref_method") == m %}selected{% endif %}>{{ m }}{% if m == "uxo/uno" %} — same as offset on this model{% endif %}</option>{% endfor %}
         </select>
       </label>
     </div>
-    <p class="hint">This model conditions on the ticked base images <strong>natively</strong>
-      &mdash; there is no IP-Adapter to weight and no ControlNet installed, so the reference
-      method above and the prompt below are the levers. <strong>Reference method</strong>
-      changes how the references are folded into the latent; try another if colour or
-      markings drift.</p>
 
     {# ---- CFG sweep: the same sheet at every guidance value ---- #}
     <div class="field-row">
-      <label>CFG sweep
+      <label>
+        <span class="label-text">CFG sweep{{ help("cfg_sweep") }}</span>
         <select name="cfg_sweep" id="anchor-cfg-sweep">
           <option value="0">off &mdash; render once, at the CFG above</option>
           {% for n, sheets in sweep_choices %}
@@ -217,23 +211,32 @@
         </select>
       </label>
     </div>
-    <p class="hint">Renders one tier and one view at
-      <strong>{{ sweep_values | join(', ') }}</strong>, holding the references, the prompt and
-      the <strong>base seed</strong> fixed so the only thing that changes between the images is
-      the guidance. That is the whole point: the sweep these values came from was
-      <strong>one sample per point</strong>, which is why 3.5 landing between two good
-      neighbours settles nothing. One queued job per value, each separately cancellable,
-      so this is far more than the eight candidates a single sheet allows &mdash;
-      {{ sweep_choices[0][1] }} sheets at the smallest setting, about a minute each.
-      Needs <strong>quality mode</strong> (above CFG 1.0 the Lightning LoRA is dropped, and
-      fast mode's four steps without it are mush), a <strong>single tier and view</strong>,
-      and Guidance left on &ldquo;follow the mode&rdquo;. Anything else is refused rather
-      than quietly adjusted.</p>
+
+    {# Denoise sits OUT here, not inside the collapsed Sampler section, and its
+       warning sits with it. A closed <details> is worse than a modal for a
+       silent-failure warning: a modal takes a deliberate click to open, while a
+       collapsed section tells you that reading the visible page was enough. #}
+    <div class="field-row">
+      <label>
+        <span class="label-text">Denoise{{ help("denoise") }}</span>
+        <select name="denoise">
+          <option value="">mode default (1.0)</option>
+          {% for value, label in denoise_choices %}
+          <option value="{{ value }}" {% if last.get("denoise") is not none and value | float == last.get("denoise") | float %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <p class="hint"><span class="tag warn-tag">returns noise below 1.0</span>
+      An anchor renders from an EMPTY latent (<code>EmptySD3LatentImage</code>), so there is no
+      base image to preserve and anything under 1.0 leaves it partly un-denoised. The lower
+      values are offered because a refine-from-image pass wants them; this is not one.</p>
 
     <details>
       <summary>Sampler &mdash; only if you know why</summary>
       <div class="field-row">
-        <label>Steps
+        <label>
+          <span class="label-text">Steps{{ help("steps") }}</span>
           <select name="steps">
             <option value="">mode default (quality = 28)</option>
             {% for value, label in steps_choices %}
@@ -241,23 +244,18 @@
             {% endfor %}
           </select>
         </label>
-        <label>Denoise
-          <select name="denoise">
-            <option value="">mode default (1.0)</option>
-            {% for value, label in denoise_choices %}
-            <option value="{{ value }}" {% if last.get("denoise") is not none and value | float == last.get("denoise") | float %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>Sampler
+        <label>
+          <span class="label-text">Sampler{{ help("sampler_name") }}</span>
           <select name="sampler_name"><option value="">mode default (quality = dpmpp_2m)</option>
             {% for x in samplers %}<option value="{{ x }}" {% if last.get("sampler_name") == x %}selected{% endif %}>{{ x }}</option>{% endfor %}</select>
         </label>
-        <label>Seed
+        <label>
+          <span class="label-text">Seed{{ help("seed") }}</span>
           <input type="number" name="seed" min="1" step="1" placeholder="random each time"
                  value="{{ last.get('seed') or '' }}">
         </label>
-        <label>Scheduler
+        <label>
+          <span class="label-text">Scheduler{{ help("scheduler") }}</span>
           <select name="scheduler"><option value="">mode default (quality = karras)</option>
             {% for x in schedulers %}<option value="{{ x }}" {% if last.get("scheduler") == x %}selected{% endif %}>{{ x }}</option>{% endfor %}</select>
         </label>
@@ -271,15 +269,11 @@
         &mdash; composition here is seed-dominated, and comparing two random seeds tells you
         nothing about what you changed. The candidates within one sheet are spaced off it
         (seed, +137, +274&hellip;), and a CFG sweep reuses it at every guidance value.</p>
-      <p class="hint"><strong>Denoise below 1.0 will return noise here.</strong> An anchor
-        renders from an EMPTY latent (<code>EmptySD3LatentImage</code>) &mdash; there is no
-        base image to preserve, so anything under 1.0 leaves it partly un-denoised. The lower
-        values are offered because a refine-from-image pass wants them; this is not one.</p>
     </details>
   </fieldset>
 
   <fieldset>
-    <legend>Negative prompt</legend>
+    <legend>Negative prompt{{ help("negative") }}</legend>
     {# The one control on this page that can silently do nothing, so it says so.
        At cfg 1.0 ComfyUI skips the negative pass entirely; build_refs drops the
        text rather than sending something that has no effect. #}
@@ -293,7 +287,8 @@
        where fur belongs -- and other music with other artwork wants a different
        list, so one global constant could only ever be a starting point. #}
     <div class="field-row prompt-versions" data-negative>
-      <label>Saved negatives
+      <label>
+        <span class="label-text">Saved negatives{{ help("prompt_versions") }}</span>
         <select class="negative-version-pick">
           <option value="">{% if negative_versions %}the album's latest saved negative{% else %}the generic starting point{% endif %}</option>
           {% for v in negative_versions %}
@@ -318,14 +313,6 @@
     <textarea name="negative" rows="3" class="counted" data-max="{{ max_negative }}"
               maxlength="{{ max_negative }}"
               placeholder="white fur, cream fur, lighter patches, white tail, human skin, extra limbs, deformed tail, text, watermark, blurry">{{ negative or "" }}</textarea>
-    <p class="hint">Fights what the positive cannot: colour drift, wrong markings, stray
-      clothing on a nude sheet. Screened like every other free-text field here.
-      <strong>Saved per album</strong>{% if negative_versions %} &mdash; this box is
-      {{ form_album }}'s latest saved version{% else %}, and this album has saved none yet, so
-      the box holds the generic starting point: every term in it is a failure MODE rather than
-      a trait of any one character, which is what makes it a sane opening list for a different
-      species or palette{% endif %}. Edit and press <strong>Save negative</strong> to keep it;
-      clear the box and generate to send none.</p>
   </fieldset>
 
   {# ---- exactly what gets sent ---- #}
@@ -369,8 +356,9 @@
        compose_guardrail() then hands the renderer -- the two cannot disagree.
        The pinned adult-safety clause above is welded on regardless and is not
        reachable from here. #}
-    <label class="rule"><strong>The <code>{{ p.name | tiername }}</code> wording used for
-      {{ form_album or "this album" }}</strong>, attached on top of the pinned text:
+    <label class="rule"><span class="label-text"><strong>The
+      <code>{{ p.name | tiername }}</code> wording used for
+      {{ form_album or "this album" }}</strong>{{ help("tone") }}</span>
       <textarea name="tone_{{ p.name }}" rows="4" class="counted"
                 data-max="{{ max_tier_guardrail }}" maxlength="{{ max_tier_guardrail }}"
                 >{{ p.text }}</textarea>
@@ -391,12 +379,6 @@
       <strong>Save wording</strong> keeps an edit without spending a render; pressing Generate
       saves it too, so what the box shows is always what the sheet is built from. Clear the box
       to go back to the tier's own wording.
-      Editing here and generating stores it <strong>for {{ form_album or "this album" }}
-      only</strong> &mdash; it does not touch the tier under
-      <a href="/tiers">Tiers</a>, so no other release's sheets change wording.
-      Put the tier's own text back to go back to it.
-      One line, up to {{ max_tier_guardrail }} characters; it describes tone and wardrobe, not
-      a script, and text that argues with the pinned clause is refused.
       {% if p.overridden %}<br><span class="muted">The tier's own wording:
         {{ p.tier_default or "(none)" }}</span>{% endif %}</p>
     {# Saved versions. The prompt used to live nowhere: it was recomposed from the
@@ -405,7 +387,8 @@
        tuned by comparing renders and the one you want back is usually the last
        but one. #}
     <div class="field-row prompt-versions" data-tier="{{ p.name }}">
-      <label>Saved prompts
+      <label>
+        <span class="label-text">Saved prompts{{ help("prompt_versions") }}</span>
         <select class="prompt-version-pick" data-tier="{{ p.name }}">
           <option value="">composed from the album profile (the default)</option>
           {% for v in p.versions %}
@@ -463,4 +446,8 @@
      functions the submit runs, so the two cannot disagree. #}
   <div id="anchor-plan" class="plan-panel" aria-live="polite"></div>
   <button type="submit" id="anchor-generate">Generate anchors</button>
+
+  {# Every help panel, once. A trigger may repeat -- the per-tier panels are a
+     loop -- but an id may not. #}
+  {{ help_dialogs() }}
 </form>

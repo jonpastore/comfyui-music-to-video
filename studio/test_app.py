@@ -5293,3 +5293,52 @@ def test_the_form_says_what_it_will_do_before_you_press_it(patch_stub):
         r = client.post("/anchors", data=bad,
                         files=[("images", ("p.png", _png_bytes(), "image/png"))])
         assert r.status_code == 400, "the preflight refused what the route accepted"
+
+
+def test_help_lives_behind_an_icon_but_the_footguns_stay_on_the_page(patch_stub):
+    """The forms carried so much explanatory prose that the controls were hard to
+    find. It moves behind a "?" per control -- except the warnings whose absence
+    produces silently wrong or wasted output, which stay pinned beside the thing
+    they are about, because a modal takes a deliberate click.
+
+    The split is the whole point of this test. Anything that can be moved and
+    anything that must not be are both asserted, so a later tidy-up cannot
+    quietly demote a warning into a modal.
+    """
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Help Split Album"})
+        page = client.get("/anchors/form",
+                          params={"album": "Help Split Album", "tier": ["r", "xxx"]}).text
+
+        # every control the owner called technical has a help trigger, and every
+        # panel is emitted exactly ONCE even though the per-tier panels loop
+        ids = re.findall(r'class="help-modal" id="help-([a-z_]+)"', page)
+        assert set(ids) == set(appmod.ANCHOR_HELP), set(appmod.ANCHOR_HELP) ^ set(ids)
+        assert len(ids) == len(set(ids)), \
+            f"duplicate dialog ids: {sorted({i for i in ids if ids.count(i) > 1})}"
+        assert len(re.findall(r'class="help-btn"', page)) >= len(ids)
+        for key in ("cfg", "seed", "sampler_name", "scheduler", "denoise", "cfg_sweep"):
+            assert f"id=\"help-{key}\"" in page, f"no help panel for {key}"
+
+        # the owner asked what the sampler and the scheduler differ by; the
+        # answer has to actually be in the page
+        assert "second-order multistep" in page, "the sampler help does not explain the solver"
+        assert "bunches steps at the low-noise end" in page, \
+            "the scheduler help does not explain step spacing"
+
+        # THE THREE THAT STAY. Each is a silent failure: nothing else on screen
+        # would tell you, and the render completes and disappoints.
+        assert "returns noise below 1.0" in page, "the denoise warning left the page"
+        assert "dropped, not sent" in page or "not applied in fast mode" in page, \
+            "the inert-negative warning left the page"
+        assert "used verbatim for every view" in page, \
+            "the prompt-override warning left the page"
+
+        # ...and the denoise one is not merely on the page but OUTSIDE the
+        # collapsed sampler section. A closed <details> is worse than a modal:
+        # a modal takes a deliberate click, a collapsed section tells you that
+        # reading the visible page was enough.
+        first = page.index("<details>")
+        collapsed = page[first:page.index("</details>", first)]
+        assert "returns noise below 1.0" not in collapsed, \
+            "the denoise warning is buried in a collapsed section again"

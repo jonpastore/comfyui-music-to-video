@@ -1926,6 +1926,144 @@ CFG_SWEEP_CHOICES = (2, 3, 4)
 # rather than a policy.
 MAX_SWEEP_SHEETS = 44
 
+# What each technical control DOES, shown by the "?" beside it (templates/
+# _macros.html). One dict, not prose inline in the template: the wording is
+# needed by more than one template and duplicated prose drifts.
+#
+# What is deliberately NOT in here: any warning whose absence produces silently
+# wrong or wasted output. A modal takes a deliberate click, so the negative
+# prompt being dropped below cfg 1.0, denoise returning noise from an empty
+# latent, and an edited prompt overriding the per-view framing all stay pinned
+# beside their controls. So does anything computed from the current selections --
+# that is the form reporting your own choices back, not reference material.
+ANCHOR_HELP = {
+    "n": {"label": "Candidates per sheet", "body": [
+        "How many images one sheet renders. Each gets its own seed, spaced off the base "
+        "(seed, +137, +274&hellip;), so they are variations rather than repeats.",
+        "Composition here is <strong>seed-dominated</strong> &mdash; the pose and framing vary "
+        "far more between seeds than between small prompt changes. That is why more than one "
+        "is worth rendering: you pick the composition you want and discard the rest.",
+        "Eight is the ceiling for one sheet. A CFG sweep goes far past it by queueing one job "
+        "per guidance value instead of one big job."]},
+    "mode": {"label": "Generation mode", "body": [
+        "<strong>quality</strong> is 28 steps with the Lightning LoRA switched off, about a "
+        "minute a sheet. <strong>fast</strong> is the LoRA's own 4 steps at CFG 1.0, about "
+        "fifteen seconds.",
+        "The difference is not only speed. At CFG 1.0 ComfyUI skips the negative pass "
+        "entirely, so a negative prompt in fast mode is <strong>dropped, not weakened</strong>. "
+        "Quality mode is the only one where it does anything.",
+        "The two knobs move together and cannot be separated: raising CFG above 1.0 forces the "
+        "LoRA to zero, because a 4-step distillation driven at CFG 4.5 produces mush."]},
+    "cfg": {"label": "Guidance (CFG)", "body": [
+        "How hard the model is pushed to follow the prompt rather than its own instincts. "
+        "1.0 means no classifier-free guidance at all; higher values follow the words more "
+        "literally and start to oversaturate and stiffen poses.",
+        "A fixed-seed sweep on this model, three seeds at each of eleven values, measured "
+        "something worth knowing: on a <strong>nude</strong> sheet, higher guidance made the "
+        "model follow the nude wording more literally and progressively replaced fur with "
+        "human skin. Two of three seeds were a human body with a cat's head by 7.0. The "
+        "contradiction causing that has since been fixed in the nude wording, but the lesson "
+        "stands &mdash; higher is not better here.",
+        "The values above 6.0 are offered because the written spec asked for them, not because "
+        "they measured well."]},
+    "ref_method": {"label": "Reference method", "body": [
+        "How the ticked base images are folded into the latent this model conditions on. "
+        "There is no IP-Adapter to weight and no ControlNet installed, so this and the prompt "
+        "are the only levers on reference adherence.",
+        "Try another if fur colour, markings or overall identity drift between sheets.",
+        "<code>uxo/uno</code> is the same as <code>offset</code> on this model &mdash; read "
+        "from ComfyUI's source, where the Qwen path only branches on <code>index</code>, "
+        "<code>index_timestep_zero</code> and <code>negative_index</code>, so uxo falls "
+        "through to offset's branch."]},
+    "cfg_sweep": {"label": "CFG sweep", "body": [
+        "Renders the same sheet at every guidance value in the dropdown, holding the "
+        "references, the prompt and the <strong>base seed</strong> fixed so the only thing "
+        "changing between the images is the guidance.",
+        "That is the whole method. Without a pinned seed the images would differ by seed and "
+        "by guidance at once, and nothing in the result would be attributable to the knob "
+        "being swept &mdash; which is why the earlier one-sample-per-value sweep settled "
+        "nothing.",
+        "One queued job per value, each separately cancellable, so this goes far past the "
+        "eight candidates a single sheet allows. It needs quality mode, a single tier and a "
+        "single view, and Guidance left on &ldquo;follow the mode&rdquo;; anything else is "
+        "refused rather than quietly adjusted, and the panel above Generate says so before "
+        "you press it."]},
+    "steps": {"label": "Steps", "body": [
+        "How many denoising steps the sampler takes. More steps means more compute and, up to "
+        "a point, more detail; past roughly 30 on this model the returns are hard to see.",
+        "4 is the Lightning LoRA's own count and is only meaningful at CFG 1.0 with the LoRA "
+        "on. Four steps <em>without</em> the LoRA is an undercooked image, not a fast one."]},
+    "denoise": {"label": "Denoise", "body": [
+        "How much of the starting latent is replaced. 1.0 denoises it completely; lower values "
+        "preserve some of what was already there.",
+        "That only makes sense when something WAS already there. An anchor renders from "
+        "<code>EmptySD3LatentImage</code> &mdash; pure noise &mdash; so there is nothing to "
+        "preserve and anything below 1.0 leaves part of the noise in the output.",
+        "The lower values exist because a refine-from-an-image pass genuinely wants them. "
+        "This is not one of those."]},
+    "sampler_name": {"label": "Sampler", "body": [
+        "The <strong>algorithm</strong> that removes noise at each step &mdash; the solver.",
+        "<code>euler</code> takes one naive step at a time. <code>dpmpp_2m</code> is a "
+        "second-order multistep method: it uses the previous step to correct the current one, "
+        "so it converges in fewer steps, which is why quality mode uses it.",
+        "Pairs with the scheduler: the sampler decides HOW to step, the scheduler decides "
+        "WHERE the steps land. &ldquo;DPM++ 2M Karras&rdquo; is just that pair, and quality "
+        "mode already is it."]},
+    "scheduler": {"label": "Scheduler", "body": [
+        "The <strong>spacing</strong> of the steps &mdash; how much noise comes out at each "
+        "one. Same step count, different distribution of the work.",
+        "<code>karras</code> bunches steps at the low-noise end, where fine detail is decided, "
+        "and takes bigger strides early where only the composition is at stake. "
+        "<code>simple</code> spaces them evenly.",
+        "See the Sampler help for how the two fit together."]},
+    "seed": {"label": "Seed", "body": [
+        "The number the noise is generated from. The same seed with the same prompt and "
+        "settings gives the same image.",
+        "Blank draws a new one every time, which is what makes a second Generate produce "
+        "different sheets. <strong>Set it</strong> and the same composition comes back, so a "
+        "prompt or sampler change can be judged on its own &mdash; composition here is "
+        "seed-dominated, and comparing two random seeds tells you nothing about what you "
+        "changed.",
+        "The candidates within one sheet are spaced off it (seed, +137, +274&hellip;), and a "
+        "CFG sweep reuses it at every guidance value."]},
+    "refs": {"label": "Base images", "body": [
+        "The photographs this model conditions on natively. They are an unordered "
+        "<strong>set</strong>, not face-then-outfit: one image carrying both is fine, and with "
+        "several the prompt tells the model they are the same character rather than several to "
+        "line up side by side.",
+        "The model conditions on three. A fourth is refused rather than silently narrowed to "
+        "whichever three came first by row id.",
+        "Anything uploaded here is KEPT for this album and character, so the next sheet can be "
+        "built from it without finding the photographs again."]},
+    "negative": {"label": "Negative prompt", "body": [
+        "What the render should avoid. It fights what the positive cannot: colour drift, wrong "
+        "markings, stray clothing on a nude sheet.",
+        "Saved <strong>per album</strong> and versioned. Its terms are this release's failure "
+        "modes &mdash; the fur colours that drift, the skin that appears where fur belongs "
+        "&mdash; and other music with other artwork wants a different list, so the generic "
+        "starting point is only where an album that has saved none begins.",
+        "Naming a version is required: the picker lists them by name, and an unnamed one "
+        "cannot be told from the rest. What is in the box is exactly what is sent."]},
+    "tone": {"label": "Tier wording", "body": [
+        "The tone-and-wardrobe wording attached on top of the pinned safety clause for this "
+        "tier's sheets.",
+        "Editing it here stores it <strong>for this album only</strong>. It does not touch the "
+        "tier itself, so no other release's sheets change wording &mdash; the badge beside the "
+        "box says which of the two is currently in force.",
+        "One line, and text that argues with the pinned clause is refused. Clear the box to go "
+        "back to the tier's own wording; <strong>Save wording</strong> keeps an edit without "
+        "spending a render on it."]},
+    "prompt_versions": {"label": "Saved versions", "body": [
+        "Every save is a new numbered version, never an overwrite: prompts are tuned by "
+        "comparing renders, and the one worth going back to is usually the one before last.",
+        "The count beside each version is how many <strong>renders</strong> it produced, not "
+        "how many times it was loaded &mdash; a wording you looked at and rejected is not one "
+        "you used.",
+        "Version numbers are not reused after a delete. The number is how a render gets "
+        "referred to afterwards, so closing the gap would quietly repoint an old note at "
+        "different text."]},
+}
+
 
 def anchor_render_settings(form):
     """The render knobs off the form, clamped, in the shape pipeline.gen_anchor
@@ -2950,6 +3088,8 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
         "sweep_choices": [(c, c * len(CFG_CHOICES)) for c in CFG_SWEEP_CHOICES],
         "sweep_values": [v for v, _ in CFG_CHOICES],
         "max_tier_guardrail": tiers.MAX_TIER_GUARDRAIL,
+        # what the "?" beside each technical control says
+        "help_text": ANCHOR_HELP,
         # the last generation's chosen settings, and the history to load any
         # earlier one back out of
         "last": last,

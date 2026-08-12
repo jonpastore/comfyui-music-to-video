@@ -1,0 +1,43 @@
+{# Shared Jinja macros. Import what you need:
+   {% from "_macros.html" import help, help_dialogs with context %}
+
+   help(key) puts a small "?" beside a control; help_dialogs() emits the panels
+   ONCE, at the end of the form. The two are separate on purpose: the per-tier
+   panels are a loop, so a macro that emitted the dialog beside every trigger
+   produced one duplicate id per ticked tier. A trigger may repeat; an id may
+   not.
+
+   The pattern is not new -- _album_field.html and config.html already have
+   .help-btn opening a .help-modal -- this generalises those two call sites so a
+   third does not become a third pattern.
+
+   The TEXT lives in app.ANCHOR_HELP, one Python dict, not inline in the
+   template: the same wording is needed by more than one template, and prose
+   duplicated into markup is prose that drifts.
+
+   What does NOT belong behind this button: a warning whose absence produces
+   silently wrong or wasted output that nothing else on screen would reveal. A
+   modal takes a deliberate click, so anything pinned to correctness -- the
+   negative being dropped below cfg 1.0, denoise returning noise from an empty
+   latent, an edited prompt overriding the per-view framing -- stays inline
+   beside its control. So does anything COMPUTED from the current selections:
+   that is the form reporting your own choices back, not reference material. #}
+
+{% macro help(key) %}
+{%- if help_text.get(key) -%}
+<button type="button" class="help-btn" aria-label="What does {{ help_text[key].label }} do?"
+        onclick="document.getElementById('help-{{ key }}').showModal()">?</button>
+{%- endif -%}
+{% endmacro %}
+
+{% macro help_dialogs() %}
+{% for key, h in (help_text or {}).items() %}
+<dialog class="help-modal" id="help-{{ key }}" aria-labelledby="help-{{ key }}-title">
+  <div class="modal-bar">
+    <strong id="help-{{ key }}-title">{{ h.label }}</strong>
+    <button type="button" class="secondary" onclick="this.closest('dialog').close()">Close</button>
+  </div>
+  {% for p in h.body %}<p>{{ p | safe }}</p>{% endfor %}
+</dialog>
+{% endfor %}
+{% endmacro %}

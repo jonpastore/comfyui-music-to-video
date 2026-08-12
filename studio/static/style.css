@@ -18,6 +18,19 @@
   --accent: #7aa2f7;
   --accent-fg: #0d1117;
   --danger: #f7768e;
+
+  /* The three Material Design 3 ideas worth taking, and only those. Its type
+     scale (15 levels), ripple and state-layer overlays solve problems a dense
+     internal tool does not have -- the button system already signals stakes
+     through colour, so an overlay would be a second signal for the same thing.
+     What was genuinely missing is DEPTH: every dialog floated over the page on
+     the same flat --panel as the page itself, with no cue that it was above it,
+     and appeared by instant pop. */
+  --elevation-1: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.15);
+  --elevation-2: 0 2px 6px rgba(0,0,0,.35), 0 4px 12px 2px rgba(0,0,0,.2);
+  --panel-raised: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%);
+  --motion-standard: 200ms;
+  --motion-easing: cubic-bezier(0.2, 0, 0, 1);   /* M3's "standard" curve */
 }
 
 * { box-sizing: border-box; }
@@ -715,6 +728,9 @@ button.toggle.off { color: var(--muted); }
 
 /* ---- modals ---- */
 .help-modal, .confirm-modal, .lightbox, .fix-modal {
+  /* max-height without overflow-y meant a long help body bled past the panel
+     instead of scrolling. */
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
@@ -1106,7 +1122,11 @@ textarea.inert { opacity: 0.55; }
    and had NO rule of any kind behind it -- queued, running, failed and done
    all rendered as identical plain text, on the page whose entire job is to
    tell you which is which. */
-.status-queued, .status-done { color: var(--muted); }
+.status-queued { color: var(--muted); }
+/* done and queued are opposite outcomes and rendered in the same colour, so a
+   job list could only be read word by word. --accent for done matches the
+   .tag.done convention already used elsewhere. */
+.status-done { color: var(--accent); }
 .status-running { color: var(--text); }
 .status-running::before {
   content: "";
@@ -1196,3 +1216,32 @@ button.linkish.danger, .linkish.danger {
    still has to say why, and the reason is in the panel above it. */
 button.blocked { background: var(--panel); color: var(--danger); border-color: var(--danger); }
 button.blocked:hover:not(:disabled) { background: var(--danger); color: var(--bg); }
+
+/* ---- depth and motion (see the tokens in :root) -------------------------- */
+.card { box-shadow: var(--elevation-1); }
+
+/* Anything that floats ABOVE the page reads as above it. One rule for every
+   dialog in the app rather than a class per modal. */
+dialog {
+  box-shadow: var(--elevation-2);
+  background: var(--panel-raised);
+}
+
+/* Native showModal() everywhere already, so the entrance needs no JS and no
+   template change. */
+dialog[open] { animation: modal-in var(--motion-standard) var(--motion-easing); }
+dialog[open]::backdrop { animation: backdrop-in var(--motion-standard) var(--motion-easing); }
+@keyframes modal-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* A help trigger is a button that opens something, not a hover tooltip. */
+.help-btn { cursor: pointer; }
+
+/* The icon belongs on the label's FIRST line, beside the caption -- these
+   labels are flex columns, so without this it would land between the caption
+   and the input. */
+label .label-text { display: flex; align-items: center; gap: 0.35rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  dialog[open], dialog[open]::backdrop { animation: none; }
+}
