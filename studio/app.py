@@ -446,13 +446,13 @@ def clamp_set_item_params(in_secs, out_secs, gain_db, transition, secs):
     return in_secs, out_secs, gain_db, transition, secs
 
 
-# "duck" (audio, needs a sidechain input) and "layer" (video, needs a second
-# labelled clip) are the two effects.py/video_fx.py fragments mixer.py does
-# not wire into a set's single-input per-item chain (see mixer._audio_chain
-# and mixer._video_fragment). Refusing them here rather than silently
-# accepting-and-ignoring matches the rest of this codebase's own rule: a
-# choice that looks available but does nothing is worse than one that
-# doesn't exist (see the anchor-view trap in CONTINUATION-*.md).
+# "duck" is the one effects.py fragment mixer.py still does not wire into a
+# set (see mixer._audio_chain: sidechaincompress needs a second input aligned
+# to the accumulated chain). "layer" was here too until mixer._layer_join
+# wired it into the join. Refusing rather than silently accepting-and-ignoring
+# matches the rest of this codebase's own rule: a choice that looks available
+# but does nothing is worse than one that doesn't exist (see the anchor-view
+# trap in CONTINUATION-*.md).
 _UNSUPPORTED_EFFECT_KEYS = effects.UNSUPPORTED_KEYS
 
 
@@ -3804,6 +3804,14 @@ def edit_set_item(id: int, item_id: int, in_secs: BlankFloat = Form(None),
     in_secs, out_secs, gain_db, transition, secs = clamp_set_item_params(
         in_secs, out_secs, gain_db, transition, secs)
     effects_json = clamp_set_item_effects(effects_json)
+    # layer is checked HERE, not inside clamp_set_item_effects, because it is
+    # the only effect whose validity depends on a field outside the JSON: it
+    # blends across the transition window, and this is the first place that
+    # knows what transition was submitted alongside it.
+    if video_fx.layer_without_overlap(effects_json, transition, secs):
+        raise HTTPException(400, "layer blends this clip and the next across the transition, "
+                                  "so it needs a transition with a duration -- a cut has no "
+                                  "overlap to blend. Pick fade, dissolve or wipe, or remove it.")
     # The mixing note is free text that will be handed to a model, so it is
     # screened exactly like the anchor prompt, the tier wording and the
     # storyboard direction. Kept beside the JSON it produced: the JSON stays

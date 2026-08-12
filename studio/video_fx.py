@@ -32,7 +32,11 @@ HUE_RANGE = (-180.0, 180.0)      # degrees, hue filter's h=
 # recognise; parse_effects_json REFUSES them, so a caller holding one blob for
 # both must hand this module only its own subset. Named here so the split is
 # defined once rather than retyped by every caller that does it.
-VIDEO_KEYS = ("grade", "glitch")
+# "layer" is here even though it is not a per-item fragment: it is a key this
+# module owns and validates, and callers use this tuple to decide what to hand
+# to parse_effects_json. mixer.py picks the per-item subset with its own
+# _VIDEO_EFFECT_KEYS, because layer is consumed at the JOIN, not on one clip.
+VIDEO_KEYS = ("grade", "glitch", "layer")
 
 GLITCH_KINDS = ("rgba", "chroma")
 GLITCH_AMOUNT_RANGE = (0, 40)    # pixel shift -- rgbashift/chromashift take ints
@@ -87,6 +91,29 @@ def layer(mode, opacity):
     return f"blend=all_mode={mode}:all_opacity={o:.3f}"
 
 
+def layer_without_overlap(effects, transition, secs):
+    """True when this item asks for `layer` but its transition gives it no
+    window to blend in.
+
+    layer replaces the crossfade across the transition overlap, so a cut -- or
+    any transition of zero length -- has nothing to blend. Defined once and
+    asked by all three callers (the set editor before it stores, mixadvice
+    before it suggests, mixer before it renders) because the alternative is the
+    defect this codebase keeps making: an editor that accepts a setting the
+    renderer then refuses, or worse, silently drops.
+    """
+    if not effects:
+        return False
+    raw = json.loads(effects) if isinstance(effects, str) else effects
+    if not isinstance(raw, dict) or "layer" not in raw:
+        return False
+    try:
+        secs = float(secs or 0)
+    except (TypeError, ValueError):
+        secs = 0.0
+    return (transition or "cut") == "cut" or secs <= 0
+
+
 def parse_effects_json(effects_json):
     """set_items.effects_json (JSON string, dict, or None/"") -> {"grade":
     fragment, "glitch": fragment, "layer": fragment}, one key per effect
@@ -102,7 +129,7 @@ def parse_effects_json(effects_json):
     raw = json.loads(effects_json) if isinstance(effects_json, str) else effects_json
     if not isinstance(raw, dict):
         raise ValueError(f"effects_json must be an object, got {type(raw).__name__}")
-    unknown = set(raw) - {"grade", "glitch", "layer"}
+    unknown = set(raw) - set(VIDEO_KEYS)
     if unknown:
         raise ValueError(f"effects_json has unknown keys: {sorted(unknown)}")
 

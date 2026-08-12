@@ -2676,13 +2676,32 @@ def test_set_item_effects_json_validated_screened_and_rendered():
                                      "effects_json": '{"note": "a 12 year old mix"}'})
         assert bad_text.status_code == 400, bad_text.text
 
-        # duck (needs a sidechain input) and layer (needs a second clip) are
-        # neither wired into set rendering -- refused outright, not silently
-        # accepted-and-ignored
-        for unsupported in ('{"duck": 0.5}', '{"layer": {"mode": "screen", "opacity": 0.5}}'):
-            r = client.post(f"/sets/{row['id']}/items/{item['id']}",
-                            data={"transition": "cut", "secs": "0", "effects_json": unsupported})
-            assert r.status_code == 400, r.text
+        # duck still needs a sidechain input mixer._audio_chain does not have,
+        # so it is refused outright rather than silently accepted-and-ignored
+        r = client.post(f"/sets/{row['id']}/items/{item['id']}",
+                        data={"transition": "cut", "secs": "0", "effects_json": '{"duck": 0.5}'})
+        assert r.status_code == 400, r.text
+
+        # layer IS wired now -- but it blends across the transition window, so
+        # a cut has nothing to blend. Refused HERE, at edit time, not left for
+        # render_set to refuse later: an editor that stores a setting the
+        # renderer rejects is the defect this codebase keeps making.
+        lay = '{"layer": {"mode": "screen", "opacity": 0.5}}'
+        r = client.post(f"/sets/{row['id']}/items/{item['id']}",
+                        data={"transition": "cut", "secs": "0", "effects_json": lay})
+        assert r.status_code == 400, r.text
+        assert "overlap" in r.text, r.text
+
+        # ...and accepted on a transition that HAS a window, which is the half
+        # that fails if the removal from UNSUPPORTED_KEYS was never done
+        r = client.post(f"/sets/{row['id']}/items/{item['id']}",
+                        data={"transition": "fade", "secs": "1.5", "effects_json": lay})
+        assert r.status_code in (200, 303), r.text
+        assert json.loads(db.one("SELECT effects_json FROM set_items WHERE id=?",
+                                  item["id"])["effects_json"]) == json.loads(lay)
+        # put the item back as the rest of this test expects to find it
+        client.post(f"/sets/{row['id']}/items/{item['id']}",
+                    data={"transition": "cut", "secs": "0", "effects_json": good})
 
         # every refusal above left the earlier valid save untouched
         assert json.loads(db.one("SELECT effects_json FROM set_items WHERE id=?",

@@ -255,10 +255,9 @@ _VIDEO_EFFECT_KEYS = ("grade", "glitch")
 
 def _video_fragment(effects_json):
     """grade/glitch chain for one item's video, or None if neither is set.
-    "layer" (two-input blend) is deliberately not read here -- it needs a
-    second labelled video stream from the transition window, a bigger change
-    to _build_render_set_filter's xfade-based join than this pass makes;
-    video_fx.layer() stays available and tested, just uncalled from here."""
+    "layer" is not read here because it is not a per-item fragment: it is a
+    two-input blend consumed at the JOIN, by _layer_join below, out of the
+    transition window where both clips exist."""
     if not effects_json:
         return None
     raw = json.loads(effects_json) if isinstance(effects_json, str) else effects_json
@@ -268,6 +267,57 @@ def _video_fragment(effects_json):
     parsed = video_fx.parse_effects_json(video_only)
     frags = [parsed[k] for k in _VIDEO_EFFECT_KEYS if k in parsed]
     return ",".join(frags) if frags else None
+
+
+def _layer_fragment(effects_json):
+    """The blend fragment for the transition OUT of this item, or None.
+
+    Read off the same item that carries `transition` and `secs`, because that
+    is the item the transition belongs to -- layer was filed as a per-ITEM
+    effect but it is a per-TRANSITION one, which is the whole reason it sat
+    unwired: on one clip it looks like a filter that merely "needs a second
+    input", and there is no second input until the join.
+    """
+    if not effects_json:
+        return None
+    raw = json.loads(effects_json) if isinstance(effects_json, str) else effects_json
+    if "layer" not in raw:
+        return None
+    return video_fx.parse_effects_json({"layer": raw["layer"]})["layer"]
+
+
+def _layer_join(running_v, nxt_v, out_v, offset, secs, blend, i):
+    """Blend the two clips across the transition window instead of xfading.
+
+    xfade has no blend modes, so the overlap is cut out of both streams,
+    blended, and spliced back:
+
+        [running_v] = head(0..offset) + overlap(offset..offset+secs)
+        [nxt_v]     = overlap(0..secs) + tail(secs..end)
+
+    `running_v` ends exactly at offset+secs -- it is the accumulated chain up
+    to this join -- so it splits in two, not three.
+
+    The result is the SAME LENGTH as the xfade it replaces (head + secs +
+    tail), which is why the caller's duration arithmetic is untouched. That
+    also means no duration measurement can tell layer from xfade: the
+    difference is in the pixels, and demo() checks it there.
+    """
+    h, oa, ob, t, ov = (f"lh{i}", f"loa{i}", f"lob{i}", f"lt{i}", f"lov{i}")
+    return [
+        f"[{running_v}]split=2[{h}s][{oa}s]",
+        f"[{h}s]trim=0:{offset:.3f},setpts=PTS-STARTPTS[{h}]",
+        f"[{oa}s]trim={offset:.3f}:{offset + secs:.3f},setpts=PTS-STARTPTS,format=gbrp[{oa}]",
+        f"[{nxt_v}]split=2[{ob}s][{t}s]",
+        f"[{ob}s]trim=0:{secs:.3f},setpts=PTS-STARTPTS,format=gbrp[{ob}]",
+        f"[{t}s]trim={secs:.3f},setpts=PTS-STARTPTS[{t}]",
+        # gbrp in, yuv420p back out. blend works PER PLANE on whatever it is
+        # given, so on yuv420p "screen" screens the chroma planes: red over
+        # green came out magenta instead of yellow, which no duration check
+        # could have seen and the frame comparison in demo() did.
+        f"[{oa}][{ob}]{blend},format=yuv420p[{ov}]",
+        f"[{h}][{ov}][{t}]concat=n=3:v=1:a=0[{out_v}]",
+    ]
 
 
 def _audio_chain(gain_db, effects_json):
@@ -445,15 +495,31 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
         secs = float(items[i].get("secs", 0.0))
         nxt_v, nxt_a = f"v{i + 1}n", f"a{i + 1}n"
         out_v, out_a = f"vj{i}", f"aj{i}"
+        blend = _layer_fragment(items[i].get("effects_json"))
         if transition == "cut" or secs <= 0:
+            # A blend needs an overlap and a cut has none. Refused, not dropped:
+            # a layer that silently did nothing on a cut is precisely the
+            # "control that looks available and does nothing" this codebase
+            # keeps producing.
+            if video_fx.layer_without_overlap(items[i].get("effects_json"), transition, secs):
+                raise ValueError(
+                    "this item asks for layer across a cut, which has no overlap to blend. "
+                    "Give it a fade, dissolve or wipe with a duration, or remove the layer.")
             lines.append(f"[{running_v}][{nxt_v}]concat=n=2:v=1:a=0[{out_v}]")
             lines.append(f"[{running_a}][{nxt_a}]concat=n=2:v=0:a=1[{out_a}]")
             running_dur += durations[i + 1]
         else:
             _check_transition_fits(secs, running_dur)
             offset = running_dur - secs
-            xf = _XFADE_NAMES.get(transition, "fade")
-            lines.append(f"[{running_v}][{nxt_v}]xfade=transition={xf}:duration={secs:.3f}:offset={offset:.3f}[{out_v}]")
+            if blend:
+                # layer REPLACES the xfade -- the two are alternative ways of
+                # crossing the same window, and running them both would fade
+                # the footage the blend is made of.
+                lines += _layer_join(running_v, nxt_v, out_v, offset, secs, blend, i)
+            else:
+                xf = _XFADE_NAMES.get(transition, "fade")
+                lines.append(f"[{running_v}][{nxt_v}]xfade=transition={xf}:duration={secs:.3f}:offset={offset:.3f}[{out_v}]")
+            # audio crosses the same window either way: layer is video-only
             lines.append(f"[{running_a}][{nxt_a}]acrossfade=d={secs:.3f}[{out_a}]")
             running_dur += durations[i + 1] - secs
         running_v, running_a = out_v, out_a
@@ -1123,6 +1189,82 @@ def demo():
         render_set(grade_items, out_grade)
         info_grade = probe(out_grade)
         assert info_grade["has_video"] and info_grade["duration"] > 0
+
+        # --- layer: a per-TRANSITION blend, wired into the join ---------------
+        # Two clips of DIFFERENT colours and a 1s transition, so the overlap can
+        # be looked at. Everything else in this demo renders red on red, where a
+        # blend and a crossfade are indistinguishable.
+        lay_a = os.path.join(tmpdir, "lay_red.mp4")
+        lay_b = os.path.join(tmpdir, "lay_green.mp4")
+        for path, colour in ((lay_a, "red"), (lay_b, "lime")):
+            r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+                                 "-i", f"color=c={colour}:s=320x240:d=2", "-r", "16",
+                                 "-c:v", "libx264", "-pix_fmt", "yuv420p", path],
+                                capture_output=True, text=True)
+            assert r.returncode == 0, r.stderr
+
+        def mean_rgb(path, at):
+            """Average colour of one frame, straight out of ffmpeg -- no image
+            library, and it is the only thing that can tell these two renders
+            apart."""
+            r = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{at:.3f}", "-i", path,
+                                 "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                                capture_output=True)
+            b = r.stdout
+            assert b, f"no frame at {at}s of {path}: {r.stderr[-300:]}"
+            px = len(b) // 3
+            return (sum(b[0::3]) // px, sum(b[1::3]) // px, sum(b[2::3]) // px)
+
+        lay_json = json.dumps({"layer": {"mode": "screen", "opacity": 1.0}})
+        layered = [{"video": lay_a, "transition": "fade", "secs": 1.0,
+                    "effects_json": lay_json},
+                   {"video": lay_b, "transition": "cut", "secs": 0.0}]
+        plain = [{"video": lay_a, "transition": "fade", "secs": 1.0},
+                 {"video": lay_b, "transition": "cut", "secs": 0.0}]
+
+        out_lay = os.path.join(tmpdir, "set_layer.mp4")
+        out_plain = os.path.join(tmpdir, "set_plain.mp4")
+        render_set(layered, out_lay)
+        render_set(plain, out_plain)
+
+        # Same length either way -- head + secs + tail is exactly what the xfade
+        # it replaces produces, which is WHY set_duration needs no special case.
+        # It is also why duration is not evidence here.
+        dur_lay, dur_plain = probe(out_lay)["duration"], probe(out_plain)["duration"]
+        assert abs(dur_lay - dur_plain) <= 0.2, (dur_lay, dur_plain)
+        assert abs(dur_lay - set_duration(layered)) <= 0.3, (dur_lay, set_duration(layered))
+
+        # THE DIFFERENTIAL: mid-overlap (2s + 2s with a 1s transition -> the
+        # window is 1.0-2.0s), same input, layer on vs off. A screen blend of
+        # red and lime is yellow; a crossfade halfway is dim olive. If layer
+        # were silently ignored these two frames would be identical.
+        lit = mean_rgb(out_lay, 1.5)
+        dim = mean_rgb(out_plain, 1.5)
+        assert lit[0] - dim[0] > 60 and lit[1] - dim[1] > 60, \
+            f"layer changed nothing in the overlap: layered={lit} plain={dim}"
+        assert lit[0] > 180 and lit[1] > 180, f"screen blend did not brighten both: {lit}"
+
+        # a blend has no window to work in on a cut, and is refused rather than
+        # rendered as a silent no-op
+        try:
+            render_set([{"video": lay_a, "transition": "cut", "secs": 0.0,
+                         "effects_json": lay_json},
+                        {"video": lay_b, "transition": "cut", "secs": 0.0}],
+                       os.path.join(tmpdir, "should_not_exist3.mp4"))
+            raise AssertionError("layer on a cut was accepted")
+        except ValueError as e:
+            assert "no overlap" in str(e), e
+
+        # and the graph itself: layer REPLACES the xfade, it does not run beside
+        # it -- both would fade the footage the blend is made from
+        lay_lines, _, _, _ = _build_render_set_filter(
+            [{"has_audio": False}, {"has_audio": False}], [2.0, 2.0],
+            [{"transition": "fade", "secs": 1.0, "effects_json": lay_json},
+             {"transition": "cut", "secs": 0.0}], 320, 240, 16)
+        joined = "\n".join(lay_lines)
+        assert "blend=all_mode=screen" in joined, joined
+        assert "xfade" not in joined, f"layer ran alongside the xfade it replaces:\n{joined}"
+        assert "acrossfade=d=1.000" in joined, f"layer swallowed the audio transition:\n{joined}"
 
         # --- beatmatch application: an item with beatmatch=1 gets out_secs/secs
         # recomputed from its OWN beat grid (video_fx.beat_cut_offsets). Both

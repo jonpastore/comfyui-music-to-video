@@ -155,7 +155,11 @@ def loudnorm_filter():
 # Validated by this module but NOT wired into render_set/mix_audio: both need a
 # second input stream (a sidechain, a second video). Refused at every entry
 # point rather than accepted and silently ignored.
-UNSUPPORTED_KEYS = ("duck", "layer")
+# "layer" came off this list when mixer._layer_join wired it into the set join.
+# "duck" is still here: sidechaincompress needs a second input time-aligned to
+# the running chain, and running_a is the ACCUMULATED mix, not the outgoing
+# item -- a naive sidechain ducks the whole set from its first second.
+UNSUPPORTED_KEYS = ("duck",)
 
 # The keys THIS module owns. parse_effects deliberately ignores anything it
 # does not recognise, so callers that want "unknown key is a mistake" -- the

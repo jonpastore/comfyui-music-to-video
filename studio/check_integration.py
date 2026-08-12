@@ -8,7 +8,7 @@ it is the only thing standing between a custom tier and unrestricted output.
 
 Run: python3 check_integration.py     (no GPU, no network, no ComfyUI)
 """
-import inspect, os, sys, tempfile
+import inspect, json, os, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -261,6 +261,35 @@ if video_fx:
     check("video_fx.parse_effects_json", lambda: sig(video_fx, "parse_effects_json", ["effects_json"]))
     check("video_fx.beat_cut_offsets", lambda: sig(
         video_fx, "beat_cut_offsets", ["beat_grid", "downbeat_offset", "want_secs"]))
+
+
+def _layer_is_wired_everywhere_or_nowhere():
+    """layer is refused in three places and rendered in a fourth. A half-removal
+    leaves a control that looks available and does nothing -- which is why this
+    asks the RENDER path for a filtergraph rather than grepping for a call.
+    """
+    import effects as fx
+    assert "layer" not in fx.UNSUPPORTED_KEYS, \
+        "layer is wired into the join but still on effects.UNSUPPORTED_KEYS, so the editor "\
+        "refuses what the renderer now supports"
+    assert "layer" in video_fx.VIDEO_KEYS, \
+        "layer is not a known key, so clamp_set_item_effects rejects it as a typo"
+    eff = json.dumps({"layer": {"mode": "screen", "opacity": 0.5}})
+    lines, _, _, _ = mixer._build_render_set_filter(
+        [{"has_audio": False}, {"has_audio": False}], [2.0, 2.0],
+        [{"transition": "fade", "secs": 1.0, "effects_json": eff},
+         {"transition": "cut", "secs": 0.0}], 320, 240, 16)
+    joined = "\n".join(lines)
+    assert "blend=all_mode=screen" in joined, f"layer never reached the filtergraph:\n{joined}"
+    assert "xfade" not in joined, "layer ran alongside the xfade it is supposed to replace"
+    # and the same question the editor and the suggester ask, answered the same
+    assert video_fx.layer_without_overlap(eff, "cut", 0), "a cut has no window to blend in"
+    assert not video_fx.layer_without_overlap(eff, "fade", 1.0)
+
+
+if video_fx and mixer:
+    check("layer is wired at the join, not just validated",
+          _layer_is_wired_everywhere_or_nowhere)
 
 # mixadvice reaches into grok's INTERNALS (_chat, _resolve_model) rather than a
 # public helper, so a rename there breaks suggestions at request time with a 502
