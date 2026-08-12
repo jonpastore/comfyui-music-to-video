@@ -116,11 +116,29 @@ DEFAULT_VIEWS = {
 #
 # So the default says UNCLOTHED, not "skin", and defers what the surface is to
 # the body clause -- and a profile can replace it outright.
+# It must ASSERT nudity, positively, and name no garment at all.
+#
+# The first attempt at fixing the bare-skin contradiction replaced it with a
+# list of negations -- "no garments, no underwear, no straps, no accessories" --
+# and measured worse: on a fixed seed at cfg 1.0 and 2.0 the sheet came back
+# WEARING a leather harness, trousers and boots, where the old wording had at
+# least produced a nude body. The reason is the rule this project already
+# states in its own wardrobe field: say what is WORN, never what is absent.
+# A diffusion model does not process negation in the positive prompt, so naming
+# garments there makes them MORE likely to appear, and "her fur is her only
+# covering" contributed a clothing word on top.
+#
+# So: every clause here is a positive statement about a bare body, the word for
+# the surface comes from the BODY clause rather than from here, and no garment
+# is mentioned even to forbid it. The negative prompt is where absent things
+# belong -- and it only applies above cfg 1.0, which is its own reason to keep
+# quality mode the default.
 NUDE_WARDROBE = (
-    "She is fully nude and wearing nothing at all: no garments, no underwear, no straps and "
-    "no accessories, with her natural body surface visible over her whole body exactly as the "
-    "body description states. Take her build and proportions from the reference images but "
-    "none of their clothing."
+    "She is completely nude, undressed and bare, her whole body uncovered and fully exposed "
+    "from shoulders to feet, with her natural body surface continuing unbroken over her "
+    "chest, stomach, hips, thighs and legs exactly as the body description states. Take her "
+    "build and proportions from the reference images, and her surface from the body "
+    "description."
 )
 
 # What a nude sheet is asked to DEPICT, as opposed to what it is asked to omit.

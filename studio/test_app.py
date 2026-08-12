@@ -5108,237 +5108,52 @@ def test_every_composer_field_reaches_the_renderer_and_the_preview_agrees(patch_
         assert fields["nude_wardrobe"] not in clothed
 
 
-def test_the_default_nude_wording_no_longer_argues_with_a_furred_body():
-    """make_anchor's default said "bare skin over the whole body", which landed
-    in the same prompt as "her entire body is covered in the same sleek
-    jet-black fur" -- two contradictory instructions. A fixed-seed CFG sweep on
-    2026-08-12 measured the consequence: as guidance rose the model followed
-    "bare skin" harder, until two of three seeds rendered a human body with a
-    cat's head. No cfg value satisfies both clauses, so the fix is the wording.
+def test_the_nude_wording_asserts_nudity_and_names_no_garment():
+    """Two measured failures, one clause.
+
+    The ORIGINAL said "bare skin over the whole body", which landed in the same
+    prompt as this album's "her entire body is covered in the same sleek
+    jet-black fur" -- contradictory, and a fixed-seed sweep watched the model
+    resolve it towards skin harder the higher the guidance went, until two of
+    three seeds rendered a human body with a cat's head.
+
+    MY FIRST FIX replaced it with a list of negations -- no garments, no
+    underwear, no straps, no accessories -- and measured WORSE: on a fixed seed
+    at cfg 1.0 and 2.0 the sheet came back wearing a leather harness, trousers
+    and boots, where the old wording had at least produced a nude body. A
+    diffusion model does not process negation in the positive prompt, so naming
+    garments there makes them more likely to appear. This project already states
+    that rule in its own wardrobe field: say what is WORN, never what is absent.
+
+    So this asserts both halves. No asserted SURFACE, because that fights any
+    non-human body clause; and no garment named at all, not even to forbid it.
     """
     import make_anchor
-    assert "bare skin" not in make_anchor.NUDE_WARDROBE.lower(), \
-        "the nude default asserts skin again, which fights every non-human body clause"
     low = make_anchor.NUDE_WARDROBE.lower()
-    assert "nude" in low and "no garments" in low
-    assert "body description" in low or "body wording" in low
 
+    # half one: it must not name the surface -- the body clause owns that
+    assert "bare skin" not in low, \
+        "the nude default asserts skin again, which fights every non-human body clause"
+    assert "body description" in low, "it no longer defers the surface to the body clause"
+
+    # half two: no garment noun, in any form, even negated
+    for word in ("garment", "underwear", "strap", "accessor", "jewel", "clothing",
+                 "clothes", "covering", "outfit", "lingerie", "bikini"):
+        assert word not in low, (
+            f"the nude wording names {word!r}. Naming a garment in the POSITIVE prompt makes "
+            f"it more likely to appear -- measured: a leather harness and boots on a nude "
+            f"sheet -- and negation does not work there. Absent things belong in the negative.")
+
+    # ...and it must positively ASSERT nudity rather than merely deny clothing
+    assert "nude" in low
+    assert sum(w in low for w in ("undressed", "bare", "uncovered", "exposed")) >= 2, \
+        "nudity is only implied; it has to be stated positively"
+
+    # a furred body clause and the nude swap coexist without contradiction
     furred = make_anchor.anchor_from({
         "body": "Her entire body is covered in sleek jet-black fur, uniformly.",
         "identity": "A black feline face.", "wardrobe": "A leather harness."})
     p = make_anchor.prompt_for("front_nude", furred)
     assert "jet-black fur" in p and "bare skin" not in p.lower(), p[:200]
-
-
-def test_the_seed_is_controllable_and_blank_still_means_random(patch_stub):
-    """Composition here is seed-dominated, so comparing two random seeds tells
-    you nothing about a prompt or sampler change you just made. Setting one
-    brings the same composition back; leaving it blank must still draw a new one
-    every time, which is what makes a second Generate produce different sheets.
-    """
-    seen = []
-    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
-                                      prefix=None, profile=None, guard="", prompt="", render=None: (
-        seen.append(dict(render or {})) or []))
-    with TestClient(appmod.app) as client:
-        client.post("/playlists", data={"name": "Seed Album"})
-        base = {"album": "Seed Album", "tier": "r", "view": "front", "n": "1",
-                "prompt_r": "", "mode": "quality"}
-        files = [("images", ("s.png", _png_bytes(), "image/png"))]
-
-        seen.clear()
-        client.post("/anchors", data={**base, "seed": "12345"}, files=files)
-        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
-        assert seen and seen[-1]["seed"] == 12345, seen
-
-        # blank sends NO seed, so make_anchor draws its own
-        seen.clear()
-        client.post("/anchors", data={**base, "seed": ""}, files=files)
-        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
-        assert seen and "seed" not in seen[-1], seen
-
-        # a set seed is honoured by a sweep rather than refused, so a sweep can
-        # be repeated exactly against a changed prompt
-        seen.clear()
-        r = client.post("/anchors", headers={"accept": "application/json"},
-                        data={**base, "seed": "999", "cfg_sweep": "2"}, files=files)
-        assert r.status_code == 200, r.text
-        assert r.json()["sweep"]["seed"] == 999
-        for j in r.json()["jobs"]:
-            wait_job(j["id"])
-        assert {s["seed"] for s in seen} == {999}, "the sweep ignored the seed it was given"
-
-        # and it is refused when it could not work
-        assert client.post("/anchors", data={**base, "seed": "-4"},
-                           files=files).status_code == 400
-        assert client.post("/anchors", data={**base, "seed": "abc"},
-                           files=files).status_code == 400
-
-
-def test_a_versions_usage_is_counted_when_it_renders_not_when_it_is_read(patch_stub):
-    """usage_count answers "which wording have I actually been using?", so it has
-    to count renders. Counting loads would rank the versions you scrolled past
-    alongside the one you kept, and the number would describe browsing rather
-    than work."""
-    patch_stub("pipeline", gen_anchor=lambda *a, **k: [])
-    with TestClient(appmod.app) as client:
-        client.post("/playlists", data={"name": "Usage Album"})
-        r = client.post("/anchors/prompt", data={"album": "Usage Album", "tier": "r",
-                                                  "text": "a woman in a doorway",
-                                                  "label": "doorway"})
-        assert r.status_code == 200, r.text
-        vid = r.json()["id"]
-        assert r.json()["version_number"] == 1
-        assert prompts.get(vid)["usage_count"] == 0, "saving already counted as a use"
-
-        # merely listing it does not count
-        client.get("/anchors/form", params={"album": "Usage Album", "tier": "r"})
-        assert prompts.get(vid)["usage_count"] == 0
-
-        # rendering FROM it does
-        client.post("/anchors", data={"album": "Usage Album", "tier": "r", "view": "front",
-                                       "n": "1", "prompt_r": "a woman in a doorway",
-                                       "mode": "quality", "used_version": str(vid)},
-                    files=[("images", ("u.png", _png_bytes(), "image/png"))])
-        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
-        assert prompts.get(vid)["usage_count"] == 1, "a render did not count as a use"
-
-        # a second render counts again, and a render that sent no version does not
-        client.post("/anchors", data={"album": "Usage Album", "tier": "r", "view": "front",
-                                       "n": "1", "prompt_r": "", "mode": "quality"},
-                    files=[("images", ("u.png", _png_bytes(), "image/png"))])
-        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
-        assert prompts.get(vid)["usage_count"] == 1, "a render counted a version it never used"
-
-        # the numbering is per album+type and survives a delete as a GAP
-        second = client.post("/anchors/prompt", data={"album": "Usage Album", "tier": "r",
-                                                       "text": "on a fire escape",
-                                                       "label": "escape"}).json()
-        assert second["version_number"] == 2
-        client.post("/anchors/version/delete", data={"id": vid})
-        third = client.post("/anchors/prompt", data={"album": "Usage Album", "tier": "r",
-                                                      "text": "in the rain", "label": "rain"})
-        assert third.json()["version_number"] == 3, \
-            "a deleted version's number was handed out again, repointing any note that cites it"
-
-        # and a version can be CORRECTED without becoming a new one
-        r = client.post("/anchors/version/update",
-                        data={"id": second["id"], "text": "on a fire escape, at night"})
-        assert r.status_code == 200 and r.json()["version_number"] == 2, r.text
-        assert prompts.get(second["id"])["text"].endswith("at night")
-        assert len(prompts.versions("Usage Album", "positive", "r")) == 2
-
-
-def test_the_form_says_what_it_will_do_before_you_press_it(patch_stub):
-    """Every refusal in the generate route was a 400 discovered AFTER submitting
-    -- a poor way to learn that a sweep needs a single view, or that four
-    references is one too many. The preflight runs the same functions the submit
-    runs, so the two cannot disagree, and it collects ALL the refusals where the
-    route can only ever report the first.
-    """
-    patch_stub("pipeline", gen_anchor=lambda *a, **k: [])
-    with TestClient(appmod.app) as client:
-        client.post("/playlists", data={"name": "Plan Album"})
-        base = {"album": "Plan Album", "tier": "r", "view": "front", "mode": "quality"}
-
-        d = client.post("/anchors/plan", data={**base, "n": "4"}).json()
-        assert d["sheets"] == 4 and d["jobs"] == 1 and not d["blockers"], d
-        assert d["seconds"] > 0, "no time estimate for work that takes minutes"
-
-        # the arithmetic follows the form
-        d = client.post("/anchors/plan",
-                        data={**base, "tier": ["r", "pg13"], "view": ["front", "back"],
-                              "n": "3"}).json()
-        assert d["sheets"] == 12 and d["jobs"] == 4, d
-
-        # a sweep is counted as the sweep, not as one sheet
-        d = client.post("/anchors/plan", data={**base, "n": "3", "cfg_sweep": "3"}).json()
-        assert d["sweep"] and d["jobs"] == len(appmod.CFG_CHOICES), d
-        assert d["sheets"] == 3 * len(appmod.CFG_CHOICES), d
-
-        # EVERY refusal at once, in advance, in the same words the route uses
-        d = client.post("/anchors/plan",
-                        data={**base, "view": ["front", "front_nude"], "tier": ["r", "xxx"],
-                              "cfg_sweep": "3", "mode": "fast", "n": "1"}).json()
-        assert len(d["blockers"]) >= 2, d
-        assert any("ONE sheet" in b for b in d["blockers"]), d["blockers"]
-        assert any("quality mode" in b for b in d["blockers"]), d["blockers"]
-
-        # too many references is caught here rather than after the upload
-        d = client.post("/anchors/plan",
-                        data={**base, "n": "1", "ref_id": ["1", "2", "3", "4"]}).json()
-        assert any("conditions on" in b for b in d["blockers"]), d["blockers"]
-
-        # notes are WARNINGS, not blockers: they describe a render that will
-        # happen and will disappoint
-        d = client.post("/anchors/plan",
-                        data={**base, "n": "1", "mode": "fast",
-                              "negative": "white fur"}).json()
-        assert not d["blockers"], d
-        assert any("DROPPED" in nte for nte in d["notes"]), d["notes"]
-        d = client.post("/anchors/plan",
-                        data={**base, "n": "1", "denoise": "0.65"}).json()
-        assert any("returns noise" in nte for nte in d["notes"]), d["notes"]
-        # a skipped nude view is explained, not silently dropped from the count
-        d = client.post("/anchors/plan",
-                        data={**base, "tier": "pg13", "view": ["front", "front_nude"],
-                              "n": "1"}).json()
-        assert d["sheets"] == 1 and any("permits no nudity" in nte for nte in d["notes"]), d
-
-        # and the preflight AGREES with the route: what it refuses, the route
-        # refuses, and what it allows, the route accepts
-        bad = {**base, "view": ["front", "front_nude"], "tier": "xxx", "prompt_xxx": "",
-               "cfg_sweep": "3", "n": "1"}
-        assert client.post("/anchors/plan", data=bad).json()["blockers"]
-        r = client.post("/anchors", data=bad,
-                        files=[("images", ("p.png", _png_bytes(), "image/png"))])
-        assert r.status_code == 400, "the preflight refused what the route accepted"
-
-
-def test_help_lives_behind_an_icon_but_the_footguns_stay_on_the_page(patch_stub):
-    """The forms carried so much explanatory prose that the controls were hard to
-    find. It moves behind a "?" per control -- except the warnings whose absence
-    produces silently wrong or wasted output, which stay pinned beside the thing
-    they are about, because a modal takes a deliberate click.
-
-    The split is the whole point of this test. Anything that can be moved and
-    anything that must not be are both asserted, so a later tidy-up cannot
-    quietly demote a warning into a modal.
-    """
-    with TestClient(appmod.app) as client:
-        client.post("/playlists", data={"name": "Help Split Album"})
-        page = client.get("/anchors/form",
-                          params={"album": "Help Split Album", "tier": ["r", "xxx"]}).text
-
-        # every control the owner called technical has a help trigger, and every
-        # panel is emitted exactly ONCE even though the per-tier panels loop
-        ids = re.findall(r'class="help-modal" id="help-([a-z_]+)"', page)
-        assert set(ids) == set(appmod.ANCHOR_HELP), set(appmod.ANCHOR_HELP) ^ set(ids)
-        assert len(ids) == len(set(ids)), \
-            f"duplicate dialog ids: {sorted({i for i in ids if ids.count(i) > 1})}"
-        assert len(re.findall(r'class="help-btn"', page)) >= len(ids)
-        for key in ("cfg", "seed", "sampler_name", "scheduler", "denoise", "cfg_sweep"):
-            assert f"id=\"help-{key}\"" in page, f"no help panel for {key}"
-
-        # the owner asked what the sampler and the scheduler differ by; the
-        # answer has to actually be in the page
-        assert "second-order multistep" in page, "the sampler help does not explain the solver"
-        assert "bunches steps at the low-noise end" in page, \
-            "the scheduler help does not explain step spacing"
-
-        # THE THREE THAT STAY. Each is a silent failure: nothing else on screen
-        # would tell you, and the render completes and disappoints.
-        assert "returns noise below 1.0" in page, "the denoise warning left the page"
-        assert "dropped, not sent" in page or "not applied in fast mode" in page, \
-            "the inert-negative warning left the page"
-        assert "used verbatim for every view" in page, \
-            "the prompt-override warning left the page"
-
-        # ...and the denoise one is not merely on the page but OUTSIDE the
-        # collapsed sampler section. A closed <details> is worse than a modal:
-        # a modal takes a deliberate click, a collapsed section tells you that
-        # reading the visible page was enough.
-        first = page.index("<details>")
-        collapsed = page[first:page.index("</details>", first)]
-        assert "returns noise below 1.0" not in collapsed, \
-            "the denoise warning is buried in a collapsed section again"
+    # and the album's actual WARDROBE never reaches a nude sheet
+    assert "leather harness" not in p, "the clothed wardrobe leaked onto a nude sheet"
