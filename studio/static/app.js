@@ -425,7 +425,93 @@ document.addEventListener("DOMContentLoaded", function () {
   initLibraryBulk();
   initAnchors();
   initAnchorBatch();
+  initAnchorPrompts();
 });
+
+// ---- Anchors: show exactly what will be sent -------------------------------
+// The panel is filled from the SERVER, which composes it with the same
+// functions the renderer uses. Nothing here rebuilds a prompt in JavaScript:
+// a preview assembled a second way is a preview that can disagree with the
+// render, which is this codebase's oldest defect.
+function initAnchorPrompts() {
+  var form = document.getElementById("anchor-form");
+  if (!form) return;
+
+  // The negative is inert at cfg 1.0, so fast mode says so instead of taking
+  // text it will silently drop.
+  function syncMode() {
+    var mode = form.querySelector("[name=mode]");
+    var note = document.getElementById("negative-inert");
+    var box = form.querySelector("[name=negative]");
+    if (!mode || !note) return;
+    var fast = mode.value !== "quality";
+    note.hidden = !fast;
+    if (box) box.classList.toggle("inert", fast);
+  }
+  form.addEventListener("change", function (e) {
+    if (e.target.name === "mode" || e.target.name === "cfg") syncMode();
+  });
+  syncMode();
+
+  var btn = document.getElementById("anchor-preview-btn");
+  var out = document.getElementById("anchor-preview-out");
+  if (!btn || !out) return;
+  btn.addEventListener("click", function () {
+    btn.disabled = true;
+    out.textContent = "assembling...";
+    api("/anchors/preview", new FormData(form)).then(function (d) {
+      out.textContent = "";
+      if (!d.sheets || !d.sheets.length) {
+        out.textContent = "Nothing selected to render.";
+        return;
+      }
+      var s = d.settings || {};
+      var head = document.createElement("p");
+      head.className = "hint";
+      head.textContent = d.sheets.length + " sheet(s) · " + s.steps + " steps, cfg " +
+        s.cfg + ", " + s.sampler_name + "/" + s.scheduler +
+        (s.lora_strength ? ", Lightning LoRA " + s.lora_strength : ", LoRA off") +
+        " · negative " + (d.negative_applies ? "APPLIES" : "NOT applied at this CFG");
+      out.appendChild(head);
+
+      d.sheets.forEach(function (sheet) {
+        var box = document.createElement("div");
+        box.className = "prompt-sheet";
+        var h = document.createElement("h4");
+        h.textContent = sheet.tier.toUpperCase() + " · " + sheet.view.replace(/_/g, " ");
+        box.appendChild(h);
+        if (sheet.refused) {
+          var r = document.createElement("p");
+          r.className = "hint warn";
+          r.textContent = "refused before sending: " + sheet.refused;
+          box.appendChild(r);
+        }
+        [["positive (sent)", sheet.positive],
+         ["negative", sheet.negative ? sheet.negative +
+            (sheet.negative_applies ? "" : "   ← dropped, not sent at this CFG") : "(none)"],
+         ["this tier's wording, included above", sheet.tier_wording || "(none)"]
+        ].forEach(function (pair) {
+          var lbl = document.createElement("p");
+          lbl.className = "hint";
+          lbl.textContent = pair[0];
+          var pre = document.createElement("pre");
+          pre.className = "prompt-body";
+          pre.textContent = pair[1];
+          box.appendChild(lbl);
+          box.appendChild(pre);
+        });
+        var foot = document.createElement("p");
+        foot.className = "hint muted";
+        foot.textContent = "+ the always-on adult-content safety clause (" +
+          sheet.pinned_len + " chars), attached to the positive and not shown here.";
+        box.appendChild(foot);
+        out.appendChild(box);
+      });
+    }).catch(function (err) {
+      out.textContent = "Could not assemble: " + err.message;
+    }).then(function () { btn.disabled = false; });
+  });
+}
 
 // ---- Anchors: queue the sheets, say so, and watch them render ---------------
 // The Generate button was the last form POST on this page: it 303'd, reloaded

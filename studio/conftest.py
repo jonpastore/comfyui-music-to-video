@@ -404,7 +404,10 @@ _stub("pipeline",
       swarm_backends=lambda: None,
       collect=lambda prefix_dir, pattern="*.png": [],
       MAX_ANCHOR_REFS=3,
-      gen_anchor=lambda images, view="front", n=4, progress=None, prefix=None, profile=None, guard="", prompt="": anchor_calls.append({"profile": profile, "view": view, "guard": guard, "prompt": prompt, "images": list(images)}) or [],
+      # `render` is the anchor form's sampler settings (mode/negative/steps/cfg
+      # ...). Recorded, not ignored: a test asserting the form's knobs reach the
+      # renderer has to be able to see them arrive.
+      gen_anchor=lambda images, view="front", n=4, progress=None, prefix=None, profile=None, guard="", prompt="", render=None: anchor_calls.append({"profile": profile, "view": view, "guard": guard, "prompt": prompt, "images": list(images), "render": dict(render or {})}) or [],
       gen_refs=lambda slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="", cast=None: refs_calls.append({"guard": guard, "body": body, "cast": cast}) or [],
       reroll=lambda slug, tier, sb, anchor, mp3, idxs, progress=None: [],
       stage_refs=lambda slug, tier, ref_paths: [],

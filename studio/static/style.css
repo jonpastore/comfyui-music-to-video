@@ -959,3 +959,14 @@ dialog.lightbox img { max-height: 82vh; }
   border: 1px solid var(--border, #444);
 }
 .lightbox-help { font-size: 0.75rem; margin: 0.4rem 0 0; text-align: center; }
+
+/* The assembled-prompt panel. Monospace and pre-wrapped: this is the literal
+   string the model receives, and reflowed prose hides trailing-space and
+   double-space problems that change a prompt. */
+.prompt-sheet { border-left: 2px solid var(--muted); padding-left: 0.75rem; margin: 0.75rem 0; }
+.prompt-sheet h4 { margin: 0.25rem 0; }
+pre.prompt-body {
+  white-space: pre-wrap; word-break: break-word; font-size: 0.78rem;
+  background: #11131a; padding: 0.5rem; border-radius: 4px; margin: 0.15rem 0 0.5rem;
+}
+textarea.inert { opacity: 0.55; }

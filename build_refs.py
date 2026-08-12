@@ -69,7 +69,30 @@ def sampler_settings(mode="fast", **over):
     for k, v in over.items():
         if v is not None and k in out:
             out[k] = v
+    # The two knobs that must move together. Raising cfg on FAST leaves the
+    # Lightning LoRA at 1.0, which is the documented mush -- and negative_applies
+    # would then truthfully answer "yes" for a render that comes back as noise,
+    # so the UI would promise a working negative on a broken sheet. Explicitly
+    # passing lora_strength is still honoured: that is the deliberate escape.
+    if out["cfg"] > 1.0 and over.get("lora_strength") is None:
+        out["lora_strength"] = 0.0
     return out
+
+
+def _selfcheck():
+    """Run by check_integration: the two knobs that must move together."""
+    assert sampler_settings("fast")["lora_strength"] == 1.0
+    assert sampler_settings("fast")["cfg"] == 1.0
+    # raising cfg alone must drop the LoRA, or negative_applies promises a
+    # working negative on a 4-step distillation driven at cfg 4.5 -- mush
+    hot = sampler_settings("fast", cfg=4.5)
+    assert hot["lora_strength"] == 0.0, hot
+    assert negative_applies(hot), hot
+    # ...unless the caller says otherwise, which stays possible on purpose
+    assert sampler_settings("fast", cfg=4.5, lora_strength=0.6)["lora_strength"] == 0.6
+    assert sampler_settings("quality")["lora_strength"] == 0.0
+    assert not negative_applies(sampler_settings("fast"))
+    return True
 
 
 def negative_applies(settings):

@@ -671,7 +671,8 @@ def h_anchor(args, progress):
     paths = pipeline.gen_anchor(args["images"], view, args.get("n", 4), progress,
                                  profile=anchor_profile,
                                  guard=tiers.compose_guardrail(args["tier"]),
-                                 prompt=args.get("prompt", ""))
+                                 prompt=args.get("prompt", ""),
+                                 render=args.get("render") or {})
     now = time.time()
     for p in paths:
         db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen, created,
@@ -1635,7 +1636,8 @@ def _anchor_ctx_from_form(form, album, character_id):
     tiers_sel = [t for t in form.getlist("tier") if t]
     views_sel = [v for v in form.getlist("view") if v] or ["front"]
     prompts = {k[len("prompt_"):]: v for k, v in form.items() if k.startswith("prompt_")}
-    return anchor_form_ctx(album, tiers_sel, views_sel, character_id, prompts)
+    return anchor_form_ctx(album, tiers_sel, views_sel, character_id, prompts,
+                            negative=form.get("negative") or "")
 
 
 @app.post("/anchors/refs")
@@ -1698,6 +1700,157 @@ async def delete_anchor_ref(request: Request, asset_id: int):
         return templates.TemplateResponse(request, "_anchor_form.html",
                                            _anchor_ctx_from_form(form, album, cid))
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
+
+
+def _build_refs():
+    """build_refs lives at the repo root beside make_anchor.py, and is imported
+    lazily so the studio still starts on a checkout without the CLI scripts."""
+    import build_refs
+    return build_refs
+
+
+ANCHOR_MODES = ("fast", "quality")
+MAX_NEGATIVE = 1200
+
+
+def anchor_render_settings(form):
+    """The render knobs off the form, clamped, in the shape pipeline.gen_anchor
+    takes. Values the user did not set are simply absent, so make_anchor's own
+    defaults apply -- an unset field must never become a number nobody chose."""
+    import build_refs
+    mode = (form.get("mode") or "fast").strip().lower()
+    if mode not in ANCHOR_MODES:
+        raise HTTPException(400, f"mode must be one of {', '.join(ANCHOR_MODES)}")
+    out = {"mode": mode}
+
+    negative = " ".join((form.get("negative") or "").split())
+    if negative:
+        if len(negative) > MAX_NEGATIVE:
+            raise HTTPException(400, f"the negative prompt is {len(negative)} characters; "
+                                      f"keep it under {MAX_NEGATIVE}")
+        # free text headed for a model: screened exactly like the positive
+        try:
+            tiers.check_text(negative, "negative prompt")
+            tiers.check_override(negative)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        out["negative"] = negative
+
+    ref = (form.get("ref_method") or "").strip()
+    if ref:
+        if ref not in build_refs.REF_METHODS:
+            raise HTTPException(400, f"reference method must be one of "
+                                      f"{', '.join(build_refs.REF_METHODS)}")
+        out["ref_method"] = ref
+
+    for key, lo, hi, cast in (("steps", 1, 60, int), ("cfg", 1.0, 12.0, float),
+                              ("denoise", 0.1, 1.0, float)):
+        raw = (form.get(key) or "").strip()
+        if raw == "":
+            continue
+        try:
+            v = cast(raw)
+        except ValueError:
+            raise HTTPException(400, f"{key} must be a number")
+        if not (lo <= v <= hi):
+            raise HTTPException(400, f"{key} must be between {lo} and {hi}")
+        out[key] = v
+
+    for key, allowed in (("sampler_name", build_refs.SAMPLERS),
+                         ("scheduler", build_refs.SCHEDULERS)):
+        raw = (form.get(key) or "").strip()
+        if raw:
+            if raw not in allowed:
+                raise HTTPException(400, f"{key} must be one of {', '.join(allowed)}")
+            out[key] = raw
+    return out
+
+
+def anchor_prompt_preview(album, tier, view, character_id=None, typed="",
+                           negative="", settings=None):
+    """EXACTLY what ComfyUI will be sent for one tier/view, composed by the same
+    functions the renderer uses.
+
+    Not a lookalike. The positive runs through make_anchor.prompt_for and then
+    guardrail.build_prompt with this tier's real wording -- the identical
+    chokepoint build_refs.workflow puts it through -- so a preview that differs
+    from the render is impossible by construction rather than by discipline.
+
+    The always-on safety clause is REMOVED FROM THE DISPLAY only. It is
+    unconditional, it is the same paragraph on every prompt in the studio, and
+    showing it buries the wording that actually steers a render. It is still
+    attached to what is sent, and the panel says so.
+    """
+    import make_anchor
+    import guardrail as g
+    settings = settings or {}
+    pos = (typed or "").strip() or default_anchor_prompt(album, view, character_id)
+    tier_text = tiers.compose_guardrail(tier)
+    try:
+        final = g.build_prompt(pos, tier_text, "anchor prompt preview")
+        refused = ""
+    except Exception as e:
+        final, refused = "", str(e)
+    # Both forms. build_prompt strips the whole prompt, which eats PINNED's
+    # trailing space when the clause lands last -- so matching only the constant
+    # leaves the clause on screen, which is precisely what this hides. The same
+    # trailing-space trap is recorded in check_integration.py's guardrail check.
+    def _hide(text):
+        return (text or "").replace(g.PINNED, " ").replace(g.PINNED.strip(), " ")
+
+    shown = " ".join(_hide(final).split())
+    tier_only = " ".join(_hide(tier_text).split())
+    applies = build_refs_negative_applies(settings)
+    return {"tier": tier, "view": view,
+            "positive": shown, "refused": refused,
+            "tier_wording": tier_only,
+            "negative": (negative or "").strip(),
+            "negative_applies": applies,
+            "pinned_len": len(g.PINNED.strip()),
+            "settings": settings}
+
+
+def build_refs_negative_applies(settings):
+    """Whether a negative does anything at these settings -- asked of build_refs,
+    which is the module that builds the sampler node, so the answer can never be
+    a different opinion from the workflow's."""
+    try:
+        import build_refs
+        return build_refs.negative_applies(settings or {})
+    except Exception:
+        return False
+
+
+@app.post("/anchors/preview")
+async def anchor_preview(request: Request):
+    """The assembled prompts for every tier/view the form currently selects."""
+    form = await request.form()
+    album = (form.get("album") or "").strip()
+    cid = form.get("character_id")
+    cid = int(cid) if cid not in (None, "") else None
+    tiers_sel = sorted({t for t in form.getlist("tier") if t})
+    views_sel = sorted({v for v in form.getlist("view") if v}) or ["front"]
+    chosen = anchor_render_settings(form)
+    # what the sampler will ACTUALLY be: the mode's defaults with the user's
+    # overrides on top, resolved by build_refs so the panel and the workflow
+    # cannot hold different opinions about the cfg
+    import build_refs
+    settings = build_refs.sampler_settings(
+        chosen.get("mode", "fast"),
+        **{k: v for k, v in chosen.items() if k in ("steps", "cfg", "sampler_name",
+                                                     "scheduler", "denoise")})
+    unedited = default_anchor_prompt(album, next(
+        (k for k in ANCHOR_VIEWS if k in set(views_sel)), "front"), cid)
+    out = []
+    for p in anchor_plan(tiers_sel, views_sel):
+        typed = (form.get(f"prompt_{p['tier']}") or "").strip()
+        if typed and typed == (unedited or "").strip():
+            typed = ""          # untouched: each view composes its own, as at render
+        for v in p["views"]:
+            out.append(anchor_prompt_preview(album, p["tier"], v, cid, typed,
+                                              form.get("negative") or "", settings))
+    return JSONResponse({"sheets": out, "settings": settings,
+                         "negative_applies": build_refs_negative_applies(settings)})
 
 
 @app.post("/anchors")
@@ -1812,6 +1965,7 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
                                   f"on {pipeline.MAX_ANCHOR_REFS}. Untick some.")
     paths = picked
 
+    render = anchor_render_settings(form)
     n = max(1, min(int(n), 8))
     # An UNEDITED prompt is sent as empty so make_anchor composes it PER VIEW.
     #
@@ -1834,7 +1988,8 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
             text = ""
         jid = jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": album, "tier": t,
                                        "view": v, "images": paths, "n": n,
-                                       "character_id": character_id, "prompt": text})
+                                       "character_id": character_id, "prompt": text,
+                                       "render": render})
         queued.append({"id": jid, "tier": t, "view": v, "prompt": text})
 
     # The async caller paints from THIS, never from what it typed -- and this is
@@ -1846,7 +2001,7 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     if wants_json(request):
         return JSONResponse({"queued": len(queued), "jobs": queued, "album": album,
                              "tiers": selected_tiers, "views": selected_views, "n": n,
-                             "refs": len(paths)})
+                             "refs": len(paths), "render": render})
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 
@@ -1970,7 +2125,7 @@ def anchor_plan(selected_tiers, selected_views):
 
 
 def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), character_id=None,
-                    prompts=None):
+                    prompts=None, negative=""):
     """The generate form for one album, across any number of tiers and views.
 
     Every view is offered against every tier; see anchor_plan() for what gets
@@ -2028,6 +2183,12 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
         "saved_refs": anchor_refs(album, character_id),
         "max_anchor_prompt": MAX_ANCHOR_PROMPT, "max_uploads": MAX_ANCHOR_UPLOADS,
         "max_refs": pipeline.MAX_ANCHOR_REFS,
+        # the sampler vocabulary the RENDERER accepts, read from the module that
+        # builds the node -- offering a name ComfyUI would reject is the same
+        # class of lie as a control that does nothing
+        "samplers": _build_refs().SAMPLERS, "schedulers": _build_refs().SCHEDULERS,
+        "ref_methods": _build_refs().REF_METHODS,
+        "max_negative": MAX_NEGATIVE, "negative": negative,
         "character_id": character_id,
         "characters": (album_cast(album) if album
                        else db.q("SELECT * FROM characters ORDER BY scope_value, name")),
@@ -3369,6 +3530,16 @@ def start_arc(id: int, direction: str = Form(""), backend: str = Form(""),
             raise HTTPException(400, str(e))
     elif not chat.available():
         raise HTTPException(400, "no chat backend has an API key -- set one on the Config page")
+    # A model belongs to ONE backend. The form offers both lists in one select,
+    # so picking xai beside an OpenAI model would send that name straight to xAI
+    # (grok._resolve_model returns whatever it is given) and fail at job-run time
+    # on a submission the page accepted.
+    if model:
+        target = backend or chat.resolve(None)
+        allowed = chat.list_models(target)
+        if allowed and model not in allowed:
+            raise HTTPException(400, f"{model!r} is not a {target} model -- pick one from the "
+                                      f"{target} group, or change the backend.")
     jobs.enqueue("arc", {"playlist_id": id, "direction": direction,
                           "backend": backend or None, "model": model or None})
     return RedirectResponse(f"/playlists/{id}/arc", status_code=303)

@@ -317,6 +317,21 @@ def _anchor_render_flags_exist():
     # and the modes the form offers are the ones build_refs implements
     sys.path.insert(0, os.path.dirname(HERE))
     import build_refs
+    build_refs._selfcheck()          # cfg and the Lightning LoRA move together
+
+    # THE differential, asked of the WORKFLOW rather than of the predicate.
+    # negative_applies() checking sampler_settings() is two constants from one
+    # module agreeing with each other; deleting the drop in workflow() left that
+    # check green and the whole suite green. Build the graph and read node 12.
+    for mode, expect in (("fast", ""), ("quality", "white fur")):
+        wf = build_refs.workflow({"image_prompt": "a character",
+                                  "negative_prompt": "white fur"},
+                                 "a.png", None, "empty", 64, 64, 1,
+                                 settings=build_refs.sampler_settings(mode))
+        got = wf["12"]["inputs"]["prompt"]
+        assert got == expect, (
+            f"{mode} mode sends negative {got!r}, expected {expect!r} -- at cfg 1.0 "
+            f"ComfyUI ignores it, so sending it is the lie this drop exists to prevent")
     assert build_refs.negative_applies(build_refs.sampler_settings("quality")), \
         "quality mode must be a cfg where the negative prompt actually applies"
     assert not build_refs.negative_applies(build_refs.sampler_settings("fast")), \

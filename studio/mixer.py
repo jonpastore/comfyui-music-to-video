@@ -245,8 +245,15 @@ def _normalize_filter(idx, w, h, fps, video_extra=None):
     """Geometry normalisation, plus one item's own look/glitch chain
     (video_fx.grade/glitch) tacked on before the label -- same single-input
     chain, so it costs nothing extra to wire in."""
+    # settb=AVTB is not cosmetic. concat emits timebase 1/1000000 while a raw
+    # normalized input carries 1/fps, and xfade REFUSES two inputs whose
+    # timebases differ ("First input link main timebase (1/1000000) do not match
+    # ... (1/16)"). Any join that ends in concat -- a cut, a fade to black, a
+    # layer blend -- therefore could not be followed by a fade, dissolve or wipe:
+    # set_duration predicted a confident length and ffmpeg then refused the
+    # graph. Pinning every input to the same base makes the two producers agree.
     base = (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
-            f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps={fps}")
+            f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps={fps},settb=AVTB")
     if video_extra:
         base += "," + video_extra
     return f"[{idx}:v]{base}[v{idx}n]"
@@ -1609,6 +1616,22 @@ def demo():
             raise AssertionError("a missing branding image was accepted")
         except ValueError as e:
             assert "not found" in str(e), e
+
+        # --- a concat-producing join BEFORE a crossfade ----------------------
+        # THE ordering that was broken and that nothing here tried. cut, black
+        # and layer all end in concat (timebase 1/1000000); fade/dissolve/wipe
+        # are xfade, which REFUSES inputs whose timebases differ. Every case
+        # above happens to put its crossfades first, so a confident
+        # set_duration was followed by ffmpeg refusing the graph outright.
+        for kind, extra in (("cut", {}), ("black", {"hold": 1.0}),
+                            ("fade", {"effects_json": lay_json})):
+            mixed = [{"video": lay_a, "transition": kind, "secs": 1.0, **extra},
+                     {"video": lay_b, "transition": "fade", "secs": 1.0},
+                     {"video": lay_a, "transition": "cut", "secs": 0.0}]
+            out_mixed = os.path.join(tmpdir, f"set_then_xfade_{kind}.mp4")
+            render_set(mixed, out_mixed)          # raised before settb=AVTB
+            pred, got = set_duration(mixed), probe(out_mixed)["duration"]
+            assert abs(got - pred) <= 0.3, (kind, got, pred)
 
         # --- duck: the outgoing mix pushed under the incoming track ----------
         duck_json = json.dumps({"duck": 1.0})

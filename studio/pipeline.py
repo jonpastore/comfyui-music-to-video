@@ -174,6 +174,23 @@ def swarm_backends():
     return out or None
 
 
+def _say(progress, msg):
+    """Report from inside CLEANUP, where the reporter itself may raise.
+
+    jobs.py's progress() raises Cancelled on EVERY call once a cancel has been
+    requested -- which is exactly when this code runs. Calling it straight meant
+    the /queue delete threw Cancelled out of abandon() before /interrupt was
+    ever tried, so a cancelled job kept the GPU: the precise outcome the cancel
+    work exists to prevent. Cleanup must never be abortable by its own logging.
+    """
+    if not progress:
+        return
+    try:
+        progress(msg)
+    except BaseException:
+        pass
+
+
 def abandon(pid, progress=None):
     """Tell ComfyUI to stop making something nobody is waiting for any more.
 
@@ -192,8 +209,7 @@ def abandon(pid, progress=None):
         try:
             _post(url, payload)
         except Exception as e:
-            if progress:
-                progress(f"could not stop ComfyUI prompt {pid}: {e}")
+            _say(progress, f"could not stop ComfyUI prompt {pid}: {e}")
 
 
 def submit_dir(wf_dir, progress=None):
@@ -314,8 +330,7 @@ def _submit_and_collect(wf_dir, prefix_dir, pattern, progress):
         for p in _mine_only(collect(prefix_dir, pattern), before, mine):
             try:
                 os.remove(p)
-                if progress:
-                    progress(f"removed {os.path.basename(p)}, written by a run that stopped")
+                _say(progress, f"removed {os.path.basename(p)}, written by a run that stopped")
             except OSError:
                 pass
         raise
@@ -333,7 +348,12 @@ def _submit_and_collect(wf_dir, prefix_dir, pattern, progress):
 def _mine_only(paths, before, mine):
     if not mine:
         return []
-    keep = tuple(mine)
+    # WITH the counter separator. ComfyUI appends "_00001_", so bare-prefix
+    # matching makes seed front_s52862573 also claim front_s528625731's file --
+    # seeds are random and vary in length, so one being a prefix of another is
+    # ordinary. The consequence is the cross-sheet leak this function exists to
+    # stop, so the one character matters.
+    keep = tuple(m + "_" for m in mine)
     return [p for p in paths
             if p not in before and os.path.basename(p).startswith(keep)]
 
@@ -709,6 +729,32 @@ def demo():
         _post, _get = real_post, real_get
         SUBMIT_TIMEOUT = real_timeout
     assert [u for u, _ in stopped] == ["queue", "interrupt"], stopped
+
+    # --- cleanup must survive a progress() that raises -----------------------
+    # jobs.py's progress raises Cancelled on EVERY call once a cancel is
+    # requested, which is exactly when abandon() runs. Reporting the first
+    # failure used to throw out of the loop before /interrupt was tried, so the
+    # GPU kept rendering a job the user had cancelled.
+    class _Boom(Exception):
+        pass
+
+    def raising(msg):
+        raise _Boom()
+
+    hit = []
+    _post_real = globals()["_post"]
+
+    def _dead(url, payload):
+        hit.append(url.rsplit("/", 1)[-1])
+        raise RuntimeError("ComfyUI gone")
+
+    globals()["_post"] = _dead
+    try:
+        abandon("pid-y", raising)          # must NOT raise
+    finally:
+        globals()["_post"] = _post_real
+    assert hit == ["queue", "interrupt"], \
+        f"cleanup stopped at the first failure because its own logging raised: {hit}"
     assert stopped[0][1] == {"delete": ["pid-x"]}, stopped
     # targeted, so it can never interrupt another client's render
     assert stopped[1][1] == {"prompt_id": "pid-x"}, stopped

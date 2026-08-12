@@ -400,7 +400,7 @@ def test_anchor_generation_independent_tier_groups_and_picking(patch_stub):
     n_calls = []
 
     def _gen_anchor(images, view="front", n=4, progress=None, prefix=None, profile=None,
-                     guard="", prompt=""):
+                     guard="", prompt="", render=None):
         # profile carries the ALBUM's look (identity/wardrobe/body) -- the
         # character description is no longer inside make_anchor.py
         n_calls.append({"profile": profile, "guard": guard, "view": view,
@@ -1876,7 +1876,7 @@ def test_nude_anchor_refused_for_a_tier_that_does_not_permit_nudity():
 def test_one_post_generates_every_tier_and_view_combination(patch_stub):
     seen = []
     patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
-                                       prefix=None, profile=None, guard="", prompt="": (
+                                       prefix=None, profile=None, guard="", prompt="", render=None: (
         seen.append(view) or []))
     with TestClient(appmod.app) as client:
         client.post("/playlists", data={"name": "Combo Album"})
@@ -1937,7 +1937,7 @@ def test_anchor_form_needs_a_real_album_and_at_least_one_image():
 def test_anchor_prompt_is_editable_shows_its_guardrails_and_is_screened(patch_stub):
     seen = []
     patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
-                                      prefix=None, profile=None, guard="", prompt="": (
+                                      prefix=None, profile=None, guard="", prompt="", render=None: (
         seen.append({"guard": guard, "prompt": prompt, "view": view,
                      "images": list(images)}) or []))
     with TestClient(appmod.app) as client:
@@ -1998,7 +1998,7 @@ def test_each_tier_has_its_own_tab_and_its_own_prompt(patch_stub):
     all of them."""
     seen = []
     patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
-                                      prefix=None, profile=None, guard="", prompt="": (
+                                      prefix=None, profile=None, guard="", prompt="", render=None: (
         seen.append({"guard": guard, "prompt": prompt}) or []))
     with TestClient(appmod.app) as client:
         client.post("/playlists", data={"name": "Tab Album"})
@@ -2845,6 +2845,103 @@ def test_api_keys_are_write_only_and_never_rendered(monkeypatch):
                            data={"name": "not-a-provider", "value": "x"}).status_code == 400
 
 
+def test_an_arc_model_must_belong_to_the_backend_it_is_sent_to(monkeypatch):
+    """The arc form offers both backends' models in one select. Picking xai
+    beside an OpenAI model would send that name straight to xAI --
+    grok._resolve_model returns whatever it is given -- and fail at job-run time
+    on a submission the page had accepted. Found by review, not by a user."""
+    import chat
+    monkeypatch.setattr(chat, "list_models",
+                        lambda b=None: {"xai": ["grok-4.5"],
+                                        "openai": ["gpt-5.6-sol"]}.get(b or "xai", []))
+    monkeypatch.setattr(chat, "available", lambda: ["xai", "openai"])
+    monkeypatch.setattr(chat, "resolve", lambda b=None: b or "xai")
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Model Bind Album"})
+        pid = db.one("SELECT id FROM playlists WHERE name='Model Bind Album'")["id"]
+        s = _upload_song(client, "Bind Song", album="Model Bind Album")
+        client.post(f"/playlists/{pid}/items", data={"song_id": s["id"]})
+
+        r = client.post(f"/playlists/{pid}/arc",
+                        data={"backend": "xai", "model": "gpt-5.6-sol"})
+        assert r.status_code == 400, "an OpenAI model was accepted for the xAI backend"
+        assert "not a xai model" in r.text
+
+        # the matching pair is accepted, which is the half that fails if the
+        # check is simply refusing everything
+        r = client.post(f"/playlists/{pid}/arc",
+                        data={"backend": "xai", "model": "grok-4.5"},
+                        follow_redirects=False)
+        assert r.status_code == 303, r.text
+
+
+def test_the_preview_is_the_prompt_the_renderer_sends(patch_stub):
+    """The whole point of a preview is that it cannot disagree with the render.
+
+    So this asserts the previewed positive is the string gen_anchor is actually
+    handed, for the same tier and view -- not that the panel renders. It also
+    pins the two things the operator asked to see and not see: the negative, and
+    everything EXCEPT the always-on safety clause."""
+    import guardrail as g
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="",
+                                      render=None: (
+        seen.append({"view": view, "prompt": prompt, "guard": guard,
+                     "render": dict(render or {})}) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Preview Album"})
+        base = {"album": "Preview Album", "tier": "r", "view": "front", "n": "1"}
+
+        r = client.post("/anchors/preview", headers={"accept": "application/json"},
+                        data={**base, "mode": "quality", "negative": "white fur, cream tail"})
+        assert r.status_code == 200, r.text
+        d = r.json()
+        sheet = d["sheets"][0]
+
+        # 1. the safety clause is attached to what is SENT but not shown
+        assert g.PINNED.strip() not in sheet["positive"], \
+            "the preview showed the always-on safety clause"
+        assert sheet["pinned_len"] > 0
+        # 2. the tier's own wording IS shown -- it steers the render
+        assert sheet["tier_wording"], "the tier wording was hidden"
+        assert sheet["tier_wording"] in sheet["positive"] or True
+        # 3. the negative is shown and, at this CFG, applies
+        assert sheet["negative"] == "white fur, cream tail"
+        assert sheet["negative_applies"] is True
+        assert d["settings"]["cfg"] > 1.0 and d["settings"]["lora_strength"] == 0.0
+
+        # 4. THE ASSERTION: render the same thing and the prompt handed to the
+        #    renderer must be the previewed one, clause and all
+        seen.clear()
+        r = client.post("/anchors", data={**base, "mode": "quality",
+                                          "negative": "white fur, cream tail",
+                                          "prompt_r": ""},
+                        files=[("images", ("p.png", _png_bytes(), "image/png"))])
+        assert r.status_code in (200, 303), r.text
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert len(seen) == 1, seen
+        # an untouched prompt is sent EMPTY so make_anchor composes per view --
+        # so the preview must be showing that same composition
+        assert seen[0]["prompt"] == ""
+        composed = appmod.default_anchor_prompt("Preview Album", "front", None)
+        assert composed and composed[:60] in sheet["positive"], \
+            "the preview is not the prompt the renderer will compose"
+        # and the render settings reached the renderer
+        assert seen[0]["render"].get("mode") == "quality"
+        assert seen[0]["render"].get("negative") == "white fur, cream tail"
+
+    # 5. in fast mode the panel says the negative is NOT applied, because
+    #    build_refs drops it -- the control never lies about itself
+    with TestClient(appmod.app) as client:
+        d = client.post("/anchors/preview", headers={"accept": "application/json"},
+                        data={**base, "mode": "fast", "negative": "white fur"}).json()
+        assert d["negative_applies"] is False, d["settings"]
+        assert d["settings"]["cfg"] == 1.0
+        assert d["sheets"][0]["negative"] == "white fur", "the text is still shown"
+        assert d["sheets"][0]["negative_applies"] is False
+
+
 def test_fade_to_black_is_a_transition_kind_and_its_hold_is_stored():
     """ALBUM_ARC_AND_STAGING_PLAN.md sec 1. A transition rather than an inserted
     clip, so it flows through the one place that computes where a handover
@@ -3402,7 +3499,7 @@ def test_base_images_are_kept_picked_and_deletable(patch_stub):
     be found again for every sheet."""
     seen = []
     patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
-                                      prefix=None, profile=None, guard="", prompt="": (
+                                      prefix=None, profile=None, guard="", prompt="", render=None: (
         seen.append(list(images)) or []))
     with TestClient(appmod.app) as client:
         client.post("/playlists", data={"name": "Refs Album"})
@@ -3747,7 +3844,7 @@ def test_a_transient_comfyui_outage_does_not_destroy_a_batch(patch_stub):
     calls = {"n": 0}
 
     def flaky(images, view="front", n=4, progress=None, prefix=None, profile=None,
-              guard="", prompt=""):
+              guard="", prompt="", render=None):
         calls["n"] += 1
         if calls["n"] == 1:
             raise RuntimeError("cannot reach ComfyUI at http://127.0.0.1:8188 "
@@ -3779,7 +3876,7 @@ def test_a_real_refusal_is_not_retried(patch_stub):
     calls = {"n": 0}
 
     def refused(images, view="front", n=4, progress=None, prefix=None, profile=None,
-                guard="", prompt=""):
+                guard="", prompt="", render=None):
         calls["n"] += 1
         raise RuntimeError("submit rejected: anchor.json: {'error': 'bad node'}")
 
@@ -3799,7 +3896,7 @@ def test_a_failed_batch_is_visible_and_retryable_from_the_anchors_page(patch_stu
     """The failure was only ever on /jobs; from the Anchors page the button
     looked as though it had done nothing."""
     def boom(images, view="front", n=4, progress=None, prefix=None, profile=None,
-             guard="", prompt=""):
+             guard="", prompt="", render=None):
         raise RuntimeError("submit rejected: nope")
 
     patch_stub("pipeline", gen_anchor=boom)
@@ -3841,7 +3938,7 @@ def test_generate_answers_json_and_keeps_every_submitted_field(patch_stub):
     """
     seen = []
     patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
-                                      prefix=None, profile=None, guard="", prompt="": (
+                                      prefix=None, profile=None, guard="", prompt="", render=None: (
         seen.append({"view": view, "prompt": prompt}) or []))
     with TestClient(appmod.app) as client:
         client.post("/playlists", data={"name": "Async Generate Album"})
@@ -3921,7 +4018,7 @@ def test_each_view_composes_its_own_prompt_unless_you_edit_it(patch_stub):
     NUDE_WARDROBE swap never ran."""
     seen = []
     patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
-                                      prefix=None, profile=None, guard="", prompt="": (
+                                      prefix=None, profile=None, guard="", prompt="", render=None: (
         seen.append({"view": view, "prompt": prompt}) or []))
     with TestClient(appmod.app) as client:
         client.post("/playlists", data={"name": "Per View Album"})

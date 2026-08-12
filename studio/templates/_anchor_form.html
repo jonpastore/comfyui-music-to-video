@@ -147,6 +147,74 @@
             hx-encoding="multipart/form-data" hx-include="#anchor-form">Upload</button>
   </div>
 
+  {# ---- render settings: the knobs that actually exist for this model ---- #}
+  <fieldset>
+    <legend>Render &mdash; reference adherence</legend>
+    <div class="field-row">
+      <label>Mode
+        <select name="mode" id="anchor-mode">
+          <option value="fast">fast &mdash; 4 steps, ~15s a sheet</option>
+          <option value="quality">quality &mdash; ~28 steps, ~1 min a sheet</option>
+        </select>
+      </label>
+      <label>Reference method
+        <select name="ref_method">
+          <option value="">default (index_timestep_zero)</option>
+          {% for m in ref_methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <p class="hint">This model conditions on the ticked base images <strong>natively</strong>
+      &mdash; there is no IP-Adapter to weight and no ControlNet installed, so the reference
+      method above and the prompt below are the levers. <strong>Reference method</strong>
+      changes how the references are folded into the latent; try another if colour or
+      markings drift.</p>
+    <details>
+      <summary>Sampler &mdash; only if you know why</summary>
+      <div class="field-row">
+        <label>Steps <input type="number" name="steps" min="1" max="60" placeholder="mode default"></label>
+        <label>CFG <input type="number" step="0.1" name="cfg" min="1" max="12" placeholder="mode default"></label>
+        <label>Denoise <input type="number" step="0.05" name="denoise" min="0.1" max="1" placeholder="1.0"></label>
+        <label>Sampler
+          <select name="sampler_name"><option value="">mode default</option>
+            {% for x in samplers %}<option value="{{ x }}">{{ x }}</option>{% endfor %}</select>
+        </label>
+        <label>Scheduler
+          <select name="scheduler"><option value="">mode default</option>
+            {% for x in schedulers %}<option value="{{ x }}">{{ x }}</option>{% endfor %}</select>
+        </label>
+      </div>
+    </details>
+  </fieldset>
+
+  <fieldset>
+    <legend>Negative prompt</legend>
+    {# The one control on this page that can silently do nothing, so it says so.
+       At cfg 1.0 ComfyUI skips the negative pass entirely; build_refs drops the
+       text rather than sending something that has no effect. #}
+    <p class="hint" id="negative-inert">
+      <span class="tag warn-tag">not applied in fast mode</span>
+      A negative prompt needs CFG above 1, and fast mode is CFG 1.0 &mdash; ComfyUI skips
+      the negative pass entirely there, so this text is <strong>dropped, not sent</strong>.
+      Switch Mode to <strong>quality</strong> for it to take effect.</p>
+    <textarea name="negative" rows="3" class="counted" data-max="{{ max_negative }}"
+              maxlength="{{ max_negative }}"
+              placeholder="white fur, cream fur, lighter patches, white tail, human skin, extra limbs, deformed tail, text, watermark, blurry">{{ negative or "" }}</textarea>
+    <p class="hint">Fights what the positive cannot: colour drift, wrong markings, stray
+      clothing on a nude sheet. Screened like every other free-text field here.</p>
+  </fieldset>
+
+  {# ---- exactly what gets sent ---- #}
+  <details class="prompt-preview">
+    <summary>Show the final prompts &mdash; what ComfyUI actually receives</summary>
+    <p class="hint">Composed by the same functions the renderer uses, for every tier and view
+      ticked above. The always-on adult-content safety clause is attached to all of them and
+      is <em>not</em> shown here: it is identical on every prompt in the studio and burying
+      the wording that steers a render under it helps nobody.</p>
+    <button type="button" id="anchor-preview-btn">Assemble the prompts</button>
+    <div id="anchor-preview-out"></div>
+  </details>
+
   {# ---- the rules that apply, above the box they govern ---- #}
   <div class="guardrail-panel">
     <h3>What applies to every sheet</h3>
