@@ -21,3 +21,12 @@ At the root right now:
 | `CONTINUATION-2026-08-11-meowp-studio-day4.md` | Sets as documents, per-song analysis, beat matching, DJ effects, the timeline, AI mix suggestions, Python 3.12 |
 
 The next continuation archives `CONTINUATION-2026-08-11-meowp-studio-day2.md`.
+
+## Standalone hand-offs
+
+Scoped to one machine or one piece of work rather than to a session, so they do
+not take part in the rotation above.
+
+| Doc | For |
+|---|---|
+| [`ETHAN-CONTINUE.md`](../../ETHAN-CONTINUE.md) | Bringing `ethan-wsl` up as a second ComfyUI backend: what is staged there, how to resume after the reboot that interrupted it, and why a 16 GB card does not help with the video renders |
