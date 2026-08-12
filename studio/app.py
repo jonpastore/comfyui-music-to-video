@@ -1992,6 +1992,46 @@ def anchor_render_settings(form):
     return out
 
 
+def sweep_blockers(form, render, combos):
+    """(candidates per point, [every reason this sweep cannot run]).
+
+    Returns (None, []) when the sweep box is off. Split out from
+    cfg_sweep_points so the rules exist ONCE and are read twice: the route
+    raises the first as a 400, the preflight shows all of them before you press
+    anything. Re-deriving them in the preflight -- or in JavaScript -- is how
+    the form comes to disagree with the route about what it will accept.
+    """
+    raw = (form.get("cfg_sweep") or "").strip()
+    if not raw or raw == "0":
+        return None, []
+    try:
+        per_point = int(raw)
+    except ValueError:
+        return None, ["the CFG sweep count must be a number"]
+    reasons = []
+    if per_point not in CFG_SWEEP_CHOICES:
+        reasons.append(f"a CFG sweep renders "
+                       f"{', '.join(str(c) for c in CFG_SWEEP_CHOICES)} candidates at each "
+                       f"value, not {per_point}")
+    if len(combos) != 1:
+        reasons.append(f"a CFG sweep renders ONE sheet at every guidance value, and this "
+                       f"would render {len(combos)}. Tick a single tier and a single view -- "
+                       f"with two, the candidates land in two different grids and neither one "
+                       f"is a comparison.")
+    if render.get("mode") != "quality":
+        reasons.append("a CFG sweep needs quality mode. Above cfg 1.0 the Lightning LoRA is "
+                       "dropped, and fast mode's step count is the LoRA's four -- so every "
+                       "point above the first would render four undistilled steps, which is "
+                       "mush, not a comparison.")
+    if "cfg" in render:
+        reasons.append("the sweep sets the guidance at every point, so leave Guidance on "
+                       "'follow the mode'.")
+    if per_point in CFG_SWEEP_CHOICES and per_point * len(CFG_CHOICES) > MAX_SWEEP_SHEETS:
+        reasons.append(f"that is {per_point * len(CFG_CHOICES)} sheets; {MAX_SWEEP_SHEETS} is "
+                       f"this sweep's ceiling")
+    return per_point, reasons
+
+
 def cfg_sweep_points(form, render, combos):
     """The CFG sweep, or None when the box is off.
 
@@ -2020,35 +2060,17 @@ def cfg_sweep_points(form, render, combos):
     which is exactly what "same references, same prompt, only guidance
     changing" meant in the sweep this one re-runs.
     """
-    raw = (form.get("cfg_sweep") or "").strip()
-    if not raw or raw == "0":
+    per_point, reasons = sweep_blockers(form, render, combos)
+    if per_point is None:
         return None
-    try:
-        per_point = int(raw)
-    except ValueError:
-        raise HTTPException(400, "the CFG sweep count must be a number")
-    if per_point not in CFG_SWEEP_CHOICES:
-        raise HTTPException(400, f"a CFG sweep renders "
-                                  f"{', '.join(str(c) for c in CFG_SWEEP_CHOICES)} candidates "
-                                  f"at each value, not {per_point}")
-    if len(combos) != 1:
-        raise HTTPException(400, f"a CFG sweep renders ONE sheet at every guidance value, and "
-                                  f"this would render {len(combos)}. Tick a single tier and a "
-                                  f"single view -- with two, the candidates land in two "
-                                  f"different grids and neither one is a comparison.")
-    if render.get("mode") != "quality":
-        raise HTTPException(400, "a CFG sweep needs quality mode. Above cfg 1.0 the Lightning "
-                                  "LoRA is dropped, and fast mode's step count is the LoRA's "
-                                  "four -- so every point above the first would render four "
-                                  "undistilled steps, which is mush, not a comparison.")
-    if "cfg" in render:
-        raise HTTPException(400, "the sweep sets the guidance at every point, so leave Guidance "
-                                  "on 'follow the mode'.")
+    # The route reports the FIRST, because a 400 carries one message. The
+    # preflight shows them all, from this same list -- which is why the rules
+    # are a list rather than a run of raises: collecting them was the whole
+    # reason the form could only ever tell you about one problem at a time.
+    if reasons:
+        raise HTTPException(400, reasons[0])
     cfgs = [float(v) for v, _ in CFG_CHOICES]
     sheets = per_point * len(cfgs)
-    if sheets > MAX_SWEEP_SHEETS:
-        raise HTTPException(400, f"that is {sheets} sheets; {MAX_SWEEP_SHEETS} is this sweep's "
-                                  f"ceiling")
     # One base seed for the whole sweep. make_anchor spaces the n candidates off
     # it deterministically (base + k*137), so point-for-point the SAME n seeds
     # are rendered at every guidance value.
@@ -2406,6 +2428,84 @@ def anchor_group(request: Request, scope_value: str, tier: str, view: str,
          "character_id": character_id, "character_name": rows[0]["character_name"],
          "candidates": rows, "unpicked": sum(1 for c in rows if not c["chosen"])}
     return templates.TemplateResponse(request, "_anchor_group.html", {"g": g})
+
+
+# Rough, and honest about being rough: measured 186s a sheet at 28 steps and
+# ~20s at the Lightning LoRA's four, on the 5090 this studio renders on.
+SECS_PER_SHEET = {"quality": 186.0, "fast": 20.0}
+
+
+@app.post("/anchors/plan")
+async def anchor_preflight(request: Request):
+    """What this form would do, and what would stop it -- BEFORE you press it.
+
+    Every refusal in the generate route was a 400 discovered after submitting,
+    which is a poor way to learn that a sweep needs one view or that four
+    references is one too many. This runs the SAME functions the real submit
+    runs -- anchor_plan, anchor_render_settings, cfg_sweep_points -- and reports
+    what they say. Re-deriving the rules in JavaScript would have been less
+    code and would have drifted from the route the first time either changed.
+
+    Refusals are collected rather than raised: the point is to show ALL of them
+    at once, where the route can only ever report the first.
+    """
+    form = await request.form()
+    album = (form.get("album") or "").strip()
+    tiers_sel = sorted({t for t in form.getlist("tier") if t})
+    views_sel = sorted({v for v in form.getlist("view") if v}) or ["front"]
+    blockers, notes = [], []
+
+    if not album:
+        blockers.append("Choose an album.")
+    if not tiers_sel:
+        blockers.append("Tick at least one tier.")
+
+    plan = anchor_plan(tiers_sel, views_sel) if tiers_sel else []
+    combos = [(p["tier"], v) for p in plan for v in p["views"]]
+    skipped = [(p["tier"], s) for p in plan for s in p.get("skipped", [])]
+    for tier, view in skipped:
+        notes.append(f"{ANCHOR_VIEWS.get(view, view)} is skipped for {tier.upper()} "
+                     f"-- that tier permits no nudity.")
+    if tiers_sel and not combos:
+        blockers.append("Every view you picked is a nude one and no tier you picked permits "
+                        "nudity, so there is nothing to render.")
+
+    refs = len(form.getlist("ref_id"))
+    if refs > pipeline.MAX_ANCHOR_REFS:
+        blockers.append(f"{refs} reference images are ticked; the model conditions on "
+                        f"{pipeline.MAX_ANCHOR_REFS}. Untick some.")
+
+    settings, sweep = {}, None
+    try:
+        render = anchor_render_settings(form)
+        settings = resolved_settings(render)
+    except HTTPException as e:
+        blockers.append(str(e.detail))
+        render = {}
+    # every sweep reason at once, from the same list the route raises from
+    per_point, sweep_reasons = sweep_blockers(form, render, combos)
+    blockers += sweep_reasons
+    if per_point and not sweep_reasons:
+        sweep = {"cfgs": [float(v) for v, _ in CFG_CHOICES], "n": per_point,
+                 "sheets": per_point * len(CFG_CHOICES)}
+
+    try:
+        n = max(1, min(int(form.get("n") or 4), 8))
+    except ValueError:
+        n = 4
+    sheets = sweep["sheets"] if sweep else len(combos) * n
+    jobs_queued = len(sweep["cfgs"]) if sweep else len(combos)
+    secs = sheets * SECS_PER_SHEET.get(render.get("mode", "quality"), 186.0)
+
+    if settings and not build_refs_negative_applies(settings) and (form.get("negative") or "").strip():
+        notes.append("The negative prompt will be DROPPED: it needs CFG above 1.0, and "
+                     "ComfyUI skips the negative pass entirely below that.")
+    if settings.get("denoise", 1.0) < 1.0:
+        notes.append(f"Denoise {settings['denoise']:g} on an anchor returns noise -- these "
+                     f"render from an empty latent, so there is nothing to preserve.")
+    return JSONResponse({"sheets": sheets, "jobs": jobs_queued, "seconds": round(secs),
+                         "sweep": bool(sweep), "blockers": blockers, "notes": notes,
+                         "settings": settings})
 
 
 @app.post("/anchors/preview")

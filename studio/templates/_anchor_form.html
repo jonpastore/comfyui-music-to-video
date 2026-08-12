@@ -457,5 +457,10 @@
   <p class="hint">Tick at least one tier.</p>
   {% endif %}
 
-  <button type="submit">Generate anchors</button>
+  {# What this form will DO, and what would stop it, before you press it. Every
+     refusal used to be a 400 discovered after submitting -- a poor way to learn
+     that a sweep needs a single view. Computed by the server from the same
+     functions the submit runs, so the two cannot disagree. #}
+  <div id="anchor-plan" class="plan-panel" aria-live="polite"></div>
+  <button type="submit" id="anchor-generate">Generate anchors</button>
 </form>

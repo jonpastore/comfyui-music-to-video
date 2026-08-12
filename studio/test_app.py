@@ -5227,3 +5227,69 @@ def test_a_versions_usage_is_counted_when_it_renders_not_when_it_is_read(patch_s
         assert r.status_code == 200 and r.json()["version_number"] == 2, r.text
         assert prompts.get(second["id"])["text"].endswith("at night")
         assert len(prompts.versions("Usage Album", "positive", "r")) == 2
+
+
+def test_the_form_says_what_it_will_do_before_you_press_it(patch_stub):
+    """Every refusal in the generate route was a 400 discovered AFTER submitting
+    -- a poor way to learn that a sweep needs a single view, or that four
+    references is one too many. The preflight runs the same functions the submit
+    runs, so the two cannot disagree, and it collects ALL the refusals where the
+    route can only ever report the first.
+    """
+    patch_stub("pipeline", gen_anchor=lambda *a, **k: [])
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Plan Album"})
+        base = {"album": "Plan Album", "tier": "r", "view": "front", "mode": "quality"}
+
+        d = client.post("/anchors/plan", data={**base, "n": "4"}).json()
+        assert d["sheets"] == 4 and d["jobs"] == 1 and not d["blockers"], d
+        assert d["seconds"] > 0, "no time estimate for work that takes minutes"
+
+        # the arithmetic follows the form
+        d = client.post("/anchors/plan",
+                        data={**base, "tier": ["r", "pg13"], "view": ["front", "back"],
+                              "n": "3"}).json()
+        assert d["sheets"] == 12 and d["jobs"] == 4, d
+
+        # a sweep is counted as the sweep, not as one sheet
+        d = client.post("/anchors/plan", data={**base, "n": "3", "cfg_sweep": "3"}).json()
+        assert d["sweep"] and d["jobs"] == len(appmod.CFG_CHOICES), d
+        assert d["sheets"] == 3 * len(appmod.CFG_CHOICES), d
+
+        # EVERY refusal at once, in advance, in the same words the route uses
+        d = client.post("/anchors/plan",
+                        data={**base, "view": ["front", "front_nude"], "tier": ["r", "xxx"],
+                              "cfg_sweep": "3", "mode": "fast", "n": "1"}).json()
+        assert len(d["blockers"]) >= 2, d
+        assert any("ONE sheet" in b for b in d["blockers"]), d["blockers"]
+        assert any("quality mode" in b for b in d["blockers"]), d["blockers"]
+
+        # too many references is caught here rather than after the upload
+        d = client.post("/anchors/plan",
+                        data={**base, "n": "1", "ref_id": ["1", "2", "3", "4"]}).json()
+        assert any("conditions on" in b for b in d["blockers"]), d["blockers"]
+
+        # notes are WARNINGS, not blockers: they describe a render that will
+        # happen and will disappoint
+        d = client.post("/anchors/plan",
+                        data={**base, "n": "1", "mode": "fast",
+                              "negative": "white fur"}).json()
+        assert not d["blockers"], d
+        assert any("DROPPED" in nte for nte in d["notes"]), d["notes"]
+        d = client.post("/anchors/plan",
+                        data={**base, "n": "1", "denoise": "0.65"}).json()
+        assert any("returns noise" in nte for nte in d["notes"]), d["notes"]
+        # a skipped nude view is explained, not silently dropped from the count
+        d = client.post("/anchors/plan",
+                        data={**base, "tier": "pg13", "view": ["front", "front_nude"],
+                              "n": "1"}).json()
+        assert d["sheets"] == 1 and any("permits no nudity" in nte for nte in d["notes"]), d
+
+        # and the preflight AGREES with the route: what it refuses, the route
+        # refuses, and what it allows, the route accepts
+        bad = {**base, "view": ["front", "front_nude"], "tier": "xxx", "prompt_xxx": "",
+               "cfg_sweep": "3", "n": "1"}
+        assert client.post("/anchors/plan", data=bad).json()["blockers"]
+        r = client.post("/anchors", data=bad,
+                        files=[("images", ("p.png", _png_bytes(), "image/png"))])
+        assert r.status_code == 400, "the preflight refused what the route accepted"

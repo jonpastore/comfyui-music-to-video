@@ -428,6 +428,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initAnchorPrompts();
   initJobForms();       // every page, not just the ones with an anchor grid
   initRunHistory();
+  initAnchorPlan();
 });
 
 // ---- Anchors: show exactly what will be sent -------------------------------
@@ -789,6 +790,71 @@ function markUsedVersion(box, tier, vid) {
     box.dataset.versionWatched = "1";
     box.addEventListener("input", function () { hidden.value = ""; });
   }
+}
+
+// ---- preflight: what this form will do, and what would stop it -------------
+// Debounced because it fires on every keystroke in a textarea. The arithmetic
+// and every refusal come from the SERVER, computed by the same functions the
+// submit runs -- re-deriving them here would have been less code and would have
+// drifted from the route the first time either changed.
+function initAnchorPlan() {
+  var timer = null, inflight = false;
+
+  function paint(d) {
+    var panel = document.getElementById("anchor-plan");
+    var btn = document.getElementById("anchor-generate");
+    if (!panel) return;
+    panel.innerHTML = "";
+    var line = document.createElement("p");
+    line.className = "plan-line";
+    var mins = Math.round(d.seconds / 60);
+    line.textContent = d.sheets + " sheet" + (d.sheets === 1 ? "" : "s") + " in " +
+      d.jobs + " job" + (d.jobs === 1 ? "" : "s") +
+      (d.sheets ? " · about " + (mins < 1 ? "under a minute" : mins + " min") : "") +
+      (d.sweep ? " · CFG sweep" : "");
+    panel.appendChild(line);
+    (d.blockers || []).forEach(function (b) {
+      var p = document.createElement("p");
+      p.className = "plan-blocker";
+      p.textContent = b;
+      panel.appendChild(p);
+    });
+    (d.notes || []).forEach(function (nte) {
+      var p = document.createElement("p");
+      p.className = "plan-note";
+      p.textContent = nte;
+      panel.appendChild(p);
+    });
+    // The button is NOT disabled -- a control that cannot apply must still say
+    // why, and a greyed-out Generate with the reason elsewhere is how this app
+    // used to hide its refusals. It is marked, and the server refuses anyway.
+    if (btn) btn.classList.toggle("blocked", !!(d.blockers || []).length);
+  }
+
+  function run() {
+    var form = anchorForm();
+    if (!form || inflight) return;
+    inflight = true;
+    api("/anchors/plan", new FormData(form)).then(paint).catch(function () {
+      // a preflight that cannot answer must not claim the form is fine
+      var panel = document.getElementById("anchor-plan");
+      if (panel) panel.textContent = "";
+    }).then(function () { inflight = false; });
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(run, 250);
+  }
+
+  document.addEventListener("input", function (e) {
+    if (e.target.closest && e.target.closest("#anchor-form")) schedule();
+  });
+  document.addEventListener("change", function (e) {
+    if (e.target.closest && e.target.closest("#anchor-form")) schedule();
+  });
+  document.body.addEventListener("htmx:afterSwap", schedule);
+  schedule();
 }
 
 // A save note that says which it is. Success fades (.flash-ok), failure does

@@ -1183,3 +1183,16 @@ button.linkish.danger, .linkish.danger {
 .queue-list .queue-actions { white-space: nowrap; text-align: right; }
 .queue-list tr.queue-bad .queue-progress { color: var(--danger); }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- preflight: what the form will do, before you press it ---------------- */
+.plan-panel { margin: 0.75rem 0; }
+.plan-panel p { margin: 0.2rem 0; font-size: 0.85rem; }
+.plan-line { color: var(--text); font-weight: 600; }
+/* A blocker is not decoration: it is the 400 you would otherwise have got after
+   submitting, said in advance. */
+.plan-blocker { color: var(--danger); font-weight: 600; }
+.plan-note { color: var(--muted); }
+/* The Generate button is MARKED, never disabled -- a control that cannot apply
+   still has to say why, and the reason is in the panel above it. */
+button.blocked { background: var(--panel); color: var(--danger); border-color: var(--danger); }
+button.blocked:hover:not(:disabled) { background: var(--danger); color: var(--bg); }
