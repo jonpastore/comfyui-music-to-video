@@ -352,6 +352,15 @@ _stub("mixer",
       # assertion reads as. SPLICE_XFADE is a VALUE the route does arithmetic
       # with, so it has to be the real one, not a stand-in.
       SPLICE_XFADE=0.25,
+      # Mirrors the real formula rather than falling through to it, because the
+      # real one calls probe() and would shell out to ffprobe. A span touching
+      # either edge of the track has ONE seam, not two -- getting that wrong in
+      # the route is the bug this stub's caller exists to catch, so the stub has
+      # to be right about it or the test would assert against its own mistake.
+      bridge_seconds=lambda mp3_path, start, end, xfade=0.25: (
+          (float(end) - float(start))
+          + ((1 if float(start) > 0 else 0)
+             + (1 if float(end) < _STUB_ITEM_DUR else 0)) * xfade),
       splice_bridge=lambda mp3_path, bridge_path, out_path, start, end, xfade=0.25,
       progress=None: (
           splice_calls.append({"src": mp3_path, "bridge": bridge_path,

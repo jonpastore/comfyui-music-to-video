@@ -232,6 +232,21 @@ def edit_audio(mp3_path, out_path, trim_start=0.0, trim_end=None, gain_db=0.0,
 SPLICE_XFADE = 0.25   # seconds of overlap at each seam; short enough not to eat a bar
 
 
+def bridge_seconds(mp3_path, start, end, xfade=SPLICE_XFADE):
+    """How long a bridge must BE for splice_bridge to return the original length.
+
+    The caller cannot compute this as gap + 2*xfade, which is what it did until
+    a review caught it: a span that reaches the start or the end of the track
+    has only ONE seam, so only one crossfade is consumed, and a bridge sized for
+    two comes back a quarter of a second long. The arithmetic lives here, beside
+    the code that performs it, so the two cannot disagree -- the same reason
+    set_duration and render_set share theirs.
+    """
+    duration = probe(mp3_path)["duration"]
+    seams = (1 if start > 0 else 0) + (1 if end < duration else 0)
+    return (float(end) - float(start)) + seams * xfade
+
+
 def splice_bridge(mp3_path, bridge_path, out_path, start, end, xfade=SPLICE_XFADE,
                   progress=None):
     """Replace [start, end) of mp3_path with bridge_path. THE cut-from-the-middle.
@@ -263,15 +278,27 @@ def splice_bridge(mp3_path, bridge_path, out_path, start, end, xfade=SPLICE_XFAD
         raise ValueError("the bridge has no audio in it")
 
     head, tail = start, max(0.0, duration - end)
-    # Each surviving piece has to be longer than the fade that eats into it, or
-    # acrossfade is asked to consume audio that is not there.
+    # A piece of exactly ZERO is fine -- the span reaches the edge of the track
+    # and there is simply no seam on that side. A piece SHORTER than the fade is
+    # not: acrossfade would be asked to consume audio that is not there, and the
+    # first version of this dropped such a piece silently. Measured on a 20s
+    # track spliced at 0.1s: the first 0.1s vanished and the result came back
+    # 0.193s LONGER than the original, because the caller had sized the bridge
+    # for two crossfades and only one happened. Refusing is the honest answer --
+    # the span the user wants is start=0, and they can say so.
+    for piece, which, edge in ((head, "before", "0"), (tail, "after", f"{duration:.3f}")):
+        if 0 < piece <= xfade:
+            raise ValueError(
+                f"only {piece:.3f}s of track is left {which} the span, which is shorter "
+                f"than the {xfade:.2f}s crossfade -- there is not enough audio there to "
+                f"fade into. Use {edge} for that end of the span instead.")
     parts, chain, n = [], [], 0
-    if head > xfade:
+    if head:
         parts += ["-ss", "0", "-to", f"{start:.3f}", "-i", mp3_path]
         n += 1
     parts += ["-i", bridge_path]
     n += 1
-    if tail > xfade:
+    if tail:
         parts += ["-ss", f"{end:.3f}", "-i", mp3_path]
         n += 1
     if n == 1:
@@ -1921,6 +1948,41 @@ def demo():
         assert _band_db(spliced, 0.3, 0.4, 440) > _band_db(spliced, 0.3, 0.4, 880) + 12, \
             "the head was overwritten -- the splice replaced more than its span"
 
+        # EDGE SPANS. demo() only ever spliced an interior span (head and tail
+        # both 1.5s), so the boundary arithmetic was never run and a review
+        # found it broken: a sliver of head shorter than the crossfade was
+        # dropped silently and the result came back LONGER than the original.
+        # bridge_seconds is what the route asks, so ask it the same way here.
+        src_len = probe(mp3)["duration"]
+        for a, b, seams in ((0.0, 1.0, 1),               # touches the start: ONE seam
+                            (src_len - 1.0, src_len, 1),  # touches the end: ONE seam
+                            (1.0, 2.0, 2)):               # interior: two
+            want = bridge_seconds(mp3, a, b)
+            assert abs(want - ((b - a) + seams * SPLICE_XFADE)) < 1e-6, (a, b, want, seams)
+            eb = os.path.join(tmpdir, f"eb_{a:.2f}.mp3")
+            r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-t",
+                                f"{want:.3f}", "-i", "sine=frequency=880", "-c:a",
+                                "libmp3lame", eb], capture_output=True, text=True)
+            assert r.returncode == 0, r.stderr
+            edged = os.path.join(tmpdir, f"edged_{a:.2f}.mp3")
+            splice_bridge(mp3, eb, edged, a, b)
+            # THE contract: a bridge sized by bridge_seconds returns the track's
+            # own length, at every position. Sizing edge spans as gap + 2*xfade
+            # -- which the route did -- came back 0.25s long here.
+            assert abs(probe(edged)["duration"] - src_len) <= 0.12, (
+                f"span {a:.2f}-{b:.2f} came back {probe(edged)['duration']:.3f}s "
+                f"against the original {src_len:.3f}s")
+
+        # A SLIVER outside the span is refused, not silently dropped. Measured
+        # before this was fixed: splicing at 0.1s deleted the first 0.1s of the
+        # track and returned a file 0.193s LONGER than the original.
+        for a, b, why in ((0.1, 1.1, "a head shorter than the crossfade"),
+                          (src_len - 1.1, src_len - 0.1, "a tail shorter than the crossfade")):
+            try:
+                splice_bridge(mp3, bridge, os.path.join(tmpdir, "sliver.mp3"), a, b)
+                raise AssertionError(f"splice_bridge silently accepted {why}")
+            except ValueError as e:
+                assert "crossfade" in str(e), e
         for bad, why in (((5.0, 6.0), "a span past the end of the track"),
                          ((2.0, 1.0), "an end before its start"),
                          ((-1.0, 1.0), "a negative start"),

@@ -4345,7 +4345,15 @@ def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
         if duration and span["end"] > duration + 0.001:
             raise HTTPException(400, f"the span ends at {span['end']:g}s but the track is "
                                      f"only {duration:.1f}s long")
-        seconds = (span["end"] - span["start"]) + 2 * mixer.SPLICE_XFADE
+        # mixer owns this arithmetic. Computing it here as gap + 2*xfade was
+        # wrong for a span touching either edge of the track: that has only ONE
+        # seam, so only one crossfade is consumed and the song came back a
+        # quarter-second long. A review caught it; the fix is to stop having two
+        # places that both think they know.
+        try:
+            seconds = mixer.bridge_seconds(song["mp3_path"], span["start"], span["end"])
+        except Exception:
+            seconds = (span["end"] - span["start"]) + 2 * mixer.SPLICE_XFADE
     if not 1.0 <= seconds <= MAX_AUDIO_SECS:
         raise HTTPException(400, f"seconds must be between 1 and {MAX_AUDIO_SECS:g}")
     if not 1 <= n <= MAX_AUDIO_TAKES:
@@ -4362,6 +4370,13 @@ def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
         except ValueError:
             raise HTTPException(400, "seed must be a whole number, or blank for random") from None
     if from_current:
+        # The two are alternatives, and the form presents them as such -- but
+        # nothing stopped both being filled in, and the result was a bridge
+        # re-synthesised from the whole track spliced back into that same track,
+        # labelled "bridged" with the seeding lost from the label. Refuse it.
+        if span:
+            raise HTTPException(400, "replace a span OR re-synthesise the whole track, "
+                                     "not both in one take")
         # Re-synthesising takes the song's CURRENT audio as the starting point,
         # and produces a whole new track rather than a patched one.
         if not song["mp3_path"] or not os.path.exists(song["mp3_path"]):

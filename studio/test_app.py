@@ -5889,9 +5889,9 @@ def test_generated_audio_is_kept_and_says_which_path_ran(monkeypatch, tmp_path):
         wait_job(db.one("SELECT id FROM jobs WHERE kind='audio' ORDER BY id DESC")["id"])
         assert splice_calls, "the span never reached mixer.splice_bridge"
         assert (splice_calls[-1]["start"], splice_calls[-1]["end"]) == (5.0, 7.5)
-        assert sent[-1]["seconds"] == 2.5 + 2 * appmod.mixer.SPLICE_XFADE, (
-            "the bridge was generated the length of the GAP, so the two crossfades "
-            "would eat into it and shorten the track")
+        assert sent[-1]["seconds"] == appmod.mixer.bridge_seconds(mp3, 5.0, 7.5), (
+            "the bridge length is not what mixer says it must be -- computing it in "
+            "the route is how an edge span came back a crossfade too long")
         bridged = db.q("SELECT * FROM assets WHERE song_id=? AND kind='audio_gen' "
                        "ORDER BY id DESC LIMIT 1", sid)[0]
         meta = db.jset(bridged)
@@ -5922,6 +5922,11 @@ def test_generated_audio_is_kept_and_says_which_path_ran(monkeypatch, tmp_path):
                          # mutation that removes the length check still passed.
                          ({**ok, "bridge_start": "11", "bridge_end": "100"}, "a span past the end"),
                          ({**ok, "bridge_start": "7", "bridge_end": "3"}, "a span ending before it starts"),
-                         ({**ok, "bridge_start": "x", "bridge_end": "3"}, "a non-numeric span")):
+                         ({**ok, "bridge_start": "x", "bridge_end": "3"}, "a non-numeric span"),
+                         # the form offers these as alternatives and nothing
+                         # enforced it: both set produced a bridge resynthesised
+                         # from the whole track, spliced back into that track
+                         ({**ok, "bridge_start": "5", "bridge_end": "7.5",
+                           "from_current": "1", "denoise": "0.6"}, "a span AND a resynthesis")):
             assert client.post(f"/songs/{sid}/audio/generate", data=bad).status_code == 400, \
                 f"{why} was accepted"
