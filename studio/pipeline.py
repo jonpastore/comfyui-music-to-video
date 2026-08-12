@@ -13,6 +13,8 @@ COMFY_OUTPUT.
 import glob, json, os, re, shutil, subprocess, sys, tempfile, time
 import urllib.error, urllib.request
 
+import gpu
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.environ.get("STUDIO_SCRIPTS", os.path.dirname(ROOT))
 COMFY = os.environ.get("COMFY_URL", "http://127.0.0.1:8188")
@@ -171,6 +173,12 @@ def _submit_and_collect(wf_dir, prefix_dir, pattern, progress):
     counter suffix -- so a prefix dir reused across runs (anchor_v2 already
     has 6-16 images from earlier sessions) would otherwise mix old and new
     candidates into one result."""
+    # One guard for all seven gen_* wrappers, not a copy per caller: every one
+    # of them reaches ComfyUI through here, and a starved card fails them all
+    # the same way -- an OOM that presents as a job which succeeded and wrote
+    # nothing. gpu.preflight takes the card back from ollama or refuses with
+    # the numbers; it never refuses because something was unreachable.
+    gpu.preflight(progress)
     before = set(collect(prefix_dir, pattern))
     submit_dir(wf_dir, progress)
     return [p for p in collect(prefix_dir, pattern) if p not in before]
