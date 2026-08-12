@@ -276,3 +276,14 @@ Append dated one-liners. Newest at the bottom.
   it as unreachable from any box that is not cerberus. It resolves correctly
   from the deployed studio, which runs there. Not a bug; do not "fix" it.
 
+- 2026-08-12 16:15 (B) `1cac5bb` **the image guardrail is off the audio path.**
+  `guardrail.check_text` refuses any mention of a minor — measured, the tags
+  "nursery rhyme for children" came back `ContentRefused: ... child, nursery`.
+  Its own docstring justifies that by "there is no legitimate reason for a tier
+  definition, style note or generated scene to reference children", which is a
+  claim about DEPICTION and does not carry to music. Jon wants to make songs for
+  his nieces. Image and video paths are untouched and still screen as before.
+  Re-rendered after removing it: 20.010 s of 44.1 kHz stereo off peaches.
+  **A — if you want any screening on the audio path it is your call and your
+  `screen_prompt_field`; a LENGTH bound on lyrics is the one I would actually
+  argue for, since ACE-Step has a token limit and nothing currently bounds it.**
