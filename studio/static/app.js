@@ -444,9 +444,17 @@ function initAnchorPrompts() {
     var note = document.getElementById("negative-inert");
     var box = form.querySelector("[name=negative]");
     if (!mode || !note) return;
-    var fast = mode.value !== "quality";
-    note.hidden = !fast;
-    if (box) box.classList.toggle("inert", fast);
+    // The same rule build_refs.negative_applies() applies, on the same number:
+    // the negative is inert at cfg 1.0 and live above it. Reading the MODE
+    // alone was wrong in one direction that matters -- fast mode with cfg
+    // raised by hand drops the Lightning LoRA and the negative DOES apply, and
+    // the panel said it would be thrown away.
+    var cfg = form.querySelector("[name=cfg]");
+    var value = cfg && cfg.value ? parseFloat(cfg.value)
+                                 : (mode.value === "quality" ? 4.5 : 1.0);
+    var inert = !(value > 1.0);
+    note.hidden = !inert;
+    if (box) box.classList.toggle("inert", inert);
   }
   form.addEventListener("change", function (e) {
     if (e.target.name === "mode" || e.target.name === "cfg") syncMode();
@@ -498,6 +506,58 @@ function initAnchorPrompts() {
           o.textContent = (v.label || "unnamed");
           pick.appendChild(o);
         });
+        pick.value = String(d.id);
+      }
+      if (label) label.value = "";
+    }).catch(function (err) {
+      if (note) note.textContent = "not saved: " + err.message;
+    }).then(function () { save.disabled = false; });
+  });
+
+  // The negative prompt saves the same way, per ALBUM: its terms are this
+  // release's failure modes and other artwork wants a different list. Same
+  // pick-to-load, same version list, no tier -- a negative has none.
+  form.addEventListener("change", function (e) {
+    var pick = e.target.closest(".negative-version-pick");
+    if (!pick) return;
+    var box = form.querySelector("[name=negative]");
+    var opt = pick.options[pick.selectedIndex];
+    if (!box || !opt.value) return;
+    box.value = opt.dataset.text || "";
+    box.dispatchEvent(new Event("input", {bubbles: true}));
+    syncMode();
+  });
+
+  form.addEventListener("click", function (e) {
+    var save = e.target.closest(".negative-save");
+    if (!save) return;
+    var box = form.querySelector("[name=negative]");
+    var note = form.querySelector(".negative-save-note");
+    var label = form.querySelector(".negative-version-label");
+    if (!box) return;
+    var body = new FormData();
+    body.append("album", (form.querySelector("[name=album]") || {}).value || "");
+    body.append("text", box.value);
+    body.append("label", label ? label.value : "");
+    save.disabled = true;
+    if (note) note.textContent = "saving...";
+    api("/anchors/negative", body).then(function (d) {
+      if (note) note.textContent = "saved " + (d.label || "unnamed");
+      var pick = form.querySelector(".negative-version-pick");
+      if (pick && d.versions) {
+        // the first option (the album's latest) and the last (the generic
+        // starting point) are not versions and are kept as they are
+        var first = pick.options[0], last = pick.options[pick.options.length - 1];
+        pick.innerHTML = "";
+        pick.appendChild(first);
+        d.versions.forEach(function (v) {
+          var o = document.createElement("option");
+          o.value = v.id;
+          o.dataset.text = v.text;
+          o.textContent = (v.label || "unnamed");
+          pick.appendChild(o);
+        });
+        pick.appendChild(last);
         pick.value = String(d.id);
       }
       if (label) label.value = "";

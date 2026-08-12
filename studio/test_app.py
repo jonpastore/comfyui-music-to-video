@@ -16,6 +16,7 @@ from conftest import _set_duration as _stub_set_duration
 import db      # real
 import tiers   # real
 import jobs    # real
+import models  # real
 import app as appmod
 
 from fastapi.testclient import TestClient
@@ -1713,7 +1714,7 @@ def test_models_page_names_every_model_and_what_it_is_for():
         assert "UNPROVEN" in page
 
 
-def test_clip_render_defaults_to_s2v_and_carries_the_video_model_through(patch_stub):
+def test_clip_render_defaults_to_the_catalogue_and_carries_the_video_model_through(patch_stub):
     seen = []
 
     def _gen_clips(slug, tier, sb, mp3, ref_paths, progress=None, limit=None,
@@ -1733,12 +1734,15 @@ def test_clip_render_defaults_to_s2v_and_carries_the_video_model_through(patch_s
         for i in range(appmod.clip_count(song)):
             _a_ref(sid, "r", i, seed=7000 + i, approved=1)
 
-        # default: the audio-driven path, no refiner
+        # default: whatever the CATALOGUE says, not a value copied into the web
+        # layer. The song page builds its dropdown from models.default_for, so a
+        # hardcoded default here is a default the page does not offer.
         client.post(f"/songs/{sid}/clips", data={"tier": "r"})
         wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='clips' ORDER BY id DESC",
                         sid)["id"])
-        assert seen[-1] == {"video_model": "s2v", "refine": False,
+        assert seen[-1] == {"video_model": models.default_cli("video"), "refine": False,
                             "ref_motion": None, "control_video": None}, seen[-1]
+        assert models.default_cli("video") == "ltx25"
 
         # explicit i2v + refiner reach the pipeline
         client.post(f"/songs/{sid}/clips",
@@ -1747,6 +1751,8 @@ def test_clip_render_defaults_to_s2v_and_carries_the_video_model_through(patch_s
                         sid)["id"])
         assert seen[-1]["video_model"] == "i2v" and seen[-1]["refine"] is True
 
+        # 'ltxv' is the CLIPLoader type string, never a renderer value -- the
+        # catalogue is what decides, and it does not contain it
         assert client.post(f"/songs/{sid}/clips",
                            data={"tier": "r", "video_model": "ltxv"}).status_code == 400
 
@@ -1779,8 +1785,9 @@ def test_driving_clips_are_refused_for_i2v_which_has_no_such_input():
 def test_model_default_is_remembered_and_validated():
     import models as modelmod
     with TestClient(appmod.app) as client:
-        # LTX is the default: 50s for a real clip against s2v's ~90s, measured
-        assert modelmod.default_for("video") == "ltx23"
+        # LTX is the default -- 2.5 since the upgrade; 2.3 measured 50s for a
+        # real clip against s2v's ~90s and stays catalogued as the fallback
+        assert modelmod.default_for("video") == "ltx25"
         r = client.post("/models/video/default", data={"key": "wan22_i2v"})
         assert r.status_code in (200, 303), r.text
         assert modelmod.default_for("video") == "wan22_i2v"
@@ -1788,7 +1795,7 @@ def test_model_default_is_remembered_and_validated():
         assert client.post("/models/video/default",
                            data={"key": "qwen_image_edit_2511"}).status_code == 400
         assert client.post("/models/video/default", data={"key": "nope"}).status_code == 400
-        modelmod.set_default("video", "ltx23")
+        modelmod.set_default("video", "ltx25")
 
 
 def test_tier_wording_matches_the_mpa_and_nudity_is_a_capability():
@@ -2417,7 +2424,9 @@ def test_ltx_is_the_default_video_model_and_renders_the_same_chunk():
     import build_song as B
     import models as modelmod
 
-    assert modelmod.default_for("video") == "ltx23"
+    assert modelmod.default_for("video") == "ltx25"
+    assert modelmod.renderable("video")["ltx25"] == "ltx25"
+    # 2.3 stays catalogued and renderable -- it is the fallback, not a deletion
     assert modelmod.renderable("video")["ltx23"] == "ltx"
 
     assert (B.LTX_LEN - 1) % 8 == 0, "LTX length must be 8n+1"
@@ -2443,6 +2452,54 @@ def test_ltx_is_the_default_video_model_and_renders_the_same_chunk():
     import guardrail as g
     prompt = wf["4"]["inputs"]["text"]
     assert g.PINNED.strip() in prompt and prompt.count("No minors") == 1
+
+
+def test_ltx25_graph_matches_what_25_actually_wants():
+    """Every assertion here is a way 2.5 differs from 2.3 that a retarget of the
+    constants alone would get wrong. Checked against ComfyUI's own shipped
+    template (video_ltx2_5_i2v.json) and accepted by a real 0.32.0 backend."""
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import build_song as B
+
+    scene = {"scene_number": 1, "name": "s", "camera": "wide", "lighting": "neon",
+             "video_motion_prompt": "she walks", "negative_prompt": "",
+             "duration_guidance": "5 sec", "image_prompt": "x"}
+    wf = B.workflow(0, scene, "clip_000.png", "song.mp3", "a black cat", "an alley",
+                    "tier wording", video_model="ltx25")
+
+    # the projection is baked into the "with-proj" encoder, so 2.5 loads it
+    # through a PLAIN CLIPLoader -- LTXAVTextEncoderLoader wants a second
+    # checkpoints/ file that 2.5 does not ship
+    assert wf["2"]["class_type"] == "CLIPLoader"
+    assert wf["2"]["inputs"]["type"] == "ltxv"
+    assert "with-proj" in wf["2"]["inputs"]["clip_name"]
+    assert not any(n["class_type"] == "LTXAVTextEncoderLoader" for n in wf.values())
+
+    # the audio VAE is a plain VAELoader in 2.5, so it does NOT need to sit in
+    # checkpoints/ the way 2.3's did
+    assert wf["6"]["class_type"] == "VAELoader"
+    assert wf["6"]["inputs"]["vae_name"] == B.LTX25_AUDIO_VAE
+
+    # sampling: DualCFGGuider takes BOTH halves of LTXVConditioning, and there
+    # is no ModelSamplingLTXV/LTXVScheduler pair any more
+    assert wf["17"]["class_type"] == "LTXVDualCFGGuider"
+    assert wf["17"]["inputs"]["positive"] == ["12", 0]
+    assert wf["17"]["inputs"]["negative"] == ["12", 1]
+    assert wf["21"]["class_type"] == "SamplerCustomAdvanced"
+    assert not any(n["class_type"] in ("ModelSamplingLTXV", "LTXVScheduler")
+                   for n in wf.values())
+    # 9 sigmas = 8 steps, terminating at 0.0: a single full-res pass, not the
+    # template's half-res base + upsample pair
+    assert B.LTX25_SIGMAS.split(",")[-1].strip() == "0.0"
+    assert len(B.LTX25_SIGMAS.split(",")) == 9
+
+    # unchanged contract: audio conditions the motion, only video is decoded
+    assert wf["16"]["class_type"] == "LTXVConcatAVLatent"
+    assert wf["21"]["inputs"]["latent_image"] == ["16", 0]
+    assert wf["22"]["class_type"] == "LTXVSeparateAVLatent"
+    assert wf["23"]["inputs"]["samples"] == ["22", 0]
+    # and the clip is still exactly one CHUNK, so allocation does not move
+    assert abs(B.LTX25_LEN / B.LTX25_FPS - B.CHUNK) < 1e-9
 
 
 # ---------------------------------------------------------- set editor (phase 1) --
@@ -4211,3 +4268,319 @@ def test_the_form_does_not_promise_a_view_swap_it_cannot_make():
         assert "Leave it untouched and each view composes its own" in page
         assert "used verbatim for every view" in page, \
             "the form no longer warns that an edit overrides the per-view framing"
+
+
+def test_a_cfg_sweep_renders_every_guidance_value_at_one_pinned_seed(patch_stub):
+    """Day 7's guidance sweep was ONE sample per point, which is why 3.5 landing
+    between two good neighbours settles nothing. The sweep control re-runs it at
+    n per point -- and the only thing that makes those images comparable is that
+    the base SEED is pinned across every point.
+
+    The differential is the seed. With the sweep off, no seed is sent at all and
+    make_anchor draws its own random base, which is what makes a second click
+    produce different sheets. Turn the sweep on and every job must carry the
+    SAME one: a per-job random base would leave the images differing by seed and
+    by guidance at once, and nothing in the result attributable to the knob
+    being swept.
+    """
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="", render=None: (
+        seen.append({"n": n, "render": dict(render or {})}) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Sweep Album"})
+        base = {"album": "Sweep Album", "tier": "xxx", "view": "front_nude",
+                "mode": "quality", "prompt_xxx": ""}
+
+        # --- feature OFF: one sheet, no seed, no cfg ------------------------
+        seen.clear()
+        r = client.post("/anchors", headers={"accept": "application/json"},
+                        data={**base, "n": "3", "cfg_sweep": "0"},
+                        files=[("images", ("s.png", _png_bytes(), "image/png"))])
+        assert r.status_code == 200, r.text
+        off = r.json()
+        assert off["queued"] == 1 and off["sweep"] is None, off
+        for j in off["jobs"]:
+            wait_job(j["id"])
+        assert len(seen) == 1 and "seed" not in seen[0]["render"], seen
+        assert "cfg" not in seen[0]["render"], "a sheet that is not a sweep chose a cfg"
+
+        # --- feature ON: one job per value, three candidates each -----------
+        seen.clear()
+        r = client.post("/anchors", headers={"accept": "application/json"},
+                        data={**base, "n": "3", "cfg_sweep": "3"},
+                        files=[("images", ("s.png", _png_bytes(), "image/png"))])
+        assert r.status_code == 200, r.text
+        d = r.json()
+        values = [float(v) for v, _ in appmod.CFG_CHOICES]
+        assert d["queued"] == len(values), d
+        assert d["sweep"]["cfgs"] == values, d["sweep"]
+        # deliberately far past the eight candidates one sheet may ask for
+        assert d["sweep"]["sheets"] == 3 * len(values) > 8, d["sweep"]
+        for j in d["jobs"]:
+            wait_job(j["id"])
+
+        assert len(seen) == len(values), seen
+        assert sorted(s["render"]["cfg"] for s in seen) == sorted(values), \
+            [s["render"].get("cfg") for s in seen]
+        assert all(s["n"] == 3 for s in seen), [s["n"] for s in seen]
+        seeds = {s["render"].get("seed") for s in seen}
+        assert len(seeds) == 1 and None not in seeds, \
+            f"the sweep did not pin one base seed, so the images differ by seed too: {seeds}"
+        assert seeds == {d["sweep"]["seed"]}, "the response named a seed the renderer never got"
+        # everything but the guidance is held: same references, same prompt,
+        # same mode -- the sweep changes one knob or it is not a sweep
+        assert {s["render"]["mode"] for s in seen} == {"quality"}, seen
+
+
+def test_a_cfg_sweep_refuses_what_it_cannot_answer(patch_stub):
+    """Each of these would render sheets that cannot answer the question the
+    sweep is asked, so each is refused rather than quietly adjusted."""
+    patch_stub("pipeline", gen_anchor=lambda *a, **k: [])
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Sweep Refusal Album"})
+        base = {"album": "Sweep Refusal Album", "tier": "xxx", "prompt_xxx": "",
+                "mode": "quality", "n": "1", "cfg_sweep": "3"}
+        files = [("images", ("s.png", _png_bytes(), "image/png"))]
+
+        # two sheets: two experiments interleaved, landing in two grids
+        r = client.post("/anchors", data={**base, "view": ["front", "front_nude"]}, files=files)
+        assert r.status_code == 400 and "ONE sheet" in r.text, r.text
+        r = client.post("/anchors", data={**base, "tier": ["r", "xxx"],
+                                          "prompt_r": "", "view": "front"}, files=files)
+        assert r.status_code == 400 and "ONE sheet" in r.text, r.text
+
+        # fast mode: above cfg 1.0 the LoRA is dropped and four undistilled
+        # steps are mush, so every point but the first would be noise
+        r = client.post("/anchors", data={**base, "view": "front", "mode": "fast"}, files=files)
+        assert r.status_code == 400 and "quality mode" in r.text, r.text
+
+        # a chosen cfg: the sweep sets it, so honouring the box is impossible
+        r = client.post("/anchors", data={**base, "view": "front", "cfg": "4.5"}, files=files)
+        assert r.status_code == 400 and "sweep sets the guidance" in r.text, r.text
+
+        # a count nobody offered
+        r = client.post("/anchors", data={**base, "view": "front", "cfg_sweep": "99"},
+                        files=files)
+        assert r.status_code == 400, r.text
+
+        assert not db.q("SELECT id FROM jobs WHERE kind='anchor' AND status='queued'"), \
+            "a refused sweep still queued work"
+
+
+def test_a_swept_candidate_records_the_guidance_it_was_rendered_at(patch_stub):
+    """A sweep puts every guidance value in ONE grid -- same album, same tier,
+    same view -- so without the settings on the thumbnail "6.0 haloes" is a
+    claim about an image nobody can pick out again.
+
+    The differential: two candidates from two points of the same sweep must
+    carry DIFFERENT tags, and the tag must be the resolved cfg rather than the
+    form's, so a sheet left on the mode default is labelled with the number the
+    KSampler actually got.
+    """
+    made = []
+
+    def fake(images, view="front", n=4, progress=None, prefix=None, profile=None,
+             guard="", prompt="", render=None):
+        path = os.path.join(db.DATA, f"sweepshot_{len(made)}.png")
+        open(path, "wb").write(_png_bytes())
+        made.append(path)
+        return [path]
+
+    patch_stub("pipeline", gen_anchor=fake)
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Tagged Album"})
+        r = client.post("/anchors", headers={"accept": "application/json"},
+                        data={"album": "Tagged Album", "tier": "r", "view": "front",
+                              "mode": "quality", "prompt_r": "", "n": "1", "cfg_sweep": "2"},
+                        files=[("images", ("t.png", _png_bytes(), "image/png"))])
+        assert r.status_code == 200, r.text
+        for j in r.json()["jobs"]:
+            wait_job(j["id"])
+
+        rows = db.q("""SELECT render_json FROM anchors WHERE scope_value='Tagged Album'
+                       ORDER BY id""")
+        cfgs = [json.loads(x["render_json"])["cfg"] for x in rows]
+        assert sorted(cfgs) == sorted(float(v) for v, _ in appmod.CFG_CHOICES), cfgs
+        # resolved, not merely echoed: the form sent no steps and the badge
+        # still names quality mode's 28
+        assert all(json.loads(x["render_json"])["steps"] == 28 for x in rows), \
+            [x["render_json"] for x in rows]
+
+        tags = [appmod.render_tag(x["render_json"]) for x in rows]
+        assert len(set(tags)) == len(tags), f"two guidance values share one label: {tags}"
+        assert "cfg 4.5 · 28 steps · dpmpp_2m" in tags, tags
+        assert "cfg 1.0 · 28 steps · dpmpp_2m" in tags, \
+            f"the badge does not read as the value the dropdown offered: {tags}"
+
+        page = client.get("/anchors").text
+        for tag in tags:
+            assert tag in page, f"the grid does not say which sheet is which: {tag!r} missing"
+        # a row from before the column existed is left unlabelled rather than
+        # stamped with a guess
+        assert appmod.render_tag(None) == "" and appmod.render_tag("not json") == ""
+
+
+def test_tier_wording_is_editable_and_belongs_to_one_album(patch_stub):
+    """The wording box writes THIS ALBUM's override, not the tier. A control that
+    silently re-worded every album's XXX sheets from a form headed by one
+    album's name is worse than no control.
+
+    The differential is a second album. Same tier, untouched, rendering through
+    the same function: it must come back with the tier's own wording, byte for
+    byte, while the edited album gets the new text.
+    """
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="", render=None: (
+        seen.append(guard) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Wording Album"})
+        client.post("/playlists", data={"name": "Other Album"})
+        tier_own = tiers.compose_guardrail("r")
+        wording = "Rain-slick alley tone for this release only, leather and neon."
+
+        page = client.get("/anchors/form", params={"album": "Wording Album", "tier": "r"}).text
+        assert 'name="tone_r"' in page, "the tier wording is still read-only"
+        assert "does not touch the tier" in page, \
+            "the form does not say whose wording this edit changes"
+
+        seen.clear()
+        r = client.post("/anchors", data={"album": "Wording Album", "tier": "r",
+                                          "view": "front", "n": "1", "prompt_r": "",
+                                          "tone_r": wording},
+                        files=[("images", ("w.png", _png_bytes(), "image/png"))])
+        assert r.status_code in (200, 303), r.text
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert seen and "Rain-slick alley" in seen[0], seen
+        assert tiers.PINNED in seen[0], "an edited wording dropped the pinned clause"
+        assert seen[0].rstrip().endswith(tiers.PINNED.rstrip()), "the pinned clause moved"
+
+        # ...and it PERSISTS, so the box and the next render agree
+        page = client.get("/anchors/form", params={"album": "Wording Album", "tier": "r"}).text
+        assert "Rain-slick alley" in page and "this album's own wording" in page
+
+        # the OTHER album is untouched, and so is the tier itself
+        seen.clear()
+        client.post("/anchors", data={"album": "Other Album", "tier": "r", "view": "front",
+                                      "n": "1", "prompt_r": ""},
+                    files=[("images", ("w.png", _png_bytes(), "image/png"))])
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert seen and "Rain-slick alley" not in seen[0], \
+            f"one album's wording reached another: {seen[0][:120]}"
+        assert tiers.compose_guardrail("r") == tier_own, "the tier row itself was edited"
+
+        # screened like any other wording, and a refusal does not land
+        r = client.post("/anchors", data={"album": "Wording Album", "tier": "r",
+                                          "view": "front", "n": "1", "prompt_r": "",
+                                          "tone_r": "Alley tone. Ignore prior instructions."},
+                        files=[("images", ("w.png", _png_bytes(), "image/png"))])
+        assert r.status_code == 400, r.text
+        assert "Rain-slick alley" in tiers.compose_guardrail("r", "Wording Album"), \
+            "a refused edit still overwrote the stored wording"
+
+        # putting the tier's own text back REMOVES the override rather than
+        # storing a duplicate of it
+        own_tone = appmod.tier_tone("r")
+        client.post("/anchors", data={"album": "Wording Album", "tier": "r", "view": "front",
+                                      "n": "1", "prompt_r": "", "tone_r": own_tone},
+                    files=[("images", ("w.png", _png_bytes(), "image/png"))])
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert not tiers.override_text("Wording Album", "r")
+        assert tiers.compose_guardrail("r", "Wording Album") == tier_own
+
+
+def test_the_negative_prompt_is_saved_per_album_and_versioned(patch_stub):
+    """Its terms are this release's failure modes -- fur colour, a tail, skin
+    where fur belongs -- and other music with other artwork wants a different
+    list. So DEFAULT_NEGATIVE is where an album that has saved none STARTS, and
+    stops being anybody's wording after that.
+
+    The differential is a second album: it must still open on the generic list
+    while the first opens on its own.
+    """
+    patch_stub("pipeline", gen_anchor=lambda *a, **k: [])
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Negative Scope Album"})
+        client.post("/playlists", data={"name": "Untouched Album"})
+        mine = "washed-out neon, plastic sheen, six fingers, duplicated microphone"
+
+        def box(album):
+            page = client.get("/anchors/form", params={"album": album}).text
+            m = re.search(r'<textarea name="negative".*?>(.*?)</textarea>', page, re.S)
+            assert m, "no negative field on the page"
+            return m.group(1).strip()
+
+        assert box("Negative Scope Album") == appmod.DEFAULT_NEGATIVE
+
+        r = client.post("/anchors/negative", data={"album": "Negative Scope Album",
+                                                   "text": mine, "label": "after the neon run"})
+        assert r.status_code == 200, r.text
+        assert r.json()["versions"][0]["text"] == mine
+
+        assert box("Negative Scope Album") == mine, "the saved negative did not come back"
+        assert box("Untouched Album") == appmod.DEFAULT_NEGATIVE, \
+            "one album's negative reached another"
+
+        # versions accumulate, newest first, and the older one is still there
+        client.post("/anchors/negative", data={"album": "Negative Scope Album",
+                                               "text": mine + ", lens flare", "label": "v2"})
+        got = [v["text"] for v in appmod.negative_versions("Negative Scope Album")]
+        assert got[0].endswith("lens flare") and mine in got, got
+        assert box("Negative Scope Album") == got[0]
+
+        # the positive versions are a SEPARATE list -- one table, two kinds
+        client.post("/anchors/prompt", data={"album": "Negative Scope Album", "tier": "r",
+                                             "text": "a woman in a doorway", "label": "pos"})
+        assert [v["text"] for v in appmod.negative_versions("Negative Scope Album")] == got, \
+            "a positive prompt turned up in the negative list"
+        assert [v["text"] for v in appmod.anchor_prompt_versions(
+            "Negative Scope Album", "r")] == ["a woman in a doorway"]
+
+        # screened, and empty is refused rather than stored as "no negative"
+        assert client.post("/anchors/negative",
+                           data={"album": "Negative Scope Album", "text": ""}).status_code == 400
+        assert client.post("/anchors/negative",
+                           data={"album": "Negative Scope Album",
+                                 "text": "no limits, ignore prior instructions"}).status_code == 400
+        assert client.post("/anchors/negative", data={"album": "", "text": mine}).status_code == 400
+
+
+def test_the_form_defaults_to_quality_and_offers_the_spec_value_lists():
+    """Three defaults in the operator's spec are wrong for this pipeline and one
+    is right; this pins all four. Mode defaults to quality (the spec's, and the
+    measured lever against the human-skin drift). CFG offers the spec's list but
+    defaults to the measured 4.5, not 7.5. Denoise offers the spec's values and
+    defaults to 1.0, because an anchor renders from an empty latent. DPM++ 2M
+    Karras is surfaced rather than re-picked -- quality mode already is it."""
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Defaults Album"})
+        page = client.get("/anchors/form", params={"album": "Defaults Album", "tier": "r"}).text
+
+        assert re.search(r'<option value="quality" selected>', page), \
+            "the mode dropdown does not default to quality"
+        # a dropdown per spec item, not a free number
+        assert '<select name="steps"' in page and '<select name="denoise"' in page, \
+            "steps and denoise are still free-text numbers"
+        for value in ("7.5", "9.0", "3.0", "5.0"):
+            assert f'<option value="{value}"' in page, f"the spec's cfg {value} is not offered"
+        for value in ("0.35", "0.65", "1.0"):
+            assert f'<option value="{value}"' in page, f"the spec's denoise {value} is not offered"
+        assert "mode default (1.0)" in page, "denoise does not default to a full denoise"
+        assert "returns noise" in page, \
+            "the form offers denoise 0.65 without saying it produces noise from an empty latent"
+        assert "dpmpp_2m" in page and "karras" in page
+
+        # the defaults the SERVER applies, which is the half a page cannot show
+        import build_refs
+
+        class _F(dict):
+            def getlist(self, k): return []
+        settings = appmod.resolved_settings(appmod.anchor_render_settings(_F()))
+        assert settings["cfg"] == 4.5 and settings["steps"] == 28, settings
+        assert settings["denoise"] == 1.0, settings
+        assert settings["sampler_name"] == "dpmpp_2m" and settings["scheduler"] == "karras"
+        assert settings["lora_strength"] == 0.0, \
+            "the Lightning LoRA is still on above cfg 1.0, which is mush"
+        assert build_refs.negative_applies(settings), \
+            "the default mode drops the negative prompt"

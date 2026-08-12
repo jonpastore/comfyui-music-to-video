@@ -2,7 +2,7 @@
 in db/tiers/jobs/pipeline/grok/lyrics/mixer; this file wires HTTP to them and
 does upload validation + path-traversal-safe media serving.
 """
-import json, math, os, re, shutil, sqlite3, tempfile, time
+import json, math, os, random, re, shutil, sqlite3, tempfile, time
 from contextlib import asynccontextmanager
 from typing import Annotated, List, Optional
 from urllib.parse import quote
@@ -126,6 +126,35 @@ templates.env.filters["viewname"] = lambda v: ANCHOR_VIEWS.get(v, v or "")
 # be in, which is never the one the reader is in.
 templates.env.filters["isotime"] = lambda t: (
     time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)) if t else "")
+
+
+def render_tag(render_json):
+    """The settings a candidate was rendered at, in one line, or "".
+
+    Empty for every row written before anchors.render_json existed -- an
+    unlabelled thumbnail is honest about knowing nothing, and a guessed default
+    stamped on it would not be.
+    """
+    try:
+        s = json.loads(render_json) if render_json else {}
+    except ValueError:
+        return ""
+    if not s:
+        return ""
+    # "cfg 1.0", not "cfg 1" -- the badge has to read as the same value the
+    # dropdown offered, or the thumbnail and the control name it differently.
+    cfg = f"{float(s['cfg']):g}" if "cfg" in s else ""
+    bits = [f"cfg {cfg}{'' if '.' in cfg else '.0'}"] if cfg else []
+    if s.get("steps"):
+        bits.append(f"{s['steps']} steps")
+    if s.get("sampler_name"):
+        bits.append(str(s["sampler_name"]))
+    if s.get("lora_strength"):
+        bits.append("Lightning LoRA")
+    return " · ".join(bits)
+
+
+templates.env.filters["rendertag"] = render_tag
 
 
 def opposite_view(view):
@@ -653,7 +682,8 @@ def h_anchor(args, progress):
     view = args.get("view", "front")
     # the album's own look, edited in the UI, is what describes the character --
     # make_anchor.py no longer knows about any particular one
-    prof = album_profile(args["scope_value"] if args["scope_kind"] == "album" else "")
+    album = args["scope_value"] if args["scope_kind"] == "album" else ""
+    prof = album_profile(album)
     cid = args.get("character_id")
     if cid:
         # a CAST member's sheet describes that character, not the protagonist.
@@ -668,17 +698,28 @@ def h_anchor(args, progress):
                                  "body": prof["body"]}}
     if view in NUDE_VIEWS:
         progress(f"nude anchor for tier '{args['tier']}' -- permitted by its allow_nudity flag")
+    render = args.get("render") or {}
     paths = pipeline.gen_anchor(args["images"], view, args.get("n", 4), progress,
                                  profile=anchor_profile,
-                                 guard=tiers.compose_guardrail(args["tier"]),
+                                 # this ALBUM's wording for the tier if it has its
+                                 # own, else the tier's -- the same call the form
+                                 # composed its panel and its preview from
+                                 guard=tiers.compose_guardrail(args["tier"], album),
                                  prompt=args.get("prompt", ""),
-                                 render=args.get("render") or {})
+                                 render=render)
+    # What the KSampler was actually built with, resolved the same way the
+    # preview resolves it, stored per candidate. A CFG sweep otherwise leaves a
+    # dozen sheets in one group with nothing on them saying which guidance
+    # produced which -- and an unattributable image cannot settle an argument
+    # about a default.
+    settings = json.dumps(resolved_settings(render))
     now = time.time()
     for p in paths:
         db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen, created,
-                                        character_id)
-                  VALUES (?,?,?,?,?,0,?,?)""",
-               args["scope_kind"], args["scope_value"], args["tier"], view, p, now, cid)
+                                        character_id, render_json)
+                  VALUES (?,?,?,?,?,0,?,?,?)""",
+               args["scope_kind"], args["scope_value"], args["tier"], view, p, now, cid,
+               settings)
     return {"n": len(paths)}
 
 
@@ -739,7 +780,10 @@ def album_arc(album):
 def h_storyboard(args, progress):
     sid, tier = args["song_id"], args["tier"]
     song = db.one("SELECT * FROM songs WHERE id=?", sid)
-    guardrail = tiers.compose_guardrail(tier)
+    # the ALBUM's wording for this tier when it has its own. Composing without
+    # the album here would storyboard a song against wording its own anchors
+    # were never rendered from.
+    guardrail = tiers.compose_guardrail(tier, song["album"] or "")
     # The style note used to come from a per-song style-guide upload. That UI
     # moved to the album, so it comes from the ALBUM now: its theme, its world
     # and its render style are exactly what "the look of this release" means.
@@ -827,7 +871,8 @@ def h_refs(args, progress):
         progress(f"cast for this tier: {', '.join(sorted(cast))}")
     results = pipeline.gen_refs(song["slug"], tier, sb["json_path"], anchor_name,
                                  song["mp3_path"], progress, limit=args.get("limit"),
-                                 guard=tiers.compose_guardrail(tier), body=body, cast=cast)
+                                 guard=tiers.compose_guardrail(tier, album), body=body,
+                                 cast=cast)
     now = time.time()
     for r in results:
         db.run("""INSERT OR IGNORE INTO refs (song_id, tier, clip_idx, path, seed, approved,
@@ -854,7 +899,7 @@ def h_reroll(args, progress):
             for c, a in cast_anchors(album, tier)}
     results = pipeline.reroll(song["slug"], tier, sb["json_path"], anchor_name,
                                song["mp3_path"], args["clip_indices"], progress,
-                               guard=tiers.compose_guardrail(tier),
+                               guard=tiers.compose_guardrail(tier, album),
                                body=album_profile(album)["body"],
                                note=args.get("note", ""), cast=cast)
     now = time.time()
@@ -896,7 +941,7 @@ def h_artwork(args, progress):
     # An album cover carries no tier of its own. It uses the tier of whichever
     # anchor it is rendered from, so a cover generated from an explicit anchor
     # is permitted what that tier permits -- and PINNED applies either way.
-    guard = tiers.compose_guardrail(args["tier"]) if args.get("tier") else ""
+    guard = tiers.compose_guardrail(args["tier"], p["name"]) if args.get("tier") else ""
     paths = pipeline.gen_artwork(safe_name(p["name"]), prompt, progress,
                                   anchor_path=args.get("anchor_path"),
                                   source_path=args.get("source_path"), guard=guard)
@@ -923,7 +968,7 @@ def h_fix_ref(args, progress):
         args["seed"], progress, face_path=args.get("face_path"),
         mask_path=args.get("mask_path"), pad=args.get("pad", (0, 0, 0, 0)),
         instruction=args.get("instruction", ""),
-        guard=tiers.compose_guardrail(tier), body=body)
+        guard=tiers.compose_guardrail(tier, song["album"] or ""), body=body)
     now = time.time()
     for r in results:
         db.run("""INSERT OR IGNORE INTO refs (song_id, tier, clip_idx, path, seed, approved,
@@ -940,7 +985,7 @@ def h_clips(args, progress):
     sb = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", sid, tier)
     approved = db.q("SELECT clip_idx, path FROM refs WHERE song_id=? AND tier=? AND approved=1", sid, tier)
     ref_paths = [{"clip_idx": r["clip_idx"], "path": r["path"]} for r in approved]
-    video_model = args.get("video_model") or "s2v"
+    video_model = args.get("video_model") or models.default_cli("video")
     if video_model == "i2v":
         progress("i2v: prompt-driven only -- this render has no beat sync or mouth movement")
     if args.get("refine"):
@@ -1732,13 +1777,65 @@ DEFAULT_NEGATIVE = (
 # Lightning LoRA's own operating point and the only one where a negative prompt
 # is ignored; everything above it drops the LoRA (build_refs.sampler_settings)
 # and costs steps. Values are the sampler's, not a scale invented here.
+#
+# The list is the operator's spec (1.0, 3.0, 5.0, 7.0, 7.5, 8.0, 9.0) merged
+# with the five a fixed-seed sweep actually rendered on 2026-08-12. The labels
+# on 6.0 and above are what those renders LOOKED like, not a preference: 6.0
+# brought a human face and haloing back, so the spec's 7.5 default is past the
+# point this model degrades and 4.5 is the default here instead. That sweep was
+# n=1 per point -- turn on the CFG sweep below to re-run it at n=3 and judge it
+# on images rather than on this sentence.
 CFG_CHOICES = (
     ("1.0", "1.0 — Lightning LoRA, 4 steps, fastest. Negative prompt IGNORED."),
     ("2.0", "2.0 — gentle guidance, closest to the references"),
+    ("3.0", "3.0 — gentle-to-balanced"),
     ("3.5", "3.5 — balanced; follows the prompt without flattening the references"),
-    ("4.5", "4.5 — stronger prompt adherence, more contrast"),
-    ("6.0", "6.0 — heavy guidance; can oversaturate and stiffen poses"),
+    ("4.5", "4.5 — stronger prompt adherence, more contrast. Best of the measured five."),
+    ("5.0", "5.0 — stronger still"),
+    ("6.0", "6.0 — measured: a human face returned, haloing around head and arms"),
+    ("7.0", "7.0 — past the measured degradation point"),
+    ("7.5", "7.5 — the spec's default; past the measured degradation point here"),
+    ("8.0", "8.0 — past the measured degradation point"),
+    ("9.0", "9.0 — past the measured degradation point"),
 )
+
+# Steps, spanning the spec's 10-50 range plus the Lightning LoRA's own 4. The
+# empty option stays FIRST and stays the default: an unset field must reach
+# make_anchor as absent, so the mode's own number applies, rather than as a
+# number this form happened to list.
+STEPS_CHOICES = (
+    ("4", "4 — the Lightning LoRA's own count; only meaningful at CFG 1.0"),
+    ("10", "10 — fast, soft detail"),
+    ("14", "14"),
+    ("20", "20"),
+    ("28", "28 — quality mode's own"),
+    ("36", "36"),
+    ("50", "50 — slowest, diminishing returns"),
+)
+
+# Denoise. The spec asks for 0.65 by default and that would produce noise HERE:
+# an anchor renders from EmptySD3LatentImage (build_refs.workflow,
+# latent_mode="empty"), so there is no base latent to preserve and anything
+# below 1.0 leaves it partly un-denoised. The values are offered because the
+# spec asks for them and a refine-from-image pass genuinely wants them; the
+# default stays 1.0 and each lower value says what it is for.
+DENOISE_CHOICES = (
+    ("0.35", "0.35 — refine-from-image only; on an anchor this returns noise"),
+    ("0.45", "0.45 — refine-from-image only; on an anchor this returns noise"),
+    ("0.55", "0.55 — refine-from-image only; on an anchor this returns noise"),
+    ("0.65", "0.65 — the spec's default; on an anchor this returns noise"),
+    ("0.75", "0.75 — refine-from-image only; on an anchor this returns noise"),
+    ("1.0", "1.0 — full denoise, the only correct value from an empty latent"),
+)
+
+# How many candidates a CFG sweep renders at each guidance value. Off is the
+# default and everything else is a deliberate multi-sheet job.
+CFG_SWEEP_CHOICES = (2, 3, 4)
+# Ceiling on one sweep, in sheets. Eleven values at four each is 44 renders on
+# a single card at roughly a minute apiece -- long, but it is one queued job per
+# value and each is separately cancellable, so this is a bound against a typo
+# rather than a policy.
+MAX_SWEEP_SHEETS = 44
 
 
 def anchor_render_settings(form):
@@ -1746,7 +1843,11 @@ def anchor_render_settings(form):
     takes. Values the user did not set are simply absent, so make_anchor's own
     defaults apply -- an unset field must never become a number nobody chose."""
     import build_refs
-    mode = (form.get("mode") or "fast").strip().lower()
+    # QUALITY, not fast. Every cfg above 1.0 fixed the human-skin drift in the
+    # 2026-08-12 sweep and quality mode is what raises it; the form defaults to
+    # it, and the server agreeing means a submit that omits the field renders
+    # what the form would have sent rather than the other mode.
+    mode = (form.get("mode") or "quality").strip().lower()
     if mode not in ANCHOR_MODES:
         raise HTTPException(400, f"mode must be one of {', '.join(ANCHOR_MODES)}")
     out = {"mode": mode}
@@ -1794,15 +1895,130 @@ def anchor_render_settings(form):
     return out
 
 
+def cfg_sweep_points(form, render, combos):
+    """The CFG sweep, or None when the box is off.
+
+    What it is for: day 7's guidance sweep was n=1 per point, so 3.5 sitting
+    between two good neighbours is single-sample noise and not a property of
+    3.5. This renders every value in the dropdown at n candidates each -- more
+    sheets than the 8 one form submit has ever been allowed, because it is one
+    queued job PER VALUE rather than one big one, and each is separately
+    cancellable.
+
+    Three things are refused rather than quietly worked around, because each
+    would produce images that cannot answer the question the sweep is asked:
+
+    - MORE THAN ONE SHEET. A sweep of two views is two experiments interleaved,
+      and the grid it lands in is grouped by tier and view, so they would mix.
+    - FAST MODE. sampler_settings drops the Lightning LoRA the moment cfg goes
+      above 1.0, and fast mode's step count is the LoRA's four. Four steps of
+      euler with no distillation is mush at every point above the first, so the
+      sweep would compare ten pictures of noise.
+    - A CHOSEN CFG. The sweep sets it. A form that let you pick one and then
+      ignored it is a control that does nothing.
+
+    The base SEED is drawn once and pinned to every point. Without it each job
+    draws its own random base, so the images differ by seed AND by guidance at
+    once and nothing in the result is attributable to the knob being swept --
+    which is exactly what "same references, same prompt, only guidance
+    changing" meant in the sweep this one re-runs.
+    """
+    raw = (form.get("cfg_sweep") or "").strip()
+    if not raw or raw == "0":
+        return None
+    try:
+        per_point = int(raw)
+    except ValueError:
+        raise HTTPException(400, "the CFG sweep count must be a number")
+    if per_point not in CFG_SWEEP_CHOICES:
+        raise HTTPException(400, f"a CFG sweep renders "
+                                  f"{', '.join(str(c) for c in CFG_SWEEP_CHOICES)} candidates "
+                                  f"at each value, not {per_point}")
+    if len(combos) != 1:
+        raise HTTPException(400, f"a CFG sweep renders ONE sheet at every guidance value, and "
+                                  f"this would render {len(combos)}. Tick a single tier and a "
+                                  f"single view -- with two, the candidates land in two "
+                                  f"different grids and neither one is a comparison.")
+    if render.get("mode") != "quality":
+        raise HTTPException(400, "a CFG sweep needs quality mode. Above cfg 1.0 the Lightning "
+                                  "LoRA is dropped, and fast mode's step count is the LoRA's "
+                                  "four -- so every point above the first would render four "
+                                  "undistilled steps, which is mush, not a comparison.")
+    if "cfg" in render:
+        raise HTTPException(400, "the sweep sets the guidance at every point, so leave Guidance "
+                                  "on 'follow the mode'.")
+    cfgs = [float(v) for v, _ in CFG_CHOICES]
+    sheets = per_point * len(cfgs)
+    if sheets > MAX_SWEEP_SHEETS:
+        raise HTTPException(400, f"that is {sheets} sheets; {MAX_SWEEP_SHEETS} is this sweep's "
+                                  f"ceiling")
+    # One base seed for the whole sweep. make_anchor spaces the n candidates off
+    # it deterministically (base + k*137), so point-for-point the SAME three
+    # seeds are rendered at every guidance value.
+    return {"cfgs": cfgs, "n": per_point, "sheets": sheets,
+            "seed": random.randrange(1, 2 ** 31 - 1)}
+
+
+SAMPLER_KEYS = ("steps", "cfg", "sampler_name", "scheduler", "denoise")
+
+
+def resolved_settings(render):
+    """What the KSampler will ACTUALLY be built with, from what the form chose.
+
+    The mode's defaults with the user's overrides on top, resolved by
+    build_refs -- the one function make_anchor also resolves through, so the
+    preview panel, the stored badge on a candidate and the workflow cannot hold
+    three different opinions about the cfg.
+    """
+    import build_refs
+    render = render or {}
+    return build_refs.sampler_settings(
+        render.get("mode", "fast"),
+        **{k: v for k, v in render.items() if k in SAMPLER_KEYS})
+
+
 MAX_PROMPT_VERSIONS = 20
 
 
-def anchor_prompt_versions(album, tier, character_id=None):
-    """Saved prompts for this album+tier+character, newest first."""
+def anchor_prompt_versions(album, tier, character_id=None, kind="positive"):
+    """Saved prompts of one KIND for this album+tier+character, newest first.
+
+    COALESCE because `kind` arrived after the table did: every row written
+    before it is a positive prompt and reads NULL.
+    """
     return db.q("""SELECT id, label, text, created FROM anchor_prompts
                    WHERE scope_value=? AND tier=? AND character_id IS ?
+                     AND COALESCE(kind,'positive')=?
                    ORDER BY id DESC LIMIT ?""",
-                album or "", tier, character_id, MAX_PROMPT_VERSIONS)
+                album or "", tier, character_id, kind, MAX_PROMPT_VERSIONS)
+
+
+def negative_versions(album):
+    """Saved NEGATIVE prompts for one album, newest first.
+
+    Per album and not per tier or character, because that is the scope of what
+    the text says: it lists this release's failure modes -- the fur colours that
+    drift, the skin that appears where fur belongs. Another album, another
+    species or another palette wants a different list, and DEFAULT_NEGATIVE is
+    only a starting point for the first one.
+    """
+    return anchor_prompt_versions(album, "", None, "negative")
+
+
+def save_prompt_version(album, tier, cid, kind, text, label):
+    """One row per save, oldest trimmed. Shared by both boxes that save."""
+    now = time.time()
+    pid = db.run("""INSERT INTO anchor_prompts (scope_value, tier, character_id, label,
+                                                 text, created, kind) VALUES (?,?,?,?,?,?,?)""",
+                 album, tier, cid, label or None, text, now, kind)
+    # keep the list to a readable length; the oldest go
+    old_ids = [r["id"] for r in db.q(
+        """SELECT id FROM anchor_prompts WHERE scope_value=? AND tier=? AND character_id IS ?
+             AND COALESCE(kind,'positive')=?
+           ORDER BY id DESC LIMIT -1 OFFSET ?""", album, tier, cid, kind, MAX_PROMPT_VERSIONS)]
+    for i in old_ids:
+        db.run("DELETE FROM anchor_prompts WHERE id=?", i)
+    return pid, now
 
 
 @app.post("/anchors/prompt")
@@ -1834,19 +2050,46 @@ async def save_anchor_prompt(request: Request):
         tiers.check_override(text)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    now = time.time()
-    pid = db.run("""INSERT INTO anchor_prompts (scope_value, tier, character_id, label,
-                                                 text, created) VALUES (?,?,?,?,?,?)""",
-                 album, tier, cid, label or None, text, now)
-    # keep the list to a readable length; the oldest go
-    old_ids = [r["id"] for r in db.q(
-        """SELECT id FROM anchor_prompts WHERE scope_value=? AND tier=? AND character_id IS ?
-           ORDER BY id DESC LIMIT -1 OFFSET ?""", album, tier, cid, MAX_PROMPT_VERSIONS)]
-    for i in old_ids:
-        db.run("DELETE FROM anchor_prompts WHERE id=?", i)
+    pid, now = save_prompt_version(album, tier, cid, "positive", text, label)
     return JSONResponse({"id": pid, "label": label, "created": now,
                          "versions": [dict(r) for r in
                                       anchor_prompt_versions(album, tier, cid)]})
+
+
+@app.post("/anchors/negative")
+async def save_anchor_negative(request: Request):
+    """Save the negative prompt as a new version, for THIS ALBUM.
+
+    Its own route rather than a flag on the one above: the two boxes have
+    different limits and a different scope, and a negative has no tier. The
+    album's newest saved negative is what the form then prefills, so
+    DEFAULT_NEGATIVE is the starting point for an album that has never saved
+    one and stops being anybody's wording after that.
+
+    Screened like the positive, for the same reason: text on its way to a model.
+    """
+    form = await request.form()
+    album = (form.get("album") or "").strip()
+    text = " ".join((form.get("text") or "").split())
+    label = " ".join((form.get("label") or "").split())[:80]
+    if not album:
+        raise HTTPException(400, "an album is needed to save a negative prompt")
+    if not text:
+        raise HTTPException(400, "nothing to save -- the negative prompt is empty. To render "
+                                  "with no negative, clear the box and generate; saving an "
+                                  "empty one would make 'no negative' indistinguishable from "
+                                  "'not set up yet'")
+    if len(text) > MAX_NEGATIVE:
+        raise HTTPException(400, f"the negative prompt is {len(text)} characters; keep it "
+                                  f"under {MAX_NEGATIVE}")
+    try:
+        tiers.check_text(text, "negative prompt")
+        tiers.check_override(text)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    pid, now = save_prompt_version(album, "", None, "negative", text, label)
+    return JSONResponse({"id": pid, "label": label, "created": now,
+                         "versions": [dict(r) for r in negative_versions(album)]})
 
 
 def anchor_prompt_preview(album, tier, view, character_id=None, typed="",
@@ -1868,7 +2111,7 @@ def anchor_prompt_preview(album, tier, view, character_id=None, typed="",
     import guardrail as g
     settings = settings or {}
     pos = (typed or "").strip() or default_anchor_prompt(album, view, character_id)
-    tier_text = tiers.compose_guardrail(tier)
+    tier_text = tiers.compose_guardrail(tier, album)
     try:
         final = g.build_prompt(pos, tier_text, "anchor prompt preview")
         refused = ""
@@ -1939,14 +2182,7 @@ async def anchor_preview(request: Request):
     tiers_sel = sorted({t for t in form.getlist("tier") if t})
     views_sel = sorted({v for v in form.getlist("view") if v}) or ["front"]
     chosen = anchor_render_settings(form)
-    # what the sampler will ACTUALLY be: the mode's defaults with the user's
-    # overrides on top, resolved by build_refs so the panel and the workflow
-    # cannot hold different opinions about the cfg
-    import build_refs
-    settings = build_refs.sampler_settings(
-        chosen.get("mode", "fast"),
-        **{k: v for k, v in chosen.items() if k in ("steps", "cfg", "sampler_name",
-                                                     "scheduler", "denoise")})
+    settings = resolved_settings(chosen)
     unedited = default_anchor_prompt(album, next(
         (k for k in ANCHOR_VIEWS if k in set(views_sel)), "front"), cid)
     out = []
@@ -2035,6 +2271,27 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
             raise HTTPException(400, str(e))
         prompts[t] = text
 
+    # TIER WORDING, arriving as tone_<tier> for the same reason the prompts do.
+    # Stored BEFORE anything is queued, so the wording the box showed is the
+    # wording compose_guardrail() then hands the renderer -- an edit that
+    # rendered but did not persist would put the form and the next render into
+    # disagreement, which is this codebase's recurring defect.
+    #
+    # Scoped to this ALBUM. Typing in this box cannot re-word another release's
+    # sheets, and typing the tier's own wording back removes the override
+    # rather than storing a duplicate of it.
+    for t in selected_tiers:
+        if f"tone_{t}" not in form:
+            continue                        # no box on the page: leave the wording alone
+        typed_tone = " ".join((form.get(f"tone_{t}") or "").split())
+        if typed_tone == tiers.tier_text(t).strip():
+            typed_tone = ""
+        if typed_tone != tiers.override_text(album, t):
+            try:
+                tiers.set_override(album, t, typed_tone)
+            except ValueError as e:
+                raise HTTPException(400, str(e))
+
     if character_id is not None:
         # a character belongs to the album it was defined on; anchoring one
         # elsewhere would silently make an unreachable anchor
@@ -2075,6 +2332,7 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
 
     render = anchor_render_settings(form)
     n = max(1, min(int(n), 8))
+    sweep = cfg_sweep_points(form, render, combos)
     # An UNEDITED prompt is sent as empty so make_anchor composes it PER VIEW.
     #
     # make_anchor.py:169 is `args.prompt.strip() or prompt_for(view, ...)`, so an
@@ -2089,16 +2347,25 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     # An EDITED prompt is still honoured, and still applies to every view of its
     # tier -- the form says so, because that edit does override the framing and
     # the nude swap.
+    #
+    # A CFG SWEEP replaces the per-combination loop with a per-GUIDANCE one: the
+    # single tier and view, rendered once at every cfg value, n candidates each.
+    # Everything else is held fixed, including the base SEED -- see
+    # cfg_sweep_points for why that is the whole point of it.
     queued = []
-    for t, v in combos:
+    plan_points = ([(t, v, None) for t, v in combos] if not sweep else
+                   [(combos[0][0], combos[0][1], c) for c in sweep["cfgs"]])
+    for t, v, cfg in plan_points:
         text = prompts[t]
         if text and text.strip() == (unedited_default or "").strip():
             text = ""
+        this_render = render if cfg is None else dict(render, cfg=cfg, seed=sweep["seed"])
+        this_n = n if cfg is None else sweep["n"]
         jid = jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": album, "tier": t,
-                                       "view": v, "images": paths, "n": n,
+                                       "view": v, "images": paths, "n": this_n,
                                        "character_id": character_id, "prompt": text,
-                                       "render": render})
-        queued.append({"id": jid, "tier": t, "view": v, "prompt": text})
+                                       "render": this_render})
+        queued.append({"id": jid, "tier": t, "view": v, "prompt": text, "cfg": cfg})
 
     # The async caller paints from THIS, never from what it typed -- and this is
     # the whole answer to "I clicked generate and I don't think it generated any
@@ -2108,8 +2375,14 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     # that carries them can be asserted on.
     if wants_json(request):
         return JSONResponse({"queued": len(queued), "jobs": queued, "album": album,
-                             "tiers": selected_tiers, "views": selected_views, "n": n,
-                             "refs": len(paths), "render": render})
+                             "tiers": selected_tiers, "views": selected_views,
+                             "n": sweep["n"] if sweep else n,
+                             "refs": len(paths), "render": render,
+                             # the sweep's own numbers, so a caller can assert
+                             # that every point got the SAME seed rather than
+                             # take it on trust
+                             "sweep": ({"cfgs": sweep["cfgs"], "seed": sweep["seed"],
+                                        "sheets": sweep["sheets"]} if sweep else None)})
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 
@@ -2277,14 +2550,28 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
     # in their framing sentence, which make_anchor swaps in per view
     default_prompt = default_anchor_prompt(album, chosen_views[0], character_id)
     prompts = prompts or {}
+    # The negative is the ALBUM's, and DEFAULT_NEGATIVE is only where an album
+    # that has never saved one starts. Its terms are failure modes of THIS
+    # release's art -- fur colour, a tail, skin where fur belongs -- and other
+    # music with other artwork wants a different list, which is why saving one
+    # is per album and why the constant is a starting point rather than a rule.
+    saved_negatives = negative_versions(album)
+    if negative is None:
+        negative = saved_negatives[0]["text"] if saved_negatives else DEFAULT_NEGATIVE
     return {
         "tiers": all_t, "albums": albums, "form_album": album,
         "selected_tiers": selected, "views": views, "selected_views": chosen_views,
         "plan": plan, "sheet_count": sum(len(p["views"]) for p in plan),
         "view_labels": ANCHOR_VIEWS,
         "pinned": tiers.PINNED.strip(),
-        # one panel per ticked tier: its wording, and its own prompt
-        "tier_panels": [{"name": t, "text": tier_tone(t),
+        # One panel per ticked tier: the wording that applies, its own prompt,
+        # and whether that wording is this ALBUM's or the tier's. `text` is what
+        # the box shows and `tier_default` is what "use the tier's wording"
+        # would put back -- both are needed, because a panel that showed only
+        # the effective text could not tell you it was an override.
+        "tier_panels": [{"name": t, "text": tier_tone(t, album),
+                         "tier_default": tiers.tier_text(t).strip(),
+                         "overridden": bool(tiers.override_text(album, t)),
                          "prompt": prompts.get(t, default_prompt),
                          "versions": anchor_prompt_versions(album, t, character_id)}
                         for t in selected],
@@ -2299,8 +2586,14 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
         "samplers": _build_refs().SAMPLERS, "schedulers": _build_refs().SCHEDULERS,
         "ref_methods": _build_refs().REF_METHODS,
         "max_negative": MAX_NEGATIVE,
-        "negative": DEFAULT_NEGATIVE if negative is None else negative,
+        "negative": negative, "negative_versions": saved_negatives,
         "cfg_choices": CFG_CHOICES, "default_negative": DEFAULT_NEGATIVE,
+        "steps_choices": STEPS_CHOICES, "denoise_choices": DENOISE_CHOICES,
+        # (candidates per point, total sheets) -- the cost is computed here so
+        # the form states it rather than leaving it to be discovered
+        "sweep_choices": [(c, c * len(CFG_CHOICES)) for c in CFG_SWEEP_CHOICES],
+        "sweep_values": [v for v, _ in CFG_CHOICES],
+        "max_tier_guardrail": tiers.MAX_TIER_GUARDRAIL,
         "character_id": character_id,
         "characters": (album_cast(album) if album
                        else db.q("SELECT * FROM characters ORDER BY scope_value, name")),
@@ -2422,7 +2715,9 @@ def h_fix_anchor(args, progress):
         f"anchor_{row['id']}", row["tier"], 0, args["mode"], row["path"], args["seed"],
         progress, face_path=args.get("face_path"), mask_path=args.get("mask_path"),
         pad=args.get("pad", (0, 0, 0, 0)), instruction=args.get("instruction", ""),
-        guard=tiers.compose_guardrail(row["tier"]), body=prof["body"])
+        guard=tiers.compose_guardrail(
+            row["tier"], row["scope_value"] if row["scope_kind"] == "album" else ""),
+        body=prof["body"])
     now = time.time()
     for r in results:
         # a NEW candidate in the same group, never a replacement: the sheet you
@@ -2519,15 +2814,17 @@ def pick_anchor(request: Request, id: int):
         status_code=303)
 
 
-def tier_tone(tier):
-    """A tier's own tone/wardrobe wording, with the pinned clause removed.
+def tier_tone(tier, album=""):
+    """The tone/wardrobe wording that APPLIES, with the pinned clause removed.
 
-    compose_guardrail() always welds PINNED on; this is the half a human wrote
-    and the half that is editable. Unknown tier -> "" rather than an exception,
+    This album's own wording for the tier if it has one, else the tier's --
+    tiers.tier_text is the single place that decides, so a panel showing this
+    and a render composing through compose_guardrail() cannot disagree about
+    which wording is in force. Unknown tier -> "" rather than an exception,
     because this feeds a form that must still render.
     """
     try:
-        return tiers.compose_guardrail(tier).replace(tiers.PINNED, "").strip()
+        return tiers.tier_text(tier, album).strip()
     except ValueError:
         return ""
 
@@ -2541,7 +2838,7 @@ def default_direction(song, tier):
     is written from this text, so it is the text that should be editable.
     """
     prof = album_profile(song["album"] or "")
-    parts = [(f"Tone and wardrobe ({tier} tier)", tier_tone(tier)),
+    parts = [(f"Tone and wardrobe ({tier} tier)", tier_tone(tier, song["album"] or "")),
              ("Look", prof["style_text"]), ("World", prof["world"]),
              ("Render style", prof["render_tail"])]
     return "\n\n".join(f"{label}: {text.strip()}" for label, text in parts if text and text.strip())
@@ -2562,7 +2859,8 @@ def storyboard_form_ctx(song, tier, chat_models=None, best=None, direction=None)
                      or default_direction(song, tier))
     return {"song": song, "tier": tier, "tiers": tiers.all_tiers(),
             "direction": direction, "pinned": tiers.PINNED.strip(),
-            "tier_text": tier_tone(tier), "max_direction": grok.MAX_DIRECTION,
+            "tier_text": tier_tone(tier, song["album"] or ""),
+            "max_direction": grok.MAX_DIRECTION,
             "models": chat_models if chat_models is not None else [], "best_model": best}
 
 
@@ -3129,7 +3427,7 @@ async def save_driving_video(upload, dest_dir, prefix):
 
 
 @app.post("/songs/{id}/clips")
-async def start_clips(id: int, tier: str = Form(...), video_model: str = Form("s2v"),
+async def start_clips(id: int, tier: str = Form(...), video_model: str = Form(""),
                        refine: bool = Form(False),
                        ref_motion: Optional[UploadFile] = File(None),
                        control_video: Optional[UploadFile] = File(None)):
@@ -3148,8 +3446,14 @@ async def start_clips(id: int, tier: str = Form(...), video_model: str = Form("s
     missing = [i for i in range(n_clips) if i not in approved_idxs]
     if missing:
         raise HTTPException(400, f"clips missing an approved reference: {missing}")
-    if video_model not in ("s2v", "i2v"):
-        raise HTTPException(400, "video_model must be 's2v' or 'i2v'")
+    # The catalogue is the single place that knows which renderers exist -- the
+    # song page already builds its dropdown from models.renderable("video") and
+    # marks models.default_for("video"). Hardcoding the pair here meant the page
+    # offered a default the API answered with a 400.
+    allowed = set(models.renderable("video").values())
+    video_model = video_model or models.default_cli("video")
+    if video_model not in allowed:
+        raise HTTPException(400, f"video_model must be one of {sorted(allowed)}")
     work_dir = os.path.join(db.DATA, "driving", song["slug"])
     stamp = int(time.time() * 1000)
     motion_path = await save_driving_video(ref_motion, work_dir, f"motion_{stamp}")

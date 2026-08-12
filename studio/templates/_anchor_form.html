@@ -154,14 +154,18 @@
     <legend>Render &mdash; reference adherence</legend>
     <div class="field-row">
       <label>Mode
+        {# quality is the default, not fast. Every cfg above 1.0 -- with the
+           Lightning LoRA off and the negative live -- fixed the human-skin
+           drift in the 2026-08-12 sweep, and quality mode is what pulls that
+           lever. fast is still here and still fifteen seconds a sheet. #}
         <select name="mode" id="anchor-mode">
+          <option value="quality" selected>quality &mdash; ~28 steps, ~1 min a sheet</option>
           <option value="fast">fast &mdash; 4 steps, ~15s a sheet</option>
-          <option value="quality">quality &mdash; ~28 steps, ~1 min a sheet</option>
         </select>
       </label>
       <label>Guidance (CFG)
         <select name="cfg" id="anchor-cfg">
-          <option value="">follow the mode</option>
+          <option value="">follow the mode (quality = 4.5)</option>
           {% for value, label in cfg_choices %}
           <option value="{{ value }}">{{ label }}</option>
           {% endfor %}
@@ -179,21 +183,67 @@
       method above and the prompt below are the levers. <strong>Reference method</strong>
       changes how the references are folded into the latent; try another if colour or
       markings drift.</p>
+
+    {# ---- CFG sweep: the same sheet at every guidance value ---- #}
+    <div class="field-row">
+      <label>CFG sweep
+        <select name="cfg_sweep" id="anchor-cfg-sweep">
+          <option value="0">off &mdash; render once, at the CFG above</option>
+          {% for n, sheets in sweep_choices %}
+          <option value="{{ n }}">{{ n }} candidates at EVERY CFG value
+            &mdash; {{ sheets }} sheets</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <p class="hint">Renders one tier and one view at
+      <strong>{{ sweep_values | join(', ') }}</strong>, holding the references, the prompt and
+      the <strong>base seed</strong> fixed so the only thing that changes between the images is
+      the guidance. That is the whole point: the sweep these values came from was
+      <strong>one sample per point</strong>, which is why 3.5 landing between two good
+      neighbours settles nothing. One queued job per value, each separately cancellable,
+      so this is far more than the eight candidates a single sheet allows &mdash;
+      {{ sweep_choices[0][1] }} sheets at the smallest setting, about a minute each.
+      Needs <strong>quality mode</strong> (above CFG 1.0 the Lightning LoRA is dropped, and
+      fast mode's four steps without it are mush), a <strong>single tier and view</strong>,
+      and Guidance left on &ldquo;follow the mode&rdquo;. Anything else is refused rather
+      than quietly adjusted.</p>
+
     <details>
       <summary>Sampler &mdash; only if you know why</summary>
       <div class="field-row">
-        <label>Steps <input type="number" name="steps" min="1" max="60" placeholder="mode default"></label>
-
-        <label>Denoise <input type="number" step="0.05" name="denoise" min="0.1" max="1" placeholder="1.0"></label>
+        <label>Steps
+          <select name="steps">
+            <option value="">mode default (quality = 28)</option>
+            {% for value, label in steps_choices %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Denoise
+          <select name="denoise">
+            <option value="">mode default (1.0)</option>
+            {% for value, label in denoise_choices %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
         <label>Sampler
-          <select name="sampler_name"><option value="">mode default</option>
+          <select name="sampler_name"><option value="">mode default (quality = dpmpp_2m)</option>
             {% for x in samplers %}<option value="{{ x }}">{{ x }}</option>{% endfor %}</select>
         </label>
         <label>Scheduler
-          <select name="scheduler"><option value="">mode default</option>
+          <select name="scheduler"><option value="">mode default (quality = karras)</option>
             {% for x in schedulers %}<option value="{{ x }}">{{ x }}</option>{% endfor %}</select>
         </label>
       </div>
+      {# Quality mode is already DPM++ 2M Karras. The spec asks for it as the
+         default and it is one; these two selects surface it rather than
+         re-pick it. #}
+      <p class="hint"><strong>Denoise below 1.0 will return noise here.</strong> An anchor
+        renders from an EMPTY latent (<code>EmptySD3LatentImage</code>) &mdash; there is no
+        base image to preserve, so anything under 1.0 leaves it partly un-denoised. The lower
+        values are offered because a refine-from-image pass wants them; this is not one.</p>
     </details>
   </fieldset>
 
@@ -207,14 +257,38 @@
       A negative prompt needs CFG above 1, and fast mode is CFG 1.0 &mdash; ComfyUI skips
       the negative pass entirely there, so this text is <strong>dropped, not sent</strong>.
       Switch Mode to <strong>quality</strong> for it to take effect.</p>
+    {# Saved per ALBUM, and versioned exactly as the positive prompts are. The
+       terms are this release's failure modes -- its fur colours, its tail, skin
+       where fur belongs -- and other music with other artwork wants a different
+       list, so one global constant could only ever be a starting point. #}
+    <div class="field-row prompt-versions" data-negative>
+      <label>Saved negatives
+        <select class="negative-version-pick">
+          <option value="">{% if negative_versions %}the album's latest saved negative{% else %}the generic starting point{% endif %}</option>
+          {% for v in negative_versions %}
+          <option value="{{ v.id }}" data-text="{{ v.text }}">
+            {{ v.label or "unnamed" }} &middot; {{ v.created | isotime }}</option>
+          {% endfor %}
+          <option value="default" data-text="{{ default_negative }}">the generic starting point</option>
+        </select>
+      </label>
+      <label>Name this version
+        <input type="text" class="negative-version-label" maxlength="80"
+               placeholder="e.g. after the white-tail run"></label>
+      <button type="button" class="negative-save">Save negative</button>
+      <span class="negative-save-note muted"></span>
+    </div>
     <textarea name="negative" rows="3" class="counted" data-max="{{ max_negative }}"
               maxlength="{{ max_negative }}"
               placeholder="white fur, cream fur, lighter patches, white tail, human skin, extra limbs, deformed tail, text, watermark, blurry">{{ negative or "" }}</textarea>
     <p class="hint">Fights what the positive cannot: colour drift, wrong markings, stray
       clothing on a nude sheet. Screened like every other free-text field here.
-      Pre-filled with a generic starting point &mdash; every term is a failure MODE, not a
-      trait of any one character, so it suits a different species or palette unchanged.
-      Edit it freely; clear it to send none.</p>
+      <strong>Saved per album</strong>{% if negative_versions %} &mdash; this box is
+      {{ form_album }}'s latest saved version{% else %}, and this album has saved none yet, so
+      the box holds the generic starting point: every term in it is a failure MODE rather than
+      a trait of any one character, which is what makes it a sane opening list for a different
+      species or palette{% endif %}. Edit and press <strong>Save negative</strong> to keep it;
+      clear the box and generate to send none.</p>
   </fieldset>
 
   {# ---- exactly what gets sent ---- #}
@@ -251,9 +325,35 @@
   {% for p in tier_panels %}
   <div class="tier-panel {% if not loop.first %}hidden{% endif %}"
        data-album="anchor-form" data-tier="{{ p.name }}">
-    <p class="rule"><strong>The <code>{{ p.name | tiername }}</code> tier's wording</strong>,
-      attached on top of the pinned text for this tier's sheets:</p>
-    <blockquote>{{ p.text or "(this tier adds no wording of its own)" }}</blockquote>
+    {# EDITABLE, and scoped to this album. The box writes tier_overrides, not
+       the tiers table: a control that silently re-worded every album's XXX
+       sheets from a form headed by one album's name is worse than no control.
+       Saved when you generate, so what this box shows is what
+       compose_guardrail() then hands the renderer -- the two cannot disagree.
+       The pinned adult-safety clause above is welded on regardless and is not
+       reachable from here. #}
+    <label class="rule"><strong>The <code>{{ p.name | tiername }}</code> wording used for
+      {{ form_album or "this album" }}</strong>, attached on top of the pinned text:
+      <textarea name="tone_{{ p.name }}" rows="4" class="counted"
+                data-max="{{ max_tier_guardrail }}" maxlength="{{ max_tier_guardrail }}"
+                >{{ p.text }}</textarea>
+      <span class="char-count muted" data-for="tone_{{ p.name }}"></span>
+    </label>
+    <p class="hint">
+      {% if p.overridden %}<span class="tag">this album's own wording</span>
+      {{ form_album }} has its own <code>{{ p.name | tiername }}</code> wording; every other
+      album still uses the tier's.
+      {% else %}<span class="tag">the tier's wording</span>
+      Unchanged from the <code>{{ p.name | tiername }}</code> tier itself.
+      {% endif %}
+      Editing here and generating stores it <strong>for {{ form_album or "this album" }}
+      only</strong> &mdash; it does not touch the tier under
+      <a href="/tiers">Tiers</a>, so no other release's sheets change wording.
+      Put the tier's own text back to go back to it.
+      One line, up to {{ max_tier_guardrail }} characters; it describes tone and wardrobe, not
+      a script, and text that argues with the pinned clause is refused.
+      {% if p.overridden %}<br><span class="muted">The tier's own wording:
+        {{ p.tier_default or "(none)" }}</span>{% endif %}</p>
     {# Saved versions. The prompt used to live nowhere: it was recomposed from the
        album profile on every load and only travelled with the job, so an edit was
        gone the moment you navigated away. A new row per save, because a prompt is

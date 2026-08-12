@@ -27,6 +27,13 @@
       <img class="thumb" src="{{ media_url(c.path) }}" alt="anchor candidate" loading="lazy"
            data-full="{{ media_url(c.path) }}" tabindex="0" role="button"
            title="Click to view full size">
+      {# What this one was rendered AT. A CFG sweep puts every guidance value in
+         this same grid -- same tier, same view -- so without the settings on
+         the thumbnail "6.0 haloes" is a claim about an image nobody can pick
+         out afterwards. Absent on rows generated before the column existed,
+         which is left blank rather than filled in with a guess. #}
+      {% set tag = c.render_json | rendertag %}
+      {% if tag %}<p class="muted render-tag">{{ tag }}</p>{% endif %}
       <div class="candidate-actions">
         <form method="post" action="/anchors/{{ c.id }}/pick" class="pick-anchor-form">
           <button type="submit" {% if c.chosen %}disabled{% endif %}>{{ "Chosen" if c.chosen else "Pick" }}</button>

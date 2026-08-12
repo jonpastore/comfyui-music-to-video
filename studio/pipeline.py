@@ -14,6 +14,7 @@ import glob, json, os, re, shutil, subprocess, sys, tempfile, time
 import urllib.error, urllib.request
 
 import gpu
+import models   # for the catalogue's default renderer; imports db only, no cycle
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.environ.get("STUDIO_SCRIPTS", os.path.dirname(ROOT))
@@ -382,7 +383,15 @@ MAX_ANCHOR_REFS = 3
 ANCHOR_RENDER_FLAGS = {"mode": "--mode", "negative": "--negative",
                        "ref_method": "--ref-method", "steps": "--steps",
                        "cfg": "--cfg", "sampler_name": "--sampler",
-                       "scheduler": "--scheduler", "denoise": "--denoise"}
+                       "scheduler": "--scheduler", "denoise": "--denoise",
+                       # The BASE seed. Omitted means make_anchor draws a random
+                       # one, which is what makes a second click of Generate
+                       # produce different sheets, and that stays the default.
+                       # A CFG sweep must pin it: with a fresh random base at
+                       # every guidance value, the images differ by seed AND by
+                       # cfg at once, and nothing in the result is attributable
+                       # to the knob being swept.
+                       "seed": "--seed"}
 ANCHOR_RENDER_KEYS = tuple(ANCHOR_RENDER_FLAGS)
 
 
@@ -545,9 +554,13 @@ def stage_refs(slug, tier, ref_paths):
 
 
 def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None, limit=None,
-              video_model="s2v", ref_motion=None, control_video=None, refine=False):
-    """video_model: 's2v' (default, audio-driven) or 'i2v' (prompt-driven, no
-    audio at all). See studio/models.py for what each is designed for."""
+              video_model=None, ref_motion=None, control_video=None, refine=False):
+    """video_model: a renderer value from models.renderable("video") --
+    'ltx25' (default) and 'ltx' are the audio-conditioned LTX paths, 's2v' is
+    WAN's, and 'i2v' is prompt-driven with no audio at all. None means "ask the
+    catalogue", so this default cannot drift from the one the song page offers.
+    See studio/models.py for what each is designed for."""
+    video_model = video_model or models.default_cli("video")
     # ref_paths must be staged before build_song.py runs -- it references
     # them by name inside the workflow, it doesn't take them as CLI input.
     stage_refs(slug, tier, ref_paths)

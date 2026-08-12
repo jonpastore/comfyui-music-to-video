@@ -233,6 +233,20 @@ MIGRATIONS = [
     # mark on every transition is a slideshow, the same objection the plan
     # makes to a fade to black between every song.
     "ALTER TABLE set_items ADD COLUMN branded INTEGER DEFAULT 0",
+    # The render settings this candidate was actually produced with, as the
+    # JSON that pipeline.gen_anchor turned into command-line flags. A CFG sweep
+    # puts a dozen sheets in one group that differ only by guidance, and
+    # nothing in the filename says which is which -- so "cfg 6.0 haloes" was a
+    # claim about an image nobody could identify afterwards. NULL on every row
+    # that predates this, which the UI shows as no badge rather than as a
+    # setting nobody chose.
+    "ALTER TABLE anchors ADD COLUMN render_json TEXT",
+    # Which BOX a saved version came out of: 'positive' | 'negative'. The
+    # negative prompt is per ALBUM, not per tier -- it lists this release's
+    # failure modes, and another album's art wants a different list -- so a
+    # negative row carries tier='' and character_id NULL. NULL reads as
+    # 'positive', which is what every row written before this column is.
+    "ALTER TABLE anchor_prompts ADD COLUMN kind TEXT DEFAULT 'positive'",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and
@@ -256,6 +270,25 @@ CREATE TABLE IF NOT EXISTS anchor_prompts (
 
 CREATE INDEX IF NOT EXISTS idx_anchor_prompts
   ON anchor_prompts(scope_value, tier, character_id, id);
+"""
+
+TIER_OVERRIDES_SCHEMA = """
+-- One ALBUM's own wording for a tier. The tiers table stays what it is: the
+-- studio-wide definition of what R or XXX means. This is the per-album
+-- exception, so tuning the XXX wording for one release cannot silently
+-- re-word every other album's XXX sheets -- which is the whole reason the
+-- anchor form's wording box is not simply an editor for tiers.guardrail.
+--
+-- The pinned adult-safety clause is NOT stored here and cannot be: it is
+-- welded on by tiers.compose(), which every path through compose_guardrail()
+-- ends in. An override replaces the tone-and-wardrobe half only.
+CREATE TABLE IF NOT EXISTS tier_overrides (
+  id INTEGER PRIMARY KEY,
+  scope_value TEXT NOT NULL,          -- album name, as anchors are scoped
+  tier TEXT NOT NULL,
+  guardrail TEXT NOT NULL,
+  created REAL,
+  UNIQUE(scope_value, tier));
 """
 
 ARCS_SCHEMA = """
@@ -306,6 +339,7 @@ def conn():
         c.execute("PRAGMA foreign_keys=ON")
         c.executescript(SCHEMA)
         c.executescript(ANCHOR_PROMPTS_SCHEMA)
+        c.executescript(TIER_OVERRIDES_SCHEMA)
         c.executescript(ARCS_SCHEMA)
         c.executescript(CREDENTIALS_SCHEMA)
         _migrate(c)
