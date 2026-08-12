@@ -3140,6 +3140,37 @@ def test_base_images_are_kept_picked_and_deletable(patch_stub):
         assert len(appmod.anchor_refs("Refs Album")) == 2
 
 
+def test_base_image_thumbnails_carry_the_anchor_lightbox_hooks(patch_stub):
+    """Base images used to be dead to click -- only the anchor candidates below
+    them opened in the lightbox. initAnchors() in app.js finds a base image by
+    the same shape it finds a candidate: a .ref-thumb[data-ref] item with an
+    img.thumb carrying data-full, inside a .ref-gallery row it treats the same
+    as .candidate-grid. There must still be exactly one lightbox on the page --
+    the point of generalising the existing one rather than growing a second."""
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Lightbox Refs Album"})
+        client.post("/anchors/refs", data={"album": "Lightbox Refs Album"},
+                    files=[("images", ("a.png", _png_bytes(), "image/png"))])
+        ref = appmod.anchor_refs("Lightbox Refs Album")[0]
+        page = client.get("/anchors", params={"scope_value": "Lightbox Refs Album"}).text
+        assert page.count('<dialog class="lightbox"') == 1, "a second lightbox crept in"
+        assert f'data-ref="{ref["id"]}"' in page
+        assert 'img class="thumb"' in page and "data-full=" in page
+        # the tick moved into its own corner label so a click on the thumbnail
+        # opens the lightbox instead of also toggling the checkbox
+        assert 'class="ref-pick"' in page
+
+        # the lightbox's Delete button talks to this endpoint the same way
+        # every other button in that modal does -- Accept: application/json --
+        # and that must come back as JSON, not the htmx-fragment/redirect this
+        # route also serves the in-page Delete button and no-JS browsers
+        r = client.post(f"/anchors/refs/{ref['id']}/delete",
+                         headers={"Accept": "application/json"})
+        assert r.status_code == 200
+        assert r.json() == {"deleted": [ref["id"]]}
+        assert appmod.anchor_refs("Lightbox Refs Album") == []
+
+
 def test_base_images_do_not_leak_between_characters(patch_stub):
     """A cast member's photographs are not the protagonist's -- pooling them
     would condition one character's sheet on another's face."""

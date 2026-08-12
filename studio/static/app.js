@@ -547,14 +547,22 @@ function initAnchors() {
   // pointer describing a card that is no longer there.
   var current = null;                       // the .candidate element on show
 
+  // The base-image gallery (.ref-gallery/.ref-thumb) is a second row/item shape
+  // the same lightbox now serves, alongside .candidate-grid/.candidate -- one
+  // set of selectors covering both rather than a duplicate lightbox and a
+  // duplicate keyboard handler for the base-image picker.
+  var ROW_SEL = ".candidate-grid, .ref-gallery";
+  var ITEM_SEL = ".candidate[data-anchor], .ref-thumb[data-ref]";
+  var THUMB_SEL = ROW_SEL.split(", ").map(function (s) { return s + " img.thumb"; }).join(", ");
+
   function rows() {
-    return Array.prototype.slice.call(document.querySelectorAll(".candidate-grid"));
+    return Array.prototype.slice.call(document.querySelectorAll(ROW_SEL));
   }
   function cardsIn(row) {
-    return Array.prototype.slice.call(row.querySelectorAll(".candidate[data-anchor]"));
+    return Array.prototype.slice.call(row.querySelectorAll(ITEM_SEL));
   }
   function where(card) {
-    var row = card.closest(".candidate-grid");
+    var row = card.closest(ROW_SEL);
     return {row: row, rowIdx: rows().indexOf(row), idx: cardsIn(row).indexOf(card)};
   }
 
@@ -567,9 +575,13 @@ function initAnchors() {
     var src = img.dataset.full || img.src;
     box.querySelector("img").src = src;
     // the row's own heading, so "which sheet is this" is answerable without
-    // closing the modal and counting thumbnails
+    // closing the modal and counting thumbnails -- a candidate row is titled
+    // by its section's h3, a base-image row has no h3 and is titled by its
+    // fieldset's legend instead
     var head = at.row.closest("section.card") && at.row.closest("section.card").querySelector("h3");
-    box.querySelector(".lightbox-title").textContent = head ? head.textContent.trim() : "";
+    var legend = at.row.closest("fieldset") && at.row.closest("fieldset").querySelector("legend");
+    var title = legend || head;
+    box.querySelector(".lightbox-title").textContent = title ? title.textContent.trim() : "";
     box.querySelector(".lightbox-pos").textContent =
       "option " + (at.idx + 1) + " of " + all.length +
       (card.classList.contains("picked") ? " · CHOSEN" : "");
@@ -598,17 +610,17 @@ function initAnchors() {
   }
 
   document.addEventListener("click", function (e) {
-    var img = e.target.closest(".candidate-grid img.thumb");
-    if (img) { show(img.closest(".candidate")); return; }
+    var img = e.target.closest(THUMB_SEL);
+    if (img) { show(img.closest(ITEM_SEL)); return; }
     // backdrop or the close button dismisses; clicking the image itself does not
     if (box && box.open && (e.target === box || e.target.closest(".lightbox-close"))) box.close();
   });
 
   document.addEventListener("keydown", function (e) {
     // opening from the grid, for keyboard users who never touch the mouse
-    var thumb = e.target.closest && e.target.closest(".candidate-grid img.thumb");
+    var thumb = e.target.closest && e.target.closest(THUMB_SEL);
     if (thumb && (e.key === "Enter" || e.key === " ")) {
-      e.preventDefault(); show(thumb.closest(".candidate")); return;
+      e.preventDefault(); show(thumb.closest(ITEM_SEL)); return;
     }
     if (!box || !box.open || !current) return;
     if (e.key === "ArrowRight") { e.preventDefault(); step(0, 1); }
@@ -624,6 +636,26 @@ function initAnchors() {
   function removeShown() {
     if (!current) return;
     var card = current, at = where(card), all = cardsIn(at.row);
+    // where to land afterwards: the next sheet along, else the previous one
+    var next = all[at.idx + 1] || all[at.idx - 1] || null;
+
+    // a base image is not an anchor candidate -- different table, different
+    // delete endpoint (one id at a time, no batch) -- so the two branches
+    // cannot share the same request even though they share the modal
+    if (card.classList.contains("ref-thumb")) {
+      if (!confirm("Delete this base image? The file is removed too. Sheets already " +
+                   "generated from it are not affected.")) return;
+      api("/anchors/refs/" + card.dataset.ref + "/delete", {})
+        .then(function () {
+          card.remove();
+          if (next) { show(next); } else { box.close(); }
+        })
+        .catch(function (err) {
+          box.querySelector(".lightbox-pos").textContent = "not deleted: " + err.message;
+        });
+      return;
+    }
+
     // same wording as the grid's own delete, and the chosen one still says what
     // it costs rather than being refused
     var msg = card.classList.contains("picked")
@@ -631,8 +663,6 @@ function initAnchors() {
         "generation for this tier will refuse until you pick or generate another."
       : "Delete this anchor candidate? The file is removed too.";
     if (!confirm(msg)) return;
-    // where to land afterwards: the next sheet along, else the previous one
-    var next = all[at.idx + 1] || all[at.idx - 1] || null;
     api("/anchors/delete", {anchor_ids: [Number(card.dataset.anchor)]})
       .then(function () {
         var sec = card.closest("section.card");

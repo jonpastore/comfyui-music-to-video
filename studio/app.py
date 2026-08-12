@@ -1559,6 +1559,11 @@ async def delete_anchor_ref(request: Request, asset_id: int):
         except OSError:
             pass
     db.run("DELETE FROM assets WHERE id=?", asset_id)
+    # the anchor lightbox's Delete button hits this same route via api(), which
+    # asks for JSON same as every other button in that modal -- htmx's own
+    # Delete button below the thumbnail still gets the swapped form back
+    if wants_json(request):
+        return JSONResponse({"deleted": [asset_id]})
     if request.headers.get("HX-Request"):
         form = await request.form()
         # the character too: deleting one of a CHARACTER's base images used to

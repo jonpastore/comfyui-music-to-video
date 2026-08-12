@@ -98,12 +98,22 @@
       than several to line up side by side.</p>
     <div class="ref-gallery">
       {% for r in saved_refs %}
-      <div class="ref-thumb">
-        <label class="check">
+      {# data-ref, plus the img carrying .thumb/data-full/tabindex, are the same
+         hooks .candidate/.candidate-grid give the anchor lightbox below --
+         initAnchors() in app.js widens its row/item selectors to find both, so
+         one lightbox and one keyboard handler serve both galleries. The
+         checkbox moved out of the image's label into its own small corner
+         pick (.ref-pick, styled like .candidate-pick) because a label wrapping
+         the image would tick the box on every click meant to open the modal. #}
+      <div class="ref-thumb" data-ref="{{ r.id }}">
+        <label class="ref-pick">
           <input type="checkbox" name="ref_id" value="{{ r.id }}"
-                 {% if loop.index <= max_refs %}checked{% endif %}>
-          <img src="{{ media_url(r.path) }}" alt="reference image" loading="lazy">
+                 {% if loop.index <= max_refs %}checked{% endif %}
+                 aria-label="use this base image">
         </label>
+        <img class="thumb" src="{{ media_url(r.path) }}" alt="reference image" loading="lazy"
+             data-full="{{ media_url(r.path) }}" tabindex="0" role="button"
+             title="Click to view full size">
         <time class="local-time muted" datetime="{{ r.created | isotime }}">
           {{ r.created | isotime }}</time>
         {# formaction, not a nested <form>: a form inside this form is invalid
