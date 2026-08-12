@@ -28,10 +28,78 @@ if ROOT not in sys.path:
 os.environ["STUDIO_DATA"] = tempfile.mkdtemp(prefix="studio_test_")
 
 
+_REAL_CACHE = {}
+
+
+def _real_module(name):
+    """The genuine module, loaded under a private name so it does not disturb
+    the stub sitting in sys.modules[name]. None if it cannot be imported at all
+    (lyrics pulls in faster-whisper, which is exactly the sort of thing a stub
+    exists to avoid)."""
+    if name not in _REAL_CACHE:
+        import importlib.util
+        path = os.path.join(ROOT, f"{name}.py")
+        mod = None
+        if os.path.isfile(path):
+            try:
+                spec = importlib.util.spec_from_file_location(f"_real_{name}", path)
+                mod = importlib.util.module_from_spec(spec)
+                sys.modules[spec.name] = mod
+                spec.loader.exec_module(mod)
+            except Exception:
+                mod = None
+        _REAL_CACHE[name] = mod
+    return _REAL_CACHE[name]
+
+
 def _stub(name, **attrs):
+    """A stubbed module that falls through to the real one for plain DATA.
+
+    A stub exists to keep ffmpeg, the GPU and the network out of the tests --
+    not to hide constants. Every time app.py started reading a new constant off
+    a stubbed module (`mixer._XFADE_NAMES`, `_item_duration`'s shape,
+    `plan_tempo_ramp`, `comfy_queue`, and most recently `mixer.TRANSITIONS` and
+    `mixer.BLACK`) the whole suite died at IMPORT with a bare AttributeError,
+    which points at conftest rather than at the line that needs changing. Five
+    times.
+
+    So an attribute the stub does not define is looked up on the real module:
+
+    - plain data (a string, number, tuple, dict, frozenset) is returned as-is,
+      which means a constant can never again need mirroring here, and cannot
+      drift from the real value if it is
+    - anything CALLABLE is refused, loudly and by name. That is the half a stub
+      is actually for: falling through to a real function would let a test shell
+      out to ffmpeg or reach the network, silently. The message says which
+      module, which attribute, and what to do.
+    """
     mod = types.ModuleType(name)
     for k, v in attrs.items():
         setattr(mod, k, v)
+
+    _SAFE = (str, bytes, int, float, bool, tuple, list, dict, set, frozenset, type(None))
+
+    def __getattr__(attr, _name=name):
+        # Dunders are module IDENTITY, not module data. Serving the real
+        # module's __file__/__path__/__spec__ here makes the stub claim to be
+        # the real file -- which fooled the first version of this fix's own
+        # test -- and hands the import machinery answers about a module that is
+        # deliberately not present.
+        if attr.startswith("__") and attr.endswith("__"):
+            raise AttributeError(f"module {_name!r} has no attribute {attr!r}")
+        real = _real_module(_name)
+        if real is None or not hasattr(real, attr):
+            raise AttributeError(f"module {_name!r} has no attribute {attr!r}")
+        value = getattr(real, attr)
+        if isinstance(value, _SAFE) and not callable(value):
+            return value
+        raise AttributeError(
+            f"{_name}.{attr} is callable and the test stub does not define it. "
+            f"Stubs deliberately do not fall through to real functions -- this one would "
+            f"have run the real {_name}.{attr}, which is what the stub exists to prevent. "
+            f"Add {attr}= to the _stub({_name!r}, ...) call in conftest.py.")
+
+    mod.__getattr__ = __getattr__
     sys.modules[name] = mod
     return mod
 
@@ -266,21 +334,11 @@ def _set_duration(items, key="video"):
     return max(0.0, running_dur)
 
 
-# _XFADE_NAMES is READ by mixadvice.transitions() to decide what a model is
-# allowed to suggest, so the stub has to carry it or every suggest 500s with
-# "module 'mixer' has no attribute". Same real values as mixer.py.
-_XFADE_NAMES = {"fade": "fade", "dissolve": "dissolve", "wipe": "wipeleft"}
-# TRANSITIONS and BLACK are read by app.SET_TRANSITIONS, app.clamp_hold and
-# mixadvice.transitions(). Fifth time a stub gap has done this -- if app.py
-# touches an attribute on a stubbed module, the stub needs it, and the failure
-# is an import-time AttributeError across the whole suite rather than one test.
-TRANSITIONS = ("fade", "dissolve", "wipe", "cut", "black")
-BLACK = "black"
-
+# _XFADE_NAMES, TRANSITIONS and BLACK are deliberately NOT mirrored here any
+# more. They are plain data, so _stub's fallback serves them from the real
+# mixer.py -- one source, and a constant added to mixer can never again break
+# this suite at import. Only behaviour is stubbed below.
 _stub("mixer",
-      _XFADE_NAMES=_XFADE_NAMES,
-      TRANSITIONS=TRANSITIONS,
-      BLACK=BLACK,
       probe=lambda p: {"duration": _STUB_ITEM_DUR},
       _item_duration=_item_duration,
       assemble_song=lambda clip_paths, mp3, out, progress, fade: open(out, "w").close(),
