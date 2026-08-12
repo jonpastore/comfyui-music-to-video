@@ -250,6 +250,15 @@ def _set_duration(items, key="video"):
         return 0.0
     running_dur = _STUB_ITEM_DUR
     for it in items[:-1]:
+        # a black handover overlaps nothing and ADDS its hold -- the one
+        # transition that makes a set longer (mixer._advance)
+        if it.get("transition") == "black":
+            fade = float(it.get("secs", 0.0)) / 2.0
+            if fade > running_dur:
+                raise ValueError(
+                    f"transition secs={fade} longer than preceding duration={running_dur}")
+            running_dur += _STUB_ITEM_DUR + float(it.get("hold") or 0.0)
+            continue
         secs = 0.0 if it.get("transition") == "cut" else float(it.get("secs", 0.0))
         if secs > running_dur:
             raise ValueError(f"transition secs={secs} longer than preceding duration={running_dur}")
@@ -261,9 +270,17 @@ def _set_duration(items, key="video"):
 # allowed to suggest, so the stub has to carry it or every suggest 500s with
 # "module 'mixer' has no attribute". Same real values as mixer.py.
 _XFADE_NAMES = {"fade": "fade", "dissolve": "dissolve", "wipe": "wipeleft"}
+# TRANSITIONS and BLACK are read by app.SET_TRANSITIONS, app.clamp_hold and
+# mixadvice.transitions(). Fifth time a stub gap has done this -- if app.py
+# touches an attribute on a stubbed module, the stub needs it, and the failure
+# is an import-time AttributeError across the whole suite rather than one test.
+TRANSITIONS = ("fade", "dissolve", "wipe", "cut", "black")
+BLACK = "black"
 
 _stub("mixer",
       _XFADE_NAMES=_XFADE_NAMES,
+      TRANSITIONS=TRANSITIONS,
+      BLACK=BLACK,
       probe=lambda p: {"duration": _STUB_ITEM_DUR},
       _item_duration=_item_duration,
       assemble_song=lambda clip_paths, mp3, out, progress, fade: open(out, "w").close(),

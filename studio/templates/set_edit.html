@@ -66,6 +66,7 @@
     {% if not loop.last %}
     <span class="tl-trans {% if t.beatmatch %}beat{% endif %}">
       {{ t.transition }}{% if t.transition != "cut" %} {{ t.trans_secs }}s{% endif %}
+      {%- if t.transition == "black" and t.hold %} +{{ t.hold }}s{% endif %}
       {%- if t.beatmatch %} ♪{% endif %}</span>
     {% endif %}
   </div>
@@ -147,7 +148,16 @@
       </select>
     </label>
     <label>Secs <input type="number" step="0.1" min="0" name="secs" value="{{ it.secs }}"></label>
+    {# Only `black` uses it, and the route zeroes it for every other kind: a hold
+       that survived switching transition would be a number the renderer ignores
+       and the length prediction does not. #}
+    <label>Hold (s) <input type="number" step="0.1" min="0" name="hold"
+                            value="{{ it.hold or 0 }}"></label>
   </div>
+  <p class="hint"><code>black</code> fades out to black, holds for
+    <strong>Hold</strong> seconds of silence, then fades in &mdash; Secs is the total
+    fade time, split either side. It is the one transition that makes a set
+    <em>longer</em>, by exactly the hold. Hold is ignored by every other kind.</p>
   <div class="check-row">
     <label class="check"><input type="checkbox" name="beatmatch" {% if it.beatmatch %}checked{% endif %}>
       Beatmatch into next <span class="muted">(snaps this transition to the beat)</span></label>

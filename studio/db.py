@@ -216,6 +216,12 @@ MIGRATIONS = [
     # produces. The JSON stays the source of truth -- this records what was
     # ASKED for, so a re-suggest starts from the intent rather than the output.
     "ALTER TABLE set_items ADD COLUMN mix_direction TEXT",
+    # How long the screen stays black between two songs, for transition='black'
+    # (ALBUM_ARC_AND_STAGING_PLAN.md sec 1). The ONLY new number that shape
+    # needs: the fades either side come out of `secs`, and the hold is the
+    # only part that lengthens the set. Default 0 so an existing row cannot
+    # acquire a pause nobody asked for.
+    "ALTER TABLE set_items ADD COLUMN hold REAL DEFAULT 0",
 ]
 
 

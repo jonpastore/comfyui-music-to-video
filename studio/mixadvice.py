@@ -27,8 +27,10 @@ GAIN_RANGE = (-30.0, 30.0)   # matches app.GAIN_DB_RANGE
 
 
 def transitions():
-    """What mixer can actually emit. 'cut' is not an xfade name but is valid."""
-    return sorted(set(mixer._XFADE_NAMES) | {"cut"})
+    """What mixer can actually emit. 'cut' and 'black' are not xfade names but
+    are both valid transitions, so this reads mixer's own list rather than
+    deriving one from the xfade table and quietly losing them."""
+    return list(mixer.TRANSITIONS)
 
 
 def set_summary(items):

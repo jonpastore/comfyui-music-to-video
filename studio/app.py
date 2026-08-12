@@ -62,7 +62,8 @@ CharacterId = Annotated[Optional[int], _blank_none]
 BlankFloat = Annotated[Optional[float], _blank_none]
 BlankInt = CharacterId  # same blank-string -> None coercion, for any optional-id field
 
-SET_TRANSITIONS = ("fade", "dissolve", "wipe", "cut")
+# mixer owns this: it is the only module that knows what it can render.
+SET_TRANSITIONS = mixer.TRANSITIONS
 
 # Anything servable over /media must resolve inside one of these -- reuses
 # pipeline's own ComfyUI paths rather than inventing a parallel config knob.
@@ -446,6 +447,41 @@ def clamp_set_item_params(in_secs, out_secs, gain_db, transition, secs):
     return in_secs, out_secs, gain_db, transition, secs
 
 
+MAX_HOLD_SECS = 30.0
+
+
+def _hold_of(row):
+    """A set_items row's black-hold, tolerating a row that never selected the
+    column (a playlist item has no hold, and neither did any row before the
+    migration). 0 means "no hold", which is what every other transition wants."""
+    try:
+        return float(row["hold"] or 0.0)
+    except (KeyError, IndexError, TypeError):
+        return 0.0
+
+
+def clamp_hold(hold, transition):
+    """The black-hold, validated against the transition it belongs to.
+
+    Stored as 0 for every other transition kind rather than kept: a hold that
+    survives switching away from `black` is a number the renderer ignores and
+    the length prediction does not, and the two would disagree the moment the
+    transition was switched back.
+    """
+    hold = float(hold or 0.0)
+    if not math.isfinite(hold):
+        raise HTTPException(400, "hold must be a finite number")
+    if transition != mixer.BLACK:
+        return 0.0
+    if hold < 0:
+        raise HTTPException(400, "hold must be >= 0")
+    if hold > MAX_HOLD_SECS:
+        raise HTTPException(400, f"hold is {hold}s; {MAX_HOLD_SECS:.0f}s is the most this "
+                                  f"editor accepts -- a longer silence is an interstitial, "
+                                  f"not a transition")
+    return hold
+
+
 # Nothing is unsupported any more -- duck and layer are both wired at the join
 # (mixer._duck_join, mixer._layer_join). This stays as the hook a future
 # validated-but-unwired effect goes on, because refusing rather than silently
@@ -524,6 +560,7 @@ def _mix_items_for_set(id, overrides=None, extra_item=None):
         if row["mp3_path"] and os.path.isfile(row["mp3_path"]):
             items.append({"audio": row["mp3_path"], "transition": row["transition"],
                           "secs": row["secs"], "in_secs": row["in_secs"], "out_secs": row["out_secs"],
+                          "hold": _hold_of(row),
                           **_beatmatch_fields(row, row)})
     if extra_item is not None:
         items.append(extra_item)
@@ -3507,7 +3544,7 @@ def set_detail(row):
     # already applies to its own probe, so a missing file degrades the total
     # instead of 500ing the page the Remove button lives on.
     mix_items = [{"audio": it["mp3_path"], "transition": it["transition"], "secs": it["secs"],
-                 "in_secs": it["in_secs"], "out_secs": it["out_secs"],
+                 "in_secs": it["in_secs"], "out_secs": it["out_secs"], "hold": _hold_of(it),
                  **_beatmatch_fields(it, {"bpm": it["song_bpm"],
                                           "beat_grid_json": it["song_beat_grid_json"],
                                           "downbeat_offset": it["song_downbeat_offset"]})}
@@ -3562,7 +3599,7 @@ def set_detail(row):
         timeline.append({"id": it["id"], "title": it["song_title"], "secs": secs,
                           "bpm": it["song_bpm"], "key": it["song_key"],
                           "transition": it["transition"], "trans_secs": it["secs"],
-                          "beatmatch": it["beatmatch"]})
+                          "hold": _hold_of(it), "beatmatch": it["beatmatch"]})
     for t in timeline:
         # a floor so a very short item is still clickable rather than a hairline
         t["pct"] = max(8.0, 100.0 * t["secs"] / longest) if longest else 100.0
@@ -3671,7 +3708,7 @@ def _suggest_ctx(request, id, suggested, note="", form=None, item_id=None):
     # hand, so they are applied to that item alone.
     typed = {}
     if form is not None and item_id is not None:
-        for k in ("transition", "secs", "in_secs", "out_secs", "gain_db",
+        for k in ("transition", "secs", "hold", "in_secs", "out_secs", "gain_db",
                   "effects_json", "mix_direction"):
             if k in form:
                 typed[k] = form.get(k)
@@ -3780,7 +3817,7 @@ def add_set_item(id: int, song_id: int = Form(...), transition: str = Form("fade
     # renders before adding, not just this one new row. Same tolerance
     # _mix_items_for_set gives every existing row: a missing mp3 (deleted,
     # moved) is skipped rather than treated as a validation failure.
-    extra = ({"audio": song["mp3_path"], "transition": transition, "secs": secs,
+    extra = ({"audio": song["mp3_path"], "transition": transition, "secs": secs, "hold": 0.0,
              "in_secs": None, "out_secs": None, **_beatmatch_fields({"beatmatch": beatmatch}, song)}
              if song["mp3_path"] and os.path.isfile(song["mp3_path"]) else None)
     _refuse_if_unrenderable(_mix_items_for_set(id, extra_item=extra))
@@ -3795,6 +3832,7 @@ def add_set_item(id: int, song_id: int = Form(...), transition: str = Form("fade
 def edit_set_item(id: int, item_id: int, in_secs: BlankFloat = Form(None),
                   out_secs: BlankFloat = Form(None), gain_db: float = Form(0.0),
                   transition: str = Form("fade"), secs: float = Form(2.0),
+                  hold: float = Form(0.0),
                   beatmatch: bool = Form(False), effects_json: str = Form(""),
                   mix_direction: str = Form("")):
     get_set_or_404(id)
@@ -3802,6 +3840,7 @@ def edit_set_item(id: int, item_id: int, in_secs: BlankFloat = Form(None),
         raise HTTPException(404, "no such item")
     in_secs, out_secs, gain_db, transition, secs = clamp_set_item_params(
         in_secs, out_secs, gain_db, transition, secs)
+    hold = clamp_hold(hold, transition)
     effects_json = clamp_set_item_effects(effects_json)
     # duck and layer are checked HERE, not inside clamp_set_item_effects,
     # because they are the effects whose validity depends on a field outside
@@ -3831,12 +3870,13 @@ def edit_set_item(id: int, item_id: int, in_secs: BlankFloat = Form(None),
     # (SETS_MIXING_PLAN.md): shortening THIS item's out_secs can leave its
     # own already-stored transition too long to fit. Check before writing.
     _refuse_if_unrenderable(_mix_items_for_set(id, overrides={
-        item_id: {"transition": transition, "secs": secs, "in_secs": in_secs, "out_secs": out_secs,
+        item_id: {"transition": transition, "secs": secs, "hold": hold,
+                  "in_secs": in_secs, "out_secs": out_secs,
                   "beatmatch": int(beatmatch)}}))
     db.run("""UPDATE set_items SET in_secs=?, out_secs=?, gain_db=?, transition=?, secs=?,
-              beatmatch=?, effects_json=?, mix_direction=? WHERE id=?""",
+              beatmatch=?, effects_json=?, mix_direction=?, hold=? WHERE id=?""",
            in_secs, out_secs, gain_db, transition, secs, int(beatmatch), effects_json,
-           mix_direction or None, item_id)
+           mix_direction or None, hold, item_id)
     db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
     return RedirectResponse(f"/sets/{id}", status_code=303)
 
@@ -3907,6 +3947,7 @@ def render_set_route(id: int):
         for it in items:
             build.append({"audio": songs[it["song_id"]]["mp3_path"], "transition": it["transition"],
                           "secs": it["secs"], "in_secs": it["in_secs"], "out_secs": it["out_secs"],
+                          "hold": _hold_of(it),
                           "gain_db": it["gain_db"], "effects_json": it["effects_json"],
                           **_beatmatch_fields(it, songs[it["song_id"]])})
     else:
@@ -3921,6 +3962,7 @@ def render_set_route(id: int):
             else:
                 build.append({"video": r["path"], "transition": it["transition"], "secs": it["secs"],
                               "in_secs": it["in_secs"], "out_secs": it["out_secs"],
+                              "hold": _hold_of(it),
                               "gain_db": it["gain_db"], "effects_json": it["effects_json"],
                               **_beatmatch_fields(it, songs[it["song_id"]])})
         if missing:

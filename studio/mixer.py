@@ -194,6 +194,12 @@ def edit_audio(mp3_path, out_path, trim_start=0.0, trim_end=None, gain_db=0.0,
 
 _XFADE_NAMES = {"fade": "fade", "dissolve": "dissolve", "wipe": "wipeleft"}  # xfade has no generic "wipe"
 
+# Every transition a set may ask for, in the order the editor offers them.
+# Defined HERE because mixer is the only module that knows what it can
+# actually render; app.SET_TRANSITIONS and mixadvice.transitions() both read
+# this rather than keeping their own list to drift out of step with it.
+TRANSITIONS = ("fade", "dissolve", "wipe", "cut", "black")
+
 
 def _item_duration(info, it):
     """An item's playing length after in_secs/out_secs trim, clamped to the
@@ -318,6 +324,68 @@ def _layer_join(running_v, nxt_v, out_v, offset, secs, blend, i):
         f"[{oa}][{ob}]{blend},format=yuv420p[{ov}]",
         f"[{h}][{ov}][{t}]concat=n=3:v=1:a=0[{out_v}]",
     ]
+
+
+# A fade to black is a TRANSITION KIND, not an inserted clip
+# (ALBUM_ARC_AND_STAGING_PLAN.md §1). An inserted clip has to be kept in step by
+# hand on two render paths; a transition cannot drift, because one place
+# computes where it starts.
+#
+#     [song A] --fade out--> BLACK + SILENCE --fade in--> [song B]
+#                secs/2          hold                secs/2
+#
+# `secs` is the total fade time, split either side of the hold, and both halves
+# happen INSIDE the neighbouring items rather than overlapping them -- so a
+# black handover lengthens the set by exactly `hold` and nothing else.
+BLACK = "black"
+
+
+def _black_plan(it):
+    """(fade_secs_each_side, hold_secs) for a fade-to-black handover."""
+    return (max(0.0, float(it.get("secs") or 0.0)) / 2.0,
+            max(0.0, float(it.get("hold") or 0.0)))
+
+
+def _advance(it, next_duration):
+    """How much the running length grows when this item hands over to the next.
+
+    ONE definition, called by all three walkers -- set_duration,
+    _build_render_set_filter and mix_audio. They already shared their overlap
+    arithmetic by writing it out three times; adding a third transition shape to
+    three copies is how a predicted length and a rendered length start to
+    disagree, which is this codebase's oldest and most repeated defect.
+    """
+    kind = it.get("transition", "cut")
+    if kind == BLACK:
+        return next_duration + _black_plan(it)[1]
+    secs = 0.0 if kind == "cut" else float(it.get("secs", 0.0))
+    return next_duration - secs
+
+
+def _black_audio_lines(running_a, nxt_a, out_a, st, fade, hold, i):
+    fo, sil, fi = f"bafo{i}", f"bsil{i}", f"bafi{i}"
+    lines = [f"[{running_a}]afade=t=out:st={st:.3f}:d={fade:.3f}[{fo}]",
+             f"[{nxt_a}]afade=t=in:st=0:d={fade:.3f}[{fi}]"]
+    if hold > 0:
+        lines += [f"anullsrc=r=48000:cl=stereo:d={hold:.3f}[{sil}]",
+                  f"[{fo}][{sil}][{fi}]concat=n=3:v=0:a=1[{out_a}]"]
+    else:
+        lines.append(f"[{fo}][{fi}]concat=n=2:v=0:a=1[{out_a}]")
+    return lines
+
+
+def _black_video_lines(running_v, nxt_v, out_v, st, fade, hold, w, h, fps, i):
+    fo, blk, fi = f"bvfo{i}", f"blk{i}", f"bvfi{i}"
+    lines = [f"[{running_v}]fade=t=out:st={st:.3f}:d={fade:.3f}[{fo}]",
+             f"[{nxt_v}]fade=t=in:st=0:d={fade:.3f}[{fi}]"]
+    if hold > 0:
+        # matched to _normalize_filter's own tail, or concat refuses the join
+        lines += [f"color=c=black:s={w}x{h}:r={fps}:d={hold:.3f},"
+                  f"format=yuv420p,setsar=1[{blk}]",
+                  f"[{fo}][{blk}][{fi}]concat=n=3:v=1:a=0[{out_v}]"]
+    else:
+        lines.append(f"[{fo}][{fi}]concat=n=2:v=1:a=0[{out_v}]")
+    return lines
 
 
 def _check_join_effects(items):
@@ -556,11 +624,20 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
         nxt_v, nxt_a = f"v{i + 1}n", f"a{i + 1}n"
         out_v, out_a = f"vj{i}", f"aj{i}"
         blend = _layer_fragment(items[i].get("effects_json"))
-        if transition == "cut" or secs <= 0:
+        if transition == BLACK:
+            fade, hold = _black_plan(items[i])
+            # the fade-out lives inside the accumulated chain, so it has to fit
+            # there exactly as a crossfade would
+            _check_transition_fits(fade, running_dur)
+            st = max(0.0, running_dur - fade)
+            lines += _black_video_lines(running_v, nxt_v, out_v, st, fade, hold, w, h, fps, i)
+            lines += _black_audio_lines(running_a, nxt_a, out_a, st, fade, hold, i)
+            running_dur += _advance(items[i], durations[i + 1])
+        elif transition == "cut" or secs <= 0:
             # a join effect on a cut was already refused by _check_join_effects
             lines.append(f"[{running_v}][{nxt_v}]concat=n=2:v=1:a=0[{out_v}]")
             lines.append(f"[{running_a}][{nxt_a}]concat=n=2:v=0:a=1[{out_a}]")
-            running_dur += durations[i + 1]
+            running_dur += _advance(items[i], durations[i + 1])
         else:
             _check_transition_fits(secs, running_dur)
             offset = running_dur - secs
@@ -578,7 +655,7 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
                 lines += _duck_join(running_a, nxt_a, out_a, offset, secs, comp, i)
             else:
                 lines.append(f"[{running_a}][{nxt_a}]acrossfade=d={secs:.3f}[{out_a}]")
-            running_dur += durations[i + 1] - secs
+            running_dur += _advance(items[i], durations[i + 1])
         running_v, running_a = out_v, out_a
     return lines, running_v, running_a, running_dur
 
@@ -676,20 +753,25 @@ def mix_audio(items, out_path, progress=None):
         lines.append(f"[{i}:a]{vol}aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a{i}n]")
     running, running_dur = "a0n", durations[0]
     for i in range(len(items) - 1):
-        secs = 0.0 if items[i].get("transition") == "cut" else float(items[i].get("secs", 0.0))
+        it = items[i]
+        secs = 0.0 if it.get("transition") == "cut" else float(it.get("secs", 0.0))
         out = f"am{i}"
-        if secs <= 0:
+        if it.get("transition") == BLACK:
+            fade, hold = _black_plan(it)
+            _check_transition_fits(fade, running_dur)
+            lines += _black_audio_lines(running, f"a{i + 1}n", out,
+                                         max(0.0, running_dur - fade), fade, hold, i)
+        elif secs <= 0:
             lines.append(f"[{running}][a{i + 1}n]concat=n=2:v=0:a=1[{out}]")
-            running_dur += durations[i + 1]
         else:
             _check_transition_fits(secs, running_dur)
-            comp = _duck_fragment(items[i].get("effects_json"))
+            comp = _duck_fragment(it.get("effects_json"))
             if comp:
                 lines += _duck_join(running, f"a{i + 1}n", out,
                                      running_dur - secs, secs, comp, i)
             else:
                 lines.append(f"[{running}][a{i + 1}n]acrossfade=d={secs:.3f}[{out}]")
-            running_dur += durations[i + 1] - secs
+        running_dur += _advance(it, durations[i + 1])
         running = out
 
     tmp = _atomic_out(out_path)
@@ -727,10 +809,15 @@ def set_duration(items, key="video"):
     durations = [_item_duration(probe(it[key]), it) for it in items]
     running_dur = durations[0]
     for i in range(len(items) - 1):
-        secs = 0.0 if items[i].get("transition") == "cut" else float(items[i].get("secs", 0.0))
-        if secs > 0:
-            _check_transition_fits(secs, running_dur)
-        running_dur += durations[i + 1] - secs
+        it = items[i]
+        if it.get("transition") == BLACK:
+            # only the fade-out has to fit; the hold is added, not overlapped
+            _check_transition_fits(_black_plan(it)[0], running_dur)
+        else:
+            secs = 0.0 if it.get("transition") == "cut" else float(it.get("secs", 0.0))
+            if secs > 0:
+                _check_transition_fits(secs, running_dur)
+        running_dur += _advance(it, durations[i + 1])
     return max(0.0, running_dur)
 
 
@@ -1335,7 +1422,7 @@ def demo():
         assert "xfade" not in joined, f"layer ran alongside the xfade it replaces:\n{joined}"
         assert "acrossfade=d=1.000" in joined, f"layer swallowed the audio transition:\n{joined}"
 
-        # --- duck: the outgoing mix pushed under the incoming track ----------
+        # --- fade to black as a TRANSITION KIND ------------------------------
         def mean_db(path, ss, t):
             r = subprocess.run(["ffmpeg", "-v", "info", "-ss", f"{ss:.3f}", "-t", f"{t:.3f}",
                                  "-i", path, "-af", "volumedetect", "-f", "null", "-"],
@@ -1344,6 +1431,59 @@ def demo():
             assert m, f"no volumedetect output for {path}: {r.stderr[-400:]}"
             return float(m.group(1))
 
+        # ALBUM_ARC_AND_STAGING_PLAN.md sec 1. The number that matters: a black
+        # handover is the only transition that makes a set LONGER, and by
+        # exactly the hold -- the fades happen inside the neighbouring items.
+        black_items = [{"video": lay_a, "transition": "black", "secs": 1.0, "hold": 2.0},
+                       {"video": lay_b, "transition": "cut", "secs": 0.0}]
+        cut_items = [{"video": lay_a, "transition": "cut", "secs": 0.0},
+                     {"video": lay_b, "transition": "cut", "secs": 0.0}]
+        out_black = os.path.join(tmpdir, "set_black.mp4")
+        out_cutref = os.path.join(tmpdir, "set_cutref.mp4")
+        render_set(black_items, out_black)
+        render_set(cut_items, out_cutref)
+
+        # predicted and rendered, on BOTH sides, against the same set rendered
+        # as a cut. A prediction that merely agrees with its own render proves
+        # nothing -- these two renders have to differ by the hold and no more.
+        pred_black, pred_cut = set_duration(black_items), set_duration(cut_items)
+        assert abs((pred_black - pred_cut) - 2.0) < 0.01, (pred_black, pred_cut)
+        got_black, got_cut = probe(out_black)["duration"], probe(out_cutref)["duration"]
+        assert abs((got_black - got_cut) - 2.0) < 0.3, \
+            f"a 2s hold did not add 2s to the render: {got_black} vs {got_cut}"
+        assert abs(got_black - pred_black) < 0.3, (got_black, pred_black)
+
+        # and the middle really is black -- the hold sits at 2.0-4.0s
+        assert max(mean_rgb(out_black, 3.0)) < 24, \
+            f"the hold is not black: {mean_rgb(out_black, 3.0)}"
+        assert max(mean_rgb(out_cutref, 3.0)) > 40, \
+            "the reference render is black there too, so the check proves nothing"
+
+        # mix_audio prices and renders it the same way, or the audio-only and
+        # video renders of one document run to different lengths
+        black_audio = [{"audio": mp3, "transition": "black", "secs": 1.0, "hold": 2.0},
+                       {"audio": mp3_b, "transition": "cut", "secs": 0.0}]
+        cut_audio = [{"audio": mp3, "transition": "cut", "secs": 0.0},
+                     {"audio": mp3_b, "transition": "cut", "secs": 0.0}]
+        out_ba = os.path.join(tmpdir, "mix_black.mp3")
+        mix_audio(black_audio, out_ba)
+        assert abs(set_duration(black_audio, key="audio")
+                   - set_duration(cut_audio, key="audio") - 2.0) < 0.01
+        assert abs(probe(out_ba)["duration"] - set_duration(black_audio, key="audio")) < 0.35, \
+            (probe(out_ba)["duration"], set_duration(black_audio, key="audio"))
+        # the hold is SILENT, not just dark. 4s + 2s hold + 4s, so the silence
+        # sits at 4.0-6.0s; sampled inside it, clear of the fade either side.
+        assert mean_db(out_ba, 4.6, 1.0) < -60, \
+            f"the black hold is not silent: {mean_db(out_ba, 4.6, 1.0)} dB"
+
+        # a hold of zero is still a legal fade-through-black, just with no pause
+        nohold = [{"audio": mp3, "transition": "black", "secs": 1.0, "hold": 0.0},
+                  {"audio": mp3_b, "transition": "cut", "secs": 0.0}]
+        out_nh = os.path.join(tmpdir, "mix_black0.mp3")
+        mix_audio(nohold, out_nh)
+        assert abs(probe(out_nh)["duration"] - set_duration(cut_audio, key="audio")) < 0.35
+
+        # --- duck: the outgoing mix pushed under the incoming track ----------
         duck_json = json.dumps({"duck": 1.0})
         ducked = [{"audio": mp3, "transition": "fade", "secs": 1.5,
                    "effects_json": duck_json},

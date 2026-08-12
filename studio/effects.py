@@ -152,13 +152,10 @@ def loudnorm_filter():
 # What a set_item gets when effects_json is empty. loudnorm on, everything
 # creative off -- Phase 4 of the plan calls level matching "the unglamorous
 # one that matters most" and every other effect "per-item and off by default".
-# Validated by this module but NOT wired into render_set/mix_audio: both need a
-# second input stream (a sidechain, a second video). Refused at every entry
-# point rather than accepted and silently ignored.
-# Nothing left: layer and duck are both wired into the join now (mixer.
-# _layer_join and _duck_join). Kept as the place a future two-input effect goes
-# while it is validated but unwired, because the callers that consult it -- the
-# set editor and the mix suggester -- already do the right thing with it.
+# Empty: layer and duck are both wired into the join now (mixer._layer_join and
+# mixer._duck_join). Kept as the place a future validated-but-unwired effect
+# goes, because the callers that consult it -- the set editor and the mix
+# suggester -- already refuse rather than accept-and-ignore what is on it.
 UNSUPPORTED_KEYS = ()
 
 # Effects consumed at the TRANSITION between two items, not on one item's own
@@ -166,6 +163,11 @@ UNSUPPORTED_KEYS = ()
 # they sat unwired for so long: on one clip each looks like a filter that merely
 # "needs a second input", and there is no second input until the join.
 JOIN_KEYS = ("duck", "layer")
+
+# Transitions with no overlap window for a join effect to act in. A fade to
+# black is sequential -- A fades out, black holds, B fades in -- so like a
+# cut it gives duck and layer nothing to work on.
+NO_OVERLAP = ("cut", "black")
 
 
 def join_effects_without_overlap(effects_json, transition, secs):
@@ -195,7 +197,7 @@ def join_effects_without_overlap(effects_json, transition, secs):
         secs = float(secs or 0)
     except (TypeError, ValueError):
         secs = 0.0
-    return present if (transition or "cut") == "cut" or secs <= 0 else []
+    return present if (transition or "cut") in NO_OVERLAP or secs <= 0 else []
 
 # The keys THIS module owns. parse_effects deliberately ignores anything it
 # does not recognise, so callers that want "unknown key is a mistake" -- the

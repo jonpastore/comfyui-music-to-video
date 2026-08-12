@@ -880,9 +880,13 @@ def test_delete_song_removes_row_and_files():
         sid = song["id"]
         mp3_path = song["mp3_path"]
         assert os.path.isfile(mp3_path)
-        # let the auto-enqueued transcribe job finish, or the delete's
-        # own no-active-job guard (correctly) refuses it
-        wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='transcribe'", sid)["id"])
+        # let EVERY auto-enqueued job for this song finish, or the delete's own
+        # guard (correctly) refuses it with a 409. Waiting for the transcribe
+        # alone left the analyse job racing it, which failed this test roughly
+        # one run in ten -- the guard reads "any job for this song", so the
+        # wait has to as well.
+        for j in db.q("SELECT id FROM jobs WHERE song_id=?", sid):
+            wait_job(j["id"])
 
         # a storyboard with real files under db.DATA, so the delete has more
         # than the mp3 to clean up
@@ -2639,6 +2643,52 @@ def test_set_editor_page_404s_for_an_unknown_id():
 
 # ---- SETS_MIXING_PLAN.md: beatmatch.py / effects.py / video_fx.py wired in,
 # and the shared "impossible transition" guard -----------------------------
+
+def test_fade_to_black_is_a_transition_kind_and_its_hold_is_stored():
+    """ALBUM_ARC_AND_STAGING_PLAN.md sec 1. A transition rather than an inserted
+    clip, so it flows through the one place that computes where a handover
+    starts -- an inserted item has to be kept in step by hand on two render
+    paths, and drifts.
+
+    The hold is stored only for `black`. A hold that survived switching to
+    another transition would be a number the renderer ignores and the length
+    prediction does not, and they would disagree the moment it was switched
+    back."""
+    with TestClient(appmod.app) as client:
+        a = _upload_song(client, "Black Fade A")
+        b = _upload_song(client, "Black Fade B")
+        client.post("/sets/new", data={"name": "Black Fade Set", "mode": "audio"})
+        sid = db.one("SELECT id FROM sets WHERE name='Black Fade Set'")["id"]
+        for s in (a, b):
+            client.post(f"/sets/{sid}/items", data={"song_id": s["id"], "transition": "fade",
+                                                     "secs": "1.0"})
+        first = db.q("SELECT id FROM set_items WHERE set_id=? ORDER BY position", sid)[0]["id"]
+
+        r = client.post(f"/sets/{sid}/items/{first}",
+                        data={"transition": "black", "secs": "1.0", "hold": "2.5",
+                              "gain_db": "0"})
+        assert r.status_code in (200, 303), r.text
+        row = db.one("SELECT transition, hold FROM set_items WHERE id=?", first)
+        assert row["transition"] == "black" and abs(row["hold"] - 2.5) < 1e-6, dict(row)
+
+        # the editor offers it, and shows the hold it will actually use
+        page = client.get(f"/sets/{sid}").text
+        assert 'value="black"' in page and 'name="hold"' in page
+
+        # switching away zeroes it rather than leaving a number nothing reads
+        r = client.post(f"/sets/{sid}/items/{first}",
+                        data={"transition": "fade", "secs": "1.0", "hold": "2.5",
+                              "gain_db": "0"})
+        assert r.status_code in (200, 303), r.text
+        assert db.one("SELECT hold FROM set_items WHERE id=?", first)["hold"] == 0.0, \
+            "a hold survived a transition that has no hold"
+
+        # and it is a real transition name everywhere, not just in the form
+        assert "black" in appmod.SET_TRANSITIONS
+        r = client.post(f"/sets/{sid}/items/{first}",
+                        data={"transition": "strobe", "secs": "1.0", "gain_db": "0"})
+        assert r.status_code == 400, "an invented transition was accepted"
+
 
 def test_set_item_effects_json_validated_screened_and_rendered():
     """effects_json is free text (JSON) -- screened exactly like the anchor
