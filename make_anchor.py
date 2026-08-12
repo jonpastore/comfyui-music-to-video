@@ -28,7 +28,8 @@ usage:
   make_anchor.py --images face.png,wardrobe.jpg --outdir /tmp/wf_anchor \
                  --profile profiles/street_cats.json
 """
-import argparse, json, os, sys
+import argparse
+import random, json, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from build_refs import workflow  # noqa: E402
@@ -156,6 +157,10 @@ def main():
     ap.add_argument("--height", type=int, default=1216)
     ap.add_argument("--view", choices=list(DEFAULT_VIEWS), default="front")
     ap.add_argument("--prefix", default="anchor_v2")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="base seed. Omitted means a RANDOM base, which is what makes "
+                         "re-rolling produce different candidates -- pass one only to "
+                         "reproduce a specific sheet.")
     ap.add_argument("--profile", help="album profile json; its \"anchor\" block "
                                       "supplies identity/wardrobe/body/views")
     ap.add_argument("--prompt", default="", help="use this prompt verbatim instead of the "
@@ -170,8 +175,23 @@ def main():
                  args.view, load_anchor(args.profile), len(images)),
              "negative_prompt": ""}
     os.makedirs(args.outdir, exist_ok=True)
+    # A RANDOM base unless one is pinned. This was `4200 + k * 137`, a fixed
+    # sequence, so every anchor job this studio has ever run used the same six
+    # seeds. Two consequences, both reported as bugs:
+    #
+    #   - "there is not much variation" -- same seeds and same prompt produce
+    #     the same images, so re-rolling a sheet could not give you anything new,
+    #     however many times you pressed it.
+    #   - eleven jobs wrote six files. An identical workflow is a cache hit in
+    #     ComfyUI: it returns the cached node output and never re-runs SaveImage,
+    #     while /history still reports success. The job looks done and no image
+    #     appears.
+    #
+    # The filename carries the seed, so a random base also stops separate runs
+    # colliding in the shared output directory.
+    base = args.seed if args.seed is not None else random.randrange(1, 2**31 - 1)
     for k in range(args.n):
-        seed = 4200 + k * 137
+        seed = base + k * 137
         # shot "" so no framing directive is prepended over the character-sheet
         # instruction; the anchor prompt is self-contained.
         # The guardrail is attached by workflow() -> guardrail.build_prompt, the
