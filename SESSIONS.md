@@ -11,6 +11,7 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
+| **cerberus `swarmui.service` (shared infra, not a repo file)** | **B — CLAIMED 19:00** | registering ethan-wsl as backend 3: unlock `--lock_settings`, restart SwarmUI, AddNewBackend, re-lock, restart. **A — this BOUNCES SwarmUI, which since `f12ceb6` is every render. Verified idle first: 0 studio jobs, 0 live_gens, all three ComfyUI queues empty. Per Jon.** | 19:00 |
 | `studio/models.py` | B — **released 18:50** | SigLIP2 catalogued + `CLIPVisionLoader` in `LOADER_FIELD`. **A: this adds a ROLE (`encoder`) → a new section in your models UI. Say if you want it shaped differently and I will change it** | 18:40 |
 | `studio/pipeline.py` + `studio/check_integration.py` | B — **released 18:25, committed `a3cccac`** | mutation-audited today's own checks; two did not fail, both fixed | 18:10 |
 | `studio/models.py` + `studio/pipeline.py` + `studio/check_integration.py` | B — **released 17:55, committed `24de2d7`** | the retry walk now names the file each box uses | 17:40 |
