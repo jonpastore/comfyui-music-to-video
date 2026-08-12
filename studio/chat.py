@@ -21,6 +21,17 @@ import os
 
 import creds
 
+# ORDER IS DELIBERATE, and this is the reason: xai first.
+#
+# An album arc for an R or XXX release is a story about adult material, and xAI
+# generates that text without refusing it. OpenAI declines or quietly sanitises
+# the same request, and for an arc the second is the worse one -- a sanitised
+# arc is not an error anyone sees, it is thirty-one storyboards written against
+# a story with the teeth taken out of it.
+#
+# Sorting this list alphabetically, or otherwise "tidying" it, silently moves
+# every default-backend arc to the provider that will refuse the adult ones.
+# Both are always selectable; this is only what you get when you choose nothing.
 BACKENDS = ("xai", "openai")
 
 OPENAI_BASE = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
@@ -104,6 +115,24 @@ def resolve(backend=None):
     return have[0]
 
 
+class Refused(RuntimeError):
+    """The provider declined the request on content grounds.
+
+    Its own type because it is not a bug and not an outage: it is one provider
+    saying no to material another will write. The caller can name the backend
+    that does not refuse instead of reporting a failure the operator cannot act
+    on -- which for an ALBUM ARC is the difference between "try xAI" and
+    "something went wrong".
+    """
+
+
+def _refusal_note(model, detail):
+    return (f"{model} declined this request on content grounds. An album arc for an R or "
+            f"XXX release is a story about adult material, and xAI does not refuse it -- "
+            f"pick the xai backend for this album. The provider said: "
+            f"{' '.join(str(detail).split())[:200]}")
+
+
 def chat_json(system, user, backend=None, model=None, progress=None):
     """(parsed_json, "backend/model"). Raises on anything that is not an object."""
     backend = resolve(backend)
@@ -143,11 +172,23 @@ def _openai_chat(model, system, user, progress=None):
     if r.status_code >= 400:
         # scrubbed: an error body can echo the request, and the request carries
         # the key in a header some proxies helpfully include
-        raise RuntimeError(f"OpenAI {r.status_code}: {r.text.replace(key, '<redacted>')[:500]}")
+        body = r.text.replace(key, "<redacted>")
+        if "content_policy" in body or "content policy" in body.lower():
+            raise Refused(_refusal_note(model, body[:300]))
+        raise RuntimeError(f"OpenAI {r.status_code}: {body[:500]}")
     try:
-        return r.json()["choices"][0]["message"]["content"]
+        msg = r.json()["choices"][0]["message"]
     except (KeyError, IndexError, ValueError) as e:
-        raise RuntimeError(f"OpenAI reply had no message content: {r.text[:300]}") from e
+        raise RuntimeError(f"OpenAI reply had no choices: {r.text[:300]}") from e
+    # A REFUSAL is a 200 with content null and this field set. Read it, or the
+    # failure reads as a parsing bug -- "reply had no message content" -- when
+    # what actually happened is that the provider declined the album.
+    if msg.get("refusal"):
+        raise Refused(_refusal_note(model, msg["refusal"]))
+    content = msg.get("content")
+    if not content:
+        raise RuntimeError(f"OpenAI returned an empty message: {r.text[:300]}")
+    return content
 
 
 def demo():
@@ -231,6 +272,55 @@ def demo():
         for junk in ("text-embedding-3-large", "whisper-1", "dall-e-3",
                      "gpt-4o-realtime-preview", "gpt-5-search-api"):
             assert junk not in got, f"{junk} was offered as a chat model"
+
+        # --- a content refusal is its own outcome, not a parse failure ---
+        # Both shapes OpenAI uses, neither of which can be triggered on demand
+        # without generating the material they refuse. The distinction that
+        # matters: an operator reading this must be told to switch backend, not
+        # that the studio broke.
+        have["openai"] = "sk-live"
+
+        class _Refusal:
+            status_code = 200
+            text = "{}"
+            def json(self):
+                return {"choices": [{"message": {"content": None,
+                                                 "refusal": "I can't help with that."}}]}
+
+        class _PolicyError:
+            status_code = 400
+            text = '{"error": {"code": "content_policy_violation", "message": "declined"}}'
+
+        real_post = httpx.post
+        for resp, shape in ((_Refusal(), "a 200 with message.refusal"),
+                            (_PolicyError(), "a 400 content_policy_violation")):
+            httpx.post = lambda *a, _r=resp, **k: _r
+            try:
+                _openai_chat("gpt-test", "sys", "user")
+                raise AssertionError(f"{shape} was not treated as a refusal")
+            except Refused as e:
+                assert "xai" in str(e), f"{shape}: the message must name the backend that "\
+                                        f"does not refuse -- got {e}"
+                assert "declined this request" in str(e), e
+            finally:
+                httpx.post = real_post
+
+        # and an empty reply is still an ordinary failure, not a refusal
+        class _Empty:
+            status_code = 200
+            text = "{}"
+            def json(self):
+                return {"choices": [{"message": {"content": ""}}]}
+        httpx.post = lambda *a, **k: _Empty()
+        try:
+            _openai_chat("gpt-test", "sys", "user")
+            raise AssertionError("an empty reply was accepted")
+        except Refused:
+            raise AssertionError("an empty reply was misreported as a content refusal")
+        except RuntimeError as e:
+            assert "empty message" in str(e), e
+        finally:
+            httpx.post = real_post
     finally:
         creds.get = real_get
     print("chat.py OK")

@@ -15,6 +15,12 @@
     wording is composed at render time by <code>guardrail.build_prompt()</code>, and that stays
     the one place content is decided &mdash; what you type here and what the model writes back
     are both screened before either is stored.</p>
+  <p class="hint"><strong>xAI is the default, and for an adult album it is the one to
+    use.</strong> An arc for an R or XXX release is a story about adult material; xAI
+    writes it, OpenAI declines or quietly sanitises it &mdash; and a sanitised arc is not
+    an error anyone sees, it is every storyboard on the album written against a story
+    with the teeth taken out of it. If OpenAI does refuse, the job says so and names xAI
+    rather than reporting a failure you cannot act on.</p>
   {% if not backends %}
   <p class="hint"><span class="tag warn-tag">no API key</span>
     Set one on the <a href="/config">Config page</a> first.</p>
@@ -27,7 +33,7 @@
     <div class="field-row">
       <label>Backend
         <select name="backend">
-          <option value="">first available{% if backends %} ({{ backends[0] }}){% endif %}</option>
+          <option value="">default{% if backends %} ({{ backends[0] }}){% endif %}</option>
           {% for b in backends %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
         </select>
       </label>
