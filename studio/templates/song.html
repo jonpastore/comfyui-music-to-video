@@ -167,6 +167,20 @@
       <label>Seed <input type="text" name="seed" placeholder="blank = random"></label>
     </div>
     <details>
+      <summary>Replace a span &mdash; cut from the middle</summary>
+      <p class="hint">The one thing that really does cut from the middle: ffmpeg removes
+        the span, ACE-Step writes a bridge to fill it, and the seams are crossfaded so
+        the join does not click. The bridge is generated slightly longer than the gap
+        because {{ "%.2f"|format(2 * 0.25) }}s of it is eaten by the two crossfades, so
+        the track comes back the length it went in. The seconds box above is ignored.</p>
+      <div class="row">
+        <label>From <input type="number" name="bridge_start" min="0" step="0.1"
+                           placeholder="seconds"></label>
+        <label>To <input type="number" name="bridge_end" min="0" step="0.1"
+                         placeholder="seconds"></label>
+      </div>
+    </details>
+    <details>
       <summary>Re-synthesise from the current audio</summary>
       <p class="warn">This does not repair a section. It feeds the whole current track in
         at the denoise below and returns a whole new one.</p>

@@ -338,11 +338,25 @@ def _set_duration(items, key="video"):
 # more. They are plain data, so _stub's fallback serves them from the real
 # mixer.py -- one source, and a constant added to mixer can never again break
 # this suite at import. Only behaviour is stubbed below.
+splice_calls = []
+
+
 _stub("mixer",
       probe=lambda p: {"duration": _STUB_ITEM_DUR},
       _item_duration=_item_duration,
       assemble_song=lambda clip_paths, mp3, out, progress, fade: open(out, "w").close(),
       edit_audio=lambda *a, **k: None,
+      # Records the span and writes a real file at out_path, because the audio
+      # job stores that path in an assets row and the test then checks the file
+      # is there -- a stub writing nothing would prove the opposite of what the
+      # assertion reads as. SPLICE_XFADE is a VALUE the route does arithmetic
+      # with, so it has to be the real one, not a stand-in.
+      SPLICE_XFADE=0.25,
+      splice_bridge=lambda mp3_path, bridge_path, out_path, start, end, xfade=0.25,
+      progress=None: (
+          splice_calls.append({"src": mp3_path, "bridge": bridge_path,
+                               "start": start, "end": end})
+          or open(out_path, "wb").write(b"ID3" + b"\0" * 64) and out_path),
       # h_analyse draws a waveform now. Stubbed to write a real (empty) file at
       # the path it was given, because the caller records an assets row and
       # song_waveform() then checks the file is actually there -- a stub that

@@ -5877,6 +5877,27 @@ def test_generated_audio_is_kept_and_says_which_path_ran(monkeypatch, tmp_path):
         assert db.jset(latest)["mode"] == "resynthesised", "a seeded take read as a plain generation"
         assert sent[-1]["source_path"] == mp3 and sent[-1]["denoise"] == 0.6
 
+        # CUT FROM THE MIDDLE. The span reaches the splicer unchanged, and the
+        # bridge is asked for LONGER than the gap by exactly the two crossfades
+        # that will be eaten joining it -- otherwise the song comes back shorter
+        # than it went in, which is the failure nobody would notice until the
+        # video no longer lines up.
+        from conftest import splice_calls
+        r = client.post(f"/songs/{sid}/audio/generate",
+                        data={**ok, "n": "1", "bridge_start": "12.0", "bridge_end": "14.5"})
+        assert r.status_code in (200, 303), r.text
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='audio' ORDER BY id DESC")["id"])
+        assert splice_calls, "the span never reached mixer.splice_bridge"
+        assert (splice_calls[-1]["start"], splice_calls[-1]["end"]) == (12.0, 14.5)
+        assert sent[-1]["seconds"] == 2.5 + 2 * appmod.mixer.SPLICE_XFADE, (
+            "the bridge was generated the length of the GAP, so the two crossfades "
+            "would eat into it and shorten the track")
+        bridged = db.q("SELECT * FROM assets WHERE song_id=? AND kind='audio_gen' "
+                       "ORDER BY id DESC LIMIT 1", sid)[0]
+        meta = db.jset(bridged)
+        assert meta["mode"] == "bridged" and meta["bridge_start"] == 12.0
+        assert os.path.exists(bridged["path"])
+
         # a take can be pressed into use through the SAME route an edit uses
         r = client.post(f"/songs/{sid}/audio/{rows[0]['id']}/use")
         assert r.status_code in (200, 303)

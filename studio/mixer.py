@@ -229,6 +229,77 @@ def edit_audio(mp3_path, out_path, trim_start=0.0, trim_end=None, gain_db=0.0,
     return out_path
 
 
+SPLICE_XFADE = 0.25   # seconds of overlap at each seam; short enough not to eat a bar
+
+
+def splice_bridge(mp3_path, bridge_path, out_path, start, end, xfade=SPLICE_XFADE,
+                  progress=None):
+    """Replace [start, end) of mp3_path with bridge_path. THE cut-from-the-middle.
+
+    models.py used to catalogue ACE-Step as the answer to this, on the grounds
+    that "ffmpeg can only trim the ENDS of a track". Both halves were wrong.
+    ffmpeg can cut from anywhere -- it just needs three pieces and two seams --
+    and ACE-Step cannot do it at all, because no backend publishes a region or
+    mask node, so a denoise below 1.0 re-synthesises the whole track. What
+    ACE-Step supplies is the BRIDGE; the cutting and the joining are here.
+
+    Seams are crossfaded rather than butt-joined: a hard splice between two
+    unrelated renders clicks, and a click is the one artefact a listener hears
+    every time. acrossfade consumes `xfade` seconds from each side, so the
+    result runs about 2*xfade shorter than head + bridge + tail.
+
+    Raises rather than guessing when the span is not inside the track: a
+    silently clamped range would return a file that is not the edit that was
+    asked for, and nothing downstream could tell.
+    """
+    progress = progress or _NOOP
+    duration = probe(mp3_path)["duration"]
+    start, end = float(start), float(end)
+    if not 0.0 <= start < end <= duration + 0.001:
+        raise ValueError(f"the span {start:.3f}-{end:.3f}s is not inside a "
+                         f"{duration:.3f}s track")
+    bridge_len = probe(bridge_path)["duration"]
+    if bridge_len <= 0:
+        raise ValueError("the bridge has no audio in it")
+
+    head, tail = start, max(0.0, duration - end)
+    # Each surviving piece has to be longer than the fade that eats into it, or
+    # acrossfade is asked to consume audio that is not there.
+    parts, chain, n = [], [], 0
+    if head > xfade:
+        parts += ["-ss", "0", "-to", f"{start:.3f}", "-i", mp3_path]
+        n += 1
+    parts += ["-i", bridge_path]
+    n += 1
+    if tail > xfade:
+        parts += ["-ss", f"{end:.3f}", "-i", mp3_path]
+        n += 1
+    if n == 1:
+        raise ValueError("that span covers the whole track -- generate a take instead "
+                         "of splicing one into nothing")
+    prev = "[0:a]"
+    for i in range(1, n):
+        out = f"[x{i}]"
+        chain.append(f"{prev}[{i}:a]acrossfade=d={xfade:.3f}:c1=tri:c2=tri{out}")
+        prev = out
+    codec = "libmp3lame" if os.path.splitext(out_path)[1].lower() == ".mp3" else "aac"
+    args = parts + ["-filter_complex", ";".join(chain), "-map", prev,
+                    "-c:a", codec, "-b:a", "192k"]
+
+    tmp = _atomic_out(out_path)
+    try:
+        progress(f"splicing {end - start:.2f}s at {start:.2f}s into a {duration:.2f}s track")
+        _run_ffmpeg(args + [tmp], progress,
+                    total_duration=head + bridge_len + tail, stage="splice_bridge")
+        os.replace(tmp, out_path)
+    except Exception:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+    progress("done")
+    return out_path
+
+
 _XFADE_NAMES = {"fade": "fade", "dissolve": "dissolve", "wipe": "wipeleft"}  # xfade has no generic "wipe"
 
 # Every transition a set may ask for, in the order the editor offers them.
@@ -1808,6 +1879,57 @@ def demo():
         mix_audio(bm_audio_items, out_bm_audio)
         pred_bm_audio = set_duration(bm_audio_items, key="audio")
         assert abs(probe(out_bm_audio)["duration"] - pred_bm_audio) <= 0.3
+
+        # ---- splice_bridge: the cut-from-the-middle ACE-Step cannot do.
+        # A DIFFERENTIAL on the audio itself, not just on the duration: the
+        # spliced region has to actually be the bridge. The source is a 440 Hz
+        # tone for 4s and the bridge is 1s of 880 Hz, so a mean-volume read over
+        # the replaced window differs from the same window of the original only
+        # if the splice really landed there. Duration alone would pass even if
+        # ffmpeg had concatenated the source with itself.
+        bridge = os.path.join(tmpdir, "bridge.mp3")
+        r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-t", "1",
+                            "-i", "sine=frequency=880:sample_rate=44100", "-c:a", "libmp3lame",
+                            bridge], capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        spliced = os.path.join(tmpdir, "spliced.mp3")
+        splice_bridge(mp3, bridge, spliced, 1.5, 2.5, progress=progress)
+        # head 1.5 + bridge 1.0 + tail 1.5, less 2 * 0.25 of crossfade overlap
+        assert abs(probe(spliced)["duration"] - 3.5) <= 0.35, probe(spliced)["duration"]
+
+        def _band_db(path, start, dur, freq):
+            """Energy in a narrow band around freq, in a window. NEVER returns a
+            default: the first version of this check used aspectralstats, which
+            emits nothing without a metadata printer, so both readings came back
+            0.0 and the comparison silently passed on no data at all. A
+            measurement that cannot fail is not evidence, so a missing reading
+            raises here instead of degrading into one."""
+            r = subprocess.run(
+                ["ffmpeg", "-v", "info", "-ss", str(start), "-t", str(dur), "-i", path,
+                 "-af", f"bandpass=f={freq}:width_type=h:w=80,volumedetect", "-f", "null", "-"],
+                capture_output=True, text=True)
+            m = re.search(r"mean_volume:\s*(-?\d+\.?\d*) dB", r.stderr or "")
+            assert m, f"volumedetect reported nothing for {freq} Hz at {start}s"
+            return float(m.group(1))
+
+        # Three readings, because two would not distinguish "the bridge landed"
+        # from "the whole file was replaced by the bridge".
+        assert _band_db(mp3, 1.8, 0.4, 880) < _band_db(mp3, 1.8, 0.4, 440) - 12, \
+            "the fixture is not a 440 Hz tone, so the rest of this proves nothing"
+        assert _band_db(spliced, 1.8, 0.4, 880) > _band_db(spliced, 1.8, 0.4, 440) + 5, \
+            "the 880 Hz bridge is not in the window it was spliced into"
+        assert _band_db(spliced, 0.3, 0.4, 440) > _band_db(spliced, 0.3, 0.4, 880) + 12, \
+            "the head was overwritten -- the splice replaced more than its span"
+
+        for bad, why in (((5.0, 6.0), "a span past the end of the track"),
+                         ((2.0, 1.0), "an end before its start"),
+                         ((-1.0, 1.0), "a negative start"),
+                         ((0.0, 4.0), "a span covering the whole track")):
+            try:
+                splice_bridge(mp3, bridge, os.path.join(tmpdir, "no.mp3"), *bad)
+                raise AssertionError(f"splice_bridge accepted {why}")
+            except ValueError:
+                pass
 
         assert logs, "progress callback never fired"
         print(f"mixer.py OK  assemble={info1['duration']:.2f}s fade={info2['duration']:.2f}s "

@@ -1175,10 +1175,18 @@ def h_audio(args, progress):
     outdir = os.path.join(db.DATA, "audio", slug)
     os.makedirs(outdir, exist_ok=True)
     stamp = int(time.time() * 1000)
+    span = args.get("bridge")
     kept = []
     for i, src in enumerate(took):
         out = os.path.join(outdir, f"gen_{stamp}_{i}.mp3")
-        shutil.copy2(src, out)
+        if span:
+            # THE cut-from-the-middle. ACE-Step supplies the bridge and ffmpeg
+            # does the cutting, because no backend has a region node -- see the
+            # ACE-Step entry in models.py, which used to claim the opposite.
+            mixer.splice_bridge(song["mp3_path"], src, out, span["start"], span["end"],
+                                progress=progress)
+        else:
+            shutil.copy2(src, out)
         # WHICH PATH RAN, stored beside the file rather than inferred later.
         # models.py's ACE-Step entry is explicit that whatever comes back is NEW
         # audio and never a shortened original, so a take that was seeded from
@@ -1187,11 +1195,14 @@ def h_audio(args, progress):
         # region node on any backend -- so "resynthesised" means all of it.
         db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
                sid, "audio_gen", out, json.dumps({
-                   "mode": "resynthesised" if args.get("source_path") else "generated",
+                   "mode": ("bridged" if span else
+                            "resynthesised" if args.get("source_path") else "generated"),
                    "tags": args["tags"], "lyrics": args.get("lyrics", ""),
                    "seconds": args["seconds"], "seed": args.get("seed"),
                    "denoise": args.get("denoise", 1.0),
                    "source_path": args.get("source_path") or "",
+                   "bridge_start": (span or {}).get("start"),
+                   "bridge_end": (span or {}).get("end"),
                    "model": models.default_for("audio")}), time.time())
         kept.append(out)
     progress(f"{len(kept)} take(s) kept in {outdir}")
@@ -4282,7 +4293,8 @@ MAX_AUDIO_TAKES = 4
 def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
                    seconds: float = Form(30.0), n: int = Form(1),
                    seed: str = Form(""), denoise: float = Form(1.0),
-                   from_current: str = Form("")):
+                   from_current: str = Form(""),
+                   bridge_start: str = Form(""), bridge_end: str = Form("")):
     """Queue an ACE-Step take for this song.
 
     Deliberately NOT screened by tiers.check_text: the image guardrail is off
@@ -4302,6 +4314,21 @@ def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
     for value, bound, what in ((tags, MAX_TAGS, "tags"), (lyrics or "", MAX_LYRICS, "lyrics")):
         if len(value) > bound:
             raise HTTPException(400, f"{what} is {len(value)} characters; keep it under {bound}")
+    # Replacing a span is the only thing here that is an EDIT of this track
+    # rather than a new one, so it computes its own length and ignores the
+    # seconds box: the bridge has to be the gap PLUS the two crossfades that
+    # will be eaten joining it, or the song comes back shorter than it went in.
+    span = None
+    if (bridge_start or "").strip() or (bridge_end or "").strip():
+        if not song["mp3_path"] or not os.path.exists(song["mp3_path"]):
+            raise HTTPException(400, "this song has no audio to splice into")
+        try:
+            span = {"start": float(bridge_start), "end": float(bridge_end)}
+        except ValueError:
+            raise HTTPException(400, "the span needs a start and an end, in seconds") from None
+        if span["end"] <= span["start"] or span["start"] < 0:
+            raise HTTPException(400, "the span must end after it starts")
+        seconds = (span["end"] - span["start"]) + 2 * mixer.SPLICE_XFADE
     if not 1.0 <= seconds <= MAX_AUDIO_SECS:
         raise HTTPException(400, f"seconds must be between 1 and {MAX_AUDIO_SECS:g}")
     if not 1 <= n <= MAX_AUDIO_TAKES:
@@ -4310,6 +4337,8 @@ def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
         raise HTTPException(400, "denoise must be above 0 and at most 1.0")
     args = {"song_id": id, "tags": tags, "lyrics": lyrics or "", "seconds": float(seconds),
             "n": int(n), "denoise": float(denoise)}
+    if span:
+        args["bridge"] = span
     if (seed or "").strip():
         try:
             args["seed"] = int(seed)
