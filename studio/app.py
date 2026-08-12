@@ -2239,7 +2239,8 @@ def cfg_sweep_points(form, render, combos):
 MAX_RUN_HISTORY = 25
 
 
-def create_anchor_run(album, tier, view, character_id, n, prompt, render, refs, guardrail):
+def create_anchor_run(album, tier, view, character_id, n, prompt, render, refs, guardrail,
+                       chosen=None):
     """Record ONE generation, with everything that was sent, before it is queued.
 
     Written in the route rather than in the handler so the settings are stored
@@ -2251,14 +2252,25 @@ def create_anchor_run(album, tier, view, character_id, n, prompt, render, refs, 
     the KSampler, so a candidate can be labelled with the cfg it truly used.
     form_json is what was CHOSEN, so "leave it on the mode default" reloads as
     a default rather than as the number it happened to resolve to that day.
+
+    `chosen` exists for the sweep, and it is the difference between the two
+    being real. A sweep's per-point render carries a cfg this form never picked
+    and a seed the server drew, and storing THAT as form_json meant the newest
+    run was the sweep's last point: the form reopened at cfg 9.0 -- past every
+    measured degradation point -- with the seed pinned, so the next ordinary
+    Generate silently rendered there, a second click no longer produced
+    different sheets, and a second sweep was refused for a reason the user did
+    not cause. The swept values stay recoverable from settings_json, which is
+    what the thumbnail badge reads.
     """
+    chosen = render if chosen is None else chosen
     return db.run("""INSERT INTO anchor_runs (scope_value, tier, view, character_id, n,
                                                prompt, negative, guardrail, settings_json,
                                                form_json, refs_json, created)
                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                   album, tier, view, character_id, n, prompt or "",
                   (render or {}).get("negative", ""), guardrail,
-                  json.dumps(resolved_settings(render)), json.dumps(render or {}),
+                  json.dumps(resolved_settings(render)), json.dumps(chosen or {}),
                   json.dumps(list(refs or [])), time.time())
 
 
@@ -2611,8 +2623,13 @@ async def anchor_preflight(request: Request):
 
     if not album:
         blockers.append("Choose an album.")
+    elif not db.one("SELECT id FROM playlists WHERE name=? AND kind='playlist'", album):
+        blockers.append(f"No album called {album!r} -- create it on Playlists first.")
     if not tiers_sel:
         blockers.append("Tick at least one tier.")
+    for t in tiers_sel:
+        if not db.one("SELECT id FROM tiers WHERE name=?", t):
+            blockers.append(f"No tier called {t!r}.")
 
     plan = anchor_plan(tiers_sel, views_sel) if tiers_sel else []
     combos = [(p["tier"], v) for p in plan for v in p["views"]]
@@ -2624,20 +2641,50 @@ async def anchor_preflight(request: Request):
         blockers.append("Every view you picked is a nude one and no tier you picked permits "
                         "nudity, so there is nothing to render.")
 
-    refs = len(form.getlist("ref_id"))
+    # Count what the ROUTE counts: ticked gallery images PLUS anything in the
+    # upload input. Counting only the ticks reported "no blockers, 4 sheets,
+    # about 12 min" for the two commonest refusals there are -- four references,
+    # and none at all.
+    uploads = len(form_files(form, "images"))
+    refs = len(form.getlist("ref_id")) + uploads
+    if uploads > MAX_ANCHOR_UPLOADS:
+        blockers.append(f"That is {uploads} images at once; {MAX_ANCHOR_UPLOADS} is the most "
+                        f"this form accepts.")
     if refs > pipeline.MAX_ANCHOR_REFS:
-        blockers.append(f"{refs} reference images are ticked; the model conditions on "
+        blockers.append(f"{refs} reference images selected; the model conditions on "
                         f"{pipeline.MAX_ANCHOR_REFS}. Untick some.")
+    if not refs:
+        blockers.append("Pick at least one saved reference image, or upload one.")
 
-    settings, sweep = {}, None
+    # The per-tier prompt boxes, through the SAME three checks the route runs.
+    # Collected rather than raised, so a screening refusal and a length refusal
+    # both show at once instead of one revealing the next.
+    for t in tiers_sel:
+        text = (form.get(f"prompt_{t}") or "").strip()
+        if not text:
+            continue
+        if len(text) > MAX_ANCHOR_PROMPT:
+            blockers.append(f"The {t.upper()} prompt is {len(text)} characters; keep it under "
+                            f"{MAX_ANCHOR_PROMPT}.")
+        try:
+            tiers.check_text(text, f"{t.upper()} anchor prompt")
+            tiers.check_override(text)
+        except ValueError as e:
+            blockers.append(str(e))
+
+    settings, sweep, settings_ok = {}, None, True
     try:
         render = anchor_render_settings(form)
         settings = resolved_settings(render)
     except HTTPException as e:
         blockers.append(str(e.detail))
-        render = {}
-    # every sweep reason at once, from the same list the route raises from
-    per_point, sweep_reasons = sweep_blockers(form, render, combos)
+        render, settings_ok = {}, False
+    # Every sweep reason at once, from the same list the route raises from --
+    # but skipped when the settings themselves would not parse. render is {}
+    # there, so sweep_blockers would report "a CFG sweep needs quality mode" on
+    # top of the real error: a blocker the user did not cause.
+    per_point, sweep_reasons = (sweep_blockers(form, render, combos) if settings_ok
+                                else (None, []))
     blockers += sweep_reasons
     if per_point and not sweep_reasons:
         sweep = {"cfgs": [float(v) for v, _ in CFG_CHOICES], "n": per_point,
@@ -2853,7 +2900,9 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
         this_n = n if cfg is None else sweep["n"]
         # The run row goes in FIRST, so what was sent survives a job that fails.
         run_id = create_anchor_run(album, t, v, character_id, this_n, text, this_render,
-                                    paths, tiers.compose_guardrail(t, album))
+                                    paths, tiers.compose_guardrail(t, album),
+                                    # what the FORM chose, not the sweep's point
+                                    chosen=render)
         jid = jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": album, "tier": t,
                                        "view": v, "images": paths, "n": this_n,
                                        "character_id": character_id, "prompt": text,
@@ -4187,25 +4236,27 @@ DESCRIBABLE = ("identity", "wardrobe", "body")
 ANCHOR_PROFILE_FIELDS = ("identity", "wardrobe", "body", "nude_wardrobe", "anatomy", "views")
 
 
-def file_profile_anchor():
-    """The `anchor` block of the profile JSON on disk, or {}.
-
-    The album's own wording in the DATABASE wins over every field this defines.
-    It is read at all for one thing: `views`, the per-view framing sentences,
-    which have no database column and no UI, and which the studio was dropping
-    entirely -- h_anchor built its profile from identity/wardrobe/body alone, so
-    the front and back sentences written for this character in
-    profiles/street_cats.json reached nothing, and every sheet this studio ever
-    rendered used make_anchor's generic defaults instead.
-    """
-    path = getattr(pipeline, "PROFILE", "") or ""
-    if not path or not os.path.isfile(path):
-        return {}
-    try:
-        with open(path) as f:
-            return (json.load(f) or {}).get("anchor") or {}
-    except (OSError, ValueError):
-        return {}
+# NOTHING is taken from the global profile FILE any more, and that is a
+# deliberate reversal of an earlier fix in this same session.
+#
+# The parallel session reported that profiles/street_cats.json defines its own
+# `views` -- per-character framing sentences -- which h_anchor never shipped, so
+# every sheet used make_anchor's generic defaults. True. I wired it through, and
+# the critic then reproduced the other half of the same fact: STUDIO_PROFILE is
+# ONE file for the whole studio, that file's views read "FRONT VIEW character
+# reference sheet of a single adult anthropomorphic black feline woman", and
+# `views` has no database column and no UI -- so wiring it welded one album's
+# SPECIES into every other album's clothed sheets with no way to change it.
+#
+# Both reports are right; the wiring was wrong. An album owns its wording
+# through its own columns (identity, wardrobe, body, nude_wardrobe, anatomy) and
+# the framing stays species-neutral in make_anchor.DEFAULT_VIEWS. That also
+# leaves render output exactly as every anchor in this database was made --
+# those sentences never reached the renderer, so nothing regresses.
+#
+# Per-album view framing is a real feature and this is where it would go: four
+# columns and four boxes, at which point the album overrides the default the way
+# every other field does. It is not a global.
 
 
 def anchor_profile_fields(album, character_id=None):
@@ -4217,10 +4268,10 @@ def anchor_profile_fields(album, character_id=None):
     editor showing something the renderer does not build.
     """
     prof = album_profile(album)
-    out = dict(file_profile_anchor())
+    out = {}
     for key in ANCHOR_PROFILE_FIELDS:
         if key == "views":
-            continue
+            continue          # framing is make_anchor's, and species-neutral
         value = prof.get(key)
         if value:
             out[key] = value

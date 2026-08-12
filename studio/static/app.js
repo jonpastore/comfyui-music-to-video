@@ -782,6 +782,13 @@ function initRunHistory() {
 function markUsedVersion(box, tier, vid) {
   var form = anchorForm();
   if (!form || !box) return;
+  // Only a real version id. The negative picker's last option is the sentinel
+  // "default" (the generic starting point), which is not a row -- it reached
+  // prompts.mark_used as a string and 500'd the render request AFTER the jobs
+  // were queued. syncVersionDelete already special-cased it; this handler did
+  // not, which is how a sentinel handled in one place and not the other gets
+  // through.
+  if (!/^\d+$/.test(String(vid || ""))) vid = "";
   var sel = tier ? '.used-version[data-tier="' + tier + '"]' : ".used-version:not([data-tier])";
   var hidden = form.querySelector(sel);
   if (!hidden) return;
@@ -891,9 +898,10 @@ function syncVersionDelete(pick) {
 // no rebuild, so no ticked tier, chosen view, typed prompt or selected character
 // can be silently reset the way the first async upload/delete handlers did.
 function initAnchorBatch() {
-  var form = document.getElementById("anchor-form");
+  // Looked up at event time, not captured: the batch panel lives inside the
+  // page but the FORM above it is replaced by htmx, and on a fresh /anchors
+  // there may be no panel yet at DOMContentLoaded.
   var panel = document.getElementById("anchor-batch");
-  if (!panel) return;
   var list = document.getElementById("anchor-batch-list");
   var note = document.getElementById("anchor-batch-note");
   var done = 0, failed = 0, total = list.children.length;
@@ -986,16 +994,30 @@ function initAnchorBatch() {
     };
   }
 
-  Array.prototype.forEach.call(list.children, watch);
-  tally();
+  if (list) Array.prototype.forEach.call(list.children, watch);
+  if (panel) tally();
 
-  if (!form) return;
-  form.addEventListener("submit", function (e) {
+  // Delegated on document, resolving the form at event time. Bound to the
+  // ELEMENT this listener died on the first tier or view tick: every one of
+  // those controls carries hx-swap="outerHTML" on #anchor-form, so the node this
+  // closure captured was detached and Generate fell back to a native POST and a
+  // 303 full-page reload -- no batch report, no SSE watchers, no per-sheet
+  // Cancel. 36d7d7a fixed exactly this for the save buttons and the pickers and
+  // left this handler behind; the test guarding it sliced the source up to the
+  // start of this function, so the one surviving instance sat just past the end
+  // of what it read.
+  document.addEventListener("submit", function (e) {
+    var form = e.target.closest && e.target.closest("#anchor-form");
+    if (!form) return;
     if (e.defaultPrevented) return;          // htmx or a confirm() already handled it
     // Upload and each thumbnail's Delete are submit buttons with their own
     // formaction, driven by htmx. Only the bare Generate submit is ours.
     if (e.submitter && e.submitter.hasAttribute("formaction")) return;
     e.preventDefault();
+    panel = document.getElementById("anchor-batch");
+    list = document.getElementById("anchor-batch-list");
+    note = document.getElementById("anchor-batch-note");
+    if (!panel || !list || !note) return;
     var btn = e.submitter || form.querySelector('button[type="submit"]:not([formaction])');
     if (btn) btn.disabled = true;
     panel.hidden = false;
@@ -1020,12 +1042,24 @@ function initAnchorBatch() {
       // the reload used to clear it.
       var file = document.getElementById("anchor-images");
       if (file) file.value = "";
+      refreshQueue();          // the panel is inert while the queue was empty
     }).catch(function (err) {
       total = done = failed = 0;
       list.innerHTML = "";
       note.firstChild.textContent = "Nothing was queued: " + err.message + " ";
     }).then(function () { if (btn) btn.disabled = false; });
   });
+}
+
+// The queue panel stops polling when the queue drains, which is right -- a page
+// that polls forever never lets the machine idle. But nothing re-armed it, so on
+// /anchors, the one page that queues work WITHOUT a reload, the panel sat on
+// "idle -- not polling / Nothing queued." for the whole render. Called wherever
+// work is enqueued asynchronously.
+function refreshQueue() {
+  var panel = document.getElementById("queue-panel");
+  if (!panel || typeof htmx === "undefined") return;
+  htmx.ajax("GET", "/queue", {target: "#queue-panel", swap: "outerHTML"});
 }
 
 // ---- Retry and Cancel, on every page that shows a job ----------------------
@@ -1054,6 +1088,7 @@ function initJobForms() {
     api(form.action, new FormData(form)).then(function (d) {
       if (cell) cell.textContent = retry ? "re-queued as job #" + d.job_id : "cancelled";
       if (!retry && row) row.classList.add("job-cancelled");
+      refreshQueue();          // a retry queues work; a cancel may drain it
     }).catch(function (err) {
       if (cell) cell.textContent = (retry ? "retry failed: " : "cancel failed: ") + err.message;
       if (btn) btn.disabled = false;      // it did not happen, so let it be tried again

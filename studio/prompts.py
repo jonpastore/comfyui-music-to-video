@@ -147,8 +147,25 @@ def delete(vid):
 
 def mark_used(vids):
     """Count a version as USED -- called when a render is queued with it, never
-    when it is merely loaded into the form."""
-    for vid in {int(v) for v in vids if v}:
+    when it is merely loaded into the form.
+
+    TOTAL BY CONSTRUCTION: anything that is not a version id is skipped rather
+    than raising. This is a usage counter, and it is called AFTER the jobs are
+    enqueued -- so an exception here does not prevent a bad render, it reports
+    failure for renders that are already running. It did exactly that: the
+    negative picker's "the generic starting point" option carries the sentinel
+    value "default", int() raised on it, and a sweep 500'd with eleven jobs
+    already queued while the batch panel said "Nothing was queued" and dropped
+    their watch lines and their Cancel buttons.
+
+    The sentinel is also filtered client-side, in markUsedVersion. Both, because
+    a counter that can fail a render is the wrong shape whatever feeds it.
+    """
+    for raw in set(vids or ()):
+        try:
+            vid = int(raw)
+        except (TypeError, ValueError):
+            continue
         db.run("UPDATE prompt_versions SET usage_count = usage_count + 1 WHERE id=?", vid)
 
 
@@ -211,7 +228,11 @@ def demo():
 
     # usage is counted when a render USES it, not when it is looked at
     assert latest("Street Cats", "body")["usage_count"] == 0
-    mark_used([b["id"], b["id"], None, ""])      # deduped, blanks ignored
+    # deduped, and everything that is not an id is SKIPPED rather than raising:
+    # this runs after the jobs are enqueued, so an exception here reports failure
+    # for renders that are already running. "default" is the negative picker's
+    # own sentinel and is exactly what took a sweep down with 11 jobs queued.
+    mark_used([b["id"], b["id"], None, "", "default", "abc", 0])
     assert get(b["id"])["usage_count"] == 1, get(b["id"])["usage_count"]
     mark_used([b["id"]])
     assert get(b["id"])["usage_count"] == 2
