@@ -453,6 +453,59 @@ function initAnchorPrompts() {
   });
   syncMode();
 
+  // Saved prompt versions: pick one to load it, Save to store what is in the box.
+  form.addEventListener("change", function (e) {
+    var pick = e.target.closest(".prompt-version-pick");
+    if (!pick) return;
+    var box = form.querySelector('[name="prompt_' + pick.dataset.tier + '"]');
+    if (!box) return;
+    var opt = pick.options[pick.selectedIndex];
+    // the empty option means "the composed default" -- reloading is the honest
+    // way back to it, since the composer lives on the server
+    if (!opt.value) { location.reload(); return; }
+    box.value = opt.dataset.text || "";
+    box.dispatchEvent(new Event("input", {bubbles: true}));   // refresh the counter
+  });
+
+  form.addEventListener("click", function (e) {
+    var save = e.target.closest(".prompt-save");
+    if (!save) return;
+    var tier = save.dataset.tier;
+    var box = form.querySelector('[name="prompt_' + tier + '"]');
+    var note = form.querySelector('.prompt-save-note[data-tier="' + tier + '"]');
+    var label = form.querySelector('.prompt-version-label[data-tier="' + tier + '"]');
+    if (!box) return;
+    var body = new FormData();
+    body.append("album", (form.querySelector("[name=album]") || {}).value || "");
+    body.append("tier", tier);
+    body.append("text", box.value);
+    body.append("label", label ? label.value : "");
+    var cid = (form.querySelector("[name=character_id]") || {}).value;
+    if (cid) body.append("character_id", cid);
+    save.disabled = true;
+    if (note) note.textContent = "saving...";
+    api("/anchors/prompt", body).then(function (d) {
+      if (note) note.textContent = "saved " + (d.label || "unnamed");
+      var pick = form.querySelector('.prompt-version-pick[data-tier="' + tier + '"]');
+      if (pick && d.versions) {
+        var keep = pick.options[0];
+        pick.innerHTML = "";
+        pick.appendChild(keep);
+        d.versions.forEach(function (v) {
+          var o = document.createElement("option");
+          o.value = v.id;
+          o.dataset.text = v.text;
+          o.textContent = (v.label || "unnamed");
+          pick.appendChild(o);
+        });
+        pick.value = String(d.id);
+      }
+      if (label) label.value = "";
+    }).catch(function (err) {
+      if (note) note.textContent = "not saved: " + err.message;
+    }).then(function () { save.disabled = false; });
+  });
+
   var btn = document.getElementById("anchor-preview-btn");
   var out = document.getElementById("anchor-preview-out");
   if (!btn || !out) return;

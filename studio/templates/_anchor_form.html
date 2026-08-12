@@ -41,6 +41,7 @@
     </label>
   </div>
 
+  <div class="side-by-side">
   <fieldset>
     <legend>Tiers &mdash; one tab, and one set of sheets, per tier</legend>
     <div class="check-row">
@@ -86,6 +87,7 @@
     <p class="hint"><strong>{{ sheet_count }}</strong> sheet{{ "" if sheet_count == 1 else "s" }}
       to render, each with its own candidates.</p>
   </fieldset>
+  </div>
 
   {# ---- base images: kept, not re-uploaded every time ---- #}
   {% if saved_refs %}
@@ -252,6 +254,27 @@
     <p class="rule"><strong>The <code>{{ p.name | tiername }}</code> tier's wording</strong>,
       attached on top of the pinned text for this tier's sheets:</p>
     <blockquote>{{ p.text or "(this tier adds no wording of its own)" }}</blockquote>
+    {# Saved versions. The prompt used to live nowhere: it was recomposed from the
+       album profile on every load and only travelled with the job, so an edit was
+       gone the moment you navigated away. A new row per save, because a prompt is
+       tuned by comparing renders and the one you want back is usually the last
+       but one. #}
+    <div class="field-row prompt-versions" data-tier="{{ p.name }}">
+      <label>Saved prompts
+        <select class="prompt-version-pick" data-tier="{{ p.name }}">
+          <option value="">composed from the album profile (the default)</option>
+          {% for v in p.versions %}
+          <option value="{{ v.id }}" data-text="{{ v.text }}">
+            {{ v.label or "unnamed" }} &middot; {{ v.created | isotime }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Name this version
+        <input type="text" class="prompt-version-label" data-tier="{{ p.name }}"
+               maxlength="80" placeholder="e.g. tighter fur wording"></label>
+      <button type="button" class="prompt-save" data-tier="{{ p.name }}">Save prompt</button>
+      <span class="prompt-save-note muted" data-tier="{{ p.name }}"></span>
+    </div>
     <label>Prompt &mdash; what {{ p.name | tiername }}'s character sheets are built from
       <textarea name="prompt_{{ p.name }}" rows="8" class="counted"
                 data-max="{{ max_anchor_prompt }}"

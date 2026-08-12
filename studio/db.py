@@ -239,6 +239,25 @@ MIGRATIONS = [
 # creds.py's own docstring for what that does and does not buy). Its own
 # statement rather than a line in SCHEMA because it is the only table holding
 # anything sensitive, and that is worth being able to find.
+ANCHOR_PROMPTS_SCHEMA = """
+-- Saved anchor prompts, VERSIONED. The per-tier prompt had nowhere to live: it
+-- was recomposed from the album profile on every page load and only travelled
+-- with the job, so an edit was lost the moment you navigated away. Versions
+-- rather than one row because a prompt is tuned by comparing renders, and the
+-- one you want back is usually the one before last.
+CREATE TABLE IF NOT EXISTS anchor_prompts (
+  id INTEGER PRIMARY KEY,
+  scope_value TEXT NOT NULL,          -- album name, as anchors are scoped
+  tier TEXT NOT NULL,
+  character_id INTEGER,               -- NULL is the protagonist, as everywhere else
+  label TEXT,
+  text TEXT NOT NULL,
+  created REAL);
+
+CREATE INDEX IF NOT EXISTS idx_anchor_prompts
+  ON anchor_prompts(scope_value, tier, character_id, id);
+"""
+
 ARCS_SCHEMA = """
 -- The album's STORY (ALBUM_ARC_AND_STAGING_PLAN.md sec 4). Same shape as
 -- storyboards -- JSON and markdown on disk, one row pointing at them -- so an
@@ -286,6 +305,7 @@ def conn():
         c.execute("PRAGMA journal_mode=WAL")
         c.execute("PRAGMA foreign_keys=ON")
         c.executescript(SCHEMA)
+        c.executescript(ANCHOR_PROMPTS_SCHEMA)
         c.executescript(ARCS_SCHEMA)
         c.executescript(CREDENTIALS_SCHEMA)
         _migrate(c)

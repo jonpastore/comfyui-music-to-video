@@ -1794,6 +1794,61 @@ def anchor_render_settings(form):
     return out
 
 
+MAX_PROMPT_VERSIONS = 20
+
+
+def anchor_prompt_versions(album, tier, character_id=None):
+    """Saved prompts for this album+tier+character, newest first."""
+    return db.q("""SELECT id, label, text, created FROM anchor_prompts
+                   WHERE scope_value=? AND tier=? AND character_id IS ?
+                   ORDER BY id DESC LIMIT ?""",
+                album or "", tier, character_id, MAX_PROMPT_VERSIONS)
+
+
+@app.post("/anchors/prompt")
+async def save_anchor_prompt(request: Request):
+    """Save the prompt currently in the box as a new VERSION.
+
+    A new row every time rather than an update: a prompt is tuned by comparing
+    renders, and the one worth going back to is usually the one before last.
+    Screened exactly like the prompt that goes to the model, because it is the
+    same text -- saving is not a way around the guardrail.
+    """
+    form = await request.form()
+    album = (form.get("album") or "").strip()
+    tier = (form.get("tier") or "").strip()
+    text = (form.get("text") or "").strip()
+    label = " ".join((form.get("label") or "").split())[:80]
+    cid = form.get("character_id")
+    cid = int(cid) if cid not in (None, "") else None
+    if not album or not tier:
+        raise HTTPException(400, "an album and a tier are needed to save a prompt")
+    valid_tier_or_400(tier)
+    if not text:
+        raise HTTPException(400, "nothing to save -- the prompt is empty")
+    if len(text) > MAX_ANCHOR_PROMPT:
+        raise HTTPException(400, f"the prompt is {len(text)} characters; keep it under "
+                                  f"{MAX_ANCHOR_PROMPT}")
+    try:
+        tiers.check_text(text, "anchor prompt")
+        tiers.check_override(text)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    now = time.time()
+    pid = db.run("""INSERT INTO anchor_prompts (scope_value, tier, character_id, label,
+                                                 text, created) VALUES (?,?,?,?,?,?)""",
+                 album, tier, cid, label or None, text, now)
+    # keep the list to a readable length; the oldest go
+    old_ids = [r["id"] for r in db.q(
+        """SELECT id FROM anchor_prompts WHERE scope_value=? AND tier=? AND character_id IS ?
+           ORDER BY id DESC LIMIT -1 OFFSET ?""", album, tier, cid, MAX_PROMPT_VERSIONS)]
+    for i in old_ids:
+        db.run("DELETE FROM anchor_prompts WHERE id=?", i)
+    return JSONResponse({"id": pid, "label": label, "created": now,
+                         "versions": [dict(r) for r in
+                                      anchor_prompt_versions(album, tier, cid)]})
+
+
 def anchor_prompt_preview(album, tier, view, character_id=None, typed="",
                            negative="", settings=None):
     """EXACTLY what ComfyUI will be sent for one tier/view, composed by the same
@@ -2230,7 +2285,9 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
         "pinned": tiers.PINNED.strip(),
         # one panel per ticked tier: its wording, and its own prompt
         "tier_panels": [{"name": t, "text": tier_tone(t),
-                         "prompt": prompts.get(t, default_prompt)} for t in selected],
+                         "prompt": prompts.get(t, default_prompt),
+                         "versions": anchor_prompt_versions(album, t, character_id)}
+                        for t in selected],
         # the album+character's saved base images, so a sheet can be generated
         # from photographs already here instead of finding them again
         "saved_refs": anchor_refs(album, character_id),

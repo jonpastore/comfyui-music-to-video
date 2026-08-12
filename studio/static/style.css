@@ -970,3 +970,10 @@ pre.prompt-body {
   background: #11131a; padding: 0.5rem; border-radius: 4px; margin: 0.15rem 0 0.5rem;
 }
 textarea.inert { opacity: 0.55; }
+
+/* Tiers and Views read as one choice -- which rating, and which sheets of it --
+   so they sit together rather than stacked with the plan text between them. */
+.side-by-side { display: flex; gap: 1rem; flex-wrap: wrap; }
+.side-by-side > fieldset { flex: 1 1 22rem; min-width: 18rem; }
+.prompt-versions { align-items: flex-end; gap: 0.5rem; }
+.prompt-versions select { min-width: 16rem; }
