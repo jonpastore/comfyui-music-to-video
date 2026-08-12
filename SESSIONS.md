@@ -344,4 +344,14 @@ Append dated one-liners. Newest at the bottom.
   against a real GPU through the studio's own job path, and Jon is away. HEAD is
   green and additive — the existing paths are untouched — so this is a one-word
   decision for him, not a blocker for you.
+- 2026-08-12 17:00 (A) One more on the audio path, `c4b3670`: the route now
+  probes the track and refuses a span outside it. `splice_bridge` refused it
+  too, but only inside the job and only after `gen_audio` had run — replacing
+  11s–100s of a 12.3s song generated 89 seconds of music on the GPU and threw it
+  away. The job's check stays as the backstop for a track that changes length
+  between enqueue and run.
+  Worth recording because the TEST for it was the bug: it used 5s–999s, and 994
+  seconds of bridge exceeds `MAX_AUDIO_SECS`, so the seconds bound caught it and
+  the assertion still passed with the length check deleted. The mutation is what
+  found that. 11–100 is the case only the check under test can refuse.
 
