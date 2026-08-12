@@ -34,6 +34,8 @@ KEY = os.environ.get("LITELLM_KEY", "")
 # Explicit override wins; otherwise any model whose id looks like a vision
 # model is used, so loading one on the gateway is all it takes to switch over.
 MODEL = os.environ.get("STUDIO_VISION_MODEL", "")
+# Pin the text-only model. See local_text_model() for why a render box needs it.
+TEXT_MODEL = os.environ.get("STUDIO_TEXT_MODEL", "")
 _VISION_HINTS = ("vl", "vision", "llava", "pixtral", "moondream", "intern")
 TIMEOUT = float(os.environ.get("STUDIO_VISION_TIMEOUT", 180))
 
@@ -155,7 +157,17 @@ def json_or_raise(out, what):
 def local_text_model():
     """Any local chat model, vision or not -- for text-only jobs like reading an
     edit instruction. Prefers an instruct/chat model over an embedding or
-    rerank one, which are on the same gateway and cannot answer."""
+    rerank one, which are on the same gateway and cannot answer.
+
+    STUDIO_TEXT_MODEL pins one, and on a box that also renders it should be set:
+    the gateway fronts several machines and auto-detection cannot see which. On
+    cerberus the first match is `qwen3.6-coder`, which is ollama on THIS box --
+    and ComfyUI already holds ~22 GB of the 24 GB card, so ollama silently loads
+    that 27B model on the CPU instead. Measured through the gateway: 315 ms for
+    a model on the other box, versus no answer at all in 90 s for that one.
+    """
+    if TEXT_MODEL:
+        return TEXT_MODEL
     base, key = _env()
     if not base or not key:
         return None
