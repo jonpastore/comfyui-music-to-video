@@ -174,6 +174,15 @@ def _run_one(row, attempt=1):
         log.write(msg + "\n")
         db.run("UPDATE jobs SET progress=? WHERE id=?", msg[:500], jid)
 
+    # The same question without the side effects, for a loop that WAITS rather
+    # than reports. pipeline.submit_dir polls ComfyUI for ninety seconds per
+    # workflow and only calls progress() once one finishes, so a cancel sat
+    # unnoticed for the whole render -- and ComfyUI, never told, kept the GPU
+    # and wrote a file the next job then collected as its own. Hung off the
+    # function rather than added to every handler signature: a caller that does
+    # not know about it is simply uninterruptible, exactly as before.
+    progress.cancelled = lambda: cancel_requested(jid)
+
     try:
         args = json.loads(row["args_json"] or "{}")
         progress(f"start {row['kind']}")

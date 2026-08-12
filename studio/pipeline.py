@@ -134,8 +134,36 @@ def comfy_queue():
             "pending": len(q.get("queue_pending") or [])}
 
 
+def abandon(pid, progress=None):
+    """Tell ComfyUI to stop making something nobody is waiting for any more.
+
+    Removes it from the pending queue AND interrupts it if it is the one
+    running. /interrupt takes a prompt_id and no-ops when that prompt is not
+    the running one, so this can never stop another client's render -- which
+    matters, because ComfyUI is unauthenticated and the studio is not
+    necessarily its only caller.
+
+    Best effort, and deliberately silent about the shape of the answer: both
+    endpoints return an empty 200 body, which _post cannot decode. A cancel
+    must not fail because the acknowledgement was empty.
+    """
+    for url, payload in ((f"{COMFY}/queue", {"delete": [pid]}),
+                         (f"{COMFY}/interrupt", {"prompt_id": pid})):
+        try:
+            _post(url, payload)
+        except Exception as e:
+            if progress:
+                progress(f"could not stop ComfyUI prompt {pid}: {e}")
+
+
 def submit_dir(wf_dir, progress=None):
     progress = progress or (lambda msg: None)
+    # jobs.py attaches this to the progress it passes in. Without it the poll
+    # loop below has no cancellation checkpoint at all: progress() is the
+    # checkpoint and it is only called once a workflow FINISHES, so a cancel
+    # during a single 90-second render did nothing until that render was done
+    # -- and ComfyUI kept the GPU and wrote the file anyway.
+    cancelled = getattr(progress, "cancelled", None)
     files = sorted(f for f in os.listdir(wf_dir) if f.endswith(".json"))
     ids = []
     for i, name in enumerate(files, 1):
@@ -146,42 +174,128 @@ def submit_dir(wf_dir, progress=None):
         if not pid:
             raise RuntimeError(f"submit rejected: {name}: {resp}")
         errors = 0
-        while True:
-            if time.time() - start > SUBMIT_TIMEOUT:
-                raise RuntimeError(
-                    f"{name} (prompt {pid}) did not finish within {SUBMIT_TIMEOUT:.0f}s")
-            try:
-                hist = _get(f"{COMFY}/history/{pid}")
-                errors = 0
-            except RuntimeError:
-                errors += 1
-                if errors >= MAX_POLL_ERRORS:
-                    raise
+        try:
+            while True:
+                if cancelled and cancelled():
+                    # jobs.py's progress raises Cancelled here, which is the
+                    # normal exit; the handler below then stops ComfyUI. The
+                    # raise is for a caller that supplied a checkpoint but a
+                    # progress that does not stop the job -- having decided to
+                    # abandon the render, never return as though it had run.
+                    progress(f"cancelled -- stopping {os.path.splitext(name)[0]} in ComfyUI")
+                    raise RuntimeError(f"cancelled while rendering {name}")
+                if time.time() - start > SUBMIT_TIMEOUT:
+                    raise RuntimeError(
+                        f"{name} (prompt {pid}) did not finish within {SUBMIT_TIMEOUT:.0f}s")
+                try:
+                    hist = _get(f"{COMFY}/history/{pid}")
+                    errors = 0
+                except RuntimeError:
+                    errors += 1
+                    if errors >= MAX_POLL_ERRORS:
+                        raise
+                    time.sleep(POLL_SECS)
+                    continue
+                if hist:
+                    break
                 time.sleep(POLL_SECS)
-                continue
-            if hist:
-                break
-            time.sleep(POLL_SECS)
+        except BaseException:
+            # Stopped waiting, for ANY reason -- cancel, timeout, ComfyUI gone.
+            # Leaving it running means the GPU keeps working on output nothing
+            # will ever collect, and the file it eventually writes is exactly
+            # the orphan that used to be swept up by the NEXT job.
+            abandon(pid, progress)
+            raise
         ids.append(pid)
         progress(f"{i}/{len(files)} {os.path.splitext(name)[0]} {time.time()-start:.0f}s")
     return ids
 
 
+def submitted_prefixes(wf_dir):
+    """The basename of every filename_prefix in the workflows about to be
+    submitted -- i.e. the names ComfyUI will actually write.
+
+    `make_anchor.py` writes `anchor_v2/front_s<seed>`, `build_refs.py` writes
+    `refs_<slug>/clip_<n>`; ComfyUI appends `_00001_.png` to whichever it is
+    given. Reading them out is how a collected file can be tied back to the
+    job that asked for it.
+    """
+    out = set()
+    for name in sorted(f for f in os.listdir(wf_dir) if f.endswith(".json")):
+        try:
+            wf = json.load(open(os.path.join(wf_dir, name)))
+        except (ValueError, OSError):
+            continue
+        for node in (wf.values() if isinstance(wf, dict) else []):
+            if not isinstance(node, dict):
+                continue
+            p = (node.get("inputs") or {}).get("filename_prefix")
+            if isinstance(p, str) and p:
+                out.add(os.path.basename(p))
+    return out
+
+
 def _submit_and_collect(wf_dir, prefix_dir, pattern, progress):
-    """submit_dir() + collect(), returning only files that appeared during
-    THIS submit. ComfyUI's SaveImage/SaveVideo never overwrite -- they bump a
-    counter suffix -- so a prefix dir reused across runs (anchor_v2 already
-    has 6-16 images from earlier sessions) would otherwise mix old and new
-    candidates into one result."""
+    """submit_dir() + collect(), returning only the files THIS submit asked for.
+
+    Two filters, and both are load-bearing.
+
+    NEW SINCE WE STARTED, because ComfyUI's SaveImage/SaveVideo never overwrite
+    -- they bump a counter suffix -- so a prefix dir reused across runs
+    (anchor_v2 already has 6-16 images from earlier sessions) would otherwise
+    mix old and new candidates into one result.
+
+    AND NAMED BY ONE OF OUR OWN PREFIXES, because "new" is not the same as
+    "ours". A cancelled job's workflow used to keep rendering inside ComfyUI
+    and write its image after the studio had stopped waiting; the NEXT job's
+    before/after diff then swept that file up and filed it under a different
+    tier, view and prompt. Measured: job 170 was cancelled, ComfyUI wrote
+    front_s1580385877 at 22:17:19, and job 171 -- which submitted seed
+    s2002116300 and nothing else -- returned both. Harmless there because both
+    were the same sheet. A cancelled XXX nude landing in a G group is not.
+
+    Anything else that appears is REPORTED, not silently dropped: this directory
+    is shared with anyone else who can reach an unauthenticated ComfyUI.
+    """
     # One guard for all seven gen_* wrappers, not a copy per caller: every one
     # of them reaches ComfyUI through here, and a starved card fails them all
     # the same way -- an OOM that presents as a job which succeeded and wrote
     # nothing. gpu.preflight takes the card back from ollama or refuses with
     # the numbers; it never refuses because something was unreachable.
     gpu.preflight(progress)
+    mine = submitted_prefixes(wf_dir)
     before = set(collect(prefix_dir, pattern))
-    submit_dir(wf_dir, progress)
-    return [p for p in collect(prefix_dir, pattern) if p not in before]
+    try:
+        submit_dir(wf_dir, progress)
+    except BaseException:
+        # Garbage-collect what a cancelled or failed run did manage to write.
+        # Only files matching OUR prefixes and newer than our start, so this
+        # can never remove a candidate belonging to another job.
+        for p in _mine_only(collect(prefix_dir, pattern), before, mine):
+            try:
+                os.remove(p)
+                if progress:
+                    progress(f"removed {os.path.basename(p)}, written by a run that stopped")
+            except OSError:
+                pass
+        raise
+    fresh = [p for p in collect(prefix_dir, pattern) if p not in before]
+    if not mine:
+        return fresh            # no prefix to match on: better than losing the render
+    ours = _mine_only(fresh, before, mine)
+    stray = [p for p in fresh if p not in ours]
+    if stray and progress:
+        progress(f"ignored {len(stray)} file(s) in {prefix_dir} written by something else: "
+                 + ", ".join(os.path.basename(p) for p in stray[:4]))
+    return ours
+
+
+def _mine_only(paths, before, mine):
+    if not mine:
+        return []
+    keep = tuple(mine)
+    return [p for p in paths
+            if p not in before and os.path.basename(p).startswith(keep)]
 
 
 def _natkey(name):
@@ -495,6 +609,95 @@ def demo():
     finally:
         _post, _get = real_post, real_get
         SUBMIT_TIMEOUT = real_timeout
+
+    # --- a cancel reaches the poll loop, and ComfyUI is TOLD ---
+    # The whole defect: progress() was the only cancellation checkpoint and it
+    # is called once a workflow finishes, so a cancel during a 90s render did
+    # nothing until the render was over -- and ComfyUI was never told at all.
+    stopped = []
+
+    def cancel_post(url, payload):
+        if url.endswith("/prompt"):
+            return {"prompt_id": "pid-x"}
+        stopped.append((url.rsplit("/", 1)[-1], payload))
+        return {}
+
+    def prog(msg):
+        pass
+    prog.cancelled = lambda: True
+
+    _post, _get = cancel_post, (lambda url: {})      # history never fills in
+    # Short, so that a submit_dir which IGNORES the cancel fails this case in
+    # seconds with "did not finish within", instead of sitting here for the real
+    # 1800s backstop and looking like a hang rather than a broken cancel.
+    SUBMIT_TIMEOUT = 5
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            json.dump({"_name": "c"}, open(os.path.join(d, "wf.json"), "w"))
+            t0 = time.time()
+            try:
+                submit_dir(d, prog)
+                raise AssertionError("a cancelled submit returned as though it had rendered")
+            except RuntimeError as e:
+                assert "cancelled while rendering" in str(e), \
+                    f"the cancel was not what stopped it: {e}"
+            assert time.time() - t0 < 2, \
+                "the cancel waited for the render instead of stopping it"
+    finally:
+        _post, _get = real_post, real_get
+        SUBMIT_TIMEOUT = real_timeout
+    assert [u for u, _ in stopped] == ["queue", "interrupt"], stopped
+    assert stopped[0][1] == {"delete": ["pid-x"]}, stopped
+    # targeted, so it can never interrupt another client's render
+    assert stopped[1][1] == {"prompt_id": "pid-x"}, stopped
+
+    # --- a collected file must be one THIS submit asked for ---
+    real_submit = globals()["submit_dir"]
+    real_out = COMFY_OUTPUT
+    import gpu
+    real_preflight = gpu.preflight
+    gpu.preflight = lambda progress=None: None
+    try:
+        with tempfile.TemporaryDirectory() as out, tempfile.TemporaryDirectory() as d:
+            COMFY_OUTPUT = out
+            os.makedirs(os.path.join(out, "anchor_v2"))
+            sheet = lambda n: os.path.join(out, "anchor_v2", n)
+            open(sheet("front_s111_00001_.png"), "w").close()      # an earlier run
+            json.dump({"1": {"inputs": {"filename_prefix": "anchor_v2/front_s999"}}},
+                      open(os.path.join(d, "wf.json"), "w"))
+            assert submitted_prefixes(d) == {"front_s999"}, submitted_prefixes(d)
+
+            def writing_submit(wf_dir, progress=None):
+                open(sheet("front_s999_00001_.png"), "w").close()   # ours
+                open(sheet("front_s777_00001_.png"), "w").close()   # a cancelled job's
+                return ["pid"]
+
+            globals()["submit_dir"] = writing_submit
+            said = []
+            got = _submit_and_collect(d, "anchor_v2", "*.png", said.append)
+            assert [os.path.basename(p) for p in got] == ["front_s999_00001_.png"], got
+            assert any("front_s777" in m for m in said), \
+                f"a file written by something else was dropped in silence: {said}"
+
+            # --- and what a stopped run wrote is collected as garbage ---
+            def failing_submit(wf_dir, progress=None):
+                open(sheet("front_s999_00002_.png"), "w").close()
+                raise RuntimeError("cancelled while rendering wf.json")
+
+            globals()["submit_dir"] = failing_submit
+            try:
+                _submit_and_collect(d, "anchor_v2", "*.png", said.append)
+                raise AssertionError("a cancelled submit returned a result")
+            except RuntimeError:
+                pass
+            left = sorted(os.path.basename(p) for p in collect("anchor_v2", "*.png"))
+            assert "front_s999_00002_.png" not in left, f"the cancelled run's file survived: {left}"
+            assert "front_s111_00001_.png" in left, f"GC ate an earlier run's sheet: {left}"
+            assert "front_s777_00001_.png" in left, f"GC ate another job's file: {left}"
+    finally:
+        globals()["submit_dir"] = real_submit
+        COMFY_OUTPUT = real_out
+        gpu.preflight = real_preflight
 
     # --- free_vram: never fatal, whatever ComfyUI does ---
     seen = []
