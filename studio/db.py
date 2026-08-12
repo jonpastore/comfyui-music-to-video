@@ -136,6 +136,22 @@ CREATE TABLE IF NOT EXISTS set_items (
   gain_db REAL DEFAULT 0,
   effects_json TEXT);
 
+-- Which box produced each rendered file. Tier 0 of docs/OUTPUT_QC_PLAN.md.
+--
+-- Keyed by PATH rather than being a column on anchors/clips/refs/assets,
+-- because pipeline knows the backend at the moment it has the file and those
+-- four tables are written later, in four different places, by app.py. One
+-- write where the render lands cannot be forgotten by the next gen_* wrapper;
+-- four columns can. Join on path when you want it per artefact.
+--
+-- `backend` is Swarm's numeric id and is NOT stable -- adding a backend
+-- renumbers them (studio/models.py BACKEND_STABILITY says the same thing and
+-- keys by host for the same reason). `host` is the durable identity; group by
+-- that. Either may be NULL: SwarmUI does not report which backend served an
+-- unpinned render, and a guess that cannot be checked is worse than a blank.
+CREATE TABLE IF NOT EXISTS artefacts (
+  path TEXT PRIMARY KEY, backend TEXT, host TEXT, via TEXT, created REAL);
+
 CREATE INDEX IF NOT EXISTS idx_set_items ON set_items(set_id, position);
 CREATE INDEX IF NOT EXISTS idx_anchors ON anchors(scope_kind, scope_value, tier, view);
 CREATE INDEX IF NOT EXISTS idx_characters ON characters(scope_value, name);

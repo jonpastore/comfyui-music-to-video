@@ -40,13 +40,23 @@ SMOKE = ["db"]
 # wait -- run `pytest -m "not slow"` to skip them.
 SLOW = ["mixer", "pipeline"]
 
+# The workflow BUILDERS live at the repo root, not in studio/, and their
+# self-checks were in exactly the state this file's docstring describes: written,
+# load-bearing, and run by nobody. make_postproc's holds the frame-rate
+# arithmetic that decides whether an interpolated clip is the length it started;
+# make_audio's holds the assertion that the image guardrail has not come back
+# onto the audio path. Their demo is behind `--demo` because argparse owns argv.
+ROOT = os.path.dirname(HERE)
+ROOT_SCRIPTS = ["make_audio", "make_postproc"]
 
-def _run(mod, timeout):
-    path = os.path.join(HERE, f"{mod}.py")
+
+def _run(mod, timeout, argv=(), cwd=None):
+    cwd = cwd or HERE
+    path = os.path.join(cwd, f"{mod}.py")
     if not os.path.isfile(path):
         pytest.skip(f"{mod}.py not present")
-    r = subprocess.run([sys.executable, path], capture_output=True, text=True,
-                       timeout=timeout, cwd=HERE)
+    r = subprocess.run([sys.executable, path, *argv], capture_output=True, text=True,
+                       timeout=timeout, cwd=cwd)
     assert r.returncode == 0, (
         f"{mod}.py self-check FAILED\n--- stdout ---\n{r.stdout[-3000:]}\n"
         f"--- stderr ---\n{r.stderr[-3000:]}")
@@ -68,4 +78,10 @@ def test_module_imports_cleanly(mod):
 @pytest.mark.parametrize("mod", SLOW)
 def test_module_selfcheck_slow(mod):
     out = _run(mod, timeout=900)
+    assert "OK" in out, f"{mod}.py did not report OK: {out[-300:]}"
+
+
+@pytest.mark.parametrize("mod", ROOT_SCRIPTS)
+def test_root_script_selfcheck(mod):
+    out = _run(mod, timeout=120, argv=["--demo"], cwd=ROOT)
     assert "OK" in out, f"{mod}.py did not report OK: {out[-300:]}"

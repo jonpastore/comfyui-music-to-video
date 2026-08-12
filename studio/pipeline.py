@@ -13,6 +13,7 @@ COMFY_OUTPUT.
 import glob, json, os, re, shutil, subprocess, sys, tempfile, threading, time
 import urllib.error, urllib.parse, urllib.request
 
+import db       # artefacts: which box produced which file (OUTPUT_QC_PLAN tier 0)
 import gpu
 import models   # for the catalogue's default renderer; imports db only, no cycle
 
@@ -528,6 +529,68 @@ def _swarm_fetch(entry, out_dir, prefix):
     return dest
 
 
+def _host(url):
+    return (url or "").split("//")[-1].split(":")[0].split("/")[0] or None
+
+
+def _ran_on(pin):
+    """(backend id, host) for the render that just finished, or (None, None).
+
+    A PINNED attempt already knows. The free draw does not, and nothing in the
+    response tells it: GenerateText2Image answers `{"images": [...]}` and
+    nothing else, and a comfyworkflowraw render leaves no `.swarm.json` sidecar
+    to read either (measured 2026-08-12 -- the sidecar 404s for raw output).
+
+    So it is read off ListBackends' `seconds_since_used`, which is 0 for the box
+    that has just finished. Verified 2026-08-12 against pins 0, 1 and 2: each
+    time, the box that had been pinned was the one reading 0.
+
+    ponytail: exactly-one-zero, or nothing. Two boxes finishing inside the same
+    second are indistinguishable here -- and that tie is a real observation, not
+    a hypothetical: it happened in the verification run above. Filing an
+    artefact under the WRONG box is worse for QC than filing it under none,
+    because a wrong grouping cannot be caught being wrong. Pin the render if you
+    need certainty; upgrade path is Swarm reporting the backend in the response.
+    """
+    try:
+        data = _swarm_call("/API/ListBackends", {})
+    except Exception:
+        return (str(pin) if pin is not None else None), None
+    if not isinstance(data, dict):
+        data = {}
+    if pin is None:
+        idle = [k for k, b in data.items()
+                if isinstance(b, dict) and b.get("seconds_since_used") == 0]
+        if len(idle) != 1:
+            return None, None
+        pin = idle[0]
+    b = data.get(str(pin)) or {}
+    return str(pin), _host((b.get("settings") or {}).get("Address") or "")
+
+
+def _stamp(paths, backend, host, via, progress=None):
+    """Record which box produced each artefact. Tier 0 of docs/OUTPUT_QC_PLAN.md.
+
+    Here rather than in app.py's four INSERTs because this is the one moment
+    that knows BOTH the file and the box, and because a wrapper added later
+    cannot forget to do it -- every gen_* reaches a renderer through one of the
+    two callers of this, which is the same reason _submit_and_collect is the
+    only place that branches on the backend at all.
+
+    Never fails a render. The GPU work is already paid for by the time this
+    runs, and a bookkeeping row is not worth losing a rendered clip over; a
+    write that fails says so once and the artefact still comes back.
+    """
+    now = time.time()
+    for p in paths:
+        try:
+            db.run("INSERT OR REPLACE INTO artefacts (path, backend, host, via, created)"
+                   " VALUES (?,?,?,?,?)", p, backend, host, via, now)
+        except Exception as e:      # noqa: BLE001 -- see docstring
+            _say(progress, f"could not record which box rendered {os.path.basename(p)}: {e}")
+            return
+
+
 def submit_swarm(wf_dir, prefix_dir, pattern, progress=None):
     """submit_dir + collect for RENDER_BACKEND=swarm, and they cannot be split.
 
@@ -579,7 +642,9 @@ def submit_swarm(wf_dir, prefix_dir, pattern, progress=None):
             raise last or RuntimeError(f"no backend would run {name}")
         mine = [p for p in collect(prefix_dir, pattern)
                 if p not in seen and os.path.basename(p).startswith(prefix + "_")]
-        got += mine or [_swarm_fetch(e, out_dir, prefix) for e in entries]
+        made = mine or [_swarm_fetch(e, out_dir, prefix) for e in entries]
+        _stamp(made, *_ran_on(pin), via="swarm", progress=progress)
+        got += made
         seen |= set(collect(prefix_dir, pattern))
         progress(f"{i}/{len(files)} {os.path.splitext(name)[0]} {time.time()-start:.0f}s")
     return sorted(got, key=lambda p: _natkey(os.path.basename(p)))
@@ -649,12 +714,18 @@ def _submit_and_collect(wf_dir, prefix_dir, pattern, progress):
         raise
     fresh = [p for p in collect(prefix_dir, pattern) if p not in before]
     if not mine:
-        return fresh            # no prefix to match on: better than losing the render
-    ours = _mine_only(fresh, before, mine)
-    stray = [p for p in fresh if p not in ours]
-    if stray and progress:
-        progress(f"ignored {len(stray)} file(s) in {prefix_dir} written by something else: "
-                 + ", ".join(os.path.basename(p) for p in stray[:4]))
+        ours = fresh        # no prefix to match on: better than losing the render
+    else:
+        ours = _mine_only(fresh, before, mine)
+        stray = [p for p in fresh if p not in ours]
+        if stray and progress:
+            progress(f"ignored {len(stray)} file(s) in {prefix_dir} written by something else: "
+                     + ", ".join(os.path.basename(p) for p in stray[:4]))
+    # Backend "0" is a DEFINITION on this path, not a discovery: the comfy path
+    # renders wherever COMFY_URL points, and that is the box SwarmUI lists first
+    # as its own local ComfyUI. The host is the part that survives Swarm
+    # renumbering its backends, so group by that.
+    _stamp(ours, "0", _host(COMFY), "comfy", progress)
     return ours
 
 
@@ -985,6 +1056,48 @@ def gen_audio(slug, tags, lyrics="", seconds=30.0, n=1, progress=None, seed=None
     with tempfile.TemporaryDirectory() as wf_dir:
         _run_script("make_audio.py", [*args, "--outdir", wf_dir], progress)
         return _submit_and_collect(wf_dir, f"audio_{slug}", "*.mp3", progress)
+
+
+def gen_postproc(clip_paths, slug, multiplier=2, upscale="", progress=None):
+    """Interpolate and/or upscale already-rendered clips. Returns the new paths.
+
+    The ninth wrapper, same shape as the other eight. Post-processing is a
+    SECOND artefact, never a replacement: the original clip stays exactly where
+    it was, because the studio's whole design is candidates plus a human pick,
+    and a pass that overwrites destroys the comparison that would show whether
+    it helped (docs/OUTPUT_QC_PLAN.md says the same about repair).
+
+    WHERE IT RUNS. Nowhere in particular, and deliberately so. Both boxes hold
+    both models under the same names, so this reaches whichever backend is free
+    -- which is the whole point of moving the pass off the generating card. What
+    it costs there is measured in make_postproc.py's docstring; the short of it
+    is that interpolation is 5% of a render and an upscale is most of one.
+
+    Clips are installed into the backends' input dirs first: LoadVideo takes a
+    NAME, not a path, and on a remote box the file has to be there at all.
+    """
+    import mixer      # ffprobe wrapper; kept out of the module import graph
+    made = []
+    for i, clip in enumerate(clip_paths, 1):
+        info = mixer.probe(clip)
+        if not info["fps"]:
+            raise RuntimeError(f"{os.path.basename(clip)} reports no frame rate, so "
+                               f"interpolating it would guess at the playback speed")
+        # The frame COUNT, not just the rate: RIFE returns (n-1)*m+1 frames, so
+        # the rate that keeps the clip its original length depends on n. Derived
+        # from duration x fps because ffprobe's own nb_frames is absent on some
+        # containers, and a missing count would refuse a clip that is fine.
+        frames = round(info["duration"] * info["fps"])
+        args = ["--source", install_input(clip), "--fps", str(info["fps"]),
+                "--frames", str(frames),
+                "--multiplier", str(multiplier), "--prefix", f"post_{slug}"]
+        if upscale:
+            args += ["--upscale", upscale]
+        with tempfile.TemporaryDirectory() as wf_dir:
+            _run_script("make_postproc.py", [*args, "--outdir", wf_dir], progress)
+            made += _submit_and_collect(wf_dir, f"post_{slug}", "*.mp4", progress)
+        _say(progress, f"{i}/{len(clip_paths)} {os.path.basename(clip)}")
+    return made
 
 
 def contact_sheet(src_dir, out_jpg, cols=6):
@@ -1326,6 +1439,12 @@ def demo():
     def _never(*a, **kw):
         raise AssertionError("_submit_and_collect took the other backend's path")
 
+    # Tier 0 rows are captured, not written: demo() runs standalone against the
+    # deployed studio.db, and a self-check must not leave fake artefact paths in
+    # the table the QC work is going to read.
+    real_db_run, stamped = db.run, []
+    db.run = lambda sql, *a: stamped.append(a) if "artefacts" in sql else real_db_run(sql, *a)
+
     def _swarm(gen):
         """A fake SwarmUI: three running backends, and `gen` for everything
         else. ListBackends has to answer, because the retry walk is what turns
@@ -1355,6 +1474,12 @@ def demo():
             globals()["submit_dir"] = writing_submit
             comfy_got = _submit_and_collect(d, "anchor_v2", "*.png", lambda m: None)
             assert [os.path.basename(p) for p in comfy_got] == ["front_s42_00001_.png"], comfy_got
+            # tier 0: the file that came back is on record as having been made
+            # HERE. Without this the comfy path -- still the default, so still
+            # where nearly every artefact comes from -- would be the one whole
+            # backend the QC plan cannot group by.
+            assert len(stamped) == 1 and stamped[0][0] == comfy_got[0], stamped
+            assert stamped[0][3] == "comfy", stamped
 
             # 2. swarm on a LOCAL backend: the rendering ComfyUI wrote the file
             # itself, so that one is the result -- not a downloaded duplicate
@@ -1385,6 +1510,14 @@ def demo():
             remote_got = _submit_and_collect(d, "anchor_v2", "*.png", lambda m: None)
             assert [os.path.basename(p) for p in remote_got] == ["front_s42_00001_.png"], remote_got
             assert open(remote_got[0], "rb").read() == b"PNGDATA"
+            # tier 0 on the swarm path, and the part that has to be RIGHT rather
+            # than merely present: this fake ListBackends reports no
+            # seconds_since_used at all, so the box is genuinely unknown and the
+            # row says so instead of naming one. A stamp that guesses is the
+            # failure this table exists to avoid.
+            assert stamped[-1][0] == remote_got[0] and stamped[-1][3] == "swarm", stamped[-1]
+            assert stamped[-1][1] is None, \
+                f"a backend was named for an unpinned render nothing identified: {stamped[-1]}"
 
             # 4. a box that does not hold the model refuses in about a second,
             # and the job moves to the NEXT box rather than re-rolling the same
@@ -1409,6 +1542,12 @@ def demo():
             assert payloads[1]["exactbackendid"] == "0", payloads
             assert [os.path.basename(p) for p in got] == ["front_s42_00001_.png"], got
             assert any("refused by SwarmUI" in m for m in said), said
+            # the other half of tier 0: a PINNED attempt is exact, so the box
+            # that actually ran it is recorded rather than inferred. This is why
+            # the walk is worth more than a blind retry to QC as well as to
+            # routing -- every render after the first miss is attributable.
+            assert stamped[-1][1] == "0", stamped[-1]
+            before_dead = len(stamped)
 
             # 5. and when NO box can run it, the walk covers every one of them
             # and then stops, rather than either giving up early or looping.
@@ -1432,6 +1571,8 @@ def demo():
             assert len(tries) == 4, tries
             assert [q.get("exactbackendid") for q in payloads] == [None, "0", "1", "2"], payloads
             assert os.listdir(sheets) == [], os.listdir(sheets)
+            assert len(stamped) == before_dead, \
+                f"a render nothing produced was recorded as an artefact: {stamped[before_dead:]}"
 
             # 6. a cancel MID-GENERATION reaches the render, and is the one
             # failure never retried -- a second attempt hands the GPU straight
@@ -1473,6 +1614,7 @@ def demo():
         COMFY_OUTPUT = real_out
         gpu.preflight, gpu.ollama_holding = real_preflight, real_holding
         urllib.request.urlopen = real_urlopen
+        db.run = real_db_run
 
     # --- both documented forms of images[] (T2IAPI.cs:72) --------------------
     with tempfile.TemporaryDirectory() as out:

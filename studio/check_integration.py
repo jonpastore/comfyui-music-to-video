@@ -175,6 +175,72 @@ if pipeline:
     check("audio flags exist and the fp16 name is what routes them",
           _audio_flags_exist_and_route_to_the_turing_box)
 
+    def _rendered_files_are_stamped_with_their_box():
+        """A collected artefact lands in db.artefacts, through the REAL sqlite.
+
+        pipeline.demo() stubs db.run out -- it has to, or a self-check run
+        against the deployed studio would leave fake paths in the table QC is
+        about to read. That stub also means demo() cannot see the seam that
+        actually rots here: pipeline naming a column db's schema does not have.
+        sqlite only complains at execution time, and _stamp swallows the error
+        on purpose so a bookkeeping failure never costs a rendered clip -- so
+        without this check, tier 0 could stop recording ANYTHING and every test
+        would still pass. That is the whole reason this runs against real sqlite.
+        """
+        import tempfile
+        was = (pipeline.COMFY_OUTPUT, pipeline.RENDER_BACKEND, pipeline.submit_dir)
+        # preflight asks nvidia-smi and ollama for the card. This file promises
+        # no GPU, and a busy card would otherwise fail a check about bookkeeping.
+        gpu_was = pipeline.gpu.preflight
+        pipeline.gpu.preflight = lambda progress=None: None
+        try:
+            with tempfile.TemporaryDirectory() as out, tempfile.TemporaryDirectory() as wf:
+                pipeline.COMFY_OUTPUT, pipeline.RENDER_BACKEND = out, "comfy"
+                made = os.path.join(out, "x", "front_s1_00001_.png")
+                os.makedirs(os.path.dirname(made))
+                json.dump({"1": {"inputs": {"filename_prefix": "x/front_s1"}}},
+                          open(os.path.join(wf, "wf.json"), "w"))
+                pipeline.submit_dir = lambda d, progress=None: open(made, "w").close()
+                got = pipeline._submit_and_collect(wf, "x", "*.png", lambda m: None)
+                assert got == [made], got
+                row = db.one("SELECT * FROM artefacts WHERE path = ?", made)
+                assert row, "a collected artefact recorded no backend at all"
+                assert row["via"] == "comfy" and row["backend"] == "0", dict(row)
+        finally:
+            pipeline.COMFY_OUTPUT, pipeline.RENDER_BACKEND, pipeline.submit_dir = was
+            pipeline.gpu.preflight = gpu_was
+
+    check("every collected artefact records which box made it",
+          _rendered_files_are_stamped_with_their_box)
+    check("pipeline.gen_postproc", lambda: sig(
+        pipeline, "gen_postproc", ["clip_paths", "slug", "multiplier", "progress"]))
+
+    def _postproc_flags_exist_and_it_never_overwrites():
+        """gen_postproc's flags must be ones make_postproc.py declares, and the
+        pass must write a NEW file rather than replace the clip it read.
+
+        The overwrite is the one that would be silent: the studio's design is
+        candidates plus a human pick, so a pass that replaced the original would
+        destroy the only evidence of whether it helped -- and it would look like
+        it worked, because there would be a video there afterwards either way.
+        """
+        import re
+        src = open(os.path.join(os.path.dirname(HERE), "make_postproc.py")).read()
+        declared = set(re.findall(r'ap\.add_argument\("(--[a-z-]+)"', src))
+        for flag in ("--source", "--fps", "--frames", "--multiplier", "--upscale",
+                     "--prefix", "--outdir"):
+            assert flag in declared, \
+                f"pipeline.gen_postproc emits {flag}, make_postproc.py does not take it"
+        import make_postproc
+        wf = make_postproc.workflow("clip_000.mp4", "post_x/clip_000", 16.0, 77)
+        assert wf["99"]["inputs"]["filename_prefix"].startswith("post_"), \
+            "post-processing writes over the prefix it read from"
+        # and the clip comes out the length it went in -- see make_postproc.out_fps
+        assert abs(153 / wf["90"]["inputs"]["fps"] - 77 / 16.0) < 1e-9, wf["90"]
+
+    check("post-processing takes real flags and writes a new file",
+          _postproc_flags_exist_and_it_never_overwrites)
+
 grok = optional_import("grok")
 if grok:
     check("grok.list_models", lambda: sig(grok, "list_models", []))
