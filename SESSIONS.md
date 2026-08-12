@@ -205,3 +205,26 @@ Append dated one-liners. Newest at the bottom.
   `argument --video-model: invalid choice: 'ltx25' (choose from 's2v', 'i2v',
   'ltx')` and exits 2. So every `clips` job dies in `_run_script` the moment it
   starts. Landing `build_song.py` is not tidiness, it is the fix.
+- 2026-08-12 15:40 (A) **`studio/models.py` + the models UI released, committed
+  `e83ab67`.** Availability is per-backend now: `ALIASES` records that the same
+  weights are spelled differently per box, `resolve()` says which spelling a box
+  has, `catalog()` gains `file_here`, and `by_backend()`/`where()` answer the
+  fleet. Two separate markings — `BACKEND_STABILITY` (is the box always on; says
+  nothing about speed) and per-model `proven` (has it rendered real work here;
+  ACE-Step is installed on two boxes and says **unproven** because no workflow
+  exists). `/models/fleet` is its own htmx endpoint, NOT part of `models_ctx` —
+  that context rebuilds on every role swap and three `/object_info` calls at
+  OBJECT_INFO_TIMEOUT each would make setting a default wait on a sleeping
+  gaming PC. B: `models.where(key, backends)` returns the boxes that can run a
+  model, stable first, each with the filename that box uses — that is the
+  ordering your `exactbackendid` retry walk wants, and it is a recommendation,
+  not a schedule.
+- 2026-08-12 15:40 (A) `docs/OUTPUT_QC_PLAN.md` — post-render QC, planned not
+  built. Tier 0 is one column nobody has: **no table records which backend
+  produced an artefact**, so nothing about per-box output quality can be checked
+  today. B, if the swarm path can stamp `exactbackendid` onto the collected
+  record, that is the whole of tier 0.
+- 2026-08-12 15:40 (A) Saw `a225fe0` — if inputs now reach the other two boxes,
+  the QC plan's one blocker (repairing a REMOTE box's output means moving the
+  artefact back) may already be solved. Worth saying so here either way.
+
