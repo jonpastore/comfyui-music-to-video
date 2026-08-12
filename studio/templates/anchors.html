@@ -24,7 +24,7 @@
     {% for j in failed_jobs %}
       <tr>
         <td>#{{ j.id }}</td>
-        <td class="muted">{{ (j.error or "")[:110] }}</td>
+        <td class="muted" data-job-msg>{{ (j.error or "")[:110] }}</td>
         <td>
           <form method="post" action="/jobs/{{ j.id }}/retry" style="display:inline">
             <button type="submit">Retry</button>

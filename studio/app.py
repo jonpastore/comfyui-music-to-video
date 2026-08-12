@@ -4943,11 +4943,21 @@ def retry_job(request: Request, id: int):
 
 
 @app.post("/jobs/{id}/cancel")
-def cancel_job(id: int):
+def cancel_job(request: Request, id: int):
+    """Cancel a queued or running job.
+
+    The JSON branch is not decoration: Cancel appears on /jobs, on a song page
+    and beside a running batch, and the redirect sent every one of them back to
+    /jobs -- so cancelling one sheet from a song page navigated away from the
+    page you were working on.
+    """
     try:
         jobs.cancel(id)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    if wants_json(request):
+        row = jobs.get(id)
+        return JSONResponse({"cancelled": id, "status": row["status"] if row else "cancelled"})
     return RedirectResponse("/jobs", status_code=303)
 
 

@@ -307,7 +307,7 @@
       {% for j in song_jobs %}
         <tr>
           <td>{{ j.id }}</td><td>{{ j.kind }}</td>
-          <td class="status-{{ j.status }}">{{ j.status }}</td>
+          <td class="status-{{ j.status }}" data-job-msg>{{ j.status }}</td>
           <td class="truncate">{{ j.progress or "" }}</td>
           <td class="nowrap num">{{ j.started | clock }}</td>
           <td class="nowrap num">{{ j.finished | clock }}</td>

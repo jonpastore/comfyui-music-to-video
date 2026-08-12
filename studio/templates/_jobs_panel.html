@@ -69,7 +69,10 @@
       <tr>
         <td>{{ e.job.id }}</td>
         <td>{{ e.desc }}</td>
-        <td class="status-{{ e.job.status }}">{{ e.job.status }}</td>
+        {# where Retry/Cancel report back -- see initJobForms(). Marked rather
+           than found by column number: the three job tables in this app have
+           three different layouts. #}
+        <td class="status-{{ e.job.status }}" data-job-msg>{{ e.job.status }}</td>
         <td>{% if e.elapsed is not none %}{{ "%.0f"|format(e.elapsed) }}s{% endif %}</td>
         <td>{{ e.job.progress or "" }}</td>
         <td>

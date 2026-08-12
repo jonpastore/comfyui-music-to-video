@@ -4584,3 +4584,65 @@ def test_the_form_defaults_to_quality_and_offers_the_spec_value_lists():
             "the Lightning LoRA is still on above cfg 1.0, which is mush"
         assert build_refs.negative_applies(settings), \
             "the default mode drops the negative prompt"
+
+
+def test_cancel_and_retry_are_async_on_every_page_that_shows_a_job(patch_stub):
+    """The Retry/Cancel interception lived inside initAnchors(), which returns
+    early on any page without an anchor grid. So /jobs -- the page whose entire
+    purpose is jobs -- reloaded its whole table to cancel one job, and Cancel on
+    a song page redirected to /jobs and navigated you off the song you were
+    working on. Both routes are now dual-path, and the handler is delegated on
+    document rather than wired per page.
+
+    The differential is the Accept header: the same POST must 303 without it and
+    answer JSON with it. And every table that carries a job form must mark the
+    cell the reply lands in -- the three layouts differ, so a column number
+    would overwrite the job description on one page and the kind on another.
+    """
+    patch_stub("pipeline", gen_anchor=lambda *a, **k: [])
+    with TestClient(appmod.app) as client:
+        jid = jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": "X", "tier": "r",
+                                       "view": "front", "images": [], "n": 1})
+        r = client.post(f"/jobs/{jid}/cancel", headers={"accept": "application/json"})
+        assert r.status_code == 200, r.text
+        assert r.json()["cancelled"] == jid, r.json()
+        # the reply reports the row's status rather than asserting an outcome:
+        # a job the worker has already picked up stays 'running' until it
+        # notices the flag, and a reply that claimed otherwise would be the
+        # editor-promises-what-the-renderer-does-not-produce defect in
+        # miniature
+        assert r.json()["status"] == jobs.get(jid)["status"], r.json()
+        assert wait_job(jid)["status"] in ("cancelled", "done", "failed")
+
+        # a plain form post still redirects, so the page works with JS off
+        jid2 = jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": "X", "tier": "r",
+                                        "view": "front", "images": [], "n": 1})
+        r = client.post(f"/jobs/{jid2}/cancel", follow_redirects=False)
+        assert r.status_code == 303, r.text
+
+        # retry answers JSON with the NEW job to watch. The row is forced to
+        # 'failed' rather than raced there: a cancel that lands after the worker
+        # has finished leaves the job 'done', and done is not retryable -- which
+        # is correct behaviour and would make this a flaky test of the wrong
+        # thing.
+        wait_job(jid)
+        db.run("UPDATE jobs SET status='failed', error='forced' WHERE id=?", jid)
+        r = client.post(f"/jobs/{jid}/retry", headers={"accept": "application/json"})
+        assert r.status_code == 200 and r.json()["job_id"] != jid, r.text
+        jobs.cancel(r.json()["job_id"])
+
+        # every job table marks the cell the reply is written into
+        js = open(os.path.join(os.path.dirname(appmod.__file__), "static", "app.js")).read()
+        assert "function initJobForms()" in js
+        assert "initJobForms();" in js.split("function initJobForms()")[0], \
+            "initJobForms is defined but never called"
+        assert "data-job-msg" in js
+        # ...and it is NOT nested inside the anchors-only initialiser again
+        anchors_body = js.split("function initAnchors()")[1]
+        assert 'form[action^="/jobs/"]' not in anchors_body, \
+            "the job handler is back inside initAnchors, so it is dead on /jobs"
+
+        here = os.path.join(os.path.dirname(appmod.__file__), "templates")
+        for name in ("_jobs_panel.html", "song.html", "anchors.html"):
+            assert "data-job-msg" in open(os.path.join(here, name)).read(), \
+                f"{name} has a job form with nowhere to report back to"

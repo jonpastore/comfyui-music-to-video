@@ -426,6 +426,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initAnchors();
   initAnchorBatch();
   initAnchorPrompts();
+  initJobForms();       // every page, not just the ones with an anchor grid
 });
 
 // ---- Anchors: show exactly what will be sent -------------------------------
@@ -773,6 +774,39 @@ function initAnchorBatch() {
   });
 }
 
+// ---- Retry and Cancel, on every page that shows a job ----------------------
+// This lived INSIDE initAnchors(), which bails on any page without an anchor
+// grid -- so the one page whose whole purpose is jobs got the plain 303. /jobs
+// reloaded the entire table to cancel one job, and Cancel on a song page
+// redirected to /jobs and navigated you off the song you were working on.
+// Delegated on document and selector-guarded, so it is inert where there are no
+// job forms and needs no per-page wiring.
+//
+// The message lands in [data-job-msg], marked in each template, NOT in a column
+// by number: the three job tables have three different layouts, and the old
+// td:nth-child(2) was the failure reason on /anchors, the job DESCRIPTION on
+// /jobs and the kind on a song page -- so two of the three would have had a
+// real cell overwritten with status text.
+function initJobForms() {
+  document.addEventListener("submit", function (e) {
+    var form = e.target.closest('form[action^="/jobs/"]');
+    if (!form) return;
+    e.preventDefault();
+    var row = form.closest("tr");
+    var cell = row && (row.querySelector("[data-job-msg]") || row.querySelector("td:nth-child(2)"));
+    var btn = form.querySelector("button");
+    var retry = /\/retry$/.test(form.getAttribute("action") || "");
+    if (btn) btn.disabled = true;
+    api(form.action, new FormData(form)).then(function (d) {
+      if (cell) cell.textContent = retry ? "re-queued as job #" + d.job_id : "cancelled";
+      if (!retry && row) row.classList.add("job-cancelled");
+    }).catch(function (err) {
+      if (cell) cell.textContent = (retry ? "retry failed: " : "cancel failed: ") + err.message;
+      if (btn) btn.disabled = false;      // it did not happen, so let it be tried again
+    });
+  });
+}
+
 // ---- Anchors: view full size, multi-select, and nothing reloads the page -----
 function initAnchors() {
   var grid = document.querySelector(".candidate-grid");
@@ -1021,17 +1055,6 @@ function initAnchors() {
         if (document.body.contains(form)) form.remove();
       }).catch(function (err) { say(sec, "Not deleted: " + err.message); });
       return;
-    }
-    if ((form = e.target.closest('form[action^="/jobs/"]'))) {
-      e.preventDefault();
-      var row = form.closest("tr");
-      api(form.action, new FormData(form)).then(function (d) {
-        if (row) row.querySelector("td:nth-child(2)").textContent =
-          "re-queued as job #" + d.job_id;
-        form.querySelector("button").disabled = true;
-      }).catch(function (err) {
-        if (row) row.querySelector("td:nth-child(2)").textContent = "retry failed: " + err.message;
-      });
     }
   });
 
