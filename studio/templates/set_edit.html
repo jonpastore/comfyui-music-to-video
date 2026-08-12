@@ -24,6 +24,25 @@
     </div>
     <button type="submit">Save</button>
   </form>
+  {# The album mark, overlaid on whichever handovers are ticked below. An
+     overlay changes no duration, so this cannot make a set unrenderable. #}
+  <form method="post" action="/sets/{{ set.id }}/brand" enctype="multipart/form-data"
+        class="field-row">
+    <label>Branding mark &mdash; PNG with transparency
+      <input type="file" name="image" accept="image/*" required></label>
+    <button type="submit">Upload mark</button>
+  </form>
+  {% if set.brand_path %}
+  <p class="hint">Mark set.
+    <img src="{{ media_url(set.brand_path) }}" alt="branding mark" style="height:2rem;
+         vertical-align:middle; background:#222">
+    Ticked handovers fade it in over the cut and out again; it never changes the
+    running length.
+    <form method="post" action="/sets/{{ set.id }}/brand/clear" style="display:inline">
+      <button type="submit" class="linkish">Remove</button></form></p>
+  {% else %}
+  <p class="hint">No mark yet. Upload one to offer "mark on this handover" per item.</p>
+  {% endif %}
 </section>
 
 <p class="meta">{{ count }} song{{ "" if count == 1 else "s" }}
@@ -161,6 +180,10 @@
   <div class="check-row">
     <label class="check"><input type="checkbox" name="beatmatch" {% if it.beatmatch %}checked{% endif %}>
       Beatmatch into next <span class="muted">(snaps this transition to the beat)</span></label>
+    <label class="check"><input type="checkbox" name="branded" {% if it.branded %}checked{% endif %}>
+      Mark on this handover
+      <span class="muted">{% if set.brand_path %}(the set's mark, faded over the
+        transition){% else %}(upload a mark below first){% endif %}</span></label>
   </div>
   <div class="field-row">
     <label style="flex: 1 1 100%">Mix direction &mdash; plain language

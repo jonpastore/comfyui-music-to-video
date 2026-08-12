@@ -222,6 +222,17 @@ MIGRATIONS = [
     # only part that lengthens the set. Default 0 so an existing row cannot
     # acquire a pause nobody asked for.
     "ALTER TABLE set_items ADD COLUMN hold REAL DEFAULT 0",
+    # A branding still faded over a handover (ALBUM_ARC_AND_STAGING_PLAN.md
+    # sec 2). One default per SET -- an album mark is the normal case -- and a
+    # per-item override for the handover that wants a different card. An
+    # overlay changes no duration, so neither column touches any length
+    # arithmetic.
+    "ALTER TABLE sets ADD COLUMN brand_path TEXT",
+    "ALTER TABLE set_items ADD COLUMN brand_path TEXT",
+    # Which handovers actually get the set's default mark. Off by default: a
+    # mark on every transition is a slideshow, the same objection the plan
+    # makes to a fade to black between every song.
+    "ALTER TABLE set_items ADD COLUMN branded INTEGER DEFAULT 0",
 ]
 
 

@@ -388,6 +388,61 @@ def _black_video_lines(running_v, nxt_v, out_v, st, fade, hold, w, h, fps, i):
     return lines
 
 
+# A branding still, faded in and out over a handover
+# (ALBUM_ARC_AND_STAGING_PLAN.md sec 2). An overlay changes NO duration, which
+# is the whole reason it comes before the interstitial card: it is the version
+# that cannot disturb the arithmetic every other part of this file depends on.
+#
+# ponytail: fixed placement and size -- centred, in the lower third, a quarter
+# of the frame wide. Per-item x/y/scale when someone actually wants a mark
+# somewhere else; a knob nobody has asked for is a knob nobody has tested.
+BRAND_MIN_SECS = 2.0        # a mark shorter than this reads as a flicker
+BRAND_FADE_SECS = 0.4
+BRAND_WIDTH_FRACTION = 0.25
+BRAND_BOTTOM_MARGIN = 0.12  # of frame height
+
+
+def _brand_window(centre, span, total):
+    """(start, end) for a mark anchored ON a handover rather than near it.
+
+    Widened to BRAND_MIN_SECS when the transition itself is shorter -- a
+    half-second wipe would otherwise flash the mark for half a second -- and
+    clamped into the timeline so a handover near either end cannot ask ffmpeg
+    for a negative start or an end past the last frame.
+    """
+    span = max(float(span or 0.0), BRAND_MIN_SECS)
+    st = max(0.0, centre - span / 2.0)
+    en = min(float(total), st + span)
+    return st, max(st, en)
+
+
+def _brand_lines(idx, label, out_label, src, st, en, w, h):
+    """One overlay pass: the still, faded up and down on its alpha channel, shown
+    only between st and en. yuva420p because overlay wants an alpha-carrying
+    pixel format for the top layer; -2 on the scale keeps the height even."""
+    lbl = f"brnd{idx}"
+    fade = min(BRAND_FADE_SECS, (en - st) / 2.0)
+    return [
+        f"[{idx}:v]format=yuva420p,scale={int(w * BRAND_WIDTH_FRACTION)}:-2,"
+        f"fade=t=in:st={st:.3f}:d={fade:.3f}:alpha=1,"
+        f"fade=t=out:st={max(st, en - fade):.3f}:d={fade:.3f}:alpha=1[{lbl}]",
+        # shortest=1, with the still deliberately made LONGER than the video by
+        # its caller: overlay otherwise runs to the LONGEST input and a looped
+        # image added exactly one frame to the set. An overlay that changes the
+        # duration is the one thing this feature is supposed not to do.
+        f"[{label}][{lbl}]overlay=x=(W-w)/2:y=H-h-{int(h * BRAND_BOTTOM_MARGIN)}:"
+        f"shortest=1:enable='between(t,{st:.3f},{en:.3f})'[{out_label}]",
+    ]
+
+
+def _brand_at(brands, it, centre, span):
+    """Record this item's mark, if it has one, against the handover it belongs
+    to. Reads brand_path off the SAME item that carries transition and secs."""
+    path = (it.get("brand_path") or "").strip() if it.get("brand_path") else ""
+    if path:
+        brands.append((path, centre, span))
+
+
 def _check_join_effects(items):
     """Refuse a join effect that no join will ever read.
 
@@ -607,6 +662,12 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
     n = len(infos)
     _check_join_effects(items)
     lines = []
+    # (path, centre_on_the_finished_timeline, transition_span) per branded
+    # handover. Collected in the SAME walk that places the transitions, because
+    # a mark that computed its own timeline would drift off the cut it is
+    # supposed to land on -- which is the entire reason sec 2 anchors to sec 0's
+    # numbers instead of inventing its own clock.
+    brands = []
     for idx, info in enumerate(infos):
         video_extra = _video_fragment(items[idx].get("effects_json"))
         lines.append(_normalize_filter(idx, w, h, fps, video_extra))
@@ -632,11 +693,14 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
             st = max(0.0, running_dur - fade)
             lines += _black_video_lines(running_v, nxt_v, out_v, st, fade, hold, w, h, fps, i)
             lines += _black_audio_lines(running_a, nxt_a, out_a, st, fade, hold, i)
+            # the middle of the black, where a mark has the screen to itself
+            _brand_at(brands, items[i], running_dur + hold / 2.0, hold or fade * 2)
             running_dur += _advance(items[i], durations[i + 1])
         elif transition == "cut" or secs <= 0:
             # a join effect on a cut was already refused by _check_join_effects
             lines.append(f"[{running_v}][{nxt_v}]concat=n=2:v=1:a=0[{out_v}]")
             lines.append(f"[{running_a}][{nxt_a}]concat=n=2:v=0:a=1[{out_a}]")
+            _brand_at(brands, items[i], running_dur, 0.0)   # a cut has no span
             running_dur += _advance(items[i], durations[i + 1])
         else:
             _check_transition_fits(secs, running_dur)
@@ -655,9 +719,10 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
                 lines += _duck_join(running_a, nxt_a, out_a, offset, secs, comp, i)
             else:
                 lines.append(f"[{running_a}][{nxt_a}]acrossfade=d={secs:.3f}[{out_a}]")
+            _brand_at(brands, items[i], running_dur - secs / 2.0, secs)
             running_dur += _advance(items[i], durations[i + 1])
         running_v, running_a = out_v, out_a
-    return lines, running_v, running_a, running_dur
+    return lines, running_v, running_a, running_dur, brands
 
 
 def render_set(items, out_path, progress=None):
@@ -676,11 +741,28 @@ def render_set(items, out_path, progress=None):
     # scale+pad+fps before joining. Lazy default: revisit if a mismatched
     # hero clip should drive dimensions instead.
     w, h, fps = infos[0]["width"], infos[0]["height"], infos[0]["fps"] or 30
-    lines, out_v, out_a, predicted_dur = _build_render_set_filter(infos, durations, items, w, h, fps)
+    lines, out_v, out_a, predicted_dur, brands = _build_render_set_filter(
+        infos, durations, items, w, h, fps)
 
     inputs = []
     for it in items:
         inputs += _trim_input_args(it) + ["-i", it["video"]]
+
+    # Branding stills, chained onto the FINISHED video. Each is a looped image
+    # input bounded by -t: without the loop it is one frame at t=0 and the
+    # overlay only ever shows at t=0, and without the -t it is an infinite
+    # input that never lets the encode finish.
+    for k, (path, centre, span) in enumerate(brands):
+        if not os.path.isfile(path):
+            raise ValueError(f"branding image not found: {path}")
+        idx = len(items) + k
+        # a second longer than the video, so overlay's shortest=1 always ends
+        # on the video rather than on the still
+        inputs += ["-loop", "1", "-t", f"{predicted_dur + 1.0:.3f}", "-i", path]
+        st, en = _brand_window(centre, span, predicted_dur)
+        nxt = f"vbr{k}"
+        lines += _brand_lines(idx, out_v, nxt, path, st, en, w, h)
+        out_v = nxt
 
     tmp = _atomic_out(out_path)
     try:
@@ -1413,7 +1495,7 @@ def demo():
 
         # and the graph itself: layer REPLACES the xfade, it does not run beside
         # it -- both would fade the footage the blend is made from
-        lay_lines, _, _, _ = _build_render_set_filter(
+        lay_lines, _, _, _, _ = _build_render_set_filter(
             [{"has_audio": False}, {"has_audio": False}], [2.0, 2.0],
             [{"transition": "fade", "secs": 1.0, "effects_json": lay_json},
              {"transition": "cut", "secs": 0.0}], 320, 240, 16)
@@ -1483,6 +1565,51 @@ def demo():
         mix_audio(nohold, out_nh)
         assert abs(probe(out_nh)["duration"] - set_duration(cut_audio, key="audio")) < 0.35
 
+        # --- branding overlay on a handover ----------------------------------
+        # ALBUM_ARC_AND_STAGING_PLAN.md sec 2. The claim being checked is the
+        # one that makes it safe to build before the interstitial card: it
+        # changes pixels and changes NO duration.
+        mark = os.path.join(tmpdir, "mark.png")
+        r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+                             "-i", "color=c=white:s=80x40:d=1", "-frames:v", "1", mark],
+                            capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+
+        branded = [{"video": lay_a, "transition": "fade", "secs": 1.0, "brand_path": mark},
+                   {"video": lay_b, "transition": "cut", "secs": 0.0}]
+        unbranded = [{"video": lay_a, "transition": "fade", "secs": 1.0},
+                     {"video": lay_b, "transition": "cut", "secs": 0.0}]
+        out_brand = os.path.join(tmpdir, "set_brand.mp4")
+        out_nobrand = os.path.join(tmpdir, "set_nobrand.mp4")
+        render_set(branded, out_brand)
+        render_set(unbranded, out_nobrand)
+
+        # identical length, both against each other and against the prediction
+        db_, dn = probe(out_brand)["duration"], probe(out_nobrand)["duration"]
+        assert abs(db_ - dn) < 0.05, f"an overlay changed the set length: {db_} vs {dn}"
+        assert abs(db_ - set_duration(branded)) < 0.3, (db_, set_duration(branded))
+
+        # ...and a different picture at the handover it is anchored to. 2s + 2s
+        # with a 1s fade -> the handover is centred at 1.5s; the mark is white
+        # on dark footage, so the frame there gets brighter.
+        on, off = mean_rgb(out_brand, 1.5), mean_rgb(out_nobrand, 1.5)
+        assert sum(on) > sum(off) + 12, \
+            f"the mark never reached the picture: branded={on} plain={off}"
+        # and it is GONE well away from the handover, rather than stamped over
+        # the whole set
+        assert mean_rgb(out_brand, 0.3) == mean_rgb(out_nobrand, 0.3), \
+            "the mark is on screen far from the handover it belongs to"
+
+        # a mark on a missing file is refused, not skipped in silence
+        try:
+            render_set([{"video": lay_a, "transition": "fade", "secs": 1.0,
+                         "brand_path": os.path.join(tmpdir, "nope.png")},
+                        {"video": lay_b, "transition": "cut", "secs": 0.0}],
+                       os.path.join(tmpdir, "should_not_exist5.mp4"))
+            raise AssertionError("a missing branding image was accepted")
+        except ValueError as e:
+            assert "not found" in str(e), e
+
         # --- duck: the outgoing mix pushed under the incoming track ----------
         duck_json = json.dumps({"duck": 1.0})
         ducked = [{"audio": mp3, "transition": "fade", "secs": 1.5,
@@ -1511,7 +1638,7 @@ def demo():
 
         # the graph: the sidechain copy is DELAYED onto the running timeline,
         # which is the whole fix -- 4s of item one, 1.5s transition -> 2500ms
-        duck_lines, _, _, _ = _build_render_set_filter(
+        duck_lines, _, _, _, _ = _build_render_set_filter(
             [{"has_audio": True}, {"has_audio": True}], [4.0, 4.0],
             [{"transition": "fade", "secs": 1.5, "effects_json": duck_json},
              {"transition": "cut", "secs": 0.0}], 320, 240, 16)

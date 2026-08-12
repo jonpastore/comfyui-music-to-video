@@ -460,6 +460,31 @@ def _hold_of(row):
         return 0.0
 
 
+def _brand_of(item_row, set_row):
+    """The mark for THIS handover: the item's own override, else the set's
+    default when the item is ticked for branding, else nothing.
+
+    Resolved in one place because the render path and the editor's preview must
+    answer it identically -- an editor that shows a mark the renderer will not
+    draw is the same defect as one that promises a tempo ramp nothing applies.
+    """
+    try:
+        own = (item_row["brand_path"] or "").strip()
+    except (KeyError, IndexError, TypeError):
+        own = ""
+    if own:
+        return own
+    try:
+        if not item_row["branded"]:
+            return ""
+    except (KeyError, IndexError, TypeError):
+        return ""
+    try:
+        return (set_row["brand_path"] or "").strip()
+    except (KeyError, IndexError, TypeError):
+        return ""
+
+
 def clamp_hold(hold, transition):
     """The black-hold, validated against the transition it belongs to.
 
@@ -3599,7 +3624,8 @@ def set_detail(row):
         timeline.append({"id": it["id"], "title": it["song_title"], "secs": secs,
                           "bpm": it["song_bpm"], "key": it["song_key"],
                           "transition": it["transition"], "trans_secs": it["secs"],
-                          "hold": _hold_of(it), "beatmatch": it["beatmatch"]})
+                          "hold": _hold_of(it), "beatmatch": it["beatmatch"],
+                          "branded": bool(_brand_of(it, row))})
     for t in timeline:
         # a floor so a very short item is still clickable rather than a hairline
         t["pct"] = max(8.0, 100.0 * t["secs"] / longest) if longest else 100.0
@@ -3832,7 +3858,7 @@ def add_set_item(id: int, song_id: int = Form(...), transition: str = Form("fade
 def edit_set_item(id: int, item_id: int, in_secs: BlankFloat = Form(None),
                   out_secs: BlankFloat = Form(None), gain_db: float = Form(0.0),
                   transition: str = Form("fade"), secs: float = Form(2.0),
-                  hold: float = Form(0.0),
+                  hold: float = Form(0.0), branded: bool = Form(False),
                   beatmatch: bool = Form(False), effects_json: str = Form(""),
                   mix_direction: str = Form("")):
     get_set_or_404(id)
@@ -3874,10 +3900,31 @@ def edit_set_item(id: int, item_id: int, in_secs: BlankFloat = Form(None),
                   "in_secs": in_secs, "out_secs": out_secs,
                   "beatmatch": int(beatmatch)}}))
     db.run("""UPDATE set_items SET in_secs=?, out_secs=?, gain_db=?, transition=?, secs=?,
-              beatmatch=?, effects_json=?, mix_direction=?, hold=? WHERE id=?""",
+              beatmatch=?, effects_json=?, mix_direction=?, hold=?, branded=?
+              WHERE id=?""",
            in_secs, out_secs, gain_db, transition, secs, int(beatmatch), effects_json,
-           mix_direction or None, hold, item_id)
+           mix_direction or None, hold, int(branded), item_id)
     db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
+    return RedirectResponse(f"/sets/{id}", status_code=303)
+
+
+@app.post("/sets/{id}/brand")
+async def set_brand_image(id: int, image: UploadFile = File(...)):
+    """The album mark this set overlays on its branded handovers. Same shape as
+    the playlist cover upload, and the same validation."""
+    get_set_or_404(id)
+    dest = await save_upload(image, MAX_IMAGE, os.path.join(db.DATA, "sets", str(id)),
+                              "image", prefix="brand")
+    db.run("UPDATE sets SET brand_path=?, updated=? WHERE id=?", dest, time.time(), id)
+    return RedirectResponse(f"/sets/{id}", status_code=303)
+
+
+@app.post("/sets/{id}/brand/clear")
+def clear_brand_image(id: int):
+    """Removes the row's pointer, not the file: another set may be using it, and
+    a mark is cheap to re-point at."""
+    get_set_or_404(id)
+    db.run("UPDATE sets SET brand_path=NULL, updated=? WHERE id=?", time.time(), id)
     return RedirectResponse(f"/sets/{id}", status_code=303)
 
 
@@ -3962,7 +4009,7 @@ def render_set_route(id: int):
             else:
                 build.append({"video": r["path"], "transition": it["transition"], "secs": it["secs"],
                               "in_secs": it["in_secs"], "out_secs": it["out_secs"],
-                              "hold": _hold_of(it),
+                              "hold": _hold_of(it), "brand_path": _brand_of(it, row),
                               "gain_db": it["gain_db"], "effects_json": it["effects_json"],
                               **_beatmatch_fields(it, songs[it["song_id"]])})
         if missing:

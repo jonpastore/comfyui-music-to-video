@@ -2690,6 +2690,59 @@ def test_fade_to_black_is_a_transition_kind_and_its_hold_is_stored():
         assert r.status_code == 400, "an invented transition was accepted"
 
 
+def test_branding_mark_is_per_set_with_a_per_handover_tick():
+    """ALBUM_ARC_AND_STAGING_PLAN.md sec 2. One mark per set, drawn only on the
+    handovers that ask for it -- a mark on every transition is the same
+    objection the plan makes to a fade to black between every song.
+
+    The resolver is the thing under test: the editor's preview and the render
+    path must answer "is there a mark here" identically, or the page shows a
+    mark the renderer will not draw."""
+    with TestClient(appmod.app) as client:
+        client.post("/sets/new", data={"name": "Branded Set", "mode": "video"})
+        sid = db.one("SELECT id FROM sets WHERE name='Branded Set'")["id"]
+        a = _upload_song(client, "Branded A")
+        b = _upload_song(client, "Branded B")
+        for s in (a, b):
+            client.post(f"/sets/{sid}/items", data={"song_id": s["id"], "transition": "fade",
+                                                     "secs": "1.0"})
+        first = db.q("SELECT id FROM set_items WHERE set_id=? ORDER BY position", sid)[0]["id"]
+
+        # ticked but with no mark uploaded yet -> nothing to draw, and the
+        # resolver says so rather than handing the renderer an empty path
+        client.post(f"/sets/{sid}/items/{first}",
+                    data={"transition": "fade", "secs": "1.0", "gain_db": "0", "branded": "on"})
+        item = db.one("SELECT * FROM set_items WHERE id=?", first)
+        assert appmod._brand_of(item, db.one("SELECT * FROM sets WHERE id=?", sid)) == ""
+
+        r = client.post(f"/sets/{sid}/brand",
+                        files={"image": ("mark.png", _png_bytes(), "image/png")},
+                        follow_redirects=False)
+        assert r.status_code == 303, r.text
+        row = db.one("SELECT * FROM sets WHERE id=?", sid)
+        assert row["brand_path"] and os.path.isfile(row["brand_path"])
+
+        # now the ticked item resolves to the set's mark...
+        assert appmod._brand_of(db.one("SELECT * FROM set_items WHERE id=?", first),
+                                row) == row["brand_path"]
+        # ...and the unticked one does not
+        second = db.q("SELECT id FROM set_items WHERE set_id=? ORDER BY position", sid)[1]["id"]
+        assert appmod._brand_of(db.one("SELECT * FROM set_items WHERE id=?", second), row) == ""
+
+        # unticking puts it back, so the control is not one-way
+        client.post(f"/sets/{sid}/items/{first}",
+                    data={"transition": "fade", "secs": "1.0", "gain_db": "0"})
+        assert appmod._brand_of(db.one("SELECT * FROM set_items WHERE id=?", first), row) == ""
+
+        # clearing the set's mark clears it for every item at once
+        client.post(f"/sets/{sid}/items/{first}",
+                    data={"transition": "fade", "secs": "1.0", "gain_db": "0", "branded": "on"})
+        client.post(f"/sets/{sid}/brand/clear")
+        cleared = db.one("SELECT * FROM sets WHERE id=?", sid)
+        assert appmod._brand_of(db.one("SELECT * FROM set_items WHERE id=?", first),
+                                cleared) == ""
+
+
 def test_set_item_effects_json_validated_screened_and_rendered():
     """effects_json is free text (JSON) -- screened exactly like the anchor
     prompt and tier wording, then checked structurally against effects.py/

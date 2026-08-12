@@ -278,7 +278,7 @@ def _join_effects_are_wired_everywhere_or_nowhere():
     assert "duck" in fx.DEFAULT_EFFECTS, "duck is not a known audio key"
 
     eff = json.dumps({"layer": {"mode": "screen", "opacity": 0.5}, "duck": 0.8})
-    lines, _, _, _ = mixer._build_render_set_filter(
+    lines, _, _, _, _ = mixer._build_render_set_filter(
         [{"has_audio": True}, {"has_audio": True}], [4.0, 4.0],
         [{"transition": "fade", "secs": 1.0, "effects_json": eff},
          {"transition": "cut", "secs": 0.0}], 320, 240, 16)
