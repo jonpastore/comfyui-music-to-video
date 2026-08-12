@@ -140,6 +140,81 @@
 
 
 <section class="card">
+  <h2>Generate audio</h2>
+  <p class="hint">
+    {% if audio_model %}<code>{{ audio_model.label }}</code> &mdash; {% endif %}
+    writes NEW music from style tags and optional lyrics. It is a generator, not an
+    editor: <strong>it cannot cut a region out of this track.</strong> Re-synthesising
+    from the current audio replaces the whole thing, not a span of it, because no
+    backend publishes a region or mask node. Trimming and fading stay with
+    &ldquo;Edit audio&rdquo; above, which is deterministic ffmpeg and touches nothing else.
+    Takes are kept as candidates; none of them becomes this song&rsquo;s audio until you
+    press Use.</p>
+  <form id="audio-gen-form" method="post" action="/songs/{{ song.id }}/audio/generate"
+        class="stack-form">
+    <label>Style tags
+      <input type="text" name="tags" maxlength="600" required
+             placeholder="dark synthwave, driving bassline, female vocal, 120 bpm">
+      <span class="muted">Musical style tokens, comma separated. Not a scene description.</span>
+    </label>
+    <label>Lyrics <span class="muted">(optional)</span>
+      <textarea name="lyrics" rows="4" maxlength="10000"
+                placeholder="[verse]&#10;..."></textarea>
+    </label>
+    <div class="row">
+      <label>Seconds <input type="number" name="seconds" value="30" min="1" max="240" step="1"></label>
+      <label>Takes <input type="number" name="n" value="1" min="1" max="4" step="1"></label>
+      <label>Seed <input type="text" name="seed" placeholder="blank = random"></label>
+    </div>
+    <details>
+      <summary>Re-synthesise from the current audio</summary>
+      <p class="warn">This does not repair a section. It feeds the whole current track in
+        at the denoise below and returns a whole new one.</p>
+      <div class="row">
+        <label><input type="checkbox" name="from_current" value="1"> Use the current audio as the source</label>
+        <label>Denoise <input type="number" name="denoise" value="1.0" min="0.05" max="1.0" step="0.05"></label>
+      </div>
+    </details>
+    <button type="submit">Generate take</button>
+  </form>
+
+  {% if audio_gens %}
+  <h3>Takes</h3>
+  <table class="list">
+    <thead><tr><th>#</th><th>What ran</th><th>Active</th><th></th></tr></thead>
+    <tbody>
+    {% for a in audio_gens %}
+      {% set p = jset(a) %}
+      <tr>
+        <td>{{ a.id }}</td>
+        <td>
+          {% if p.mode == 'resynthesised' %}
+            <strong>re-synthesised</strong> from the then-current audio at denoise
+            {{ p.denoise }} &mdash; a whole new track, not a patch
+          {% else %}
+            <strong>generated</strong> from tags
+          {% endif %}
+          &middot; {{ p.seconds }}s{% if p.seed is not none and p.seed != '' %}, seed {{ p.seed }}{% endif %}
+          <br><span class="muted">{{ p.tags }}{% if p.lyrics %} &middot; with lyrics{% endif %}</span>
+        </td>
+        <td>{{ "yes" if song.mp3_path == a.path else "" }}</td>
+        <td>
+          <audio controls preload="none" src="{{ media_url(a.path) }}"></audio>
+          {% if song.mp3_path != a.path %}
+          <form method="post" action="/songs/{{ song.id }}/audio/{{ a.id }}/use">
+            <button type="submit">Use this take</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+
+<section class="card">
   <h2>Storyboard</h2>
   {% include "_storyboard_form.html" %}
 

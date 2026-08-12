@@ -5833,3 +5833,64 @@ def test_fleet_panel_names_the_spelling_each_box_uses(monkeypatch):
     with TestClient(appmod.app) as client:
         r = client.get("/models/fleet")
         assert r.status_code == 200 and "SwarmUI did not answer" in r.text
+
+
+def test_generated_audio_is_kept_and_says_which_path_ran(monkeypatch, tmp_path):
+    """gen_audio left its takes in ComfyUI's OUTPUT directory with no row and no
+    song -- the same directory every anchor candidate and clip lands in, so a
+    generated track there is a file nobody can identify again.
+
+    Also asserts the thing models.py demands of this model: whatever comes back
+    is NEW audio, never a shortened original, so a take seeded from an existing
+    track has to be labelled or it reads as an edit of it. There is no region
+    node on any backend, so denoise below 1.0 replaces the WHOLE clip."""
+    from conftest import audio_calls as sent
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Audio Song", album="Audio Album")
+        sid, mp3 = song["id"], song["mp3_path"]
+
+        ok = {"tags": "dark synthwave, 120 bpm", "seconds": "12", "n": "2"}
+        r = client.post(f"/songs/{sid}/audio/generate", data=ok)
+        assert r.status_code in (200, 303), r.text
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='audio' ORDER BY id DESC")["id"])
+
+        rows = db.q("SELECT * FROM assets WHERE song_id=? AND kind='audio_gen' ORDER BY id", sid)
+        assert len(rows) == 2, "the takes were rendered and then lost"
+        for row in rows:
+            assert os.path.exists(row["path"]), "an assets row points at nothing"
+            # kept in the STUDIO's data dir, not left among the render outputs
+            assert os.path.realpath(row["path"]).startswith(os.path.realpath(db.DATA))
+            assert db.jset(row)["mode"] == "generated"
+        # never over the song's own audio, and the original is recorded so
+        # revert has something to restore even if no EDIT was ever made
+        assert db.one("SELECT mp3_path FROM songs WHERE id=?", sid)["mp3_path"] == mp3
+        assert db.one("SELECT id FROM assets WHERE song_id=? AND kind='audio_original'", sid)
+
+        # DIFFERENTIAL: same route, one field different, and the stored claim
+        # about what ran changes with it
+        r = client.post(f"/songs/{sid}/audio/generate",
+                        data={**ok, "from_current": "1", "denoise": "0.6"})
+        assert r.status_code in (200, 303), r.text
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='audio' ORDER BY id DESC")["id"])
+        latest = db.q("SELECT * FROM assets WHERE song_id=? AND kind='audio_gen' "
+                      "ORDER BY id DESC LIMIT 1", sid)[0]
+        assert db.jset(latest)["mode"] == "resynthesised", "a seeded take read as a plain generation"
+        assert sent[-1]["source_path"] == mp3 and sent[-1]["denoise"] == 0.6
+
+        # a take can be pressed into use through the SAME route an edit uses
+        r = client.post(f"/songs/{sid}/audio/{rows[0]['id']}/use")
+        assert r.status_code in (200, 303)
+        assert db.one("SELECT mp3_path FROM songs WHERE id=?", sid)["mp3_path"] == rows[0]["path"]
+
+        # bounds: a form cannot occupy a GPU for an hour, and re-synthesising at
+        # denoise 1.0 ignores the source entirely, so it is refused rather than
+        # silently run as a plain generation under a label that says otherwise
+        for bad, why in (({**ok, "tags": ""}, "no tags"),
+                         ({**ok, "tags": "x" * (appmod.MAX_TAGS + 1)}, "over-long tags"),
+                         ({**ok, "lyrics": "x" * (appmod.MAX_LYRICS + 1)}, "over-long lyrics"),
+                         ({**ok, "seconds": "9999"}, "a 9999 second take"),
+                         ({**ok, "n": "99"}, "99 takes"),
+                         ({**ok, "seed": "not-a-number"}, "a non-numeric seed"),
+                         ({**ok, "from_current": "1", "denoise": "1.0"}, "denoise 1.0 with a source")):
+            assert client.post(f"/songs/{sid}/audio/generate", data=bad).status_code == 400, \
+                f"{why} was accepted"

@@ -1149,6 +1149,55 @@ def h_edit_audio(args, progress):
     return {"path": out}
 
 
+@jobs.handler("audio")
+def h_audio(args, progress):
+    """Generate music with ACE-Step, and KEEP it.
+
+    pipeline.gen_audio leaves its takes in ComfyUI's output directory with
+    nothing recording that they exist -- no row, no song, no way to find them
+    from the studio. ComfyUI's output is also where every anchor candidate and
+    clip lands, so a generated track there is a file nobody will ever identify
+    again. Each take is copied into the studio's own data dir and given an
+    assets row, exactly as an audio EDIT is.
+
+    Never writes over song["mp3_path"]. A take becomes the song's audio only
+    when someone presses Use, which is the same route an edit goes through.
+    """
+    sid = args.get("song_id")
+    song = db.one("SELECT * FROM songs WHERE id=?", sid) if sid else None
+    slug = song["slug"] if song else "loose"
+    took = pipeline.gen_audio(safe_name(slug), args["tags"], args.get("lyrics", ""),
+                              seconds=args["seconds"], n=args["n"], progress=progress,
+                              seed=args.get("seed"), source_path=args.get("source_path"),
+                              denoise=args.get("denoise", 1.0))
+    if not took:
+        raise RuntimeError("the audio render produced no track")
+    outdir = os.path.join(db.DATA, "audio", slug)
+    os.makedirs(outdir, exist_ok=True)
+    stamp = int(time.time() * 1000)
+    kept = []
+    for i, src in enumerate(took):
+        out = os.path.join(outdir, f"gen_{stamp}_{i}.mp3")
+        shutil.copy2(src, out)
+        # WHICH PATH RAN, stored beside the file rather than inferred later.
+        # models.py's ACE-Step entry is explicit that whatever comes back is NEW
+        # audio and never a shortened original, so a take that was seeded from
+        # an existing track has to say so or it will be mistaken for an edit of
+        # it. denoise below 1.0 re-synthesises the WHOLE clip -- there is no
+        # region node on any backend -- so "resynthesised" means all of it.
+        db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+               sid, "audio_gen", out, json.dumps({
+                   "mode": "resynthesised" if args.get("source_path") else "generated",
+                   "tags": args["tags"], "lyrics": args.get("lyrics", ""),
+                   "seconds": args["seconds"], "seed": args.get("seed"),
+                   "denoise": args.get("denoise", 1.0),
+                   "source_path": args.get("source_path") or "",
+                   "model": models.default_for("audio")}), time.time())
+        kept.append(out)
+    progress(f"{len(kept)} take(s) kept in {outdir}")
+    return {"path": kept[0], "takes": len(kept)}
+
+
 @jobs.handler("render_song")
 def h_render_song(args, progress):
     sid, tier = args["song_id"], args["tier"]
@@ -1527,6 +1576,7 @@ def song_page(request: Request, id: int):
         except Exception:
             pass
     audio_edits = db.q("SELECT * FROM assets WHERE song_id=? AND kind='audio_edit' ORDER BY id DESC", id)
+    audio_gens = db.q("SELECT * FROM assets WHERE song_id=? AND kind='audio_gen' ORDER BY id DESC", id)
     audio_original = db.one("SELECT * FROM assets WHERE song_id=? AND kind='audio_original'", id)
     # anchors belong to the song's ALBUM, not the song -- this is a read-only
     # summary for convenience; management happens on /anchors.
@@ -1588,6 +1638,7 @@ def song_page(request: Request, id: int):
         "renders": renders, "song_jobs": song_jobs, "active_job": active_job,
         "models": chat_models,
         "audio_duration": audio_duration, "audio_edits": audio_edits, "audio_original": audio_original,
+        "audio_gens": audio_gens, "audio_model": models.get(models.default_for("audio")),
         "best_model": best, "render_tiers": render_tiers,
         **storyboard_form_ctx(song, form_tier, chat_models, best),
     })
@@ -4216,10 +4267,83 @@ def edit_song_audio(id: int, trim_start: float = Form(0.0), trim_end: BlankFloat
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
+# Form sanity bounds, and NOT the model's limits -- ACE-Step's own
+# TextEncodeAceStepAudio publishes `lyrics` as a plain multiline STRING with no
+# declared maximum, so there is no number to read off the box and none is
+# invented here. These exist so a paste accident or a hostile field cannot
+# occupy a GPU for an hour; where the model actually truncates is unmeasured.
+MAX_TAGS = 600
+MAX_LYRICS = 10000
+MAX_AUDIO_SECS = 240.0
+MAX_AUDIO_TAKES = 4
+
+
+@app.post("/songs/{id}/audio/generate")
+def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
+                   seconds: float = Form(30.0), n: int = Form(1),
+                   seed: str = Form(""), denoise: float = Form(1.0),
+                   from_current: str = Form("")):
+    """Queue an ACE-Step take for this song.
+
+    Deliberately NOT screened by tiers.check_text: the image guardrail is off
+    the audio path on purpose (it refused nursery rhymes), and ACE-Step reads
+    tags as musical style tokens, so wording about what must not be DEPICTED is
+    noise there at best. The bounds below are the only thing this route asserts.
+    """
+    song = get_song_or_404(id)
+    tags = " ".join((tags or "").split())
+    # Form("") and not Form(...): an empty value for a REQUIRED form field is
+    # reported by FastAPI as "field required" and answered 422 before any
+    # handler code runs, so the check below -- and its message -- would have
+    # been unreachable for the one case it exists for. Whitespace-only tags get
+    # here either way, so the check is needed regardless of the default.
+    if not tags:
+        raise HTTPException(400, "a take needs at least one style tag")
+    for value, bound, what in ((tags, MAX_TAGS, "tags"), (lyrics or "", MAX_LYRICS, "lyrics")):
+        if len(value) > bound:
+            raise HTTPException(400, f"{what} is {len(value)} characters; keep it under {bound}")
+    if not 1.0 <= seconds <= MAX_AUDIO_SECS:
+        raise HTTPException(400, f"seconds must be between 1 and {MAX_AUDIO_SECS:g}")
+    if not 1 <= n <= MAX_AUDIO_TAKES:
+        raise HTTPException(400, f"takes must be between 1 and {MAX_AUDIO_TAKES}")
+    if not 0.0 < denoise <= 1.0:
+        raise HTTPException(400, "denoise must be above 0 and at most 1.0")
+    args = {"song_id": id, "tags": tags, "lyrics": lyrics or "", "seconds": float(seconds),
+            "n": int(n), "denoise": float(denoise)}
+    if (seed or "").strip():
+        try:
+            args["seed"] = int(seed)
+        except ValueError:
+            raise HTTPException(400, "seed must be a whole number, or blank for random") from None
+    if from_current:
+        # Re-synthesising takes the song's CURRENT audio as the starting point,
+        # and produces a whole new track rather than a patched one.
+        if not song["mp3_path"] or not os.path.exists(song["mp3_path"]):
+            raise HTTPException(400, "this song has no audio to re-synthesise from")
+        if denoise >= 1.0:
+            raise HTTPException(400, "re-synthesising needs a denoise below 1.0; at 1.0 the "
+                                     "source is ignored entirely and it is a plain generation")
+        args["source_path"] = song["mp3_path"]
+    # Record the true original before any take can be pressed into use, exactly
+    # as the edit route does. Without this, using a generated take as the song's
+    # audio on a song that had never been EDITED left nothing for revert to
+    # restore -- the upload would still be on disk with nothing pointing at it.
+    if song["mp3_path"] and not db.one(
+            "SELECT id FROM assets WHERE song_id=? AND kind='audio_original'", id):
+        db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+               id, "audio_original", song["mp3_path"], None, time.time())
+    jobs.enqueue("audio", args, song_id=id)
+    return RedirectResponse(f"/songs/{id}", status_code=303)
+
+
 @app.post("/songs/{id}/audio/{asset_id}/use")
 def use_audio_edit(id: int, asset_id: int):
     get_song_or_404(id)
-    asset = db.one("SELECT * FROM assets WHERE id=? AND song_id=? AND kind='audio_edit'", asset_id, id)
+    # Both kinds, one route. A generated take and an edit are both "an audio
+    # file this song could use", and a second near-identical route is how the
+    # two drift apart -- revert still restores audio_original either way.
+    asset = db.one("SELECT * FROM assets WHERE id=? AND song_id=? "
+                   "AND kind IN ('audio_edit','audio_gen')", asset_id, id)
     if not asset:
         raise HTTPException(404, "no such audio edit")
     db.run("UPDATE songs SET mp3_path=? WHERE id=?", asset["path"], id)

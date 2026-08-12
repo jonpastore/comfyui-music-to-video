@@ -390,6 +390,25 @@ anchor_calls = []
 free_vram_calls = []
 
 
+audio_calls = []
+
+
+def _gen_audio(slug, tags, lyrics="", seconds=30.0, n=1, progress=None, seed=None,
+               source_path=None, denoise=1.0, steps=None, cfg=None):
+    """Real files in the stub OUTPUT dir, because the point of the audio job is
+    that the takes are copied OUT of there and given rows -- a stub returning
+    bare paths that do not exist could not tell a kept take from a lost one."""
+    audio_calls.append(dict(slug=slug, tags=tags, lyrics=lyrics, seconds=seconds, n=n,
+                            seed=seed, source_path=source_path, denoise=denoise))
+    out = []
+    for i in range(int(n)):
+        p = os.path.join(_PIPE_DIR, "output", f"audio_{slug}_take{len(audio_calls)}_{i}.mp3")
+        with open(p, "wb") as fh:
+            fh.write(b"ID3" + b"\0" * 64)
+        out.append(p)
+    return out
+
+
 def _contact_sheet(src, out, cols=6):
     # records exactly which frames were staged -- the point of the review job
     # is that the sheet shows the APPROVED refs, nothing else
@@ -425,6 +444,7 @@ _stub("pipeline",
       gen_artwork=lambda slug, prompt, anchor_path, progress=None, guard="", n=1, size=1024: [],
       fix_ref=lambda *a, **kw: [],
       gen_clips=lambda slug, tier, sb, mp3, ref_paths, progress=None: [],
+      gen_audio=_gen_audio,
       contact_sheet=_contact_sheet)
 
 
