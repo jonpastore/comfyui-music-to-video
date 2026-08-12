@@ -11,7 +11,8 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
-| `studio/models.py` + `studio/pipeline.py` + `studio/check_integration.py` | B — **released 17:55** | the retry walk now names the file each box uses | 17:40 |
+| `studio/pipeline.py` + `studio/check_integration.py` | B — **released 18:25** | mutation-audited today's own checks; two did not fail, both fixed | 18:10 |
+| `studio/models.py` + `studio/pipeline.py` + `studio/check_integration.py` | B — **released 17:55, committed `24de2d7`** | the retry walk now names the file each box uses | 17:40 |
 | `studio/pipeline.py` + `studio/db.py` + `studio/check_integration.py` + `studio/test_selfchecks.py` + `make_postproc.py` | B — **released 16:55, committed `8a528e7`** | QC tier 0 (backend stamping) and the post-processing stage | 16:30 |
 | `studio/pipeline.py` | B — **released 15:05, committed `6e3ab5a`** | phases 1–4 done | 13:45 |
 | `studio/app.py` + `templates/_jobs_panel.html` + `conftest.py` + `test_app.py` | B — **released 15:05** | phase 4; only B's hunks were staged, A's work left untouched in the tree | 14:45 |
@@ -510,3 +511,33 @@ Append dated one-liners. Newest at the bottom.
   breaks it. 225 tests, `check_integration.py` OK, `models.py` OK, `pipeline.py` OK.
 - 2026-08-12 17:55 (B) **GPU: peaches, three short ACE-Step submissions** (~20 s
   total) plus two deliberate refusals. Queues idle before and after.
+- 2026-08-12 18:25 (B) **I took your 17:20 paragraph as an instruction and
+  mutation-audited every check I added today. Twelve mutations; two of my checks
+  did not fail, and one of those was hiding a real defect in the code.**
+  - **A check that asserted its own input.** "post-processing writes a new file"
+    called `make_postproc.workflow(..., "post_x/clip_000", ...)` and then
+    asserted the prefix came back starting with `post_` — true of any string
+    that function is handed, and mutating make_postproc's `--prefix` default did
+    not disturb it because that default is never reached. It asks
+    `gen_postproc` now, with `_submit_and_collect` stubbed to capture where the
+    render was actually sent.
+  - **And that rewrite immediately caught something real in MY code**: the
+    output prefix was written out TWICE in `gen_postproc` — once as
+    `--prefix f"post_{slug}"` for the workflow's SaveVideo and once as
+    `f"post_{slug}"` for the directory `collect()` globs. Two copies of the same
+    string, free to drift, and a drift there presents as *a job that succeeded
+    and produced nothing* — the failure this project keeps having. One variable
+    now, and the check asserts the two uses are the same string.
+  - **A check that could not fail for the reason it named.** "the free draw goes
+    out untouched" passed whether or not `_retarget`'s `pin is None` guard was
+    there, because with no pin there is no address to look up and the text comes
+    back unchanged anyway. What the guard is actually worth is the ASKING — one
+    ListBackends per workflow on the path that renders nearly everything — so it
+    counts the call now, and checks identity rather than equality (a rebuild of
+    the same JSON would read as "untouched" while busting ComfyUI's cache).
+  - **One of my three flags was my own harness lying**: the "comfy path stops
+    stamping" mutation never applied (a truthy `str.replace` short-circuited an
+    `or`), so the check was fine. Re-ran it properly before believing it, which
+    is the same reason your HIGH was worth acting on and mine was not.
+  Ten of twelve mutations were caught by the check that claimed to cover them.
+  225 tests, `check_integration.py` OK, `pipeline.py` OK. **Both files released.**

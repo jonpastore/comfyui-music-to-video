@@ -239,10 +239,47 @@ if pipeline:
                 f"pipeline.gen_postproc emits {flag}, make_postproc.py does not take it"
         import make_postproc
         wf = make_postproc.workflow("clip_000.mp4", "post_x/clip_000", 16.0, 77)
-        assert wf["99"]["inputs"]["filename_prefix"].startswith("post_"), \
-            "post-processing writes over the prefix it read from"
-        # and the clip comes out the length it went in -- see make_postproc.out_fps
+        # the clip comes out the length it went in -- see make_postproc.out_fps
         assert abs(153 / wf["90"]["inputs"]["fps"] - 77 / 16.0) < 1e-9, wf["90"]
+
+        # The never-overwrites check has to ask PIPELINE, not the workflow.
+        # It used to assert that a prefix this function had just passed in came
+        # back out -- which is true of any string and could not fail. Mutating
+        # make_postproc's --prefix default did not disturb it, because the
+        # default is never reached. gen_postproc is what actually chooses where
+        # a post-processed clip lands, so that is what gets asked.
+        seen = {}
+        was = (pipeline._submit_and_collect, pipeline._run_script,
+               pipeline.install_input, pipeline.gpu.preflight)
+        try:
+            pipeline._run_script = lambda script, args, progress=None: seen.update(
+                {"args": args, "script": script})
+            pipeline.install_input = lambda p, name=None: os.path.basename(p)
+            pipeline.gpu.preflight = lambda progress=None: None
+            pipeline._submit_and_collect = lambda wf_dir, prefix_dir, pattern, progress: \
+                seen.setdefault("prefix_dir", prefix_dir) and []
+            clip = os.path.join(HERE, "..", "Street Cats", "Rear Entrance",
+                                "clips_r", "clip_000_00001_.mp4")
+            if not os.path.isfile(clip):
+                return          # no sample clip in this checkout; nothing to probe
+            pipeline.gen_postproc([clip], "songslug", multiplier=2)
+        finally:
+            (pipeline._submit_and_collect, pipeline._run_script,
+             pipeline.install_input, pipeline.gpu.preflight) = was
+        assert seen.get("prefix_dir", "").startswith("post_"), \
+            f"post-processing did not write to a post_ prefix: {seen.get('prefix_dir')!r}"
+        assert os.path.basename(os.path.dirname(clip)) not in seen["prefix_dir"], \
+            f"post-processing writes back into the directory it read: {seen['prefix_dir']}"
+        # The prefix the WORKFLOW saves under and the directory collect() globs
+        # must be the same string. They were written out twice, and a drift
+        # between them presents as a job that succeeded and produced nothing --
+        # which is this project's most-repeated defect, not a hypothetical.
+        assert seen["args"][seen["args"].index("--prefix") + 1] == seen["prefix_dir"], \
+            (f"the render saves under {seen['args'][seen['args'].index('--prefix') + 1]!r} "
+             f"and collect globs {seen['prefix_dir']!r}")
+        # and it told the builder the real frame count, not a guess
+        assert "--frames" in seen["args"] and int(seen["args"][seen["args"].index("--frames") + 1]) == 77, \
+            seen["args"]
 
     check("post-processing takes real flags and writes a new file",
           _postproc_flags_exist_and_it_never_overwrites)

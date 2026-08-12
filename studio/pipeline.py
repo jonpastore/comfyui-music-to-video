@@ -1137,6 +1137,12 @@ def gen_postproc(clip_paths, slug, multiplier=2, upscale="", progress=None):
     NAME, not a path, and on a remote box the file has to be there at all.
     """
     import mixer      # ffprobe wrapper; kept out of the module import graph
+    # ONE name, used for both the workflow's save prefix and the directory
+    # collect() globs. It was written out twice, and the two copies drifting is
+    # this project's recurring defect exactly: the render would write to one
+    # directory and collect would glob the other, which presents as a job that
+    # succeeded and produced nothing rather than as a mismatch.
+    prefix = f"post_{slug}"
     made = []
     for i, clip in enumerate(clip_paths, 1):
         info = mixer.probe(clip)
@@ -1150,12 +1156,12 @@ def gen_postproc(clip_paths, slug, multiplier=2, upscale="", progress=None):
         frames = round(info["duration"] * info["fps"])
         args = ["--source", install_input(clip), "--fps", str(info["fps"]),
                 "--frames", str(frames),
-                "--multiplier", str(multiplier), "--prefix", f"post_{slug}"]
+                "--multiplier", str(multiplier), "--prefix", prefix]
         if upscale:
             args += ["--upscale", upscale]
         with tempfile.TemporaryDirectory() as wf_dir:
             _run_script("make_postproc.py", [*args, "--outdir", wf_dir], progress)
-            made += _submit_and_collect(wf_dir, f"post_{slug}", "*.mp4", progress)
+            made += _submit_and_collect(wf_dir, prefix, "*.mp4", progress)
         _say(progress, f"{i}/{len(clip_paths)} {os.path.basename(clip)}")
     return made
 
@@ -1681,6 +1687,22 @@ def demo():
             # byte-identical to before and ComfyUI's execution cache still hits
             assert json.loads(payloads[0]["comfyworkflowraw"])["1"]["inputs"]["ckpt_name"] \
                 == "ace_step_v1_3.5b_fp16.safetensors", payloads[0]
+            # That assertion alone could not fail for the reason it names:
+            # with no pin there is no address to look up, so the text comes back
+            # unchanged whether the guard is there or not. What the guard is
+            # actually worth is the ASKING -- one ListBackends per workflow on
+            # the path that renders nearly everything. So check the call, and
+            # check identity rather than equality, or a rebuild of the same JSON
+            # would read as "untouched" while busting ComfyUI's execution cache.
+            asked = []
+            globals()["_swarm_call"] = lambda path, payload, timeout=30: (
+                asked.append(path) or {"0": {"status": "running"}})
+            plain = "PLAIN TEXT, NOT EVEN JSON"
+            assert _retarget(plain, None) is plain, \
+                "the free draw came back re-serialised, so the cache key changed"
+            assert not asked, \
+                f"the free draw asked SwarmUI what each box holds: {asked}"
+            globals()["_swarm_call"] = named
             os.remove(got[0])
 
             # 6. a cancel MID-GENERATION reaches the render, and is the one
