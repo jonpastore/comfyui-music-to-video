@@ -32,6 +32,7 @@ import argparse
 import random, json, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import build_refs  # noqa: E402
 from build_refs import workflow  # noqa: E402
 
 # Neutral fallbacks. These describe HOW a character sheet is framed, which is
@@ -168,12 +169,37 @@ def main():
     ap.add_argument("--guardrail", default="", help="tier wording. The pinned clause is "
                                                     "appended regardless; this adds the tier's "
                                                     "own, which an anchor never used to get.")
+    ap.add_argument("--mode", choices=("fast", "quality"), default="fast",
+                    help="fast = the Lightning 4-step LoRA at cfg 1.0, where a NEGATIVE "
+                         "PROMPT IS INERT. quality = LoRA off, more steps, cfg > 1, where "
+                         "the negative actually applies -- the direct lever against colour "
+                         "drift, at roughly a minute a sheet instead of fifteen seconds.")
+    ap.add_argument("--negative", default="", help="negative prompt. Silently dropped in "
+                                                    "fast mode, because ComfyUI does not "
+                                                    "apply it at cfg 1.0 -- see --mode.")
+    ap.add_argument("--ref-method", dest="ref_method", default=None,
+                    choices=list(build_refs.REF_METHODS),
+                    help="how references are folded into the latent. THE reference-adherence "
+                         "knob for this architecture; there is no IP-Adapter to weight.")
+    ap.add_argument("--steps", type=int, default=None)
+    ap.add_argument("--cfg", type=float, default=None)
+    ap.add_argument("--sampler", dest="sampler_name", default=None,
+                    choices=list(build_refs.SAMPLERS))
+    ap.add_argument("--scheduler", default=None, choices=list(build_refs.SCHEDULERS))
+    ap.add_argument("--denoise", type=float, default=None)
+    ap.add_argument("--lora-strength", dest="lora_strength", type=float, default=None,
+                    help="Lightning LoRA weight. Above 0 with cfg > 1 is mush; the modes "
+                         "set it for you.")
     args = ap.parse_args()
+
+    settings = build_refs.sampler_settings(
+        args.mode, steps=args.steps, cfg=args.cfg, sampler_name=args.sampler_name,
+        scheduler=args.scheduler, denoise=args.denoise, lora_strength=args.lora_strength)
 
     images = [x.strip() for x in args.images.split(",") if x.strip()]
     scene = {"image_prompt": args.prompt.strip() or prompt_for(
                  args.view, load_anchor(args.profile), len(images)),
-             "negative_prompt": ""}
+             "negative_prompt": args.negative.strip()}
     os.makedirs(args.outdir, exist_ok=True)
     # A RANDOM base unless one is pinned. This was `4200 + k * 137`, a fixed
     # sequence, so every anchor job this studio has ever run used the same six
@@ -205,13 +231,18 @@ def main():
                       images[1] if len(images) > 1 else None, "empty",
                       args.width, args.height, seed, "", args.guardrail,
                       extra_refs=[(f"reference {i + 3}", img, "")
-                                  for i, img in enumerate(images[2:])])
+                                  for i, img in enumerate(images[2:])],
+                      settings=settings, ref_method=args.ref_method)
         wf["18"] = {"class_type": "SaveImage", "inputs": {
             "images": ["17", 0],
             "filename_prefix": f"{args.prefix}/{args.view}_s{seed}"}}
         json.dump(wf, open(f"{args.outdir}/{args.view}_{k:02d}_s{seed}.json", "w"))
+    per = 15 if settings["lora_strength"] else 60
+    note = "" if build_refs.negative_applies(settings) else \
+        " -- negative prompt INERT at cfg 1.0, use --mode quality for it to apply"
     print(f"{args.n} {args.view} anchor candidates -> {args.outdir} "
-          f"({args.width}x{args.height}, ~{args.n * 15}s to render)")
+          f"({args.width}x{args.height}, {args.mode} mode: {settings['steps']} steps "
+          f"cfg {settings['cfg']}, ~{args.n * per}s to render){note}")
 
 
 if __name__ == "__main__":

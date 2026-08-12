@@ -354,8 +354,20 @@ def collect(prefix_dir, pattern="*.png"):
 MAX_ANCHOR_REFS = 3
 
 
+# What the anchor form may send through to make_anchor.py. Named here so the
+# route, the form and the renderer cannot drift apart about which knobs exist.
+# key -> the flag make_anchor.py actually declares. An explicit map, not
+# k.replace("_", "-"): that rule gives --sampler-name, which argparse rejects,
+# and the failure would land at render time on a job the form said was fine.
+ANCHOR_RENDER_FLAGS = {"mode": "--mode", "negative": "--negative",
+                       "ref_method": "--ref-method", "steps": "--steps",
+                       "cfg": "--cfg", "sampler_name": "--sampler",
+                       "scheduler": "--scheduler", "denoise": "--denoise"}
+ANCHOR_RENDER_KEYS = tuple(ANCHOR_RENDER_FLAGS)
+
+
 def gen_anchor(images, view="front", n=8, progress=None, prefix=None, profile=None,
-               guard="", prompt=""):
+               guard="", prompt="", render=None):
     """images: an unordered list of local reference paths, 0-3 used.
 
     Not face-then-outfit. One photograph often carries both, and demanding they
@@ -375,8 +387,18 @@ def gen_anchor(images, view="front", n=8, progress=None, prefix=None, profile=No
                  f"-- the model conditions on no more than that")
     names = [install_input(p) for p in images[:MAX_ANCHOR_REFS]]
     prefix = prefix or "anchor_v2"  # matches make_anchor.py's own default
+    # Render settings, straight through to the CLI. Absent means make_anchor's
+    # own defaults, which are exactly today's behaviour -- this cannot change a
+    # render nobody asked to change.
+    render = {k: v for k, v in (render or {}).items()
+              if k in ANCHOR_RENDER_KEYS and v not in (None, "")}
+    flags = []
+    for k, v in sorted(render.items()):
+        flags += [ANCHOR_RENDER_FLAGS[k], str(v)]
+    if render and progress:
+        progress("render settings: " + ", ".join(f"{k}={v}" for k, v in sorted(render.items())))
     args = ["--images", ",".join(names),
-            "--n", str(n), "--view", view, "--prefix", prefix,
+            "--n", str(n), "--view", view, "--prefix", prefix, *flags,
             # the TIER's wording. An anchor was previously built with guard=""
             # -- it got PINNED and nothing else, which is why a nude anchor for
             # an adult tier had no wording permitting it.

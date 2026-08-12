@@ -27,6 +27,64 @@ from build_song import (allocate, audio_duration, shot_directive, sname,
 STEPS, CFG = 4, 1.0
 SHIFT = 3.1
 
+# Two render modes, and the difference between them is not a preference.
+#
+# FAST is what this pipeline has always done: the Lightning 4-step LoRA at
+# cfg 1.0. At cfg 1.0 there is NO classifier-free guidance, so the negative
+# conditioning is not applied at all -- a negative prompt in this mode is inert,
+# which is why the anti-drift wording has always had to live in the POSITIVE.
+#
+# QUALITY exists because a negative prompt is the direct lever against the
+# colour drift this pipeline actually suffers from (white/cream tails, lighter
+# patches, human skin on fur). It needs cfg > 1, and cfg > 1 needs the Lightning
+# LoRA OUT of the way: a 4-step distillation driven at cfg 4.5 produces mush.
+# So the mode drops the LoRA to 0 and pays for it in steps -- roughly a minute a
+# sheet instead of fifteen seconds.
+#
+# Anything in between is available through the individual knobs; these are the
+# two points worth having names.
+FAST = {"steps": STEPS, "cfg": CFG, "sampler_name": "euler", "scheduler": "simple",
+        "denoise": 1.0, "lora_strength": 1.0}
+QUALITY = {"steps": 28, "cfg": 4.5, "sampler_name": "dpmpp_2m", "scheduler": "karras",
+           "denoise": 1.0, "lora_strength": 0.0}
+# Every option the KSampler on this box actually accepts is far longer than this;
+# these are the ones worth offering, and each was checked against
+# /object_info/KSampler rather than recalled.
+SAMPLERS = ("euler", "euler_ancestral", "dpmpp_2m", "dpmpp_2m_sde", "dpmpp_3m_sde",
+            "uni_pc", "ddim", "res_multistep")
+# FluxKontextMultiReferenceLatentMethod's own options, read off
+# /object_info on this box. index_timestep_zero is the long-standing default and
+# stays last so it remains the fallback for anything unrecognised.
+REF_METHODS = ("offset", "index", "uxo/uno", "index_timestep_zero")
+SCHEDULERS = ("simple", "karras", "normal", "sgm_uniform", "beta", "exponential")
+
+
+def sampler_settings(mode="fast", **over):
+    """FAST/QUALITY with individual overrides applied on top.
+
+    Returns a plain dict so a caller can show the user exactly what will be sent
+    -- the settings are part of what the prompt preview has to be honest about.
+    """
+    out = dict(QUALITY if str(mode).lower() == "quality" else FAST)
+    for k, v in over.items():
+        if v is not None and k in out:
+            out[k] = v
+    return out
+
+
+def negative_applies(settings):
+    """Whether a negative prompt does anything at these settings.
+
+    The single most important thing this module can tell a UI. A negative field
+    that is silently ignored is the defect this codebase has found six times --
+    an editor promising what the renderer does not produce -- so the answer is
+    computed from the SAME numbers the workflow is built with, not asserted.
+    """
+    try:
+        return float(settings.get("cfg", CFG)) > 1.0
+    except (TypeError, ValueError):
+        return False
+
 
 def single_subject(character=""):
     """Positive anti-duplicate clause, worded from the storyboard's OWN
@@ -128,7 +186,8 @@ def cast_clause(slots):
 
 
 def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
-             guard="", world="", character="", body="", extra_refs=()):
+             guard="", world="", character="", body="", extra_refs=(),
+             settings=None, ref_method=None):
     """guard: tier wording. The pinned clause is appended regardless, HERE --
     this is the chokepoint every storyboard reaches on its way to the image
     model, whoever generated it. Storing the clause in the storyboard JSON only
@@ -162,6 +221,19 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
     pos += cast_clause(slots)
     pos = guardrail.build_prompt(pos, guard, f"scene {scene.get('scene_number','?')}")
     neg = scene.get("negative_prompt", "")
+    # How the reference images are folded into the latent -- THE reference-
+    # adherence knob for this architecture. Qwen-Image-Edit conditions on
+    # references natively through TextEncodeQwenImageEditPlus(image1..3); there
+    # is no IP-Adapter to weight, so this and the prompt are the levers.
+    ref_mode = ref_method if ref_method in REF_METHODS else REF_METHODS[-1]
+    cfg_set = dict(FAST) if settings is None else dict(settings)
+    for k, v in FAST.items():
+        cfg_set.setdefault(k, v)          # a partial dict is still a whole workflow
+    # A negative at cfg 1.0 is not applied by ComfyUI at all. Dropping it HERE,
+    # where the cfg is known, means a stored negative can never look like it took
+    # effect: what reaches the model is what the preview shows.
+    if neg and not negative_applies(cfg_set):
+        neg = ""
 
     wf = {
         "1": {"class_type": "UNETLoader", "inputs": {
@@ -169,7 +241,10 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
         "2": {"class_type": "LoraLoaderModelOnly", "inputs": {
             "model": ["1", 0],
             "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
-            "strength_model": 1.0}},
+            # 0 in QUALITY mode: the Lightning distillation is what makes 4 steps
+            # possible and what makes cfg > 1 unusable, so raising guidance means
+            # taking it out rather than fighting it.
+            "strength_model": float(cfg_set["lora_strength"])}},
         "3": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["2", 0], "shift": SHIFT}},
         "4": {"class_type": "CFGNorm", "inputs": {"model": ["3", 0], "strength": 1.0}},
         "5": {"class_type": "CLIPLoader", "inputs": {
@@ -207,9 +282,9 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
     wf["11"] = {"class_type": "TextEncodeQwenImageEditPlus", "inputs": dict(enc, prompt=pos)}
     wf["12"] = {"class_type": "TextEncodeQwenImageEditPlus", "inputs": dict(enc, prompt=neg)}
     wf["13"] = {"class_type": "FluxKontextMultiReferenceLatentMethod", "inputs": {
-        "conditioning": ["11", 0], "reference_latents_method": "index_timestep_zero"}}
+        "conditioning": ["11", 0], "reference_latents_method": ref_mode}}
     wf["14"] = {"class_type": "FluxKontextMultiReferenceLatentMethod", "inputs": {
-        "conditioning": ["12", 0], "reference_latents_method": "index_timestep_zero"}}
+        "conditioning": ["12", 0], "reference_latents_method": ref_mode}}
 
     if latent_mode == "empty" or not (base or anchor):
         # free-size generation: gives a true 16:9 frame. Also the only option
@@ -222,9 +297,11 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
         wf["15"] = {"class_type": "VAEEncode", "inputs": {"pixels": src, "vae": ["6", 0]}}
 
     wf["16"] = {"class_type": "KSampler", "inputs": {
-        "model": ["4", 0], "seed": seed, "steps": STEPS, "cfg": CFG,
-        "sampler_name": "euler", "scheduler": "simple",
-        "positive": ["13", 0], "negative": ["14", 0], "latent_image": ["15", 0], "denoise": 1.0}}
+        "model": ["4", 0], "seed": seed,
+        "steps": int(cfg_set["steps"]), "cfg": float(cfg_set["cfg"]),
+        "sampler_name": cfg_set["sampler_name"], "scheduler": cfg_set["scheduler"],
+        "positive": ["13", 0], "negative": ["14", 0], "latent_image": ["15", 0],
+        "denoise": float(cfg_set["denoise"])}}
     wf["17"] = {"class_type": "VAEDecode", "inputs": {"samples": ["16", 0], "vae": ["6", 0]}}
     return wf
 

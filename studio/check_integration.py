@@ -301,6 +301,31 @@ if video_fx and mixer:
     check("duck and layer are wired at the join, not just validated",
           _join_effects_are_wired_everywhere_or_nowhere)
 
+def _anchor_render_flags_exist():
+    """Every flag pipeline can emit must be one make_anchor.py declares.
+
+    k.replace("_", "-") gives --sampler-name; the CLI declares --sampler. That
+    mistake is invisible until a render runs, on a job the form has already
+    accepted -- the editor promising what the renderer will not take.
+    """
+    import re
+    src = os.path.join(os.path.dirname(HERE), "make_anchor.py")
+    declared = set(re.findall(r'ap\.add_argument\("(--[a-z-]+)"', open(src).read()))
+    emitted = set(pipeline.ANCHOR_RENDER_FLAGS.values())
+    missing = sorted(emitted - declared)
+    assert not missing, f"pipeline emits flags make_anchor.py does not accept: {missing}"
+    # and the modes the form offers are the ones build_refs implements
+    sys.path.insert(0, os.path.dirname(HERE))
+    import build_refs
+    assert build_refs.negative_applies(build_refs.sampler_settings("quality")), \
+        "quality mode must be a cfg where the negative prompt actually applies"
+    assert not build_refs.negative_applies(build_refs.sampler_settings("fast")), \
+        "fast mode is cfg 1.0, where a negative is inert -- saying otherwise is the lie"
+
+
+if pipeline:
+    check("anchor render flags exist in make_anchor.py", _anchor_render_flags_exist)
+
 arc = optional_import("arc")
 chat = optional_import("chat")
 creds = optional_import("creds")
