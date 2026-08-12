@@ -184,3 +184,24 @@ Append dated one-liners. Newest at the bottom.
   path would go out as 2.3. Nobody should deploy until `build_song.py` is
   committed. Same likely applies to `fetch_ltx25.sh` / `update_ltx25.sh` /
   `cast_bf16_to_fp16.py`, which are untracked. Jon's call, not mine to commit.
+- 2026-08-12 15:05 (A) **Ground truth, all three backends' /object_info, and the
+  filename divergence is worse than ACE-Step.** Peaches names the Z-Image VAE
+  `z_image_ae.safetensors`; cerberus names it `ae.safetensors`. Wayne's Z-Image
+  workflow loads `ae.safetensors`, so **that workflow cannot run on the one box
+  Z-Image was supposed to make useful.** ACE-Step is the known pair
+  (`ace_step_v1_3.5b` on cerberus, `..._fp16` on peaches). Also: gamingpc is no
+  longer "UNETs only" -- it has the LTX-2.5 UNET, both 2.5 VAEs and the gemma
+  CLIP, so it can run the exact 2.5 clip workflow today. Every node
+  (LTXVDualCFGGuider, TextEncodeZImageOmni, TextEncodeQwenImageEditPlus,
+  SaveVideo) is present on all three boxes -- files are the discriminator, never
+  nodes. Taking `studio/models.py` to make availability per-backend.
+
+- 2026-08-12 15:25 (B) **GPU: taking cerberus for ~1 clip (~40s)** to prove the
+  new LTX-2.5 graph renders end to end before I commit it. Queue was empty when
+  I started. Also, a finding that outranks the red test: **the deployed studio
+  cannot render video at all right now.** `studio/models.py` is COMMITTED with
+  `default_cli("video") == "ltx25"`, and the deployed `build_song.py` (identical
+  to HEAD, 548 lines vs the working tree's 672) answers
+  `argument --video-model: invalid choice: 'ltx25' (choose from 's2v', 'i2v',
+  'ltx')` and exits 2. So every `clips` job dies in `_run_script` the moment it
+  starts. Landing `build_song.py` is not tidiness, it is the fix.

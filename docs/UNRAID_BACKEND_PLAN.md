@@ -192,7 +192,160 @@ Phases, each independently useful:
    pool, a video job can land on it. Whether SwarmUI can express "this backend
    only does these models" needs checking before joining, or the fast boxes get
    starved by jobs queued behind a card that cannot do them.
-3. **Array or cache for the models?** Cache, on speed grounds — but 837 GB is
-   shared with everything else Unraid caches, and Unraid's mover may relocate
-   files written to a share with a cache-then-array policy. The appdata share's
-   policy needs checking rather than assuming.
+3. ~~**Array or cache for the models?**~~ **ANSWERED 2026-08-12.** Cache, on a
+   share of their own. The policies were read rather than assumed: `appdata` is
+   `shareUseCache="prefer"` (the mover pulls array→cache, so files written there
+   do stay on the pool) and `system` is `"only"`. Models now live on a dedicated
+   **`models`** share at `shareUseCache="only"`, `shareCachePool="cache"` —
+   `only` means the mover has no array copy to make and cannot relocate them at
+   all, which `prefer` does not guarantee if the pool ever fills. It is also not
+   `appdata`, so an appdata-backup plugin (none installed today) would never try
+   to back up a hundred gigabytes of weights. Verified: a write through
+   `/mnt/user/models` lands on `/mnt/cache/models` (nvme). 837 GB free, and
+   `shareExport="-"` keeps it off SMB/NFS.
+
+   This is also why the Docker vDisk did NOT need resizing. Weights belong on a
+   bind mount, not inside `docker.img` — the vDisk holds image layers, and at
+   the time of writing it was 10.4 GB used of 20 GB with six images. Growing it
+   to 120 GB to store models would have been solving the wrong problem, at the
+   cost of recreating every container.
+
+---
+
+## 8 · Postmortem: the 2026-08-12 docker vDisk resize
+
+**What was wanted:** grow the Docker vDisk from 20 GB to 120 GB, to make room
+for text and music models.
+
+**What happened:** the box became unreachable — no ssh, no ping — and came back
+with a stopped array and a pending dual-parity check.
+
+**What the evidence says.** `/boot/logs/syslog-previous` from that boot:
+
+    07:36:55 emhttpd: shcmd (128): umount /mnt/cache
+    07:36:55 emhttpd: shcmd (128): exit status: 32
+    07:36:55 emhttpd: Retry unmounting disk share(s)...
+    ... the same, every 5 s, ten times ...
+    07:37:45 rc.6: Sending all processes the SIGTERM signal
+
+Exit status 32 is "target is busy". `/mnt/cache` would not unmount, Unraid
+retried for ~45 s, then the shutdown was forced through. That is why the array
+came back unclean (`/boot/config/forcesync` present) and why `mdResyncAction`
+is now `check P Q` against 11.7 TB. The lost ssh and ping were the shutdown
+tearing down `eth0` — `rc.6` had already reached `ip link set eth0 down` — not
+a crash and not a network fault. The shutdown itself was ORDERLY; it was the
+array stop that hung.
+
+**Why /mnt/cache was busy.** `DOCKER_IMAGE_FILE=/mnt/user/system/docker/docker.img`
+— the vDisk lives on the cache pool. Stopping the ARRAY to resize it means
+unmounting the pool Docker is running out of. Anything still holding the pool
+(the Docker service, a container, or a shell whose cwd is under /mnt/cache)
+pins it, and Unraid will not force an unmount.
+
+### The lesson, and it is the whole point of this section
+
+**Resizing the Docker vDisk does NOT require stopping the array.** The
+supported path stops only the Docker *service*:
+
+1. Settings → Docker → **Enable Docker: No** → Apply. The array stays started.
+2. The vDisk size field and a **Delete vDisk file** control become editable
+   (verified in this box's own `DockerSettings.page`, lines 181 and 192).
+3. Set size, delete the old vDisk, Apply.
+4. **Enable Docker: Yes.** A fresh image is created at the new size.
+5. Reinstall containers from **Apps → Previous Apps** — templates live on the
+   USB flash (`/boot/config/plugins/dockerMan/templates-user/`) and survive.
+
+Changing the size alone does not grow an existing image; the vDisk has to be
+recreated. That is why step 3 deletes it.
+
+**Better still: there is no need for a fixed size at all.** Unraid 7.3 supports
+`DOCKER_IMAGE_TYPE='folder'` — a directory data-root instead of a vDisk, which
+grows as needed and can never hit this wall again.
+
+**And the models do not belong inside it either way.** A vDisk holds image
+layers. Model weights belong on a bind-mounted path on the cache pool, so they
+are not in the thing being resized, are not lost when the vDisk is recreated,
+and do not have to be sized for in advance.
+
+### Access is safe during this — verified, not assumed
+
+The obvious fear is losing the remote path. It does not apply here:
+
+| | |
+|---|---|
+| `tailscaled` | HOST process, `/usr/local/sbin/tailscaled`, state on `/boot/config/plugins/tailscale/state` (USB flash). The Unraid **plugin**, not a container — `docker ps` matches nothing. |
+| `sshd` | HOST process, listening on `100.95.184.29:22` and `192.168.1.99:22`. |
+
+Neither is a container, so stopping the Docker service cannot take either down.
+Note that a tailnet ssh login arrives via `tailscaled be-child ssh` — Tailscale
+SSH, not sshd — but tailscaled is still a host process, so the conclusion holds.
+
+### One correction, and one real risk
+
+1. **`DOCKER_CUSTOM_NETWORKS="wlan0 "` is CORRECT — do not "fix" it.** It reads
+   like an inclusion list naming a dead interface. It is the opposite: an
+   EXCLUSION list. `/etc/rc.d/rc.docker:504` is
+
+       for NETWORK in $INCLUDE; do
+         if [[ ! $DOCKER_CUSTOM_NETWORKS =~ "$NETWORK " ]]; then
+           # ...create the network...
+
+   and `DockerSettings.page:135` builds the value from `implode(' ', $unset)` —
+   the interfaces UN-ticked in the GUI. So the setting says "do not create a
+   custom network on wlan0", which is right for a down, unused NIC. `eth0` is
+   absent from the list precisely because its macvlan SHOULD be created, and
+   that is the network `pihole-v6-unbound` runs on at 192.168.1.24. Editing this
+   to "include eth0" would either build a macvlan on a dead WiFi interface or
+   remove the network pihole depends on.
+
+2. **The real risk stands:** `docker network inspect eth0` reports
+   `driver=macvlan parent=vhost0`, and `vhost0@eth0` carries the same
+   192.168.1.99 as the management interface (from `DOCKER_ALLOW_ACCESS="yes"`).
+   macvlan on the management link is the known Unraid hard-lock class, and a
+   Docker restart is when it bites. Switching the custom network type to ipvlan
+   is the documented mitigation — but note pihole holds a fixed IP on that
+   network, so the change is not free and should be made deliberately, not as a
+   side effect of something else.
+
+### Sequel, same day
+
+The array was started and the correcting parity check (`check P Q`, 11.7 TB) is
+running. It does NOT conflict with Docker work: `docker.img` lives on the nvme
+pool (`/mnt/cache/system/docker/docker.img`) while the check reads the array
+disks, so there is no contention — measured, not assumed.
+
+Model WEIGHTS went to a dedicated cache-only `models` share (§7 q3), which needs
+no Docker at all. But the vDisk did have to grow after all — not for the models,
+for the RUNTIME. Measured rather than guessed, by pulling it on a box with room:
+
+    mmartial/comfyui-nvidia-docker:ubuntu24_cuda12.6-latest
+      4.7 GB compressed / 31 layers  ->  14.5 GB on disk
+
+against 9.44 GiB free. Image layers live in Docker's data-root by definition; no
+bind mount can hold them, so no volume arrangement avoids this.
+
+### Growing docker.img ONLINE, with nothing stopped
+
+`docker.img` is btrfs on a loop device, and btrfs grows online. This took
+seconds, restarted nothing, and left all six containers serving:
+
+    IMG=/mnt/cache/system/docker/docker.img
+    stat -c %s "$IMG"                      # 21474836480 -- and REFUSE if >= target
+    truncate -s $((120*1024*1024*1024)) "$IMG"   # sparse growth, no data written
+    losetup -c /dev/loop2                  # make the loop device see the new size
+    btrfs filesystem resize max /var/lib/docker  # grow the fs inside
+
+    Device size:  20.00GiB -> 120.00GiB
+    Free:          9.44GiB -> 109.44GiB
+    physically allocated on the pool: still 20G (sparse, grows on demand)
+
+Then `DOCKER_IMAGE_SIZE="120"` in `/boot/config/docker.cfg` so the GUI agrees
+with reality (backup kept alongside it). The size is only read when an image is
+CREATED, so the edit is inert until then — but a stale value there is a trap for
+whoever next presses Apply.
+
+**The guard matters more than the commands.** `truncate` downwards would destroy
+the filesystem, so the script refuses unless the target exceeds the current size.
+
+This is not the GUI path, which deletes and recreates the vDisk and therefore
+every container. It is the one that costs nothing.

@@ -226,6 +226,123 @@ LTX_STEPS = 8
 LTX_MAX_SHIFT, LTX_BASE_SHIFT = 2.05, 0.95
 
 
+# ---- LTX-2.5 -------------------------------------------------------------
+# NOT a retarget of the 2.3 constants: 2.5 changed the graph, not just the
+# weights, and every difference below was read off ComfyUI's own shipped
+# template (Comfy-Org/workflow_templates video_ltx2_5_i2v.json) rather than
+# guessed at.
+#
+#   - the text encoder loads through a PLAIN CLIPLoader with type "ltxv".
+#     2.3 needed LTXAVTextEncoderLoader because its projection was a second
+#     file in checkpoints/; 2.5's encoder is "with-proj" -- the projection is
+#     baked in and there is no second file.
+#   - the audio VAE loads through a plain VAELoader, not LTXVAudioVAELoader,
+#     so it does NOT need to sit in checkpoints/ the way 2.3's did.
+#   - sampling is SamplerCustomAdvanced + LTXVDualCFGGuider + ManualSigmas,
+#     not SamplerCustom + LTXVScheduler, and there is no ModelSamplingLTXV.
+LTX25_MODEL = "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors"
+# The nvfp4 build is downloaded alongside it (17.4 GiB against 20.03) as the
+# fallback for the 24 GB laptop card. Swap LTX25_MODEL to it if int8 will not fit.
+LTX25_MODEL_NVFP4 = "ltx-2.5-22b-distilled-transformer-nvfp4.safetensors"
+LTX25_TEXT_ENCODER = "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors"
+LTX25_VIDEO_VAE = "ltx-2.5-video-vae-bf16.safetensors"
+LTX25_AUDIO_VAE = "ltx-2.5-audio-vae-bf16.safetensors"
+
+# Verbatim from the template's stage-1 schedule: 9 values, so 8 steps, and it
+# already terminates at 0.0. The template splits the render into a half-res base
+# pass and an upsampled refine pass; this pipeline renders once at W x H, which
+# is what the 2.3 path measured at and what keeps clip timing comparable.
+LTX25_SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+LTX25_IMG_COMPRESSION = 18       # LTXVPreprocess, template value
+LTX25_VIDEO_CFG = LTX25_AUDIO_CFG = 1.0
+
+# Same 8n+1 latent rule as 2.3, so the same 81 frames at 16.8312 fps: exactly
+# one CHUNK. The clip allocation must not move -- every approved reference frame
+# is keyed to a clip index.
+LTX25_LEN = LTX_LEN
+LTX25_FPS = LTX_FPS
+
+
+def ltx25_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard, with_audio=True):
+    """LTX-2.5, the audio-conditioned path -- same contract as ltx_workflow.
+
+    The audio is encoded from the master mp3 and fused as a joint AV latent so
+    it conditions the MOTION; only the video half is decoded, because the mp3 is
+    laid over the assembled timeline once and per-clip audio would otherwise
+    drift. That is unchanged from 2.3. What changed is the node graph; see the
+    constants above.
+    """
+    motion = scene.get("video_motion_prompt") or scene.get("motion", "")
+    pos = (f"{shot_directive(scene, i)} {char_lock} {world_lock} Motion: {motion} "
+           f"Camera: {scene.get('camera','')} Lighting: {scene.get('lighting','')}")
+    pos = guardrail.build_prompt(pos, guard, f"scene {i}")
+    start = round(i * CHUNK, 4)
+
+    wf = {
+        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": LTX25_MODEL,
+                                                      "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": LTX25_TEXT_ENCODER, "type": "ltxv", "device": "default"}},
+        "3": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": pos}},
+        "4": {"class_type": "CLIPTextEncode", "inputs": {
+            "clip": ["2", 0], "text": scene.get("negative_prompt", "")}},
+        "5": {"class_type": "VAELoader", "inputs": {"vae_name": LTX25_VIDEO_VAE}},
+        "6": {"class_type": "VAELoader", "inputs": {"vae_name": LTX25_AUDIO_VAE}},
+        "7": {"class_type": "LoadImage", "inputs": {"image": ref_image}},
+        "8": {"class_type": "ImageScale", "inputs": {
+            "image": ["7", 0], "upscale_method": "lanczos", "width": W, "height": H,
+            "crop": "center"}},
+        # 2.5 puts a compression preprocess in front of the conditioning image;
+        # the template runs it on every path, including i2v.
+        "9": {"class_type": "LTXVPreprocess", "inputs": {
+            "image": ["8", 0], "img_compression": LTX25_IMG_COMPRESSION}},
+        "10": {"class_type": "EmptyLTXVLatentVideo", "inputs": {
+            "width": W, "height": H, "length": LTX25_LEN, "batch_size": 1}},
+        # strength 1.0, not the template's 0.7: that 0.7 belongs to its half-res
+        # base pass. Here the approved reference frame IS the first frame, which
+        # is the whole mechanism carrying the character into the clip.
+        "11": {"class_type": "LTXVImgToVideoInplace", "inputs": {
+            "vae": ["5", 0], "image": ["9", 0], "latent": ["10", 0],
+            "strength": 1.0, "bypass": False}},
+        "12": {"class_type": "LTXVConditioning", "inputs": {
+            "positive": ["3", 0], "negative": ["4", 0], "frame_rate": round(LTX25_FPS, 4)}},
+    }
+
+    latent = ["11", 0]
+    if with_audio:
+        wf["13"] = {"class_type": "LoadAudio", "inputs": {"audio": audio_file}}
+        wf["14"] = {"class_type": "TrimAudioDuration", "inputs": {
+            "audio": ["13", 0], "start_index": start, "duration": round(CHUNK, 4)}}
+        wf["15"] = {"class_type": "LTXVAudioVAEEncode", "inputs": {
+            "audio": ["14", 0], "audio_vae": ["6", 0]}}
+        wf["16"] = {"class_type": "LTXVConcatAVLatent", "inputs": {
+            "video_latent": ["11", 0], "audio_latent": ["15", 0]}}
+        latent = ["16", 0]
+
+    # DualCFGGuider takes both halves of LTXVConditioning: slot 0 positive,
+    # slot 1 negative.
+    wf["17"] = {"class_type": "LTXVDualCFGGuider", "inputs": {
+        "model": ["1", 0], "positive": ["12", 0], "negative": ["12", 1],
+        "video_cfg": LTX25_VIDEO_CFG, "audio_cfg": LTX25_AUDIO_CFG}}
+    wf["18"] = {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler_ancestral"}}
+    wf["19"] = {"class_type": "ManualSigmas", "inputs": {"sigmas": LTX25_SIGMAS}}
+    wf["20"] = {"class_type": "RandomNoise", "inputs": {"noise_seed": 1000 + i}}
+    wf["21"] = {"class_type": "SamplerCustomAdvanced", "inputs": {
+        "noise": ["20", 0], "guider": ["17", 0], "sampler": ["18", 0],
+        "sigmas": ["19", 0], "latent_image": latent}}
+
+    if with_audio:
+        wf["22"] = {"class_type": "LTXVSeparateAVLatent", "inputs": {"av_latent": ["21", 0]}}
+        sampled = ["22", 0]
+    else:
+        sampled = ["21", 0]
+
+    wf["23"] = {"class_type": "VAEDecode", "inputs": {"samples": sampled, "vae": ["5", 0]}}
+    wf["24"] = {"class_type": "CreateVideo", "inputs": {
+        "images": ["23", 0], "fps": round(LTX25_FPS, 4)}}
+    return wf
+
+
 def ltx_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard, with_audio=True):
     """LTX-2.3, the audio-conditioned path.
 
@@ -328,11 +445,12 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
     neg = scene.get("negative_prompt", "")
     start = round(i * CHUNK, 4)
 
-    if video_model == "ltx":
-        # a separate builder: LTX shares none of WAN's node graph, and folding
-        # two unrelated graphs into one function with branches everywhere is how
-        # both of them end up subtly wrong
-        return ltx_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard)
+    if video_model in ("ltx", "ltx25"):
+        # a separate builder per family: LTX shares none of WAN's node graph, and
+        # 2.5 shares little enough of 2.3's that folding them together would put
+        # branches everywhere -- which is how all three end up subtly wrong.
+        build = ltx25_workflow if video_model == "ltx25" else ltx_workflow
+        return build(i, scene, ref_image, audio_file, char_lock, world_lock, guard)
 
     wf = {
         "4":  {"class_type": "CLIPLoader", "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan", "device": "default"}},
@@ -423,9 +541,10 @@ def main():
     ap.add_argument("--audio", required=True, help="path to the mp3 (for duration)")
     ap.add_argument("--audio-name", help="filename as it appears in ComfyUI/input (defaults to basename of --audio)")
     ap.add_argument("--slug", required=True, help="short song id, e.g. rear_entrance")
-    ap.add_argument("--video-model", choices=["s2v", "i2v", "ltx"], default="s2v",
-                    help="s2v (default) is driven by the audio -- beat sync and mouth "
-                          "movement. i2v is prompt-driven only and has NO audio input.")
+    ap.add_argument("--video-model", choices=["s2v", "i2v", "ltx", "ltx25"], default="ltx25",
+                    help="ltx25 (default) and ltx are the audio-conditioned LTX paths -- "
+                          "2.5 and 2.3 respectively. s2v is WAN's audio-driven path (beat "
+                          "sync and mouth movement). i2v is prompt-driven only, NO audio.")
     ap.add_argument("--ref-motion", help="s2v only: a motion-style reference clip (path)")
     ap.add_argument("--control-video", help="s2v only: a driving clip for pose/structure (path)")
     ap.add_argument("--refine", action="store_true",
@@ -454,9 +573,14 @@ def main():
         wf = workflow(i, scene, ref, audio_name, char, world, guard,
                       video_model=args.video_model, ref_motion=args.ref_motion,
                       control_video=args.control_video, refine=args.refine)
-        # the CreateVideo node differs per family (WAN 17, LTX 21), so the save
-        # is attached to whichever one this graph actually built
-        video_node = "21" if args.video_model == "ltx" else "17"
+        # Attach the save to whichever node actually produces the VIDEO, found by
+        # class rather than by a per-family id table. That table was
+        # `"21" if video_model == "ltx" else "17"`, so ltx25 silently took the
+        # WAN id and every workflow was rejected with
+        #   received_type(GUIDER) mismatch input_type(VIDEO)
+        # -- a whole render's worth of JSONs, refused one at a time. Every new
+        # family would have re-earned that bug; asking the graph does not.
+        video_node = next(k for k, n in wf.items() if n["class_type"] == "CreateVideo")
         wf["99"] = {"class_type": "SaveVideo", "inputs": {
             "video": [video_node, 0],
             "filename_prefix": f"{args.slug}/clip_{i:03d}",

@@ -1,5 +1,40 @@
 # ethan-wsl as a swarm backend — resume after reboot
 
+> **UPDATE 2026-08-12 (day 9) — read this before the rest.**
+>
+> Resolved since this was written:
+> - `UNBLOCK.md` is **deleted**. Both its items were verified dead: `jon` is in
+>   the docker group and docker works over ssh, and nvidia-container-toolkit is
+>   NOT needed — `/dev/dxg` passthrough gives the container the RTX 5080
+>   (verified: `NVIDIA GeForce RTX 5080, 16303 MiB, 610.88`). `nvidia-smi` is not
+>   on PATH under WSL passthrough; use `/usr/lib/wsl/lib/nvidia-smi`.
+> - **Passwordless sudo now works** (the "Loose end" below is done).
+> - **SSH keys are meshed and verified agent-free**: gamingpc<->ethan and
+>   cerberus<->ethan. Ethan had no key at all; one was generated. Test any
+>   cross-node access with `-o ForwardAgent=no` — agent forwarding hides a
+>   missing key and the failure only appears when something runs detached.
+> - **DNS is fixed** with a `resolved.conf.d` drop-in (`DNS=1.1.1.1 1.0.0.1`).
+>   MagicDNS resolved tailnet names but had no global nameservers to forward
+>   public queries to. The drop-in keeps MagicDNS working.
+>
+> **The new finding, which supersedes "this box will keep dropping out":** the box
+> runs **Proton VPN**, and it captures all traffic. Confirmed on the host —
+> `ProtonVPN.Client` and `ProtonVPNService` running, `0.0.0.0/1` + `128.0.0.0/1`
+> routed to `ProTUN`, 5.26 GB received on that adapter, egress IP
+> `134.82.68.167` = `AS208172 Proton AG, Miami`. That is why throughput is
+> ~5 Mbit/s AND why Tailscale relays via DERP `"mia"` instead of peering
+> directly: a VPN breaks UDP hole punching. One cause, both symptoms.
+>
+> **Do not disable it** — it is Ethan's machine and his choice. Ask for split
+> tunnelling (exclude Docker/WSL/Tailscale) if the box is wanted seriously.
+>
+> **Its value dropped.** The one thing it could do that peaches could not was
+> bf16 (ACE-Step). `cast_bf16_to_fp16.py` removed that distinction, so peaches —
+> always-on, LAN-attached — now does music too. Treat ethan as opportunistic
+> capacity and design nothing that depends on it. Build is stopped at
+> 393 MB / 2.06 GB with layers cached; resume with
+> `cd /home/jon/comfy-backend && docker compose build`.
+
 Setting up Ethan's machine as a second ComfyUI backend for the SwarmUI instance
 on cerberus. The build was interrupted when the machine went offline mid-way
 (tailscale showed both `ethan-wsl` and `desktop-695nkr4` drop together, so the
