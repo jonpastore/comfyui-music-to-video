@@ -1,0 +1,821 @@
+Below is the skeptical version. I’m assuming: single user, no auth, tailnet-only, SQLite, ffmpeg is the source of truth for rendering, browser UI is for editing/preview/control only.
+
+---
+
+# 1) Browser DAW-like timeline editor for sets
+
+## A. Requirements you’ve probably missed
+
+### Canonical timeline model
+You need a **single canonical edit model** that is not “whatever the UI drew” and not “raw ffmpeg text”. Define it first.
+
+Minimum entities:
+- `SetTimeline`
+- `Track` / `Lane`
+- `ClipPlacement` with:
+  - source asset id
+  - in-point in source
+  - out-point in source
+  - timeline start
+  - playback rate / time stretch mode
+  - gain
+  - pan or channel routing
+  - mute/solo/bypass
+  - z-order / overlap priority
+- `AutomationLane`
+  - target parameter (`gain`, `pan`, `left_gain`, `right_gain`, `effect param X`)
+  - interpolation mode
+  - points in timeline time
+- `EffectBlock`
+  - effect type
+  - bounded start/end
+  - parameter set
+  - channel/video target
+- `Marker`
+  - beat, section, transition, note
+- `RenderIntent`
+  - sample rate
+  - channel layout
+  - loudness target
+  - preview/full render differences
+
+If this model is weak, round-tripping will rot immediately.
+
+### Timebase and precision rules
+You need explicit rules for:
+- timeline unit: milliseconds is not enough; use samples for audio alignment, plus rational frame time for video
+- fixed project sample rate
+- fixed video fps/rational timebase for previews
+- snap behavior:
+  - beat snap
+  - frame snap
+  - free
+- what happens when clip boundaries land between samples/frames
+
+If not specified, you get off-by-one cuts, drift, and impossible ffmpeg parity.
+
+### Preview vs final render contract
+Browser playback will not behave exactly like ffmpeg output. You need a contract:
+- what preview guarantees
+- which features are approximate in preview
+- what forces server-side pre-render for truthful audition
+
+Examples:
+- simple gain envelopes: can preview in browser
+- exact ffmpeg tempo ramp + crossfade + channel split + effect chain: maybe not
+- video effect lanes synchronized to audio timeline: browser may drift if you try to “live compose” everything
+
+### Automation semantics
+You need to define:
+- interpolation type: step / linear / spline
+- point density limits
+- whether automation is absolute or relative
+- precedence when clip gain + track gain + master gain all exist
+- overlap behavior for multiple automation lanes on same target
+
+### Channel semantics
+“Left/right split” sounds simple but isn’t. Specify:
+- stereo source can be edited as linked stereo, dual mono, or split channels
+- per-channel fades/gain apply pre- or post-effects
+- export downmix/upmix policy
+- pan law if pan exists
+- handling of mono and multichannel assets imported later
+
+### Video-effect lane semantics
+Need a hard rule for:
+- whether effects are clip-local or global timeline overlays
+- whether effects key off absolute set time or clip-local time
+- whether effects attach to audio beat markers, clip boundaries, or explicit keyframes
+- how effects compose when multiple lanes overlap
+
+### Undo/redo and revision boundaries
+This editor needs:
+- transaction-based undo/redo
+- autosave granularity
+- “rendered from revision X” traceability
+
+Without revision ids, debugging ffmpeg mismatches will be miserable.
+
+### Constrained modes: easy / normal / advanced
+These can’t just hide controls. Define capability subsets:
+- Easy: cards only, snap on, no overlap, preset transitions only
+- Normal: clip trimming, fades, track gain, markers, preset effect blocks
+- Advanced: arbitrary automation lanes, channel split, raw effect params, overlap/mix rules
+
+And define **mode downcast rules**:
+- what happens when an advanced project is opened in easy mode?
+- warning only? read-only advanced features? flatten?
+
+### ffmpeg graph serialization format
+Do not round-trip through human-typed filter graph strings alone.
+Need:
+- a structured intermediate representation
+- deterministic compiler to ffmpeg filters
+- parser only for your own emitted subset if you really need reverse import
+
+### Performance budget
+Requirements needed:
+- max set length
+- max concurrent tracks
+- max visible automation points before decimation
+- waveform resolution levels
+- server-side proxy generation policy
+
+### Proxy/cache policy
+For timeline responsiveness:
+- precomputed waveform peaks
+- audio preview proxies
+- low-res H.264 preview proxies for video clips
+- invalidation rules when source or trim changes
+
+### Error surfacing
+Need exact UX for ffmpeg failures:
+- compile-time validation before render
+- exact lane/clip/effect causing invalid graph
+- preservation of failed render command/log
+
+---
+
+## B. Failure modes that bite people
+
+- **UI model diverges from render model.** Browser sounds one way; ffmpeg export sounds another.
+- **Automation point explosion.** Freehand-drawn curves generate thousands of points; ffmpeg expressions become slow or impossible.
+- **Time drift between audio and video preview.** Especially with browser media element playback and manual sync.
+- **Crossfade law mismatch.** Equal-power vs linear fades sound different; users think render is broken.
+- **Scrubbing latency.** If you rely on original media rather than generated peaks/proxies, scrubbing is awful.
+- **Overlapping clip semantics become ambiguous.** Does overlap mix, replace, duck, crossfade, or disallow?
+- **Sample-rate mismatch.** Imported assets at 44.1k/48k create subtle timing bugs unless normalized in model or render path.
+- **Tempo ramp parity issues.** Browser preview may not match ffmpeg `atempo`/rubberband-like behavior; if ffmpeg-only, preview lies.
+- **Video effect timing slips at non-integer frame boundaries.**
+- **Undo stack corruption** when drag operations emit too many micro-events.
+- **Mode complexity debt.** “Easy/normal/advanced” often becomes three partially broken editors unless the same model backs all three.
+- **ffmpeg graph unreadability.** Once effects stack, debugging generated graphs gets nasty fast.
+- **SQLite contention** if waveform generation, autosave, and render jobs all write too often.
+- **State explosion for transitions in sets.** Song-to-song transitions plus clip-level transitions plus set-level overlays stack badly.
+
+---
+
+## C. What NOT to build
+
+- Don’t build a full DAW in the browser.
+- Don’t implement arbitrary Bezier automation first. Start with step + linear.
+- Don’t attempt sample-accurate browser preview for every advanced ffmpeg effect.
+- Don’t support arbitrary raw ffmpeg filter editing in UI v1.
+- Don’t make the browser the source of truth for media processing.
+- Don’t allow unconstrained overlap/effect combinations without explicit semantics.
+- Don’t build collaborative editing, comments, presence, locks.
+- Don’t build a plugin system.
+- Don’t build non-destructive “every possible audio effect”; stay on timeline assembly and the deterministic effects you actually render.
+
+---
+
+# 2) Audio export in WAV, FLAC, Ogg Vorbis
+
+## A. Requirements you’ve probably missed
+
+- Explicit export matrix:
+  - WAV: PCM16? PCM24? float32?
+  - FLAC: 16/24-bit, compression level
+  - Ogg Vorbis: quality scale, not bitrate-only
+- Metadata mapping:
+  - title, artist, album, track number, date, genre, comment, artwork?
+- Loudness policy:
+  - preserve current mix
+  - optional normalization
+  - true peak handling
+- Dither policy when reducing bit depth
+- Sample rate export policy:
+  - preserve project SR or allow conversion
+- Channel layout constraints:
+  - mono/stereo only?
+- File naming policy and overwrite behavior
+- Whether exports are “master” or “distribution” versions
+- Gaplessness expectations for set/song exports
+- CUE/splits if exporting multiple songs from a set later
+
+---
+
+## B. Failure modes
+
+- **Different exports don’t null-match** because filter graph differs by format path.
+- **WAV balloons storage** and cache cleanup is forgotten.
+- **Vorbis tagging quirks** differ from ID3 expectations.
+- **Bit-depth clipping** if float internal mix is slammed into PCM16 without limiter/dither policy.
+- **MP3 and Vorbis durations differ slightly** due to encoder delay/padding; users think timing broke.
+- **FLAC export from lossy intermediate** if pipeline accidentally re-encodes from MP3 instead of master PCM.
+- **Metadata silently dropped** because ffmpeg mapping wasn’t explicit.
+
+---
+
+## C. What NOT to build
+
+- Don’t build a complex mastering suite.
+- Don’t offer every codec/bitrate permutation.
+- Don’t promise archival correctness if your source path is already lossy.
+- Don’t make per-format custom mix behavior; compile once from the same PCM render path, then encode.
+
+---
+
+# 3) Automated QC of generated media
+
+## A. Requirements you’ve probably missed
+
+You need separate QC classes. Do not mash them together.
+
+### Image QC
+- blurry / low-detail detection
+- anatomy / face artifact heuristics if characters matter
+- text/watermark detection
+- resolution / aspect / border checks
+- NSFW category tagging
+- reference-character similarity score
+- duplicate/near-duplicate detection within storyboard
+
+### Audio QC
+- silence / clipped samples / DC offset
+- integrated loudness, short-term loudness, true peak
+- excessive noise/hiss
+- tempo/beat consistency if required
+- structural checks: intro/outro truncation, abrupt cuts, gaps
+- vocal intelligibility maybe, but likely not worth automatic enforcement
+- generated music repetition/loop artifact detection
+
+### Video clip QC
+- black frames
+- frozen frames
+- strobing/flicker
+- duplicate frame runs
+- bad scene cuts
+- motion instability/judder
+- lip/body artifact heuristics if relevant
+- mux/audio stream presence and duration sync
+
+### Full video / set QC
+- A/V duration alignment
+- transition continuity
+- branding overlay presence/placement
+- fade-to-black correctness
+- section timing against storyboard
+- cumulative duplicate shots / overuse
+- policy/NSFW destination classification
+- reference consistency over entire piece
+
+### “Reference compliance”
+You need to define what this means:
+- identity similarity to a character sheet?
+- outfit/color palette consistency?
+- scene composition consistency?
+- prompt adherence?
+- style consistency across clips?
+
+One scalar score is deceptive. Use a vector:
+- face/identity similarity
+- outfit/object similarity
+- palette/style similarity
+- composition match
+- prohibited deviation flags
+
+### “Percent variation”
+Specify exactly against what baseline:
+- variation from reference image
+- variation among takes for same shot
+- variation across clips in a song
+
+If you don’t define denominator and metric, “percent variation” becomes nonsense.
+
+### Automatic fixability taxonomy
+Need outputs like:
+- auto-fixable now
+- auto-fixable with regeneration
+- detectable but not auto-fixable
+- advisory only
+
+That taxonomy matters more than score cosmetics.
+
+### Ground-truth and thresholds
+Need per-model/per-backend thresholds. Qwen-Image-Edit failure signatures differ from LTX-2.5 failure signatures.
+
+---
+
+## B. Failure modes
+
+- **False confidence.** QC score says “92% compliant” but character identity is visibly wrong.
+- **Reference similarity collapses style diversity.** Model rewards near-copy sameness and punishes intentional variation.
+- **Aesthetic quality and policy safety get conflated.**
+- **CLIP-only scoring gets gamed.** It often misses hands/faces/temporal defects.
+- **Temporal artifacts missed by frame sampling.** Flicker often hides unless inspected over sequence.
+- **Auto-fix claims overreach.** Most visual generation defects are not “fixable”; they require regenerate/select.
+- **Threshold drift** when generator models change.
+- **Cost blowup** if every candidate asset goes through heavyweight vision models.
+- **QC bottlenecks pipeline throughput** more than generation itself.
+- **No audit trail.** Users can’t see why something failed or what score changed between runs.
+
+---
+
+## C. What NOT to build
+
+- Don’t build “one score to rule them all.”
+- Don’t claim objective artistic quality.
+- Don’t promise automatic repair of anatomy, identity drift, or narrative incoherence.
+- Don’t block on expensive full-stack QC for every draft iteration.
+- Don’t overfit to CLIP similarity alone.
+- Don’t make QC a black box; show frames/regions/measures that triggered flags.
+
+---
+
+# 4) Publishing to YouTube, TikTok, Reddit, X, Bluesky, Vimeo, Dailymotion, Odysee, SoundCloud with hard adult-policy gate
+
+## A. Requirements you’ve probably missed
+
+### Policy model
+You need a **destination capability matrix** in your DB, not hardcoded booleans in templates.
+
+Per destination/account:
+- allows adult sexual content? under what labeling?
+- allows artistic nudity?
+- allows suggestive but not explicit?
+- video length limits
+- aspect ratio/resolution constraints
+- file size limits
+- audio-only support
+- title/description/tag constraints
+- link rules
+- thumbnail rules
+- scheduled posting support
+- rate limits
+- API availability vs browser automation
+- moderation review risks
+- geoblock quirks if relevant
+
+### Hard policy gate inputs
+Need explicit source labels:
+- project-level content rating
+- asset-level content rating
+- confidence score
+- manual override reason
+- “most restrictive asset wins” aggregation rule for sets
+
+### Publish workflow states
+Need lifecycle:
+- draft
+- validated for destination
+- blocked by policy
+- queued
+- uploading
+- uploaded pending processing
+- published
+- failed retryable
+- failed terminal
+- taken down / rejected
+
+### Credential/storage model
+Even on tailnet single-user:
+- token expiry and refresh handling
+- secure at-rest token storage
+- revocation/reconnect UX
+- per-destination account binding
+
+### Per-platform media transforms
+Need deterministic export profiles by platform:
+- TikTok vertical variants
+- YouTube horizontal variants
+- audio-only for SoundCloud
+- thumbnail generation/cropping
+
+### Proof of gating
+If you want “adult-tier material can never reach forbidden destination,” you need:
+- gate checked before queue
+- gate rechecked at execution time
+- upload worker refuses if metadata/assets changed
+- immutable publish job snapshot
+- audit log
+
+Anything less is “best effort,” not hard policy.
+
+### API realism
+Some platforms are hostile/incomplete for uploads. You need per-platform support categories:
+- official upload API
+- unofficial API
+- browser automation required
+- unsupported for now
+
+Be honest up front.
+
+---
+
+## B. Failure modes
+
+- **Policy drift.** Platform rules change; your matrix goes stale.
+- **API inconsistency.** Metadata accepted but upload rejected after processing.
+- **Adult gate loopholes.** Manual relabel after queue, swapped asset after approval, alternate destination profile, retries bypassing validation.
+- **Token expiration mid-upload.**
+- **Silent partial publication.** Video uploaded without thumbnail, description, labels, or age settings.
+- **Non-idempotent retries create duplicate posts.**
+- **Unofficial API gets blocked/CAPTCHA’d.**
+- **Per-platform transcoding creates visual differences** that break QC expectations.
+- **Destination-specific moderation** flags content your classifier allowed.
+- **Rate limiting/backoff bugs** make the queue look flaky.
+
+---
+
+## C. What NOT to build
+
+- Don’t promise every platform is equally automatable.
+- Don’t rely on UI-only warnings for policy gating.
+- Don’t make policy exceptions ad hoc without durable audit reason fields.
+- Don’t do browser automation for everything if an official API exists.
+- Don’t auto-publish immediately after render by default.
+- Don’t build multi-user role/approval workflows unless your operation changes.
+
+---
+
+# 5) Version-controlled prompt management for per-album story arc and per-song storyboards with AI-assisted rewrite and full CRUD history
+
+## A. Requirements you’ve probably missed
+
+### Data model hierarchy
+You need explicit hierarchy and derivation:
+- Album / Project
+- Story Arc document
+- Song storyboard document
+- Scene / shot entries
+- Prompt variants per shot
+- Generation runs linked back to exact prompt revision
+- “Derived from revision X” links
+
+### Version model
+Do not just store “current text + updated_at”.
+Need:
+- immutable revisions
+- parent revision id(s)
+- author/source (`human`, `ai-rewrite`, `import`, `rollback`)
+- diff summary
+- label/tag (`approved`, `experimental`, `used in render`)
+- branch/fork semantics if you want alternatives
+
+### Structured prompt schema
+If prompts are free text only, consistency collapses.
+Need structured fields where possible:
+- characters
+- setting
+- wardrobe
+- camera/motion
+- palette/style
+- negative constraints
+- continuity anchors
+- must-keep facts from story arc
+
+Then also keep the rendered text prompt.
+
+### Rewrite guardrails
+AI rewrite needs constraints:
+- preserve named entities
+- preserve continuity anchors
+- do not widen rating beyond policy tier
+- do not mutate shot timing intent unless asked
+- explain changes / produce diff
+
+### CRUD history semantics
+Need to define deletion:
+- soft delete only for revisions?
+- cannot delete revisions used in renders?
+- tombstones for audit?
+
+### Traceability to outputs
+This is the big one:
+- every image/video/audio output must store exact prompt revision ids and model/workflow versions
+- if storyboard changes, outputs become stale/dirty
+
+### Comparison UX
+Need side-by-side:
+- revision diff
+- generated outputs by revision
+- “why this changed” notes
+
+---
+
+## B. Failure modes
+
+- **Prompt history without output linkage is useless.**
+- **AI rewrite causes continuity drift** across songs while each individual prompt looks better.
+- **Story arc and storyboard diverge** because derivation is one-time, not linked.
+- **Free-text diff is noisy** and misses semantic changes.
+- **Users overwrite approved prompts** instead of creating revisions.
+- **No branch model** means experimentation pollutes production canon.
+- **Regeneration provenance disappears** when prompts are copied manually between songs/scenes.
+- **SQLite text search gets awkward** if you don’t index structured fields and revision labels.
+
+---
+
+## C. What NOT to build
+
+- Don’t build a Git clone in the browser.
+- Don’t support arbitrary merge conflict resolution unless you truly need branching.
+- Don’t make AI rewrite autonomous; require explicit accept/reject.
+- Don’t store prompts only as chat transcripts.
+- Don’t let “delete” destroy provenance for renders already produced.
+
+---
+
+# Cross-cutting requirements you likely missed
+
+## Job system expectations
+All five features imply background jobs with:
+- enqueue/dequeue/retry/backoff
+- cancellation
+- progress events
+- structured logs
+- durable job inputs snapshot
+- job output artifact links
+
+If you don’t already have this, you need it before several of these.
+
+## Provenance everywhere
+Store for every render/export/publish/QC:
+- source asset ids + hashes
+- timeline revision id
+- prompt/storyboard revision ids
+- ffmpeg command/filter-graph IR + emitted text
+- generator model/workflow versions
+- QC version/threshold set
+- publish destination profile revision
+
+## Asset hashing
+Needed for:
+- duplicate detection
+- cache invalidation
+- provenance
+- safe publish snapshots
+
+## Explicit “preview truthfulness” labels
+Mark any preview as:
+- exact
+- proxy
+- approximate
+- stale
+
+---
+
+# Specific open-source projects to read or borrow from
+
+I am only listing projects I believe are real and whose repo paths I’m confident about. I am **not** guessing recency. Where I’m unsure about 2025/2026 activity, I say so.
+
+---
+
+## Timeline / waveform / browser media editing
+
+### `katspaugh/wavesurfer.js`
+Take: waveform peak rendering, regions/timeline/minimap interactions, and pragmatic large-file waveform UX patterns.  
+Recency: UNSURE about 2025/2026, but the repo is real and active historically.
+
+### `bbc/peaks.js`
+Take: decimated waveform data model and marker/segment UI concepts for long-form audio timelines.  
+Recency: UNSURE about 2025/2026.
+
+### `xzdarcy/react-timeline-editor`
+Take: timeline data model ideas for tracks/actions and drag/resize constraints; ignore React, borrow interaction semantics only.  
+Recency: UNSURE about 2025/2026.
+
+### `designcombo/react-video-editor`
+Take: browser timeline interaction patterns for layered media and keyframe-ish editing concepts; not stack-compatible directly, but useful UI behavior reference.  
+Recency: UNSURE about 2025/2026.
+
+### `videojs/video.js`
+Take: scrub/playback state handling and media control edge-case behavior; useful for understanding browser playback constraints, not for full timeline editing.  
+Recency: UNSURE about 2025/2026.
+
+### `ffmpegwasm/ffmpeg.wasm`
+Take: what *not* to push into the browser, but useful for understanding client-side ffmpeg preview limits and worker/progress patterns.  
+Recency: UNSURE about 2025/2026.
+
+---
+
+## ffmpeg graph building / command construction
+
+### `kkroening/ffmpeg-python`
+Take: structured graph-building patterns in Python; specifically DAG-like chaining and labeled stream handling, even if you outgrow the library.  
+Recency: UNSURE about 2025/2026.
+
+### `python-ffmpegio/python-ffmpegio`
+Take: Python-side ffmpeg filter and media pipeline abstractions; useful for ideas on argument normalization and probing.  
+Recency: UNSURE about 2025/2026.
+
+### `imageio/imageio-ffmpeg`
+Take: robust ffmpeg process invocation patterns and stderr/progress handling from Python.  
+Recency: UNSURE about 2025/2026.
+
+### `FFmpeg/FFmpeg`
+Take: filter docs/examples for `afade`, `acrossfade`, `atrim`, `asetpts`, `volume`, `pan`, `amix`, `asplit`, `fade`, `overlay`, `xfade`, `concat`; treat upstream filter semantics as the spec.  
+Recency: likely current, but I’m not asserting specific 2025/2026 commits here.
+
+### `mifi/lossless-cut`
+Take: practical ffmpeg-backed timeline/segment model, cut semantics, and “preview vs exact export” UX messaging.  
+Recency: UNSURE about 2025/2026.
+
+---
+
+## Audio analysis / QC
+
+### `librosa/librosa`
+Take: onset/beat/tempo features, spectral flatness, RMS, silence-ish heuristics, repetition analysis foundations.  
+Recency: UNSURE about 2025/2026.
+
+### `essentia/essentia`
+Take: richer audio descriptors and rhythm/structure analysis pipelines for QC beyond basic loudness.  
+Recency: UNSURE about 2025/2026.
+
+### `pytorch/audio`
+Take: audio transforms and model-ready feature extraction if you build heavier QC later.  
+Recency: UNSURE about 2025/2026.
+
+### `ebu/ebu_r128`
+Take: loudness measurement reference implementation concepts for integrated loudness / true peak policy.  
+Recency: UNSURE about 2025/2026.
+
+### `jiixyj/libebur128`
+Take: concrete loudness measurement implementation you can trust more than ad hoc ffmpeg parsing alone.  
+Recency: UNSURE about 2025/2026.
+
+### `aubio/aubio`
+Take: onset/beat/pitch detection primitives for abrupt-cut and rhythm sanity checks.  
+Recency: UNSURE about 2025/2026.
+
+---
+
+## Image/video QC / artifact detection / similarity
+
+### `opencv/opencv`
+Take: black frame, freeze frame, duplicate frame, border detection, basic flicker and motion-statistics heuristics cheaply.  
+Recency: likely active; not asserting exact 2025/2026 commit status.
+
+### `scikit-image/scikit-image`
+Take: SSIM/PSNR/Laplacian blur metrics and image-quality primitives for deterministic QC features.  
+Recency: UNSURE about 2025/2026.
+
+### `openai/CLIP`  **UNSURE on maintenance recency**
+Take: baseline image-text/image-image embedding similarity for reference compliance, but only as one feature among many.  
+Recency: UNSURE and likely not recent; repo path is real.
+
+### `mlfoundations/open_clip`
+Take: maintained CLIP-family embeddings for image-image and text-image similarity scoring; better practical base than relying only on original CLIP repo.  
+Recency: UNSURE about 2025/2026, but likely more current than `openai/CLIP`.
+
+### `huggingface/transformers`
+Take: access to modern vision models for NSFW, detection, captioning, and embedding-based compliance checks under one Python stack.  
+Recency: likely active; not asserting exact 2025/2026.
+
+### `deepinsight/insightface`
+Take: face identity embeddings for character-reference consistency when faces are visible; much better than generic CLIP for identity.  
+Recency: UNSURE about 2025/2026.
+
+### `ultralytics/ultralytics`
+Take: fast object/person detection to validate expected scene elements and catch missing subject failures.  
+Recency: likely active; not asserting exact 2025/2026.
+
+### `pytorch/vision`
+Take: standard image/video transforms and pretrained backbones if you need lightweight internal classifiers.  
+Recency: UNSURE about 2025/2026.
+
+### `facebookresearch/pytorchvideo`  **UNSURE on recency**
+Take: video feature extraction and clip-level temporal modeling references; useful if you later move beyond frame heuristics.  
+Recency: UNSURE.
+
+### `Netuzb/UMT` **UNSURE**
+I am not confident enough in repo path/maintenance to recommend; omit unless you verify.
+
+---
+
+## Video quality metrics / no-reference QA
+
+I’m being careful here because many “video quality” repos are abandoned or easy to misname.
+
+### `Netflix/vmaf`
+Take: full-reference video quality metrics and pipeline ideas; useful when comparing encoded outputs/proxies, not for generative artifact detection itself.  
+Recency: historically maintained; UNSURE about 2025/2026.
+
+### `slhck/ffmpeg-quality-metrics`
+Take: practical orchestration around VMAF/PSNR/SSIM for regression testing your assembly/export pipeline.  
+Recency: UNSURE about 2025/2026.
+
+For no-reference aesthetic/artifact QA, I do **not** want to guess a repo. Most likely you’ll combine OpenCV + embeddings + task-specific detectors instead of adopting a single trustworthy OSS package.
+
+---
+
+## Multi-platform publishing / APIs
+
+### `googleapis/google-api-python-client`
+Take: official YouTube Data API client patterns for resumable upload, metadata update, and retry logic.  
+Recency: likely active; not asserting exact 2025/2026.
+
+### `googleapis/google-auth-library-python-oauthlib`
+Take: OAuth flow/token refresh handling for Google destinations.  
+Recency: likely active; not asserting exact 2025/2026.
+
+### `bluesky-social/atproto`
+Take: Bluesky/ATProto posting and media upload primitives with a sane Python API.  
+Recency: likely active; not asserting exact 2025/2026.
+
+### `praw-dev/praw`
+Take: Reddit API posting patterns, rate-limit behavior, and media-post caveats.  
+Recency: historically maintained; UNSURE about 2025/2026.
+
+### `vimeo/vimeo.py`
+Take: Vimeo upload/auth flow reference, including chunked upload patterns if supported there.  
+Recency: UNSURE about 2025/2026.
+
+### `soundcloud/soundcloud-python` **UNSURE on current viability**
+Take: probably only as historical reference; SoundCloud API support status must be verified before committing.  
+Recency: UNSURE.
+
+### `tweepy/tweepy`
+Take: X posting/auth patterns for text/media where API access level permits; verify current media-upload support against your account tier.  
+Recency: likely active; not asserting exact 2025/2026.
+
+### `MarshalX/tgcalls`  
+Not relevant; do not use. Mentioning only to avoid confusion with media libs.
+
+### `dlenski/python-pkce`
+Take: generic PKCE support if some destination OAuth flows need it.  
+Recency: UNSURE about 2025/2026.
+
+For TikTok, Dailymotion, Odysee:
+- I am **not** confident enough to name a Python OSS upload client repo path without verification.
+- Treat these as **verify-first** destinations.
+- Especially TikTok: API access and upload capability can be constrained; do not architect around assumptions.
+
+---
+
+## Prompt/version history / diff / text management
+
+### `google/diff-match-patch`
+Take: text diff/patch algorithm for prompt revision visualization and storing compact textual changes.  
+Recency: UNSURE about 2025/2026.
+
+### `isaacs/node-lru-cache`
+Not relevant to your Python stack; skip.
+
+### `jupyter/nbdime`
+Take: ideas for human-readable structured diffs; not directly applicable, but useful if prompts become structured JSON plus text.  
+Recency: UNSURE about 2025/2026.
+
+### `semanchi/sqlite-vss` **UNSURE**
+I’m not sufficiently confident in exact repo path; do not rely on this recommendation.
+
+### `asg017/sqlite-vec`
+Take: SQLite-native vector search if you want local embedding search over prompt revisions/reference assets without leaving SQLite.  
+Recency: I believe this is current-ish, but I’m not asserting exact 2025/2026.
+
+### `simonw/sqlite-utils`
+Take: pragmatic SQLite schema evolution and document-ish storage patterns for revisioned prompt/history records.  
+Recency: likely active; not asserting exact 2025/2026.
+
+### `coleifer/peewee`
+If you already use raw SQLite you may not need it; not a must-read.
+
+---
+
+# Strong recommendations by area
+
+## For the timeline editor, the safest architecture is:
+1. Canonical timeline JSON/DB model.
+2. Deterministic compiler from that model to ffmpeg graph IR.
+3. ffmpeg graph emitter from IR.
+4. Browser preview only for a constrained subset; otherwise use short server-side proxy renders.
+5. Waveforms generated offline and cached.
+
+If you skip the IR and generate ffmpeg strings directly from UI state, you will regret it.
+
+## For audio exports:
+- Render once to canonical PCM master.
+- Then encode WAV/FLAC/Vorbis/MP3 from that.
+- Put loudness/dither/sample-rate policy in one place.
+
+## For QC:
+Use **layered QC**, not magic AI:
+- deterministic cheap checks first
+- embedding/detector checks second
+- expensive temporal/video checks only on shortlisted assets/final outputs
+- results categorized by auto-fixability
+
+## For publishing:
+Build a **destination policy matrix + immutable publish job snapshot** before adding platforms.
+That’s the only credible “hard gate”.
+
+## For prompt management:
+Treat prompts/storyboards as **revisioned structured documents with provenance links to outputs**.
+If outputs are not linked to exact revisions, “version control” is decorative.
+
+---
+
+# What I would postpone
+
+- Arbitrary drawn automation curves beyond linear points
+- Full browser-accurate playback of advanced ffmpeg effects
+- TikTok/X/Odysee automation until API realities are verified
+- “Percent variation” as a headline metric before underlying QC measures are validated
+- Branch/merge for prompt history
+- Automatic QC fixes beyond deterministic issues like loudness, black frames, missing fades, duplicate exports, and some packaging errors
+
+If you want, I can turn this into:
+1. a concrete SQLite schema sketch for the timeline/prompt/QC/publish pieces, or  
+2. a “v1/v2/v3” implementation sequence that minimizes rework.

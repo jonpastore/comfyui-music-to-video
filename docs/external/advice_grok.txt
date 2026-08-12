@@ -1,0 +1,212 @@
+## 1. Browser DAW-like timeline → ffmpeg
+
+**(a) Requirements you have probably missed**
+
+- **Canonical model vs preview model.** One JSON (or similar) document is source of truth; browser playback is an approximation; ffmpeg is ground truth. Spec the schema first (clips, tracks, automation keyframes, transition ids, effect params, in/out in a single timebase). Round-trip means: UI → document → `filter_complex` + inputs → render; and re-open document → identical UI. Not “export once.”
+- **Timebase.** Pick one internal unit (prefer nanoseconds or rational seconds, not float ms). Map explicitly to audio samples (e.g. 48 kHz) and video frames (fixed fps per project). Tempo ramps make “beat time” ≠ “timeline time”; you need both or you will desync cuts you already make beat-matched.
+- **Automation → ffmpeg mapping table.** For every curve you allow (volume, pan/L-R, fade, opacity, crop, etc.), define: keyframe interpolation (step/linear only at first), sampling policy, and the exact ffmpeg expression/filter (`volume`/`enable`/`eval`, `afade`, `acrossfade`, `overlay=enable`, `fade`). Bezier-in-UI that becomes mystery math in ffmpeg is a bug factory.
+- **Channel model.** “L/R split” must mean either dual mono tracks with independent automation or M/S-style processing—pick one. ffmpeg `pan`, `channelsplit`, `amerge` behavior and downmix to final stereo need a written rule.
+- **Preview budget.** What the browser must play: trimmed clips, volume automation, simple fades, maybe opacity. What it will not play live: full branding stack, expensive filter chains, true crossfade quality. Gap is acceptable if labeled.
+- **Waveform data path.** Precompute peaks server-side; do not decode full stems in the browser for set-length timelines. Store peaks next to media; version them when audio is re-rendered.
+- **Edit vs render concurrency.** Lock or snapshot the document when a render job starts; define behavior if user edits mid-render.
+- **Undo, dirty state, crash recovery.** Autosave document to SQLite; undo stack is document patches, not DOM.
+- **Command size / graph structure.** Large sets → huge `filter_complex`. Require segmented intermediate renders (per song / per transition boundary) + final concat, not one mega-graph.
+- **Easy/normal/advanced.** One document schema; modes only change which controls are visible and which params get defaults. Not three pipelines.
+- **htmx boundary.** Timeline scrubbing, playhead, curve drawing, and media element sync need real JS. htmx for shell, save, job status—not for the pointer path on the timeline.
+
+**(b) Failure modes**
+
+- Preview ≠ ffmpeg (different fade curves, resampling, off-by-one frame at cuts) → users “fix” in UI and the master is wrong.
+- Float timestamps → creeping drift on long sets.
+- Automation drawn at screen resolution → ugly stepped volume when sampled poorly into ffmpeg.
+- Re-encoding the same audio every preview/export → generational loss and CPU waste.
+- Treating video-effect lanes as free-form After Effects → never finishes; graphs become unreadable.
+- Three modes forked into three half-maintained UIs.
+- Loading full decoded audio into memory for a multi-song set → tab death.
+- No answer for “clip is shorter/longer after tempo change” → silent gaps or overruns.
+
+**(c) What NOT to build**
+
+- A second DSP engine in Web Audio that tries to mirror all ffmpeg effects.
+- Collaborative/multiplayer timeline.
+- Custom binary project format; a versioned JSON document is enough.
+- Bezier/envelope fancy that ffmpeg cannot express cleanly.
+- In-browser final master render.
+- Pixel-perfect “NLE to replace Premiere.” You need a set assembler with automation, not a DAW+NLE product.
+
+---
+
+## 2. WAV / FLAC / Ogg Vorbis export
+
+**(a) Missed**
+
+- **Source policy.** ACE-Step output is already lossy-ish/synthetic. Define: masters always from highest-quality intermediate you keep (WAV/FLAC mezzanine), never MP3→FLAC theater.
+- **Sample rate / bit depth / dither.** e.g. mezzanine 48 kHz/24-bit; consumer 48 kHz/16-bit with dither; do not upsample junk.
+- **Loudness.** Target integrated loudness + true peak (EBU R128 / streaming norms) applied once on the mezzanine, then encode. Per-format loudness guessing causes level jumps across uploads.
+- **Metadata.** Title, album, artist, track, ISRC-if-any, cover art; format-specific tag limits (`mutagen`-level details).
+- **Sets vs songs.** Gapless chapter metadata where relevant; whether set export is one file or a folder of stems/tracks.
+- **Ogg Vorbis vs Opus.** You specified Vorbis; confirm you do not want Opus (usually better). Container is `.ogg`.
+- **Determinism.** Same document + same encoder params → bit-identical or accept “equivalent.” Pin ffmpeg build/flags.
+
+**(b) Failure modes**
+
+- “FLAC” that is decode(MP3)→FLAC (large, pointless, still artifacts).
+- Clipping after loudnorm or after codec (true peak ignored).
+- Broken or stripped tags; cover art works in one format only.
+- Multi-hour set as one WAV → disk and browser download pain; no progress/resume.
+- Assuming Vorbis is welcome on every platform (it is not; many re-encode anyway).
+
+**(c) What NOT to build**
+
+- Your own encoders/muxers.
+- A general asset transcoder farm UI.
+- Exotic formats (DSD, Ambisonics, spatial) unless you already need them.
+- Per-destination loudness “AI.” One mezzanine loudness policy + platform upload rules.
+
+---
+
+## 3. Automated QC
+
+**(a) Missed**
+
+- **Hard metrics vs soft scores.** Separate: (1) objective gates that can fail a build, (2) advisory scores, (3) human-only judgments.
+- **Objective audio:** true peak, integrated loudness, silence/dropout runs, duration vs timeline expectation, clip at seams, maybe correlation (L/R phase) if you split channels.
+- **Objective video:** resolution/fps/duration/codec, black frames, freeze frames, audio/video duration mismatch, maybe scene-change density vs storyboard.
+- **Reference compliance:** define the metric before building. Practical stack: embedding similarity (CLIP-class) against reference stills; optional face/identity embedding if characters are faces; LPIPS/DISTS-style distance for stills. “Percent variation” without a named distance is meaningless—specify formula and baseline.
+- **Temporal consistency:** same character across clips (pairwise similarity to reference and to previous clip). You will not get a reliable single “% match.”
+- **Artifact heuristics (advisory):** over-smooth skin, text-like noise, heavy flicker between frames (frame-diff stats)—all noisy.
+- **Provenance:** every QC report points at exact media hash, prompt version, Comfy workflow id, timeline document version.
+- **Actions:** fail / warn / pass; which failures auto-requeue generation; which only flag. **State clearly: most generative defects cannot be auto-fixed**—only re-generate, swap clip, or human edit.
+- **Cost/latency budget.** QC must be much cheaper than regen; run cheap gates first.
+- **Human queue.** Single-user still needs a “review” state or you will ignore reports.
+
+**(b) Failure modes**
+
+- Thresholds that always pass or always fail after the first model change.
+- “Auto-fix” that re-filters and creates new artifacts (blur to hide defects).
+- Reference compliance that rewards bland similarity and punishes required shot variety.
+- QC slower/more expensive than generation.
+- No link from fail → which storyboard beat/clip id → cannot act.
+- Treating VMAF/SSIM against a non-existent “perfect” video as character compliance (wrong tool).
+
+**(c) What NOT to build**
+
+- A trained-from-scratch artifact CNN until cheap gates exist and you have labeled fails.
+- Auto-repair inpainting pipeline promised as QC.
+- Single scalar “quality %” as the product.
+- Blocking publish on advisory ML scores with high false-positive rates.
+
+**Can vs cannot fix automatically (state this in-product):**  
+**Can:** trim silence, normalize loudness, reject wrong duration/resolution, re-render ffmpeg assembly if graph/inputs wrong, auto-requeue generation with same prompt if hard gate fails.  
+**Cannot reliably:** fix wrong identity, melted hands, story drift, “make it match the reference,” aesthetic taste, platform policy nuance.
+
+---
+
+## 4. Multi-platform publishing + adult gate
+
+**(a) Missed**
+
+- **Rating on the asset, not at upload.** Enum on song/set/video: e.g. `safe / suggestive / adult`. Gate is `destination.allows(rating)` before any token is used. Default deny on missing rating.
+- **Per-destination matrix:** max duration, aspect ratio, resolution, codec, title/description length, tags, whether adult is allowed, audio-only vs video, thumbnail rules. Encode from mezzanine per destination; do not upload one master everywhere.
+- **Auth:** OAuth per platform, refresh tokens, revoke, multi-account later even if single-user now. Store tokens outside SQLite if you ever care about leakage; at minimum encrypt at rest.
+- **Job model:** one publish job → N destination attempts; partial success; retry; idempotency keys so double-click does not double-post.
+- **Copy/metadata per platform** (title truncation, hashtags, Reddit title vs body, TikTok caption).
+- **Audit log:** what was sent where, when, rating, remote id, error. Needed when something forbidden nearly ships.
+- **Manual confirm.** Single-user is not an excuse for fire-and-forget to nine networks.
+- **Platform reality:** X API access is paid/hostile; Reddit video is awkward; TikTok/YouTube have strict review; SoundCloud is audio; Odysee/LBRY and Bluesky (ATProto) are not “another REST clone.” Vimeo/Dailymotion have their own quota/privacy defaults.
+- **Takedown/update:** store remote ids; define unpublish support per platform (many are weak).
+- **Policy gate tests:** unit tests with fixtures—adult + YouTube/TikTok/etc. must hard-fail; no “warn.”
+
+**(b) Failure modes**
+
+- Gate checks filename or folder, not the rated asset that is actually uploaded.
+- Re-encode for TikTok changes loudness/aspect after QC passed.
+- Token expiry halfway through a fan-out.
+- Silent success with platform-side processing failure (YouTube “uploaded but unplayable”).
+- Assuming “API exists” means “allowed to automate” under current ToS/quota.
+- Adult content on a “maybe” platform because matrix was outdated.
+
+**(c) What NOT to build**
+
+- A full social CMS/analytics suite.
+- Scraping upload paths to bypass API limits.
+- Auto-post on render complete without confirm.
+- One generic “SocialUploader” abstraction that pretends all nine are identical—thin shared job runner, thick per-platform adapters.
+- Soft gating (“user acknowledged”) for adult→forbidden destinations.
+
+---
+
+## 5. Version-controlled prompts (album arc → song storyboards)
+
+**(a) Missed**
+
+- **Lineage graph:** `album_arc_version` → `song_storyboard_version` → `prompt_payload` → `comfy_workflow_version` → `media_hash`. Without media linkage, history is fanfiction.
+- **Immutable versions.** Edit = new version row; never mutate in place. “Current” is a pointer.
+- **What is versioned:** arc prose, character bible, per-beat shots, negative prompts, sampler params, reference image ids, seed policy—not only the text blob.
+- **AI rewrite:** propose diff, human accept/reject, store as new version with `parent_version` + `generated_by`. Never silent overwrite.
+- **Diff/blame UI** for text; for structured storyboard, field-level diff.
+- **Concurrency:** lock arc when bulk-regenerating a song; conflict policy if song board diverges from new arc (flag drift, do not auto-rebase media).
+- **Retention:** snapshots grow forever—prune policy for unused text versions (never prune versions referenced by published media).
+- **CRUD:** list/get/create/update-as-new/delete-only-if-unreferenced; export arc+boards as JSON for backup.
+
+**(b) Failure modes**
+
+- Prompt history without artifact ids → cannot answer “why does this clip look like that.”
+- AI rewrite slowly destroys the through-line across songs.
+- Versioning only text while Comfy graphs change underfoot → unreproducible.
+- Homegrown git (branches/merges) in SQLite that nobody trusts.
+- Editing “the prompt” on a published song without forking → provenance lie.
+
+**(c) What NOT to build**
+
+- Full git implementation (branches, merge algorithms, remotes).
+- Auto-apply LLM rewrites to all songs in the album.
+- Versioning binary media inside the prompt store (content-address files on disk; DB holds hashes + pointers).
+- Multi-user permissions/roles.
+
+---
+
+# Specific open-source to read or borrow
+
+Only items I am confident exist. Recency: **I am not asserting 2025/2026 commit dates** unless noted; treat recency as **UNSURE** and verify on GitHub before you bet on them.
+
+| Project | Path | Take exactly this |
+|--------|------|-------------------|
+| **wavesurfer.js** | `katspaugh/wavesurfer.js` | Waveform-as-card rendering, regions, hover/timeline plugins, media-element sync patterns for scrub/play. Browser side only. |
+| **peaks.js** | `bbc/peaks.js` | Dual overview + zoomview interaction for long timelines (set-length audio), with precomputed peak data—not live full-decode. |
+| **audiowaveform** | `bbc/audiowaveform` | Server-side peak/waveform JSON generation to feed the browser; avoids WASM-decoding multi-song sets. |
+| **DAWproject** | `dawproject/dawproject` | Timeline **data model** ideas: tracks, channels, timebase, automation points as an interchange schema. Borrow structure; do not adopt the whole standard unless it fits. |
+| **lossless-cut** | `mifi/lossless-cut` | Pragmatic **segment list → ffmpeg** philosophy; cut UI/UX; how a thin UI stays honest about ffmpeg doing the work. Electron, not your stack—steal intent, not the framework. |
+| **VMAF** | `Netflix/vmaf` | Perceptual **full-reference** video score when you have a reference cut (e.g. re-encode QC), not for character likeness. |
+| **PySceneDetect** | `Breakthrough/PySceneDetect` (also known as `scenedetect`) | Shot-boundary / scene list for assembly QC (“did the set cut where the storyboard said”). |
+| **pedalboard** | `spotify/pedalboard` | Server-side audio check/FX prototyping in Python if you need loudness/limit/true-peak related processing outside raw ffmpeg; do not put this in the browser DAW. |
+| **mutagen** | `quodlibet/mutagen` | Tags for FLAC/Ogg/MP3/WAV metadata on export—do not hand-roll tag writers. |
+| **FFmpeg** | `FFmpeg/FFmpeg` | `loudnorm` / ebur128, `astats`, `silencedetect`, `blackdetect`, `freezedetect`, `concat` demuxer, `acrossfade`, `volume` with expressions—**your real effect and QC backend**. Read filter docs as the automation target language. |
+| **google-api-python-client** | `googleapis/google-api-python-client` | YouTube upload/resumable sessions, not a multi-social framework. |
+| **atproto** | `bluesky-social/atproto` | Bluesky auth + post model; treat as separate adapter. |
+| **Postiz** | `gitroomhq/postiz-app` | Multi-destination **post job / channel adapter** layout and scheduling UX patterns. Verify license and whether platform connectors match your needs; you will still write your own gate. Recency: **UNSURE**—confirm activity. |
+| **yt-dlp** | `yt-dlp/yt-dlp` | **Do not** use for upload. Only useful as a negative reference for how fragmented site requirements are. |
+
+**Image/reference similarity (QC), real libs—not full products:**
+
+| Project | Path | Take |
+|--------|------|------|
+| **OpenCLIP** | `mlfoundations/open_clip` | Embedding similarity reference still ↔ render for “compliance score” you define. |
+| **LPIPS** | `richzhang/PerceptualSimilarity` | Perceptual distance on stills/keyframes; advisory, not policy. |
+| **InsightFace** | `deepinsight/insightface` | Face identity distance **if** characters are faces; useless for non-face art. Heavy; optional. |
+
+**UNSURE / do not rely on me inventing a winner:**
+
+- A maintained **Python ffmpeg filter-graph builder** that cleanly models automation curves → `filter_complex` for complex multi-track sets. `kkroening/ffmpeg-python` exists but is a thin wrapper and maintenance has been uneven historically—**verify before adopting**. Prefer generating filter graphs yourself from your document schema.
+- A solid **OSS “AI video artifact detector”** productized for gen-video hands/faces/flicker. Research repos churn; I will not name a flaky paper repo as production basis.
+- A single library that **uploads to all nine** destinations you listed with adult-policy awareness. **Does not meaningfully exist** as one trustworthy package; expect first-party APIs + your matrix.
+- **Web DAW frameworks** that output ffmpeg masters and fit FastAPI/htmx with no React—nothing complete. Compose wavesurfer/peaks + your schema.
+- Exact **2025/2026 commit** activity for the rows above: **UNSURE**—check default branch dates yourself.
+
+---
+
+## Cross-cutting skepticism (short)
+
+- Your stack choice (FastAPI/Jinja/htmx/SQLite/ffmpeg/Comfy) is fine for single-user; the timeline editor is the first feature that will force a **contained** JS island. Do not pretend htmx will draw automation curves.
+- Spec **document schema + ffmpeg mapping + rating matrix** before UI chrome. The five features all collapse to provenance: **timeline version, prompt version, media hash, QC report, publish audit**.
+- Ship order that reduces regret: (2) export/mezzanine discipline → (5) prompt/media lineage → (3) cheap QC gates → (1) timeline on a frozen schema → (4) publish adapters behind the rating gate. Building (1) and (4) first is how these studios drown.

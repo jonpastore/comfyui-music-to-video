@@ -1,0 +1,49 @@
+You are advising on requirements for an existing, working, single-user music-video
+production studio. Be concrete and skeptical. Do not pad.
+
+THE STACK AS IT EXISTS (do not propose replacing it):
+- Python 3.12, FastAPI + Jinja2 templates + htmx. Minimal JS, no build step, no
+  React/Vue/Svelte. One SQLite database. Runs on a tailnet, single user, no auth.
+- ffmpeg for ALL deterministic audio/video work (trim, crossfade, concat,
+  beat-matched cuts, tempo ramp, branding overlays, fade-to-black).
+- ComfyUI (3 GPU backends behind SwarmUI) for generation: Qwen-Image-Edit for
+  reference stills, LTX-2.5 for 4.8s video clips, ACE-Step for music.
+- A song -> storyboard -> reference frames -> clips -> assembled video pipeline
+  already works end to end. Sets/playlists mix multiple songs with transitions.
+
+WHAT WE ARE ABOUT TO SPECIFY. For each, tell me (a) the requirements we have
+probably MISSED, (b) the specific failure modes that bite people who build this,
+(c) what NOT to build:
+
+1. A browser DAW-like timeline editor for sets. Waveform-as-card, scrubbing
+   timeline with timestamps, playback, then volume/fade automation curves drawn
+   per channel, left/right channel split, and video-effect lanes tied to the
+   audio timeline. Three modes: easy / normal / advanced. It must round-trip to
+   ffmpeg filter graphs, since ffmpeg is what actually renders.
+2. Audio export in WAV, FLAC and Ogg Vorbis alongside the current MP3.
+3. Automated QC of generated media: images, audio, video clips, full videos and
+   sets. Detect artifacts, measure "reference compliance" (does the render match
+   the character reference), report percent variation, and state clearly what it
+   can and cannot fix automatically.
+4. Publishing to YouTube, TikTok, Reddit, X, Bluesky, Vimeo, Dailymotion, Odysee
+   and SoundCloud, with a hard policy gate so adult-tier material can never reach
+   a destination that forbids it.
+5. Version-controlled prompt management for a per-album "story arc" (think a
+   musical or opera: setting and through-line) and per-song storyboards derived
+   from it, with AI-assisted rewrite and full CRUD history.
+
+THEN, THE PART I CARE MOST ABOUT:
+Name SPECIFIC open-source projects we should read or borrow from, for any of the
+five areas. Requirements for what you name:
+- It must be real and you must be confident of the exact repo path.
+- Prefer projects with commits in 2025 or 2026. Say so if you are unsure of
+  recency; do NOT guess a star count or a date.
+- Say in one line WHAT to take from it (an algorithm, a data model, a UI
+  interaction, a filter-graph technique) rather than "look at this, it's similar".
+- Web-audio waveform/timeline libraries, ffmpeg filter-graph builders, video QC
+  and artifact-detection tools, and multi-platform upload libraries are all
+  directly relevant.
+
+If you are not sure a project exists or is maintained, SAY SO explicitly rather
+than producing a plausible name. A fabricated repo costs me more than a missing
+one. Mark anything uncertain with UNSURE.

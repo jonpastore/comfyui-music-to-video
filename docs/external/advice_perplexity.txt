@@ -1,0 +1,181 @@
+Below is the **practical gap analysis** for your five features, assuming the stack you already have stays intact. I’m being skeptical on purpose: several of these are deceptively large and need explicit non-goals, or they will become brittle glue around ffmpeg, browser state, and platform policy.
+
+## 1) Browser DAW-like timeline editor
+
+**What you probably missed**
+
+- **Canonical timeline model**: you need one source of truth for clip regions, fades, automation nodes, channel routing, effect lanes, and tempo map, with deterministic serialization to and from ffmpeg filter graphs.
+- **Timebase rules**: define whether the editor is sample-locked, frame-locked, or wall-clock-locked during scrubbing, playback, and render; mixed timebases will create off-by-one-frame bugs.
+- **Automation semantics**: specify interpolation type per curve segment, snap rules, curve resolution, and whether envelopes are preview-only or render-authoritative.
+- **Audio channel policy**: left/right split implies explicit handling for mono sources, stereo widening, downmix, and mid/side-style operations; otherwise “split” becomes ambiguous UI sugar.
+- **Video lane semantics**: decide whether effect lanes are per-clip, per-track, or global, and whether they can overlap or stack.
+- **Undo/redo model**: timeline editing without a strict command log becomes unrecoverable once you add curves and multi-lane edits.
+- **Performance budget**: waveform drawing, scrubbing, and selection hit-testing need hard limits on clip count, waveform density, and rerender frequency.
+- **Render parity tests**: every timeline state should be renderable headlessly and diffable against a reference output, or ffmpeg drift will be discovered only after export.
+- **Mode boundaries**: easy/normal/advanced must map to feature visibility only; if each mode changes behavior, you’ll create hidden state bugs.
+
+**Failure modes that bite people**
+
+- **“Looks right, renders wrong”** because preview math differs from ffmpeg filter ordering, sample rate conversion, or frame rounding.
+- **Curve drift** when UI control points are stored in pixels instead of normalized time/value units.
+- **Scrub stutter** from redrawing full waveforms or requerying large decoded buffers on every mouse move.
+- **Broken stereo** when left/right editing silently collapses to mono during intermediate processing.
+- **Filter-graph explosion** when the UI allows arbitrary lane combinations and the exporter emits unreadable, untestable ffmpeg graphs.
+- **State corruption** if automation edits, clip trims, and ripple moves are not transactionally grouped.
+- **Hidden nondeterminism** from depending on browser audio playback timing as if it were the render clock.
+- **Impossible support cases** when users can create states the renderer technically accepts but the UI cannot re-open faithfully.
+
+**What not to build**
+
+- Do **not** build a full general-purpose DAW with plugin hosting, MIDI, live monitoring, or sample-level editing.
+- Do **not** build custom audio DSP if ffmpeg already covers the deterministic render path.
+- Do **not** let the browser become the timing authority for final export.
+- Do **not** invent a proprietary timeline format unless you also ship import/export and migration tooling from day one.
+- Do **not** allow arbitrary freeform effects without a constrained ffmpeg mapping.
+
+## 2) Audio export in WAV, FLAC, and Ogg Vorbis
+
+**What you probably missed**
+
+- **Codec policy**: define sample rate, bit depth, channel count, dither policy, and whether exports are loudness-normalized.
+- **Metadata handling**: decide what tags are preserved for each format and whether artwork/lyrics/chapters are in scope.
+- **Container vs codec distinction**: WAV is a container family, FLAC is lossless, Ogg Vorbis is lossy; the UI should not present them as interchangeable “quality levels.”
+- **Validation**: exported files need post-write verification, not just ffmpeg exit-code checking.
+- **Round-trip expectations**: if you ever reimport these files, define what metadata and timing fidelity you expect.
+
+**Failure modes that bite people**
+
+- **Silent sample-rate changes** that make A/B comparisons unfair.
+- **Tag loss** across format-specific metadata models.
+- **Bit-depth confusion** where 24-bit intent turns into 16-bit export.
+- **Inconsistent loudness** between MP3 and lossless exports if normalization is not fixed.
+- **Vorbis quality ambiguity** if you expose numeric quality without documenting the actual tradeoff.
+
+**What not to build**
+
+- Do **not** build a format zoo.
+- Do **not** promise bit-perfect identity across all exports.
+- Do **not** add codec-specific tuning UI unless you have a real need and test coverage.
+
+## 3) Automated QC of generated media
+
+**What you probably missed**
+
+- **QC taxonomy**: separate *syntactic validity*, *artifact detection*, *reference compliance*, and *policy compliance*.
+- **Threshold governance**: every metric needs a threshold, a confidence level, and a failure severity.
+- **Human-readable explanation**: a percent variation number is useless unless the report says *variation in what dimension* and *why it matters*.
+- **Partial-failure model**: a clip can be valid but visually off, or compliant visually but broken audio; QC must score dimensions independently.
+- **Fixability boundaries**: define which failures can be auto-repaired, which require regeneration, and which are terminal.
+- **Dataset versioning**: reference compliance depends on the exact reference image/video/audio version, not just the label.
+- **Regression baselines**: QC must compare against prior accepted outputs, or quality will drift while metrics remain “green.”
+
+**Failure modes that bite people**
+
+- **False confidence from one scalar score**.
+- **Reference mismatch** because the model changed, the prompt changed, or the reference set changed and nobody recorded which one happened.
+- **Overfitting the QC model** to your own generator’s artifacts, then missing real failures in new model versions.
+- **Auto-fix loops** where the system keeps “repairing” a clip that should have been rejected.
+- **GPU cost blowups** if QC is more expensive than generation.
+- **Specious compliance claims** if the system cannot explain failure modes in plain language.
+
+**What not to build**
+
+- Do **not** claim “reference compliance” as a single authoritative metric.
+- Do **not** make QC automatically mutate assets without a clear audit trail.
+- Do **not** hide uncertainty; QC should be able to say “cannot determine.”
+- Do **not** build a giant subjective “aesthetic score” and treat it as truth.
+
+## 4) Publishing to YouTube, TikTok, Reddit, X, Bluesky, Vimeo, Dailymotion, Odysee, SoundCloud with a hard policy gate
+
+**What you probably missed**
+
+- **Per-destination policy matrix**: age-rating, adult-content prohibition, thumbnail rules, title/description constraints, and metadata exposure differ by platform.
+- **Hard gate placement**: the policy gate must sit *before* any upload job creation, not just before API calls.
+- **Content classification inputs**: the gate needs a source of truth for adult-tier status, not manual checkbox memory.
+- **Credential and token lifecycle**: refresh, revocation, scope changes, app-review failures, and platform-specific rate limits need explicit handling.
+- **Upload idempotency**: retries must not create duplicate posts.
+- **State reconciliation**: uploads can succeed partially; you need a durable record of remote IDs and statuses.
+- **Platform drift**: APIs and policy rules change; some destinations may become unsupported at any time.
+- **Dry-run and preview**: the user needs a “what would happen” check before any post is irreversible.
+
+**Failure modes that bite people**
+
+- **Policy bypass by retry path**.
+- **Cross-post metadata leaks** where one platform’s title/thumbnail is inappropriate elsewhere.
+- **Token expiry mid-upload** producing orphaned half-published states.
+- **API deprecations** breaking one destination while the UI still says “published.”
+- **False equivalence across platforms**: “adult-tier material” means different things in different TOS regimes.
+- **Accidental public posting** due to misread visibility defaults.
+
+**What not to build**
+
+- Do **not** build a one-click “publish everywhere” button without destination-specific previews and gating.
+- Do **not** assume platform APIs remain stable.
+- Do **not** store the policy decision only in UI state; persist it and enforce it server-side.
+- Do **not** automate around a forbidden destination by “best effort.”
+
+## 5) Version-controlled prompt management for album story arcs and per-song storyboards
+
+**What you probably missed**
+
+- **Prompt schema**: prompts need typed fields, not just free text, so versions can diff meaningfully.
+- **Inheritance model**: album-level arc → song-level storyboard → shot-level prompt overrides needs explicit merge rules.
+- **Provenance**: every generated artifact should record which prompt version, model version, and seed produced it.
+- **Approval workflow**: AI-assisted rewrite must not overwrite canonical text without review or a reversible change set.
+- **Branching semantics**: prompts will fork; you need branch/merge/rename semantics or history becomes useless.
+- **Diff readability**: raw text diffs are insufficient if the prompt has structured sections.
+- **Searchability**: you need to retrieve “all storyboards derived from arc v12” quickly.
+
+**Failure modes that bite people**
+
+- **Prompt drift** where small edits silently invalidate downstream storyboard assumptions.
+- **Circular edits** when AI rewrites the prompt that defines the AI rewrite behavior.
+- **History bloat** from saving every transient assistant suggestion as a first-class version.
+- **Lost causality** when generated assets can’t be traced back to the exact prompt state.
+- **Merge ambiguity** when two branches both edit the same story beat differently.
+
+**What not to build**
+
+- Do **not** treat prompts as plain notes.
+- Do **not** rely on linear history only.
+- Do **not** make AI the author of record.
+- Do **not** hide derived storyboards from the version graph.
+
+## Specific open-source projects to read or borrow from
+
+I’m only naming projects I’m reasonably confident are real. Where recency is uncertain, I mark it **UNSURE** rather than guessing.
+
+| Project | Exact repo path | What to take from it |
+|---|---|---|
+| WaveSurfer | `katspaugh/wavesurfer.js` | Waveform rendering, region selection, and scrub interaction patterns for an audio timeline. |
+| waves-ui | `wavesjs/waves-ui` | Timeline/track abstraction and audio-event editing concepts for browser-based sequencing. |
+| Video.js | `videojs/video.js` | Player UI state, timeline controls, and plugin structure for media playback surfaces. |
+| Remotion | `remotion-dev/remotion` | Render-pipeline orchestration and mapping timeline state to frame-accurate output. |
+| FFmpeg source | `FFmpeg/FFmpeg` | Filter-graph semantics and the exact behavior of the render backend you must match. |
+| FFmpeg filter graph builder examples | UNSURE | I do not want to invent a repo path here; many builders exist, but I am not confident naming one without verification. |
+| pymediainfo | `sbraz/pymediainfo` | Media introspection for QC preflight and post-render validation. |
+| ffmpeg-normalize | `slhck/ffmpeg-normalize` | Loudness analysis and normalization workflow you can adapt for export/QC policy. |
+| ffmpeg-python | `kkroening/ffmpeg-python` | A Pythonic way to construct ffmpeg command graphs; useful as a reference for your own graph serializer. |
+| MoviePy | `Zulko/moviepy` | High-level clip composition concepts; useful mainly as a cautionary model for what becomes hard to scale. |
+| scikit-image | `scikit-image/scikit-image` | Image similarity primitives you can use in QC and reference-compliance scoring. |
+| OpenCV | `opencv/opencv` | General image/video feature extraction for artifact detection and frame comparison. |
+| librosa | `librosa/librosa` | Audio feature extraction for QC metrics and beat/tempo analysis. |
+| pyloudnorm | `csteinmetz1/pyloudnorm` | Loudness measurement logic for export verification and QC thresholds. |
+| yt-dlp | `yt-dlp/yt-dlp` | Multi-site media extraction patterns and per-site adapter architecture; useful as a template for platform-specific upload/publish adapters. |
+| discord.py style uploader patterns | UNSURE | I’m not confident of a single canonical upload library that covers your full destination list. |
+| BlueSky SDKs | UNSURE | There are client libraries, but I’m not confident naming one repo path that is both maintained and appropriate for publishing without verification. |
+| Vimeo API clients | UNSURE | Many exist; I’m not confident enough to name a single repo path. |
+| SoundCloud API clients | UNSURE | Same issue: several repos exist, but I won’t guess. |
+| LangGraph | `langchain-ai/langgraph` | Versioned, branching state-machine ideas that map well to prompt lineage and human-in-the-loop revision. |
+| DVC | `iterative/dvc` | Content-addressed versioning and lineage tracking concepts for prompts/assets. |
+| gitoxide | `github/gitoxide` | If you want a serious local history model, study its approach to repository data structures; don’t copy the UI, copy the discipline. |
+
+## My skeptical take on scope
+
+- The **timeline editor** is the riskiest feature because it touches every hidden mismatch between UI time, audio time, video time, and ffmpeg render time.
+- The **QC system** is second riskiest because people want it to sound objective while the real problem is threshold design, provenance, and explainability.
+- The **publish layer** is mostly a policy and adapter problem, but only if you treat destination rules as hard server-side constraints.
+- The **prompt/versioning layer** is manageable if you model it like structured content with lineage, not like notes with history.
+- The **audio export** item is the smallest, but only if you keep the output matrix narrow and define metadata rules up front.
+
+If you want, I can turn this into a **requirements checklist with acceptance criteria and explicit non-goals** for each of the five items.

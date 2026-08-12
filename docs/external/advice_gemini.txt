@@ -1,0 +1,116 @@
+### 1. Browser DAW-like Timeline Editor for Sets
+
+* **(a) Missed Requirements:**
+  * **Clock Domain Synchronization:** Web Audio API works on a floating-point sample clock, HTML5 Video works on frame boundaries, and `ffmpeg` works on strict microsecond timestamps. You need an explicit time-base conversion layer (e.g., mapping frame index $\to$ exact fractional seconds) or video cuts will drift off-beat over long timelines.
+  * **Canonical AST Storage:** Storing the UI state *as* an `ffmpeg` string is fatal. You must store a canonical, normalized JSON Abstract Syntax Tree (AST) of tracks, clips, automation points, and crossfades. The `ffmpeg` filter graph generator must be a pure, one-way function derived entirely from this AST.
+  * **Dynamic Canvas Optimization:** Rendering multi-lane SVG or HTML Canvas automation curves and waveforms during realtime playback with htmx polling will destroy browser performance. The UI playback engine must be pure browser-side JS handling DOM canvas transforms, completely detached from backend calls until edit interactions end.
+
+* **(b) Failure Modes:**
+  * **The Filter Graph Complexity Explosion:** Splitting L/R channels, applying volume automation curves via `eval=frame` or time-indexed `volume` filters, and compositing multiple video lanes produces hundreds of intermediate labels (`[a0]`, `[v1]`). ffmpeg will throw unparseable evaluation errors or run out of memory during graph parsing.
+  * **Round-Trip Graph Loss:** Attempting to parse arbitrary `ffmpeg` command strings back into UI timeline state. Filter graphs are directed acyclic graphs; timeline UIs are ordered track sequences. The abstraction leaks instantly, corrupting keyframes and volume points.
+
+* **(c) What NOT to Build:**
+  * **Do NOT build an `ffmpeg`-to-UI parser:** Round-tripping must be one-way: `JSON AST -> ffmpeg CLI string`. Never parse `ffmpeg` back into JSON.
+  * **Do NOT build "Three Modes" (Easy / Normal / Advanced):** This triples UI layout logic, state transition edge cases, and test paths. Build *one* modular track layout with collapsible sub-lanes for automation curves and video FX.
+  * **Do NOT run real-time audio DSP in the browser:** Do not attempt complex Web Audio node processing (reverbs, dynamic compression) to simulate `ffmpeg` filters in preview. Use raw browser HTML5 playback for timing validation only.
+
+---
+
+### 2. Audio Export (WAV, FLAC, Ogg Vorbis)
+
+* **(a) Missed Requirements:**
+  * **32-bit Floating-Point Pipeline Processing:** When combining automation curves, gain adjustments, and crossfades in `ffmpeg`, integer audio streams will clip at 0 dBFS before export. All intermediate processing inside `ffmpeg` filter graphs must explicitly enforce floating-point format (`aformat=sample_fmts=fltp`) before final quantization to WAV (16/24-bit PCM), FLAC, or Vorbis.
+  * **Standardized Metadata Engine Mapping:** Target formats use fundamentally different metadata structures (RIFF INFO tags for WAV, Vorbis Comments for FLAC/Ogg, ID3v2 for MP3). You must map unified track metadata to these distinct format key-value pairs during export.
+
+* **(b) Failure Modes:**
+  * **Inaudible Dynamic Range Clipping:** Summing multiple mix lanes in `ffmpeg` without dynamic gain staging or a final brickwall limiter (`alimiter`) causes digital hard-clipping baked directly into lossless WAV/FLAC exports.
+  * **Lossy-to-Lossless Illusion:** Accidental re-encoding of compressed intermediate stems (e.g., MP3 generation outputs from ACE-Step) into WAV or FLAC containers, providing zero quality increase while multiplying disk usage by 10x.
+
+* **(c) What NOT to Build:**
+  * **Do NOT build custom audio encoding bindings:** Do not write Python-level byte manipulators or use wrapper wrappers around raw C encoders. Pass exact codec parameters (`pcm_s16le`, `pcm_s24le`, `flac`, `libvorbis`) directly through `ffmpeg`.
+
+---
+
+### 3. Automated QC of Generated Media
+
+* **(a) Missed Requirements:**
+  * **Separate Structural vs. Perceptual Metrics:** Visual quality failure in AI video is rarely technical corruption (bad headers); it is temporal morphing, frame flickering, or anatomical degradation. QC requires both low-level boundary checks (black frames, silent audio tails via `ffmpeg` filters) and semantic checks (embeddings distance).
+  * **Resource Isolation Gate:** QC models (like CLIP or VMAF) compete directly for GPU VRAM and CPU cycles with ComfyUI and video rendering tasks. Automated QC must run asynchronously in an isolated queue worker.
+
+* **(b) Failure Modes:**
+  * **Volatile Static-to-Temporal Distance Scores:** Measuring frame-by-frame similarity of a dynamic 4.8s video clip against a static character reference photo yields high false-positive rejection rates due to motion, lighting, and camera angle shifts.
+  * **The Automated Healing Loop Nightmare:** Attempting to auto-regenerate bad clips based on arbitrary score thresholds. ComfyUI will enter infinite generation loops, burning GPU cycles and changing character features further.
+
+* **(c) What NOT to Build:**
+  * **Do NOT build automated self-healing loops:** QC must strictly flag, score, and isolate assets. The output must be a simple binary PASS/FAIL with a diagnostic report. Never auto-trigger ComfyUI regenerations automatically without human sign-off.
+  * **Do NOT train custom computer vision models from scratch:** Use established, pretrained feature extractors (e.g., DINOv2) to measure cosine similarity between reference vectors and generated clip keyframes.
+
+---
+
+### 4. Multi-Platform Publishing & Hard Policy Gate
+
+* **(a) Missed Requirements:**
+  * **Pre-Flight Spec Validation:** Each platform enforces non-negotiable video profiles (e.g., TikTok limits aspect ratios and durations; SoundCloud accepts only audio formats; YouTube enforces precise aspect/bitrate limits). Pre-flight checks must validate duration, resolution, container codec, and file size *before* initiating network streams.
+  * **Token Refresh Lifecycle Engine:** Nine different platforms mean nine different OAuth2 token expiration cycles, refresh mechanisms, and API rate-limit behaviors. Storing simple static API keys in SQLite will cause background publish jobs to fail mid-upload.
+
+* **(b) Failure Modes:**
+  * **False Negative Policy Breaches:** Relying on basic NSFW classifiers for policy gates on edge-tier content. If a post bypasses your local policy gate and hits YouTube or TikTok with explicit material, your API app credentials or platform accounts will be instantly banned.
+  * **Catastrophic API Deprecation:** Third-party upload wrappers break constantly as social media platforms alter upload endpoints (particularly X/Twitter and TikTok).
+
+* **(c) What NOT to Build:**
+  * **Do NOT write raw HTTP upload clients for complex APIs:** Do not write manual chunked-upload protocols for YouTube or TikTok from scratch. Use official SDKs where available.
+  * **Do NOT build a rich social post composition editor:** Keep post text, tags, and titles strictly tied to song/album metadata structures in SQLite.
+
+---
+
+### 5. Version-Controlled Prompt Management
+
+* **(a) Missed Requirements:**
+  * **Full Generation State Coupling:** A prompt string alone is non-reproducible. Prompt versioning must bind the exact text prompt, negative prompt, random seed, ComfyUI workflow JSON, model checkpoint hash, sampler, CFG scale, and Lora weights as an immutable block snapshot.
+  * **Structural JSON Diffing:** Standard line-by-line text diffing breaks on nested storyboards, scene breakdown lists, and ComfyUI workflow configurations. You need structural tree-diffing algorithms.
+
+* **(b) Failure Modes:**
+  * **Cascading Narrative Corruption:** Updating a global "Album Master Arc" variable without explicit version pinning forces silent changes downstream, invalidating already generated storyboards and shot lists for completed songs.
+  * **Database Bloat and Locking:** Storing high-frequency full snapshot bloat (with massive ComfyUI graph JSON payloads) directly inside SQLite without delta encoding causes slow query times and WAL file bloat.
+
+* **(c) What NOT to Build:**
+  * **Do NOT build a custom Git implementation inside Python/SQLite:** Do not implement custom commit tree graph traversal, manual staging areas, or custom merging engines.
+  * **Do NOT build visual node-graph editors for prompts:** Keep prompt interfaces as simple structured text blocks with variable substitutions.
+
+---
+
+### Specific Open-Source Projects to Reference / Borrow From
+
+#### Area 1: Timeline Editor & FFmpeg Generation
+* **`mifi/lossless-cut`** *(Commits in 2025/2026)*
+  * **What to take:** Read `src/ffmpeg.js` for clean patterns on generating frame-accurate `ffmpeg` cut, split, and merge CLI arguments directly from UI clip boundary segments.
+* **`wavesurfer-js/wavesurfer.js`** *(Commits in 2025/2026)*
+  * **What to take:** Borrow the browser-side canvas audio waveform rendering engine and region plugin interaction models to render waveform cards without hitting the server.
+* **`kkroening/ffmpeg-python`** *(UNSURE of recency; unmaintained)*
+  * **What to take:** Read its internal DAG (Directed Acyclic Graph) representation model (`ffmpeg/_run.py`) to build your own lightweight Python class that converts timeline AST nodes into valid `ffmpeg` complex filtergraphs (`-filter_complex`).
+
+#### Area 2: Audio Export & Metadata
+* **`quodlibet/mutagen`** *(Commits in 2025/2026)*
+  * **What to take:** Use this library directly in Python to write FLAC Vorbis comments, MP3 ID3v2 tags, and WAV RIFF metadata structures using a single unified key-value API post-export.
+* **`csteinmetz1/pyloudnorm`** *(UNSURE of recency; inactive maintenance)*
+  * **What to take:** Borrow the BS.1770-4 audio loudness measurement implementation to check integrated LUFS levels before exporting audio for platform compliance.
+
+#### Area 3: Automated QC
+* **`Netflix/vmaf`** *(Commits in 2025/2026)*
+  * **What to take:** Use the compiled `libvmaf` filter via `ffmpeg` (`-vf vmaf`) to generate objective perceptual video quality degradation scores against reference source frames.
+* **`facebookresearch/dinov2`** *(Commits in 2025/2026)*
+  * **What to take:** Use the PyTorch model evaluation code to extract visual feature embeddings from video keyframes and compute cosine similarity against character reference images.
+
+#### Area 4: Publishing & Policy Gate
+* **`bluesky-social/atproto`** *(Commits in 2025/2026)*
+  * **What to take:** Use the official Python SDK (`atproto` package) for chunked video blob uploading and record creation pipelines on Bluesky.
+* **`googleapis/google-api-python-client`** *(Commits in 2025/2026)*
+  * **What to take:** Extract the `googleapiclient.http.MediaFileUpload` class interaction patterns for chunked, resumable large video uploads to YouTube.
+* **`O2A/opennsfw2`** *(UNSURE of recency; unmaintained)*
+  * **What to take:** Borrow the video frame extraction sampling and thresholding logic to build the pre-upload policy gate safety check.
+
+#### Area 5: Version-Controlled Prompt Management
+* **`seperman/deepdiff`** *(Commits in 2025/2026)*
+  * **What to take:** Use this library directly to compute, store, and apply structural delta changes between revisions of album storyboards and ComfyUI prompt JSON states.
+* **`libgit2/pygit2`** *(Commits in 2025/2026)*
+  * **What to take:** Use the Python C-bindings to Git to back prompt versioning directly into actual file-system Git repositories on disk behind your SQLite app database.
