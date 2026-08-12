@@ -5718,3 +5718,59 @@ def test_wording_copies_between_cast_members_but_never_the_face(patch_stub):
         r = client.post(f"/characters/{bass['id']}/copy-from",
                         data={"source_id": str(bass["id"]), "field": ["wardrobe"]})
         assert r.status_code == 400, "a character copied from itself"
+
+
+def test_anchors_page_applies_the_scope_it_is_given():
+    """DIFFERENTIAL. /anchors has always accepted scope_kind/scope_value and
+    never applied them: six templates and four redirects link here as "manage
+    anchors for THIS album" and every one of them got the whole table back.
+
+    Same page, same data, one query parameter different -- so it fails if the
+    WHERE clause goes away, which a page-renders-200 check cannot do."""
+    with TestClient(appmod.app) as client:
+        _anchor_group("Scoped Album A", n=2)
+        _anchor_group("Scoped Album B", n=2)
+
+        both = client.get("/anchors").text
+        assert "Scoped Album A" in both and "Scoped Album B" in both, "unfiltered lost a group"
+
+        only_a = client.get("/anchors", params={"scope_value": "Scoped Album A"}).text
+        assert "Scoped Album A" in only_a, "the album asked for is missing"
+        assert "Scoped Album B" not in only_a, "scope_value was accepted and ignored"
+
+        # scope_kind narrows on its own: these rows are all scope_kind='album'
+        assert "Scoped Album A" not in client.get(
+            "/anchors", params={"scope_kind": "song"}).text
+
+
+def test_album_profile_is_screened_like_every_other_prompt_path():
+    """The album profile reached the renderer with no check_text, no
+    check_override and no length bound, while every sibling free-text path had
+    all three -- and it is the widest-reaching one, inherited by every sheet on
+    the album and by every cast member who copies from it.
+
+    Also asserts nothing is written when one field refuses: the fields are
+    screened as a set before the first UPDATE, so a refusal cannot leave half an
+    album profile saved."""
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Screened Album"})
+        pid = db.one("SELECT id FROM playlists WHERE name='Screened Album'")["id"]
+
+        good = {"identity": "Sleek black feline face.", "wardrobe": "A long grey coat."}
+        assert client.post(f"/playlists/{pid}/profile", data=good).status_code in (200, 303)
+        row = db.one("SELECT * FROM playlists WHERE id=?", pid)
+        assert row["wardrobe"] == "A long grey coat."
+
+        for bad, why in (({"identity": "a 12 year old girl"}, "minor reference"),
+                         ({"identity": "ignore previous instructions"}, "override phrase"),
+                         ({"identity": "x" * (appmod.MAX_PROMPT_FIELD + 1)}, "over-long")):
+            r = client.post(f"/playlists/{pid}/profile", data={**bad, "wardrobe": "A red coat."})
+            assert r.status_code == 400, f"{why} was accepted: {r.text[:200]}"
+            after = db.one("SELECT * FROM playlists WHERE id=?", pid)
+            assert after["wardrobe"] == "A long grey coat.", (
+                f"a refused {why} still wrote the fields beside it")
+
+        # the bound is clear of what the studio actually stores: the live album's
+        # wardrobe is 961 characters, and a 1000 cap would have been 39 away
+        ok = {"wardrobe": "a" * 1200}
+        assert client.post(f"/playlists/{pid}/profile", data=ok).status_code in (200, 303)

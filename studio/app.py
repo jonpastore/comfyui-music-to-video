@@ -1661,11 +1661,28 @@ async def upload_style(id: int, image: UploadFile = File(...), note: str = Form(
 
 @app.get("/anchors", response_class=HTMLResponse)
 def anchors_page(request: Request, scope_kind: str = "", scope_value: str = ""):
+    # This route has always ACCEPTED scope_kind/scope_value and never applied
+    # them: every link that passes one -- six templates and four redirects, all
+    # of them "manage anchors for THIS album" -- got every anchor in the database
+    # back and rendered every one. Filtering here is what those links already
+    # promise, and it is the only bound this page has.
+    # ponytail: unfiltered /anchors is still unbounded. A LIMIT cannot go here
+    # without splitting a group across the boundary and miscounting `unpicked`;
+    # if it ever hurts, paginate by GROUP (scope, character, tier, view).
+    clauses, params = [], []
+    if scope_kind:
+        clauses.append("a.scope_kind=?")
+        params.append(scope_kind)
+    if scope_value:
+        clauses.append("a.scope_value=?")
+        params.append(scope_value)
+    where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
     # grouped by CHARACTER as well: two characters' candidates in one grid, with
     # one "chosen" between them, is unreadable and mispicks are invisible
-    rows = db.q("""SELECT a.*, c.name AS character_name
-                   FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
-                   ORDER BY a.scope_kind, a.scope_value, c.name, a.tier, a.view, a.id DESC""")
+    rows = db.q(f"""SELECT a.*, c.name AS character_name
+                    FROM anchors a LEFT JOIN characters c ON c.id = a.character_id{where}
+                    ORDER BY a.scope_kind, a.scope_value, c.name, a.tier, a.view, a.id DESC""",
+                *params)
     groups = {}
     for r in rows:
         key = (r["scope_kind"], r["scope_value"], r["character_id"], r["character_name"],
@@ -2954,25 +2971,43 @@ CHARACTER_FIELDS = ("role", "identity", "wardrobe", "body", "nude_wardrobe", "an
 # two characters one appearance -- the exact thing a cast exists to keep apart.
 # Role is absent because it is a label for you, not prompt text.
 COPYABLE_CHARACTER_FIELDS = ("wardrobe", "body", "nude_wardrobe", "anatomy")
-MAX_CHARACTER_FIELD = 1000
+
+# Was MAX_CHARACTER_FIELD = 1000, and the album profile it now also covers holds
+# a 961-character wardrobe today -- 39 from being refused by a bound it had never
+# been subject to. The point of the cap is to refuse absurd input, not to shape
+# prose, so it sits well clear of what the studio actually stores.
+MAX_PROMPT_FIELD = 2000
+
+
+def screen_prompt_field(value, field, where):
+    """One guard for prose a form is about to put into an image prompt.
+
+    Shared rather than copied per route. `check_character_fields` used to say the
+    cast was screened "exactly as the album profile's own fields would be if they
+    were free text from a form" -- and the album profile's fields ARE free text
+    from a form, and had no screening at all: no check_text, no check_override,
+    no bound, while every sibling path had all three. One guard, both callers, so
+    the next field added to either table cannot land unscreened.
+    """
+    if len(value) > MAX_PROMPT_FIELD:
+        raise HTTPException(400, f"{field} is {len(value)} characters; keep it under "
+                                 f"{MAX_PROMPT_FIELD}")
+    try:
+        tiers.check_text(value, f"{where} {field}")
+        tiers.check_override(value)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return value
 
 
 def check_character_fields(form):
-    """Character prose lands in image prompts, so it is screened exactly as the
-    album profile's own fields would be if they were free text from a form."""
+    """Character prose lands in image prompts, so it is screened."""
     out = {}
     for field in CHARACTER_FIELDS:
         if field not in form:
             continue
         value = " ".join((form.get(field) or "").split())   # single line: prompt fragment
-        if len(value) > MAX_CHARACTER_FIELD:
-            raise HTTPException(400, f"{field} is {len(value)} characters; keep it under "
-                                      f"{MAX_CHARACTER_FIELD}")
-        try:
-            tiers.check_text(value, f"character {field}")
-        except ValueError as e:
-            raise HTTPException(400, str(e))
-        out[field] = value
+        out[field] = screen_prompt_field(value, field, "character")
     return out
 
 
@@ -4498,10 +4533,17 @@ async def save_album_profile(id: int, request: Request):
     """
     get_playlist_or_404(id)
     form = await request.form()
+    # Screened before anything is written. Every one of these fields is composed
+    # into an anchor prompt, and this was the only free-text path in the studio
+    # that reached a render with no check_text, no check_override and no length
+    # bound -- and it is the widest-reaching one, because an album's profile is
+    # inherited by every sheet and every cast member who copies from it.
+    values = {key: screen_prompt_field((form.get(key) or "").strip(), key, "album")
+              for key in ALBUM_FIELDS if key in form}
     for key, (_label, default, _hint) in ALBUM_FIELDS.items():
-        if key not in form:
+        if key not in values:
             continue
-        value = (form.get(key) or "").strip()
+        value = values[key]
         db.run(f"UPDATE playlists SET {key}=? WHERE id=?",
                None if not value or value == default else value, id)
     return RedirectResponse("/playlists", status_code=303)
