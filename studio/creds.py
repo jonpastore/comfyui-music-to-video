@@ -35,9 +35,17 @@ PROVIDERS = {
     "xai": {"label": "xAI (Grok)", "env": "XAI_API_KEY",
             "file": os.path.expanduser("~/.config/morpheus/grok-mcp.env"),
             "note": "storyboards, mix suggestions and the album arc"},
-    "openai": {"label": "OpenAI", "env": "OPENAI_API_KEY", "file": "",
+    "openai": {"label": "OpenAI", "env": "OPENAI_API_KEY",
+               "file": os.path.expanduser("~/.config/morpheus/openai.env"),
                "note": "second album-arc backend"},
 }
+
+# A plain KEY=VALUE file for anything not covered above, searched for every
+# provider. Outside the repo on purpose -- a .env inside it would be rsynced to
+# the render box by deploy.sh and is one `git add -A` away from being committed,
+# which is why .gitignore carries it as well as belt and braces.
+ENV_FILE = os.environ.get("STUDIO_ENV_FILE",
+                          os.path.expanduser("~/.config/meowp-studio/.env"))
 
 # Outside db.DATA on purpose: the whole point is that a copy of the database is
 # useless without it. STUDIO_CRED_KEY moves it for a deployment that keeps
@@ -110,7 +118,9 @@ def get(name):
     p = PROVIDERS.get(name)
     if not p:
         return ""
-    value = os.environ.get(p["env"]) or _from_file(p.get("file"), p["env"])
+    value = (os.environ.get(p["env"])
+             or _from_file(p.get("file"), p["env"])
+             or _from_file(ENV_FILE, p["env"]))
     if value:
         return value
     row = db.one("SELECT ciphertext FROM credentials WHERE name=?", name)
@@ -123,6 +133,27 @@ def get(name):
         # told there is no secret, and the config page still says one is stored,
         # which is the truthful pair of statements.
         return ""
+
+
+def setting(env_name, provider=None):
+    """A NON-secret setting -- a model name, a base URL -- read with the same
+    precedence as a key, from the same files.
+
+    Separate from get() on purpose: this one is safe to render, log and put in
+    an error message, and keeping the two apart is what stops a value that is
+    printable today becoming a secret that leaks tomorrow.
+    """
+    value = os.environ.get(env_name)
+    if value:
+        return value
+    paths = [ENV_FILE]
+    if provider and PROVIDERS.get(provider, {}).get("file"):
+        paths.insert(0, PROVIDERS[provider]["file"])
+    for path in paths:
+        value = _from_file(path, env_name)
+        if value:
+            return value
+    return ""
 
 
 def put(name, value):
@@ -156,12 +187,17 @@ def status():
     out = []
     for name, p in PROVIDERS.items():
         env = bool(os.environ.get(p["env"]))
-        in_file = bool(_from_file(p.get("file"), p["env"])) if not env else False
+        in_file = ""
+        if not env:
+            for path in (p.get("file"), ENV_FILE):
+                if _from_file(path, p["env"]):
+                    in_file = path
+                    break
         row = stored.get(name)
         if env:
             source = f"environment ({p['env']})"
         elif in_file:
-            source = f"file ({p['file']})"
+            source = f"file ({in_file})"
         elif row:
             source = "stored here, encrypted"
         else:
@@ -171,7 +207,7 @@ def status():
                     "stored": bool(row), "updated": row["updated"] if row else None,
                     # an env or file key WINS, so say so rather than letting the
                     # page imply the stored one is in use
-                    "shadowed": bool(row) and (env or in_file)})
+                    "shadowed": bool(row) and bool(env or in_file)})
     return out
 
 
@@ -228,7 +264,29 @@ def demo():
         assert get("xai") == ""
         assert not db.one("SELECT id FROM credentials WHERE name='xai'")
 
-        # 6. an unreadable key file is not a crash -- the caller is told there
+        # 6. the general .env file is consulted for any provider, and a
+        #    NON-secret setting reads with the same precedence from the same
+        #    files -- that is how the model name travels beside the key
+        global ENV_FILE
+        real_env_file = ENV_FILE
+        ENV_FILE = os.path.join(tempfile.mkdtemp(), ".env")
+        with open(ENV_FILE, "w") as f:
+            f.write("OPENAI_API_KEY=sk-from-dotenv\nSTUDIO_OPENAI_MODEL=gpt-test-9\n")
+        try:
+            os.environ.pop("OPENAI_API_KEY", None)
+            assert get("openai") == "sk-from-dotenv", "the .env fallback was not consulted"
+            assert setting("STUDIO_OPENAI_MODEL", "openai") == "gpt-test-9"
+            assert setting("STUDIO_NOTHING_SET") == ""
+            # the environment still wins, for settings as well as secrets
+            os.environ["STUDIO_OPENAI_MODEL"] = "gpt-from-env"
+            assert setting("STUDIO_OPENAI_MODEL", "openai") == "gpt-from-env"
+            del os.environ["STUDIO_OPENAI_MODEL"]
+            src = {s["name"]: s for s in status()}["openai"]["source"]
+            assert ".env" in src, f"status did not name the file the key came from: {src}"
+        finally:
+            ENV_FILE = real_env_file
+
+        # 7. an unreadable key file is not a crash -- the caller is told there
         #    is no secret, which is true
         put("xai", "sk-third")
         with open(KEY_PATH, "wb") as f:

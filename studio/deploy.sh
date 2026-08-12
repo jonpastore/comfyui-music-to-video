@@ -101,12 +101,15 @@ Environment=COMFY_URL=http://127.0.0.1:8188
 # STUDIO_VISION_MODEL to pin one instead of auto-detecting.
 Environment=LITELLM_BASE=http://127.0.0.1:4000/v1
 # PIN the text model, do not auto-detect it here. The gateway fronts several
-# machines and the first match on this one is qwen3.6-coder -- which is ollama
-# on THIS box, where ComfyUI already holds ~22 GB of the 24 GB card. Ollama
-# then loads that 27B model on the CPU and says nothing. Measured through the
-# gateway: qwen3-coder (a different box) answered in 315 ms; qwen3.6-coder did
-# not answer at all in 90 s.
-Environment=STUDIO_TEXT_MODEL=qwen3-coder
+# machines and auto-detection cannot see which of them shares a GPU with the
+# renderer -- it used to pick qwen3.6-coder, which was ollama on THIS box behind
+# a card ComfyUI already fills, and it answered nothing in 90 s.
+#
+# qwen3.6 is Qwen3.6-35B-A3B on amd-halo :8007 with thinking OFF. Thinking
+# matters here: with it on the model spent 193 completion tokens and 4.0 s to
+# answer "say ok"; off, 2 tokens and 133 ms. Every studio caller wants short
+# structured output, not an essay about it.
+Environment=STUDIO_TEXT_MODEL=qwen3.6
 Environment=COMFY_INPUT=%h/ComfyUI/input
 Environment=COMFY_OUTPUT=%h/ComfyUI/output
 # Album profile: character, wardrobe, world, locations. The scripts carry no

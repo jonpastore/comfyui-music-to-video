@@ -24,11 +24,17 @@ import creds
 BACKENDS = ("xai", "openai")
 
 OPENAI_BASE = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
-# Not pinned to a dated snapshot: those retire, and a hard-coded one turns into
-# a 404 months later on a box nobody is watching. Overridable per call and by
-# environment for the same reason grok's model is.
-OPENAI_MODEL = os.environ.get("STUDIO_OPENAI_MODEL", "gpt-4o")
 OPENAI_TIMEOUT = float(os.environ.get("STUDIO_OPENAI_TIMEOUT", 600))
+# Last-resort fallback only. The model is read at CALL time from the same file
+# the key came from (STUDIO_OPENAI_MODEL beside OPENAI_API_KEY), because the
+# box that has the key is the box that knows which model that key can reach --
+# and a name hard-coded here is a 404 some months from now on a machine nobody
+# is watching. Never guess a model from memory: check what answers.
+OPENAI_MODEL_FALLBACK = "gpt-4o"
+
+
+def openai_model():
+    return creds.setting("STUDIO_OPENAI_MODEL", "openai") or OPENAI_MODEL_FALLBACK
 
 
 def available():
@@ -63,7 +69,7 @@ def chat_json(system, user, backend=None, model=None, progress=None):
         raw = grok._chat(model, [{"role": "system", "content": system},
                                  {"role": "user", "content": user}], progress)
     else:
-        model = model or OPENAI_MODEL
+        model = model or openai_model()
         raw = _openai_chat(model, system, user, progress)
     try:
         data = json.loads(raw)
