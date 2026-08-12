@@ -150,6 +150,30 @@ if pipeline:
             pipeline.SWARM, pipeline.COMFY_OUTPUT, pipeline._swarm_sid = was
 
     check("an unreachable SwarmUI fails loudly, not emptily", _swarm_down_is_loud)
+    check("pipeline.gen_audio", lambda: sig(
+        pipeline, "gen_audio", ["slug", "tags", "seconds", "progress"]))
+
+    def _audio_flags_exist_and_route_to_the_turing_box():
+        """gen_audio's flags must be ones make_audio.py declares, and the
+        checkpoint it names must be the fp16 cast.
+
+        The filename IS the routing policy: a loader enum is validated against
+        the literal string, cerberus holds the bf16 build under a different
+        name, and peaches is the only box with the fp16 one. Rename it here and
+        audio silently goes back to competing with video on a 5090 -- or stops
+        rendering anywhere.
+        """
+        import re
+        src = open(os.path.join(os.path.dirname(HERE), "make_audio.py")).read()
+        declared = set(re.findall(r'ap\.add_argument\("(--[a-z-]+)"', src))
+        for flag in ("--tags", "--lyrics", "--seconds", "--n", "--prefix",
+                     "--denoise", "--source", "--seed", "--steps", "--cfg", "--outdir"):
+            assert flag in declared, f"pipeline.gen_audio emits {flag}, make_audio.py does not take it"
+        assert re.search(r'^MODEL = "ace_step_v1_3\.5b_fp16\.safetensors"', src, re.M), \
+            "make_audio.py no longer names the fp16 cast, so audio no longer routes to peaches"
+
+    check("audio flags exist and the fp16 name is what routes them",
+          _audio_flags_exist_and_route_to_the_turing_box)
 
 grok = optional_import("grok")
 if grok:

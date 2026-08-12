@@ -956,6 +956,37 @@ def gen_artwork(slug, prompt, progress=None, anchor_path=None, source_path=None,
         return _submit_and_collect(wf_dir, prefix, "*.png", progress)
 
 
+def gen_audio(slug, tags, lyrics="", seconds=30.0, n=1, progress=None, seed=None,
+              source_path=None, denoise=1.0, steps=None, cfg=None):
+    """Generate audio with ACE-Step. Returns the rendered mp3 paths.
+
+    The eighth wrapper, and the same shape as the other seven: run a CLI script
+    into a temp dir, then _submit_and_collect. It does not know which box will
+    run it -- but make_audio.py names the fp16 checkpoint, and peaches is the
+    only backend holding a file by that name, so audio lands on the always-on
+    box by curation rather than by any routing rule. That is the point: every
+    minute of music generation is a minute not taken from video on a 5090.
+
+    source_path: a local audio file to re-synthesise from, for repairing a
+    region ffmpeg cannot cut. It is installed into the backends' input dirs
+    first, because LoadAudio takes a NAME, not a path -- the same reason
+    stage_refs exists for images.
+    """
+    args = ["--tags", tags, "--lyrics", lyrics, "--seconds", str(seconds),
+            "--n", str(n), "--prefix", f"audio_{slug}", "--denoise", str(denoise)]
+    if seed is not None:
+        args += ["--seed", str(seed)]
+    if steps is not None:
+        args += ["--steps", str(steps)]
+    if cfg is not None:
+        args += ["--cfg", str(cfg)]
+    if source_path:
+        args += ["--source", install_input(source_path)]
+    with tempfile.TemporaryDirectory() as wf_dir:
+        _run_script("make_audio.py", [*args, "--outdir", wf_dir], progress)
+        return _submit_and_collect(wf_dir, f"audio_{slug}", "*.mp3", progress)
+
+
 def contact_sheet(src_dir, out_jpg, cols=6):
     _run_script("make_contact_sheet.py", [src_dir, out_jpg, str(cols)])
     return out_jpg
@@ -1232,6 +1263,12 @@ def demo():
 
     def fake_submit_dir(wf_dir, progress=None):
         written["files"] = sorted(os.listdir(wf_dir))
+        for f in written["files"]:
+            wf = json.load(open(os.path.join(wf_dir, f)))
+            for node in wf.values():
+                ck = (node.get("inputs") or {}).get("ckpt_name")
+                if ck:
+                    written["last_ckpt"] = ck
         return [f"pid-{i}" for i in range(len(written["files"]))]
 
     globals()["submit_dir"] = fake_submit_dir
@@ -1249,6 +1286,20 @@ def demo():
             gen_refs("demo", "pg13", sb_path, "anchor.png", mp3_path)
         assert written.get("files"), "no workflow JSONs written"
         assert all(f.endswith(".json") for f in written["files"]), written["files"]
+
+        # --- and the real make_audio.py through gen_audio() ------------------
+        # The checkpoint NAME is the routing policy, so it is asserted on the
+        # JSON this actually writes rather than trusted from the script.
+        written.clear()
+        real_out2 = COMFY_OUTPUT
+        with tempfile.TemporaryDirectory() as out:
+            COMFY_OUTPUT = out
+            gen_audio("demo", "hip hop, 90 bpm", lyrics="la la", seconds=5, seed=7)
+        COMFY_OUTPUT = real_out2
+        assert written.get("files"), "gen_audio wrote no workflow"
+        assert written["last_ckpt"] == "ace_step_v1_3.5b_fp16.safetensors", \
+            ("audio would render on whichever box holds this name, and only "
+             "peaches holds the fp16 cast: " + str(written["last_ckpt"]))
     finally:
         globals()["submit_dir"] = real_submit_dir
 
