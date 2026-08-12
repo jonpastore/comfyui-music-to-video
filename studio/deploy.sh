@@ -18,6 +18,13 @@ rsync -a --delete \
   --exclude data/ --exclude __pycache__/ --exclude '*.pyc' \
   ./ "$R:$DEST/app/"
 
+# The real database is $DEST/data/studio.db, set by STUDIO_DATA in the unit.
+# Running the app by hand from the app directory WITHOUT that variable creates a
+# second, empty one at $DEST/app/data/studio.db -- and the --exclude above meant
+# it then survived every deploy. One sat there from Aug 10 with 0 songs and no
+# anchors table, as a decoy for "where did all my rows go".
+ssh $R "rm -rf $DEST/app/data"
+
 # The pipeline scripts live at the repo root and are imported by each other
 # (build_refs imports build_song), so they ship as a set into one directory.
 echo "== syncing pipeline scripts"
@@ -66,6 +73,17 @@ ssh $R "set -e
         $DEST/venv/bin/pip -q install --upgrade pip
         $DEST/venv/bin/pip -q install -r $DEST/app/requirements.txt"
 
+# The bind address, decided BEFORE the unit is written because the unit needs
+# it. Tailnet-only by default: this app has no authentication of any kind and
+# 0.0.0.0 put it on the LAN and on every docker bridge as well.
+# STUDIO_HOST=0.0.0.0 in the environment opts back out.
+IP=$(ssh $R 'tailscale ip -4 2>/dev/null | head -1')
+BIND="${STUDIO_HOST:-$IP}"
+if [ -z "$BIND" ]; then
+  echo "  WARNING: no tailscale IP on $R, binding 0.0.0.0 -- LAN and docker bridges too"
+  BIND=0.0.0.0
+fi
+
 echo "== systemd unit"
 ssh $R "mkdir -p ~/.config/systemd/user && cat > ~/.config/systemd/user/meowp-studio.service <<'UNIT'
 [Unit]
@@ -94,11 +112,15 @@ Environment=COMFY_OUTPUT=%h/ComfyUI/output
 # Album profile: character, wardrobe, world, locations. The scripts carry no
 # album content, so point this at a different profile for a different project.
 Environment=STUDIO_PROFILE=%h/meowp-studio/scripts/profiles/street_cats.json
-Environment=STUDIO_HOST=0.0.0.0
+# STUDIO_HOST is the BIND, and ExecStart below reads it. It used to be set here
+# and ignored: ExecStart hardcoded --host 0.0.0.0, so the deploy banner offered
+# "set STUDIO_HOST to the tailscale IP for tailnet-only" -- advice that would
+# have changed nothing while the banner then reported the isolation as done.
+Environment=STUDIO_HOST=$BIND
 Environment=STUDIO_PORT=8000
 # XAI_API_KEY is read from ~/.config/morpheus/grok-mcp.env by studio/grok.py.
 # It is deliberately NOT baked into this unit file.
-ExecStart=%h/meowp-studio/venv/bin/uvicorn app:app --host 0.0.0.0 --port 8000
+ExecStart=%h/meowp-studio/venv/bin/uvicorn app:app --host $BIND --port 8000
 Restart=on-failure
 RestartSec=3
 
@@ -117,14 +139,15 @@ if [ "${1:-}" != "--no-restart" ]; then
           systemctl --user --no-pager -l status meowp-studio.service | head -20"
 fi
 
-IP=$(ssh $R 'tailscale ip -4 2>/dev/null | head -1')
-
 # Smoke test: a green systemd status only proves uvicorn started, not that the
 # app imports its modules and renders. Hit the real pages and fail loudly.
+# Against $BIND, not 127.0.0.1: uvicorn --host takes ONE address, so a
+# tailnet-only bind does not answer on loopback and a loopback smoke test would
+# report the whole app down.
 echo "== smoke test"
 FAIL=0
 for P in / /playlists /tiers /jobs /models /anchors; do
-  CODE=$(ssh $R "curl -s -o /dev/null -w '%{http_code}' -m 15 http://127.0.0.1:8000$P" || echo 000)
+  CODE=$(ssh $R "curl -s -o /dev/null -w '%{http_code}' -m 15 http://$BIND:8000$P" || echo 000)
   printf "  %-12s %s\n" "$P" "$CODE"
   [ "$CODE" = "200" ] || FAIL=1
 done
@@ -139,18 +162,17 @@ ssh $R 'test -s ~/.config/morpheus/grok-mcp.env && grep -q "^XAI_API_KEY=." ~/.c
        echo "               fix: scp ~/.config/morpheus/grok-mcp.env $R:~/.config/morpheus/"; FAIL=1; }
 
 echo
-# Report the bind honestly. STUDIO_HOST defaults to 0.0.0.0, which is every
-# interface -- tailnet, LAN and any docker bridge -- not the tailnet alone.
-# That is a fine choice on a trusted home network, but the banner should not
-# claim an isolation the service is not enforcing.
-BIND=$(ssh $R "systemctl --user show meowp-studio -p Environment --value 2>/dev/null | tr ' ' '\n' | grep '^STUDIO_HOST=' | cut -d= -f2")
+# Report the bind honestly -- read back from the RUNNING unit, not from the
+# variable this script hoped to set, so a unit edited by hand is reported as it
+# actually is.
+RUNNING=$(ssh $R "systemctl --user show meowp-studio -p ExecStart --value 2>/dev/null | tr ' ' '\n' | grep -A1 -- '--host' | tail -1")
 if [ "$FAIL" = 0 ]; then
   echo "studio: http://${IP:-cerberus-ai}:8000"
-  if [ "${BIND:-0.0.0.0}" = "0.0.0.0" ]; then
+  if [ "${RUNNING:-0.0.0.0}" = "0.0.0.0" ]; then
     echo "        bound to 0.0.0.0 -- reachable on tailnet, LAN and docker bridges."
-    echo "        for tailnet-only: set STUDIO_HOST to the tailscale IP in the unit."
+    echo "        for tailnet-only: deploy with tailscale up, or STUDIO_HOST=<ip> ./deploy.sh"
   else
-    echo "        bound to $BIND"
+    echo "        bound to $RUNNING -- tailnet only, not the LAN or docker bridges"
   fi
 else
   echo "DEPLOYED BUT NOT HEALTHY -- see the failures above."
