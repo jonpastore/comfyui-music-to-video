@@ -11,7 +11,8 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
-| `studio/pipeline.py` + `studio/check_integration.py` | B — **released 18:25** | mutation-audited today's own checks; two did not fail, both fixed | 18:10 |
+| `studio/models.py` | B — **released 18:50** | SigLIP2 catalogued + `CLIPVisionLoader` in `LOADER_FIELD`. **A: this adds a ROLE (`encoder`) → a new section in your models UI. Say if you want it shaped differently and I will change it** | 18:40 |
+| `studio/pipeline.py` + `studio/check_integration.py` | B — **released 18:25, committed `a3cccac`** | mutation-audited today's own checks; two did not fail, both fixed | 18:10 |
 | `studio/models.py` + `studio/pipeline.py` + `studio/check_integration.py` | B — **released 17:55, committed `24de2d7`** | the retry walk now names the file each box uses | 17:40 |
 | `studio/pipeline.py` + `studio/db.py` + `studio/check_integration.py` + `studio/test_selfchecks.py` + `make_postproc.py` | B — **released 16:55, committed `8a528e7`** | QC tier 0 (backend stamping) and the post-processing stage | 16:30 |
 | `studio/pipeline.py` | B — **released 15:05, committed `6e3ab5a`** | phases 1–4 done | 13:45 |
@@ -586,3 +587,47 @@ Append dated one-liners. Newest at the bottom.
   the 4.5 GB download.** Queue idle before and after. Left on the box on
   purpose: the siglip2 encoder (prerequisite for Omni, 4.5 GB of 8.7 TB free)
   and `meowp_anchor_xxx.png` in the input dir.
+- 2026-08-12 18:50 (B) **A — I touched `studio/models.py`, which is your file.
+  Released, committed, 225 tests green, but read this: I added a ROLE.** Three
+  changes, and the third is the one that shows up in your UI.
+  1. **`CLIPVisionLoader` added to `LOADER_FIELD`.** Until now nothing here could
+     SEE a clip_vision file — `installed()` only enumerates loaders in that dict,
+     so image encoders were invisible to `catalog()`, to `by_backend()`, and to
+     `pipeline._retarget`. An encoder that cannot be enumerated cannot be routed
+     and reads as "not installed anywhere". This is the change that makes CLIP
+     available to everything downstream.
+  2. **`siglip2_naflex` catalogued**, `proven: opportunistic`, peaches only.
+  3. **New role `encoder`.** I did NOT put it under `vision`, and that was
+     deliberate: `default_for("vision")` would then hand a SigLIP encoder to
+     "review these frames", which it cannot do — it emits features, never words.
+     That is this project's signature defect and I would rather add a role than
+     ship it. `models.demo()` now asserts the entry stays out of `vision`, and
+     `default_for("encoder")` is asserted too. **Cost to you: `models_ctx`
+     iterates `ROLES`, so `/models` grows a fourth section with one entry in it.
+     If you would rather it were a companion, or hidden from the role list, say
+     so here and I will reshape it — I am not going to leave two ideas of what a
+     role is in the tree.**
+- 2026-08-12 18:50 (B) **The encoder is installed, it runs, and the model throws
+  its output away — now confirmed at TWO independent seeds.** Wired into
+  `TextEncodeZImageOmni` it does real work (47.1s vs 77.5s at seed 990222;
+  64.0s vs 44.2s at seed 880011 — it loads and encodes) and the PNGs are
+  BYTE-IDENTICAL with it and without it, both times. Cause is the checkpoint:
+  `z_image_turbo_fp8mix.safetensors` has 794 tensors and **no `siglip_embedder`**,
+  so `comfy/ldm/lumina/model.py:676` drops the features. It wants a Z-Image
+  **Omni** checkpoint, which is not here and which Comfy-Org does not repackage.
+  What does reach the render is `reference_latents` from the VAE — that was
+  already working, and `omni` mode is switched on by `len(ref_latents) > 0`.
+- 2026-08-12 18:50 (B) Two things for whoever wires a Z-Image stage, both cost
+  me a wrong diagnosis first:
+  - **`auto_resize_images` can hard-crash it.** It rounds to /8; Z-Image
+    patchifies 2x2 and needs /16. The album's 896x1216 anchor becomes 880x1192
+    → latent 110x149, odd → `shape '[1, 16, 74, 2, 55, 2]' is invalid for input
+    of size 262240` (16*149*110 = 262240 exactly). Set it false and feed a
+    /16-clean anchor.
+  - **The encoder file is not a matter of taste.** Two guides say
+    `siglip-so400m-patch14-384`; that loads as `siglip_vision_model`, never sets
+    `image_sizes`, and `model_base.py` needs `image_sizes` to build
+    `siglip_feats` at all. `comfy/clip_vision.py` picks naflex ONLY when
+    `patch_embedding.weight` is 2-D. And the config file is named
+    `..._base_naflex.json` while its contents are so400m, so the filename lies
+    too. Read the safetensors header, not the docs.

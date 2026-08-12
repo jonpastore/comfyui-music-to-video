@@ -46,6 +46,13 @@ ROLES = {
     "storyboard": "Writing the shot list from the lyrics",
     "vision": "Reviewing rendered frames, and describing an anchor",
     "audio": "Generative audio repair",
+    # NOT the same thing as "vision". A vision model LOOKS at a frame and says
+    # something about it; an encoder turns a reference image into features
+    # another model conditions on, and never produces words or pixels. They were
+    # nearly folded together, which would have put a SigLIP encoder in the list
+    # the UI offers for "review these frames" -- the editor promising what the
+    # renderer cannot do, one more time.
+    "encoder": "Turning a reference image into features a renderer can condition on",
 }
 
 # Roles whose models are rendered by one of this repo's own scripts, and so
@@ -63,6 +70,13 @@ LOADER_FIELD = {
     "CLIPLoader": "clip_name",
     "CheckpointLoaderSimple": "ckpt_name",
     "AudioEncoderLoader": "audio_encoder_name",
+    # Added 2026-08-12. Until then nothing here could SEE a clip_vision file:
+    # installed() only enumerates the loaders listed in this dict, so a box's
+    # image encoders were invisible to catalog(), to by_backend(), and to
+    # pipeline._retarget -- which is the thing that rewrites a filename to the
+    # spelling a box uses. An encoder that cannot be enumerated cannot be
+    # routed, cannot be reported missing, and reads as "not installed anywhere".
+    "CLIPVisionLoader": "clip_name",
 }
 
 # The SAME weights under a different filename on a different box. Availability
@@ -317,6 +331,46 @@ CATALOG = {
             "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors": "LoraLoaderModelOnly",
             "qwen_2.5_vl_7b_fp8_scaled.safetensors": "CLIPLoader",
             "qwen_image_vae.safetensors": "VAELoader"},
+    },
+    "siglip2_naflex": {
+        "role": "encoder",
+        # Installed and loading on peaches, and it changes NOTHING it is wired
+        # to today. That is not a hedge, it is measured -- see the notes.
+        "proven": "opportunistic",
+        "weights_gib": 4.23,    # the published file carries a text tower too
+        "label": "SigLIP2 so400m patch16 NaFlex (image encoder)",
+        "file": "siglip2_so400m_patch16_naflex.safetensors",
+        "loader": "CLIPVisionLoader",
+        "purpose": (
+            "Encodes a reference image into the `siglip_feats` that Z-Image Omni "
+            "conditions on. It renders nothing itself and has no CLI: it is a "
+            "companion an image model either uses or ignores."),
+        "notes": [
+            "INERT WITH THE Z-IMAGE WE HAVE, measured 2026-08-12 on peaches at two "
+            "independent seeds. Wiring it into TextEncodeZImageOmni costs real work "
+            "(47.1s vs 77.5s, and 64.0s vs 44.2s on the other seed -- it loads and "
+            "encodes) and the rendered PNGs are BYTE-IDENTICAL with it and without "
+            "it. Cause is in the checkpoint, not the wiring: "
+            "z_image_turbo_fp8mix.safetensors has 794 tensors and no siglip_embedder, "
+            "so comfy/ldm/lumina/model.py:676 drops the features -- `if (not omni) or "
+            "self.siglip_embedder is None`. It needs a Z-Image OMNI checkpoint, which "
+            "is not installed here and which Comfy-Org does not repackage.",
+            "The anchor DOES reach the render without it, by the other path: "
+            "reference_latents, from the VAE. Anchor vs no-anchor at one seed differ "
+            "by 67.1 mean absolute RGB, and `omni` mode is switched on by "
+            "len(ref_latents) > 0, never by this encoder.",
+            "WHICH FILE IS NOT A MATTER OF TASTE, and the usual advice is wrong. Two "
+            "guides recommend siglip-so400m-patch14-384; that loads as "
+            "siglip_vision_model, which never sets image_sizes, and model_base.py "
+            "needs image_sizes to build siglip_feats at all. comfy/clip_vision.py "
+            "picks the naflex config ONLY when patch_embedding.weight is 2-D. Verified "
+            "from this file's own safetensors header before trusting it: [1152, 768], "
+            "27 layers, width 1152. Note the config is named ..._base_naflex.json but "
+            "its contents are so400m, so the filename is not the guide either.",
+            "Peaches only, for now. Nothing on cerberus or gamingpc needs it while "
+            "Z-Image Omni is absent, and it is 4.5 GB.",
+        ],
+        "companions": {},
     },
     "ace_step_v1": {
         "role": "audio",
@@ -844,6 +898,23 @@ def demo():
     assert resolve("z_image_ae.safetensors",
                    {"ae.safetensors", "z_image_ae.safetensors"}) == "z_image_ae.safetensors"
     assert spellings("unaliased.safetensors") == ("unaliased.safetensors",)
+
+    # An encoder is not a renderer and must never be offered as one. It has no
+    # cli by construction (encoder is not in RENDERED_ROLES, which the invariant
+    # below already enforces), and it must not drift into the `vision` role,
+    # where default_for would hand it to "review these frames" -- a job it
+    # cannot do, because it emits features and never words.
+    enc = CATALOG["siglip2_naflex"]
+    assert enc["role"] == "encoder" and enc["role"] != "vision", enc["role"]
+    assert not enc.get("cli") and not enc.get("default"), enc
+    assert default_for("encoder") == "siglip2_naflex", default_for("encoder")
+    # and the loader it names has to be one installed() can actually enumerate,
+    # or the fleet page reports an installed encoder as missing everywhere
+    assert enc["loader"] in LOADER_FIELD, enc["loader"]
+    peaches_vis = {"CLIPVisionLoader": {"input": {"required": {"clip_name": [
+        ["siglip2_so400m_patch16_naflex.safetensors"]]}}}}
+    assert installed(peaches_vis)["CLIPVisionLoader"] == \
+        {"siglip2_so400m_patch16_naflex.safetensors"}, "clip_vision is not enumerable"
 
     ace_there = next(e for e in catalog(object_info=peaches) if e["key"] == "ace_step_v1")
     assert ace_there["available"] is True, "the fp16 cast read as a missing model"
