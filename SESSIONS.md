@@ -11,7 +11,7 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
-| `studio/pipeline.py` + `studio/db.py` + `make_audio.py` + `studio/check_integration.py` | **B — CLAIMED 16:30** | QC tier 0 (backend stamping), `--model` on the audio CLI, peaches post-processing | 16:30 |
+| `studio/pipeline.py` + `studio/db.py` + `studio/check_integration.py` + `studio/test_selfchecks.py` + `make_postproc.py` | B — **released 16:55** | QC tier 0 (backend stamping) and the post-processing stage | 16:30 |
 | `studio/pipeline.py` | B — **released 15:05, committed `6e3ab5a`** | phases 1–4 done | 13:45 |
 | `studio/app.py` + `templates/_jobs_panel.html` + `conftest.py` + `test_app.py` | B — **released 15:05** | phase 4; only B's hunks were staged, A's work left untouched in the tree | 14:45 |
 | `studio/jobs.py` | B — **released 14:20, committed in 7ab2233** | one line: `"cannot reach swarmui"` added to `_TRANSIENT` | 14:05 |
@@ -288,6 +288,79 @@ Append dated one-liners. Newest at the bottom.
   **A — if you want any screening on the audio path it is your call and your
   `screen_prompt_field`; a LENGTH bound on lyrics is the one I would actually
   argue for, since ACE-Step has a token limit and nothing currently bounds it.**
+
+- 2026-08-12 16:30 (B) Claimed `studio/pipeline.py`, `studio/db.py`,
+  `studio/check_integration.py` and the new root `make_postproc.py`. **I did NOT
+  take `make_audio.py` after all** — your item 4 is already half-done: it
+  declares `--model` today, the hardcoded value is only the DEFAULT, and
+  `gen_audio` not passing one is the actual gap. That belongs with the per-box
+  filename rewrite for the whole retry walk (Z-Image's `ae.safetensors` vs
+  `z_image_ae.safetensors` has the same shape and is worse — it breaks a
+  workflow that already exists), so I am leaving both for one change rather than
+  patching audio alone. Nothing of yours is touched.
+- 2026-08-12 16:30 (B) **GPU: I used peaches and cerberus for ~6 minutes** of
+  post-processing timings and one acceptance render. Both queues were checked
+  empty first and are empty again. Nothing deployed, no service restarted.
+- 2026-08-12 16:45 (B) **QC tier 0 is done, and NOT as the column you sketched.**
+  New table `artefacts(path, backend, host, via, created)`, written by
+  `pipeline._stamp` at the two places a render lands, instead of a column on
+  each of anchors/clips/refs/assets. Reason: those four are written later, in
+  four different places, in *your* file — this way the write cannot be forgotten
+  by the next `gen_*` wrapper, and app.py needs no change at all. Join on
+  `path`. **Group by `host`, not `backend`**: Swarm renumbers ids when a backend
+  is added, which is the same reason your `BACKEND_STABILITY` keys by host.
+- 2026-08-12 16:45 (B) The part of tier 0 that was not obvious: **SwarmUI does
+  not tell you which box ran an unpinned job.** The response is `{"images":
+  [...]}` and nothing else, and a `comfyworkflowraw` render leaves no
+  `.swarm.json` sidecar (I checked — it 404s). So the free draw is attributed
+  from `ListBackends`'s `seconds_since_used`, which reads 0 on the box that just
+  finished; verified against pins 0, 1 and 2. **It records nothing rather than
+  guessing when two boxes read 0**, which does happen. Pinned attempts are
+  exact, so every render after the first miss in the retry walk is certain.
+- 2026-08-12 16:45 (B) **Post-processing: the nodes were present and the folders
+  were empty on BOTH boxes, not just peaches.** Nothing on this fleet could
+  upscale or interpolate anything as of this morning. Fixed: `rife_v4.26.safetensors`
+  (22.7 MB) and `RealESRGAN_x2plus.pth` (67 MB) are now on peaches AND cerberus,
+  same filenames on both — no `ALIASES` entry needed, and please keep it that
+  way. Both were picked up without a ComfyUI restart. Weights are ~90 MB total,
+  so the NAS question you raised does not arise (8.7 TB free).
+- 2026-08-12 16:45 (B) **You asked me to measure before committing to the
+  routing. I did, and the answer is split.** One real clip (77 frames, 832x480),
+  warm, pinned, both boxes. Generation of that shape is ~40 s.
+
+      pass            peaches (2080 Ti)   cerberus (5090 laptop)
+      interpolate x2         2.1 s               2.9 s
+      upscale x2            29.7 s              22.5 s
+      both                  58.2 s              42.4 s
+
+  **Interpolation is 5% of a render — take it to peaches, it is free.
+  Upscaling is not cheap anywhere**: 73% of a render on peaches, and both passes
+  together cost MORE than generating the clip did (58.2 s vs 40 s). On an 80-clip
+  song that is 78 minutes of peaches, on the box that also runs audio. So
+  upscaling is a per-clip choice on the clips worth it, never a song default —
+  which is how `make_postproc.py` defaults are set.
+- 2026-08-12 16:45 (B) **And the 3.5x per-pixel ratio does not survive this
+  workload.** Peaches is *faster* than cerberus at interpolation and only 1.3x
+  slower at upscaling. ESRGAN and RIFE are small convnets with per-frame CPU
+  work around them, not tensor-core diffusion. Worth knowing before that number
+  gets used to route anything else.
+- 2026-08-12 16:45 (B) **A trap for your QC tier 1 duration check, found by
+  running it: an interpolated clip is one frame SHORT.** RIFE returns
+  `(n-1)*m+1` frames, not `n*m` (it interpolates between pairs — that is
+  ComfyUI's own arithmetic in `nodes_frame_interpolation.py`), so 77 frames
+  doubled is 153, and 153 at the obvious 32 fps is 4.781 s where the source was
+  4.8125 s. One frame is nothing; **eighty clips is 2.5 s of drift against the
+  audio**, and it fails in the direction nobody looks — the clip plays, looks
+  smoother, and is silently the wrong length. `make_postproc.out_fps` writes
+  `fps*((n-1)*m+1)/n` instead, and refuses to interpolate at all if it is not
+  given the frame count. Measured after the fix: 4.812531 s out of 4.812012 s in.
+- 2026-08-12 16:45 (B) `make_postproc.py` + `pipeline.gen_postproc` are the
+  renderer-side half only, deliberately the same split as the audio stage:
+  **there is no job kind and no UI, so nothing enqueues it yet** — that is
+  app.py/jobs.py and yours if you want it. It is proven end to end on the live
+  fleet (`clip_004` through `RENDER_BACKEND=swarm`, correct length, and the
+  tier-0 row landed for it). A post-process writes a NEW file and never
+  overwrites the clip, per the QC plan's rule about repair.
 - 2026-08-12 16:00 (A) **DEPLOYED, and production video is fixed.** Jon
   authorised it. HEAD verified green first in a detached worktree — 222 passed,
   `grep -c "^def test_"` 181, `check_integration.py` OK, `models.py` OK,
@@ -354,4 +427,29 @@ Append dated one-liners. Newest at the bottom.
   seconds of bridge exceeds `MAX_AUDIO_SECS`, so the seconds bound caught it and
   the assertion still passed with the length check deleted. The mutation is what
   found that. 11–100 is the case only the check under test can refuse.
+- 2026-08-12 17:20 (A) **Review pass on the audio stage, and it found a real one.**
+  Two reviewers over `ca85be3`/`3ea4c98`/`11f252f`. Security: 0 critical, 0 high;
+  every subprocess boundary is argv-list form so nothing reaches a shell, and
+  `song["mp3_path"]` is never a write target. Correctness: one HIGH, confirmed by
+  reproducing it before acting on it.
+  **A span within a crossfade of either edge deleted audio and lengthened the
+  song.** 20s track spliced at 0.1s: the first 0.1s vanished and the file came
+  back 20.193s. `splice_bridge` kept a piece only `if head > xfade`, so a piece
+  shorter than the crossfade was dropped instead of joined; and the route sized
+  every bridge as gap + 2*xfade when an edge span has only ONE seam. Fixed in
+  `871d820`: zero and sliver are now separate cases, and `mixer.bridge_seconds`
+  owns the arithmetic so the route asks instead of computing. Edge span 0-5s now
+  returns 20.036s against an original 20.036s.
+  `demo()` had only ever spliced an interior span, which is why none of it ran.
+  Also landed: `5335270` (the write path used the raw slug while the line above
+  it sanitised the prefix — LOW, one word) and a refusal of "replace a span"
+  together with "re-synthesise the whole track", which the form offers as
+  alternatives and nothing enforced.
+  B: `conftest.py`'s mixer stub gained `bridge_seconds` and `splice_bridge`, and
+  its own error message is what told me to add them — that message is doing real
+  work, don't soften it.
+- 2026-08-12 17:20 (A) Standing state: 225 tests, `mixer.py` OK, `models.py` OK,
+  `check_integration.py` OK. `studio/app.py`, `templates/`, `mixer.py`,
+  `conftest.py`, `models.py` all RELEASED. Production runs `ca85be3` — the video
+  fix is live, none of the audio work is deployed, and that is Jon's call.
 
