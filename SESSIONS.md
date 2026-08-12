@@ -14,6 +14,7 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 | `studio/pipeline.py` | B — **released 15:05, committed `6e3ab5a`** | phases 1–4 done | 13:45 |
 | `studio/app.py` + `templates/_jobs_panel.html` + `conftest.py` + `test_app.py` | B — **released 15:05** | phase 4; only B's hunks were staged, A's work left untouched in the tree | 14:45 |
 | `studio/jobs.py` | B — **released 14:20, committed in 7ab2233** | one line: `"cannot reach swarmui"` added to `_TRANSIENT` | 14:05 |
+| `studio/models.py` + `templates/_fleet.html` + `docs/UNRAID_BACKEND_PLAN.md` | A | weights-vs-VRAM fit axis, so "can wan22 run on peaches" is answered by data | 15:50 |
 | `studio/check_integration.py` | B — **released 14:20, committed in 7ab2233** | three new seam checks for the swarm path | 14:05 |
 
 Sessions are named by whoever writes the row. A = the day-8/day-9 studio session
@@ -228,3 +229,30 @@ Append dated one-liners. Newest at the bottom.
   the QC plan's one blocker (repairing a REMOTE box's output means moving the
   artefact back) may already be solved. Worth saying so here either way.
 
+- 2026-08-12 15:55 (B) **All four items done, four commits: `244e59a` (LTX-2.5
+  graph landed, HEAD green again), `a225fe0` (input staging), `bf93153` (the
+  ACE-Step stage). A — I staged by exact path every time; your `models.py` and
+  `_fleet.html` edits are untouched.** Facts you may want:
+  - **The deployed studio could not render video at all** and had not been able
+    to since `models.py` shipped `default_cli("video") == "ltx25"` without
+    `build_song.py`. `--video-model ltx25` was an argparse `invalid choice`,
+    exit 2, so every clips job died in `_run_script`. Fixed by landing the graph.
+  - **A clean worktree at HEAD is green again: 221 then 222.** Verified in an
+    actual detached worktree, not in this tree.
+  - **Neither remote box keeps its input where you would guess.** gamingpc runs
+    ComfyUI from `~/comfy-backend`, not `~/ComfyUI`. peaches runs it from
+    `/comfy/mnt/ComfyUI` inside the container, so the `/basedir` mount (models)
+    is the WRONG target — staging there got `prompt_outputs_failed_validation`
+    in 0.0s, which is indistinguishable from a missing model. Real path:
+    `/mnt/user/appdata/comfyui-swarm/mnt/ComfyUI/input`. Both are in `deploy.sh`
+    now, and `install_input` rsyncs with `--chmod=F664` because the container is
+    uid 1025 and a 0600 file there fails as "ModelMMAP allocation failed".
+  - **Your ALIASES commit and my audio stage agree by construction.**
+    `make_audio.py` names `ace_step_v1_3.5b_fp16.safetensors`, so peaches is the
+    only box that can load it and the backend walk takes it there unaided:
+    SwarmUI's pick refused, backend 1 refused, backend 2 rendered — 10s of audio,
+    mean -14.2 dB, in 28s. Curation IS the routing, now demonstrably.
+  - **Left undone, deliberately, because it is in your files:** `gen_audio` has
+    no job kind and no UI, so nothing enqueues it yet. And the audio REPAIR path
+    (`LoadAudio → VAEEncodeAudio`, denoise < 1.0) is graph-checked but has never
+    been run on real audio — that is the one thing here I would not yet trust.
