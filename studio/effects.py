@@ -155,17 +155,57 @@ def loudnorm_filter():
 # Validated by this module but NOT wired into render_set/mix_audio: both need a
 # second input stream (a sidechain, a second video). Refused at every entry
 # point rather than accepted and silently ignored.
-# "layer" came off this list when mixer._layer_join wired it into the set join.
-# "duck" is still here: sidechaincompress needs a second input time-aligned to
-# the running chain, and running_a is the ACCUMULATED mix, not the outgoing
-# item -- a naive sidechain ducks the whole set from its first second.
-UNSUPPORTED_KEYS = ("duck",)
+# Nothing left: layer and duck are both wired into the join now (mixer.
+# _layer_join and _duck_join). Kept as the place a future two-input effect goes
+# while it is validated but unwired, because the callers that consult it -- the
+# set editor and the mix suggester -- already do the right thing with it.
+UNSUPPORTED_KEYS = ()
+
+# Effects consumed at the TRANSITION between two items, not on one item's own
+# chain. Both were originally filed as per-item effects, which is exactly why
+# they sat unwired for so long: on one clip each looks like a filter that merely
+# "needs a second input", and there is no second input until the join.
+JOIN_KEYS = ("duck", "layer")
+
+
+def join_effects_without_overlap(effects_json, transition, secs):
+    """The JOIN_KEYS in this item's effects that its transition gives no window
+    to work in -- empty when there is nothing wrong.
+
+    Both blend or compress ACROSS the transition overlap, so a cut, or any
+    transition of zero length, has nothing for them to act on. Asked by every
+    caller that can know the answer: the set editor before it stores, mixadvice
+    before it suggests, and mixer before it renders. One predicate rather than
+    three, because three would drift and the drift would show up as an editor
+    accepting a setting the renderer refuses -- this codebase's recurring
+    defect, and the one day 4 recorded six instances of.
+    """
+    if not effects_json:
+        return []
+    try:
+        raw = json.loads(effects_json) if isinstance(effects_json, str) else effects_json
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(raw, dict):
+        return []
+    present = [k for k in JOIN_KEYS if k in raw]
+    if not present:
+        return []
+    try:
+        secs = float(secs or 0)
+    except (TypeError, ValueError):
+        secs = 0.0
+    return present if (transition or "cut") == "cut" or secs <= 0 else []
 
 # The keys THIS module owns. parse_effects deliberately ignores anything it
 # does not recognise, so callers that want "unknown key is a mistake" -- the
 # set editor and the mix suggester both do -- check against this plus
 # video_fx.VIDEO_KEYS rather than relying on the parser to complain.
-AUDIO_KEYS = ("sweep", "eq_kill", "echo_out", "phaser", "flanger", "gain_db", "loudnorm")
+# "duck" is here even though it is not part of the single-input chain, for the
+# same reason video_fx.VIDEO_KEYS carries "layer": both are keys this module
+# owns and validates, and the callers that use this tuple are asking "is this a
+# real key or a typo?". Leaving it out made a wired effect look invented.
+AUDIO_KEYS = ("sweep", "eq_kill", "echo_out", "phaser", "flanger", "gain_db", "loudnorm", "duck")
 
 DEFAULT_EFFECTS = {
     "loudnorm": True,

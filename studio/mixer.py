@@ -320,6 +320,70 @@ def _layer_join(running_v, nxt_v, out_v, offset, secs, blend, i):
     ]
 
 
+def _check_join_effects(items):
+    """Refuse a join effect that no join will ever read.
+
+    layer and duck act on the transition INTO the next item. Two ways to ask
+    for one that nothing consumes: on a cut, which has no overlap, and on the
+    LAST item, which has no next item -- the join loops run to n-1, so an effect
+    there is read by nobody. Both were silent drops until this existed, which is
+    the accepted-and-ignored outcome this codebase does not allow.
+    """
+    for i, it in enumerate(items):
+        fx_json = it.get("effects_json")
+        if i == len(items) - 1:
+            present = [k for k in effects.JOIN_KEYS
+                       if k in (json.loads(fx_json) if isinstance(fx_json, str) else (fx_json or {}))]
+            if present:
+                raise ValueError(
+                    f"the last item asks for {', '.join(present)}, which act on the transition "
+                    f"into the NEXT item -- and it has none. Move it to an earlier item, or "
+                    f"remove it.")
+            continue
+        no_window = effects.join_effects_without_overlap(
+            fx_json, it.get("transition"), it.get("secs"))
+        if no_window:
+            raise ValueError(
+                f"item {i + 1} asks for {', '.join(no_window)} across a cut, which has no "
+                f"overlap for them to act on. Give it a fade, dissolve or wipe with a "
+                f"duration, or remove them.")
+
+
+def _duck_fragment(effects_json):
+    """The sidechaincompress fragment for the transition OUT of this item, or
+    None. Read off the same item that carries `transition` and `secs`, for the
+    same reason layer is."""
+    if not effects_json:
+        return None
+    return effects.parse_effects(effects_json).get("duck") or None
+
+
+def _duck_join(running_a, nxt_a, out_a, offset, secs, comp, i):
+    """Push the outgoing mix down under the incoming track across the handover.
+
+    THE TRAP, and the whole reason this sat unwired: `running_a` is the
+    ACCUMULATED chain -- every item so far, `offset + secs` long -- while
+    `nxt_a` starts at 0 of its own stream. Feeding `nxt_a` straight into
+    sidechaincompress therefore ducks the WHOLE SET from its first second,
+    because as far as the compressor is concerned the incoming track is playing
+    over all of it.
+
+    adelay puts the sidechain copy where the incoming track actually lands, so
+    the compressor sees silence until `offset` and only pulls the mix down
+    across the handover. asplit is what makes that possible: one copy is
+    delayed and used only to drive the compressor, the other is the real
+    incoming audio that crossfades in undelayed.
+    """
+    dk, dkd, dm, dd = f"dk{i}", f"dkd{i}", f"dm{i}", f"dd{i}"
+    ms = max(0, int(round(offset * 1000)))
+    return [
+        f"[{nxt_a}]asplit=2[{dk}][{dm}]",
+        f"[{dk}]adelay=delays={ms}:all=1[{dkd}]",
+        f"[{running_a}][{dkd}]{comp}[{dd}]",
+        f"[{dd}][{dm}]acrossfade=d={secs:.3f}[{out_a}]",
+    ]
+
+
 def _audio_chain(gain_db, effects_json):
     """Per-item audio filter fragments, comma-joinable, ending with
     loudnorm (on by default -- see effects.py's own docstring: it's the
@@ -329,22 +393,17 @@ def _audio_chain(gain_db, effects_json):
     internal gain stage stays inert unless a set item's JSON explicitly asks
     for one.
 
-    A duck is REFUSED here, not dropped. sidechaincompress needs a second input
-    this per-item chain does not have, so parse_effects returns it under its own
-    key and nothing consumes it -- which meant a row stored before the editor
-    began refusing duck rendered as a silent no-op. Accepted-and-ignored is the
-    one outcome this codebase does not allow, so a legacy row fails loudly and
-    can be fixed rather than quietly producing the wrong mix."""
+    A duck is not read here and that is not the same as being dropped: it is a
+    two-input effect consumed at the JOIN by _duck_join, out of the transition
+    window, exactly as layer is by _layer_join. parse_effects already keeps it
+    out of "chain" for that reason. An item whose duck reaches NO join -- a cut,
+    or the last item in the set -- is refused by _build_render_set_filter and
+    mix_audio rather than silently ignored."""
     frags = []
     gain_db = float(gain_db or 0.0)
     if gain_db:
         frags.append(f"volume={gain_db:.3f}dB")
-    parsed = effects.parse_effects(effects_json)
-    if parsed.get("duck"):
-        raise ValueError("this item asks for duck, which is not wired into set rendering "
-                          "(sidechaincompress needs a second input). Remove it from the "
-                          "item's effects to render.")
-    frags += parsed["chain"]
+    frags += effects.parse_effects(effects_json)["chain"]
     return ",".join(frags)
 
 
@@ -478,6 +537,7 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
     just the bookkeeping needed to place transitions correctly.
     """
     n = len(infos)
+    _check_join_effects(items)
     lines = []
     for idx, info in enumerate(infos):
         video_extra = _video_fragment(items[idx].get("effects_json"))
@@ -497,14 +557,7 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
         out_v, out_a = f"vj{i}", f"aj{i}"
         blend = _layer_fragment(items[i].get("effects_json"))
         if transition == "cut" or secs <= 0:
-            # A blend needs an overlap and a cut has none. Refused, not dropped:
-            # a layer that silently did nothing on a cut is precisely the
-            # "control that looks available and does nothing" this codebase
-            # keeps producing.
-            if video_fx.layer_without_overlap(items[i].get("effects_json"), transition, secs):
-                raise ValueError(
-                    "this item asks for layer across a cut, which has no overlap to blend. "
-                    "Give it a fade, dissolve or wipe with a duration, or remove the layer.")
+            # a join effect on a cut was already refused by _check_join_effects
             lines.append(f"[{running_v}][{nxt_v}]concat=n=2:v=1:a=0[{out_v}]")
             lines.append(f"[{running_a}][{nxt_a}]concat=n=2:v=0:a=1[{out_a}]")
             running_dur += durations[i + 1]
@@ -520,7 +573,11 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
                 xf = _XFADE_NAMES.get(transition, "fade")
                 lines.append(f"[{running_v}][{nxt_v}]xfade=transition={xf}:duration={secs:.3f}:offset={offset:.3f}[{out_v}]")
             # audio crosses the same window either way: layer is video-only
-            lines.append(f"[{running_a}][{nxt_a}]acrossfade=d={secs:.3f}[{out_a}]")
+            comp = _duck_fragment(items[i].get("effects_json"))
+            if comp:
+                lines += _duck_join(running_a, nxt_a, out_a, offset, secs, comp, i)
+            else:
+                lines.append(f"[{running_a}][{nxt_a}]acrossfade=d={secs:.3f}[{out_a}]")
             running_dur += durations[i + 1] - secs
         running_v, running_a = out_v, out_a
     return lines, running_v, running_a, running_dur
@@ -608,6 +665,10 @@ def mix_audio(items, out_path, progress=None):
         raise RuntimeError(f"no audio stream in: {missing[0]}")
     durations = [_item_duration(info, it) for info, it in zip(infos, items)]
 
+    # the same refusal render_set makes, on the same items: an audio-only set
+    # that silently dropped a duck the video render honours would be two
+    # renders of one document disagreeing about the mix
+    _check_join_effects(items)
     lines = []
     for i, it in enumerate(items):
         chain = _audio_chain(it.get("gain_db"), it.get("effects_json"))
@@ -622,7 +683,12 @@ def mix_audio(items, out_path, progress=None):
             running_dur += durations[i + 1]
         else:
             _check_transition_fits(secs, running_dur)
-            lines.append(f"[{running}][a{i + 1}n]acrossfade=d={secs:.3f}[{out}]")
+            comp = _duck_fragment(items[i].get("effects_json"))
+            if comp:
+                lines += _duck_join(running, f"a{i + 1}n", out,
+                                     running_dur - secs, secs, comp, i)
+            else:
+                lines.append(f"[{running}][a{i + 1}n]acrossfade=d={secs:.3f}[{out}]")
             running_dur += durations[i + 1] - secs
         running = out
 
@@ -1027,12 +1093,15 @@ def demo():
         assert not _apply_beatmatch([dict(i) for i in _it])[0].get("_ramp"), \
             "the default must be the safe one"
 
-        # a stored duck fails loudly rather than rendering as a no-op
-        try:
-            _audio_chain(0, json.dumps({"duck": 0.5}))
-            raise AssertionError("a duck was accepted and silently dropped")
-        except ValueError as e:
-            assert "not wired" in str(e)
+        # duck is not in the per-item chain -- it is consumed at the JOIN by
+        # _duck_join, so _audio_chain leaves it alone rather than refusing it.
+        # Not the same as ignoring it: _check_join_effects refuses a duck no
+        # join will read, and the differential further down proves the one that
+        # IS read reaches the audio.
+        assert "sidechaincompress" not in _audio_chain(0, json.dumps({"duck": 0.5})), \
+            "duck leaked into the single-input per-item chain, which has no sidechain"
+        assert _duck_fragment(json.dumps({"duck": 0.5})), \
+            "the join can no longer see a duck, so it would render as a no-op"
 
         # aecho APPENDS its delay, and _item_duration is otherwise pure trim
         # arithmetic -- the editor was short by exactly the delay, up to 2s.
@@ -1265,6 +1334,66 @@ def demo():
         assert "blend=all_mode=screen" in joined, joined
         assert "xfade" not in joined, f"layer ran alongside the xfade it replaces:\n{joined}"
         assert "acrossfade=d=1.000" in joined, f"layer swallowed the audio transition:\n{joined}"
+
+        # --- duck: the outgoing mix pushed under the incoming track ----------
+        def mean_db(path, ss, t):
+            r = subprocess.run(["ffmpeg", "-v", "info", "-ss", f"{ss:.3f}", "-t", f"{t:.3f}",
+                                 "-i", path, "-af", "volumedetect", "-f", "null", "-"],
+                                capture_output=True, text=True)
+            m = re.search(r"mean_volume:\s*(-?\d+(?:\.\d+)?) dB", r.stderr)
+            assert m, f"no volumedetect output for {path}: {r.stderr[-400:]}"
+            return float(m.group(1))
+
+        duck_json = json.dumps({"duck": 1.0})
+        ducked = [{"audio": mp3, "transition": "fade", "secs": 1.5,
+                   "effects_json": duck_json},
+                  {"audio": mp3_b, "transition": "cut", "secs": 0.0}]
+        undicked = [{"audio": mp3, "transition": "fade", "secs": 1.5},
+                    {"audio": mp3_b, "transition": "cut", "secs": 0.0}]
+        out_duck = os.path.join(tmpdir, "mix_duck.mp3")
+        out_flat = os.path.join(tmpdir, "mix_flat.mp3")
+        mix_audio(ducked, out_duck)
+        mix_audio(undicked, out_flat)
+
+        # 4s + 4s with a 1.5s transition -> the handover is 2.5-4.0s
+        # THE TRAP, asserted first: running_a is the ACCUMULATED chain and
+        # nxt_a starts at 0 of its own stream, so a sidechain fed the incoming
+        # track undelayed ducks the ENTIRE mix from its first second. Before the
+        # handover the two renders must be indistinguishable.
+        early_duck, early_flat = mean_db(out_duck, 0.5, 1.5), mean_db(out_flat, 0.5, 1.5)
+        assert abs(early_duck - early_flat) < 0.5, \
+            f"duck reached audio before the transition: {early_duck} vs {early_flat} dB"
+
+        # and across the handover it must actually pull the mix down
+        mid_duck, mid_flat = mean_db(out_duck, 2.6, 1.3), mean_db(out_flat, 2.6, 1.3)
+        assert mid_duck < mid_flat - 1.0, \
+            f"duck changed nothing across the handover: {mid_duck} vs {mid_flat} dB"
+
+        # the graph: the sidechain copy is DELAYED onto the running timeline,
+        # which is the whole fix -- 4s of item one, 1.5s transition -> 2500ms
+        duck_lines, _, _, _ = _build_render_set_filter(
+            [{"has_audio": True}, {"has_audio": True}], [4.0, 4.0],
+            [{"transition": "fade", "secs": 1.5, "effects_json": duck_json},
+             {"transition": "cut", "secs": 0.0}], 320, 240, 16)
+        joined_d = "\n".join(duck_lines)
+        assert "sidechaincompress" in joined_d, joined_d
+        assert "adelay=delays=2500:all=1" in joined_d, \
+            f"the sidechain was not aligned to the running chain:\n{joined_d}"
+        assert "asplit=2" in joined_d, "the incoming track must feed both the sidechain and the mix"
+
+        # a join effect nothing will read is refused, both ways it can happen
+        for bad_items, why in (
+            ([{"audio": mp3, "transition": "cut", "secs": 0.0, "effects_json": duck_json},
+              {"audio": mp3_b, "transition": "cut", "secs": 0.0}], "no overlap"),
+            ([{"audio": mp3, "transition": "fade", "secs": 1.0},
+              {"audio": mp3_b, "transition": "cut", "secs": 0.0,
+               "effects_json": duck_json}], "the last item"),
+        ):
+            try:
+                mix_audio(bad_items, os.path.join(tmpdir, "should_not_exist4.mp3"))
+                raise AssertionError(f"a duck with {why} was accepted")
+            except ValueError:
+                pass
 
         # --- beatmatch application: an item with beatmatch=1 gets out_secs/secs
         # recomputed from its OWN beat grid (video_fx.beat_cut_offsets). Both

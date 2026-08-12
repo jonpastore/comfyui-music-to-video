@@ -179,9 +179,11 @@
   {% endif %}
   <p class="hint">Loudness matching is always on. Optional keys: sweep, eq_kill, echo_out, phaser,
     flanger, gain_db (audio); grade, glitch (video).
-    <code>layer</code> &mdash; <code>{"layer": {"mode": "screen", "opacity": 0.4}}</code> &mdash;
-    blends this clip and the next across the transition instead of crossfading them, so it
-    needs a transition with a duration and is refused on a cut.</p>
+    Two act on the HANDOVER, not on this track alone:
+    <code>{"layer": {"mode": "screen", "opacity": 0.4}}</code> blends this clip and the next
+    instead of crossfading them, and <code>{"duck": 0.8}</code> pushes the outgoing mix under
+    the incoming track as it comes in. Both need a transition with a duration, so both are
+    refused on a cut and on the last item.</p>
   {% if beatmatch_plan.get(it.id) %}
   <p class="hint">{{ beatmatch_plan[it.id].note or "" }}</p>
   {% endif %}

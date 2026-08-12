@@ -52,13 +52,14 @@ def _system_prompt():
         "beatmatch true snaps the transition to the beat; prefer it when both tracks have a "
         "known bpm and they are close.\n"
         "Audio effects you may set, all optional: "
-        f"{', '.join(k for k in sorted(fx.DEFAULT_EFFECTS) if k not in ('loudnorm', 'duck'))}. "
-        "Loudness matching is always on and is not yours to set. Do not use duck -- it needs a "
-        "sidechain input and is not wired.\n"
-        "Video looks you may set, all optional: grade, glitch. Also layer "
+        f"{', '.join(k for k in sorted(fx.DEFAULT_EFFECTS) if k != 'loudnorm')}. "
+        "Loudness matching is always on and is not yours to set.\n"
+        "Video looks you may set, all optional: grade, glitch.\n"
+        'Two effects act on the HANDOVER rather than on one track: duck ({"duck": 0.0-1.0}), '
+        "which pushes the outgoing mix under the incoming track as it comes in, and layer "
         '({"layer": {"mode": "screen|overlay|difference", "opacity": 0.0-1.0}}), which blends '
-        "the two clips across the transition instead of crossfading them -- only on an item "
-        "whose transition has a duration, never on a cut.\n\n"
+        "the two clips instead of crossfading them. Set either only on an item whose transition "
+        "has a duration -- never on a cut, and never on the last item, which has no handover.\n\n"
         "Reply with JSON only: {\"items\": [{\"id\": <item id>, \"transition\": \"...\", "
         "\"secs\": <number>, \"beatmatch\": true|false, \"effects\": {...}, "
         "\"why\": \"one short sentence\"}]}\n"
@@ -114,18 +115,18 @@ def clean(raw, valid_ids, only_id=None):
             # video validator gets only its own keys, because it REFUSES ones it
             # does not own while the audio one ignores them. A suggestion cannot
             # put a value into a filtergraph that hand-editing would be refused
-            # for -- and cannot smuggle in duck or layer, which are validated
-            # but not wired.
+            # for.
             try:
                 if any(k in eff for k in fx.UNSUPPORTED_KEYS):
                     raise ValueError("unsupported effect")
-                # layer blends the two clips across the transition WINDOW, so a
-                # cut has nothing to blend and render_set refuses it. Refused
-                # here too, against this entry's own transition, or the
-                # suggestion would offer a mix the renderer will not produce --
-                # the recurring defect in this codebase.
-                if video_fx.layer_without_overlap(eff, s.get("transition"), s.get("secs")):
-                    raise ValueError("layer needs a transition with a duration")
+                # duck and layer act across the transition WINDOW, so a cut has
+                # nothing for them to act on and mixer refuses them. Refused here
+                # too, against this entry's own transition, or the suggestion
+                # would offer a mix the renderer will not produce -- the
+                # recurring defect in this codebase.
+                bad = fx.join_effects_without_overlap(eff, s.get("transition"), s.get("secs"))
+                if bad:
+                    raise ValueError(f"{', '.join(bad)} need a transition with a duration")
                 # parse_effects ignores what it does not recognise, so a model
                 # inventing an effect name would otherwise be stored and do
                 # nothing at render -- the model gets told which keys exist, so
@@ -209,19 +210,19 @@ def demo():
         {"items": [{"id": 1, "transition": "fade", "effects": {"nonsense": 1}}]}, ids)[1]
     assert "effects_json" not in clean(
         {"items": [{"id": 1, "transition": "fade", "effects": {"duck": {"amount": 5}}}]}, ids)[1], \
-        "duck is not wired and must not be suggested into a filtergraph"
+        "duck takes a number, not an object -- parse_effects would have refused it"
 
-    # layer IS wired, but only across a transition that has a window. Both
-    # halves, because a rule that only ever refuses is indistinguishable from
-    # the effect never having been enabled.
-    lay = {"mode": "screen", "opacity": 0.4}
-    ok = clean({"items": [{"id": 1, "transition": "fade", "secs": 2,
-                            "effects": {"layer": lay}}]}, ids)[1]
-    assert json.loads(ok["effects_json"])["layer"] == lay, ok
-    assert "effects_json" not in clean(
-        {"items": [{"id": 1, "transition": "cut", "secs": 0,
-                     "effects": {"layer": lay}}]}, ids)[1], \
-        "layer on a cut has no overlap to blend and render_set refuses it"
+    # duck and layer ARE wired, but only across a transition that has a window.
+    # Both halves of each, because a rule that only ever refuses is
+    # indistinguishable from the effect never having been enabled at all.
+    for key, value in (("layer", {"mode": "screen", "opacity": 0.4}), ("duck", 0.7)):
+        ok = clean({"items": [{"id": 1, "transition": "fade", "secs": 2,
+                                "effects": {key: value}}]}, ids)[1]
+        assert json.loads(ok["effects_json"])[key] == value, (key, ok)
+        assert "effects_json" not in clean(
+            {"items": [{"id": 1, "transition": "cut", "secs": 0,
+                         "effects": {key: value}}]}, ids)[1], \
+            f"{key} on a cut has no window to act in and mixer refuses it"
 
     # only_id narrows the reply even when the model answers for everything
     both = {"items": [{"id": 1, "transition": "fade"}, {"id": 2, "transition": "cut"}]}

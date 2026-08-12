@@ -91,29 +91,6 @@ def layer(mode, opacity):
     return f"blend=all_mode={mode}:all_opacity={o:.3f}"
 
 
-def layer_without_overlap(effects, transition, secs):
-    """True when this item asks for `layer` but its transition gives it no
-    window to blend in.
-
-    layer replaces the crossfade across the transition overlap, so a cut -- or
-    any transition of zero length -- has nothing to blend. Defined once and
-    asked by all three callers (the set editor before it stores, mixadvice
-    before it suggests, mixer before it renders) because the alternative is the
-    defect this codebase keeps making: an editor that accepts a setting the
-    renderer then refuses, or worse, silently drops.
-    """
-    if not effects:
-        return False
-    raw = json.loads(effects) if isinstance(effects, str) else effects
-    if not isinstance(raw, dict) or "layer" not in raw:
-        return False
-    try:
-        secs = float(secs or 0)
-    except (TypeError, ValueError):
-        secs = 0.0
-    return (transition or "cut") == "cut" or secs <= 0
-
-
 def parse_effects_json(effects_json):
     """set_items.effects_json (JSON string, dict, or None/"") -> {"grade":
     fragment, "glitch": fragment, "layer": fragment}, one key per effect

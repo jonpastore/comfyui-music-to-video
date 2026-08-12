@@ -446,13 +446,12 @@ def clamp_set_item_params(in_secs, out_secs, gain_db, transition, secs):
     return in_secs, out_secs, gain_db, transition, secs
 
 
-# "duck" is the one effects.py fragment mixer.py still does not wire into a
-# set (see mixer._audio_chain: sidechaincompress needs a second input aligned
-# to the accumulated chain). "layer" was here too until mixer._layer_join
-# wired it into the join. Refusing rather than silently accepting-and-ignoring
-# matches the rest of this codebase's own rule: a choice that looks available
-# but does nothing is worse than one that doesn't exist (see the anchor-view
-# trap in CONTINUATION-*.md).
+# Nothing is unsupported any more -- duck and layer are both wired at the join
+# (mixer._duck_join, mixer._layer_join). This stays as the hook a future
+# validated-but-unwired effect goes on, because refusing rather than silently
+# accepting-and-ignoring is this codebase's own rule: a choice that looks
+# available but does nothing is worse than one that doesn't exist (see the
+# anchor-view trap in CONTINUATION-*.md).
 _UNSUPPORTED_EFFECT_KEYS = effects.UNSUPPORTED_KEYS
 
 
@@ -3804,14 +3803,16 @@ def edit_set_item(id: int, item_id: int, in_secs: BlankFloat = Form(None),
     in_secs, out_secs, gain_db, transition, secs = clamp_set_item_params(
         in_secs, out_secs, gain_db, transition, secs)
     effects_json = clamp_set_item_effects(effects_json)
-    # layer is checked HERE, not inside clamp_set_item_effects, because it is
-    # the only effect whose validity depends on a field outside the JSON: it
-    # blends across the transition window, and this is the first place that
-    # knows what transition was submitted alongside it.
-    if video_fx.layer_without_overlap(effects_json, transition, secs):
-        raise HTTPException(400, "layer blends this clip and the next across the transition, "
-                                  "so it needs a transition with a duration -- a cut has no "
-                                  "overlap to blend. Pick fade, dissolve or wipe, or remove it.")
+    # duck and layer are checked HERE, not inside clamp_set_item_effects,
+    # because they are the effects whose validity depends on a field outside
+    # the JSON: both act across the transition window, and this is the first
+    # place that knows what transition was submitted alongside them.
+    no_window = effects.join_effects_without_overlap(effects_json, transition, secs)
+    if no_window:
+        raise HTTPException(400, f"{', '.join(no_window)} act across the transition between "
+                                  f"this clip and the next, so they need a transition with a "
+                                  f"duration -- a cut has no overlap. Pick fade, dissolve or "
+                                  f"wipe, or remove them.")
     # The mixing note is free text that will be handed to a model, so it is
     # screened exactly like the anchor prompt, the tier wording and the
     # storyboard direction. Kept beside the JSON it produced: the JSON stays

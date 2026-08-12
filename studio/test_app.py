@@ -2676,29 +2676,26 @@ def test_set_item_effects_json_validated_screened_and_rendered():
                                      "effects_json": '{"note": "a 12 year old mix"}'})
         assert bad_text.status_code == 400, bad_text.text
 
-        # duck still needs a sidechain input mixer._audio_chain does not have,
-        # so it is refused outright rather than silently accepted-and-ignored
-        r = client.post(f"/sets/{row['id']}/items/{item['id']}",
-                        data={"transition": "cut", "secs": "0", "effects_json": '{"duck": 0.5}'})
-        assert r.status_code == 400, r.text
+        # duck and layer are BOTH wired now, at the join rather than on one
+        # item's chain -- so what decides them is the transition, not the key.
+        # Refused on a cut HERE, at edit time, not left for the renderer to
+        # refuse later: an editor that stores a setting the renderer rejects is
+        # the defect this codebase keeps making.
+        #
+        # Both halves of both, because a rule that only ever refuses is
+        # indistinguishable from the effect never having been enabled at all.
+        for join_fx in ('{"layer": {"mode": "screen", "opacity": 0.5}}', '{"duck": 0.8}'):
+            r = client.post(f"/sets/{row['id']}/items/{item['id']}",
+                            data={"transition": "cut", "secs": "0", "effects_json": join_fx})
+            assert r.status_code == 400, f"accepted on a cut: {join_fx}"
+            assert "overlap" in r.text, r.text
 
-        # layer IS wired now -- but it blends across the transition window, so
-        # a cut has nothing to blend. Refused HERE, at edit time, not left for
-        # render_set to refuse later: an editor that stores a setting the
-        # renderer rejects is the defect this codebase keeps making.
-        lay = '{"layer": {"mode": "screen", "opacity": 0.5}}'
-        r = client.post(f"/sets/{row['id']}/items/{item['id']}",
-                        data={"transition": "cut", "secs": "0", "effects_json": lay})
-        assert r.status_code == 400, r.text
-        assert "overlap" in r.text, r.text
+            r = client.post(f"/sets/{row['id']}/items/{item['id']}",
+                            data={"transition": "fade", "secs": "1.5", "effects_json": join_fx})
+            assert r.status_code in (200, 303), f"refused on a real transition: {r.text[:200]}"
+            assert json.loads(db.one("SELECT effects_json FROM set_items WHERE id=?",
+                                      item["id"])["effects_json"]) == json.loads(join_fx)
 
-        # ...and accepted on a transition that HAS a window, which is the half
-        # that fails if the removal from UNSUPPORTED_KEYS was never done
-        r = client.post(f"/sets/{row['id']}/items/{item['id']}",
-                        data={"transition": "fade", "secs": "1.5", "effects_json": lay})
-        assert r.status_code in (200, 303), r.text
-        assert json.loads(db.one("SELECT effects_json FROM set_items WHERE id=?",
-                                  item["id"])["effects_json"]) == json.loads(lay)
         # put the item back as the rest of this test expects to find it
         client.post(f"/sets/{row['id']}/items/{item['id']}",
                     data={"transition": "cut", "secs": "0", "effects_json": good})
