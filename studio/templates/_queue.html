@@ -1,0 +1,62 @@
+{# The work in flight, on whatever page you started it from.
+
+   GLOBAL, not scoped to this page's jobs, and that is the point: there is one
+   serialized worker and one GPU, so a set render genuinely does wait behind an
+   anchor sweep somebody queued from another tab. A queue filtered to "your"
+   jobs would show an empty list while the thing actually blocking you ran
+   invisibly -- which is the state every page except /jobs was in before this
+   existed.
+
+   Self-polling on this element, so the swapped replacement keeps polling. The
+   interval comes from the server: 5s while anything is moving, off when the
+   queue is empty, because a page that polls every five seconds forever is a
+   page that never lets the machine idle. #}
+<div id="queue-panel" class="queue-panel"
+     {% if queue_refresh_secs %}hx-get="/queue" hx-trigger="every {{ queue_refresh_secs }}s"
+     hx-target="#queue-panel" hx-swap="outerHTML"{% endif %}>
+
+  <div class="queue-head">
+    <h3>Queue</h3>
+    {% if queue_active or queue_waiting %}
+    <span class="muted">{{ queue_active | length }} running &middot;
+      {{ queue_waiting | length }} waiting{% if queue_refresh_secs %} &middot;
+      refreshing every {{ queue_refresh_secs }}s{% endif %}</span>
+    {% else %}
+    <span class="muted">idle &mdash; not polling</span>
+    {% endif %}
+    <a class="linkish" href="/jobs">all jobs</a>
+  </div>
+
+  {% if not queue_active and not queue_waiting and not queue_recent %}
+  <p class="empty">Nothing queued.</p>
+  {% else %}
+  <table class="list queue-list">
+    <tbody>
+    {% for e in queue_active + queue_waiting + queue_recent %}
+    <tr{% if e.job.status in ("failed", "cancelled") %} class="queue-bad"{% endif %}>
+      <td class="status-{{ e.job.status }}" data-job-msg>{{ e.job.status }}</td>
+      <td>{{ e.desc }}</td>
+      <td class="num">{% if e.elapsed is not none %}{{ "%.0f"|format(e.elapsed) }}s{% endif %}</td>
+      {# The progress line is where a render says which sheet of how many it is
+         on. Truncated rather than wrapped: this panel sits above the work, and
+         a queue that reflows the page every five seconds is worse than one
+         that clips a long line. #}
+      <td class="truncate queue-progress">{{ e.job.progress or e.job.error or "" }}</td>
+      <td class="queue-actions">
+        <a class="linkish" href="/jobs/{{ e.job.id }}/log">log</a>
+        {% if e.job.status in ("queued", "running") %}
+        <form method="post" action="/jobs/{{ e.job.id }}/cancel" style="display:inline">
+          <button type="submit" class="ghost btn-sm">Cancel</button>
+        </form>
+        {% elif e.job.status in ("failed", "cancelled") %}
+        <form method="post" action="/jobs/{{ e.job.id }}/retry" style="display:inline">
+          <button type="submit" class="ghost btn-sm">Retry</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>

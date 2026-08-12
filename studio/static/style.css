@@ -1128,3 +1128,26 @@ button.linkish.danger, .linkish.danger {
   color: var(--danger); background: none; border: none; padding: 0;
   font-weight: inherit; text-decoration: underline; cursor: pointer;
 }
+
+/* ---- the queue panel, on every page that can start work ------------------ */
+.queue-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 1.25rem;
+}
+.queue-head { display: flex; align-items: baseline; gap: 0.75rem; }
+.queue-head h3 { margin: 0; font-size: 1rem; }
+.queue-head .muted { font-size: 0.85rem; }
+.queue-head a { margin-left: auto; font-size: 0.85rem; }
+.queue-panel .empty { margin: 0.4rem 0 0; }
+/* Rows are tight and the boundary between them recedes: this is a status
+   panel sitting above the actual work, not a table to be read row by row. */
+.queue-list { margin: 0.5rem 0 0; font-size: 0.85rem; }
+.queue-list td { padding: 0.2rem 0.5rem; border-bottom: 1px solid var(--divider); }
+.queue-list tr:last-child td { border-bottom: none; }
+.queue-list .queue-progress { color: var(--muted); max-width: 32rem; }
+.queue-list .queue-actions { white-space: nowrap; text-align: right; }
+.queue-list tr.queue-bad .queue-progress { color: var(--danger); }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

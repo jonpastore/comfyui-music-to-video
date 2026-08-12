@@ -4758,3 +4758,66 @@ def test_job_status_classes_have_rules_behind_them():
         assert f".status-{state}" in css, f".status-{state} is emitted with no rule behind it"
     # the running marker must not animate for someone who asked it not to
     assert "prefers-reduced-motion" in css
+
+
+def test_every_page_shows_the_queue_and_stops_polling_when_it_drains(patch_stub):
+    """Work queued from Sets, Playlists, Arc or a song page reported NOTHING --
+    "go and look at /jobs yourself" was the entire feedback mechanism, and
+    _jobs_panel.html, the only self-refreshing component in the app, was
+    included by exactly one page.
+
+    The panel is GLOBAL on purpose. One serialized worker and one GPU means a
+    set render really does wait behind an anchor sweep started in another tab;
+    a queue filtered to this page's own jobs would show an empty list while the
+    thing actually blocking you ran invisibly.
+    """
+    patch_stub("pipeline", gen_anchor=lambda *a, **k: [])
+    with TestClient(appmod.app) as client:
+        # the placeholder is on every page, and fetches itself
+        for path in ("/", "/anchors", "/playlists", "/sets", "/tiers", "/models", "/config"):
+            page = client.get(path).text
+            assert 'id="queue-panel"' in page and 'hx-get="/queue"' in page, \
+                f"{path} cannot show what it queued"
+        # ...except /jobs, which IS the queue and has its own poll. Two pollers
+        # on one page is one poller too many.
+        assert 'hx-get="/queue"' not in client.get("/jobs").text
+
+        # Polls if and only if there is work. Asserted as an INVARIANT rather
+        # than by draining the queue first: it is global by design, other tests
+        # legitimately leave jobs in flight, and a drain loop here waits on a
+        # job this test knows nothing about. The forced-busy case is below.
+        ctx = appmod.queue_ctx()
+        idle = client.get("/queue").text
+        if ctx["queue_active"] or ctx["queue_waiting"]:
+            assert 'hx-trigger="every 5s"' in idle
+        else:
+            assert "hx-trigger" not in idle, "an empty queue polls every 5s forever"
+            assert ctx["queue_refresh_secs"] == 0
+            if not ctx["queue_recent"]:
+                assert "Nothing queued." in idle
+
+        # busy: it lists the work and polls at 5s
+        hold = threading.Event()
+        patch_stub("pipeline", gen_anchor=lambda *a, **k: (hold.wait(20) or []))
+        client.post("/playlists", data={"name": "Queue Album"})
+        client.post("/anchors", headers={"accept": "application/json"},
+                    data={"album": "Queue Album", "tier": "r", "view": "front",
+                          "n": "1", "prompt_r": "", "mode": "quality"},
+                    files=[("images", ("q.png", _png_bytes(), "image/png"))])
+        jid = db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"]
+        try:
+            busy = client.get("/queue").text
+        finally:
+            hold.set()
+        assert "every 5s" in busy, "a busy queue is not refreshing"
+        assert 'hx-trigger="every 5s"' in busy
+        assert "Nothing queued." not in busy
+        assert "Generate anchor candidates" in busy, "the queue does not say WHAT is running"
+        # cancelable from wherever you are, without leaving the page
+        assert f'action="/jobs/{jid}/cancel"' in busy
+        wait_job(jid)
+
+        # a job that finished a moment ago is still visible -- a render that
+        # completes while you look away must still be there when you look back
+        done = client.get("/queue").text
+        assert "Generate anchor candidates" in done, "a just-finished job vanished silently"

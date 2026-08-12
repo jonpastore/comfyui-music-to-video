@@ -4967,6 +4967,57 @@ def jobs_page(request: Request, refresh: str = "auto", partial: int = 0):
     return templates.TemplateResponse(request, "_jobs_panel.html" if partial else "jobs.html", ctx)
 
 
+# How recently a finished job is still worth showing on the page that queued
+# it. Long enough that a render finishing while you look away is still there
+# when you look back; short enough that the panel does not become a log.
+QUEUE_RECENT_SECS = 300
+QUEUE_REFRESH_SECS = 5
+
+
+def queue_ctx():
+    """The work in flight, for the panel any page can include.
+
+    Deliberately GLOBAL. There is one serialized worker and one GPU, so a set
+    render really does wait behind an anchor sweep started from another tab --
+    a queue filtered to "this page's" jobs would show an empty list while the
+    thing actually blocking you ran invisibly. That was the state of every page
+    except /jobs.
+
+    Polling stops when nothing is moving. A page that polls forever is a page
+    that never lets the machine idle, and the panel says which state it is in
+    rather than looking identical either way.
+    """
+    now = time.time()
+
+    def entry(j):
+        return {"job": j, "desc": jobs.describe(j),
+                "elapsed": ((j["finished"] or now) - j["started"]) if j["started"] else None}
+
+    rows = [dict(r) for r in db.q(
+        """SELECT * FROM jobs WHERE status IN ('queued','running','cancelling')
+              OR (finished IS NOT NULL AND finished > ?)
+           ORDER BY CASE status WHEN 'running' THEN 0 WHEN 'cancelling' THEN 0
+                                WHEN 'queued' THEN 1 ELSE 2 END, id""",
+        now - QUEUE_RECENT_SECS)]
+    active = [entry(j) for j in rows if j["status"] in ("running", "cancelling")]
+    waiting = [entry(j) for j in rows if j["status"] == "queued"]
+    recent = [entry(j) for j in rows if j["status"] not in ("running", "cancelling", "queued")]
+    recent.reverse()                       # newest of the finished ones first
+    return {"queue_active": active, "queue_waiting": waiting, "queue_recent": recent,
+            "queue_refresh_secs": QUEUE_REFRESH_SECS if (active or waiting) else 0}
+
+
+@app.get("/queue", response_class=HTMLResponse)
+def queue_panel(request: Request):
+    """The queue panel, as the same fragment every page embeds.
+
+    One route and one template, included wherever work is started, rather than
+    a mini job list per page -- five copies of this markup would be five copies
+    to keep in step with what a job row can say.
+    """
+    return templates.TemplateResponse(request, "_queue.html", queue_ctx())
+
+
 @app.post("/jobs/{id}/retry")
 def retry_job(request: Request, id: int):
     """Re-queue a failed job with its own stored arguments.
