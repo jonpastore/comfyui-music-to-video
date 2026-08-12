@@ -252,6 +252,13 @@ MIGRATIONS = [
     # the fallback rather than being dropped -- 33 sheets from the first CFG
     # sweep carry their settings there and nowhere else.
     "ALTER TABLE anchors ADD COLUMN run_id INTEGER",
+    # The nude swap and the anatomy clause, per album. make_anchor's default
+    # nude wording says "bare skin over the whole body", which contradicts a
+    # furred or scaled body clause in the same prompt; and nothing ever asked
+    # for anatomy, so nude sheets came back featureless. Both are prompt text
+    # the album owns, so they live beside identity/wardrobe/body.
+    "ALTER TABLE playlists ADD COLUMN nude_wardrobe TEXT",
+    "ALTER TABLE playlists ADD COLUMN anatomy TEXT",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and

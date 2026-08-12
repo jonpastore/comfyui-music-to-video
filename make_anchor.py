@@ -100,11 +100,40 @@ DEFAULT_VIEWS = {
 # is describing bare skin as the thing that is there. The wardrobe IMAGE is
 # still attached because they carry build and proportion, so the prompt says
 # which part of them to take and which to ignore.
+# The nude swap, and the one clause in this file that has to be overridable per
+# character.
+#
+# "bare skin over the whole body" is WRONG for a furred, scaled or otherwise
+# non-human character, and it is wrong in a way that fights the body clause
+# rather than being merely unhelpful. On Street Cats the two arrived in one
+# prompt as "bare skin over the whole body" beside "her entire body is covered
+# in the same sleek jet-black fur, uniformly" -- directly contradictory, and a
+# fixed-seed CFG sweep on 2026-08-12 measured exactly what that produces: at
+# cfg 1.0 the longer fur clause partly wins, and as guidance rises the model
+# follows "bare skin" harder until two of three seeds render a human body with
+# a cat's head. No cfg value satisfies both clauses, which is why the sweep
+# found no good answer and why the fix is here rather than in the sampler.
+#
+# So the default says UNCLOTHED, not "skin", and defers what the surface is to
+# the body clause -- and a profile can replace it outright.
 NUDE_WARDROBE = (
-    "She is fully nude: bare skin over the whole body, no garments, no underwear, no straps "
-    "and no accessories. Take her build and proportions from the reference images but none "
-    "of their clothing."
+    "She is fully nude and wearing nothing at all: no garments, no underwear, no straps and "
+    "no accessories, with her natural body surface visible over her whole body exactly as the "
+    "body description states. Take her build and proportions from the reference images but "
+    "none of their clothing."
 )
+
+# What a nude sheet is asked to DEPICT, as opposed to what it is asked to omit.
+# Empty by default and supplied per profile, because it is the one clause whose
+# right wording is a decision about the work rather than about the craft.
+#
+# Nothing in this pipeline filters adult anatomical language: guardrail.py's
+# MINOR_TERMS refuses references to MINORS and nothing else, and a tier that
+# permits explicit content says so in its own wording. But permitting is not
+# requesting -- NUDE_WARDROBE above only ever said what was ABSENT, so a nude
+# sheet came back anatomically featureless. That is the model's prior filling a
+# gap in the prompt, not a filter, and the gap is this field.
+DEFAULT_ANATOMY = ""
 
 NUDE_VIEWS = ("front_nude", "back_nude")
 
@@ -115,12 +144,31 @@ def load_anchor(profile_path):
     if profile_path:
         with open(profile_path) as f:
             data = (json.load(f) or {}).get("anchor") or {}
+    return anchor_from(data)
+
+
+def anchor_from(data):
+    """Defaults filled in around a raw anchor dict, from wherever it came.
+
+    Split out from load_anchor so a caller holding the fields already -- the
+    studio composes them from the database -- gets the identical merge without
+    writing a temp file. It matters most for `views`: a profile that defines
+    only front and back must still answer for front_nude and back_nude, and a
+    caller that overlaid its own partial dict on top of the result instead of
+    going through here would raise a KeyError on the first nude sheet.
+    """
+    data = data or {}
     views = dict(DEFAULT_VIEWS)
     views.update({k: v for k, v in (data.get("views") or {}).items() if v})
     return {
         "identity": data.get("identity") or DEFAULT_IDENTITY,
         "wardrobe": data.get("wardrobe") or DEFAULT_WARDROBE,
         "body": data.get("body") or DEFAULT_BODY,
+        # The nude swap, per character. A furred or scaled subject needs its own
+        # wording here or the default fights its body clause -- see NUDE_WARDROBE.
+        "nude_wardrobe": data.get("nude_wardrobe") or NUDE_WARDROBE,
+        # What a nude sheet DEPICTS. Empty unless the profile says otherwise.
+        "anatomy": data.get("anatomy") or DEFAULT_ANATOMY,
         "views": views,
     }
 
@@ -131,8 +179,14 @@ def prompt_for(view, anchor=None, n_refs=1):
     # be used -- it describes the outfit, and including it produces a clothed
     # sheet however the view is worded. The BODY clause stays: colouring per
     # body part is exactly as load-bearing here as anywhere else.
-    wardrobe = NUDE_WARDROBE if view in NUDE_VIEWS else a["wardrobe"]
+    nude = view in NUDE_VIEWS
+    wardrobe = a.get("nude_wardrobe", NUDE_WARDROBE) if nude else a["wardrobe"]
     parts = [a["views"][view], wardrobe, a["body"], a["identity"]]
+    # The anatomy clause applies to nude views only, and goes AFTER the body
+    # clause so it reads as detail on the surface the body clause just
+    # established rather than as a competing description of it.
+    if nude and a.get("anatomy"):
+        parts.insert(3, a["anatomy"])
     if n_refs > 1:
         # several unlabelled references are read as several PEOPLE unless the
         # prompt says otherwise

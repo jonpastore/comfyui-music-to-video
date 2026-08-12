@@ -253,6 +253,10 @@
           <select name="sampler_name"><option value="">mode default (quality = dpmpp_2m)</option>
             {% for x in samplers %}<option value="{{ x }}" {% if last.get("sampler_name") == x %}selected{% endif %}>{{ x }}</option>{% endfor %}</select>
         </label>
+        <label>Seed
+          <input type="number" name="seed" min="1" step="1" placeholder="random each time"
+                 value="{{ last.get('seed') or '' }}">
+        </label>
         <label>Scheduler
           <select name="scheduler"><option value="">mode default (quality = karras)</option>
             {% for x in schedulers %}<option value="{{ x }}" {% if last.get("scheduler") == x %}selected{% endif %}>{{ x }}</option>{% endfor %}</select>
@@ -261,6 +265,12 @@
       {# Quality mode is already DPM++ 2M Karras. The spec asks for it as the
          default and it is one; these two selects surface it rather than
          re-pick it. #}
+      <p class="hint"><strong>Seed</strong> is the variation control. Blank draws a new one
+        every time, which is what makes a second Generate give different sheets. Set it and the
+        same composition comes back, so a prompt or sampler change can be judged on its own
+        &mdash; composition here is seed-dominated, and comparing two random seeds tells you
+        nothing about what you changed. The candidates within one sheet are spaced off it
+        (seed, +137, +274&hellip;), and a CFG sweep reuses it at every guidance value.</p>
       <p class="hint"><strong>Denoise below 1.0 will return noise here.</strong> An anchor
         renders from an EMPTY latent (<code>EmptySD3LatentImage</code>) &mdash; there is no
         base image to preserve, so anything under 1.0 leaves it partly un-denoised. The lower

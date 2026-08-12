@@ -5047,3 +5047,128 @@ def test_the_form_reopens_on_the_last_settings_and_can_load_an_earlier_run(patch
         assert "no runs yet for this album" in other
         assert '<option value="6.0" selected>' not in other, \
             "one album's last settings reached another"
+
+
+def test_every_composer_field_reaches_the_renderer_and_the_preview_agrees(patch_stub):
+    """THE REASSEMBLY. The form edits component fields; make_anchor.prompt_for
+    composes them. A field missing from the profile dict app.py ships is a field
+    whose edit reaches nothing, silently.
+
+    That is not hypothetical: `views` was missing, so the front and back
+    sentences written for this character in profiles/street_cats.json reached
+    nothing and every sheet this studio ever rendered used make_anchor's generic
+    defaults. Found by the parallel session's review.
+
+    The differential is preview vs render: both must compose from the identical
+    fields, so what the box shows is what the renderer builds.
+    """
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="", render=None: (
+        seen.append({"view": view, "profile": (profile or {}).get("anchor", {})}) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Composer Album"})
+        pid = db.one("SELECT id FROM playlists WHERE name='Composer Album'")["id"]
+        fields = {"identity": "Sleek black feline face, yellow-green eyes.",
+                  "wardrobe": "A black leather harness and boots.",
+                  "body": "Her entire body is covered in sleek jet-black fur, uniformly.",
+                  "nude_wardrobe": "She wears nothing at all; her fur is unbroken.",
+                  "anatomy": "Anatomically complete and explicit.",
+                  "style_text": "x", "world": "y", "render_tail": "z"}
+        r = client.post(f"/playlists/{pid}/profile", data=fields)
+        assert r.status_code in (200, 303), r.text
+
+        client.post("/anchors", data={"album": "Composer Album", "tier": "xxx",
+                                       "view": "front_nude", "n": "1", "prompt_xxx": "",
+                                       "mode": "quality"},
+                    files=[("images", ("c.png", _png_bytes(), "image/png"))])
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert seen, "nothing reached the renderer"
+        prof = seen[-1]["profile"]
+        for key in ("identity", "wardrobe", "body", "nude_wardrobe", "anatomy"):
+            assert prof.get(key) == fields[key], f"{key} did not reach the renderer: {prof.get(key)!r}"
+        assert "views" in prof or not appmod.file_profile_anchor().get("views"), \
+            "the profile file's per-view wording is being dropped again"
+
+        # THE SEAM: the preview composes the same prompt the renderer will build
+        import make_anchor
+        composed = make_anchor.prompt_for("front_nude", make_anchor.anchor_from(prof))
+        assert appmod.default_anchor_prompt("Composer Album", "front_nude") == composed, \
+            "the preview and the renderer compose different prompts"
+
+        # the nude swap replaces WARDROBE and nothing else, and the anatomy
+        # clause appears on a nude view only
+        assert fields["nude_wardrobe"] in composed and fields["wardrobe"] not in composed
+        assert fields["anatomy"] in composed
+        assert fields["body"] in composed, "the body clause was dropped on a nude sheet"
+        clothed = appmod.default_anchor_prompt("Composer Album", "front")
+        assert fields["wardrobe"] in clothed
+        assert fields["anatomy"] not in clothed, "anatomy wording leaked onto a clothed sheet"
+        assert fields["nude_wardrobe"] not in clothed
+
+
+def test_the_default_nude_wording_no_longer_argues_with_a_furred_body():
+    """make_anchor's default said "bare skin over the whole body", which landed
+    in the same prompt as "her entire body is covered in the same sleek
+    jet-black fur" -- two contradictory instructions. A fixed-seed CFG sweep on
+    2026-08-12 measured the consequence: as guidance rose the model followed
+    "bare skin" harder, until two of three seeds rendered a human body with a
+    cat's head. No cfg value satisfies both clauses, so the fix is the wording.
+    """
+    import make_anchor
+    assert "bare skin" not in make_anchor.NUDE_WARDROBE.lower(), \
+        "the nude default asserts skin again, which fights every non-human body clause"
+    low = make_anchor.NUDE_WARDROBE.lower()
+    assert "nude" in low and "no garments" in low
+    assert "body description" in low or "body wording" in low
+
+    furred = make_anchor.anchor_from({
+        "body": "Her entire body is covered in sleek jet-black fur, uniformly.",
+        "identity": "A black feline face.", "wardrobe": "A leather harness."})
+    p = make_anchor.prompt_for("front_nude", furred)
+    assert "jet-black fur" in p and "bare skin" not in p.lower(), p[:200]
+
+
+def test_the_seed_is_controllable_and_blank_still_means_random(patch_stub):
+    """Composition here is seed-dominated, so comparing two random seeds tells
+    you nothing about a prompt or sampler change you just made. Setting one
+    brings the same composition back; leaving it blank must still draw a new one
+    every time, which is what makes a second Generate produce different sheets.
+    """
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="", render=None: (
+        seen.append(dict(render or {})) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Seed Album"})
+        base = {"album": "Seed Album", "tier": "r", "view": "front", "n": "1",
+                "prompt_r": "", "mode": "quality"}
+        files = [("images", ("s.png", _png_bytes(), "image/png"))]
+
+        seen.clear()
+        client.post("/anchors", data={**base, "seed": "12345"}, files=files)
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert seen and seen[-1]["seed"] == 12345, seen
+
+        # blank sends NO seed, so make_anchor draws its own
+        seen.clear()
+        client.post("/anchors", data={**base, "seed": ""}, files=files)
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert seen and "seed" not in seen[-1], seen
+
+        # a set seed is honoured by a sweep rather than refused, so a sweep can
+        # be repeated exactly against a changed prompt
+        seen.clear()
+        r = client.post("/anchors", headers={"accept": "application/json"},
+                        data={**base, "seed": "999", "cfg_sweep": "2"}, files=files)
+        assert r.status_code == 200, r.text
+        assert r.json()["sweep"]["seed"] == 999
+        for j in r.json()["jobs"]:
+            wait_job(j["id"])
+        assert {s["seed"] for s in seen} == {999}, "the sweep ignored the seed it was given"
+
+        # and it is refused when it could not work
+        assert client.post("/anchors", data={**base, "seed": "-4"},
+                           files=files).status_code == 400
+        assert client.post("/anchors", data={**base, "seed": "abc"},
+                           files=files).status_code == 400

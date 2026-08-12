@@ -756,21 +756,33 @@ def h_anchor(args, progress):
     # the album's own look, edited in the UI, is what describes the character --
     # make_anchor.py no longer knows about any particular one
     album = args["scope_value"] if args["scope_kind"] == "album" else ""
-    prof = album_profile(album)
     cid = args.get("character_id")
+    prof = anchor_profile_fields(album, cid)
     if cid:
-        # a CAST member's sheet describes that character, not the protagonist.
-        # Anything they leave blank falls back to the album's wording, so a
-        # supporting character inherits the album's body-consistency rule -- the
-        # one thing that must never be silently absent from a prompt.
         char = db.one("SELECT * FROM characters WHERE id=?", cid)
         if char:
-            prof = {k: (char[k] or prof[k]) for k in ("identity", "wardrobe", "body")}
             progress(f"anchor for cast member: {char['name']}")
-    anchor_profile = {"anchor": {"identity": prof["identity"], "wardrobe": prof["wardrobe"],
-                                 "body": prof["body"]}}
+    # THE REASSEMBLY POINT. Everything the composer takes is put back together
+    # here and travels as one profile dict: app.py -> gen_anchor -> a temp
+    # profile json -> make_anchor.load_anchor -> prompt_for. Every field the
+    # form can edit has to appear in this dict or the edit reaches nothing.
+    #
+    # `views` was missing, and that was a silent hole: profiles/street_cats.json
+    # defines its own front and back sentences -- written for THIS character --
+    # and none of them ever reached the renderer, which fell back to
+    # make_anchor's generic DEFAULT_VIEWS on every sheet this studio has ever
+    # produced. Found by the parallel session's review.
+    anchor_profile = {"anchor": prof}
     if view in NUDE_VIEWS:
         progress(f"nude anchor for tier '{args['tier']}' -- permitted by its allow_nudity flag")
+        if not anchor_profile["anchor"].get("anatomy"):
+            # Permitting explicit content is not the same as asking for it.
+            # Nothing filters anatomical language here; a nude sheet with no
+            # anatomy clause comes back featureless because nothing requested
+            # otherwise, and that is worth saying once per render rather than
+            # leaving it to be rediscovered from the images.
+            progress("no anatomy wording for this album -- a nude sheet will be "
+                     "anatomically featureless unless one is set")
     render = args.get("render") or {}
     paths = pipeline.gen_anchor(args["images"], view, args.get("n", 4), progress,
                                  profile=anchor_profile,
@@ -1948,8 +1960,16 @@ def anchor_render_settings(form):
                                       f"{', '.join(build_refs.REF_METHODS)}")
         out["ref_method"] = ref
 
+    # The base seed. Blank means make_anchor draws a random one, which is what
+    # makes a second click of Generate produce different sheets -- so blank
+    # stays the default and is not silently replaced with a number. Set it to
+    # re-render the SAME composition after changing a prompt or a sampler knob,
+    # which is the only way to see what the change itself did: composition here
+    # is seed-dominated, and comparing two random seeds tells you nothing.
+    # make_anchor spaces the n candidates off it deterministically (base + k*137).
     for key, lo, hi, cast in (("steps", 1, 60, int), ("cfg", 1.0, 12.0, float),
-                              ("denoise", 0.1, 1.0, float)):
+                              ("denoise", 0.1, 1.0, float),
+                              ("seed", 1, 2 ** 31 - 2, int)):
         raw = (form.get(key) or "").strip()
         if raw == "":
             continue
@@ -2029,10 +2049,14 @@ def cfg_sweep_points(form, render, combos):
         raise HTTPException(400, f"that is {sheets} sheets; {MAX_SWEEP_SHEETS} is this sweep's "
                                   f"ceiling")
     # One base seed for the whole sweep. make_anchor spaces the n candidates off
-    # it deterministically (base + k*137), so point-for-point the SAME three
-    # seeds are rendered at every guidance value.
+    # it deterministically (base + k*137), so point-for-point the SAME n seeds
+    # are rendered at every guidance value.
+    #
+    # A seed set on the form is HONOURED rather than treated as a conflict: it
+    # is the same method, and it is what makes a sweep repeatable against a
+    # changed prompt. Only an unset one is drawn here.
     return {"cfgs": cfgs, "n": per_point, "sheets": sheets,
-            "seed": random.randrange(1, 2 ** 31 - 1)}
+            "seed": int(render.get("seed") or random.randrange(1, 2 ** 31 - 1))}
 
 
 MAX_RUN_HISTORY = 25
@@ -2671,13 +2695,12 @@ def default_anchor_prompt(scope_value, view, character_id=None):
     been sent -- not a lookalike that drifts from it.
     """
     import make_anchor
-    prof = album_profile(scope_value or "")
-    fields = {k: prof[k] for k in ("identity", "wardrobe", "body")}
-    if character_id:
-        char = db.one("SELECT * FROM characters WHERE id=?", character_id)
-        if char:
-            fields = {k: (char[k] or fields[k]) for k in fields}
-    return make_anchor.prompt_for(view, make_anchor.load_anchor(None) | fields)
+    # The SAME fields h_anchor ships to the renderer, merged by the same
+    # function -- including the per-view sentences, the nude swap and the
+    # anatomy clause. Composing the preview from a narrower set is how a preview
+    # comes to describe a render nobody will get.
+    return make_anchor.prompt_for(
+        view, make_anchor.anchor_from(anchor_profile_fields(scope_value or "", character_id)))
 
 
 def anchor_plan(selected_tiers, selected_views):
@@ -3838,6 +3861,27 @@ ALBUM_FIELDS = {
         "Re-assert colouring PER BODY PART. One mention at the top does not hold below the "
         "waist -- this is the fix for a black-furred character rendering with human-toned "
         "legs, and it has to be positive wording, not a negative."),
+    # The nude swap, per album, because the default is wrong for anything that
+    # is not bare-skinned. make_anchor's own default says "bare skin over the
+    # whole body", which on a furred character lands in the same prompt as
+    # "her entire body is covered in the same sleek jet-black fur" -- two
+    # contradictory instructions, and a fixed-seed CFG sweep measured the model
+    # resolving them towards SKIN harder the higher the guidance went.
+    "nude_wardrobe": (
+        "Nude wording",
+        "",
+        "Replaces the wardrobe sentence on nude sheets only. Say the character is unclothed "
+        "WITHOUT saying what her surface is -- the body wording above already owns that. "
+        "\"Bare skin over the whole body\" is the default and it fights a furred or scaled "
+        "body clause; leave this blank only if the character really is bare-skinned."),
+    "anatomy": (
+        "Anatomy on nude sheets",
+        "",
+        "What a nude sheet DEPICTS, as opposed to what it omits. Nothing here filters "
+        "anatomical language -- the only input filter refuses references to minors -- but "
+        "permitting explicit content is not the same as asking for it, and a nude prompt "
+        "that only lists absent clothing comes back featureless because nothing requested "
+        "otherwise. Applies to nude views only, and only where the tier permits nudity."),
     "world": (
         "World",
         "The recurring places this album's videos happen in.",
@@ -3853,6 +3897,60 @@ ALBUM_FIELDS = {
 
 # Fields the wand can draft from a look at the album's anchor image.
 DESCRIBABLE = ("identity", "wardrobe", "body")
+
+# EVERYTHING make_anchor.prompt_for composes from. The form edits these, the run
+# records them and gen_anchor ships them as one profile dict -- so a field
+# missing from this tuple is a field whose edit reaches nothing.
+ANCHOR_PROFILE_FIELDS = ("identity", "wardrobe", "body", "nude_wardrobe", "anatomy", "views")
+
+
+def file_profile_anchor():
+    """The `anchor` block of the profile JSON on disk, or {}.
+
+    The album's own wording in the DATABASE wins over every field this defines.
+    It is read at all for one thing: `views`, the per-view framing sentences,
+    which have no database column and no UI, and which the studio was dropping
+    entirely -- h_anchor built its profile from identity/wardrobe/body alone, so
+    the front and back sentences written for this character in
+    profiles/street_cats.json reached nothing, and every sheet this studio ever
+    rendered used make_anchor's generic defaults instead.
+    """
+    path = getattr(pipeline, "PROFILE", "") or ""
+    if not path or not os.path.isfile(path):
+        return {}
+    try:
+        with open(path) as f:
+            return (json.load(f) or {}).get("anchor") or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def anchor_profile_fields(album, character_id=None):
+    """The composer's fields for one album and character, in precedence order:
+    the character's own wording, then the album's, then the profile file's.
+
+    One function, because the preview, the run record and the render must all
+    compose from the same values -- the recurring defect in this codebase is the
+    editor showing something the renderer does not build.
+    """
+    prof = album_profile(album)
+    out = dict(file_profile_anchor())
+    for key in ANCHOR_PROFILE_FIELDS:
+        if key == "views":
+            continue
+        value = prof.get(key)
+        if value:
+            out[key] = value
+    if character_id:
+        # a cast member's sheet describes THAT character; anything they leave
+        # blank falls back to the album's, so a supporting character still
+        # inherits the body-consistency rule
+        char = db.one("SELECT * FROM characters WHERE id=?", character_id)
+        if char:
+            for key in ("identity", "wardrobe", "body"):
+                if char[key]:
+                    out[key] = char[key]
+    return {k: v for k, v in out.items() if v}
 
 
 def album_profile(name):
