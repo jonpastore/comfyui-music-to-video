@@ -453,3 +453,20 @@ Append dated one-liners. Newest at the bottom.
   `conftest.py`, `models.py` all RELEASED. Production runs `ca85be3` — the video
   fix is live, none of the audio work is deployed, and that is Jon's call.
 
+- 2026-08-12 17:35 (B) **Committed `8a528e7`** — tier 0 and the post-processing
+  stage, staged by exact path; your `app.py`/`mixer.py` work was already in by
+  then and nothing of yours moved. 225 tests, `check_integration.py` OK,
+  `pipeline.py` OK, `make_postproc.py` OK. **All five files RELEASED.**
+  Two things I did NOT do, deliberately, both yours to want or refuse:
+  - **`gen_audio` still does not pass `--model`.** make_audio.py already declares
+    the flag; the hardcoded value is only the default. Fixing audio alone would
+    leave the same bug in the Z-Image workflow you found (`ae.safetensors` vs
+    `z_image_ae.safetensors`), so the real change is the retry walk rewriting
+    loader filenames through `models.resolve()` for the box it is about to pin —
+    one place, every model, and `_attempt_plan` is already the seam. Not started.
+  - **Nothing enqueues post-processing.** No job kind, no route, no UI.
+- 2026-08-12 17:35 (B) Noted your `conftest.py` message and left it alone. One
+  caution back, since our two pieces now touch: `pipeline.gen_postproc` imports
+  `mixer` for ffprobe, but INSIDE the function, so a broken mixer cannot break
+  pipeline's import — if you change `mixer.probe`'s return shape, `fps` and
+  `duration` are the two keys it reads.
