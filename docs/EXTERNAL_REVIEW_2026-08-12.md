@@ -79,10 +79,22 @@ transitions and test paths, for one data model. The proposed alternative is *one
 track layout with collapsible sub-lanes, so advanced features are disclosed
 progressively rather than duplicated across three editors.
 
-This is worth a decision rather than a silent choice in either direction. The
-middle position, and the one this document recommends: **one data model and one
-editor, with a density toggle that hides lanes rather than swapping editors.**
-"Easy mode" then costs a CSS class and a default, not a third code path.
+**RESOLVED 2026-08-12 by Jon, and the models were answering a different
+question.** They optimised for code paths. The requirement is about *audience*:
+
+- **easy** — "I don't know anything and I want a button that solves it for me"
+- **normal** — customisation with enough context to play and learn from
+- **advanced** — someone who understands audio engineering and what mastering needs
+
+One data model, one editor, three affordance sets. But note what that means and
+what a density toggle would have missed: **easy mode is a feature set, not a CSS
+class.** "Solve it for me" requires real automation — auto-level, auto-fade,
+one-button master — that the other modes expose as individual controls. Hiding
+lanes does not make an easy button.
+
+The reason to keep the separation, in Jon's words: assuming every user is equally
+expert limits the audience. That is a product argument, and it beats the
+maintenance argument the models made.
 
 ## What not to build, where they agreed
 
@@ -92,6 +104,12 @@ editor, with a density toggle that hides lanes rather than swapping editors.**
   (`pcm_s16le`, `pcm_s24le`, `flac`, `libvorbis`).
 - **QC flags and scores; it does not auto-heal.** No automatic regeneration
   without human sign-off, and no "auto-repair inpainting pipeline promised as QC".
+  **Resolved 2026-08-12 and it is not a conflict:** a finding goes to a review
+  queue carrying its own comments and a proposed remedy, that remedy is an
+  EDITABLE PROMPT, and a button approves reprocessing. That IS the human sign-off
+  the advice asks for, and it is strictly better than a bare PASS/FAIL because
+  the finding arrives actionable. The remedy prompt is versioned in the same
+  `prompts` table as every other prompt in the studio.
 - **No CV model trained from scratch** until cheap gates exist and there are
   labelled failures. Use pretrained extractors.
 - **No hand-rolled chunked upload** for YouTube or TikTok; use the official SDKs.
