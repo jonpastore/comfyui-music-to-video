@@ -542,3 +542,47 @@ Append dated one-liners. Newest at the bottom.
     is the same reason your HIGH was worth acting on and mine was not.
   Ten of twelve mutations were caught by the check that claimed to cover them.
   225 tests, `check_integration.py` OK, `pipeline.py` OK. **Both files released.**
+- 2026-08-12 18:35 (B) **A CLIP vision encoder is now installed on peaches, it
+  runs there, and `z_image_turbo` throws its output away. All three claims are
+  measured.** Jon asked for a Z-Image test against the album's anchors.
+  - `models/clip_vision/` was EMPTY on **all three boxes** — the same
+    nodes-present/folder-empty trap as the upscalers this morning, third time
+    today. `siglip2_so400m_patch16_naflex.safetensors` (4.54 GB,
+    google/siglip2-so400m-patch16-naflex) is on peaches now and
+    `CLIPVisionLoader` enumerates it without a restart.
+  - **Which encoder is NOT a matter of taste, and the web gets it wrong.** Two
+    sources recommend `siglip-so400m-patch14-384`; that loads as
+    `siglip_vision_model`, which never sets `image_sizes`, and
+    `model_base.py:1524` needs `image_sizes` to build `siglip_feats`. The box's
+    own `clip_vision.py:110-123` is the oracle: the naflex config is chosen ONLY
+    when `patch_embedding.weight` is 2-D. Verified from the safetensors header
+    before trusting it — `[1152, 768]`, 27 layers, width 1152.
+  - **It loads and does real work: 64.0 s with the encoder vs 44.2 s without.**
+    And the two renders are BYTE-IDENTICAL. Cause, from the checkpoint's own
+    header: `z_image_turbo_fp8mix.safetensors` has 794 tensors and **no
+    `siglip_embedder`**, so `lumina/model.py:676` (`if (not omni) or
+    self.siglip_embedder is None`) drops the features. The encoder is correct,
+    installed, and inert until a Z-Image **Omni** checkpoint exists here.
+    Comfy-Org only repackages Turbo; Omni-Base would need converting, and
+    `z_image_turbo_bf16` is already 12.3 GB against peaches' 10.58 GB card.
+  - **What DOES condition the render is `reference_latents`, the VAE path, and
+    it was working before I installed anything.** Anchor vs no-anchor at seed
+    880011 differ by 67.1 mean abs; `omni` mode is switched on by
+    `len(ref_latents) > 0`, not by the encoder.
+- 2026-08-12 18:35 (B) **A trap for anyone wiring Z-Image references:
+  `auto_resize_images` can hard-crash the model.** It scales to ~1 MP and rounds
+  to a multiple of 8, but Z-Image patchifies 2x2 and needs 16. The album's
+  896x1216 anchor became 880x1192 → latent 110x149, and 149 is odd:
+  `shape '[1, 16, 74, 2, 55, 2]' is invalid for input of size 262240`, where
+  16*149*110 = 262240 exactly. Deterministic, 0.4 s, seven times running.
+  `auto_resize_images: false` with a /16-clean anchor renders fine. Any Z-Image
+  stage built here needs that guard, because the failure looks like a model bug.
+- 2026-08-12 18:35 (B) **`_retarget` is now proven on the workflow that
+  motivated it** (A, 15:05): Wayne's Z-Image graph names `ae.safetensors`,
+  peaches needs `z_image_ae.safetensors`. As written: refused,
+  `prompt_outputs_failed_validation`. Retargeted: rendered, every time, six
+  renders. That is the Z-Image-on-peaches blocker closed.
+- 2026-08-12 18:35 (B) **GPU: peaches, six Z-Image renders (~20-64 s each) plus
+  the 4.5 GB download.** Queue idle before and after. Left on the box on
+  purpose: the siglip2 encoder (prerequisite for Omni, 4.5 GB of 8.7 TB free)
+  and `meowp_anchor_xxx.png` in the input dir.
