@@ -37,6 +37,25 @@
   <p class="hint">ComfyUI's own queue is empty too, so the card is free.</p>
   {% endif %}
 
+  {# SwarmUI's backends, when it is running. Beside the count above, never
+     folded into it: with two backends there are two answers, and one number
+     would rebuild the confusion the ComfyUI line exists to prevent. A backend
+     that is reachable but useless -- registered, "running", and holding none of
+     the models a workflow names -- looks identical to a healthy one from
+     anywhere else in this app. #}
+  {% if swarm %}
+  <p class="hint"><strong>SwarmUI</strong> has {{ swarm | length }}
+    backend{{ "" if swarm | length == 1 else "s" }}:
+    {% for b in swarm %}
+    <span class="tag{% if b.status not in ('running', 'idle') %} warn-tag{% endif %}">{{ b.status }}</span>
+    {{ b.title }}{% if b.address %} <span class="muted">{{ b.address }}</span>{% endif %}
+    {%- if not loop.last %} &middot; {% endif %}
+    {% endfor %}
+    <br><span class="muted">Nothing routes through Swarm yet &mdash; every render still goes
+    straight to ComfyUI. A backend listed here is not proof it can run this studio's
+    workflows; it has to hold the models they name.</span></p>
+  {% endif %}
+
   {% if not jobs %}
   <p class="empty">No jobs yet.</p>
   {% else %}

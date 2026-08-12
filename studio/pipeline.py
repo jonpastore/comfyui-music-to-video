@@ -134,6 +134,46 @@ def comfy_queue():
             "pending": len(q.get("queue_pending") or [])}
 
 
+SWARM = os.environ.get("SWARM_URL", "http://127.0.0.1:7801")
+
+
+def swarm_backends():
+    """[{id, title, status, address}] from SwarmUI, or None if it did not answer.
+
+    A SIBLING of comfy_queue(), not a replacement (SWARM_PIPELINE_PLAN.md phase
+    4). With two backends there are two answers, and collapsing them into one
+    number re-creates exactly the confusion comfy_queue's docstring was written
+    to end.
+
+    Worth having before any of the routing work: a backend sitting IDLE because
+    the VPN dropped, or registered but empty, is the single most useful thing
+    this page could say, and today nothing in the studio can say it. Measured
+    2026-08-12: backend 1 was reachable, "running", and had no models at all --
+    it failed a real workflow in 0.6s. Only a page that lists it gives anyone a
+    reason to look.
+
+    Best effort: SwarmUI not running is not an error for a studio that talks to
+    ComfyUI directly, which is still the only path that renders anything.
+    """
+    try:
+        sid = _post(f"{SWARM}/API/GetNewSession", {}).get("session_id")
+        if not sid:
+            return None
+        data = _post(f"{SWARM}/API/ListBackends", {"session_id": sid})
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    out = []
+    for key, b in sorted(data.items(), key=lambda kv: str(kv[0])):
+        if not isinstance(b, dict):
+            continue
+        out.append({"id": key, "title": b.get("title") or b.get("type") or "?",
+                    "status": b.get("status") or "?",
+                    "address": (b.get("settings") or {}).get("Address") or ""})
+    return out or None
+
+
 def abandon(pid, progress=None):
     """Tell ComfyUI to stop making something nobody is waiting for any more.
 

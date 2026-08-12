@@ -4322,7 +4322,10 @@ def jobs_page(request: Request, refresh: str = "auto", partial: int = 0):
            # ComfyUI's OWN queue, which this app does not control: it is
            # unauthenticated on the tailnet, so work can arrive there from
            # anywhere and "nothing running" here never meant the card was idle
-           "comfy": pipeline.comfy_queue()}
+           "comfy": pipeline.comfy_queue(),
+           # SwarmUI's backends, if it is running. A sibling of the count above,
+           # never a replacement: with two backends there are two answers.
+           "swarm": pipeline.swarm_backends()}
     # the poll swaps the panel only -- returning the whole page would nest a
     # second <html> inside the one already on screen
     return templates.TemplateResponse(request, "_jobs_panel.html" if partial else "jobs.html", ctx)

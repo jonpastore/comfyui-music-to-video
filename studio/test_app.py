@@ -2764,6 +2764,39 @@ def test_an_arc_is_screened_on_the_way_in_and_on_the_way_out():
             pass
 
 
+def test_jobs_page_names_every_swarm_backend_without_claiming_it_works(patch_stub):
+    """SWARM_PIPELINE_PLAN.md phase 4, the one part that is useful before any
+    routing exists.
+
+    Measured 2026-08-12: backend 1 was registered, reachable and reported
+    "running" while holding none of this studio's models -- it failed a real
+    workflow in 0.6s. From everywhere else in the app that is indistinguishable
+    from a healthy backend, so the page lists them and explicitly does not claim
+    they can render."""
+    patch_stub("pipeline", swarm_backends=lambda: [
+        {"id": "0", "title": "studio ComfyUI (existing service)", "status": "running",
+         "address": "http://127.0.0.1:8188"},
+        {"id": "1", "title": "gamingpc RTX 5090 32GB", "status": "idle",
+         "address": "http://100.107.235.105:8188"}])
+    with TestClient(appmod.app) as client:
+        page = client.get("/jobs").text
+        flat = " ".join(page.split())      # the template wraps; the words matter, not the newlines
+        assert "SwarmUI</strong> has 2 backends" in flat, flat[flat.find("SwarmUI") - 50:][:300]
+        assert "gamingpc RTX 5090 32GB" in page and "100.107.235.105" in page
+        # the ComfyUI count is still its own answer, not folded in
+        assert "ComfyUI" in page
+        # and the page must not imply a listed backend can run anything
+        assert "not proof it can run" in flat
+
+    # Swarm absent is not an error: nothing routes through it, so a studio
+    # talking straight to ComfyUI is unaffected
+    patch_stub("pipeline", swarm_backends=lambda: None)
+    with TestClient(appmod.app) as client:
+        page = client.get("/jobs").text
+        assert "SwarmUI" not in page, "an absent Swarm was reported as something"
+        assert page.count("ComfyUI") >= 1
+
+
 def test_api_keys_are_write_only_and_never_rendered(monkeypatch):
     """ALBUM_ARC_AND_STAGING_PLAN.md sec 5. The studio has no login, so the one
     property that makes storing keys acceptable is that no route ever renders

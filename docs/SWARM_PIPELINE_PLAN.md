@@ -101,6 +101,66 @@ do not work around it.
 
 ---
 
+### Phase 0 RESULTS — run 2026-08-12, against the live Swarm
+
+**There are two backends now**, which is the precondition this whole plan sets:
+
+    [0] studio ComfyUI (existing service)   127.0.0.1:8188        running, AllowIdle=True
+    [1] gamingpc RTX 5090 32GB              100.107.235.105:8188  running, AllowIdle=True
+
+**1. Does `comfyworkflowraw` accept our workflows unmodified? YES.** A real
+16-node `make_anchor.py` workflow — LoadImage, TextEncodeQwenImageEditPlus,
+FluxKontextMultiReferenceLatentMethod, KSampler, SaveImage — was accepted as-is
+and rendered in 17.8s. Nothing was rewritten. The approach is viable.
+
+**4. What is `images[].image`? A PATH**, not a data URI:
+`View/local/raw/2026-08-12/0120001--unknown.png`, and a plain GET returns it
+(200, valid PNG, 896x1216). Only the path form has been observed here.
+
+**The output lands in BOTH places, and this matters.** ComfyUI still wrote our
+own filename into its own output directory (`swarmtest/front_s52862573_00001_.png`,
+788836 bytes) while Swarm kept a separate copy under its own naming
+(`0120001--unknown.png`, 930525 bytes — not byte-identical). So on a LOCAL
+backend today's `collect()` keeps working untouched and the Swarm path is purely
+additive. That is only true while the backend is local, which is the whole
+problem phase 2 exists to solve — and it confirms the filename mapping there is
+required rather than theoretical, because Swarm's name carries none of the
+`clip_(\d+)` or seed information that seven wrappers parse out of basenames.
+
+**3. How do inputs reach a backend? There is no upload API.** `UploadImage`
+returns HTTP 400 (not registered), confirming the reading of `T2IAPI.cs`. Inputs
+are a shared-filesystem problem, not an API one, exactly as feared.
+
+**But that is not the blocker. THE SECOND BACKEND HAS NO MODELS.** Pinning the
+same workflow to backend 1 with `exactbackendid` fails in 0.6s:
+
+    backend 1: ComfyUI execution error: Model in folder 'vae' with filename
+               'qwen_image_vae.safetensors' not found.
+    backend 0: OK in 25.4s
+
+Its VAE list is `['pixel_space']` — the built-in and nothing else — against
+cerberus's full Qwen-Image-Edit / LTX-2.3 / ACE-Step set. It is a reachable,
+registered, EMPTY ComfyUI.
+
+**So the gate passes on the protocol and fails on the provisioning.** The API
+works; there is nothing for it to route to. Phases 1–3 would build a router to a
+box that fails every job in 0.6s, and every generation would keep landing on
+backend 0 regardless. **The next step is not code.** It is putting the model set
+and an input path on the second box — the checkpoints this studio uses, plus
+whatever answers question 3 for inputs (rsync, NFS, or a per-backend
+`COMFY_INPUT`).
+
+**2. Does the raw path work for video? STILL UNANSWERED.** Deliberately not
+attempted: it needs a `gen_clips` workflow, which needs a storyboard and approved
+refs, and the answer only changes what phase 2 does on a backend that currently
+cannot run anything. Answer it against backend 0 before starting phase 1.
+
+`exactbackendid` (a dropdown T2I parameter) is how a specific backend is
+targeted. That is what made this testable, and it is what phase 2's acceptance
+criterion should use to prove both paths.
+
+---
+
 ## Phase 1 — a backend seam, no behaviour change · 1–2 days
 
 Introduce the abstraction with exactly one implementation: the current one.

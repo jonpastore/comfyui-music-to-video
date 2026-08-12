@@ -399,6 +399,9 @@ _stub("pipeline",
       # ComfyUI's OWN queue, which the studio reads but does not control. An
       # empty one is the honest default here: there is no ComfyUI in tests.
       comfy_queue=lambda: {"running": 0, "pending": 0},
+      # a CALLABLE, so the real-module fallback refuses it by design --
+      # letting it through would have the suite polling a live SwarmUI
+      swarm_backends=lambda: None,
       collect=lambda prefix_dir, pattern="*.png": [],
       MAX_ANCHOR_REFS=3,
       gen_anchor=lambda images, view="front", n=4, progress=None, prefix=None, profile=None, guard="", prompt="": anchor_calls.append({"profile": profile, "view": view, "guard": guard, "prompt": prompt, "images": list(images)}) or [],
