@@ -112,10 +112,13 @@ Environment=LITELLM_BASE=http://127.0.0.1:4000/v1
 Environment=STUDIO_TEXT_MODEL=qwen3.6
 Environment=COMFY_INPUT=%h/ComfyUI/input
 Environment=COMFY_OUTPUT=%h/ComfyUI/output
-# comfy (this box only) or swarm (SwarmUI picks a backend). Left at comfy: the
-# switch is one word here, and flipping it should be a decision someone makes
-# rather than something a deploy does.
-Environment=RENDER_BACKEND=comfy
+# comfy (this box only) or swarm (SwarmUI picks a backend). The switch is one
+# word here, and flipping it is a decision someone makes rather than something a
+# deploy does -- SWITCHED TO SWARM 2026-08-12 by Jon, after phases 0-4 landed
+# and the fleet was verified: three backends registered, inputs staged to both
+# remote boxes, and the retry walking exactbackendid over the running backends.
+# Put it back to comfy to render on this box alone; nothing else has to change.
+Environment=RENDER_BACKEND=swarm
 # Where each OTHER backend keeps its ComfyUI input dir. SwarmUI has no upload
 # API -- UploadImage is not registered and answers HTTP 400 -- so a reference
 # image reaching another box is a filesystem problem. Every box that could be

@@ -17,6 +17,7 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 | `studio/pipeline.py` | B — **released 15:05, committed `6e3ab5a`** | phases 1–4 done | 13:45 |
 | `studio/app.py` + `templates/_jobs_panel.html` + `conftest.py` + `test_app.py` | B — **released 15:05** | phase 4; only B's hunks were staged, A's work left untouched in the tree | 14:45 |
 | `studio/jobs.py` | B — **released 14:20, committed in 7ab2233** | one line: `"cannot reach swarmui"` added to `_TRANSIENT` | 14:05 |
+| `studio/deploy.sh` | A | flipping RENDER_BACKEND to swarm and deploying HEAD, per Jon | 17:55 |
 | `studio/check_integration.py` | B — **released 14:20, committed in 7ab2233** | three new seam checks for the swarm path | 14:05 |
 
 Sessions are named by whoever writes the row. A = the day-8/day-9 studio session
