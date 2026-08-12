@@ -423,7 +423,147 @@ document.addEventListener("DOMContentLoaded", function () {
   initGenreSelects("bulk-genre-select", "bulk-subgenre-select");
   initGenreSelects("bulk-genre2-select", "bulk-subgenre2-select");
   initLibraryBulk();
+  initAnchors();
 });
+
+// ---- Anchors: view full size, multi-select, and nothing reloads the page -----
+function initAnchors() {
+  var grid = document.querySelector(".candidate-grid");
+  if (!grid) return;
+  var box = document.getElementById("anchor-lightbox");
+
+  // full-size view. One dialog, src swapped per click.
+  function open(src) {
+    if (!box) return;
+    box.querySelector("img").src = src;
+    box.showModal();
+  }
+  document.addEventListener("click", function (e) {
+    var img = e.target.closest(".candidate-grid img.thumb");
+    if (img) { open(img.dataset.full || img.src); return; }
+    // backdrop or the close button dismisses; clicking the image itself does not
+    if (box && box.open && (e.target === box || e.target.closest(".lightbox-close"))) box.close();
+  });
+  document.addEventListener("keydown", function (e) {
+    var img = e.target.closest && e.target.closest(".candidate-grid img.thumb");
+    if (img && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(img.dataset.full || img.src); }
+  });
+  // free the decoded image when it closes; a 2048px sheet held open per page is
+  // memory nothing is using
+  if (box) box.addEventListener("close", function () { box.querySelector("img").removeAttribute("src"); });
+
+  // ---- selection, per GROUP ----
+  function sectionOf(el) { return el.closest("section.card"); }
+  function boxesIn(sec) { return Array.prototype.slice.call(sec.querySelectorAll(".pick-anchor")); }
+  function chosenIn(sec) { return boxesIn(sec).filter(function (b) { return b.checked; }); }
+
+  function refreshGroup(sec) {
+    var bar = sec.querySelector(".candidate-bar");
+    if (!bar) return;
+    var all = boxesIn(sec), picked = chosenIn(sec);
+    bar.querySelector(".anchor-count").textContent =
+      picked.length ? picked.length + " of " + all.length + " selected" : "none selected";
+    bar.querySelector(".delete-selected").hidden = picked.length === 0;
+    var toggle = bar.querySelector(".pick-all-anchors");
+    toggle.checked = all.length > 0 && picked.length === all.length;
+    toggle.indeterminate = picked.length > 0 && picked.length < all.length;
+  }
+  document.addEventListener("change", function (e) {
+    if (e.target.classList.contains("pick-anchor")) refreshGroup(sectionOf(e.target));
+    if (e.target.classList.contains("pick-all-anchors")) {
+      var sec = sectionOf(e.target);
+      boxesIn(sec).forEach(function (b) { b.checked = e.target.checked; });
+      refreshGroup(sec);
+    }
+  });
+
+  function removeCards(sec, ids) {
+    ids.forEach(function (id) {
+      var card = sec.querySelector('.candidate[data-anchor="' + id + '"]');
+      if (card) card.remove();
+    });
+    if (!sec.querySelectorAll(".candidate").length) sec.remove();
+    else refreshGroup(sec);
+  }
+  function say(sec, msg) {
+    var c = sec.querySelector(".anchor-count");
+    if (c) c.textContent = msg;
+  }
+
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".delete-selected");
+    if (!btn) return;
+    var sec = sectionOf(btn), ids = chosenIn(sec).map(function (b) { return Number(b.value); });
+    if (!ids.length) return;
+    var anyChosen = ids.some(function (id) {
+      var card = sec.querySelector('.candidate[data-anchor="' + id + '"]');
+      return card && card.classList.contains("picked");
+    });
+    var warn = "Delete " + ids.length + " candidate" + (ids.length === 1 ? "" : "s") + "?";
+    if (anyChosen) warn += "\n\nOne of them is the CHOSEN anchor for this group. " +
+                           "Reference generation for this tier will refuse to run until another is picked.";
+    if (!confirm(warn)) return;
+    btn.disabled = true;
+    api("/anchors/delete", {anchor_ids: ids})
+      .then(function (d) { removeCards(sec, d.deleted); })
+      .catch(function (err) { say(sec, "Not deleted: " + err.message); })
+      .then(function () { btn.disabled = false; });
+  });
+
+  // ---- the existing per-card forms, intercepted ----
+  document.addEventListener("submit", function (e) {
+    if (e.defaultPrevented) return;          // a confirm() handler already said no
+    var sec, form;
+
+    if ((form = e.target.closest(".pick-anchor-form"))) {
+      e.preventDefault();
+      sec = sectionOf(form);
+      api(form.action, new FormData(form)).then(function (d) {
+        // the server says who is chosen now AND who lost it
+        d.group.forEach(function (p) {
+          var card = sec.querySelector('.candidate[data-anchor="' + p.id + '"]');
+          if (!card) return;
+          card.classList.toggle("picked", p.chosen);
+          var b = card.querySelector(".pick-anchor-form button");
+          if (b) { b.disabled = p.chosen; b.textContent = p.chosen ? "Chosen" : "Pick"; }
+        });
+      }).catch(function (err) { say(sec, "Not picked: " + err.message); });
+      return;
+    }
+    if ((form = e.target.closest(".delete-anchor"))) {
+      e.preventDefault();
+      sec = sectionOf(form);
+      api(form.action, new FormData(form))
+        .then(function (d) { removeCards(sec, d.deleted); })
+        .catch(function (err) { say(sec, "Not deleted: " + err.message); });
+      return;
+    }
+    if ((form = e.target.closest(".delete-anchor-group"))) {
+      e.preventDefault();
+      sec = sectionOf(form);
+      api(form.action, new FormData(form)).then(function (d) {
+        removeCards(sec, d.deleted);
+        if (document.body.contains(form)) form.remove();
+      }).catch(function (err) { say(sec, "Not deleted: " + err.message); });
+      return;
+    }
+    if ((form = e.target.closest('form[action^="/jobs/"]'))) {
+      e.preventDefault();
+      var row = form.closest("tr");
+      api(form.action, new FormData(form)).then(function (d) {
+        if (row) row.querySelector("td:nth-child(2)").textContent =
+          "re-queued as job #" + d.job_id;
+        form.querySelector("button").disabled = true;
+      }).catch(function (err) {
+        if (row) row.querySelector("td:nth-child(2)").textContent = "retry failed: " + err.message;
+      });
+    }
+  });
+
+  document.querySelectorAll("section.card").forEach(function (sec) {
+    if (sec.querySelector(".candidate-bar")) refreshGroup(sec);
+  });
+}
 
 // ---- the one way this app talks to the server from a button ----------------
 // Every Library control goes through here: same Accept header, same error

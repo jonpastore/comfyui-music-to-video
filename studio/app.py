@@ -1903,31 +1903,66 @@ def anchor_form(request: Request, album: str = "", tier: List[str] = Query([]),
                                                        character_id, prompts))
 
 
-@app.post("/anchors/{id}/delete")
-def delete_anchor(id: int):
-    """Delete one anchor candidate, row and file.
+def _drop_anchor(row):
+    """Delete one anchor candidate, file then row.
 
-    Anchors accumulate: every generation adds N candidates and only one is ever
-    picked, so a scope+tier+view group is mostly rejects. The file is removed
-    only if it resolves inside db.DATA -- ComfyUI's own output dir is shared and
-    is not ours to delete from.
+    The file is removed only if it resolves inside db.DATA -- ComfyUI's own
+    output dir is shared and is not ours to delete from. Three callers now
+    (one, many, and a whole group's rejects), so the containment rule lives here
+    rather than being restated at each of them.
     """
-    row = db.one("SELECT * FROM anchors WHERE id=?", id)
-    if not row:
-        raise HTTPException(404, "no such anchor candidate")
     if _within_data(row["path"]) and os.path.isfile(row["path"]):
         try:
             os.remove(row["path"])
         except OSError:
             pass
-    db.run("DELETE FROM anchors WHERE id=?", id)
+    db.run("DELETE FROM anchors WHERE id=?", row["id"])
+
+
+@app.post("/anchors/{id}/delete")
+def delete_anchor(request: Request, id: int):
+    """Delete one anchor candidate, row and file.
+
+    Anchors accumulate: every generation adds N candidates and only one is ever
+    picked, so a scope+tier+view group is mostly rejects.
+    """
+    row = db.one("SELECT * FROM anchors WHERE id=?", id)
+    if not row:
+        raise HTTPException(404, "no such anchor candidate")
+    _drop_anchor(row)
+    if wants_json(request):
+        return JSONResponse({"deleted": [id]})
     return RedirectResponse(
         f"/anchors?scope_kind={row['scope_kind']}&scope_value={quote(row['scope_value'])}",
         status_code=303)
 
 
+@app.post("/anchors/delete")
+async def delete_anchors(request: Request):
+    """Delete the ticked candidates in one call.
+
+    Multi-select exists because a generation makes N candidates and N-1 are
+    rejects: picking them off one request at a time is the slow path this page
+    was mostly used for. The CHOSEN one is deletable here exactly as it is
+    singly -- refusing would make a group of one undeletable, and refs already
+    refuses a tier with no chosen anchor in its own words.
+    """
+    body = await request.json()
+    ids = [int(i) for i in (body.get("anchor_ids") or [])]
+    if not ids:
+        raise HTTPException(400, "no candidates selected")
+    gone = []
+    for i in ids:
+        row = db.one("SELECT * FROM anchors WHERE id=?", i)
+        if row:
+            _drop_anchor(row)
+            gone.append(i)
+    return JSONResponse({"deleted": gone})
+
+
 @app.post("/anchors/delete-unpicked")
-def delete_unpicked_anchors(scope_kind: str = Form(...), scope_value: str = Form(...),
+def delete_unpicked_anchors(request: Request, scope_kind: str = Form(...),
+                             scope_value: str = Form(...),
                              tier: str = Form(...), view: str = Form(...),
                              character_id: CharacterId = Form(None)):
     """Clear out one group's rejects, keeping whichever is chosen.
@@ -1940,12 +1975,9 @@ def delete_unpicked_anchors(scope_kind: str = Form(...), scope_value: str = Form
                    AND view=? AND character_id IS ? AND chosen=0""",
                 scope_kind, scope_value, tier, view, character_id)
     for r in rows:
-        if _within_data(r["path"]) and os.path.isfile(r["path"]):
-            try:
-                os.remove(r["path"])
-            except OSError:
-                pass
-        db.run("DELETE FROM anchors WHERE id=?", r["id"])
+        _drop_anchor(r)
+    if wants_json(request):
+        return JSONResponse({"deleted": [r["id"] for r in rows]})
     return RedirectResponse(
         f"/anchors?scope_kind={scope_kind}&scope_value={quote(scope_value)}", status_code=303)
 
@@ -2034,7 +2066,7 @@ async def start_fix_anchor(id: int, mode: str = Form(...), instruction: str = Fo
 
 
 @app.post("/anchors/{id}/pick")
-def pick_anchor(id: int):
+def pick_anchor(request: Request, id: int):
     row = db.one("SELECT * FROM anchors WHERE id=?", id)
     if not row:
         raise HTTPException(404, "no such anchor candidate")
@@ -2050,6 +2082,15 @@ def pick_anchor(id: int):
               AND view=? AND character_id IS ?""",
            row["scope_kind"], row["scope_value"], row["tier"], row["view"], row["character_id"])
     db.run("UPDATE anchors SET chosen=1 WHERE id=?", id)
+    if wants_json(request):
+        # which one is now chosen AND which lost it: the page has to move the
+        # highlight off the old one, and only the server knows which that was
+        peers = db.q("""SELECT id, chosen FROM anchors WHERE scope_kind=? AND scope_value=?
+                        AND tier=? AND view=? AND character_id IS ?""",
+                     row["scope_kind"], row["scope_value"], row["tier"], row["view"],
+                     row["character_id"])
+        return JSONResponse({"chosen": id,
+                             "group": [{"id": p["id"], "chosen": bool(p["chosen"])} for p in peers]})
     return RedirectResponse(
         f"/anchors?scope_kind={row['scope_kind']}&scope_value={quote(row['scope_value'])}",
         status_code=303)
@@ -4008,7 +4049,7 @@ def jobs_page(request: Request, refresh: str = "auto", partial: int = 0):
 
 
 @app.post("/jobs/{id}/retry")
-def retry_job(id: int):
+def retry_job(request: Request, id: int):
     """Re-queue a failed job with its own stored arguments.
 
     There was no way to recover a failed batch except to fill the form in again
@@ -4026,6 +4067,8 @@ def retry_job(id: int):
         raise HTTPException(400, f"job #{id} is {row['status']}, not failed -- nothing to retry")
     args = json.loads(row["args_json"] or "{}")
     new_id = jobs.enqueue(row["kind"], args, song_id=row["song_id"])
+    if wants_json(request):
+        return JSONResponse({"retried": id, "job_id": new_id, "kind": row["kind"]})
     return RedirectResponse(f"/jobs#job-{new_id}", status_code=303)
 
 

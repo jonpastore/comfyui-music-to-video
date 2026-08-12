@@ -58,12 +58,28 @@
      heading was a distinction with nothing on the other side of it #}
   <h3>{{ g.scope_value }} &middot; {{ g.character_name or "protagonist" }}
       &middot; {{ g.tier | tiername }} &middot; {{ g.view | viewname }}</h3>
+  {# One bar per GROUP, not one for the page: a candidate only ever competes
+     with its own scope+tier+view+character, and a selection spanning groups
+     would delete across sheets that have nothing to do with each other. #}
+  <div class="candidate-bar" data-group>
+    <label class="check"><input type="checkbox" class="pick-all-anchors"> Select all</label>
+    <span class="muted anchor-count">none selected</span>
+    <button type="button" class="thumb-btn-danger delete-selected" hidden>Delete selected</button>
+  </div>
   <div class="candidate-grid">
     {% for c in g.candidates %}
-    <div class="candidate {% if c.chosen %}picked{% endif %}">
-      <img class="thumb" src="{{ media_url(c.path) }}" alt="anchor candidate" loading="lazy">
+    <div class="candidate {% if c.chosen %}picked{% endif %}" data-anchor="{{ c.id }}">
+      <label class="candidate-pick">
+        <input type="checkbox" class="pick-anchor" value="{{ c.id }}"
+               aria-label="select this candidate">
+      </label>
+      {# click to see it full size: a character sheet is judged on the face and
+         the hands, and neither is legible in a grid thumbnail #}
+      <img class="thumb" src="{{ media_url(c.path) }}" alt="anchor candidate" loading="lazy"
+           data-full="{{ media_url(c.path) }}" tabindex="0" role="button"
+           title="Click to view full size">
       <div class="candidate-actions">
-        <form method="post" action="/anchors/{{ c.id }}/pick">
+        <form method="post" action="/anchors/{{ c.id }}/pick" class="pick-anchor-form">
           <button type="submit" {% if c.chosen %}disabled{% endif %}>{{ "Chosen" if c.chosen else "Pick" }}</button>
         </form>
         {# The chosen one IS deletable. Disabling it said "pick another candidate
@@ -80,7 +96,8 @@
     {% endfor %}
   </div>
   {% if g.unpicked %}
-  <form method="post" action="/anchors/delete-unpicked" class="delete-anchor-group">
+  <form method="post" action="/anchors/delete-unpicked" class="delete-anchor-group"
+        data-unpicked="{{ g.unpicked }}">
     <input type="hidden" name="scope_kind" value="{{ g.scope_kind }}">
     <input type="hidden" name="scope_value" value="{{ g.scope_value }}">
     <input type="hidden" name="tier" value="{{ g.tier }}">
@@ -92,4 +109,12 @@
 </section>
 {% endfor %}
 {% endif %}
+
+{# ONE lightbox for the page, its src swapped on click -- not one dialog per
+   candidate. A group can hold a dozen sheets and every page has several groups;
+   a modal each would be hundreds of elements to show one image at a time. #}
+<dialog class="lightbox" id="anchor-lightbox">
+  <button type="button" class="lightbox-close" aria-label="Close">&times;</button>
+  <img alt="anchor candidate, full size">
+</dialog>
 {% endblock %}

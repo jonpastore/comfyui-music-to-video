@@ -2050,6 +2050,70 @@ def test_anchor_candidates_can_be_deleted_but_never_the_chosen_one():
         assert appmod.chosen_anchor("album", album, "r") is not None
 
 
+def _anchor_group(album, n=3, tier="r", view="front"):
+    """n candidates on disk and in the table, the first one chosen."""
+    d = os.path.join(db.DATA, "anchorfix")
+    os.makedirs(d, exist_ok=True)
+    ids = []
+    for i in range(n):
+        p = os.path.join(d, f"{album.replace(' ', '_')}_{i}.png")
+        open(p, "wb").write(_png_bytes())
+        db.run("""INSERT INTO anchors (scope_kind,scope_value,tier,view,path,chosen,created)
+                  VALUES ('album',?,?,?,?,?,?)""", album, tier, view, p, 1 if i == 0 else 0,
+               time.time())
+        ids.append(db.one("SELECT id FROM anchors WHERE path=?", p)["id"])
+    return ids
+
+
+def test_anchor_actions_answer_json_and_still_redirect_a_form_post():
+    """Every button on the Anchors page goes through app.js's api(). The same
+    routes keep their redirect for a plain form post."""
+    J = {"Accept": "application/json"}
+    with TestClient(appmod.app) as client:
+        ids = _anchor_group("Async Anchor Album")
+
+        # pick reports who is chosen now AND who lost it -- the page cannot move
+        # the highlight off the old one without being told which that was
+        r = client.post(f"/anchors/{ids[2]}/pick", headers=J)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["chosen"] == ids[2]
+        assert {p["id"]: p["chosen"] for p in d["group"]} == {
+            ids[0]: False, ids[1]: False, ids[2]: True}
+
+        # single delete
+        r2 = client.post(f"/anchors/{ids[1]}/delete", headers=J)
+        assert r2.status_code == 200 and r2.json() == {"deleted": [ids[1]]}, r2.text
+
+        # and a plain form post still redirects
+        r3 = client.post(f"/anchors/{ids[0]}/delete", follow_redirects=False)
+        assert r3.status_code == 303, r3.text
+
+
+def test_multi_select_delete_removes_every_ticked_candidate_and_its_file():
+    with TestClient(appmod.app) as client:
+        ids = _anchor_group("Multi Delete Album", n=4)
+        paths = [db.one("SELECT path FROM anchors WHERE id=?", i)["path"] for i in ids[1:]]
+        r = client.post("/anchors/delete", json={"anchor_ids": ids[1:]})
+        assert r.status_code == 200, r.text
+        assert sorted(r.json()["deleted"]) == sorted(ids[1:])
+        for p in paths:
+            assert not os.path.isfile(p), "the file was left behind"
+        left = db.q("SELECT id FROM anchors WHERE scope_value=?", "Multi Delete Album")
+        assert [x["id"] for x in left] == [ids[0]]
+
+        # the CHOSEN one is deletable here exactly as it is singly -- refusing
+        # would make a group of one undeletable
+        r2 = client.post("/anchors/delete", json={"anchor_ids": [ids[0]]})
+        assert r2.status_code == 200 and r2.json()["deleted"] == [ids[0]], r2.text
+        assert not db.q("SELECT id FROM anchors WHERE scope_value=?", "Multi Delete Album")
+
+        # an empty selection is refused rather than silently doing nothing
+        assert client.post("/anchors/delete", json={"anchor_ids": []}).status_code == 400
+        # unknown ids are skipped, not fatal
+        assert client.post("/anchors/delete", json={"anchor_ids": [999999]}).json()["deleted"] == []
+
+
 def test_all_four_anchor_views_compose_a_prompt_and_nude_drops_the_wardrobe():
     """A nude sheet must not carry the album's wardrobe wording -- it describes
     the outfit, and including it produces a clothed sheet however the view is
