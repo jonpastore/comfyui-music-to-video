@@ -78,7 +78,13 @@
 <h3>Timeline</h3>
 <div class="timeline" data-reorder-url="/sets/{{ set.id }}/reorder" data-axis="x" data-reload>
   {% for t in timeline %}
-  <div class="tl-block" draggable="true" data-item="{{ t.id }}" style="flex: {{ t.pct }} 1 0"
+  {# The waveform behind the block. A background-image, not an <img>: it has to
+     stretch to whatever width the block's flex share gives it, and the picture
+     is of the RAW track -- the renderer level-matches every item with loudnorm,
+     so this is the shape of the music, not of the mix. #}
+  <div class="tl-block{% if t.waveform %} has-wave{% endif %}" draggable="true"
+       data-item="{{ t.id }}" style="flex: {{ t.pct }} 1 0
+       {%- if t.waveform %}; background-image: url('{{ media_url(t.waveform) }}'){% endif %}"
        title="{{ t.title }} — {{ t.secs | hms }}">
     <span class="tl-title">{{ loop.index }}. {{ t.title }}</span>
     <span class="tl-meta">{{ t.secs | hms }}{% if t.bpm %} · {{ "%.0f"|format(t.bpm) }}{% endif %}{% if t.key %} · {{ t.key }}{% endif %}</span>

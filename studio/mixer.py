@@ -82,6 +82,43 @@ def _run_ffmpeg(args, progress, total_duration=None, stage="ffmpeg"):
         raise RuntimeError("ffmpeg failed:\n" + "\n".join(lines[-20:]))
 
 
+# The waveform picture behind a set's channels. A PNG from ffmpeg's own
+# showwavespic, not a JSON peaks array: measured on this project's own 479s
+# track, 2000x120 is 9.3 KB in 1.3s, against 24-90 KB for a peaks array at any
+# useful resolution -- and the PNG needs an <img> where the array needs a
+# bucketing pass, a decoder and a canvas renderer.
+#
+# Transparent background, one accent colour, so a single file serves whatever
+# the page's theme is.
+WAVEFORM_SIZE = (2000, 120)
+WAVEFORM_COLOR = "0x8ab4f8"
+
+
+def waveform_png(audio_path, out_path, progress=None, size=WAVEFORM_SIZE):
+    """One track's waveform as a transparent PNG.
+
+    Of the RAW track. The renderer level-matches every item with loudnorm
+    (effects.py, on by default), so the picture is not what the mix sounds
+    like -- generating it through loudnorm closes that gap and costs 10x the
+    time, measured. The UI says so instead. It is a cosmetic mismatch and not a
+    correctness one: an envelope drawn on it is a RELATIVE gain and behaves the
+    same either way.
+    """
+    w, h = size
+    tmp = _atomic_out(out_path)
+    try:
+        _run_ffmpeg(["-i", audio_path,
+                     "-filter_complex", f"showwavespic=s={w}x{h}:colors={WAVEFORM_COLOR}",
+                     "-frames:v", "1", tmp],
+                    progress or (lambda _m: None), stage="waveform")
+        os.replace(tmp, out_path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+    return out_path
+
+
 def _write_concat_list(paths):
     fd, list_path = tempfile.mkstemp(suffix=".txt")
     with os.fdopen(fd, "w") as f:
@@ -1081,6 +1118,35 @@ def demo():
 
         logs = []
         progress = lambda m: logs.append(m)
+
+        # ---- waveform_png: a real PNG, and a DIFFERENT one for different audio.
+        # Size alone proves nothing -- ffmpeg writing a valid empty-looking
+        # picture would pass that -- so a silent track and a tone must not
+        # produce the same bytes. That is the check that fails if the filter
+        # ever stops being fed the audio.
+        wf = os.path.join(tmpdir, "wave.png")
+        waveform_png(mp3, wf, progress)
+        head = open(wf, "rb").read(8)
+        assert head == b"\x89PNG\r\n\x1a\n", head
+        assert os.path.getsize(wf) > 200, os.path.getsize(wf)
+
+        silent = os.path.join(tmpdir, "silence.mp3")
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-t", "4",
+                        "-i", "anullsrc", "-c:a", "libmp3lame", silent], check=True)
+        wf2 = os.path.join(tmpdir, "wave2.png")
+        waveform_png(silent, wf2, progress)
+        assert open(wf, "rb").read() != open(wf2, "rb").read(), \
+            "silence and a tone drew the same waveform -- the filter is not seeing the audio"
+
+        # a failure leaves NO half-written file behind for the next reader to
+        # serve as a broken image
+        try:
+            waveform_png(os.path.join(tmpdir, "nope.mp3"), os.path.join(tmpdir, "bad.png"),
+                         progress)
+            raise AssertionError("a missing input did not raise")
+        except RuntimeError:
+            pass
+        assert not os.path.exists(os.path.join(tmpdir, "bad.png"))
 
         # assemble_song: 3x 1s same-res clips, 4s audio -> video-limited ~3s
         out1 = os.path.join(tmpdir, "song1.mp4")

@@ -343,6 +343,14 @@ _stub("mixer",
       _item_duration=_item_duration,
       assemble_song=lambda clip_paths, mp3, out, progress, fade: open(out, "w").close(),
       edit_audio=lambda *a, **k: None,
+      # h_analyse draws a waveform now. Stubbed to write a real (empty) file at
+      # the path it was given, because the caller records an assets row and
+      # song_waveform() then checks the file is actually there -- a stub that
+      # wrote nothing would make every waveform silently absent in the tests
+      # and prove the opposite of what they assert.
+      waveform_png=lambda audio_path, out_path, progress=None, size=None: (
+          os.makedirs(os.path.dirname(out_path), exist_ok=True)
+          or open(out_path, "wb").write(b"\x89PNG\r\n\x1a\n") and out_path),
       render_set=_render_set,
       mix_audio=_mix_audio,
       set_duration=_set_duration,

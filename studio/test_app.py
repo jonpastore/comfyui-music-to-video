@@ -3907,7 +3907,10 @@ def test_timeline_widths_come_from_the_same_helper_the_renderer_uses():
 
         page = client.get(f"/sets/{sid}").text
         assert 'class="timeline"' in page and 'data-axis="x"' in page
-        assert page.count('class="tl-block"') == 2
+        # prefix, not the whole attribute: a block carries "has-wave" too once
+        # its song has been analysed, and matching the exact string made this
+        # assert whether a waveform exists rather than how many blocks there are
+        assert page.count('class="tl-block') == 2
         # every block can be clicked through to its controls
         for it in items:
             assert f'data-item="{it["id"]}"' in page and f'id="item-{it["id"]}"' in page
@@ -4646,3 +4649,49 @@ def test_cancel_and_retry_are_async_on_every_page_that_shows_a_job(patch_stub):
         for name in ("_jobs_panel.html", "song.html", "anchors.html"):
             assert "data-job-msg" in open(os.path.join(here, name)).read(), \
                 f"{name} has a job form with nowhere to report back to"
+
+
+def test_a_song_gets_a_waveform_picture_when_it_is_analysed(patch_stub):
+    """A set editor that draws volume over a waveform needs the waveform, and
+    generating it in the request path would fire one ffmpeg per song on the
+    first page load of a 20-song set -- on the box that is also rendering. So it
+    is written by the analyse job, which already decodes the track, already runs
+    on upload and already has a do-it-for-everything button.
+
+    Recorded as an `assets` row rather than a songs column: that bag is already
+    served by /media and already swept when a song is deleted, so this adds no
+    new table, route or cleanup path. The differential is that last part --
+    delete the song and the picture must go with it.
+    """
+    with TestClient(appmod.app) as client:
+        r = client.post("/songs", data={"title": "Waveform Song", "album": "Waves"},
+                        files=[("mp3", ("w.mp3", _mp3_bytes(), "audio/mpeg"))])
+        assert r.status_code in (200, 303), r.text
+        sid = db.one("SELECT id FROM songs WHERE title='Waveform Song'")["id"]
+        for j in db.q("SELECT id FROM jobs WHERE song_id=? ORDER BY id", sid):
+            wait_job(j["id"])
+
+        path = appmod.song_waveform(sid)
+        assert path, "an analysed song has no waveform picture"
+        assert os.path.isfile(path), path
+        row = db.one("SELECT * FROM assets WHERE song_id=? AND kind='waveform'", sid)
+        assert row and db.jset(row)["w"] == appmod.mixer.WAVEFORM_SIZE[0]
+
+        # a song that has never been analysed simply has none -- reported as
+        # absent, never guessed at
+        other = db.upsert_song("no-waves", title="Unanalysed")
+        assert appmod.song_waveform(other) is None
+
+        # it reaches the SET EDITOR, which is the only reason it exists
+        client.post("/sets/new", data={"name": "Wave Set", "mode": "audio"})
+        setid = db.one("SELECT id FROM sets WHERE name='Wave Set'")["id"]
+        client.post(f"/sets/{setid}/items", data={"song_id": sid})
+        page = client.get(f"/sets/{setid}").text
+        assert "has-wave" in page and appmod.media_url(path) in page, \
+            "the waveform never reaches the timeline block it was generated for"
+
+        # and it is swept with the song, because it lives in the assets bag
+        client.post(f"/songs/{sid}/delete", data={"confirm": "DELETE"})
+        assert not db.one("SELECT id FROM assets WHERE song_id=? AND kind='waveform'", sid), \
+            "the waveform outlived the song it belongs to"
+        assert not os.path.isfile(path), "the waveform FILE outlived the song"

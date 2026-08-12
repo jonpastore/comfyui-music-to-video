@@ -672,7 +672,52 @@ def h_analyse(args, progress):
               WHERE id=?""",
            result["bpm"], result["key"], json.dumps(result["beat_grid"]),
            result["energy"], result["downbeat_offset"], song["id"])
-    return {"bpm": result["bpm"], "key": result["key"]}
+    # The waveform picture, written HERE rather than by a job of its own: this
+    # handler already decodes the track, already runs on upload, and already
+    # has a "do it for everything" button. Measured 1.3s against this job's
+    # ~19s, so it is noise.
+    #
+    # NOT generated lazily when a page asks for it: a 20-song set would fire 20
+    # concurrent ffmpeg processes on first load, on the box that is also
+    # rendering. A song with no picture yet says so and points at this button.
+    wave = write_song_waveform(song, progress)
+    return {"bpm": result["bpm"], "key": result["key"], "waveform": bool(wave)}
+
+
+def write_song_waveform(song, progress=None):
+    """Render (or re-render) one song's waveform PNG and record it as an asset.
+
+    An `assets` row, not a songs column: that bag already holds style images,
+    reviews, anchor refs and renders, it is already served by /media, and it is
+    already swept when a song is deleted -- so this needs no new table, no new
+    route and no new cleanup path. Newest row wins, exactly as the other kinds
+    behave.
+
+    A failure here is REPORTED and swallowed: the waveform is decoration on a
+    page, and losing a whole bpm/key analysis because a picture would not draw
+    is the wrong trade. The caller learns from the returned None.
+    """
+    if not song or not song["mp3_path"] or not os.path.isfile(song["mp3_path"]):
+        return None
+    out = os.path.join(db.DATA, "waveforms", f"{song['id']}.png")
+    try:
+        mixer.waveform_png(song["mp3_path"], out, progress)
+    except Exception as e:                      # ffmpeg, a codec, a full disk
+        if progress:
+            progress(f"no waveform picture: {e}")
+        return None
+    db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+           song["id"], "waveform", out,
+           json.dumps({"w": mixer.WAVEFORM_SIZE[0], "h": mixer.WAVEFORM_SIZE[1]}), time.time())
+    return out
+
+
+def song_waveform(song_id):
+    """The newest waveform PNG for a song, or None. Missing is normal: every
+    song analysed before this existed has none until it is analysed again."""
+    row = db.one("""SELECT path FROM assets WHERE song_id=? AND kind='waveform'
+                    ORDER BY id DESC LIMIT 1""", song_id)
+    return row["path"] if row and os.path.isfile(row["path"]) else None
 
 
 @jobs.handler("anchor")
@@ -4356,7 +4401,11 @@ def set_detail(row):
                           "bpm": it["song_bpm"], "key": it["song_key"],
                           "transition": it["transition"], "trans_secs": it["secs"],
                           "hold": _hold_of(it), "beatmatch": it["beatmatch"],
-                          "branded": bool(_brand_of(it, row))})
+                          "branded": bool(_brand_of(it, row)),
+                          # None until the song has been analysed. The block
+                          # says which it is rather than drawing an empty box
+                          # that could equally mean "silent".
+                          "waveform": song_waveform(it["song_id"])})
     for t in timeline:
         # a floor so a very short item is still clickable rather than a hairline
         t["pct"] = max(8.0, 100.0 * t["secs"] / longest) if longest else 100.0
