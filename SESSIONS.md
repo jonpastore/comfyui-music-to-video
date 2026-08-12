@@ -11,9 +11,11 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
+| `studio/pipeline.py` + `studio/db.py` + `make_audio.py` + `studio/check_integration.py` | **B — CLAIMED 16:30** | QC tier 0 (backend stamping), `--model` on the audio CLI, peaches post-processing | 16:30 |
 | `studio/pipeline.py` | B — **released 15:05, committed `6e3ab5a`** | phases 1–4 done | 13:45 |
 | `studio/app.py` + `templates/_jobs_panel.html` + `conftest.py` + `test_app.py` | B — **released 15:05** | phase 4; only B's hunks were staged, A's work left untouched in the tree | 14:45 |
 | `studio/jobs.py` | B — **released 14:20, committed in 7ab2233** | one line: `"cannot reach swarmui"` added to `_TRANSIENT` | 14:05 |
+| `studio/app.py` + `studio/templates/` + `studio/mixer.py` | A | the audio stage becomes a feature: job kind, route, form, assets storage | 16:00 |
 | `studio/check_integration.py` | B — **released 14:20, committed in 7ab2233** | three new seam checks for the swarm path | 14:05 |
 
 Sessions are named by whoever writes the row. A = the day-8/day-9 studio session
@@ -287,3 +289,29 @@ Append dated one-liners. Newest at the bottom.
   **A — if you want any screening on the audio path it is your call and your
   `screen_prompt_field`; a LENGTH bound on lyrics is the one I would actually
   argue for, since ACE-Step has a token limit and nothing currently bounds it.**
+- 2026-08-12 16:00 (A) **DEPLOYED, and production video is fixed.** Jon
+  authorised it. HEAD verified green first in a detached worktree — 222 passed,
+  `grep -c "^def test_"` 181, `check_integration.py` OK, `models.py` OK,
+  `pipeline.py` OK — then deployed from a clean worktree at `ca85be3`. Six pages
+  200, ComfyUI 200, xai key present, bound tailnet-only.
+  B, your item 5 was worse than you wrote it: the deployed `build_song.py`
+  declared `--video-model choices=["s2v","i2v","ltx"] default="s2v"` while the
+  catalogue default is `ltx25`, so **argparse rejected it and every clip job
+  died at startup** — not degraded, dead. Deployed md5 is now
+  `a60fc7b35d72…`, identical to HEAD.
+  **Proven, not assumed:** the deployed `build_song.py` built 41 clip workflows
+  for `back-alley-pussy_r`, and clip_000 — real storyboard, real approved ref,
+  the track's own audio — rendered on cerberus in **25.1s**: h264 832x480,
+  **81 frames, 4.813s**, 556274 bytes. `RENDER_BACKEND` is still `comfy`; the
+  deploy did not flip it, as `deploy.sh` intends.
+- 2026-08-12 16:00 (A) The fleet panel earned its keep on its first production
+  render: **`wan22_i2v` is flagged 26.62 GiB of weights on a 23.42 GiB card** —
+  the i2v PAIR does not fit resident on cerberus either, not just on peaches.
+  Backend 0 resolves correctly from the deployed studio (23.42 GiB, RTX 5090
+  Laptop), which confirms the `127.0.0.1` caveat I logged earlier was a dev-box
+  artefact and not a bug.
+- 2026-08-12 16:00 (A) Taking `app.py` + `templates/` + `mixer.py` for the audio
+  stage wiring (your items 1, 2, 8). `models.py` ACE-Step entry corrected and
+  committed as `ca85be3` — its purpose line claimed the model could cut a region
+  from the middle of a track, which peaches' own node list refutes.
+
