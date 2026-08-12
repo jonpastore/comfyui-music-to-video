@@ -2845,6 +2845,55 @@ def test_api_keys_are_write_only_and_never_rendered(monkeypatch):
                            data={"name": "not-a-provider", "value": "x"}).status_code == 400
 
 
+def test_the_negative_prompt_is_prefilled_and_actually_sent(patch_stub):
+    """A placeholder is grey, disappears when you type, and is NEVER submitted --
+    so a field that looked populated sent nothing at all. The distinction is the
+    whole bug, so the test asserts the value is in the markup AND arrives at the
+    renderer."""
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="",
+                                      render=None: (
+        seen.append(dict(render or {})) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Negative Album"})
+        page = client.get("/anchors").text
+
+        # a VALUE between the tags, not a placeholder attribute
+        import re
+        box = re.search(r'<textarea name="negative".*?>(.*?)</textarea>', page, re.S)
+        assert box, "no negative field on the page"
+        assert box.group(1).strip(), "the negative field is empty -- a placeholder is not a value"
+        assert "extra limbs" in box.group(1), box.group(1)[:120]
+
+        # nothing in it names a colour of the CURRENT character: it must suit
+        # a different species unchanged
+        assert "black" not in box.group(1).lower()
+
+        # and it reaches the renderer when submitted
+        client.post("/anchors", data={"album": "Negative Album", "tier": "r",
+                                       "view": "front", "n": "1", "prompt_r": "",
+                                       "mode": "quality",
+                                       "negative": appmod.DEFAULT_NEGATIVE},
+                    files=[("images", ("n.png", _png_bytes(), "image/png"))])
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert seen and seen[0].get("negative") == appmod.DEFAULT_NEGATIVE, seen
+
+        # clearing it sends none, rather than silently restoring the default
+        seen.clear()
+        client.post("/anchors", data={"album": "Negative Album", "tier": "r",
+                                       "view": "front", "n": "1", "prompt_r": "",
+                                       "mode": "quality", "negative": ""},
+                    files=[("images", ("n.png", _png_bytes(), "image/png"))])
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert seen and "negative" not in seen[0], seen
+
+        # the CFG choice is on the form, not buried in an advanced panel
+        assert 'name="cfg"' in page and 'id="anchor-cfg"' in page
+        for value, _label in appmod.CFG_CHOICES:
+            assert f'value="{value}"' in page, f"cfg {value} not offered"
+
+
 def test_a_finished_sheet_can_be_dropped_into_the_page_without_a_reload(patch_stub):
     """The batch panel watches each sheet over SSE; when one finishes its
     candidates should appear without a reload. The fragment comes from the SAME

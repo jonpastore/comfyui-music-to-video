@@ -1712,6 +1712,34 @@ def _build_refs():
 ANCHOR_MODES = ("fast", "quality")
 MAX_NEGATIVE = 1200
 
+# The negative the form starts with, PRE-FILLED rather than offered as a
+# placeholder -- placeholder text is grey, vanishes the moment you type, and is
+# never submitted, so a field that looked populated sent nothing.
+#
+# Deliberately generic. This studio will anchor other characters, other species
+# and other palettes, so nothing here names a colour the CURRENT album happens
+# to want: every term is a failure MODE (a patch that disagrees with the rest of
+# the body, skin where fur belongs, clothing on a nude sheet, a limb count) not
+# a character trait. Edit it per album; it is a starting point, not a rule.
+DEFAULT_NEGATIVE = (
+    "mismatched fur colour, lighter fur patches, discoloured tail, two-tone body, "
+    "human skin, bare skin where fur belongs, clothing on a nude sheet, underwear, "
+    "extra limbs, extra tails, missing tail, deformed hands, duplicate character, "
+    "cropped head, cropped feet, text, watermark, signature, blurry, low detail"
+)
+
+# CFG, as the choice it actually is rather than a free number. 1.0 is the
+# Lightning LoRA's own operating point and the only one where a negative prompt
+# is ignored; everything above it drops the LoRA (build_refs.sampler_settings)
+# and costs steps. Values are the sampler's, not a scale invented here.
+CFG_CHOICES = (
+    ("1.0", "1.0 — Lightning LoRA, 4 steps, fastest. Negative prompt IGNORED."),
+    ("2.0", "2.0 — gentle guidance, closest to the references"),
+    ("3.5", "3.5 — balanced; follows the prompt without flattening the references"),
+    ("4.5", "4.5 — stronger prompt adherence, more contrast"),
+    ("6.0", "6.0 — heavy guidance; can oversaturate and stiffen poses"),
+)
+
 
 def anchor_render_settings(form):
     """The render knobs off the form, clamped, in the shape pipeline.gen_anchor
@@ -2150,7 +2178,7 @@ def anchor_plan(selected_tiers, selected_views):
 
 
 def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), character_id=None,
-                    prompts=None, negative=""):
+                    prompts=None, negative=None):
     """The generate form for one album, across any number of tiers and views.
 
     Every view is offered against every tier; see anchor_plan() for what gets
@@ -2213,7 +2241,9 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
         # class of lie as a control that does nothing
         "samplers": _build_refs().SAMPLERS, "schedulers": _build_refs().SCHEDULERS,
         "ref_methods": _build_refs().REF_METHODS,
-        "max_negative": MAX_NEGATIVE, "negative": negative,
+        "max_negative": MAX_NEGATIVE,
+        "negative": DEFAULT_NEGATIVE if negative is None else negative,
+        "cfg_choices": CFG_CHOICES, "default_negative": DEFAULT_NEGATIVE,
         "character_id": character_id,
         "characters": (album_cast(album) if album
                        else db.q("SELECT * FROM characters ORDER BY scope_value, name")),

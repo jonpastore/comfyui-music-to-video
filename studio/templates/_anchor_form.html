@@ -157,10 +157,18 @@
           <option value="quality">quality &mdash; ~28 steps, ~1 min a sheet</option>
         </select>
       </label>
+      <label>Guidance (CFG)
+        <select name="cfg" id="anchor-cfg">
+          <option value="">follow the mode</option>
+          {% for value, label in cfg_choices %}
+          <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
       <label>Reference method
         <select name="ref_method">
           <option value="">default (index_timestep_zero)</option>
-          {% for m in ref_methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+          {% for m in ref_methods %}<option value="{{ m }}">{{ m }}{% if m == "uxo/uno" %} — same as offset on this model{% endif %}</option>{% endfor %}
         </select>
       </label>
     </div>
@@ -173,7 +181,7 @@
       <summary>Sampler &mdash; only if you know why</summary>
       <div class="field-row">
         <label>Steps <input type="number" name="steps" min="1" max="60" placeholder="mode default"></label>
-        <label>CFG <input type="number" step="0.1" name="cfg" min="1" max="12" placeholder="mode default"></label>
+
         <label>Denoise <input type="number" step="0.05" name="denoise" min="0.1" max="1" placeholder="1.0"></label>
         <label>Sampler
           <select name="sampler_name"><option value="">mode default</option>
@@ -201,7 +209,10 @@
               maxlength="{{ max_negative }}"
               placeholder="white fur, cream fur, lighter patches, white tail, human skin, extra limbs, deformed tail, text, watermark, blurry">{{ negative or "" }}</textarea>
     <p class="hint">Fights what the positive cannot: colour drift, wrong markings, stray
-      clothing on a nude sheet. Screened like every other free-text field here.</p>
+      clothing on a nude sheet. Screened like every other free-text field here.
+      Pre-filled with a generic starting point &mdash; every term is a failure MODE, not a
+      trait of any one character, so it suits a different species or palette unchanged.
+      Edit it freely; clear it to send none.</p>
   </fieldset>
 
   {# ---- exactly what gets sent ---- #}
