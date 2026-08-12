@@ -15,7 +15,6 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 | `studio/pipeline.py` | B — **released 15:05, committed `6e3ab5a`** | phases 1–4 done | 13:45 |
 | `studio/app.py` + `templates/_jobs_panel.html` + `conftest.py` + `test_app.py` | B — **released 15:05** | phase 4; only B's hunks were staged, A's work left untouched in the tree | 14:45 |
 | `studio/jobs.py` | B — **released 14:20, committed in 7ab2233** | one line: `"cannot reach swarmui"` added to `_TRANSIENT` | 14:05 |
-| `studio/app.py` + `studio/templates/` + `studio/mixer.py` | A | the audio stage becomes a feature: job kind, route, form, assets storage | 16:00 |
 | `studio/check_integration.py` | B — **released 14:20, committed in 7ab2233** | three new seam checks for the swarm path | 14:05 |
 
 Sessions are named by whoever writes the row. A = the day-8/day-9 studio session
@@ -314,4 +313,35 @@ Append dated one-liners. Newest at the bottom.
   stage wiring (your items 1, 2, 8). `models.py` ACE-Step entry corrected and
   committed as `ca85be3` — its purpose line claimed the model could cut a region
   from the middle of a track, which peaches' own node list refutes.
+- 2026-08-12 16:45 (A) **Released `app.py`, `templates/`, `mixer.py`, `conftest.py`.
+  Your items 1, 2 and 8 are done — `3ea4c98` and `11f252f`.** 223 tests,
+  `mixer.py` OK, `models.py` OK, `check_integration.py` OK.
+  Item 1+8: job kind `audio`, a route, a form on the song page, and every take
+  copied into the studio's data dir with an assets row. Each take records WHICH
+  PATH RAN — generated / resynthesised / bridged — because models.py is explicit
+  that what comes back is new audio and never a shortened original.
+  Item 2: you were right, and `mixer.splice_bridge` is the answer — ffmpeg cuts
+  the span, ACE-Step writes the bridge, the seams are crossfaded. The route asks
+  for a bridge **two crossfades longer than the gap**, or the track comes back
+  shorter than it went in.
+  Item 3, the lyrics bound: `MAX_LYRICS = 10000`, `MAX_TAGS = 600`,
+  `MAX_AUDIO_SECS = 240`. **Form sanity bounds, not the model's limits** —
+  `TextEncodeAceStepAudio` publishes `lyrics` as a plain multiline STRING with no
+  declared maximum, so there was no number to read off the box and I invented
+  none. `tiers.check_text` is still off the audio path, as you left it.
+  `conftest.py` gained `gen_audio` and `splice_bridge` stubs — its own comment
+  says these gaps have bitten five times, so that is now six.
+- 2026-08-12 16:45 (A) Two traps worth having, both found by a check that
+  refused to pass: (a) FastAPI answers **422 before any handler runs** when a
+  REQUIRED `Form(...)` field arrives empty, so my "a take needs at least one
+  style tag" guard was unreachable for the only case it exists for — it is
+  `Form("")` now. (b) My first splice self-check used `aspectralstats`, which
+  emits nothing without a metadata printer: both readings returned 0.0 and the
+  comparison passed on no data, behind an `if` that made it a no-op. Replaced
+  with band-energy readings that raise when absent.
+- 2026-08-12 16:45 (A) **NOT DEPLOYED, deliberately.** The 16:00 deploy was
+  authorised to end a production outage; these are features, they are unproven
+  against a real GPU through the studio's own job path, and Jon is away. HEAD is
+  green and additive — the existing paths are untouched — so this is a one-word
+  decision for him, not a blocker for you.
 
