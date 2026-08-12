@@ -26,6 +26,8 @@ import vision
 import lyrics
 import mixer
 import mixadvice
+import arc
+import chat
 import creds
 import publish
 import analyse
@@ -679,6 +681,59 @@ def h_anchor(args, progress):
     return {"n": len(paths)}
 
 
+@jobs.handler("arc")
+def h_arc(args, progress):
+    """The album's story, in ONE request over every track.
+
+    One request, not one per song: what track seven does depends on what track
+    six did, and a per-song call would be guessing at exactly the thing the
+    document exists to decide -- the same reason mixadvice shows the model the
+    whole running order.
+    """
+    pl = db.one("SELECT * FROM playlists WHERE id=?", args["playlist_id"])
+    if not pl:
+        raise RuntimeError("that album no longer exists")
+    songs = [dict(r) for r in db.q(
+        """SELECT s.id, s.title, s.lyrics FROM playlist_items pi
+           JOIN songs s ON s.id = pi.song_id
+           WHERE pi.playlist_id=? ORDER BY pi.position""", pl["id"])]
+    if not songs:
+        raise RuntimeError("this album has no songs yet -- add some before writing its arc")
+    data, used = arc.generate(pl["name"], songs, direction=args.get("direction", ""),
+                              backend=args.get("backend"), model=args.get("model"),
+                              progress=progress, transitions=mixer.TRANSITIONS)
+    outdir = os.path.join(db.DATA, "arcs", safe_name(pl["name"]))
+    titles = {s["id"]: s["title"] for s in songs}
+    json_path, md_path = arc.write(data, outdir, safe_name(pl["name"]), titles)
+    db.run("""INSERT INTO arcs (playlist_id, json_path, md_path, model, prompt, created)
+              VALUES (?,?,?,?,?,?)
+              ON CONFLICT(playlist_id) DO UPDATE SET json_path=excluded.json_path,
+              md_path=excluded.md_path, model=excluded.model, prompt=excluded.prompt,
+              created=excluded.created""",
+           pl["id"], json_path, md_path, used, args.get("direction", ""), time.time())
+    return {"songs": len(data["songs"]), "acts": len(data["acts"]), "model": used}
+
+
+def album_arc(album):
+    """The stored arc for an album NAME, as a dict, or {}.
+
+    By name because that is how everything else in this studio reaches an album:
+    songs carry the name, anchors are scoped by it, and the arc has to be
+    findable from a song row that knows nothing about playlist ids.
+    """
+    if not album:
+        return {}
+    row = db.one("""SELECT a.json_path FROM arcs a JOIN playlists p ON p.id = a.playlist_id
+                    WHERE p.name=? AND p.kind='playlist'""", album)
+    if not row or not row["json_path"] or not os.path.isfile(row["json_path"]):
+        return {}
+    try:
+        with open(row["json_path"]) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
 @jobs.handler("storyboard")
 def h_storyboard(args, progress):
     sid, tier = args["song_id"], args["tier"]
@@ -724,9 +779,16 @@ def h_storyboard(args, progress):
             for c, _a in cast_anchors(song["album"] or "", tier)]
     if cast:
         progress(f"cast offered to the storyboard: {', '.join(n for n, _ in cast)}")
+    # Where this song sits in the album's story, if the album has one. Passed
+    # separately from style_note on purpose: that is the album's LOOK and this is
+    # its STORY, and folding one into the other is how the two stop being
+    # editable apart.
+    arc_ctx = arc.for_song(album_arc(song["album"] or ""), sid)
+    if arc_ctx:
+        progress(f"album arc: this is track {arc_ctx.get('beat', '')[:60]!r}")
     sb = grok.generate_storyboard(song["lyrics"] or "", tier, guardrail, style_note,
                                    song_fields, args.get("model"), args.get("scene_seconds"), progress,
-                                   direction=direction, cast=cast)
+                                   direction=direction, cast=cast, arc_ctx=arc_ctx)
     outdir = os.path.join(db.DATA, "storyboards", song["slug"])
     os.makedirs(outdir, exist_ok=True)
     json_path, md_path = grok.write_storyboard(sb, outdir, song["slug"], tier)
@@ -2218,7 +2280,13 @@ def storyboard_form_ctx(song, tier, chat_models=None, best=None, direction=None)
     sent for an already-generated storyboard."""
     if direction is None:
         row = db.one("SELECT prompt FROM storyboards WHERE song_id=? AND tier=?", song["id"], tier)
-        direction = (row["prompt"] if row else "") or default_direction(song, tier)
+        # An album arc, when there is one, is the better starting point than the
+        # tier's generic tone wording: it is what this SONG does in the story.
+        # A prefill, not a cage -- the box stays editable and what is actually
+        # sent is stored beside the storyboard, as it always was.
+        beat = arc.for_song(album_arc(song["album"] or ""), song["id"]).get("beat", "")
+        direction = ((row["prompt"] if row else "") or beat
+                     or default_direction(song, tier))
     return {"song": song, "tier": tier, "tiers": tiers.all_tiers(),
             "direction": direction, "pinned": tiers.PINNED.strip(),
             "tier_text": tier_tone(tier), "max_direction": grok.MAX_DIRECTION,
@@ -3283,6 +3351,47 @@ def reorder_playlist(id: int, order: str = Form(...)):
     return RedirectResponse("/playlists", status_code=303)
 
 
+@app.post("/playlists/{id}/arc")
+def start_arc(id: int, direction: str = Form(""), backend: str = Form(""),
+              model: str = Form("")):
+    """Queue the album's story arc. One job, one request, every track."""
+    pl = get_playlist_or_404(id)
+    try:
+        direction = arc.check_direction(direction)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not db.one("SELECT 1 FROM playlist_items WHERE playlist_id=?", id):
+        raise HTTPException(400, "this album has no songs yet -- add some first")
+    if backend:
+        try:
+            chat.resolve(backend)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+    elif not chat.available():
+        raise HTTPException(400, "no chat backend has an API key -- set one on the Config page")
+    jobs.enqueue("arc", {"playlist_id": id, "direction": direction,
+                          "backend": backend or None, "model": model or None})
+    return RedirectResponse(f"/playlists/{id}/arc", status_code=303)
+
+
+@app.get("/playlists/{id}/arc", response_class=HTMLResponse)
+def view_arc(request: Request, id: int):
+    pl = get_playlist_or_404(id)
+    row = db.one("SELECT * FROM arcs WHERE playlist_id=?", id)
+    data, md = {}, ""
+    if row and row["json_path"] and os.path.isfile(row["json_path"]):
+        with open(row["json_path"]) as f:
+            data = json.load(f)
+    if row and row["md_path"] and os.path.isfile(row["md_path"]):
+        md = open(row["md_path"]).read()
+    titles = {r["id"]: r["title"] for r in db.q(
+        """SELECT s.id, s.title FROM playlist_items pi JOIN songs s ON s.id = pi.song_id
+           WHERE pi.playlist_id=? ORDER BY pi.position""", id)}
+    return templates.TemplateResponse(request, "arc.html", {
+        "playlist": pl, "arc": data, "row": row, "md": md, "titles": titles,
+        "backends": chat.available()})
+
+
 @app.post("/playlists/{id}/render")
 def render_playlist(id: int, include_videos: bool = Form(False), tier: List[str] = Form([])):
     """Render the set.
@@ -3716,10 +3825,22 @@ def create_set(name: str = Form(...), mode: str = Form("video"), tier: str = For
         # Seeds from the playlist's current ordering -- a STARTING POINT, not a
         # link: editing the set afterward never writes back to the playlist,
         # and re-ordering the playlist later never reaches this set either.
+        #
+        # If the album has a story arc, its transition_out DEFAULTS each
+        # handover: the arc is where a fade to black was argued for, so this is
+        # where that argument arrives. It is still only a default -- the arc
+        # proposes and the set editor disposes, and every one is overridable.
+        pl_row = db.one("SELECT name FROM playlists WHERE id=?", playlist_id)
+        by_song = {s["song_id"]: s.get("transition_out") or {}
+                   for s in album_arc(pl_row["name"] if pl_row else "").get("songs") or []}
         for it in db.q("SELECT * FROM playlist_items WHERE playlist_id=? ORDER BY position", playlist_id):
-            db.run("""INSERT INTO set_items (set_id, song_id, position, transition, secs)
-                      VALUES (?,?,?,?,?)""", sid, it["song_id"], it["position"],
-                   it["transition"], it["secs"])
+            t = by_song.get(it["song_id"]) or {}
+            kind = t.get("kind") if t.get("kind") in SET_TRANSITIONS else it["transition"]
+            secs = t.get("secs") if t.get("kind") in SET_TRANSITIONS else it["secs"]
+            hold = float(t.get("hold") or 0.0) if kind == mixer.BLACK else 0.0
+            db.run("""INSERT INTO set_items (set_id, song_id, position, transition, secs, hold)
+                      VALUES (?,?,?,?,?,?)""", sid, it["song_id"], it["position"],
+                   kind, float(secs or 0.0), hold)
     return RedirectResponse(f"/sets/{sid}", status_code=303)
 
 

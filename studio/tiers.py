@@ -177,6 +177,10 @@ OVERRIDE_PHRASES = (
     "disregard the", "disregard all", "disregard any", "disregard previous",
     "override the", "override all", "override any", "override previous",
     "no restrictions", "without restrictions", "no rules", "without limits",
+    # "without limits" was here and "no limits" was not, which is the same
+    # sentence with one word changed. Found while screening album arcs, where
+    # one unscreened line propagates to every storyboard on the album.
+    "no limits", "anything is permitted", "anything goes",
     "previous instruction", "prior instruction", "earlier instruction",
     "system prompt", "do not follow", "forget previous", "forget all",
 )

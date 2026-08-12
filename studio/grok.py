@@ -311,7 +311,37 @@ def _cast_block(cast):
         "alone.\n\n")
 
 
-def _system_prompt(tier_text, style_note, n_scenes, scene_seconds, min_scenes=1, cast=()):
+def _arc_block(arc_ctx):
+    """Where this song sits in the album's story.
+
+    The neighbouring pair is the point: this track's own beat, the CLOSE of the
+    one before and the OPEN of the one after. Without them an arc is a document
+    nobody reads; with them scene one of track four follows scene twelve of
+    track three. STORY ONLY -- the arc is screened so it cannot carry policy
+    text, and the tier wording is composed at render time regardless.
+    """
+    if not arc_ctx:
+        return ""
+    bits = ["This song is part of an album with a story, and this is its place in it. "
+            "Treat it as the spine of the shot list, not as decoration.\n"]
+    for label, key in (("The album is about", "premise"), ("This track's role", "role"),
+                       ("What happens in it", "beat"),
+                       ("It should OPEN", "opens"), ("It should CLOSE", "closes"),
+                       ("The previous track ended", "prev_closes"),
+                       ("The next track opens", "next_opens")):
+        v = (arc_ctx.get(key) or "").strip()
+        if v:
+            bits.append(f"{label}: {v}")
+    cont = [c for c in (arc_ctx.get("continuity") or []) if c]
+    if cont:
+        bits.append("Facts every scene on this album must honour: " + "; ".join(cont))
+    bits.append("Scene one should follow on from how the previous track ended, and the last "
+                "scene should hand over to how the next one opens.\n")
+    return "\n".join(bits) + "\n"
+
+
+def _system_prompt(tier_text, style_note, n_scenes, scene_seconds, min_scenes=1, cast=(),
+                   arc_ctx=None):
     cams = ", ".join(CAMERA_VOCAB)
     return (
         "You are a shot-list generator for an AI-rendered music-video pipeline. "
@@ -332,7 +362,7 @@ def _system_prompt(tier_text, style_note, n_scenes, scene_seconds, min_scenes=1,
         "(a string like \"4-8 sec\"), story (one line of scene action), camera, "
         "motion, lighting, location, characters (a list of names), image_prompt, "
         "video_motion_prompt, negative_prompt.\n\n"
-        + _cast_block(cast) +
+        + _cast_block(cast) + _arc_block(arc_ctx) +
         f"camera MUST be built from this vocabulary (a different one every scene -- a "
         f"storyboard where every camera is the same is a failure): {cams}.\n\n"
         f"World/style lock for every scene: {style_note}\n"
@@ -569,7 +599,8 @@ def _direction_prompt(direction):
 
 
 def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
-                         scene_seconds=None, progress=None, direction="", cast=()):
+                         scene_seconds=None, progress=None, direction="", cast=(),
+                         arc_ctx=None):
     model = _resolve_model(model)
 
     sections = parse_sections(lyrics)
@@ -600,7 +631,7 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
             + tiers.PINNED},
         {"role": "system", "content": _system_prompt(tier_only, style_note, n_scenes,
                                                      scene_seconds, max(1, len(sections)),
-                                                     cast)},
+                                                     cast, arc_ctx)},
         {"role": "user", "content": _exemplar_prompt(exemplar, exemplar_md)},
     ]
     if (direction or "").strip():

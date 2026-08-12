@@ -149,6 +149,11 @@
     <button type="submit">Add song</button>
   </form>
 
+  <h3>Story arc</h3>
+  <p class="hint">What the album is ABOUT, and what each track does in it &mdash; the
+    storyboard for a song is written against its own beat and its neighbours' ends.
+    <a href="/playlists/{{ d.playlist.id }}/arc">Open the arc &rarr;</a></p>
+
   <h3>Render set</h3>
   <form method="post" action="/playlists/{{ d.playlist.id }}/render">
     <label class="check"><input type="checkbox" name="include_videos" value="true"> Include videos</label>

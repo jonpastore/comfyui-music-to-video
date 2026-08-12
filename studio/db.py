@@ -239,6 +239,18 @@ MIGRATIONS = [
 # creds.py's own docstring for what that does and does not buy). Its own
 # statement rather than a line in SCHEMA because it is the only table holding
 # anything sensitive, and that is worth being able to find.
+ARCS_SCHEMA = """
+-- The album's STORY (ALBUM_ARC_AND_STAGING_PLAN.md sec 4). Same shape as
+-- storyboards -- JSON and markdown on disk, one row pointing at them -- so an
+-- arc can be read, diffed and regenerated the same way. An album IS a playlist,
+-- and UNIQUE(playlist_id) is deliberate: one story per album, replaced rather
+-- than accumulated, because thirty-one storyboards need one answer.
+CREATE TABLE IF NOT EXISTS arcs (
+  id INTEGER PRIMARY KEY, playlist_id INTEGER NOT NULL,
+  json_path TEXT, md_path TEXT, model TEXT, prompt TEXT, created REAL,
+  UNIQUE(playlist_id));
+"""
+
 CREDENTIALS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS credentials (
   id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL,
@@ -274,6 +286,7 @@ def conn():
         c.execute("PRAGMA journal_mode=WAL")
         c.execute("PRAGMA foreign_keys=ON")
         c.executescript(SCHEMA)
+        c.executescript(ARCS_SCHEMA)
         c.executescript(CREDENTIALS_SCHEMA)
         _migrate(c)
         _local.c = c

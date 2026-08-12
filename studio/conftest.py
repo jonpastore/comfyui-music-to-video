@@ -109,11 +109,11 @@ grok_calls = {}
 
 
 def _generate_storyboard(lyrics_text, tier, guardrail, style_note, song, model, scene_seconds,
-                          progress, direction="", cast=()):
+                          progress, direction="", cast=(), arc_ctx=None):
     grok_calls["guardrail"] = guardrail
     grok_calls["args"] = dict(lyrics=lyrics_text, tier=tier, style_note=style_note,
                                song=song, model=model, scene_seconds=scene_seconds,
-                               direction=direction, cast=list(cast))
+                               direction=direction, cast=list(cast), arc_ctx=arc_ctx)
     return {"scenes": [{"scene_number": 1}, {"scene_number": 2}]}
 
 
