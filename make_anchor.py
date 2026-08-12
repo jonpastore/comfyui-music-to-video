@@ -57,19 +57,35 @@ DEFAULT_WARDROBE = (
 # failure mode of an unlabelled multi-image reference is a group shot.
 COMPOSITE = (
     "All of the reference images show the SAME single character from different angles or in "
-    "different outfits. Combine them into one coherent character; do not place several "
-    "figures in the frame."
+    "different outfits. Combine them into one coherent character: exactly one figure, alone "
+    "in the frame, standing by herself."
 )
 DEFAULT_BODY = (
     "Body colouring and texture are identical head to toe, matching the face: the same "
     "shade on shoulders, arms, torso, hips, thighs and calves, with no lighter or "
     "differently-toned patches anywhere."
 )
+# POSITIVE ONLY, and that is the whole point of the rewrite.
+#
+# This clause used to read "...and no scenery: no alley, no wall, no brickwork,
+# no neon, no purple or magenta lighting, no smoke, no wet ground". Every sheet
+# this studio ever rendered came back with smoke drifting around the edges and a
+# wet-looking haze across the bottom, and the reason was those two phrases: a
+# diffusion model does not process negation in the positive prompt, so "no
+# smoke" is an instruction to draw smoke and "no wet ground" is an instruction
+# to draw a wet floor. Reported as "why are all the images cloudy around the
+# edges and bottom" -- the cloud was the prompt.
+#
+# Absences belong in the NEGATIVE prompt, which is where they have been moved.
+# That works only above cfg 1.0, which is a further reason quality mode is the
+# default: in fast mode ComfyUI skips the negative pass and there is nowhere for
+# an absence to live at all.
 BACKDROP = (
-    "The background is a plain flat neutral grey studio backdrop with soft even lighting and no "
-    "scenery: no alley, no wall, no brickwork, no neon, no purple or magenta lighting, no smoke, "
-    "no wet ground, not leaning, not seated. Neutral studio character sheet, sharp focus, "
-    "high detail, full body head to toe inside the frame."
+    "The background is one flat sheet of neutral mid-grey, evenly lit and completely empty, "
+    "with the floor the same unbroken grey as the wall behind her and a soft contact shadow "
+    "under her feet. She stands upright and unsupported in an empty studio, clear of the "
+    "edges of the frame. Clean neutral studio character sheet, crisp air, sharp focus, high "
+    "detail, full body head to toe inside the frame."
 )
 DEFAULT_VIEWS = {
     "front": (
@@ -95,11 +111,6 @@ DEFAULT_VIEWS = {
         "visible. "),
 }
 
-# Replaces the wardrobe clause on a nude view. Positive wording throughout --
-# negatives are inert at cfg 1.0, so "no clothing" would do nothing; what works
-# is describing bare skin as the thing that is there. The wardrobe IMAGE is
-# still attached because they carry build and proportion, so the prompt says
-# which part of them to take and which to ignore.
 # The nude swap, and the one clause in this file that has to be overridable per
 # character.
 #
@@ -114,8 +125,8 @@ DEFAULT_VIEWS = {
 # a cat's head. No cfg value satisfies both clauses, which is why the sweep
 # found no good answer and why the fix is here rather than in the sampler.
 #
-# So the default says UNCLOTHED, not "skin", and defers what the surface is to
-# the body clause -- and a profile can replace it outright.
+# A profile can replace it outright.
+#
 # It must ASSERT nudity, positively, and name no garment at all.
 #
 # The first attempt at fixing the bare-skin contradiction replaced it with a
@@ -154,6 +165,29 @@ NUDE_WARDROBE = (
 DEFAULT_ANATOMY = ""
 
 NUDE_VIEWS = ("front_nude", "back_nude")
+
+
+# Every constant in this file that becomes part of a POSITIVE prompt. The one
+# defect this file keeps producing is negation in the positive: "no smoke" drew
+# smoke on every sheet for the life of the project, and a nude clause built from
+# "no garments, no underwear, no straps" put a leather harness on a nude sheet.
+# A diffusion model has no NOT. Absences belong in the negative prompt, which is
+# applied only above cfg 1.0 -- so a negation written here does not merely fail,
+# it actively instructs.
+POSITIVE_CONSTANTS = ("COMPOSITE", "DEFAULT_IDENTITY", "DEFAULT_WARDROBE", "DEFAULT_BODY",
+                     "BACKDROP", "NUDE_WARDROBE")
+
+# Phrases that read as "draw this" however they are meant. Checked by demo().
+_NEGATION_PATTERNS = (r"\bno\s+\w", r"\bnot\s+\w", r"\bwithout\s+\w",
+                     r"\bnever\s+\w", r"\bfree\s+of\b", r"\bavoid\b")
+
+# The one exception, stated rather than left as an oddity: DEFAULT_BODY and a
+# profile's body clause may say "no lighter patches" and "no human skin",
+# because there the thing being denied is a PROPERTY OF THE SUBJECT already in
+# frame rather than an object to be added to it -- "no lighter patches" cannot
+# summon a second character the way "no alley" summons an alley. It is still
+# weaker than a positive statement, which is why DEFAULT_BODY leads with one.
+_NEGATION_ALLOWED = ("DEFAULT_BODY",)
 
 
 def load_anchor(profile_path):

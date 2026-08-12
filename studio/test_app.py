@@ -2181,7 +2181,14 @@ def test_all_four_anchor_views_compose_a_prompt_and_nude_drops_the_wardrobe():
         assert "black fur on every limb" in p, view
         if view in make_anchor.NUDE_VIEWS:
             assert "a red leather harness" not in p, f"{view} kept the wardrobe wording"
-            assert "fully nude" in p, view
+            # the PROPERTY, not one phrasing of it: the clause has been reworded
+            # twice for measured reasons (see
+            # test_the_nude_wording_asserts_nudity_and_names_no_garment) and a
+            # test pinned to exact words fails on a correct rewrite while still
+            # passing on a wrong one.
+            assert "nude" in p.lower(), view
+            assert sum(w in p.lower() for w in ("undressed", "bare", "uncovered", "exposed")) >= 1, \
+                f"{view} does not positively assert nudity: {p[:160]}"
         else:
             assert "a red leather harness" in p, view
 
@@ -5157,3 +5164,50 @@ def test_the_nude_wording_asserts_nudity_and_names_no_garment():
     assert "jet-black fur" in p and "bare skin" not in p.lower(), p[:200]
     # and the album's actual WARDROBE never reaches a nude sheet
     assert "leather harness" not in p, "the clothed wardrobe leaked onto a nude sheet"
+
+
+def test_no_positive_prompt_constant_tries_to_negate():
+    """A diffusion model has no NOT, and this project has now paid for that three
+    times in one file.
+
+    BACKDROP said "no smoke, no wet ground", and every sheet the studio ever
+    rendered came back with smoke drifting round the edges and a wet-looking haze
+    across the bottom -- reported as "why are all the images cloudy around the
+    edges and bottom". The cloud was the prompt. NUDE_WARDROBE was rewritten into
+    "no garments, no underwear, no straps" and put a leather harness and boots on
+    a nude sheet. COMPOSITE said "do not place several figures in the frame",
+    found by this check.
+
+    Absences belong in the negative prompt -- and only above cfg 1.0, since
+    ComfyUI skips the negative pass below it, which is a further reason quality
+    mode is the default. This walks every constant that becomes positive text, so
+    the next one is caught before it renders rather than after.
+    """
+    import make_anchor as m
+    bad = []
+    for name in m.POSITIVE_CONSTANTS:
+        if name in m._NEGATION_ALLOWED:
+            continue
+        text = getattr(m, name)
+        for pat in m._NEGATION_PATTERNS:
+            for hit in re.finditer(pat, text, re.I):
+                bad.append(f"{name}: ...{text[max(0, hit.start() - 30):hit.end() + 25]}...")
+    assert not bad, (
+        "negation in a POSITIVE prompt constant -- the model will draw the thing being "
+        "denied. Move it to the negative prompt (app.DEFAULT_NEGATIVE) and say what IS "
+        "there instead:\n  " + "\n  ".join(bad))
+
+    # every view sentence is positive text too, and the back views are where a
+    # "not visible" is most tempting
+    for key, text in m.DEFAULT_VIEWS.items():
+        for pat in (r"\bno\s+\w", r"\bwithout\s+\w"):
+            assert not re.search(pat, text, re.I), f"negation in the {key} view sentence: {text}"
+
+    # ...and the absences really did land in the negative, where they work
+    assert "smoke" in appmod.DEFAULT_NEGATIVE and "wet ground" in appmod.DEFAULT_NEGATIVE, \
+        "the backdrop's absences were deleted rather than moved to the negative"
+    # which only does anything above cfg 1.0 -- so the default mode must be the
+    # one where it applies, or they have been moved somewhere inert
+    import build_refs
+    assert build_refs.negative_applies(appmod.resolved_settings({})), \
+        "the absences moved to a negative prompt the default mode never applies"

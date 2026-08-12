@@ -1844,6 +1844,13 @@ def _build_refs():
 
 
 ANCHOR_MODES = ("fast", "quality")
+# ONE default, read by both the form parser and the settings resolver. They had
+# their own, and they disagreed: anchor_render_settings defaulted to quality
+# while resolved_settings defaulted to fast, so the same absent field produced
+# cfg 4.5 with the negative live down one path and cfg 1.0 with it inert down
+# the other. Caught by the check asserting the backdrop's absences landed in a
+# negative the default mode actually applies.
+DEFAULT_ANCHOR_MODE = "quality"
 MAX_NEGATIVE = 1200
 
 # The negative the form starts with, PRE-FILLED rather than offered as a
@@ -1859,7 +1866,16 @@ DEFAULT_NEGATIVE = (
     "mismatched fur colour, lighter fur patches, discoloured tail, two-tone body, "
     "human skin, bare skin where fur belongs, clothing on a nude sheet, underwear, "
     "extra limbs, extra tails, missing tail, deformed hands, duplicate character, "
-    "cropped head, cropped feet, text, watermark, signature, blurry, low detail"
+    "cropped head, cropped feet, text, watermark, signature, blurry, low detail, "
+    # The studio backdrop's absences live HERE now, not in make_anchor.BACKDROP.
+    # Naming them in the positive prompt is what put smoke around every sheet's
+    # edges and a wet-looking haze across its bottom for the life of this
+    # project -- "no smoke" reads as "smoke" to the model. In the negative they
+    # do what they were meant to do, and only above cfg 1.0, which is where
+    # quality mode already puts us.
+    "smoke, haze, fog, mist, atmospheric particles, wet ground, wet reflective floor, "
+    "puddles, alley, brick wall, neon lighting, purple or magenta lighting, vignette, "
+    "dark corners, scenery, props"
 )
 
 # CFG, as the choice it actually is rather than a free number. 1.0 is the
@@ -2074,7 +2090,7 @@ def anchor_render_settings(form):
     # 2026-08-12 sweep and quality mode is what raises it; the form defaults to
     # it, and the server agreeing means a submit that omits the field renders
     # what the form would have sent rather than the other mode.
-    mode = (form.get("mode") or "quality").strip().lower()
+    mode = (form.get("mode") or DEFAULT_ANCHOR_MODE).strip().lower()
     if mode not in ANCHOR_MODES:
         raise HTTPException(400, f"mode must be one of {', '.join(ANCHOR_MODES)}")
     out = {"mode": mode}
@@ -2283,7 +2299,7 @@ def resolved_settings(render):
     import build_refs
     render = render or {}
     return build_refs.sampler_settings(
-        render.get("mode", "fast"),
+        render.get("mode", DEFAULT_ANCHOR_MODE),
         **{k: v for k, v in render.items() if k in SAMPLER_KEYS})
 
 
