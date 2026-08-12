@@ -235,6 +235,16 @@ MIGRATIONS = [
     "ALTER TABLE set_items ADD COLUMN branded INTEGER DEFAULT 0",
 ]
 
+# API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and
+# creds.py's own docstring for what that does and does not buy). Its own
+# statement rather than a line in SCHEMA because it is the only table holding
+# anything sensitive, and that is worth being able to find.
+CREDENTIALS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS credentials (
+  id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL,
+  ciphertext BLOB NOT NULL, created REAL, updated REAL);
+"""
+
 
 def _migrate(c):
     for stmt in MIGRATIONS:
@@ -264,6 +274,7 @@ def conn():
         c.execute("PRAGMA journal_mode=WAL")
         c.execute("PRAGMA foreign_keys=ON")
         c.executescript(SCHEMA)
+        c.executescript(CREDENTIALS_SCHEMA)
         _migrate(c)
         _local.c = c
     return c

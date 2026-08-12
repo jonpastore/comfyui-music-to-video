@@ -1,6 +1,52 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Publishing</h1>
+{# API keys. WRITE-ONLY on purpose: this page has no login, and a value that is
+   never rendered cannot be read off the screen. It shows whether a key is set,
+   where it comes from, and when it was last written -- never the key. #}
+<section class="card">
+  <h2>API keys</h2>
+  <p class="hint">Stored encrypted, with the encryption key in a file outside the data
+    directory. Honestly: that protects the database file, which gets copied and backed up.
+    It does <strong>not</strong> protect against anyone who can already read the filesystem
+    as this service, or who can reach this port &mdash; the studio has no login yet, which
+    is why it binds to the tailnet alone.
+    An <code>XAI_API_KEY</code>-style environment variable or config file always <strong>wins</strong>
+    over a stored key, so nothing that works today starts depending on this.</p>
+  <table class="list">
+    <thead><tr><th>Provider</th><th>Status</th><th>Used for</th><th></th></tr></thead>
+    <tbody>
+    {% for c in credentials %}
+      <tr>
+        <td><strong>{{ c.label }}</strong><br><span class="muted"><code>{{ c.env }}</code></span></td>
+        <td>
+          {% if c.set %}<span class="tag">set</span> <span class="muted">{{ c.source }}</span>
+            {% if c.shadowed %}<br><span class="muted">a key is also stored here, and is
+              NOT the one in use</span>{% endif %}
+            {% if c.stored and c.updated %}<br><time class="local-time muted"
+              datetime="{{ c.updated | isotime }}">{{ c.updated | isotime }}</time>{% endif %}
+          {% else %}<span class="muted">not set</span>{% endif %}
+        </td>
+        <td class="muted">{{ c.note }}</td>
+        <td>
+          <form method="post" action="/config/credentials" class="field-row">
+            <input type="hidden" name="name" value="{{ c.name }}">
+            <input type="password" name="value" placeholder="paste key" required
+                   autocomplete="off">
+            <button type="submit">{{ "Replace" if c.stored else "Store" }}</button>
+          </form>
+          {% if c.stored %}
+          <form method="post" action="/config/credentials/{{ c.name }}/clear">
+            <button type="submit" class="thumb-btn-danger">Clear</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
 <p class="hint">Where finished work may go, and what each destination permits.
   <strong>Nothing uploads yet</strong> &mdash; this records the destinations and enforces the
   one rule that must not be got wrong: a tier that permits nudity

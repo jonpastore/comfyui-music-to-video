@@ -74,20 +74,20 @@ _FENCE = re.compile(r"^```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
 
 
 def _api_key():
-    key = os.environ.get(_KEY_ENV)
+    """Through creds.get, which is the ONE place a secret is read.
+
+    Same precedence as before -- the environment first, then _KEY_FILE -- so
+    nothing that worked yesterday changes; creds adds the encrypted store as a
+    third fallback and makes Vault a swap behind one function later. Still read
+    at CALL time, never at import, so a rotated key needs no restart.
+    """
+    import creds
+    key = creds.get("xai")
     if key:
         return key
-    try:
-        with open(_KEY_FILE) as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith(f"{_KEY_ENV}="):
-                    return line.split("=", 1)[1].strip().strip('"').strip("'")
-    except FileNotFoundError:
-        pass
     raise RuntimeError(
-        f"{_KEY_ENV} is not set. Export it, or add a line '{_KEY_ENV}=...' "
-        f"to {_KEY_FILE} (chmod 600)."
+        f"{_KEY_ENV} is not set. Export it, add a line '{_KEY_ENV}=...' "
+        f"to {_KEY_FILE} (chmod 600), or set it on the Config page."
     )
 
 

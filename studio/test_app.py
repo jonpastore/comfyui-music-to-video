@@ -2644,6 +2644,54 @@ def test_set_editor_page_404s_for_an_unknown_id():
 # ---- SETS_MIXING_PLAN.md: beatmatch.py / effects.py / video_fx.py wired in,
 # and the shared "impossible transition" guard -----------------------------
 
+def test_api_keys_are_write_only_and_never_rendered(monkeypatch):
+    """ALBUM_ARC_AND_STAGING_PLAN.md sec 5. The studio has no login, so the one
+    property that makes storing keys acceptable is that no route ever renders
+    one. Asserted against the page bytes, not against the intention."""
+    import creds
+    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    monkeypatch.setitem(creds.PROVIDERS["openai"], "file", "")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    secret = "sk-should-never-be-rendered-0123456789"
+    with TestClient(appmod.app) as client:
+        page = client.get("/config").text
+        assert "not set" in page and "OPENAI_API_KEY" in page
+
+        r = client.post("/config/credentials", data={"name": "openai", "value": secret},
+                        follow_redirects=False)
+        if r.status_code == 503:
+            pytest.skip("cryptography not installed; storing is refused by design")
+        assert r.status_code == 303, r.text
+
+        # it round-trips for the code that needs it...
+        assert creds.get("openai") == secret
+        # ...and appears NOWHERE on the page that manages it
+        page = client.get("/config").text
+        assert secret not in page, "the config page rendered a stored API key"
+        assert "sk-should-never" not in page
+        assert "set" in page
+
+        # nor anywhere in the database in clear
+        with open(db.DB_PATH, "rb") as f:
+            assert secret.encode() not in f.read(), \
+                "the key is recoverable straight out of the sqlite file"
+
+        # an environment key WINS, and the page says which one is in use
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-from-env")
+        assert creds.get("openai") == "sk-from-env"
+        assert "NOT the one in use" in client.get("/config").text
+        monkeypatch.delenv("OPENAI_API_KEY")
+
+        r = client.post("/config/credentials/openai/clear", follow_redirects=False)
+        assert r.status_code == 303
+        assert creds.get("openai") == ""
+
+        # and an unknown provider is refused rather than stored under a name
+        # nothing will ever read
+        assert client.post("/config/credentials",
+                           data={"name": "not-a-provider", "value": "x"}).status_code == 400
+
+
 def test_fade_to_black_is_a_transition_kind_and_its_hold_is_stored():
     """ALBUM_ARC_AND_STAGING_PLAN.md sec 1. A transition rather than an inserted
     clip, so it flows through the one place that computes where a handover

@@ -26,6 +26,7 @@ import vision
 import lyrics
 import mixer
 import mixadvice
+import creds
 import publish
 import analyse
 import effects    # per-item audio DJ effects -- pure, no deps, validated for real (not stubbed)
@@ -3398,7 +3399,29 @@ def config_page(request: Request):
         "recheck": publish.RECHECK,
         "adult_tiers": [t["name"] for t in all_tiers if tiers.allows_nudity(t["name"])],
         "FORBIDDEN": publish.FORBIDDEN, "TAGGED": publish.TAGGED,
-        "OPEN": publish.OPEN, "UNKNOWN": publish.UNKNOWN})
+        "OPEN": publish.OPEN, "UNKNOWN": publish.UNKNOWN,
+        "credentials": creds.status()})
+
+
+@app.post("/config/credentials")
+def set_credential(name: str = Form(...), value: str = Form(...)):
+    """Store an API key. WRITE-ONLY: no route ever renders a stored value, so a
+    secret cannot be shoulder-surfed out of a page that has no login."""
+    try:
+        creds.put(name, value)
+    except creds.Unavailable as e:
+        raise HTTPException(503, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return RedirectResponse("/config", status_code=303)
+
+
+@app.post("/config/credentials/{name}/clear")
+def clear_credential(name: str):
+    if name not in creds.PROVIDERS:
+        raise HTTPException(404, f"unknown credential {name!r}")
+    creds.clear(name)
+    return RedirectResponse("/config", status_code=303)
 
 
 @app.post("/config/targets")

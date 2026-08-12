@@ -31,3 +31,12 @@ nvidia-cudnn-cu12
 # box) and 1.0.0 (py3.12 / numpy 2.4.6) return bit-identical bpm, key, beat count
 # and energy. Installing it does NOT move numpy, so faster-whisper is undisturbed.
 librosa>=0.11
+# creds.py: API keys encrypted at rest. Fernet (AES-128-CBC + HMAC) from a
+# library, never a hand-rolled cipher. If this is absent the studio still runs
+# and still reads keys from the environment and from ~/.config -- creds.put()
+# refuses to store one rather than writing it in plaintext.
+#
+# No upper pin and no lower one beyond what Fernet has always offered: the API
+# used here (Fernet.generate_key/encrypt/decrypt) has been stable for a decade,
+# and pinning to a dev machine's version is the mistake librosa taught above.
+cryptography
