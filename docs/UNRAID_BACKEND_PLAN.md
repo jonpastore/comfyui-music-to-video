@@ -80,32 +80,58 @@ local build at all.
 
 ## 3 · What the 2080 Ti can actually run, and the constraint that decides it
 
-**Compute capability 7.5 is Turing.** That is the whole answer, and it is not
-about the 11 GB:
+**SPIKED 2026-08-12, and the reasoning below it was wrong.** This section used
+to say "compute capability 7.5 is Turing, that is the whole answer, and it is
+not about the 11 GB" — that fp8 tensor cores arrive with Ada, so every fp8 model
+in the studio was out. It asked to be spiked before being committed to. It was,
+and **the constraint is the 11 GB after all.**
 
-- **No fp8.** fp8 tensor cores arrive with Ada (sm_89). Every fp8 model in this
-  studio is therefore out: `ltx-2.3-22b-distilled_transformer_only_fp8_scaled`,
-  `wan2.2_*_fp8_scaled`, `qwen_image_edit_2511_fp8mixed`, and
-  `Z-Image-Turbo-FP8Mix`.
-- **No native bf16.** bf16 arrives with Ampere (sm_80). fp16 is fine and fast —
-  Turing has fp16 tensor cores — but a bf16 checkpoint will either be converted
-  or run slowly.
+**fp8 RUNS on the 2080 Ti.** `z_image_turbo_fp8mix.safetensors` — an fp8 model —
+rendered a real 1024x576 image on peaches through SwarmUI pinned to
+`exactbackendid: 2`. Not blank: RGB std 56.2, 969830 bytes.
 
-This is architectural rather than measured, and it is the one thing worth
-spiking before committing: run `torch.cuda.get_device_capability()` and attempt
-one fp8 load inside the container. Ten minutes, and it turns this section from
-reasoning into evidence.
+    cold, including the model load   60.8s
+    warm, second seed                 8.6s
 
-What that leaves, against models this project already uses:
+Against cerberus's 5090 on the same model and step count, normalised per pixel
+(2048x896 in 7.67s = 239 kpx/s, against peaches' 1024x576 in 8.6s = 69 kpx/s):
+**cerberus is 3.5x faster.** The backend title's "~3.3x cerberus" was close.
 
-| Model | Size | On a 2080 Ti |
+fp8 tensor *cores* are indeed Ada and later. What that means in practice is that
+ComfyUI stores the weights at fp8 and upcasts per operation, so the box pays in
+speed and not in refusal — the VRAM saving is real, the matmul acceleration is
+not. That is a 3.5x tax, not a wall.
+
+**No native bf16 stands, and it is the one that bit.** bf16 arrives with Ampere
+(sm_80). This is why peaches carries `ace_step_v1_3.5b_fp16.safetensors` rather
+than the bf16 build cerberus has, and why `models.ALIASES` exists.
+
+So the real table, against models this project already uses, with sizes measured
+off disk rather than quoted, against **10.58 GiB usable** (11264 MiB nominal):
+
+| Model | Weights | On a 2080 Ti |
 |---|---|---|
-| `ace_step_v1_3.5b` | 7.2 GB | **yes** — 3.5B at fp16 is ~7 GB, fits 11 GB |
-| `sd_xl_base_1.0` | 6.5 GB | **yes**, comfortably |
-| SD 1.5, upscalers, ControlNet, face restore | small | **yes**, easily |
-| `Z-Image-Turbo-FP8Mix` | 6.1 GB | **no** — fp8 |
-| `ltx-2.3-22b-distilled` (fp8) | 21.9 GB | **no**, twice over |
-| `wan2.2_s2v_14B` (fp8) | 15.3 GB | **no**, twice over |
+| `z_image_turbo_fp8mix` | 6.1 GiB | **yes — measured, 8.6s warm at 1024x576** |
+| `ace_step_v1_3.5b` (fp16 build) | 7.2 GiB | **yes** — fits, and it is the always-on audio box |
+| `flux-2-klein-4b-fp8` | 4 GiB | **yes** by size; unproven here |
+| `sd_xl_base_1.0` | 6.5 GiB | **yes**, comfortably |
+| `wan2.2_i2v_low_noise_14B` (the refiner) | 13.31 GiB | **no** — 1.26x the card |
+| `wan2.2_s2v_14B` | 15.27 GiB | **no** — 1.44x the card |
+| `qwen_image_edit_2511_fp8mixed` | 19.12 GiB | **no** — 1.81x the card |
+| `ltx-2.5-22b-distilled` (int8) | 20.03 GiB | **no** — 1.89x the card |
+| `ltx-2.3-22b-distilled` (fp8) | 21.86 GiB | **no** — 2.07x the card |
+| `wan2.2_i2v` (high **and** low, both load) | 26.62 GiB | **no** — 2.52x the card |
+
+**None of those noes is about fp8.** Every one is a weight file larger than the
+card, which is why `models.fits()` compares exactly that and nothing else.
+
+**This is now enforced in code, not in prose.** `models.weights_gib` carries
+each measured size, `models._system_stats()` reads each backend's real VRAM off
+its own `/system_stats`, and `models.fits()` answers per box — so
+`/models/fleet` says "15.27 GiB of weights on a 10.58 GiB card" on the page
+instead of someone re-deriving it here. `models.where()` sorts a box that holds
+a model it cannot hold *resident* to the back rather than dropping it: streaming
+is slow, and slow is a different answer from cannot.
 
 **So this is an image and music box.** That is exactly what was asked for, and it
 is a genuinely good fit: ACE-Step audio is the single most useful thing to move
@@ -183,15 +209,25 @@ Phases, each independently useful:
 
 ## 7 · Open questions
 
-1. **Does an fp8 checkpoint fail loudly or silently degrade?** ComfyUI may
-   fall back to a slower path rather than refusing. If it degrades silently,
-   this box will accept LTX jobs from the swarm and take forever — which is
-   worse than refusing, given SwarmUI does not requeue a job lost mid-generation.
-2. **Should the swarm be told what this backend cannot do?** SwarmUI routes to
-   whichever backend is free, not whichever is capable. With a 2080 Ti in the
-   pool, a video job can land on it. Whether SwarmUI can express "this backend
-   only does these models" needs checking before joining, or the fast boxes get
-   starved by jobs queued behind a card that cannot do them.
+1. ~~**Does an fp8 checkpoint fail loudly or silently degrade?**~~ **ANSWERED
+   2026-08-12, and the fear was right.** It degrades silently. fp8 weights load
+   and render on Turing — measured above, 8.6s warm — at about 3.5x the time per
+   pixel, with nothing anywhere saying so. So the box will accept work it can
+   technically do and be slow at it, which is exactly the failure mode this
+   question predicted, and it is why the answer to question 2 mattered.
+2. ~~**Should the swarm be told what this backend cannot do?**~~ **ANSWERED
+   2026-08-12: it cannot be, and the studio does it instead.** SwarmUI routes to
+   whichever backend is free, not whichever is capable, and it does not requeue
+   a validation miss — measured the same day: an unpinned anchor was refused
+   twice because Swarm picked a box without Qwen-Image-Edit. Two mechanisms now
+   cover it, both in the studio:
+   - `models.py` says what each box *can* run — per-backend availability,
+     `ALIASES` for the same weights under a different name, `fits()` for weights
+     against that card's real VRAM, and `where()` for the order to try.
+   - `pipeline.py` walks `exactbackendid` over the running backends on retry
+     rather than re-rolling the same dice.
+   Model curation still decides where a job *can* succeed; it never decides
+   where Swarm *sends* it, and that is why the pinning exists.
 3. ~~**Array or cache for the models?**~~ **ANSWERED 2026-08-12.** Cache, on a
    share of their own. The policies were read rather than assumed: `appdata` is
    `shareUseCache="prefer"` (the mover pulls array→cache, so files written there

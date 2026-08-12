@@ -115,6 +115,7 @@ CATALOG = {
     "qwen_image_edit_2511": {
         "role": "reference",
         "proven": "stable",   # every reference frame and every anchor this project has rendered
+        "weights_gib": 19.12,   # fp8 mixed, one file
         "label": "Qwen-Image-Edit 2511 (fp8 mixed)",
         "file": "qwen_image_edit_2511_fp8mixed.safetensors",
         "loader": "UNETLoader",
@@ -142,6 +143,7 @@ CATALOG = {
     "wan22_s2v": {
         "role": "video",
         "proven": "stable",   # the original clip path, ~90s per clip on real songs
+        "weights_gib": 15.27,   # one file
         "label": "WAN 2.2 S2V 14B (sound to video)",
         "file": "wan2.2_s2v_14B_fp8_scaled.safetensors",
         "loader": "UNETLoader",
@@ -168,6 +170,7 @@ CATALOG = {
     "wan22_i2v": {
         "role": "video",
         "proven": "opportunistic",   # the installed 4-step LoRA is a t2v LoRA; steps unre-tuned
+        "weights_gib": 26.62,   # 13.31 x2 -- the pair is ONE model split at a denoise boundary
         "label": "WAN 2.2 I2V 14B (image to video, high+low noise)",
         "file": "Wan2.2/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
         "loader": "UNETLoader",
@@ -191,6 +194,7 @@ CATALOG = {
     "ltx25": {
         "role": "video",
         "proven": "stable",   # measured on a real clip on two boxes, 2026-08-12
+        "weights_gib": 20.03,   # int8-convrot; the nvfp4 build is 17.4
         "label": "LTX-2.5 22B distilled (audio-conditioned, int8-convrot)",
         "file": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
         "loader": "UNETLoader",
@@ -231,6 +235,7 @@ CATALOG = {
     "ltx23": {
         "role": "video",
         "proven": "stable",   # measured on a real clip, 50s, and kept as the 2.5 fallback
+        "weights_gib": 21.86,   # fp8_scaled
         "label": "LTX-2.3 22B distilled (audio-conditioned, ~2x faster)",
         "file": "ltx-2.3-22b-distilled_transformer_only_fp8_scaled.safetensors",
         "loader": "UNETLoader",
@@ -270,6 +275,7 @@ CATALOG = {
     "wan22_i2v_low": {
         "role": "refine",
         "proven": "opportunistic",   # nothing here has measured whether it helps s2v output
+        "weights_gib": 13.31,   # one file
         "label": "WAN 2.2 I2V 14B low-noise (refiner pass)",
         "file": "Wan2.2/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
         "loader": "UNETLoader",
@@ -290,6 +296,7 @@ CATALOG = {
     "qwen_artwork": {
         "role": "artwork",
         "proven": "stable",   # same weights as the reference path, already rendering covers
+        "weights_gib": 19.12,   # the same file as the reference role
         "label": "Qwen-Image-Edit 2511 (local, free)",
         "file": "qwen_image_edit_2511_fp8mixed.safetensors",
         "loader": "UNETLoader",
@@ -314,6 +321,7 @@ CATALOG = {
     "ace_step_v1": {
         "role": "audio",
         "proven": "opportunistic",   # downloaded, nodes present, NO WORKFLOW WRITTEN
+        "weights_gib": 7.17,   # bf16; peaches carries an fp16 cast of the same size class
         "label": "ACE-Step v1 3.5B",
         "file": "ace_step_v1_3.5b.safetensors",
         "loader": "CheckpointLoaderSimple",
@@ -368,6 +376,52 @@ def _object_info(url=None):
         info = None
     _cache[url] = {"at": now, "info": info}
     return info
+
+
+def _system_stats(url=None):
+    """{'vram_gib': float} for one backend, or None if it did not answer.
+
+    Same per-URL cache and same failure policy as _object_info: a box being off
+    is not an error, it is an unknown.
+    """
+    url = url or COMFY
+    key = f"stats:{url}"
+    now = time.monotonic()
+    hit = _cache.get(key)
+    if hit and now - hit["at"] < _CACHE_TTL:
+        return hit["info"]
+    info = None
+    try:
+        with urllib.request.urlopen(f"{url}/system_stats", timeout=OBJECT_INFO_TIMEOUT) as r:
+            data = json.loads(r.read())
+        dev = (data.get("devices") or [{}])[0]
+        total = dev.get("vram_total")
+        if total:
+            info = {"vram_gib": round(total / 2 ** 30, 2), "gpu": dev.get("name", "")}
+    except (urllib.error.URLError, OSError, ValueError, IndexError, TypeError):
+        info = None
+    _cache[key] = {"at": now, "info": info}
+    return info
+
+
+def fits(key, vram_gib):
+    """Does this model's weight file fit on a card of this size?
+
+    True / False / None-when-unknown, and it is a FLOOR check, not a prediction
+    of peak VRAM. ComfyUI streams weights it cannot hold, so False means "this
+    box would move the whole file across PCIe every step", not "it will refuse".
+    The direction that matters is the one it is certain about: LTX-2.3 is 21.86
+    GiB on disk and peaks at 18.9 during a render, so weights are not an upper
+    bound on anything -- but a 15.27 GiB UNET on a 10.58 GiB card is 1.44x the
+    card and no amount of scheduling makes that resident.
+
+    Per-model caveats about how close to the ceiling a model runs are in its
+    notes, measured, and this does not try to replace them.
+    """
+    m = CATALOG.get(key)
+    if not m or not vram_gib or not m.get("weights_gib"):
+        return None
+    return m["weights_gib"] <= vram_gib
 
 
 def spellings(name):
@@ -480,11 +534,21 @@ def by_backend(backends, role=None):
     """
     out = []
     for b in (backends or []):
-        info = _object_info(b.get("address") or None)
-        stability, why = backend_stability(b.get("address"))
+        address = b.get("address") or None
+        info = _object_info(address)
+        stats = _system_stats(address) or {}
+        stability, why = backend_stability(address)
+        entries = catalog(role=role, object_info=info)
+        for e in entries:
+            # INSTALLED and FITS are different failures with different fixes:
+            # one is a download, the other is a card. Peaches holds neither
+            # wan22 file, but even if it did, a 15.27 GiB UNET does not go on
+            # a 10.58 GiB 2080 Ti.
+            e["fits"] = fits(e["key"], stats.get("vram_gib"))
         out.append(dict(b, stability=stability, stability_why=why,
                         reachable=info is not None,
-                        models=catalog(role=role, object_info=info)))
+                        vram_gib=stats.get("vram_gib"), gpu=stats.get("gpu", ""),
+                        models=entries))
     return out
 
 
@@ -503,8 +567,14 @@ def where(key, backends):
         if not entry or not entry["available"]:
             continue
         rows.append({"id": b["id"], "title": b["title"], "address": b["address"],
-                     "stability": b["stability"], "file_here": entry["file_here"]})
-    return sorted(rows, key=lambda r: (r["stability"] != "stable", str(r["id"])))
+                     "stability": b["stability"], "file_here": entry["file_here"],
+                     "fits": entry["fits"], "vram_gib": b["vram_gib"]})
+    # A box that holds the file but cannot hold it IN THE CARD goes last rather
+    # than being dropped: it can still render, by streaming, and "slow" is a
+    # different answer from "cannot". Unknown fit sorts with the ones that fit,
+    # because unknown is not a reason to demote a box.
+    return sorted(rows, key=lambda r: (r["fits"] is False,
+                                       r["stability"] != "stable", str(r["id"])))
 
 
 def get(key):
@@ -587,7 +657,7 @@ def demo():
     # "what is it for" in the UI, which is the whole point of the module
     for key, m in CATALOG.items():
         for field in ("role", "label", "file", "loader", "purpose", "notes",
-                      "companions", "proven"):
+                      "companions", "proven", "weights_gib"):
             assert m.get(field) is not None, f"{key} has no {field}"
         assert m["role"] in ROLES, f"{key} has unknown role {m['role']}"
         assert m["loader"] in LOADER_FIELD, f"{key} has unknown loader {m['loader']}"
@@ -748,6 +818,13 @@ def demo():
               "address": "http://10.0.0.99:8188"}]
     _object_info = lambda url=None: {"http://127.0.0.1:8188": cerberus,
                                      "http://100.95.184.29:8188": peaches}.get(url)
+    global _system_stats
+    real_stats = _system_stats
+    # measured 2026-08-12 off each box's own /system_stats
+    _system_stats = lambda url=None: {
+        "http://127.0.0.1:8188": {"vram_gib": 23.42, "gpu": "RTX 5090 Laptop"},
+        "http://100.95.184.29:8188": {"vram_gib": 10.58, "gpu": "RTX 2080 Ti"},
+    }.get(url)
     try:
         rows = by_backend(fleet)
         assert [r["reachable"] for r in rows] == [True, True, False], rows
@@ -762,8 +839,30 @@ def demo():
         # nothing catalogued runs on the ghost, and asking does not raise
         assert where("qwen_image_edit_2511", [fleet[2]]) == []
         assert where("qwen_image_edit_2511", None) == []
+
+        # INSTALLED and FITS are separate answers, and the 2080 Ti needs both.
+        # 15.27 GiB of s2v weights do not go on a 10.58 GiB card -- that is
+        # 1.44x, and no scheduling makes it resident. It is not a dtype problem:
+        # fp8 runs on Turing, which is how peaches became the ACE-Step box.
+        assert fits("wan22_s2v", 10.58) is False
+        assert fits("wan22_i2v_low", 10.58) is False, "the REFINER does not fit either"
+        assert fits("ace_step_v1", 10.58) is True
+        assert fits("wan22_s2v", 23.42) is True
+        # the i2v pair is one model: sized as both files, because both load
+        assert fits("wan22_i2v", 23.42) is False, "13.31 x2 was sized as one file"
+        assert fits("wan22_s2v", None) is None, "a box that never answered got a verdict"
+        assert fits("no_such_model", 23.42) is None
+        # a weights file is a FLOOR, never a peak: 2.3 is 21.86 on disk and was
+        # measured peaking at 18.9 during a real render
+        assert fits("ltx23", 23.42) is True
+
+        peach_rows = by_backend([fleet[1]])[0]
+        ace = next(e for e in peach_rows["models"] if e["key"] == "ace_step_v1")
+        assert ace["available"] and ace["fits"], ace
+        assert peach_rows["vram_gib"] == 10.58
     finally:
         _object_info = real
+        _system_stats = real_stats
 
     print("models.py OK")
 

@@ -5787,9 +5787,16 @@ def test_fleet_panel_names_the_spelling_each_box_uses(monkeypatch):
     whose ComfyUI never answered."""
     import models as modelmod
     cerberus = {"CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [
-        ["ace_step_v1_3.5b.safetensors"]]}}}}
+        ["ace_step_v1_3.5b.safetensors"]]}}},
+        "UNETLoader": {"input": {"required": {"unet_name": [
+            ["wan2.2_s2v_14B_fp8_scaled.safetensors"]]}}}}
+    # peaches is given the s2v UNET it does NOT really have, so that "installed"
+    # and "fits" are separated in the assertion below: without the second check
+    # a page can call a 15.27 GiB model runnable on a 10.58 GiB card.
     peaches = {"CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [
-        ["ace_step_v1_3.5b_fp16.safetensors"]]}}}}
+        ["ace_step_v1_3.5b_fp16.safetensors"]]}}},
+        "UNETLoader": {"input": {"required": {"unet_name": [
+            ["wan2.2_s2v_14B_fp8_scaled.safetensors"]]}}}}
     fleet = [{"id": "0", "title": "cerberus", "status": "running",
               "address": "http://127.0.0.1:8188"},
              {"id": "2", "title": "peaches", "status": "running",
@@ -5800,6 +5807,11 @@ def test_fleet_panel_names_the_spelling_each_box_uses(monkeypatch):
     monkeypatch.setattr(modelmod, "_object_info",
                         lambda url=None: {"http://127.0.0.1:8188": cerberus,
                                           "http://100.95.184.29:8188": peaches}.get(url))
+    monkeypatch.setattr(modelmod, "_system_stats",
+                        lambda url=None: {
+                            "http://127.0.0.1:8188": {"vram_gib": 23.42, "gpu": "5090"},
+                            "http://100.95.184.29:8188": {"vram_gib": 10.58,
+                                                          "gpu": "2080 Ti"}}.get(url))
     with TestClient(appmod.app) as client:
         r = client.get("/models/fleet")
         assert r.status_code == 200, r.text
@@ -5810,6 +5822,11 @@ def test_fleet_panel_names_the_spelling_each_box_uses(monkeypatch):
         assert "stable" in r.text and "opportunistic" in r.text
         # a backend that never answered says so instead of reporting "missing"
         assert "did not answer us" in r.text
+        # INSTALLED is not RUNNABLE. Both boxes are given the s2v UNET, and only
+        # the 10.58 GiB card is told it cannot hold 15.27 GiB of it -- so the
+        # warning appears exactly ONCE across a three-backend page.
+        assert r.text.count("15.27 GiB of weights") == 1, "installed read as runnable"
+        assert "10.58 GiB card" in r.text
 
     # and Swarm being down is not an error for a studio that renders direct
     monkeypatch.setattr(appmod.pipeline, "swarm_backends", lambda: None)

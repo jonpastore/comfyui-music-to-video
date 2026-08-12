@@ -31,7 +31,9 @@
       <span class="tag">swarm says {{ b.status }}</span>
       {% if not b.reachable %}<span class="tag warn-tag">did not answer us</span>{% endif %}
     </header>
-    <p class="meta"><code>{{ b.address }}</code> &middot; {{ b.stability_why }}</p>
+    <p class="meta"><code>{{ b.address }}</code>
+      {% if b.vram_gib %}&middot; {{ b.gpu }}, {{ b.vram_gib }} GiB{% endif %}
+      &middot; {{ b.stability_why }}</p>
 
     {% if not b.reachable %}
       <p class="warn">Its ComfyUI did not answer, so nothing below is known about this box
@@ -51,6 +53,11 @@
             <br><strong class="warn">names it <code>{{ m.file_here }}</code></strong>,
             not <code>{{ m.file }}</code> &mdash; a workflow sent here must load that
             spelling or the loader refuses it.
+          {% endif %}
+          {% if m.fits is false %}
+            <br><strong class="warn">{{ m.weights_gib }} GiB of weights on a
+            {{ b.vram_gib }} GiB card</strong> &mdash; it would stream from system RAM
+            every step. Installed is not the same as runnable.
           {% endif %}
           {% if m.missing %}
             <br><span class="warn">missing

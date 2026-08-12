@@ -88,6 +88,15 @@ The actuators already exist and none of this needs new models:
   is marked `proven: opportunistic` because **nothing here has measured whether
   it helps**. Measuring that is tier 3's first task, not its assumption.
 
+**And the refiner cannot run on the box whose output prompted this plan.**
+`wan2.2_i2v_low_noise_14B_fp8_scaled` is 13.31 GiB against peaches' 10.58 GiB —
+1.26x the card. Nor is it installed there. So "clean up peaches output" means
+*peaches renders, cerberus refines*, and the artefact crosses boxes. That is not
+an fp8 problem: fp8 runs on Turing, measured at 8.6s warm for a 1024x576 Z-Image
+render, and every model peaches cannot run it cannot run on size alone.
+`models.fits()` answers this per box now, so tier 3 routing should ask it rather
+than assume the refiner is available wherever the clip was made.
+
 **A repair produces a NEW candidate. It never overwrites.** The studio's whole
 design is candidates plus a human pick; an auto-repair that overwrites destroys
 the evidence that anything was wrong and removes the comparison that would show
