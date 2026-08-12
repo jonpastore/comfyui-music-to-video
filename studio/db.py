@@ -284,6 +284,39 @@ CREATE INDEX IF NOT EXISTS idx_anchor_prompts
   ON anchor_prompts(scope_value, tier, character_id, id);
 """
 
+PROMPT_VERSIONS_SCHEMA = """
+-- Versioned prompt text, for every kind of prompt this studio sends. See
+-- prompts.py for what a version means and why usage_count counts renders
+-- rather than loads.
+--
+-- One table for all types, replacing two half-systems: anchor_prompts with a
+-- `kind` column bolted on to fit the negative, and the component fields
+-- (identity/wardrobe/body) which had no history at all -- editing one
+-- overwrote the previous wording with nothing kept.
+--
+-- tier is "" for a type that is album-wide; character_id NULL is the
+-- protagonist, as everywhere else. version_number is per (album, tier,
+-- character, type) and is NOT renumbered when one is deleted: the number is how
+-- a render is referred to afterwards, so closing the gap would repoint an old
+-- note at different text.
+CREATE TABLE IF NOT EXISTS prompt_versions (
+  id INTEGER PRIMARY KEY,
+  scope_value TEXT NOT NULL,          -- album name, as anchors are scoped
+  tier TEXT NOT NULL DEFAULT '',
+  character_id INTEGER,
+  prompt_type TEXT NOT NULL,
+  version_number INTEGER NOT NULL,
+  label TEXT,
+  text TEXT NOT NULL,
+  created REAL NOT NULL,
+  updated REAL,
+  usage_count INTEGER DEFAULT 0,
+  UNIQUE(scope_value, tier, character_id, prompt_type, version_number));
+
+CREATE INDEX IF NOT EXISTS idx_prompt_versions
+  ON prompt_versions(scope_value, prompt_type, tier, character_id, version_number);
+"""
+
 ANCHOR_RUNS_SCHEMA = """
 -- One row per GENERATION: everything that was sent, once, with the candidates
 -- it produced pointing back at it (anchors.run_id).
@@ -388,6 +421,7 @@ def conn():
         c.executescript(ANCHOR_PROMPTS_SCHEMA)
         c.executescript(TIER_OVERRIDES_SCHEMA)
         c.executescript(ANCHOR_RUNS_SCHEMA)
+        c.executescript(PROMPT_VERSIONS_SCHEMA)
         c.executescript(ARCS_SCHEMA)
         c.executescript(CREDENTIALS_SCHEMA)
         _migrate(c)

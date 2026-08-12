@@ -16,6 +16,7 @@ from conftest import _set_duration as _stub_set_duration
 import db      # real
 import tiers   # real
 import jobs    # real
+import prompts # real
 import models  # real
 import app as appmod
 
@@ -5172,3 +5173,57 @@ def test_the_seed_is_controllable_and_blank_still_means_random(patch_stub):
                            files=files).status_code == 400
         assert client.post("/anchors", data={**base, "seed": "abc"},
                            files=files).status_code == 400
+
+
+def test_a_versions_usage_is_counted_when_it_renders_not_when_it_is_read(patch_stub):
+    """usage_count answers "which wording have I actually been using?", so it has
+    to count renders. Counting loads would rank the versions you scrolled past
+    alongside the one you kept, and the number would describe browsing rather
+    than work."""
+    patch_stub("pipeline", gen_anchor=lambda *a, **k: [])
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Usage Album"})
+        r = client.post("/anchors/prompt", data={"album": "Usage Album", "tier": "r",
+                                                  "text": "a woman in a doorway",
+                                                  "label": "doorway"})
+        assert r.status_code == 200, r.text
+        vid = r.json()["id"]
+        assert r.json()["version_number"] == 1
+        assert prompts.get(vid)["usage_count"] == 0, "saving already counted as a use"
+
+        # merely listing it does not count
+        client.get("/anchors/form", params={"album": "Usage Album", "tier": "r"})
+        assert prompts.get(vid)["usage_count"] == 0
+
+        # rendering FROM it does
+        client.post("/anchors", data={"album": "Usage Album", "tier": "r", "view": "front",
+                                       "n": "1", "prompt_r": "a woman in a doorway",
+                                       "mode": "quality", "used_version": str(vid)},
+                    files=[("images", ("u.png", _png_bytes(), "image/png"))])
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert prompts.get(vid)["usage_count"] == 1, "a render did not count as a use"
+
+        # a second render counts again, and a render that sent no version does not
+        client.post("/anchors", data={"album": "Usage Album", "tier": "r", "view": "front",
+                                       "n": "1", "prompt_r": "", "mode": "quality"},
+                    files=[("images", ("u.png", _png_bytes(), "image/png"))])
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert prompts.get(vid)["usage_count"] == 1, "a render counted a version it never used"
+
+        # the numbering is per album+type and survives a delete as a GAP
+        second = client.post("/anchors/prompt", data={"album": "Usage Album", "tier": "r",
+                                                       "text": "on a fire escape",
+                                                       "label": "escape"}).json()
+        assert second["version_number"] == 2
+        client.post("/anchors/version/delete", data={"id": vid})
+        third = client.post("/anchors/prompt", data={"album": "Usage Album", "tier": "r",
+                                                      "text": "in the rain", "label": "rain"})
+        assert third.json()["version_number"] == 3, \
+            "a deleted version's number was handed out again, repointing any note that cites it"
+
+        # and a version can be CORRECTED without becoming a new one
+        r = client.post("/anchors/version/update",
+                        data={"id": second["id"], "text": "on a fire escape, at night"})
+        assert r.status_code == 200 and r.json()["version_number"] == 2, r.text
+        assert prompts.get(second["id"])["text"].endswith("at night")
+        assert len(prompts.versions("Usage Album", "positive", "r")) == 2

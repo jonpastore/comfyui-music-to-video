@@ -312,6 +312,7 @@
          is a row that can be deleted. #}
       <button type="button" class="version-delete danger btn-sm" disabled
               title="Select a saved version to delete it">Delete version</button>
+      <input type="hidden" name="used_version" class="used-version" value="">
       <span class="negative-save-note muted row-note"></span>
     </div>
     <textarea name="negative" rows="3" class="counted" data-max="{{ max_negative }}"
@@ -419,6 +420,12 @@
       <button type="button" class="prompt-save" data-tier="{{ p.name }}">Save prompt</button>
       <button type="button" class="version-delete danger btn-sm" data-tier="{{ p.name }}"
               disabled title="Select a saved version to delete it">Delete version</button>
+      {# Which saved version this sheet is actually being rendered from, so
+         usage_count counts RENDERS and not the times a wording was looked at
+         and rejected. Set by the picker, cleared when the box is edited away
+         from it. #}
+      <input type="hidden" name="used_version" class="used-version"
+             data-tier="{{ p.name }}" value="">
       <span class="prompt-save-note muted row-note" data-tier="{{ p.name }}"></span>
     </div>
     {# What this box was COMPOSED as. hx-include sends the whole form on every

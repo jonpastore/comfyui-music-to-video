@@ -26,7 +26,7 @@ import pytest
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Fast, pure ones: string and arithmetic checks, no ffmpeg, no network.
-PURE = ["effects", "video_fx", "beatmatch", "mixadvice", "tiers",
+PURE = ["effects", "video_fx", "beatmatch", "mixadvice", "tiers", "prompts",
         "publish", "models", "jobs", "gpu", "chat", "creds", "arc", "analyse"]
 
 # No demo() and no __main__ -- running it just imports the module and builds the

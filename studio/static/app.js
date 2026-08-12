@@ -493,6 +493,7 @@ function initAnchorPrompts() {
     if (!opt.value) { location.reload(); return; }
     box.value = opt.dataset.text || "";
     box.dispatchEvent(new Event("input", {bubbles: true}));   // refresh the counter
+    markUsedVersion(box, pick.dataset.tier || "", opt.value);
     syncVersionDelete(pick);
   });
 
@@ -564,6 +565,7 @@ function initAnchorPrompts() {
     if (!box || !opt.value) return;
     box.value = opt.dataset.text || "";
     box.dispatchEvent(new Event("input", {bubbles: true}));
+    markUsedVersion(box, "", opt.value);
     syncAnchorMode();
     syncVersionDelete(pick);
   });
@@ -770,6 +772,23 @@ function initRunHistory() {
     say2(note, "loaded run #" + opt.value);
     if (typeof syncAnchorMode === "function") syncAnchorMode();
   });
+}
+
+// Which saved version a box is currently showing, so the generate route can
+// count a RENDER as usage rather than a look. Cleared as soon as the text is
+// edited: a wording you altered is no longer the version you loaded, and
+// counting it would make the history's usage numbers describe something else.
+function markUsedVersion(box, tier, vid) {
+  var form = anchorForm();
+  if (!form || !box) return;
+  var sel = tier ? '.used-version[data-tier="' + tier + '"]' : ".used-version:not([data-tier])";
+  var hidden = form.querySelector(sel);
+  if (!hidden) return;
+  hidden.value = vid || "";
+  if (!box.dataset.versionWatched) {
+    box.dataset.versionWatched = "1";
+    box.addEventListener("input", function () { hidden.value = ""; });
+  }
 }
 
 // A save note that says which it is. Success fades (.flash-ok), failure does

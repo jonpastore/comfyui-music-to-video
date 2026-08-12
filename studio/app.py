@@ -30,6 +30,7 @@ import arc
 import chat
 import creds
 import publish
+import prompts
 import analyse
 import effects    # per-item audio DJ effects -- pure, no deps, validated for real (not stubbed)
 import video_fx   # per-item video look effects -- same, pure/no deps
@@ -1768,8 +1769,8 @@ def _anchor_ctx_from_form(form, album, character_id):
     """
     tiers_sel = [t for t in form.getlist("tier") if t]
     views_sel = [v for v in form.getlist("view") if v] or ["front"]
-    prompts = {k[len("prompt_"):]: v for k, v in form.items() if k.startswith("prompt_")}
-    return anchor_form_ctx(album, tiers_sel, views_sel, character_id, prompts,
+    typed = {k[len("prompt_"):]: v for k, v in form.items() if k.startswith("prompt_")}
+    return anchor_form_ctx(album, tiers_sel, views_sel, character_id, typed,
                             negative=form.get("negative") or "")
 
 
@@ -2130,16 +2131,14 @@ MAX_PROMPT_VERSIONS = 20
 
 
 def anchor_prompt_versions(album, tier, character_id=None, kind="positive"):
-    """Saved prompts of one KIND for this album+tier+character, newest first.
+    """Saved versions of one prompt, newest first.
 
-    COALESCE because `kind` arrived after the table did: every row written
-    before it is a positive prompt and reads NULL.
+    Reads prompts.py now, not the old anchor_prompts table. The two half-systems
+    that preceded it -- a `kind` column bolted on to fit the negative, and the
+    component fields with no history at all -- are one table with one numbering
+    rule and one CRUD surface.
     """
-    return db.q("""SELECT id, label, text, created FROM anchor_prompts
-                   WHERE scope_value=? AND tier=? AND character_id IS ?
-                     AND COALESCE(kind,'positive')=?
-                   ORDER BY id DESC LIMIT ?""",
-                album or "", tier, character_id, kind, MAX_PROMPT_VERSIONS)
+    return prompts.versions(album, kind, tier, character_id)
 
 
 def negative_versions(album):
@@ -2151,23 +2150,7 @@ def negative_versions(album):
     species or another palette wants a different list, and DEFAULT_NEGATIVE is
     only a starting point for the first one.
     """
-    return anchor_prompt_versions(album, "", None, "negative")
-
-
-def save_prompt_version(album, tier, cid, kind, text, label):
-    """One row per save, oldest trimmed. Shared by both boxes that save."""
-    now = time.time()
-    pid = db.run("""INSERT INTO anchor_prompts (scope_value, tier, character_id, label,
-                                                 text, created, kind) VALUES (?,?,?,?,?,?,?)""",
-                 album, tier, cid, label or None, text, now, kind)
-    # keep the list to a readable length; the oldest go
-    old_ids = [r["id"] for r in db.q(
-        """SELECT id FROM anchor_prompts WHERE scope_value=? AND tier=? AND character_id IS ?
-             AND COALESCE(kind,'positive')=?
-           ORDER BY id DESC LIMIT -1 OFFSET ?""", album, tier, cid, kind, MAX_PROMPT_VERSIONS)]
-    for i in old_ids:
-        db.run("DELETE FROM anchor_prompts WHERE id=?", i)
-    return pid, now
+    return prompts.versions(album, "negative")
 
 
 @app.post("/anchors/prompt")
@@ -2205,8 +2188,12 @@ async def save_anchor_prompt(request: Request):
         tiers.check_override(text)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    pid, now = save_prompt_version(album, tier, cid, "positive", text, label)
-    return JSONResponse({"id": pid, "label": label, "created": now,
+    try:
+        v = prompts.save(album, "positive", text, label, tier=tier, character_id=cid)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return JSONResponse({"id": v["id"], "label": v["label"], "created": v["created"],
+                         "version_number": v["version_number"],
                          "versions": [dict(r) for r in
                                       anchor_prompt_versions(album, tier, cid)]})
 
@@ -2245,27 +2232,57 @@ async def save_tier_wording(request: Request):
 
 @app.post("/anchors/version/delete")
 async def delete_prompt_version(request: Request):
-    """Delete one saved prompt or negative version.
+    """Delete one saved version.
 
     Versions accumulated with no way to remove one, so a picker filled up with
-    attempts and the one you wanted was somewhere among them. Deleting a saved
-    version cannot affect a rendered sheet: an anchor carries the prompt it was
-    rendered with in its own run row, not a reference to this list.
+    attempts and the one you wanted was somewhere among them. Deleting cannot
+    affect a rendered sheet: an anchor carries what it was rendered with in its
+    own run row, never a reference to this list.
     """
     form = await request.form()
     try:
         vid = int(form.get("id") or 0)
     except ValueError:
         raise HTTPException(400, "which version?")
-    row = db.one("SELECT * FROM anchor_prompts WHERE id=?", vid)
-    if not row:
-        raise HTTPException(404, "that saved version no longer exists")
-    db.run("DELETE FROM anchor_prompts WHERE id=?", vid)
-    kind = row["kind"] if "kind" in row.keys() and row["kind"] else "positive"
-    left = (negative_versions(row["scope_value"]) if kind == "negative"
-            else anchor_prompt_versions(row["scope_value"], row["tier"], row["character_id"]))
+    try:
+        row = prompts.delete(vid)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    kind = row["prompt_type"]
+    left = prompts.versions(row["scope_value"], kind, row["tier"], row["character_id"])
     return JSONResponse({"deleted": vid, "kind": kind,
                          "versions": [dict(r) for r in left]})
+
+
+@app.post("/anchors/version/update")
+async def update_prompt_version(request: Request):
+    """Correct a version in place -- a typo, or a better name.
+
+    NOT how a new wording is stored: that is Save, which takes the next number.
+    This exists because a version whose label says "with the tail fix" and whose
+    text has a typo in it is worth repairing rather than superseding.
+    """
+    form = await request.form()
+    try:
+        vid = int(form.get("id") or 0)
+    except ValueError:
+        raise HTTPException(400, "which version?")
+    row = prompts.get(vid)
+    if not row:
+        raise HTTPException(404, "that version no longer exists")
+    text = form.get("text")
+    if text is not None:
+        try:
+            tiers.check_text(text, f"{row['prompt_type']} prompt")
+            tiers.check_override(text)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+    try:
+        v = prompts.update(vid, text=text, label=form.get("label"))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return JSONResponse({"id": v["id"], "label": v["label"], "text": v["text"],
+                         "version_number": v["version_number"], "updated": v["updated"]})
 
 
 @app.post("/anchors/negative")
@@ -2302,8 +2319,12 @@ async def save_anchor_negative(request: Request):
         tiers.check_override(text)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    pid, now = save_prompt_version(album, "", None, "negative", text, label)
-    return JSONResponse({"id": pid, "label": label, "created": now,
+    try:
+        v = prompts.save(album, "negative", text, label)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return JSONResponse({"id": v["id"], "label": v["label"], "created": v["created"],
+                         "version_number": v["version_number"],
                          "versions": [dict(r) for r in negative_versions(album)]})
 
 
@@ -2473,7 +2494,7 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     # edited and the per-view composition never happens.
     _first_view = next((k for k in ANCHOR_VIEWS if k in set(selected_views)), "front")
     unedited_default = default_anchor_prompt(album, _first_view, character_id)
-    prompts = {}
+    tier_prompts = {}
     for t in selected_tiers:
         text = (form.get(f"prompt_{t}") or "").strip()
         if len(text) > MAX_ANCHOR_PROMPT:
@@ -2484,7 +2505,7 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
             tiers.check_override(text)
         except ValueError as e:
             raise HTTPException(400, str(e))
-        prompts[t] = text
+        tier_prompts[t] = text
 
     # TIER WORDING, arriving as tone_<tier> for the same reason the prompts do.
     # Stored BEFORE anything is queued, so the wording the box showed is the
@@ -2571,7 +2592,7 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     plan_points = ([(t, v, None) for t, v in combos] if not sweep else
                    [(combos[0][0], combos[0][1], c) for c in sweep["cfgs"]])
     for t, v, cfg in plan_points:
-        text = prompts[t]
+        text = tier_prompts[t]
         if text and text.strip() == (unedited_default or "").strip():
             text = ""
         this_render = render if cfg is None else dict(render, cfg=cfg, seed=sweep["seed"])
@@ -2585,6 +2606,12 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
                                        "render": this_render, "run_id": run_id})
         queued.append({"id": jid, "tier": t, "view": v, "prompt": text, "cfg": cfg,
                        "run_id": run_id})
+
+    # Count the saved versions this render was actually built from. Sent by the
+    # form as hidden fields the pickers set, and cleared the moment the box is
+    # edited away from the loaded text -- so usage_count counts RENDERS from a
+    # version, not the times one was loaded and then changed or rejected.
+    prompts.mark_used(form.getlist("used_version"))
 
     # The async caller paints from THIS, never from what it typed -- and this is
     # the whole answer to "I clicked generate and I don't think it generated any
@@ -2724,7 +2751,7 @@ def anchor_plan(selected_tiers, selected_views):
 
 
 def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), character_id=None,
-                    prompts=None, negative=None, tones=None):
+                    typed_prompts=None, negative=None, tones=None):
     """The generate form for one album, across any number of tiers and views.
 
     Every view is offered against every tier; see anchor_plan() for what gets
@@ -2733,7 +2760,7 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
     rules read as though it applied only to that tier, and it was in fact the
     only prompt sent for all of them.
 
-    prompts: {tier: text} to redisplay after a rejected submit, so an edit is
+    typed_prompts: {tier: text} to redisplay after a rejected submit, so an edit is
     not thrown away by the error.
     """
     all_t = tiers.all_tiers()
@@ -2767,7 +2794,7 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
     # the prompt is composed for the FIRST chosen view; the others differ only
     # in their framing sentence, which make_anchor swaps in per view
     default_prompt = default_anchor_prompt(album, chosen_views[0], character_id)
-    prompts = prompts or {}
+    typed_prompts = typed_prompts or {}
     # The negative is the ALBUM's, and DEFAULT_NEGATIVE is only where an album
     # that has never saved one starts. Its terms are failure modes of THIS
     # release's art -- fur colour, a tail, skin where fur belongs -- and other
@@ -2796,7 +2823,7 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
         "tier_panels": [{"name": t, "text": (tones or {}).get(t, tier_tone(t, album)),
                          "tier_default": tiers.tier_text(t).strip(),
                          "overridden": bool(tiers.override_text(album, t)),
-                         "prompt": prompts.get(t, default_prompt),
+                         "prompt": typed_prompts.get(t, default_prompt),
                          # What this panel WOULD have composed, shipped as a hidden
                          # field so the next swap can tell an untouched box from a
                          # real edit. Without it the form cannot distinguish them
@@ -2857,7 +2884,7 @@ def anchor_form(request: Request, album: str = "", tier: List[str] = Query([]),
     # anchor, and with the nude swap skipped. Changing only the VIEW is not a
     # change of subject, so an edit still survives ticking a view.
     same_subject = qp.get("composed_for") == f"{album}|{character_id or ''}"
-    prompts = ({k[len("prompt_"):]: v for k, v in qp.items()
+    typed_prompts = ({k[len("prompt_"):]: v for k, v in qp.items()
                 if k.startswith("prompt_") and not k.startswith("prompt_default_")}
                if same_subject else {})
     # Drop a box that was never touched, so it RE-COMPOSES for whatever is now
@@ -2869,7 +2896,7 @@ def anchor_form(request: Request, album: str = "", tier: List[str] = Query([]),
     # make_anchor's BACK VIEW framing and its NUDE_WARDROBE swap only run when
     # the prompt is empty. A genuinely edited box still differs from its own
     # carried default, so real edits survive the swap exactly as before.
-    prompts = {t: v for t, v in prompts.items()
+    typed_prompts = {t: v for t, v in typed_prompts.items()
                if v.strip() != (qp.get(f"prompt_default_{t}") or "").strip()}
     # The negative and the tier wordings were preserved on the POST-side rebuild
     # (_anchor_ctx_from_form) but not here, so typing a negative and then ticking
@@ -2881,7 +2908,7 @@ def anchor_form(request: Request, album: str = "", tier: List[str] = Query([]),
              if same_subject else {})
     return templates.TemplateResponse(request, "_anchor_form.html",
                                        anchor_form_ctx(album, tier, view or ["front"],
-                                                       character_id, prompts, negative, tones))
+                                                       character_id, typed_prompts, negative, tones))
 
 
 def _drop_anchor(row):
