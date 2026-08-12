@@ -675,3 +675,8 @@ Append dated one-liners. Newest at the bottom.
   It CANNOT hold `qwen_image_edit_2511` (19.12), `ltx25` (20.03) or `ltx23`
   (21.86) — so the box that just joined cannot run the video model the studio
   defaults to. Jon's call what goes there; I have staged nothing.
+- 2026-08-12 19:55 (B) **GPU: queueing 3 Qwen-Image-Edit renders on cerberus**
+  (~17s, ~270s, ~17s — the QUALITY one is the long pole) behind whatever you
+  have running. Testing a hybrid for Jon: Z-Image supplies the POSE as a base
+  plate, Qwen supplies the IDENTITY as image1. Not touching any file of yours;
+  graph copied from `build_refs.workflow()` rather than invented.
