@@ -522,9 +522,16 @@ function initAnchorPrompts() {
     var cid = (form.querySelector("[name=character_id]") || {}).value;
     if (cid) body.append("character_id", cid);
     save.disabled = true;
-    if (note) note.textContent = "saving...";
+    // say2, not textContent: every other handler on this form uses it, and it
+    // is what clears .flash-ok. That class animates saved-fade ... forwards and
+    // the keyframes END at opacity 0, so any element it has ever been applied
+    // to stays invisible for good -- a later message assigned straight to
+    // textContent lands in it and is never seen. The version-delete handler
+    // writes into THIS same note, so that state is reachable in normal use and
+    // is why a refused save looked like a button that did nothing.
+    say2(note, "saving...");
     api("/anchors/prompt", body).then(function (d) {
-      if (note) note.textContent = "saved " + (d.label || "unnamed");
+      say2(note, "saved " + (d.label || "unnamed"));
       var pick = form.querySelector('.prompt-version-pick[data-tier="' + tier + '"]');
       if (pick && d.versions) {
         var keep = pick.options[0];
@@ -541,7 +548,7 @@ function initAnchorPrompts() {
       }
       if (label) label.value = "";
     }).catch(function (err) {
-      if (note) note.textContent = "not saved: " + err.message;
+      say2(note, "not saved: " + err.message, true);
     }).then(function () { save.disabled = false; });
   });
 

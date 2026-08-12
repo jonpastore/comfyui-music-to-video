@@ -2016,9 +2016,46 @@ def test_each_tier_has_its_own_tab_and_its_own_prompt(patch_stub):
 
         # an edit in one tab survives ticking another tier -- hx-include sends
         # the textareas back, so the swap must not reset them to the default
+        # hx-include sends the WHOLE form, so a real swap always carries
+        # composed_for -- it is what tells the route this is still the same
+        # album and character rather than a switch to a different subject.
         kept = client.get("/anchors/form", params={"album": "Tab Album", "tier": ["pg13", "r"],
+                                                    "composed_for": "Tab Album|",
                                                     "prompt_r": "the R tier gets this wording"}).text
         assert "the R tier gets this wording" in kept
+
+        # ...and it does NOT survive a change of subject: the prompt describes
+        # one character on one album, so carrying it onto another renders the
+        # wrong person's identity and wardrobe, stored under the new one.
+        switched = client.get("/anchors/form", params={"album": "Tab Album", "tier": ["r"],
+                                                        "composed_for": "Some Other Album|",
+                                                        "prompt_r": "wording for the old subject"}).text
+        assert "wording for the old subject" not in switched
+
+        # ...but an UNTOUCHED box must re-compose for the newly selected view.
+        # It used to be carried forward regardless, so after ticking nude-only
+        # the box still held the CLOTHED front wording; the submit then compared
+        # it against the nude default, found them different, called it a hand
+        # edit and sent it verbatim to every sheet -- which is how a nude view
+        # rendered a clothed FRONT VIEW sheet without anyone editing anything.
+        front_default = appmod.default_anchor_prompt("Tab Album", "front", None)
+        swapped = client.get("/anchors/form",
+                             params={"album": "Tab Album", "tier": ["r"],
+                                      "view": ["front_nude", "back_nude"],
+                                      "composed_for": "Tab Album|",
+                                      "prompt_r": front_default,
+                                      "prompt_default_r": front_default}).text
+        nude_default = appmod.default_anchor_prompt("Tab Album", "front_nude", None)
+        assert nude_default[:60] in swapped, "an untouched box did not re-compose for the new view"
+        assert "FRONT VIEW nude" in swapped
+        # and a real edit still survives that same swap
+        edited = client.get("/anchors/form",
+                            params={"album": "Tab Album", "tier": ["r"],
+                                     "view": ["front_nude", "back_nude"],
+                                     "composed_for": "Tab Album|",
+                                     "prompt_r": "my hand tuned wording",
+                                     "prompt_default_r": front_default}).text
+        assert "my hand tuned wording" in edited
 
         files = [("images", ("f.png", _png_bytes(), "image/png"))]
         client.post("/anchors", data={"album": "Tab Album", "n": "1", "view": "front",
@@ -2500,6 +2537,28 @@ def test_ltx25_graph_matches_what_25_actually_wants():
     assert wf["23"]["inputs"]["samples"] == ["22", 0]
     # and the clip is still exactly one CHUNK, so allocation does not move
     assert abs(B.LTX25_LEN / B.LTX25_FPS - B.CHUNK) < 1e-9
+
+
+def test_every_video_model_has_exactly_one_createvideo_to_save_from():
+    """build_song.main attaches SaveVideo to the node producing the VIDEO. It
+    used to pick that id from a per-family table -- "21" for ltx, else "17" --
+    so ltx25 took WAN's id, pointed SaveVideo at a GUIDER, and ComfyUI rejected
+    every workflow with a return-type mismatch. The id is now looked up by
+    class, and this is the invariant that lookup depends on."""
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import build_song as B
+    import models as modelmod
+
+    scene = {"scene_number": 1, "name": "s", "camera": "wide", "lighting": "neon",
+             "video_motion_prompt": "she walks", "negative_prompt": "",
+             "duration_guidance": "5 sec", "image_prompt": "x"}
+    for cli in modelmod.renderable("video").values():
+        wf = B.workflow(0, scene, "clip_000.png", "song.mp3", "a black cat", "an alley",
+                        "tier wording", video_model=cli)
+        made = [k for k, n in wf.items() if n["class_type"] == "CreateVideo"]
+        assert len(made) == 1, f"{cli}: expected one CreateVideo, got {made}"
+        # and it must be reachable as a VIDEO source, not some other output
+        assert wf[made[0]]["inputs"].get("images"), f"{cli}: CreateVideo has no images input"
 
 
 # ---------------------------------------------------------- set editor (phase 1) --

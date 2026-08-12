@@ -1072,8 +1072,34 @@ textarea.inert { opacity: 0.55; }
    so they sit together rather than stacked with the plan text between them. */
 .side-by-side { display: flex; gap: 1rem; flex-wrap: wrap; }
 .side-by-side > fieldset { flex: 1 1 22rem; min-width: 18rem; }
-.prompt-versions { align-items: end; gap: 0.5rem; }
-.prompt-versions select { min-width: 16rem; }
+/* The saved-version rows (positive AND negative) get EXPLICIT tracks. They used
+   to inherit .field-row's `repeat(auto-fit, minmax(9rem, 1fr))` while the picker
+   carried `min-width: 16rem` -- and a grid item wider than its track overflows
+   it rather than widening it, because the track's minimum is a fixed 9rem and
+   not `auto`. That is why the picker ran underneath "Name this version".
+   The picker is the one control here with a real minimum, so it gets a track
+   sized for it and everything else is told it may shrink. */
+.prompt-versions {
+  grid-template-columns: minmax(12rem, 22rem) minmax(8rem, 1fr) auto auto;
+  align-items: end;
+  gap: 0.5rem 0.75rem;
+}
+/* the grid ITEM is the <label>; without this the select's intrinsic width
+   becomes the label's floor and the overflow comes straight back */
+.prompt-versions > label { min-width: 0; }
+.prompt-versions select,
+.prompt-versions input[type="text"] { width: 100%; min-width: 0; }
+/* The note is where a REFUSED save says why ("name this version first"). As the
+   last item in a row that was already overflowing it got pushed past the right
+   edge, so a rejected save looked like a button that did nothing. Its own full
+   width line, where it cannot be squeezed out. */
+.prompt-versions > .row-note { grid-column: 1 / -1; padding-bottom: 0; }
+/* it is empty until something is said, and an empty full-width row is just a gap */
+.prompt-versions > .row-note:empty { display: none; }
+@media (max-width: 46rem) {
+  .prompt-versions { grid-template-columns: 1fr 1fr; }
+  .prompt-versions > label:first-child { grid-column: 1 / -1; }
+}
 
 /* ---- job status, and the vocabulary of work in flight --------------------
    .status-<state> was already being emitted by song.html and _jobs_panel.html

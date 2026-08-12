@@ -12,6 +12,11 @@
    beside it, and the greyed-out reason named a tier that was no longer ticked. #}
 <form id="anchor-form" method="post" action="/anchors" enctype="multipart/form-data"
       class="stack-form">
+  {# WHICH SUBJECT the boxes below were composed for. hx-include sends the whole
+     form on every swap, so without this the route cannot tell "the user ticked
+     another view" from "the user picked a different character", and carrying a
+     prompt across the latter renders one character's wording as another's. #}
+  <input type="hidden" name="composed_for" value="{{ form_album }}|{{ character_id or '' }}">
   <div class="field-row">
     <label>Album
       {# An album IS a playlist -- the same record, matched by the name songs
@@ -406,6 +411,15 @@
               disabled title="Select a saved version to delete it">Delete version</button>
       <span class="prompt-save-note muted row-note" data-tier="{{ p.name }}"></span>
     </div>
+    {# What this box was COMPOSED as. hx-include sends the whole form on every
+       swap, so ticking a view sent the old text back and /anchors/form seeded
+       the new panel from it -- the box then held the default for the view you
+       just left. Submitting compares against the default for the view you are
+       now on, so an untouched box looked EDITED and went verbatim to every
+       sheet: pick nude-only and the nude views rendered the clothed FRONT VIEW
+       wording, wardrobe and all. Carrying this lets the swap tell "untouched"
+       from a real edit instead of having to guess. #}
+    <input type="hidden" name="prompt_default_{{ p.name }}" value="{{ p.composed }}">
     <label>Prompt &mdash; what {{ p.name | tiername }}'s character sheets are built from
       <textarea name="prompt_{{ p.name }}" rows="8" class="counted"
                 data-max="{{ max_anchor_prompt }}"

@@ -2701,7 +2701,7 @@ def anchor_plan(selected_tiers, selected_views):
 
 
 def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), character_id=None,
-                    prompts=None, negative=None):
+                    prompts=None, negative=None, tones=None):
     """The generate form for one album, across any number of tiers and views.
 
     Every view is offered against every tier; see anchor_plan() for what gets
@@ -2770,10 +2770,15 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
         # the box shows and `tier_default` is what "use the tier's wording"
         # would put back -- both are needed, because a panel that showed only
         # the effective text could not tell you it was an override.
-        "tier_panels": [{"name": t, "text": tier_tone(t, album),
+        "tier_panels": [{"name": t, "text": (tones or {}).get(t, tier_tone(t, album)),
                          "tier_default": tiers.tier_text(t).strip(),
                          "overridden": bool(tiers.override_text(album, t)),
                          "prompt": prompts.get(t, default_prompt),
+                         # What this panel WOULD have composed, shipped as a hidden
+                         # field so the next swap can tell an untouched box from a
+                         # real edit. Without it the form cannot distinguish them
+                         # and has to either discard edits or carry stale text.
+                         "composed": default_prompt,
                          "versions": anchor_prompt_versions(album, t, character_id)}
                         for t in selected],
         # the album+character's saved base images, so a sheet can be generated
@@ -2820,11 +2825,40 @@ def anchor_form(request: Request, album: str = "", tier: List[str] = Query([]),
     whole form), so ticking a second tier does not discard a prompt already
     written for the first.
     """
-    prompts = {k[len("prompt_"):]: v for k, v in request.query_params.items()
-               if k.startswith("prompt_")}
+    qp = request.query_params
+    # Whether this swap is still the SAME subject. A prompt describes one
+    # character on one album, so carrying it across a change of either renders
+    # the wrong person: the box kept character A's wording, the submit compared
+    # it against B's freshly composed default, found them different, called it a
+    # hand edit and sent A's identity and wardrobe verbatim -- stored as B's
+    # anchor, and with the nude swap skipped. Changing only the VIEW is not a
+    # change of subject, so an edit still survives ticking a view.
+    same_subject = qp.get("composed_for") == f"{album}|{character_id or ''}"
+    prompts = ({k[len("prompt_"):]: v for k, v in qp.items()
+                if k.startswith("prompt_") and not k.startswith("prompt_default_")}
+               if same_subject else {})
+    # Drop a box that was never touched, so it RE-COMPOSES for whatever is now
+    # selected. It used to be carried forward unconditionally, which meant the
+    # box kept the text composed for the previous view/album/character while the
+    # submit compared it against the default for the new one -- never equal, so
+    # an untouched box was classified as a hand edit and sent verbatim to every
+    # sheet. That is how ticking nude-only produced clothed FRONT VIEW sheets:
+    # make_anchor's BACK VIEW framing and its NUDE_WARDROBE swap only run when
+    # the prompt is empty. A genuinely edited box still differs from its own
+    # carried default, so real edits survive the swap exactly as before.
+    prompts = {t: v for t, v in prompts.items()
+               if v.strip() != (qp.get(f"prompt_default_{t}") or "").strip()}
+    # The negative and the tier wordings were preserved on the POST-side rebuild
+    # (_anchor_ctx_from_form) but not here, so typing a negative and then ticking
+    # anything silently put the album's last SAVED one back. Both are
+    # album-scoped, hence the same_subject guard: carrying them across an album
+    # switch would be the bug above wearing a different hat.
+    negative = qp.get("negative") if same_subject else None
+    tones = ({k[len("tone_"):]: v for k, v in qp.items() if k.startswith("tone_")}
+             if same_subject else {})
     return templates.TemplateResponse(request, "_anchor_form.html",
                                        anchor_form_ctx(album, tier, view or ["front"],
-                                                       character_id, prompts))
+                                                       character_id, prompts, negative, tones))
 
 
 def _drop_anchor(row):
