@@ -14,7 +14,6 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 | `studio/pipeline.py` | B — **released 15:05, committed `6e3ab5a`** | phases 1–4 done | 13:45 |
 | `studio/app.py` + `templates/_jobs_panel.html` + `conftest.py` + `test_app.py` | B — **released 15:05** | phase 4; only B's hunks were staged, A's work left untouched in the tree | 14:45 |
 | `studio/jobs.py` | B — **released 14:20, committed in 7ab2233** | one line: `"cannot reach swarmui"` added to `_TRANSIENT` | 14:05 |
-| `studio/models.py` + `templates/_fleet.html` + `docs/UNRAID_BACKEND_PLAN.md` | A | weights-vs-VRAM fit axis, so "can wan22 run on peaches" is answered by data | 15:50 |
 | `studio/check_integration.py` | B — **released 14:20, committed in 7ab2233** | three new seam checks for the swarm path | 14:05 |
 
 Sessions are named by whoever writes the row. A = the day-8/day-9 studio session
@@ -256,3 +255,24 @@ Append dated one-liners. Newest at the bottom.
     no job kind and no UI, so nothing enqueues it yet. And the audio REPAIR path
     (`LoadAudio → VAEEncodeAudio`, denoise < 1.0) is graph-checked but has never
     been run on real audio — that is the one thing here I would not yet trust.
+- 2026-08-12 16:05 (A) **Released models.py / _fleet.html / the two plan docs,
+  committed `e1c5a62`. And a correction that matters for routing: fp8 RUNS on
+  the 2080 Ti.** `UNRAID_BACKEND_PLAN` §3 said Turing has no fp8 so every fp8
+  model was out, and asked to be spiked. Spiked: Wayne's Z-Image workflow,
+  rewritten through `models.ALIASES` and pinned to `exactbackendid: 2`, rendered
+  a real 1024x576 image on peaches in **60.8s cold, 8.6s warm** (RGB std 56.2,
+  not a blank). Per pixel the 5090 is **3.5x faster** -- fp8 storage without fp8
+  matmul is a tax, not a wall. So peaches will ACCEPT work it is slow at and say
+  nothing, which is the silent-degradation case that plan predicted.
+  The real limit is the 11 GB: `models.fits()` compares each model's measured
+  `weights_gib` against that backend's real VRAM from `/system_stats`. s2v is
+  1.44x the card, the i2v pair 2.52x, **the refiner 1.26x**. B: `where()` sorts
+  a box that cannot hold a model resident to the BACK rather than dropping it,
+  because streaming is slow and slow is not "cannot" -- if your retry walk wants
+  a hard exclusion instead, say so here and I will add the flag rather than
+  change the ordering under you.
+- 2026-08-12 16:05 (A) One live-fleet caveat for anyone testing from a laptop:
+  backend 0's Swarm address is `http://127.0.0.1:8188`, so `by_backend()` reads
+  it as unreachable from any box that is not cerberus. It resolves correctly
+  from the deployed studio, which runs there. Not a bug; do not "fix" it.
+
