@@ -1884,12 +1884,19 @@ DEFAULT_NEGATIVE = (
 # and costs steps. Values are the sampler's, not a scale invented here.
 #
 # The list is the operator's spec (1.0, 3.0, 5.0, 7.0, 7.5, 8.0, 9.0) merged
-# with the five a fixed-seed sweep actually rendered on 2026-08-12. The labels
-# on 6.0 and above are what those renders LOOKED like, not a preference: 6.0
-# brought a human face and haloing back, so the spec's 7.5 default is past the
-# point this model degrades and 4.5 is the default here instead. That sweep was
-# n=1 per point -- turn on the CFG sweep below to re-run it at n=3 and judge it
-# on images rather than on this sentence.
+# with the five a fixed-seed sweep rendered on 2026-08-12.
+#
+# THE LABELS NO LONGER QUOTE THAT SWEEP, and why is worth keeping. It measured
+# fur turning to human skin as guidance rose, and the cause turned out to be a
+# contradiction in the PROMPT -- make_anchor.NUDE_WARDROBE asserting "bare skin
+# over the whole body" beside a body clause describing fur -- not a property of
+# the sampler. That contradiction is gone, so those numbers describe renders
+# that can no longer be reproduced, and a label quoting a measurement that no
+# longer holds is worse than a label with no measurement in it.
+#
+# 4.5 stays the default because it is mid-range and it worked; the high end is
+# now described by what guidance DOES rather than by what one sweep saw. Re-run
+# the sweep against the corrected prompt if the default is worth moving.
 CFG_CHOICES = (
     ("1.0", "1.0 — Lightning LoRA, 4 steps, fastest. Negative prompt IGNORED."),
     ("2.0", "2.0 — gentle guidance, closest to the references"),
@@ -1897,11 +1904,11 @@ CFG_CHOICES = (
     ("3.5", "3.5 — balanced; follows the prompt without flattening the references"),
     ("4.5", "4.5 — stronger prompt adherence, more contrast. Best of the measured five."),
     ("5.0", "5.0 — stronger still"),
-    ("6.0", "6.0 — measured: a human face returned, haloing around head and arms"),
-    ("7.0", "7.0 — past the measured degradation point"),
-    ("7.5", "7.5 — the spec's default; past the measured degradation point here"),
-    ("8.0", "8.0 — past the measured degradation point"),
-    ("9.0", "9.0 — past the measured degradation point"),
+    ("6.0", "6.0 — heavy guidance; oversaturates and stiffens poses"),
+    ("7.0", "7.0 — heavier still"),
+    ("7.5", "7.5 — the written spec's default. Never measured well here."),
+    ("8.0", "8.0"),
+    ("9.0", "9.0 — the top of the range"),
 )
 
 # Steps, spanning the spec's 10-50 range plus the Lightning LoRA's own 4. The
@@ -2937,7 +2944,16 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
 
 # ------------------------------------------------------------- characters --
 
-CHARACTER_FIELDS = ("role", "identity", "wardrobe", "body")
+# Every prose field a cast member owns. The last two arrived late: without them
+# a cast member's nude sheet used the PROTAGONIST's nude wording and anatomy
+# clause, because anchor_profile_fields only overrode the first three.
+CHARACTER_FIELDS = ("role", "identity", "wardrobe", "body", "nude_wardrobe", "anatomy")
+
+# What may be copied from one cast member to another. IDENTITY is deliberately
+# absent: a band shares a uniform, not a face, and copying identity would give
+# two characters one appearance -- the exact thing a cast exists to keep apart.
+# Role is absent because it is a label for you, not prompt text.
+COPYABLE_CHARACTER_FIELDS = ("wardrobe", "body", "nude_wardrobe", "anatomy")
 MAX_CHARACTER_FIELD = 1000
 
 
@@ -2975,11 +2991,17 @@ async def add_character(id: int, request: Request):
     except ValueError as e:
         raise HTTPException(400, str(e))
     fields = check_character_fields(form)
+    # Built from CHARACTER_FIELDS rather than naming the columns here. This
+    # INSERT listed six of them by hand, so adding nude_wardrobe and anatomy to
+    # the tuple reached the FORM, the validator and the renderer -- and not the
+    # row: a new cast member's nude wording was accepted, screened, and silently
+    # dropped on the way to the database. The same class of defect as the one
+    # ANCHOR_PROFILE_FIELDS exists to prevent, one table over.
+    cols = ["scope_value", "name"] + list(CHARACTER_FIELDS) + ["created"]
+    values = [p["name"], name] + [fields.get(f, "") for f in CHARACTER_FIELDS] + [time.time()]
     try:
-        db.run("""INSERT INTO characters (scope_value, name, role, identity, wardrobe, body, created)
-                  VALUES (?,?,?,?,?,?,?)""", p["name"], name, fields.get("role", ""),
-               fields.get("identity", ""), fields.get("wardrobe", ""), fields.get("body", ""),
-               time.time())
+        db.run(f"INSERT INTO characters ({', '.join(cols)}) "
+               f"VALUES ({', '.join('?' * len(cols))})", *values)
     except sqlite3.IntegrityError:
         raise HTTPException(400, f"'{p['name']}' already has a character called {name!r}")
     return RedirectResponse("/playlists", status_code=303)
@@ -2991,6 +3013,58 @@ async def save_character(cid: int, request: Request):
     fields = check_character_fields(await request.form())
     for field, value in fields.items():
         db.run(f"UPDATE characters SET {field}=? WHERE id=?", value, cid)
+    return RedirectResponse("/playlists", status_code=303)
+
+
+@app.post("/characters/{cid}/copy-from")
+async def copy_character_fields(cid: int, request: Request):
+    """Copy chosen prose fields from another character on the same album.
+
+    For a cast that shares something by design -- a band in matching uniforms, a
+    team in the same kit -- where the wardrobe wording should be identical and
+    the identity must NOT be. So it is per FIELD, not a whole-record clone:
+    copying identity too would give two characters one face, which is the defect
+    a cast exists to avoid.
+
+    Fields are COPIED, not linked. Editing the source afterwards does not change
+    the copy, and that is deliberate: a shared uniform still gets described per
+    character once someone's sleeve is torn, and a link would have to be broken
+    at exactly the moment it mattered.
+
+    The source must be on the same ALBUM. Characters are scoped by album name
+    everywhere else in this studio, and reaching across would let one release's
+    wording arrive somewhere nothing on the page mentions it.
+    """
+    target = get_character_or_404(cid)
+    form = await request.form()
+    try:
+        source = get_character_or_404(int(form.get("source_id") or 0))
+    except ValueError:
+        raise HTTPException(400, "choose a character to copy from")
+    if source["id"] == target["id"]:
+        raise HTTPException(400, "that is the same character")
+    if source["scope_value"] != target["scope_value"]:
+        raise HTTPException(400, f"{source['name']!r} belongs to another album")
+
+    wanted = [f for f in form.getlist("field") if f in COPYABLE_CHARACTER_FIELDS]
+    if not wanted:
+        raise HTTPException(400, "tick at least one field to copy")
+    copied = {}
+    for field in wanted:
+        value = source[field] if field in source.keys() else None
+        # An empty source field means "inherit the album's", and copying that
+        # emptiness over a target that has its own wording would silently delete
+        # the target's. Refused for the whole request rather than skipped, so
+        # the count reported back is never a lie about what happened.
+        if not value:
+            raise HTTPException(400, f"{source['name']!r} has no {field.replace('_', ' ')} of "
+                                      f"its own -- it inherits the album's, so there is nothing "
+                                      f"to copy")
+        db.run(f"UPDATE characters SET {field}=? WHERE id=?", value, cid)
+        copied[field] = value
+    if wants_json(request):
+        return JSONResponse({"copied": sorted(copied), "from": source["name"],
+                             "to": target["name"]})
     return RedirectResponse("/playlists", status_code=303)
 
 
@@ -4281,8 +4355,15 @@ def anchor_profile_fields(album, character_id=None):
         # inherits the body-consistency rule
         char = db.one("SELECT * FROM characters WHERE id=?", character_id)
         if char:
-            for key in ("identity", "wardrobe", "body"):
-                if char[key]:
+            # EVERY composer field, not just the first three. A cast member
+            # who leaves one blank still falls back to the album's, so a
+            # supporting character keeps inheriting the body-consistency rule --
+            # but a duet partner of a different species no longer inherits the
+            # lead's nude wording and anatomy.
+            for key in ANCHOR_PROFILE_FIELDS:
+                if key == "views":
+                    continue
+                if key in char.keys() and char[key]:
                     out[key] = char[key]
     return {k: v for k, v in out.items() if v}
 
@@ -4359,6 +4440,7 @@ def playlist_detail(p):
             "character_count": len(per_character) or 1,
             "artwork_models": artwork_models, "has_anchor": has_anchor,
             "cast": cast, "character_fields": CHARACTER_FIELDS,
+            "copyable_fields": COPYABLE_CHARACTER_FIELDS,
             "partial_tiers": sorted(t for t in tiers_with_video if t not in ready)}
 
 

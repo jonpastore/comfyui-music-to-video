@@ -260,6 +260,34 @@
       <button type="submit">Save {{ m.c.name }}</button>
     </div>
   </form>
+  {# Copy shared wording from another cast member -- a band in matching
+     uniforms, a team in the same kit. Per FIELD, and IDENTITY is not on the
+     list: a band shares a uniform, not a face, and copying identity would give
+     two characters one appearance, which is the thing a cast exists to keep
+     apart. Copied, not linked: editing the source afterwards leaves this alone,
+     because a shared uniform still needs describing per character the moment
+     someone's sleeve is torn. #}
+  {% if d.cast | length > 1 %}
+  <form method="post" action="/characters/{{ m.c.id }}/copy-from" class="field-row copy-from">
+    <label>
+      <span class="label-text">Copy wording from</span>
+      <select name="source_id">
+        {% for o in d.cast if o.c.id != m.c.id %}
+        <option value="{{ o.c.id }}">{{ o.c.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="check-row">
+      {% for f in d.copyable_fields %}
+      <label class="check">
+        <input type="checkbox" name="field" value="{{ f }}"
+               {% if f == "wardrobe" %}checked{% endif %}> {{ f.replace("_", " ") }}
+      </label>
+      {% endfor %}
+    </div>
+    <button type="submit" class="secondary">Copy to {{ m.c.name }}</button>
+  </form>
+  {% endif %}
   <form method="post" action="/characters/{{ m.c.id }}/delete" class="delete-character"
         data-name="{{ m.c.name }}">
     <button type="submit" class="danger">Delete {{ m.c.name }}</button>

@@ -259,6 +259,14 @@ MIGRATIONS = [
     # the album owns, so they live beside identity/wardrobe/body.
     "ALTER TABLE playlists ADD COLUMN nude_wardrobe TEXT",
     "ALTER TABLE playlists ADD COLUMN anatomy TEXT",
+    # ...and per CHARACTER, for the same reason they exist per album. Only
+    # identity/wardrobe/body were per-character, so every cast member's nude
+    # sheet was rendered with the PROTAGONIST's nude wording and the
+    # protagonist's anatomy clause -- a duet partner of a different species got
+    # the lead's fur described onto her. Invisible unless two characters are
+    # compared side by side, and nothing in the anchors table records which.
+    "ALTER TABLE characters ADD COLUMN nude_wardrobe TEXT",
+    "ALTER TABLE characters ADD COLUMN anatomy TEXT",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and

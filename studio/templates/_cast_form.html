@@ -33,6 +33,21 @@
         placeholder="Colouring PER BODY PART. Leave blank to inherit the album's, which is the safe default."
         >{{ proposed.body if proposed else "" }}</textarea>
     </div>
+    {# Both were album-only, so every cast member's nude sheet used the
+       PROTAGONIST's nude wording and anatomy clause. Blank still inherits the
+       album's, which is the right default for a cast of one species. #}
+    <div class="album-field">
+      <div class="field-head"><label for="c-nude-{{ playlist.id }}">Nude wording</label></div>
+      <textarea id="c-nude-{{ playlist.id }}" name="nude_wardrobe" rows="5"
+        placeholder="Replaces the wardrobe sentence on nude sheets. Say she is unclothed WITHOUT naming a garment or a surface -- the body wording owns the surface. Blank inherits the album's."
+        >{{ proposed.nude_wardrobe if proposed else "" }}</textarea>
+    </div>
+    <div class="album-field">
+      <div class="field-head"><label for="c-anatomy-{{ playlist.id }}">Anatomy on nude sheets</label></div>
+      <textarea id="c-anatomy-{{ playlist.id }}" name="anatomy" rows="5"
+        placeholder="What a nude sheet DEPICTS, as opposed to what it omits. Nothing filters anatomical language here; a nude prompt that only lists absent clothing comes back featureless. Blank inherits the album's."
+        >{{ proposed.anatomy if proposed else "" }}</textarea>
+    </div>
   </div>
   <button type="submit">Add character</button>
 </form>

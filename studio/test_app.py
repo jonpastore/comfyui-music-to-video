@@ -5581,3 +5581,117 @@ def test_the_preflight_refuses_everything_the_submit_refuses(patch_stub):
         assert plan["blockers"], plan
         assert not any("quality mode" in b for b in plan["blockers"]), \
             f"a settings error produced a sweep blocker the user did not cause: {plan['blockers']}"
+
+
+def test_a_cast_member_owns_its_own_nude_wording_and_anatomy(patch_stub):
+    """Only identity, wardrobe and body were per-character, so every cast
+    member's nude sheet was rendered with the PROTAGONIST's nude wording and the
+    protagonist's anatomy clause -- a duet partner of another species got the
+    lead's fur described onto her. Invisible unless two characters are compared
+    side by side, and nothing in the anchors table records which is which.
+
+    Blank still inherits the album's, which is the right default for a cast of
+    one species -- so the differential is a cast member who sets them.
+    """
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="", render=None: (
+        seen.append((profile or {}).get("anchor", {})) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Cast Album"})
+        pid = db.one("SELECT id FROM playlists WHERE name='Cast Album'")["id"]
+        client.post(f"/playlists/{pid}/profile",
+                    data={"identity": "the lead, a black feline woman", "wardrobe": "a harness",
+                          "body": "jet-black fur head to toe",
+                          "nude_wardrobe": "THE LEAD IS BARE, fur unbroken",
+                          "anatomy": "THE LEAD'S ANATOMY", "style_text": "x", "world": "y",
+                          "render_tail": "z"})
+        client.post(f"/playlists/{pid}/characters",
+                    data={"name": "Vex", "identity": "a red-scaled reptilian woman",
+                          "body": "crimson scales head to toe",
+                          "nude_wardrobe": "VEX IS BARE, scales unbroken",
+                          "anatomy": "VEX'S ANATOMY"})
+        vex = db.one("SELECT * FROM characters WHERE name='Vex' AND scope_value='Cast Album'")
+
+        r = client.post("/anchors", data={"album": "Cast Album", "tier": "xxx",
+                                       "view": "front_nude", "n": "1", "prompt_xxx": "",
+                                       "mode": "quality", "character_id": str(vex["id"])},
+                    files=[("images", ("v.png", _png_bytes(), "image/png"))])
+        assert r.status_code in (200, 303), f"generate refused: {r.status_code} {r.text[:300]}"
+        j = wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert j["status"] == "done", f"the anchor job failed: {j['error']}"
+        assert seen, "gen_anchor was never called"
+        prof = seen[-1]
+        assert prof["nude_wardrobe"].startswith("VEX IS BARE"), \
+            f"the cast member got the protagonist's nude wording: {prof['nude_wardrobe'][:60]}"
+        assert prof["anatomy"] == "VEX'S ANATOMY", prof["anatomy"]
+        assert "THE LEAD" not in prof["nude_wardrobe"] + prof["anatomy"]
+
+        # a cast member who sets NEITHER still inherits the album's -- the right
+        # default for a cast of one species
+        client.post(f"/playlists/{pid}/characters",
+                    data={"name": "Echo", "identity": "the backing singer"})
+        echo = db.one("SELECT * FROM characters WHERE name='Echo' AND scope_value='Cast Album'")
+        inherited = appmod.anchor_profile_fields("Cast Album", echo["id"])
+        assert inherited["nude_wardrobe"].startswith("THE LEAD IS BARE")
+        assert inherited["identity"] == "the backing singer", "the override stopped working"
+
+
+def test_wording_copies_between_cast_members_but_never_the_face(patch_stub):
+    """A band shares a uniform, a team shares a kit -- so wardrobe is worth
+    copying between cast members. IDENTITY is not on the list and must not be:
+    copying it would give two characters one face, which is the single thing a
+    cast exists to keep apart.
+    """
+    patch_stub("pipeline", gen_anchor=lambda *a, **k: [])
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Band Album"})
+        client.post("/playlists", data={"name": "Other Band"})
+        pid = db.one("SELECT id FROM playlists WHERE name='Band Album'")["id"]
+        other_pid = db.one("SELECT id FROM playlists WHERE name='Other Band'")["id"]
+        client.post(f"/playlists/{pid}/characters",
+                    data={"name": "Lead", "identity": "tall, silver hair",
+                          "wardrobe": "matching red band uniform, gold buttons",
+                          "body": "even pale skin", "anatomy": "LEAD ANATOMY"})
+        client.post(f"/playlists/{pid}/characters",
+                    data={"name": "Bass", "identity": "short, dark hair"})
+        client.post(f"/playlists/{other_pid}/characters",
+                    data={"name": "Stranger", "wardrobe": "a green coat"})
+        lead = db.one("SELECT * FROM characters WHERE name='Lead' AND scope_value='Band Album'")
+        bass = db.one("SELECT * FROM characters WHERE name='Bass' AND scope_value='Band Album'")
+        stranger = db.one("SELECT * FROM characters WHERE name='Stranger' AND scope_value='Other Band'")
+
+        r = client.post(f"/characters/{bass['id']}/copy-from",
+                        headers={"accept": "application/json"},
+                        data={"source_id": str(lead["id"]), "field": ["wardrobe", "body"]})
+        assert r.status_code == 200, r.text
+        assert r.json()["copied"] == ["body", "wardrobe"], r.json()
+        after = db.one("SELECT * FROM characters WHERE id=?", bass["id"])
+        assert after["wardrobe"] == "matching red band uniform, gold buttons"
+        assert after["body"] == "even pale skin"
+        # the FACE is untouched, and identity cannot even be asked for
+        assert after["identity"] == "short, dark hair", "the copy overwrote the face"
+        assert "identity" not in appmod.COPYABLE_CHARACTER_FIELDS
+        r = client.post(f"/characters/{bass['id']}/copy-from",
+                        data={"source_id": str(lead["id"]), "field": ["identity"]})
+        assert r.status_code == 400, "identity was copyable after all"
+
+        # copied, not LINKED: editing the source afterwards leaves the copy alone
+        client.post(f"/characters/{lead['id']}/save",
+                    data={"wardrobe": "red uniform with a torn sleeve"})
+        assert db.one("SELECT wardrobe FROM characters WHERE id=?",
+                      bass["id"])["wardrobe"] == "matching red band uniform, gold buttons"
+
+        # an EMPTY source field means "inherit the album's"; copying that would
+        # silently delete the target's own wording, so the whole request refuses
+        r = client.post(f"/characters/{bass['id']}/copy-from",
+                        data={"source_id": str(lead["id"]), "field": ["nude_wardrobe"]})
+        assert r.status_code == 400 and "nothing" in r.text, r.text
+
+        # and it cannot reach across albums
+        r = client.post(f"/characters/{bass['id']}/copy-from",
+                        data={"source_id": str(stranger["id"]), "field": ["wardrobe"]})
+        assert r.status_code == 400 and "another album" in r.text, r.text
+        r = client.post(f"/characters/{bass['id']}/copy-from",
+                        data={"source_id": str(bass["id"]), "field": ["wardrobe"]})
+        assert r.status_code == 400, "a character copied from itself"
