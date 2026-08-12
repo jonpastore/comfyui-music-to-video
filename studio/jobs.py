@@ -20,8 +20,8 @@ MAX_ATTEMPTS = 3
 RETRY_BACKOFF_SECS = 5.0
 # Matched on the message pipeline._get/_post raise, not on the exception type:
 # both come back as RuntimeError, and only the unreachable one is worth retrying.
-_TRANSIENT = ("cannot reach comfyui", "connection refused", "connection reset",
-              "temporarily unavailable", "timed out")
+_TRANSIENT = ("cannot reach comfyui", "cannot reach swarmui", "connection refused",
+              "connection reset", "temporarily unavailable", "timed out")
 
 
 def _is_transient(exc):

@@ -115,6 +115,41 @@ if pipeline:
     check("pipeline.gen_clips", lambda: sig(pipeline, "gen_clips", ["slug", "tier", "progress"]))
     check("pipeline.stage_refs", lambda: sig(pipeline, "stage_refs", ["slug", "tier"]))
     check("pipeline.contact_sheet", lambda: sig(pipeline, "contact_sheet", ["src_dir", "out_jpg"]))
+    check("pipeline.submit_swarm", lambda: sig(
+        pipeline, "submit_swarm", ["wf_dir", "prefix_dir", "pattern", "progress"]))
+    def _backend_default():
+        assert os.environ.get("RENDER_BACKEND") or pipeline.RENDER_BACKEND == "comfy", \
+            "unset RENDER_BACKEND must mean exactly the old single-box path"
+
+    check("RENDER_BACKEND defaults to comfy", _backend_default)
+
+    def _swarm_down_is_loud():
+        """An unreachable SwarmUI must RAISE, not return nothing.
+
+        This is the failure this work is most likely to ship: collect() on the
+        swarm path can no longer glob for its own output, so a submit that
+        quietly returned [] would present as a bad render -- a job that
+        succeeded and produced no images -- rather than as a box being down.
+        """
+        import tempfile
+        was = (pipeline.SWARM, pipeline.COMFY_OUTPUT, pipeline._swarm_sid)
+        try:
+            with tempfile.TemporaryDirectory() as out, tempfile.TemporaryDirectory() as wf:
+                pipeline.SWARM = "http://127.0.0.1:1"      # reserved: refused at once
+                pipeline.COMFY_OUTPUT, pipeline._swarm_sid = out, None
+                json.dump({"1": {"inputs": {"filename_prefix": "x/front_s1"}}},
+                          open(os.path.join(wf, "wf.json"), "w"))
+                try:
+                    got = pipeline.submit_swarm(wf, "x", "*.png")
+                except RuntimeError as e:
+                    assert "cannot reach SwarmUI" in str(e), e
+                    return
+                raise AssertionError(
+                    f"an unreachable SwarmUI returned {got!r} instead of raising")
+        finally:
+            pipeline.SWARM, pipeline.COMFY_OUTPUT, pipeline._swarm_sid = was
+
+    check("an unreachable SwarmUI fails loudly, not emptily", _swarm_down_is_loud)
 
 grok = optional_import("grok")
 if grok:

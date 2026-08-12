@@ -10,8 +10,8 @@ Every gen_* wrapper: (1) write workflow JSONs to a scratch dir via the real
 CLI script, (2) submit_dir() them, (3) collect() the rendered outputs from
 COMFY_OUTPUT.
 """
-import glob, json, os, re, shutil, subprocess, sys, tempfile, time
-import urllib.error, urllib.request
+import glob, json, os, re, shutil, subprocess, sys, tempfile, threading, time
+import urllib.error, urllib.parse, urllib.request
 
 import gpu
 import models   # for the catalogue's default renderer; imports db only, no cycle
@@ -80,9 +80,28 @@ def _get(url):
 
 
 def install_input(local_path, name=None):
+    """Put a file where a workflow's LoadImage/LoadAudio will find it BY NAME.
+
+    With more than one backend that means every box that could be handed the
+    job, because SwarmUI picks the backend and the studio does not get to know
+    which. Hence SWARM_INPUT_DIRS: unset, this is exactly the single-box copy it
+    has always been.
+    """
     name = name or os.path.basename(local_path)
     os.makedirs(COMFY_INPUT, exist_ok=True)
     shutil.copy(local_path, os.path.join(COMFY_INPUT, name))
+    for dest in SWARM_INPUT_DIRS:
+        # NOT fatal. A part-time box that is off cannot receive this file -- but
+        # it cannot receive a job either, because SwarmUI will not route to a
+        # backend that is down, so failing the render here would refuse work the
+        # remaining boxes can do. A box that is UP and rejects the copy is the
+        # case worth having in the journal, which is why this is not silent.
+        try:
+            subprocess.run(["rsync", "-a", local_path, f"{dest.rstrip('/')}/{name}"],
+                           check=True, capture_output=True, text=True, timeout=120)
+        except (OSError, subprocess.SubprocessError) as e:
+            err = getattr(e, "stderr", "") or str(e)
+            print(f"could not stage {name} to {dest}: {err.strip()[-300:]}", file=sys.stderr)
     return name
 
 
@@ -136,6 +155,66 @@ def comfy_queue():
 
 
 SWARM = os.environ.get("SWARM_URL", "http://127.0.0.1:7801")
+# comfy | swarm. DEFAULT comfy, deliberately: unset must mean exactly today's
+# behaviour, so this ships without a flag day. Only "swarm" routes renders
+# through SwarmUI and therefore onto more than one box.
+RENDER_BACKEND = os.environ.get("RENDER_BACKEND", "comfy")
+# Where a remote backend's COMFY_INPUT lives, as rsync destinations:
+#   SWARM_INPUT_DIRS="gamingpc:/home/jon/ComfyUI/input,peaches:/mnt/user/comfy/input"
+# There is NO upload API in SwarmUI -- `UploadImage` answers HTTP 400 and is not
+# in the RegisterAPICall list (measured 2026-08-12) -- so reference images
+# reaching another box is a filesystem problem, not an API one. Empty (the
+# default) means single-box, which is what the comfy path has always been.
+SWARM_INPUT_DIRS = [d.strip() for d in os.environ.get("SWARM_INPUT_DIRS", "").split(",") if d.strip()]
+# A ceiling on attempts per workflow, or 0 for "one free draw, then every
+# running backend in turn". See _attempt_plan for why that is the shape.
+RENDER_ATTEMPTS = int(os.environ.get("RENDER_ATTEMPTS", 0))
+
+_swarm_sid = None
+
+
+def _swarm_post(path, payload, timeout=30):
+    """POST to SwarmUI. Separate from _post because a generation is not a 30s
+    request -- GenerateText2Image BLOCKS for the whole render (a clip is ~90s),
+    and _post's socket timeout would abandon every one of them."""
+    req = urllib.request.Request(SWARM + path, data=json.dumps(payload).encode(),
+                                  headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            return json.loads(e.read())
+        except Exception:
+            return {}
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"cannot reach SwarmUI at {SWARM} ({e.reason}) -- is it running?") from e
+
+
+def _swarm_session(renew=False):
+    """One session, reused. GetNewSession per submit would be a request per
+    workflow for a value that does not change; expiry is handled where it shows
+    up (an invalid_session_id error) rather than guessed at ahead of time."""
+    global _swarm_sid
+    if renew or not _swarm_sid:
+        _swarm_sid = _swarm_post("/API/GetNewSession", {}).get("session_id")
+        if not _swarm_sid:
+            raise RuntimeError(f"SwarmUI at {SWARM} would not issue a session")
+    return _swarm_sid
+
+
+def _swarm_call(path, payload, timeout=30):
+    """_swarm_post with the session attached, renewed once if it has expired.
+
+    Sessions do expire, and the caller that discovers it is whichever one ran
+    next -- a Jobs page that went permanently blank, or a render refused after
+    an idle night. SwarmUI's own SwarmSwarmBackend.cs:154 recovers from exactly
+    this error_id the same way.
+    """
+    data = _swarm_post(path, {**payload, "session_id": _swarm_session()}, timeout)
+    if isinstance(data, dict) and data.get("error_id") == "invalid_session_id":
+        data = _swarm_post(path, {**payload, "session_id": _swarm_session(renew=True)}, timeout)
+    return data
 
 
 def swarm_backends():
@@ -157,10 +236,7 @@ def swarm_backends():
     ComfyUI directly, which is still the only path that renders anything.
     """
     try:
-        sid = _post(f"{SWARM}/API/GetNewSession", {}).get("session_id")
-        if not sid:
-            return None
-        data = _post(f"{SWARM}/API/ListBackends", {"session_id": sid})
+        data = _swarm_call("/API/ListBackends", {})
     except Exception:
         return None
     if not isinstance(data, dict):
@@ -292,6 +368,183 @@ def submitted_prefixes(wf_dir):
     return out
 
 
+def _wf_prefix(wf):
+    """The basename of this ONE workflow's filename_prefix, or "".
+
+    submitted_prefixes() answers the same question for a whole directory; this
+    is the per-workflow form, because on the swarm path each generation's output
+    has to be written back under the name THAT workflow asked for.
+    """
+    for node in (wf.values() if isinstance(wf, dict) else []):
+        if not isinstance(node, dict):
+            continue
+        p = (node.get("inputs") or {}).get("filename_prefix")
+        if isinstance(p, str) and p:
+            return os.path.basename(p)
+    return ""
+
+
+def _attempt_plan():
+    """Which backend to ask, in order: None (SwarmUI's own choice) then each
+    running backend pinned, until one of them can run the workflow.
+
+    Because curating models per box is the routing policy, and a policy that
+    only says where a job CAN succeed is not routing -- SwarmUI still picks the
+    backend, and a miss is not requeued: PleaseRedirectException is thrown only
+    when the websocket fails to CONNECT (ComfyUIAPIAbstractBackend.cs:295-303).
+    A failure after the socket is up sets that backend idle and rethrows
+    (:575-582). So the studio does the walk.
+
+    Measured 2026-08-12, and this is why blind retries were not enough: an
+    anchor submitted unpinned to a fleet where one box of three holds
+    Qwen-Image-Edit was refused twice in a row with "No images were generated".
+    Each miss costs about a second, at validation, before any GPU work.
+
+    A generator on purpose: the backend list is only fetched once something has
+    actually failed, so the ordinary path is one API call as before.
+    """
+    yield None
+    ids = [b["id"] for b in (swarm_backends() or []) if b.get("status") == "running"]
+    left = (RENDER_ATTEMPTS - 1) if RENDER_ATTEMPTS else len(ids)
+    for i in ids[:max(0, left)]:
+        yield i
+
+
+def _swarm_generate(wf_text, progress, cancelled, backend=None):
+    """One workflow through SwarmUI. Returns its images[] entries.
+
+    GenerateText2Image blocks for the whole render, so the request runs on a
+    thread and this polls the cancel checkpoint beside it. Without that, a
+    cancel during a 90-second clip would do nothing until the clip was finished
+    -- the exact defect submit_dir's poll loop was rewritten to fix, and it must
+    not come back through the other door. InterruptAll is scoped to OUR session
+    (other_sessions stays false), so it cannot stop somebody else's render.
+    """
+    box = {}
+    payload = {"images": 1, "comfyworkflowraw": wf_text}
+    if backend is not None:
+        payload["exactbackendid"] = backend
+
+    def run():
+        try:
+            box["r"] = _swarm_call("/API/GenerateText2Image", payload, timeout=SUBMIT_TIMEOUT)
+        except BaseException as e:      # noqa: BLE001 -- re-raised on the caller's thread
+            box["e"] = e
+
+    t = threading.Thread(target=run, daemon=True, name="swarm-generate")
+    t.start()
+    start = time.time()
+    while t.is_alive():
+        stop = ("cancelled while rendering" if cancelled and cancelled() else
+                f"did not finish within {SUBMIT_TIMEOUT:.0f}s"
+                if time.time() - start > SUBMIT_TIMEOUT else "")
+        if stop:
+            _say(progress, f"{stop} -- interrupting SwarmUI")
+            try:
+                _swarm_call("/API/InterruptAll", {"other_sessions": False})
+            except Exception as e:
+                _say(progress, f"could not interrupt SwarmUI: {e}")
+            raise RuntimeError(stop)
+        t.join(POLL_SECS)
+    if "e" in box:
+        raise box["e"]
+    resp = box.get("r") or {}
+    if resp.get("error") or resp.get("error_id"):
+        raise RuntimeError(f"SwarmUI refused it: {resp.get('error') or resp['error_id']}")
+    return resp.get("images") or []
+
+
+def _swarm_fetch(entry, out_dir, prefix):
+    """Write one images[] entry into out_dir under the name the COMFY path would
+    have produced: <prefix>_00001_.<ext>, the next free counter.
+
+    This mapping is the whole reason collect() cannot simply be pointed at
+    SwarmUI's own output. Swarm names files `0120001--unknown.png`, which
+    carries none of the `clip_(\\d+)` or seed information that seven gen_*
+    wrappers parse straight out of basenames.
+
+    Both documented forms are handled (T2IAPI.cs:72): a View/... path to GET,
+    and the data: URI it says can appear "in some cases".
+    """
+    if entry.startswith("data:"):
+        import base64
+        head, _, b64 = entry.partition(",")
+        ext = "." + (head.split("/", 1)[-1].split(";")[0] or "png")
+        blob = base64.b64decode(b64)
+    else:
+        ext = os.path.splitext(urllib.parse.urlsplit(entry).path)[1] or ".png"
+        url = entry if entry.startswith("http") else f"{SWARM}/{entry.lstrip('/')}"
+        try:
+            with urllib.request.urlopen(url, timeout=300) as r:
+                blob = r.read()
+        except urllib.error.URLError as e:
+            raise RuntimeError(f"cannot reach SwarmUI at {SWARM} to fetch {entry} ({e.reason})") from e
+    n = 1
+    while os.path.exists(os.path.join(out_dir, f"{prefix}_{n:05d}_{ext}")):
+        n += 1
+    dest = os.path.join(out_dir, f"{prefix}_{n:05d}_{ext}")
+    with open(dest, "wb") as f:
+        f.write(blob)
+    return dest
+
+
+def submit_swarm(wf_dir, prefix_dir, pattern, progress=None):
+    """submit_dir + collect for RENDER_BACKEND=swarm, and they cannot be split.
+
+    The comfy path DISCOVERS its outputs by globbing a directory; SwarmUI NAMES
+    them in the response, and that response is the only authority -- a render on
+    another box never touches this filesystem, and a collect() that globbed
+    would return an empty list and read as a bad render rather than as a job
+    that went somewhere else. Which is why this is one function.
+
+    On a LOCAL backend the rendering ComfyUI still writes its own file into
+    COMFY_OUTPUT (measured 2026-08-12: both copies exist and are not
+    byte-identical). That file is preferred where it appears, so backend 0
+    produces the same filenames under either RENDER_BACKEND instead of a
+    downloaded duplicate beside an orphan.
+    """
+    progress = progress or (lambda msg: None)
+    cancelled = getattr(progress, "cancelled", None)
+    files = sorted(f for f in os.listdir(wf_dir) if f.endswith(".json"))
+    out_dir = os.path.join(COMFY_OUTPUT, prefix_dir)
+    os.makedirs(out_dir, exist_ok=True)
+    seen = set(collect(prefix_dir, pattern))
+    got = []
+    for i, name in enumerate(files, 1):
+        if cancelled and cancelled():
+            progress(f"cancelled -- not submitting {os.path.splitext(name)[0]}")
+            raise RuntimeError(f"cancelled while rendering {name}")
+        text = open(os.path.join(wf_dir, name)).read()
+        prefix = _wf_prefix(json.loads(text)) or os.path.splitext(name)[0]
+        start = time.time()
+        entries, last = None, None
+        for pin in _attempt_plan():
+            try:
+                entries = _swarm_generate(text, progress, cancelled, pin)
+                break
+            except RuntimeError as e:
+                # A cancel is not a failure to retry, and it is the one thing
+                # here that must never be retried -- the user asked for this to
+                # stop, and a second attempt would hand the GPU straight back.
+                if "cancelled" in str(e).lower():
+                    raise
+                last = e
+                # Every miss is logged WITH THE BOX IT MISSED ON. A silent
+                # retry that halves throughput is worse than a failure because
+                # nobody goes looking, and one that does not say where it went
+                # leaves the model-curation policy unmeasurable.
+                progress(f"{name}: refused by "
+                         f"{'backend ' + str(pin) if pin is not None else 'SwarmUI'}: {e}")
+        if entries is None:
+            raise last or RuntimeError(f"no backend would run {name}")
+        mine = [p for p in collect(prefix_dir, pattern)
+                if p not in seen and os.path.basename(p).startswith(prefix + "_")]
+        got += mine or [_swarm_fetch(e, out_dir, prefix) for e in entries]
+        seen |= set(collect(prefix_dir, pattern))
+        progress(f"{i}/{len(files)} {os.path.splitext(name)[0]} {time.time()-start:.0f}s")
+    return sorted(got, key=lambda p: _natkey(os.path.basename(p)))
+
+
 def _submit_and_collect(wf_dir, prefix_dir, pattern, progress):
     """submit_dir() + collect(), returning only the files THIS submit asked for.
 
@@ -313,16 +566,35 @@ def _submit_and_collect(wf_dir, prefix_dir, pattern, progress):
 
     Anything else that appears is REPORTED, not silently dropped: this directory
     is shared with anyone else who can reach an unauthenticated ComfyUI.
+
+    RENDER_BACKEND=swarm replaces both filters with submit_swarm(), which needs
+    neither: on that path the response NAMES its outputs, so there is nothing to
+    diff and nothing to attribute. What stays shared is everything either path
+    can get wrong the same way -- the card, and the cleanup of what a stopped
+    run managed to write. This function is also the ONLY place that branches on
+    the backend: the seven gen_* wrappers above do not know there is one.
     """
     # One guard for all seven gen_* wrappers, not a copy per caller: every one
-    # of them reaches ComfyUI through here, and a starved card fails them all
+    # of them reaches a renderer through here, and a starved card fails them all
     # the same way -- an OOM that presents as a job which succeeded and wrote
     # nothing. gpu.preflight takes the card back from ollama or refuses with
     # the numbers; it never refuses because something was unreachable.
-    gpu.preflight(progress)
+    swarm = RENDER_BACKEND == "swarm"
+    if swarm:
+        # The local card is one backend of three here and SwarmUI decides which
+        # one runs this. Refusing every render because THIS card is full would
+        # be a wrong answer for a job bound for gamingpc -- so ollama is still
+        # asked for the card back (backend 0 is this card), but a full card is
+        # no longer grounds to refuse.
+        if gpu.ollama_holding():
+            gpu.release_ollama(progress)
+    else:
+        gpu.preflight(progress)
     mine = submitted_prefixes(wf_dir)
     before = set(collect(prefix_dir, pattern))
     try:
+        if swarm:
+            return submit_swarm(wf_dir, prefix_dir, pattern, progress)
         submit_dir(wf_dir, progress)
     except BaseException:
         # Garbage-collect what a cancelled or failed run did manage to write.
@@ -897,6 +1169,220 @@ def demo():
         assert all(f.endswith(".json") for f in written["files"]), written["files"]
     finally:
         globals()["submit_dir"] = real_submit_dir
+
+    # --- RENDER_BACKEND: the seam, and the flag day that must not happen -----
+    # The acceptance criterion from SWARM_PIPELINE_PLAN.md phase 2 is that both
+    # paths produce the SAME FILENAMES, because _clip_records parses clip_(\d+)
+    # and a seed out of basenames and seven wrappers depend on it.
+    global RENDER_BACKEND, POLL_SECS
+    real_backend, real_poll = RENDER_BACKEND, POLL_SECS
+    real_submit_swarm, real_submit = globals()["submit_swarm"], globals()["submit_dir"]
+    real_swarm_call = globals()["_swarm_call"]
+    real_out = COMFY_OUTPUT
+    real_preflight, real_holding = gpu.preflight, gpu.ollama_holding
+    gpu.preflight = lambda progress=None: None
+    gpu.ollama_holding = lambda: []
+    real_urlopen = urllib.request.urlopen
+
+    class _Blob:
+        def __init__(self, b): self.b = b
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return self.b
+
+    def _never(*a, **kw):
+        raise AssertionError("_submit_and_collect took the other backend's path")
+
+    def _swarm(gen):
+        """A fake SwarmUI: three running backends, and `gen` for everything
+        else. ListBackends has to answer, because the retry walk is what turns
+        "this box has no such model" into "some other box does"."""
+        def call(path, payload, timeout=30):
+            if path.endswith("ListBackends"):
+                return {str(i): {"status": "running", "title": f"box{i}"} for i in range(3)}
+            return gen(path, payload, timeout)
+        return call
+
+    try:
+        with tempfile.TemporaryDirectory() as out, tempfile.TemporaryDirectory() as d:
+            COMFY_OUTPUT = out
+            sheets = os.path.join(out, "anchor_v2")
+            os.makedirs(sheets)
+            json.dump({"1": {"inputs": {"filename_prefix": "anchor_v2/front_s42"}}},
+                      open(os.path.join(d, "wf.json"), "w"))
+
+            # 1. unset means comfy, and comfy must not touch SwarmUI at all
+            RENDER_BACKEND = "comfy"
+            globals()["submit_swarm"] = _never
+
+            def writing_submit(wf_dir, progress=None):
+                open(os.path.join(sheets, "front_s42_00001_.png"), "w").close()
+                return ["pid"]
+
+            globals()["submit_dir"] = writing_submit
+            comfy_got = _submit_and_collect(d, "anchor_v2", "*.png", lambda m: None)
+            assert [os.path.basename(p) for p in comfy_got] == ["front_s42_00001_.png"], comfy_got
+
+            # 2. swarm on a LOCAL backend: the rendering ComfyUI wrote the file
+            # itself, so that one is the result -- not a downloaded duplicate
+            # beside an orphan nobody collects.
+            os.remove(comfy_got[0])
+            RENDER_BACKEND = "swarm"
+            globals()["submit_swarm"] = real_submit_swarm
+            globals()["submit_dir"] = _never
+
+            def local_backend(path, payload, timeout=30):
+                open(os.path.join(sheets, "front_s42_00001_.png"), "w").close()
+                return {"images": ["View/local/raw/2026-08-12/0120001--unknown.png"]}
+
+            globals()["_swarm_call"] = _swarm(local_backend)
+            swarm_got = _submit_and_collect(d, "anchor_v2", "*.png", lambda m: None)
+            assert [os.path.basename(p) for p in swarm_got] \
+                   == [os.path.basename(p) for p in comfy_got], (swarm_got, comfy_got)
+            assert os.listdir(sheets) == ["front_s42_00001_.png"], \
+                f"a local render was downloaded a second time: {os.listdir(sheets)}"
+
+            # 3. swarm on a REMOTE backend: nothing lands on this filesystem, so
+            # the response is the only authority and the download must be
+            # written under the name the WORKFLOW asked for.
+            os.remove(swarm_got[0])
+            globals()["_swarm_call"] = _swarm(lambda path, payload, timeout=30: {
+                "images": ["View/local/raw/2026-08-12/0120001--unknown.png"]})
+            urllib.request.urlopen = lambda url, timeout=None: _Blob(b"PNGDATA")
+            remote_got = _submit_and_collect(d, "anchor_v2", "*.png", lambda m: None)
+            assert [os.path.basename(p) for p in remote_got] == ["front_s42_00001_.png"], remote_got
+            assert open(remote_got[0], "rb").read() == b"PNGDATA"
+
+            # 4. a box that does not hold the model refuses in about a second,
+            # and the job moves to the NEXT box rather than re-rolling the same
+            # dice. Measured on the real fleet: unpinned twice in a row landed
+            # on backends without Qwen-Image-Edit and the whole render was lost.
+            os.remove(remote_got[0])
+            tries, payloads = [], []
+
+            def flaky(path, payload, timeout=30):
+                tries.append(path)
+                payloads.append(payload)
+                if len(tries) == 1:
+                    return {"error": "Model in folder 'vae' with filename 'x' not found."}
+                return {"images": ["View/local/raw/2026-08-12/0120001--unknown.png"]}
+
+            globals()["_swarm_call"] = _swarm(flaky)
+            said = []
+            got = _submit_and_collect(d, "anchor_v2", "*.png", said.append)
+            assert len(tries) == 2, tries
+            assert payloads[0].get("exactbackendid") is None, \
+                "the first draw must be SwarmUI's own, or two 5090s never load-balance"
+            assert payloads[1]["exactbackendid"] == "0", payloads
+            assert [os.path.basename(p) for p in got] == ["front_s42_00001_.png"], got
+            assert any("refused by SwarmUI" in m for m in said), said
+
+            # 5. and when NO box can run it, the walk covers every one of them
+            # and then stops, rather than either giving up early or looping.
+            os.remove(got[0])
+            tries.clear()
+            payloads.clear()
+
+            def dead_model(path, payload, timeout=30):
+                tries.append(path)
+                payloads.append(payload)
+                return {"error": "no model"}
+
+            globals()["_swarm_call"] = _swarm(dead_model)
+            try:
+                _submit_and_collect(d, "anchor_v2", "*.png", said.append)
+                raise AssertionError("a workflow no backend can run returned a result")
+            except RuntimeError as e:
+                assert "no model" in str(e), e
+            # one free draw, then EVERY running backend in turn -- a policy that
+            # stops before reaching the box holding the model is not a policy
+            assert len(tries) == 4, tries
+            assert [q.get("exactbackendid") for q in payloads] == [None, "0", "1", "2"], payloads
+            assert os.listdir(sheets) == [], os.listdir(sheets)
+
+            # 6. a cancel MID-GENERATION reaches the render, and is the one
+            # failure never retried -- a second attempt hands the GPU straight
+            # back to work the user stopped. Cancelled only from the second
+            # check on, so this goes through the retry loop rather than
+            # stopping at the top of it, which is where a cancel that IS
+            # retried would otherwise hide.
+            POLL_SECS = 0.05
+            gens, asked, polls = [], [], []
+
+            def cancel_mid(path, payload, timeout=30):
+                if path.endswith("GenerateText2Image"):
+                    gens.append(path)
+                    time.sleep(3)
+                    return {"images": []}
+                asked.append(path)
+                return {}
+
+            def prog(msg):
+                pass
+
+            prog.cancelled = lambda: bool(polls.append(None)) or len(polls) > 1
+
+            globals()["_swarm_call"] = _swarm(cancel_mid)
+            t0 = time.time()
+            try:
+                _submit_and_collect(d, "anchor_v2", "*.png", prog)
+                raise AssertionError("a cancelled submit returned as though it had rendered")
+            except RuntimeError as e:
+                assert "cancelled" in str(e).lower(), e
+            assert time.time() - t0 < 1.5, \
+                "the cancel waited for the render instead of stopping it"
+            assert len(gens) == 1, f"the cancel was retried: {len(gens)} generations"
+            assert any("InterruptAll" in a for a in asked), asked
+    finally:
+        RENDER_BACKEND, POLL_SECS = real_backend, real_poll
+        globals()["submit_swarm"], globals()["submit_dir"] = real_submit_swarm, real_submit
+        globals()["_swarm_call"] = real_swarm_call
+        COMFY_OUTPUT = real_out
+        gpu.preflight, gpu.ollama_holding = real_preflight, real_holding
+        urllib.request.urlopen = real_urlopen
+
+    # --- both documented forms of images[] (T2IAPI.cs:72) --------------------
+    with tempfile.TemporaryDirectory() as out:
+        import base64
+        got = _swarm_fetch("data:image/png;base64," + base64.b64encode(b"INLINE").decode(),
+                           out, "clip_007")
+        assert os.path.basename(got) == "clip_007_00001_.png", got
+        assert open(got, "rb").read() == b"INLINE"
+        # and a second output of the same workflow does not overwrite the first
+        urllib.request.urlopen = lambda url, timeout=None: _Blob(b"MP4")
+        try:
+            two = _swarm_fetch("View/local/raw/2026-08-12/0120002--unknown.mp4", out, "clip_007")
+        finally:
+            urllib.request.urlopen = real_urlopen
+        assert os.path.basename(two) == "clip_007_00001_.mp4", two
+
+    # --- inputs reach every box that could be handed the job -----------------
+    real_dirs = SWARM_INPUT_DIRS
+    real_run = subprocess.run
+    real_in2 = COMFY_INPUT
+    pushed = []
+    globals()["SWARM_INPUT_DIRS"] = ["box:/comfy/input"]
+    try:
+        with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as inp:
+            COMFY_INPUT = inp
+            p = os.path.join(src, "ref.png")
+            open(p, "w").write("x")
+            subprocess.run = lambda cmd, **kw: pushed.append(cmd)
+            assert install_input(p, "clip_003.png") == "clip_003.png"
+            assert os.path.exists(os.path.join(inp, "clip_003.png"))
+            assert pushed and pushed[0][:2] == ["rsync", "-a"], pushed
+            assert pushed[0][-1] == "box:/comfy/input/clip_003.png", pushed
+
+            # a box that is off must not fail a render the other boxes can do
+            def dead(cmd, **kw):
+                raise subprocess.CalledProcessError(255, cmd, stderr="ssh: connect refused")
+
+            subprocess.run = dead
+            assert install_input(p) == "ref.png"
+    finally:
+        subprocess.run = real_run
+        globals()["SWARM_INPUT_DIRS"] = real_dirs
+        COMFY_INPUT = real_in2
 
     print("pipeline.py OK")
 
