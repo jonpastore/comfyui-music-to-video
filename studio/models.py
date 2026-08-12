@@ -320,7 +320,7 @@ CATALOG = {
     },
     "ace_step_v1": {
         "role": "audio",
-        "proven": "opportunistic",   # downloaded, nodes present, NO WORKFLOW WRITTEN
+        "proven": "stable",   # measured 2026-08-12: a real mp3, 9.979s, -14.2 dB mean
         "weights_gib": 7.17,   # bf16; peaches carries an fp16 cast of the same size class
         "label": "ACE-Step v1 3.5B",
         "file": "ace_step_v1_3.5b.safetensors",
@@ -328,12 +328,26 @@ CATALOG = {
         "default": True,
         "cli": "ace_step",
         "purpose": (
-            "Generative audio. The deterministic editor (ffmpeg) can only trim the ENDS of "
-            "a track; cutting from the middle needs this."),
+            "Writes new music from a style tag list and optional lyrics. It is a "
+            "GENERATOR, not an editor: it cannot cut a region out of an existing track, "
+            "and this entry used to claim it could."),
         "notes": [
-            "It RE-SYNTHESISES the region rather than removing it, so the result is new "
-            "audio, not a shorter original. The UI must say which path ran.",
-            "Downloaded and the nodes are present, but no workflow is written yet.",
+            "CORRECTED 2026-08-12, and the old wording had it backwards. This entry said "
+            "\"ffmpeg can only trim the ENDS of a track; cutting from the middle needs "
+            "this\" -- so ACE-Step was catalogued as the answer to a job it cannot do. "
+            "peaches publishes TextEncodeAceStepAudio, EmptyAceStepLatentAudio and "
+            "VAEEncodeAudio and NO region or mask node, so denoise below 1.0 "
+            "re-synthesises the WHOLE clip, not a span of it.",
+            "Cutting from the middle is therefore ffmpeg's job after all: slice out the "
+            "span, generate a bridge of exactly that length, splice it back. ACE-Step "
+            "supplies the bridge and nothing else.",
+            "Whatever it produces is NEW audio, never a shortened original, so the UI has "
+            "to say which path ran.",
+            "Routed by filename alone: make_audio.py names the fp16 spelling and peaches "
+            "is the only box holding a file by that name, so the backend walk lands it "
+            "there without any routing rule. See ALIASES.",
+            "Generation is measured end to end. The repair/re-synthesis path is built and "
+            "graph-checked but has NOT been run against real audio.",
         ],
         "companions": {},
     },
