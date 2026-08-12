@@ -113,9 +113,15 @@ Watch it:
 
 When it is up, these must both be true:
 
-    ssh jon@ethan-wsl 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8188/object_info'
+    ssh jon@ethan-wsl 'curl -s -o /dev/null -w "%{http_code}\n" http://100.111.252.15:8188/object_info'
     # -> 200
-    ssh jon@ethan-wsl 'curl -s http://127.0.0.1:8188/object_info | python3 -c "
+    #
+    # NOT 127.0.0.1. compose.yaml publishes on "100.111.252.15:8188:8188", the
+    # tailscale address ONLY -- that is the whole point of not using 0.0.0.0 on
+    # a ComfyUI with no auth. So 127.0.0.1:8188 answers 000 on a PERFECTLY
+    # HEALTHY backend, and this check said "dead deploy" for several minutes on
+    # 2026-08-12 while the container was up and serving. Corrected then.
+    ssh jon@ethan-wsl 'curl -s http://100.111.252.15:8188/object_info | python3 -c "
     import sys,json; d=json.load(sys.stdin)
     print(len([k for k in d if k.startswith(\"Swarm\")]))"'
     # -> ~59  (cerberus reports 59, gamingpc 60; far fewer means the packs did not load)
@@ -123,6 +129,13 @@ When it is up, these must both be true:
     # Parse the JSON, do NOT use `grep -c "\"Swarm"`. Recent ComfyUI returns
     # /object_info as a SINGLE line, so grep -c counts lines and reports 1 for a
     # perfectly healthy backend. That cost a wrong diagnosis on gamingpc.
+    #
+    # And do NOT use ComfyUI's /history to check whether a job ran here.
+    # Measured 2026-08-12: ethan executed two prompts through SwarmUI and
+    # /history stayed at 0 entries, because SwarmUI advertises
+    # `comfy_saveimage_ws` and streams outputs back over the websocket instead
+    # of writing them. `docker logs comfyui | grep "got prompt"` is the
+    # authority -- it showed "Prompt executed in 0.13 seconds" for both.
 
 ## Then register it on cerberus
 

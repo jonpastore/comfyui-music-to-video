@@ -11,7 +11,7 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
-| **cerberus `swarmui.service` (shared infra, not a repo file)** | **B — CLAIMED 19:00** | registering ethan-wsl as backend 3: unlock `--lock_settings`, restart SwarmUI, AddNewBackend, re-lock, restart. **A — this BOUNCES SwarmUI, which since `f12ceb6` is every render. Verified idle first: 0 studio jobs, 0 live_gens, all three ComfyUI queues empty. Per Jon.** | 19:00 |
+| **cerberus `swarmui.service`** + `ETHAN-CONTINUE.md` | B — **released 19:25** | ethan-wsl joined as backend 3 and rendered. Settings re-locked. | 19:00 |
 | `studio/models.py` | B — **released 18:50** | SigLIP2 catalogued + `CLIPVisionLoader` in `LOADER_FIELD`. **A: this adds a ROLE (`encoder`) → a new section in your models UI. Say if you want it shaped differently and I will change it** | 18:40 |
 | `studio/pipeline.py` + `studio/check_integration.py` | B — **released 18:25, committed `a3cccac`** | mutation-audited today's own checks; two did not fail, both fixed | 18:10 |
 | `studio/models.py` + `studio/pipeline.py` + `studio/check_integration.py` | B — **released 17:55, committed `24de2d7`** | the retry walk now names the file each box uses | 17:40 |
@@ -632,3 +632,46 @@ Append dated one-liners. Newest at the bottom.
     `patch_embedding.weight` is 2-D. And the config file is named
     `..._base_naflex.json` while its contents are so400m, so the filename lies
     too. Read the safetensors header, not the docs.
+- 2026-08-12 19:25 (B) **ethan-wsl is backend 3 and it renders. Settings are
+  locked again.** Per Jon, and every queue was verified empty before each
+  restart — A, this bounced SwarmUI three times, which since your `f12ceb6` is
+  every render in the studio. Nothing was lost: 0 studio jobs and 0 live_gens
+  each time, and I waited out an LTX-2.0 i2v render that was in flight on
+  cerberus rather than killing it. Backends 0/1/2 were smoke-tested after and
+  all three still render.
+  - RTX 5080, **15.92 GiB**, 901 nodes, **60 Swarm nodes** (cerberus 59,
+    gamingpc 60 — the packs loaded). `AllowIdle: true`.
+  - It **persisted the re-lock restart**, which is the only real proof the
+    unlock worked: while locked, SwarmUI returns early from `SaveSettingsFile`
+    and would not have kept it.
+- 2026-08-12 19:25 (B) **Two false alarms on the way, both mine, both now fixed
+  in `ETHAN-CONTINUE.md` so they do not cost the next person an hour.**
+  - **`curl 127.0.0.1:8188` can never work here.** `compose.yaml` publishes on
+    `100.111.252.15:8188` — the tailscale address ONLY, deliberately, because
+    ComfyUI has no auth. The doc's own verify step used 127.0.0.1, so a healthy
+    container read as a dead deploy for several minutes.
+  - **ComfyUI's `/history` does NOT record jobs that came through SwarmUI.**
+    ethan executed two prompts and `/history` stayed at 0 entries, because
+    SwarmUI advertises `comfy_saveimage_ws` and streams outputs back over the
+    websocket instead of writing them. I nearly reported "it did not run there".
+    `docker logs comfyui | grep "got prompt"` is the authority — it showed
+    `Prompt executed in 0.13 seconds`.
+- 2026-08-12 19:25 (B) **One more trap for the retry walk, and it is the same
+  one twice now: SwarmUI caches each backend's NODE LIST at connect time.**
+  Backend 3 connected while its ComfyUI was still booting, so a pinned render
+  was refused with `The custom workflow contains an unsupported node type
+  'EmptyImage'` — a node ethan plainly has. `RestartBackends` is blocked by
+  `--lock_settings`, so the fix is a service restart. Worth knowing before
+  anyone debugs a "missing node" that is not missing.
+- 2026-08-12 19:25 (B) ⚠ **ethan holds NO MODELS — `models/` is 8 KB, one empty
+  `checkpoints/` dir, and `VAELoader` lists only `pixel_space`.** It is now a
+  registered, running, EMPTY backend, which is exactly what backend 1 was on
+  2026-08-12 when it failed a real workflow in 0.6s. SwarmUI's free draw will
+  hand it real jobs and it will refuse them; `_retarget` and `models.where()`
+  route around it only AFTER a refusal. **Staging weights is the prerequisite,
+  not the follow-up.** What fits its 15.92 GiB, from `models.fits()`:
+  `wan22_s2v` (15.27), `wan22_i2v_low` (13.31, the refiner — and note peaches
+  CANNOT hold that one), `ace_step_v1` (7.17), `siglip2_naflex` (4.23).
+  It CANNOT hold `qwen_image_edit_2511` (19.12), `ltx25` (20.03) or `ltx23`
+  (21.86) — so the box that just joined cannot run the video model the studio
+  defaults to. Jon's call what goes there; I have staged nothing.
