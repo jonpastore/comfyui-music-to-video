@@ -3478,6 +3478,89 @@ def test_a_failed_batch_is_visible_and_retryable_from_the_anchors_page(patch_stu
         assert client.post(f"/jobs/{new['id']}/retry").status_code in (400, 200)
 
 
+def test_generate_answers_json_and_keeps_every_submitted_field(patch_stub):
+    """The Generate button was the last form POST on this page: it 303'd, reloaded
+    the whole page and said NOTHING about what it had accepted.
+
+    The async version must not repeat what the first async upload/delete
+    handlers did -- rebuild from defaults and silently drop the ticked tiers,
+    the chosen views and every typed per-tier prompt. So this posts all three
+    and asserts all three survive, in the RESPONSE the page paints from and in
+    what actually reaches the renderer.
+    """
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="": (
+        seen.append({"view": view, "prompt": prompt}) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Async Generate Album"})
+        typed_r = "R TIER TYPED PROMPT, a woman standing in a doorway"
+        typed_pg = "PG13 TIER TYPED PROMPT, the same woman on a fire escape"
+
+        r = client.post("/anchors", headers={"accept": "application/json"},
+                        data={"album": "Async Generate Album", "n": "1",
+                              "tier": ["r", "pg13"], "view": ["front", "back"],
+                              "prompt_r": typed_r, "prompt_pg13": typed_pg},
+                        files=[("images", ("a.png", _png_bytes(), "image/png"))])
+        assert r.status_code == 200, r.text
+        d = r.json()
+
+        # 1. it says how many sheets were queued -- the whole point of the panel
+        assert d["queued"] == 4, d
+        assert len(d["jobs"]) == 4 and all(j["id"] for j in d["jobs"]), d
+
+        # 2. the tiers and the views come back, both of them, unreduced
+        assert sorted(d["tiers"]) == ["pg13", "r"], f"a ticked tier was dropped: {d['tiers']}"
+        assert sorted(d["views"]) == ["back", "front"], f"a chosen view was dropped: {d['views']}"
+        assert sorted((j["tier"], j["view"]) for j in d["jobs"]) == [
+            ("pg13", "back"), ("pg13", "front"), ("r", "back"), ("r", "front")], d["jobs"]
+
+        # 3. each tier's OWN typed prompt comes back on its own sheets -- one
+        #    shared prompt for every tier is the bug this form already had once
+        assert all(j["prompt"] == typed_r for j in d["jobs"] if j["tier"] == "r"), d["jobs"]
+        assert all(j["prompt"] == typed_pg for j in d["jobs"] if j["tier"] == "pg13"), d["jobs"]
+
+        # and it REACHES the renderer, not just the response. A response that
+        # echoes what it was sent proves nothing about what gets rendered.
+        for j in d["jobs"]:
+            wait_job(j["id"])
+        # counted, not compared as a whole list: the worker is shared and an
+        # earlier test's queued job can land in `seen` too. Two sheets per tier
+        # is the number that falls if a tier's prompt is dropped or collapsed
+        # into its neighbour's.
+        got = [s["prompt"] for s in seen]
+        assert got.count(typed_r) == 2 and got.count(typed_pg) == 2, \
+            f"the typed prompt did not reach gen_anchor: {[p[:30] for p in got]}"
+
+        # The queued sheets are on the PAGE as well, so the indicator survives a
+        # reload and shows up in a second tab. Held mid-render deliberately: let
+        # the batch finish first and there is nothing in flight, so the
+        # assertion could not fail whatever the page rendered.
+        hold = threading.Event()
+        patch_stub("pipeline", gen_anchor=lambda *a, **k: (hold.wait(20) or []))
+        client.post("/anchors", data={"album": "Async Generate Album", "n": "1",
+                                      "tier": "r", "view": "front", "prompt_r": ""},
+                    files=[("images", ("a.png", _png_bytes(), "image/png"))],
+                    follow_redirects=False)
+        held = db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"]
+        try:
+            page = client.get("/anchors").text
+        finally:
+            hold.set()
+        assert db.one("SELECT status FROM jobs WHERE id=?", held)["status"] in \
+            ("queued", "running"), "the sheet finished before the page was read"
+        assert f'data-job="{held}"' in page, \
+            "a sheet being rendered right now is invisible on the page that queued it"
+        wait_job(held)
+
+        # JavaScript off still redirects, exactly as before
+        r = client.post("/anchors", data={"album": "Async Generate Album", "n": "1",
+                                          "tier": "r", "view": "front", "prompt_r": ""},
+                        files=[("images", ("a.png", _png_bytes(), "image/png"))],
+                        follow_redirects=False)
+        assert r.status_code == 303, r.text
+
+
 def test_each_view_composes_its_own_prompt_unless_you_edit_it(patch_stub):
     """make_anchor.py:169 is `args.prompt.strip() or prompt_for(view, ...)`, so an
     explicit prompt REPLACES the per-view composition. The form always prefilled

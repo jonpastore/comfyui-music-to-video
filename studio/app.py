@@ -1427,10 +1427,18 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = ""):
     failed = [j for j in db.q("""SELECT * FROM jobs WHERE kind='anchor' AND status='failed'
                                  ORDER BY id DESC LIMIT 20""")]
     fresh = [j for j in failed if (time.time() - (j["finished"] or 0)) < 86400]
+    # Work already in flight, so the queued indicator survives a reload and a
+    # second browser tab. Without this the only evidence a batch existed was in
+    # the JavaScript of the tab that started it -- reload, and twelve running
+    # sheets looked exactly like nothing having happened.
+    active = [{"id": j["id"], "tier": db.jset(j, "args_json").get("tier", ""),
+               "view": db.jset(j, "args_json").get("view", "")}
+              for j in db.q("""SELECT * FROM jobs WHERE kind='anchor'
+                               AND status IN ('queued','running') ORDER BY id""")]
     return templates.TemplateResponse(request, "anchors.html", dict(
         anchor_form_ctx(scope_value),
         groups=group_list, known_albums=albums, playlists=playlists,
-        failed_jobs=fresh))
+        failed_jobs=fresh, active_jobs=active))
 
 
 MAX_ANCHOR_UPLOADS = 8
@@ -1690,13 +1698,26 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     # An EDITED prompt is still honoured, and still applies to every view of its
     # tier -- the form says so, because that edit does override the framing and
     # the nude swap.
+    queued = []
     for t, v in combos:
         text = prompts[t]
         if text and text.strip() == (unedited_default or "").strip():
             text = ""
-        jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": album, "tier": t,
-                                 "view": v, "images": paths, "n": n,
-                                 "character_id": character_id, "prompt": text})
+        jid = jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": album, "tier": t,
+                                       "view": v, "images": paths, "n": n,
+                                       "character_id": character_id, "prompt": text})
+        queued.append({"id": jid, "tier": t, "view": v, "prompt": text})
+
+    # The async caller paints from THIS, never from what it typed -- and this is
+    # the whole answer to "I clicked generate and I don't think it generated any
+    # anchors": it names every sheet that was accepted, with the job to watch.
+    # It echoes the tiers, the views and each sheet's prompt because those are
+    # exactly the fields an async handler has historically dropped; a response
+    # that carries them can be asserted on.
+    if wants_json(request):
+        return JSONResponse({"queued": len(queued), "jobs": queued, "album": album,
+                             "tiers": selected_tiers, "views": selected_views, "n": n,
+                             "refs": len(paths)})
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 
