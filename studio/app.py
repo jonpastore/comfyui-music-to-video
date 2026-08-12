@@ -4328,6 +4328,18 @@ def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
             raise HTTPException(400, "the span needs a start and an end, in seconds") from None
         if span["end"] <= span["start"] or span["start"] < 0:
             raise HTTPException(400, "the span must end after it starts")
+        # Refuse a span outside the track HERE, not in the job. splice_bridge
+        # checks it too and raises -- but it runs after gen_audio, so a typo in
+        # the end box would spend a full ACE-Step render on the GPU and then
+        # throw the result away. The job's check stays as the backstop for a
+        # track that changed length between enqueue and run.
+        try:
+            duration = mixer.probe(song["mp3_path"])["duration"]
+        except Exception:
+            duration = None   # unreadable here is the job's problem, not a 500 here
+        if duration and span["end"] > duration + 0.001:
+            raise HTTPException(400, f"the span ends at {span['end']:g}s but the track is "
+                                     f"only {duration:.1f}s long")
         seconds = (span["end"] - span["start"]) + 2 * mixer.SPLICE_XFADE
     if not 1.0 <= seconds <= MAX_AUDIO_SECS:
         raise HTTPException(400, f"seconds must be between 1 and {MAX_AUDIO_SECS:g}")

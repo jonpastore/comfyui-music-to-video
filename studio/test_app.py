@@ -5884,18 +5884,18 @@ def test_generated_audio_is_kept_and_says_which_path_ran(monkeypatch, tmp_path):
         # video no longer lines up.
         from conftest import splice_calls
         r = client.post(f"/songs/{sid}/audio/generate",
-                        data={**ok, "n": "1", "bridge_start": "12.0", "bridge_end": "14.5"})
+                        data={**ok, "n": "1", "bridge_start": "5.0", "bridge_end": "7.5"})
         assert r.status_code in (200, 303), r.text
         wait_job(db.one("SELECT id FROM jobs WHERE kind='audio' ORDER BY id DESC")["id"])
         assert splice_calls, "the span never reached mixer.splice_bridge"
-        assert (splice_calls[-1]["start"], splice_calls[-1]["end"]) == (12.0, 14.5)
+        assert (splice_calls[-1]["start"], splice_calls[-1]["end"]) == (5.0, 7.5)
         assert sent[-1]["seconds"] == 2.5 + 2 * appmod.mixer.SPLICE_XFADE, (
             "the bridge was generated the length of the GAP, so the two crossfades "
             "would eat into it and shorten the track")
         bridged = db.q("SELECT * FROM assets WHERE song_id=? AND kind='audio_gen' "
                        "ORDER BY id DESC LIMIT 1", sid)[0]
         meta = db.jset(bridged)
-        assert meta["mode"] == "bridged" and meta["bridge_start"] == 12.0
+        assert meta["mode"] == "bridged" and meta["bridge_start"] == 5.0
         assert os.path.exists(bridged["path"])
 
         # a take can be pressed into use through the SAME route an edit uses
@@ -5912,6 +5912,16 @@ def test_generated_audio_is_kept_and_says_which_path_ran(monkeypatch, tmp_path):
                          ({**ok, "seconds": "9999"}, "a 9999 second take"),
                          ({**ok, "n": "99"}, "99 takes"),
                          ({**ok, "seed": "not-a-number"}, "a non-numeric seed"),
-                         ({**ok, "from_current": "1", "denoise": "1.0"}, "denoise 1.0 with a source")):
+                         ({**ok, "from_current": "1", "denoise": "1.0"}, "denoise 1.0 with a source"),
+                         # refused HERE rather than in the job: splice_bridge
+                         # checks it too, but it runs after gen_audio, so a typo
+                         # in the end box would spend a whole GPU render first
+                         # 11->100 is 89s of bridge, comfortably inside MAX_AUDIO_SECS, so
+                         # ONLY the track-length check can refuse it. With "999"
+                         # here the seconds bound caught it instead and the
+                         # mutation that removes the length check still passed.
+                         ({**ok, "bridge_start": "11", "bridge_end": "100"}, "a span past the end"),
+                         ({**ok, "bridge_start": "7", "bridge_end": "3"}, "a span ending before it starts"),
+                         ({**ok, "bridge_start": "x", "bridge_end": "3"}, "a non-numeric span")):
             assert client.post(f"/songs/{sid}/audio/generate", data=bad).status_code == 400, \
                 f"{why} was accepted"
