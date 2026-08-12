@@ -39,6 +39,27 @@
 </section>
 {% endif %}
 
+{# What is being rendered RIGHT NOW. Server-rendered so it survives a reload and
+   shows up in a second tab, then kept live over SSE by initAnchorBatch(); the
+   same <li data-job> shape is appended by the Generate button, so the wording of
+   a line lives in app.js only and cannot drift between the two.
+
+   This exists because a queued batch used to report NOTHING: the page reloaded,
+   said nothing, and twelve jobs that had already failed were invisible from
+   here. #}
+<section class="card" id="anchor-batch" {% if not active_jobs %}hidden{% endif %}>
+  <h2>Rendering now</h2>
+  <p class="hint" id="anchor-batch-note">
+    {% if active_jobs %}{{ active_jobs | length }} sheet{{ "" if active_jobs | length == 1 else "s" }}
+    in the queue.{% endif %}
+    <a class="linkish" href="/jobs">All jobs</a></p>
+  <ul class="batch-list" id="anchor-batch-list">
+    {% for j in active_jobs %}
+    <li data-job="{{ j.id }}" data-tier="{{ j.tier }}" data-view="{{ j.view }}"></li>
+    {% endfor %}
+  </ul>
+</section>
+
 <section class="card">
   <h2>Generate anchor candidates</h2>
   {% include "_anchor_form.html" %}
@@ -114,7 +135,20 @@
    candidate. A group can hold a dozen sheets and every page has several groups;
    a modal each would be hundreds of elements to show one image at a time. #}
 <dialog class="lightbox" id="anchor-lightbox">
-  <button type="button" class="lightbox-close" aria-label="Close">&times;</button>
+  <div class="lightbox-bar">
+    {# which sheet you are looking at. A grid of near-identical candidates is
+       exactly where "which one is this?" gets asked, and the answer was only
+       ever available by closing the modal and counting. #}
+    <strong class="lightbox-title"></strong>
+    <span class="lightbox-pos muted"></span>
+    <span class="lightbox-spacer"></span>
+    <a class="lightbox-download" download>Download</a>
+    <button type="button" class="thumb-btn-danger lightbox-delete">Delete</button>
+    <button type="button" class="lightbox-close" aria-label="Close">&times;</button>
+  </div>
   <img alt="anchor candidate, full size">
+  <p class="lightbox-help muted">
+    &larr; &rarr; between sheets in this row &middot; &uarr; &darr; between rows &middot;
+    Del to delete &middot; Esc to close</p>
 </dialog>
 {% endblock %}

@@ -424,33 +424,235 @@ document.addEventListener("DOMContentLoaded", function () {
   initGenreSelects("bulk-genre2-select", "bulk-subgenre2-select");
   initLibraryBulk();
   initAnchors();
+  initAnchorBatch();
 });
+
+// ---- Anchors: queue the sheets, say so, and watch them render ---------------
+// The Generate button was the last form POST on this page: it 303'd, reloaded
+// the whole page, and said NOTHING about what it had accepted. On the occasion
+// a user reported it as "I don't think it generated any anchors", twelve jobs
+// HAD been queued and had all failed, and neither fact was visible from here.
+//
+// Nothing is re-rendered on success. The form is left exactly as submitted --
+// no rebuild, so no ticked tier, chosen view, typed prompt or selected character
+// can be silently reset the way the first async upload/delete handlers did.
+function initAnchorBatch() {
+  var form = document.getElementById("anchor-form");
+  var panel = document.getElementById("anchor-batch");
+  if (!panel) return;
+  var list = document.getElementById("anchor-batch-list");
+  var note = document.getElementById("anchor-batch-note");
+  var done = 0, failed = 0, total = list.children.length;
+
+  function viewname(v) { return (v || "").replace(/_/g, " "); }
+
+  function tally() {
+    var running = total - done - failed;
+    var parts = [];
+    if (running) parts.push(running + " rendering");
+    if (done) parts.push(done + " done");
+    if (failed) parts.push(failed + " FAILED");
+    note.firstChild.textContent = total
+      ? total + " sheet" + (total === 1 ? "" : "s") + ": " + parts.join(", ") + ". "
+      : "";
+  }
+
+  // One line per sheet, filled from the job's own SSE stream rather than a
+  // poll -- /jobs/{id}/stream already carries status, progress and error.
+  function watch(li) {
+    var id = li.dataset.job;
+    var label = (li.dataset.tier || "").toUpperCase() + " " + viewname(li.dataset.view);
+    li.textContent = label + " — queued";
+    var es = new EventSource("/jobs/" + id + "/stream");
+    es.onmessage = function (e) {
+      var d = JSON.parse(e.data);
+      li.textContent = label + " — " + (d.error || d.progress || d.status || "");
+      if (d.status === "done" || d.status === "failed" || d.status === "cancelled") {
+        es.close();
+        if (d.status === "done") { done++; li.className = "batch-done"; }
+        else { failed++; li.className = "batch-failed"; }
+        var a = document.createElement("a");
+        a.className = "linkish";
+        a.href = "/jobs/" + id + "/log";
+        a.textContent = "log";
+        a.style.marginLeft = "0.5rem";
+        li.appendChild(a);
+        tally();
+      }
+    };
+    // A dropped stream is not a failed render. Say the line went quiet and
+    // leave the job alone -- /jobs is still the truth.
+    es.onerror = function () {
+      es.close();
+      if (!li.className) li.textContent = label + " — lost the live stream; see /jobs";
+    };
+  }
+
+  Array.prototype.forEach.call(list.children, watch);
+  tally();
+
+  if (!form) return;
+  form.addEventListener("submit", function (e) {
+    if (e.defaultPrevented) return;          // htmx or a confirm() already handled it
+    // Upload and each thumbnail's Delete are submit buttons with their own
+    // formaction, driven by htmx. Only the bare Generate submit is ours.
+    if (e.submitter && e.submitter.hasAttribute("formaction")) return;
+    e.preventDefault();
+    var btn = e.submitter || form.querySelector('button[type="submit"]:not([formaction])');
+    if (btn) btn.disabled = true;
+    panel.hidden = false;
+    // FormData(form) IS what was submitted -- every ticked tier, every chosen
+    // view, every per-tier textarea and any file picked. It is not rebuilt from
+    // defaults, which is how the earlier async handlers ate the user's work.
+    api("/anchors", new FormData(form)).then(function (d) {
+      done = failed = 0;
+      total = d.queued;
+      list.innerHTML = "";
+      d.jobs.forEach(function (j) {
+        var li = document.createElement("li");
+        li.dataset.job = j.id;
+        li.dataset.tier = j.tier;
+        li.dataset.view = j.view;
+        list.appendChild(li);
+        watch(li);
+      });
+      tally();
+      // The files in this input have now been SAVED for the album. Leaving them
+      // selected meant the next click uploaded the same photographs again --
+      // the reload used to clear it.
+      var file = document.getElementById("anchor-images");
+      if (file) file.value = "";
+    }).catch(function (err) {
+      total = done = failed = 0;
+      list.innerHTML = "";
+      note.firstChild.textContent = "Nothing was queued: " + err.message + " ";
+    }).then(function () { if (btn) btn.disabled = false; });
+  });
+}
 
 // ---- Anchors: view full size, multi-select, and nothing reloads the page -----
 function initAnchors() {
   var grid = document.querySelector(".candidate-grid");
-  if (!grid) return;
+  // Not `if (!grid) return`. An Anchors page with NO anchors yet has no grid --
+  // which is exactly the regenerate-from-empty case -- and bailing there left
+  // the failed-job Retry buttons below doing a full page POST, on the one page
+  // where every button is supposed to be async. Every handler here is delegated
+  // and selector-guarded, so it stays inert on pages that have neither.
+  if (!grid && !document.getElementById("anchor-form")) return;
   var box = document.getElementById("anchor-lightbox");
 
-  // full-size view. One dialog, src swapped per click.
-  function open(src) {
-    if (!box) return;
-    box.querySelector("img").src = src;
-    box.showModal();
+  // ---- full-size view: one dialog, navigated by keyboard ----
+  // Position is (row, index) resolved from the DOM every time rather than held
+  // in a variable, so deleting a sheet from inside the modal cannot leave the
+  // pointer describing a card that is no longer there.
+  var current = null;                       // the .candidate element on show
+
+  function rows() {
+    return Array.prototype.slice.call(document.querySelectorAll(".candidate-grid"));
   }
+  function cardsIn(row) {
+    return Array.prototype.slice.call(row.querySelectorAll(".candidate[data-anchor]"));
+  }
+  function where(card) {
+    var row = card.closest(".candidate-grid");
+    return {row: row, rowIdx: rows().indexOf(row), idx: cardsIn(row).indexOf(card)};
+  }
+
+  function show(card) {
+    if (!box || !card) return;
+    var img = card.querySelector("img.thumb");
+    if (!img) return;
+    current = card;
+    var at = where(card), all = cardsIn(at.row);
+    var src = img.dataset.full || img.src;
+    box.querySelector("img").src = src;
+    // the row's own heading, so "which sheet is this" is answerable without
+    // closing the modal and counting thumbnails
+    var head = at.row.closest("section.card") && at.row.closest("section.card").querySelector("h3");
+    box.querySelector(".lightbox-title").textContent = head ? head.textContent.trim() : "";
+    box.querySelector(".lightbox-pos").textContent =
+      "option " + (at.idx + 1) + " of " + all.length +
+      (card.classList.contains("picked") ? " · CHOSEN" : "");
+    var dl = box.querySelector(".lightbox-download");
+    dl.href = src;
+    // a name the file keeps once it is off the page; the src basename is a
+    // meaningless generated one
+    dl.setAttribute("download", (box.querySelector(".lightbox-title").textContent || "anchor")
+      .replace(/[^\w.-]+/g, "_") + "_" + (at.idx + 1) + ".png");
+    if (!box.open) box.showModal();
+  }
+
+  function step(dRow, dIdx) {
+    if (!current) return;
+    var at = where(current), rs = rows();
+    if (dRow) {
+      var nextRow = rs[at.rowIdx + dRow];
+      if (!nextRow) return;                 // clamp: no wrap between rows
+      var cards = cardsIn(nextRow);
+      // hold the column where possible, so up/down reads as a grid move
+      show(cards[Math.min(at.idx, cards.length - 1)]);
+      return;
+    }
+    var here = cardsIn(at.row), target = here[at.idx + dIdx];
+    if (target) show(target);               // clamp at both ends of the row
+  }
+
   document.addEventListener("click", function (e) {
     var img = e.target.closest(".candidate-grid img.thumb");
-    if (img) { open(img.dataset.full || img.src); return; }
+    if (img) { show(img.closest(".candidate")); return; }
     // backdrop or the close button dismisses; clicking the image itself does not
     if (box && box.open && (e.target === box || e.target.closest(".lightbox-close"))) box.close();
   });
+
   document.addEventListener("keydown", function (e) {
-    var img = e.target.closest && e.target.closest(".candidate-grid img.thumb");
-    if (img && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(img.dataset.full || img.src); }
+    // opening from the grid, for keyboard users who never touch the mouse
+    var thumb = e.target.closest && e.target.closest(".candidate-grid img.thumb");
+    if (thumb && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault(); show(thumb.closest(".candidate")); return;
+    }
+    if (!box || !box.open || !current) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); step(0, 1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); step(0, -1); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); step(1, 0); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); step(-1, 0); }
+    else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); removeShown(); }
+    // Esc is <dialog>'s own; nothing to add
   });
+
+  box && box.querySelector(".lightbox-delete").addEventListener("click", removeShown);
+
+  function removeShown() {
+    if (!current) return;
+    var card = current, at = where(card), all = cardsIn(at.row);
+    // same wording as the grid's own delete, and the chosen one still says what
+    // it costs rather than being refused
+    var msg = card.classList.contains("picked")
+      ? "Delete the CHOSEN anchor? The file is removed too, and reference " +
+        "generation for this tier will refuse until you pick or generate another."
+      : "Delete this anchor candidate? The file is removed too.";
+    if (!confirm(msg)) return;
+    // where to land afterwards: the next sheet along, else the previous one
+    var next = all[at.idx + 1] || all[at.idx - 1] || null;
+    api("/anchors/delete", {anchor_ids: [Number(card.dataset.anchor)]})
+      .then(function () {
+        var sec = card.closest("section.card");
+        card.remove();
+        if (next) { show(next); }
+        else { box.close(); }
+        if (sec && !sec.querySelectorAll(".candidate").length) sec.remove();
+        else if (sec) refreshGroup(sec);
+      })
+      .catch(function (err) {
+        box.querySelector(".lightbox-pos").textContent = "not deleted: " + err.message;
+      });
+  }
+
   // free the decoded image when it closes; a 2048px sheet held open per page is
   // memory nothing is using
-  if (box) box.addEventListener("close", function () { box.querySelector("img").removeAttribute("src"); });
+  if (box) box.addEventListener("close", function () {
+    box.querySelector("img").removeAttribute("src");
+    current = null;
+  });
 
   // ---- selection, per GROUP ----
   function sectionOf(el) { return el.closest("section.card"); }

@@ -920,8 +920,35 @@ dialog.lightbox img {
   display: block; max-width: 96vw; max-height: 96vh;
   width: auto; height: auto; border-radius: 6px;
 }
+/* In the bar now, not floating over the image: the sheet is judged head to toe
+   and anything overlaid sits on the face. */
 .lightbox-close {
-  position: absolute; top: -0.5rem; right: -0.5rem; z-index: 1;
   width: 2rem; height: 2rem; border-radius: 50%; cursor: pointer;
-  font-size: 1.2rem; line-height: 1;
+  font-size: 1.2rem; line-height: 1; flex: none;
 }
+/* The image is sized against the viewport MINUS the bar and the help line, or a
+   tall sheet pushes them off screen and the keys look broken. */
+dialog.lightbox img { max-height: 82vh; }
+
+/* The live batch indicator. Monospace so twelve sheets line up and a stalled
+   one is visible at a glance rather than by reading each line. */
+.batch-list { list-style: none; padding: 0; margin: 0.25rem 0 0; font-size: 0.85rem; }
+.batch-list li { font-family: ui-monospace, monospace; padding: 0.1rem 0; }
+.batch-list li.batch-done { color: var(--muted); }
+.batch-list li.batch-failed { color: var(--danger); }
+
+/* Lightbox chrome: which sheet this is, and what can be done to it.
+   The bar sits above the image rather than over it -- a character sheet is
+   judged head to toe and an overlay covers the face. */
+.lightbox-bar {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.4rem 0.6rem; margin-bottom: 0.4rem;
+  background: var(--card, #1c1c1e); border-radius: 6px;
+}
+.lightbox-spacer { flex: 1; }
+.lightbox-pos { font-size: 0.85rem; white-space: nowrap; }
+.lightbox-download {
+  padding: 0.25rem 0.7rem; border-radius: 4px; text-decoration: none;
+  border: 1px solid var(--border, #444);
+}
+.lightbox-help { font-size: 0.75rem; margin: 0.4rem 0 0; text-align: center; }
