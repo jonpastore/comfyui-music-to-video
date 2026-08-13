@@ -116,6 +116,32 @@ does not pay again.
   uses is present on every box; what differs is which weights are there and under
   what name. A capability check that consults the node list answers the wrong
   question.
+- `T9-13a` **A file is not a model, and `models.installed()` cannot tell the
+  difference.** It reads the loader's **enum**, never the bytes — so a truncated
+  weight file reports `available: True` and fails at load, hours later, looking
+  like a model defect rather than a copy that never finished. Measured
+  2026-08-13 while staging Qwen-Image-Edit to gamingpc: three model files sat at
+  their **real filenames** at 19%, 46% and 76% of source size, every one of them
+  enumerable and none of them loadable.
+
+  Two detection rules, both free and neither requiring anyone to remember that a
+  transfer happened:
+
+  - **An epoch mtime on a model file means truncated.** `rsync` sets mtime only
+    on completion, so an interrupted `--partial` leaves `Dec 31 1969`. This is
+    the cheap check and it catches the common case.
+  - **Size against source, or a checksum, before a box is trusted with the
+    model.** The epoch rule misses an `--inplace` write, which carries a current
+    mtime and mode `600` — so mtime alone is necessary and not sufficient.
+
+  This is the `wan22_i2v_low` defect in a new place: a box reporting a capability
+  it does not have. Staging is not complete when the file exists; it is complete
+  when the bytes match.
+- `T9-13b` **Staging a model stages its companions in the same act.** A box
+  holding the UNET and VAE but not the text encoder reports the model available
+  and fails at load — the same failure as `T9-13a` by a different route.
+  `models.CATALOG`'s `companions` already names them; the criterion is that the
+  staging path reads that list rather than a human remembering it.
 
 ## 6. The shared card
 

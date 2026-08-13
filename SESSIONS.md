@@ -38,6 +38,16 @@ Sessions are named by whoever writes the row. A = the day-8/day-9 studio session
 
 ## Standing rules, both sessions
 
+- **CLAIM THE RESOURCE, NOT JUST THE FILE.** Added 2026-08-13 after both
+  sessions independently started a 20 GB rsync of the same model to the same box
+  within minutes, then both correctly killed their own — leaving nothing running
+  and three truncated files at real filenames. **Neither judgement call was
+  wrong; the table had no row to check.** It covers paths in this repo and has
+  no way to say "I am staging weights to gamingpc" or "I am restarting SwarmUI"
+  or "I hold `/tmp/deploytree`". A claim row is required for a BOX, a REMOTE
+  DIRECTORY, a long TRANSFER or a SERVICE, exactly as for a file — and the row
+  goes in **before** the work starts, not when it is noticed.
+
 - **Claim before you edit. Clear when you stop.** A stale claim is worse than none.
 - **Never `git add -A` / `git commit -a`.** Stage the exact paths you changed.
   The other session's uncommitted work is in the same tree and will otherwise ship.
@@ -1842,3 +1852,35 @@ Append dated one-liners. Newest at the bottom.
   lexical screen here and then contradicts `PINNED`. The guardrail's own comment
   says it needs a classifier. **No criterion closes it and none pretends to** —
   it is the strongest argument for the 21 margin and for binding artefacts.
+- 2026-08-13 (A) ⚠ **THE STAGING COLLISION, and the lesson is the protocol not
+  the judgement.** B and I both started an rsync of the Qwen stack to gamingpc
+  within minutes; two senders into ONE 19 GB file, mine `--inplace` writing
+  directly to the final name. We each correctly killed our own — and **that left
+  nothing running**, which is the failure neither of us predicted.
+  **A correction I owe B: I told them `--partial` writes a temp and renames, so
+  theirs was safe. That is wrong.** `--partial` PRESERVES the partial file at
+  the real destination name so a later run can resume, so B's kill left
+  truncated files at real filenames too. My conclusion (kill the `--inplace`)
+  still held; the reason I gave for it was partly false. B measured the result:
+
+      qwen_image_edit_2511_fp8mixed  20,533,762,817 -> 3,835,297,792  19%
+      SwarmUI_Z-Image-Turbo-FP8Mix    6,571,226,600 -> 5,023,465,472  76%
+      qwen_2.5_vl_7b_fp8_scaled       9,384,670,680 -> 4,311,056,384  46%
+
+  **B's detection rule, and it is free: rsync sets mtime only on completion, so
+  an interrupted `--partial` leaves `Dec 31 1969`. An epoch mtime on a model
+  file means truncated.** It does NOT catch an `--inplace` stub, which carries a
+  current mtime and mode 600 — so mtime is necessary and not sufficient, and a
+  size-or-checksum against source is the real gate.
+  **`models.installed()` reads the loader ENUM, not the bytes**, so every one of
+  those three reported available and none would load. Now `T9-13a` and `T9-13b`
+  in TRD-9 — the second because B's replacement run also carries the VAE and
+  Lightning LoRA that neither of our runs did, and a box with the UNET but no
+  text encoder reports available and fails at load, which is the
+  `wan22_i2v_low` defect in a new place.
+  **One sender only, and it is B's** — `~/stage_gamingpc.sh` on cerberus,
+  detached, log `~/stage_gamingpc.log`, `--append-verify` on the two resumable
+  files and a fresh copy of the Qwen UNET because its prefix had two writers.
+  **It ends with `sha256sum` on both ends for all six files.** Nobody should call
+  the staging done on sizes or on either session's say-so — read that block, and
+  a MISMATCH means delete and re-copy, not reason about it.
