@@ -441,12 +441,34 @@ def _attempt_plan():
     Qwen-Image-Edit was refused twice in a row with "No images were generated".
     Each miss costs about a second, at validation, before any GPU work.
 
-    A generator on purpose: the backend list is only fetched once something has
-    actually failed, so the ordinary path is one API call as before.
+    THE FREE DRAW IS SKIPPED WHEN THE FLEET IS NOT WHOLE, and that is worth one
+    extra ListBackends call per workflow. Measured 2026-08-12 with ethan-wsl
+    switched off but still registered: the first unpinned render took **118.2 s**,
+    the next two 0.4 s and 0.0 s. SwarmUI hands the job to the dead box, waits
+    for it, then redirects -- AllowIdle working, but slowly, and the first job
+    after any box sleeps pays it. SwarmUI's own IdleMonitor re-validates every
+    5 s (NetworkBackendUtils), so `status` is at most 5 s stale and is a good
+    enough signal to stop asking it to guess.
+
+    When every backend is running the free draw still goes first, so two healthy
+    5090s load-balance exactly as before -- this only changes the degraded case.
+    The list call replaces the old lazy fetch; against a 40 s render it is noise,
+    and it is the same call the walk needed anyway the moment anything failed.
     """
-    yield None
-    ids = [b["id"] for b in (swarm_backends() or []) if b.get("status") == "running"]
-    left = (RENDER_ATTEMPTS - 1) if RENDER_ATTEMPTS else len(ids)
+    backends = swarm_backends()
+    if backends is None:
+        # SwarmUI itself did not answer. Yield the free draw so the render
+        # reports "cannot reach SwarmUI" rather than this returning an empty
+        # plan, which would read as "no backend would run it" -- a different
+        # and much more misleading error.
+        yield None
+        return
+    ids = [b["id"] for b in backends if b.get("status") == "running"]
+    spent = 0
+    if len(ids) == len(backends):
+        yield None
+        spent = 1
+    left = (RENDER_ATTEMPTS - spent) if RENDER_ATTEMPTS else len(ids)
     for i in ids[:max(0, left)]:
         yield i
 
@@ -1740,6 +1762,29 @@ def demo():
                 assert not _backend_vanished(m), \
                     f"a REFUSED workflow read as a vanished box, so it will retry "\
                     f"and fail again: {m[:60]}"
+
+            # 5e. A BOX THAT IS OFF MUST NOT COST THE FREE DRAW TWO MINUTES.
+            # Measured with ethan-wsl switched off but still registered: the
+            # first unpinned render took 118.2s, the next two 0.4s and 0.0s --
+            # SwarmUI hands the job to the dead box, waits, then redirects. So
+            # when any backend is not running, the walk pins from the start.
+            def _mixed(all_running):
+                def call(path, payload, timeout=30):
+                    if path.endswith("ListBackends"):
+                        return {str(i): {"status": "running" if (all_running or i < 2)
+                                                   else "idle", "title": f"box{i}"}
+                                for i in range(3)}
+                    return {"images": []}
+                return call
+
+            globals()["_swarm_call"] = _mixed(True)
+            assert list(_attempt_plan()) == [None, "0", "1", "2"], \
+                "the free draw was dropped on a HEALTHY fleet, so the 5090s stop " \
+                "load-balancing"
+            globals()["_swarm_call"] = _mixed(False)
+            assert list(_attempt_plan()) == ["0", "1"], \
+                "an offline box still gets the unpinned first draw, which is the " \
+                "118-second hole this exists to close"
 
             # 5b. AND THE WALK NAMES THE FILE EACH BOX USES. Without this the
             # walk is theatre for any model spelled differently per box: every

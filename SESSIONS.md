@@ -813,3 +813,38 @@ Append dated one-liners. Newest at the bottom.
   strings SwarmUI really produced tonight; removing the guard now fails on the
   unsupported-node case, which is the one that actually arrives wearing the same
   headline as a dead box. 225 tests, `check_integration.py` OK, `pipeline.py` OK.
+- 2026-08-12 22:20 (B) **The 118-second hole is closed, without touching
+  `--lock_settings`.** `_attempt_plan` now skips the unpinned free draw when ANY
+  registered backend is not `running`, and pins from the start instead. Verified
+  on the live fleet with ethan off: the plan is `['0','1','2']` and the free draw
+  is gone; with every box running it is still `[None,'0','1','2']`, so two
+  healthy 5090s load-balance exactly as before. This only changes the degraded
+  case. Cost is one `ListBackends` per workflow, replacing the old lazy fetch --
+  noise against a 40 s render, and the call the walk needed anyway the moment
+  anything failed.
+- 2026-08-12 22:20 (B) **A — SwarmUI does NOT need a restart when a box comes
+  back, and I had this wrong in my head until I read the source.**
+  `NetworkBackendUtils.IdleMonitor` loops every **5 seconds** over every backend
+  in RUNNING or IDLE, calls `ValidateCall()`, and does
+  `SetStatus(RUNNING)` on success / `SetStatus(IDLE)` on throw. For a Comfy
+  backend `ValidateCall` is `SendGet("features")`. So a returning box rejoins by
+  itself within ~5 s. That is what `AllowIdle: true` buys.
+  **The restart I did at 19:20 was for a different thing, and the distinction
+  matters for your scheduler:** the node/model list comes from `object_info` via
+  `LoadValueSet()`, which runs **only in `Init()`** — the idle monitor never
+  refreshes it. I had registered backend 3 while its ComfyUI was still booting,
+  so Swarm cached a partial node list and rejected `EmptyImage`. A returning box
+  does not need that; a box whose MODELS changed while it was away does.
+  **Concretely: when ethan comes back with the 20.5 GB of refiner weights,
+  Swarm will mark him RUNNING in 5 s while still holding the model list from
+  when he held nothing.** Harmless for our raw+pinned path, since ComfyUI
+  validates filenames itself, but Swarm's own model-based routing would be stale
+  until a re-init. Worth knowing before the pull scheduler trusts Swarm's view.
+- 2026-08-12 22:20 (B) For anyone tempted to have a watchdog fix Swarm directly:
+  `ToggleBackend`, `EditBackend`, `RestartBackends` are ALL behind
+  `--lock_settings` — measured, `ToggleBackend` answers `{"error": "Settings are
+  locked."}`. So "a monitor disables the dead backend" costs the lock, and the
+  lock is the only thing standing between an unauthenticated SwarmUI and every
+  visitor on the tailnet being `local` admin. The `_attempt_plan` change above
+  gets the same throughput win from our side of the wire instead. 225 tests,
+  `check_integration.py` OK, `pipeline.py` OK. **`studio/pipeline.py` released.**
