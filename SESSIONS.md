@@ -11,7 +11,7 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
-| `studio/models.py` (host identity), `studio/pipeline.py` (`_host`) | **A — CLAIMED 11:40** | canonical host: one box, one identity. `127.0.0.1` and `100.103.148.120` are both cerberus in `BACKEND_STABILITY`, and `T3-1` groups artefacts by host, so cerberus reports as two boxes. Per Jon | 11:40 |
+| `studio/models.py` (host identity), `studio/pipeline.py` (`_host`) | A — **released 11:35, committed `e20346f`** | canonical host: one box, one identity. `127.0.0.1` and `100.103.148.120` are both cerberus in `BACKEND_STABILITY`, and `T3-1` groups artefacts by host, so cerberus reports as two boxes. Per Jon | 11:40 |
 | `studio/mixer.py` | B — **released 11:05, committed `2f8e559`** | T1-20d ONLY: the set-level loudnorm decision (`_master_lines` / `_audio_chain` / their two call sites). Per Jon, who chose this over leaving it for the next session. A measured it and held docs-only; nobody held the file. Nothing else in mixer.py is mine | 10:40 |
 | `studio/app.py` (anchor routes), `templates/_anchor_form.html`, `templates/_anchor_group.html`, `static/app.js`, `studio/test_app.py`, `studio/pipeline.py` (the `ANCHOR_RENDER_*` maps and `gen_anchor` ONLY), `make_anchor.py`, `build_refs.py`, `studio/prompts.py`, `studio/tiers.py` | B — **released 10:10, committed `415584d`..`d5526cb`** | the remaining TRD-4 and TRD-7 anchor work. See the brief Jon pasted; A is staying out of every one of these files. **Widened because I was already editing four of them under a row that named two** — the anchor work reaches its template, its JS and its tests, and T7-8 reaches `gen_anchor`'s flag map. Nobody held any of them; recording it rather than leaving the row describing less than I hold | 09:20 |
 | `docs/**` ONLY — PRD, DDD, UI/UX, TRD 4-7 | **A — CLAIMED 09:20** | the specification pipeline. **A touches NO source file while B holds the anchor work.** If A needs a source change it asks here first | 09:20 |
@@ -1772,3 +1772,40 @@ Append dated one-liners. Newest at the bottom.
   refusal rather than a render fault, and on the old code. Worth a look only if
   it recurs after the restart; noting it so a fast anchor failure is not treated
   as new.
+- 2026-08-13 (A) **Canonical host shipped, `e20346f`. One box, one identity.**
+  `BACKEND_STABILITY` carried cerberus TWICE — `127.0.0.1` and
+  `100.103.148.120` — and backend 0's Swarm address is the loopback one because
+  the studio runs there. `T3-1` groups artefacts by host, so **cerberus was
+  reporting as two boxes, under a name that means "wherever I am".**
+  `models.canonical_host()` is the one owner; `pipeline._host` and
+  `models.backend_stability` both call it, replacing **two copies of the same
+  three-`split` parsing string** — the one-decision-two-places shape again.
+  241 passed, 194 defs, `check_integration` OK. Mutation: restoring the
+  duplicate key goes red.
+  **Production data fixed too: 15 legacy rows rewritten `127.0.0.1` ->
+  `100.103.148.120`**, verified before and after.
+- 2026-08-13 (A) ⚠ **A LATENT RACE IN `test_cancel_and_retry_are_async_on_every_page_that_shows_a_job`,
+  found by tipping it and NOT fixed.** I first shipped the row rewrite as a
+  `MIGRATIONS` entry. With it: **4 failures in 5 runs**. Without it: **5 passes
+  in 5**. The failure is `{"detail":"job 1 is already done"}` — the stubbed job
+  finishes before the cancel POST lands — so the extra write at init tipped a
+  pre-existing race from usually-winning to usually-losing. **The migration is
+  gone and is not needed:** no future database can acquire a loopback row now
+  that `canonical_host` prevents it at the source, so only this one database's
+  legacy rows ever needed touching, and that is a one-off. **The race is real,
+  pre-existing, and left for someone with time** — fixing a test under shutdown
+  pressure is how a suite gets quietly weakened.
+- 2026-08-13 (A) **Qwen-Image-Edit is being staged onto gamingpc, per Jon.**
+  Detached on cerberus (`nohup /tmp/stage_qwen.sh`, log `/tmp/stage_qwen.log`),
+  so it survives every session here. **~28 GiB, four files**, cerberus ->
+  gamingpc direct over the tailnet, `rsync --partial --inplace --chmod=F664`:
+  `qwen_image_edit_2511_fp8mixed` (20G), `qwen_2.5_vl_7b_fp8_scaled` (8.7G),
+  `qwen_image_vae`, and the Lightning 4-step LoRA. gamingpc had **only LTX
+  models**; 854G free.
+  **Why: anchors cannot fan out today.** `models.where("qwen_image_edit_2511")`
+  answers cerberus and ethan only, and ethan is `reachable: False` — so all 15
+  artefacts landed on backend 0. It is a CURATION limit, not a pipeline one:
+  `via=swarm` on every row. peaches can never hold it (10.58 GiB card vs 19.1
+  GiB file), so **gamingpc is the only candidate**, and jobs 230/232 took 35 and
+  22 minutes serialised on one box.
+  **When it lands, re-check `models.where` and expect two boxes.**
