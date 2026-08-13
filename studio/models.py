@@ -662,16 +662,43 @@ def where(key, backends):
     rows = []
     for b in by_backend(backends):
         entry = next((e for e in b["models"] if e["key"] == key), None)
-        if not entry or not entry["available"]:
+        if not entry:
+            continue
+        # UNKNOWN IS NOT MISSING, and this used to conflate them. `available` is
+        # False when a box was asked and does not have the model, and None when
+        # it could not be asked at all -- and `if not entry["available"]` dropped
+        # both, so a box that simply did not answer was reported as one that
+        # cannot run the model.
+        #
+        # In the worst direction, too: this function is the scheduler's
+        # capability contract, and it answered "no box can run this" when the
+        # truth was "the box I could not reach can". Backend 0's address is
+        # 127.0.0.1:8188 as Swarm reports it, so anything querying from a box
+        # that is not cerberus cannot reach it -- and cerberus is the stable box
+        # holding the models the others do not.
+        #
+        # installed() has documented this rule since it was written ("a false
+        # 'missing' sends you hunting for a file that is already there"). where()
+        # was the one place that broke it.
+        if entry["available"] is False:
             continue
         rows.append({"id": b["id"], "title": b["title"], "address": b["address"],
                      "stability": b["stability"], "file_here": entry["file_here"],
-                     "fits": entry["fits"], "vram_gib": b["vram_gib"]})
+                     "fits": entry["fits"], "vram_gib": b["vram_gib"],
+                     # True = asked and it has it. None = could not ask. A caller
+                     # that needs certainty filters on this; one that needs a
+                     # candidate list does not.
+                     "confirmed": entry["available"] is True,
+                     "reachable": b["reachable"]})
     # A box that holds the file but cannot hold it IN THE CARD goes last rather
     # than being dropped: it can still render, by streaming, and "slow" is a
     # different answer from "cannot". Unknown fit sorts with the ones that fit,
     # because unknown is not a reason to demote a box.
-    return sorted(rows, key=lambda r: (r["fits"] is False,
+    #
+    # Confirmed boxes come before unconfirmed ones: an unreachable box is a
+    # candidate, not a recommendation, and a caller taking the first row should
+    # get one that was actually asked whenever such a row exists.
+    return sorted(rows, key=lambda r: (not r["confirmed"], r["fits"] is False,
                                        r["stability"] != "stable", str(r["id"])))
 
 
@@ -968,12 +995,29 @@ def demo():
         assert all(e["available"] is None for e in rows[2]["models"]), \
             "a box that never answered reported models as missing"
         found = where("ace_step_v1", fleet)
-        assert [r["id"] for r in found] == ["0", "2"], found
+        assert [r["id"] for r in found[:2]] == ["0", "2"], found
         assert found[0]["stability"] == "stable", "fallback did not put the always-on box first"
-        assert [r["file_here"] for r in found] == [
+        assert [r["file_here"] for r in found[:2]] == [
             "ace_step_v1_3.5b.safetensors", "ace_step_v1_3.5b_fp16.safetensors"], found
-        # nothing catalogued runs on the ghost, and asking does not raise
-        assert where("qwen_image_edit_2511", [fleet[2]]) == []
+        assert [r["confirmed"] for r in found[:2]] == [True, True]
+
+        # UNKNOWN IS NOT MISSING. The ghost never answered, so it is a CANDIDATE
+        # rather than a refusal -- listed, marked unconfirmed, and sorted last.
+        # This conflation made where() answer "no box can run this" when the
+        # truth was "the box I could not reach can", which is the worst direction
+        # for the scheduler's capability contract to be wrong in. It is not
+        # hypothetical: backend 0's Swarm address is 127.0.0.1:8188, so anything
+        # querying from a box that is not cerberus cannot reach the stable box
+        # that holds the models the others do not.
+        ghost = where("qwen_image_edit_2511", [fleet[2]])
+        assert len(ghost) == 1, "an unreachable box was reported as unable"
+        assert ghost[0]["confirmed"] is False and ghost[0]["reachable"] is False, ghost
+        mixed = where("qwen_image_edit_2511", fleet)
+        assert [r["confirmed"] for r in mixed] == sorted(
+            [r["confirmed"] for r in mixed], reverse=True), "unconfirmed sorted before confirmed"
+        # a box that WAS asked and does not have it is still dropped
+        assert all(r["id"] != "2" for r in where("qwen_image_edit_2511", fleet)), \
+            "peaches answered and lacks the model, so it is a refusal, not an unknown"
         assert where("qwen_image_edit_2511", None) == []
 
         # INSTALLED and FITS are separate answers, and the 2080 Ti needs both.
