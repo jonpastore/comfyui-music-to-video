@@ -120,6 +120,34 @@ def gain(db):
     return f"volume={db:.3f}dB"
 
 
+PAN_MIN, PAN_MAX = -1.0, 1.0
+
+
+def pan(position):
+    """Stereo BALANCE, -1 hard left .. +1 hard right. docs/TRD-1 3.1.
+
+    Decided 2026-08-12 by Jon: "L/R split" is three different features -- dual
+    mono, stereo pan, mid/side -- and outside review was right that one has to
+    be picked before any timeline UI is drawn. This is the one. Dual mono and
+    mid/side are not built; the upgrade path is a channel_mode added later with
+    this as its default, so nothing stored now has to move.
+
+    BALANCE, not a pan law, and the difference matters at the centre. An
+    equal-power pan (cos/sin) puts 0.707 on both channels at centre, which is
+    -3 dB on every item that never asked to be panned at all. Attenuating only
+    the opposite channel leaves centre at unity: a set with no panning renders
+    bit-identically to one built before the feature existed.
+
+    Sources here are stereo tracks, so this is the right operation anyway --
+    "pan" on a stereo source means balance between its channels, not placing a
+    mono point source in a field.
+    """
+    p = _range("position", position, PAN_MIN, PAN_MAX)
+    left = min(1.0, 1.0 - p)
+    right = min(1.0, 1.0 + p)
+    return f"pan=stereo|c0={left:.4f}*c0|c1={right:.4f}*c1"
+
+
 def duck(amount):
     """sidechaincompress params for ducking one track under another (a bed
     under a vocal). amount 0..1 maps to threshold/ratio -- 0 barely
@@ -252,10 +280,15 @@ def join_effects_without_overlap(effects_json, transition, secs):
 # same reason video_fx.VIDEO_KEYS carries "layer": both are keys this module
 # owns and validates, and the callers that use this tuple are asking "is this a
 # real key or a typo?". Leaving it out made a wired effect look invented.
-AUDIO_KEYS = ("sweep", "eq_kill", "echo_out", "phaser", "flanger", "gain_db", "loudnorm", "duck")
+AUDIO_KEYS = ("sweep", "eq_kill", "echo_out", "phaser", "flanger", "gain_db", "loudnorm",
+              "duck", "pan")
 
 DEFAULT_EFFECTS = {
     "loudnorm": True,
+    # Centre. At 0 the filter is not emitted at all (see parse_effects), so an
+    # item that never asked to be panned renders exactly as it did before this
+    # existed -- no extra stage, no rounding, nothing to explain in a diff.
+    "pan": 0.0,
     "gain_db": 0.0,
     "sweep": None,
     "eq_kill": None,
@@ -335,6 +368,11 @@ def parse_effects(effects_json):
             chain.append(flanger())
         if cfg.get("gain_db"):
             chain.append(gain(cfg["gain_db"]))
+        # Pan before loudnorm: loudnorm measures the whole stereo programme and
+        # does not rebalance channels, so it cannot undo a pan -- unlike a gain
+        # curve, which it flattens (docs/TRD-1 5.0c).
+        if cfg.get("pan"):
+            chain.append(pan(cfg["pan"]))
         if cfg.get("loudnorm", True):
             chain.append(loudnorm_filter())
         duck_amount = cfg.get("duck")
@@ -393,6 +431,67 @@ def demo():
         assert False, "out-of-range gain must raise"
     except ValueError:
         pass
+
+    # pan: string shape, then the MEASURED differential. A fragment ffmpeg
+    # accepts is not proof it moved the audio -- that is the whole reason this
+    # demo shells out at all -- so the levels are read back per channel.
+    assert pan(0.0) == "pan=stereo|c0=1.0000*c0|c1=1.0000*c1", pan(0.0)
+    assert pan(1.0) == "pan=stereo|c0=0.0000*c0|c1=1.0000*c1", pan(1.0)
+    assert pan(-1.0) == "pan=stereo|c0=1.0000*c0|c1=0.0000*c1", pan(-1.0)
+    try:
+        pan(1.5)
+        assert False, "out-of-range pan must raise"
+    except ValueError:
+        pass
+
+    import os
+    import re as _re
+    import tempfile
+    with tempfile.TemporaryDirectory() as _d:
+        src = os.path.join(_d, "src.wav")
+        subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "lavfi",
+                        "-i", "sine=frequency=440:duration=1",
+                        "-af", "pan=stereo|c0=c0|c1=c0", src],
+                       check=True, capture_output=True)
+
+        def level(path, chan):
+            """max_volume of ONE channel, in dB."""
+            r = subprocess.run(
+                ["ffmpeg", "-nostdin", "-v", "info", "-i", path,
+                 "-af", f"pan=mono|c0=c{chan},volumedetect", "-f", "null", "-"],
+                capture_output=True, text=True)
+            m = _re.search(r"max_volume:\s*(-?\d+(?:\.\d+)?) dB", r.stderr)
+            assert m, f"volumedetect printed no level for channel {chan}:\n{r.stderr[-400:]}"
+            return float(m.group(1))
+
+        def applied(frag, name):
+            out = os.path.join(_d, name)
+            subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", src,
+                            "-af", frag, out], check=True, capture_output=True)
+            return level(out, 0), level(out, 1)
+
+        l0, r0 = level(src, 0), level(src, 1)
+        assert abs(l0 - r0) < 0.5, f"the source is not centred: {l0} vs {r0}"
+
+        # hard right: the left channel must be gone, not merely quieter
+        lR, rR = applied(pan(1.0), "right.wav")
+        assert rR - lR > 40.0, f"pan(+1) left {lR} dB, right {rR} dB -- not panned"
+        assert abs(rR - r0) < 0.5, f"pan(+1) changed the right channel: {r0} -> {rR}"
+
+        # and the mirror, so the check cannot pass by silencing a fixed channel
+        lL, rL = applied(pan(-1.0), "left.wav")
+        assert lL - rL > 40.0, f"pan(-1) left {lL} dB, right {rL} dB -- not panned"
+
+        # centre is UNITY: an item nobody panned must be untouched, which is the
+        # reason this is a balance and not an equal-power law (that would be
+        # -3 dB on every unpanned item in the set)
+        lC, rC = applied(pan(0.0), "centre.wav")
+        assert abs(lC - l0) < 0.1 and abs(rC - r0) < 0.1, \
+            f"pan(0) is not unity: {l0},{r0} -> {lC},{rC}"
+
+        # and pan=0 emits NO filter at all, so the ordinary path is unchanged
+        assert not [f for f in parse_effects({"pan": 0.0})["chain"] if f.startswith("pan=")]
+        assert [f for f in parse_effects({"pan": 0.6})["chain"] if f.startswith("pan=")]
 
     # duck: string shape and range check
     d0 = duck(0.0)

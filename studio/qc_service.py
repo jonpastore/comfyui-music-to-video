@@ -1,0 +1,308 @@
+#!/usr/bin/env python3
+"""QC as a service: run the checks, record what they found, answer the queue.
+
+docs/TRD-3 7. This is the layer the web routes call and it imports NOTHING from
+FastAPI, so every operation is reachable from a test, a shell, or a mobile
+client written later against the same JSON. If a route handler decides
+something, a mobile client cannot -- so nothing is decided in a route handler.
+
+The split from qc.py is deliberate and is the one docs/TRD-3 T3-30 asks for:
+qc.py is pure measurement and touches no database, so it can be run over a
+directory of old output; this module is what persists an answer.
+
+    python3 qc_service.py      # self-check against a temporary database
+"""
+import json
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import db      # noqa: E402
+import qc      # noqa: E402
+import prompts  # noqa: E402
+
+OPEN, APPROVED, RUNNING, REPAIRED, DISMISSED = (
+    "open", "approved", "running", "repaired", "dismissed")
+
+MAX_REMEDY = 4000
+
+
+def _txt(v):
+    """measured/expected are stored as TEXT because a check may measure a
+    number ("30.004") or a shape ("832x480"), and a REAL column would quietly
+    turn the second into NULL."""
+    return None if v is None else str(v)
+
+
+def record(findings):
+    """Persist findings. Returns the number of rows written.
+
+    A finding that PASSES is recorded too. It is the evidence that the check
+    ran and what it read, which is what makes a later regression traceable --
+    "this clip passed the duration check at 30.004s on the 13th" is a fact worth
+    having when the same clip fails at 29.1 next week.
+
+    Re-running QC over an unchanged artefact UPDATES rather than inserting a
+    second row (docs/TRD-3 T3-5): re-running after a repair is the normal case,
+    and a queue that grows a duplicate every run is a queue nobody reads. The
+    human's own columns -- status, why it was dismissed, the edited remedy
+    prompt -- are NOT overwritten by a re-run, because a re-measurement is not a
+    reason to forget that somebody already looked at it.
+    """
+    now = time.time()
+    n = 0
+    for f in findings:
+        db.run("""INSERT INTO findings
+                    (path, kind, tier, check_name, verdict, measured, expected,
+                     unit, detail, remedy, status, created)
+                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                  ON CONFLICT(path, check_name) DO UPDATE SET
+                     verdict=excluded.verdict, measured=excluded.measured,
+                     expected=excluded.expected, unit=excluded.unit,
+                     detail=excluded.detail, created=excluded.created""",
+               f["path"], f["kind"], f["tier"], f["check"], f["verdict"],
+               _txt(f.get("measured")), _txt(f.get("expected")), f.get("unit"),
+               f.get("detail"), f.get("remedy"), OPEN, now)
+        n += 1
+    return n
+
+
+def run_artefact(path, kind, expect=None, items=None, record_pass=True):
+    """Measure one artefact and record what was found. Returns the findings.
+
+    NOTHING IS REPAIRED HERE and nothing is enqueued. docs/TRD-3 T3-18: QC never
+    auto-heals, so running it over a directory of broken output must leave the
+    job queue exactly as it was.
+    """
+    found = qc.run(path, kind, expect=expect, items=items)
+    record(found if record_pass else [f for f in found if f["verdict"] != qc.PASS])
+    return found
+
+
+def queue(status=OPEN, kind=None, tier=None, include_pass=False):
+    """The review queue IS the findings table filtered. docs/TRD-3 3.
+
+    Defaults to what a human still has to look at: open, and not the passes.
+    """
+    sql = "SELECT * FROM findings WHERE 1=1"
+    args = []
+    if status:
+        sql += " AND status=?"
+        args.append(status)
+    if kind:
+        sql += " AND kind=?"
+        args.append(kind)
+    if tier:
+        sql += " AND tier=?"
+        args.append(int(tier))
+    if not include_pass:
+        sql += " AND verdict != 'pass'"
+    # rejects before flags, newest first: the order a person would want to work
+    sql += " ORDER BY CASE verdict WHEN 'reject' THEN 0 ELSE 1 END, created DESC, id DESC"
+    return db.q(sql, *args)
+
+
+def get(fid):
+    row = db.one("SELECT * FROM findings WHERE id=?", int(fid))
+    if not row:
+        raise ValueError(f"no finding {fid}")
+    return row
+
+
+def summary(path=None):
+    """Counts by verdict, for one artefact or the whole table."""
+    sql = "SELECT verdict, COUNT(*) AS n FROM findings"
+    args = []
+    if path:
+        sql += " WHERE path=?"
+        args.append(path)
+    sql += " GROUP BY verdict"
+    counts = {r["verdict"]: r["n"] for r in db.q(sql, *args)}
+    return {v: counts.get(v, 0) for v in (qc.PASS, qc.FLAG, qc.REJECT)}
+
+
+def set_remedy(fid, text, album=None):
+    """Edit the remedy that approving this finding would run.
+
+    The edited text is what would run -- docs/TRD-3 T3-19 -- so it is stored on
+    the finding and returned, not merely accepted.
+
+    When the album is known the text is ALSO saved as a version in prompts.py's
+    table (docs/TRD-3 T3-20: same rules as every other prompt -- editing makes
+    a version, deleting does not renumber, a version records its model and
+    time). When it is not known, the text still saves and no version is
+    written: prompts.save() is scoped to an album and inventing a scope to
+    satisfy the letter of the rule would put every artefact's remedy in one
+    bucket labelled with a lie.
+    """
+    text = (text or "").strip()
+    if not text:
+        raise ValueError("a remedy cannot be empty -- dismiss the finding instead")
+    if len(text) > MAX_REMEDY:
+        raise ValueError(f"remedy is {len(text)} characters, the limit is {MAX_REMEDY}")
+    row = get(fid)
+    vid = row["remedy_prompt_id"]
+    if album:
+        v = prompts.save(album, "qc_remedy", text,
+                         label=f"{row['kind']} {row['check_name']}"[:prompts.MAX_LABEL])
+        vid = v["id"]
+    db.run("UPDATE findings SET remedy=?, remedy_prompt_id=? WHERE id=?", text, vid, int(fid))
+    return get(fid)
+
+
+def dismiss(fid, why):
+    """Record that a human looked and decided it was not a problem.
+
+    A reason is REQUIRED. docs/TRD-3 T3-22 -- a dismissal with no reason is
+    indistinguishable from a finding nobody read, and the next person cannot
+    tell whether to trust it.
+    """
+    why = (why or "").strip()
+    if not why:
+        raise ValueError("dismissing a finding needs a reason")
+    db.run("UPDATE findings SET status=?, dismissed_why=?, resolved=? WHERE id=?",
+           DISMISSED, why, time.time(), int(fid))
+    return get(fid)
+
+
+def reopen(fid):
+    db.run("UPDATE findings SET status=?, resolved=NULL WHERE id=?", OPEN, int(fid))
+    return get(fid)
+
+
+def approve(fid):
+    """NOT WIRED, and it refuses rather than pretending.
+
+    Approving is supposed to enqueue the remedy and land a NEW candidate beside
+    the original. The actuators exist (fix_ref.py for images, make_postproc for
+    clips, the refine role for a re-pass) but nothing routes a finding to one
+    yet, and docs/TRD-3 T3-23/T3-24 say that routing has to ask models.where()
+    and models.fits() for a box that can hold the model -- the refiner is 20.5 GB
+    once its umt5 text encoder is counted and does not fit on the box whose
+    output prompted the plan.
+
+    So this raises. A button that marks a finding "approved" and runs nothing is
+    precisely the defect this project keeps paying for -- the editor promising
+    what the renderer does not produce -- and an accepted-and-ignored approval
+    is worse here than elsewhere, because the whole point of the queue is that
+    approving it is the human sign-off that something WILL happen.
+    """
+    raise NotImplementedError(
+        "approving a remedy is not wired yet: nothing routes a finding to an "
+        "actuator. The finding, its measurement and its editable remedy are "
+        "stored; dismiss() records a decision. See docs/TRD-3 6.1.")
+
+
+def demo():
+    """Self-check against a temporary database, so it never touches real rows."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        # Same redirection prompts.demo() uses: db resolves DB_PATH at import,
+        # so pointing it afterwards means moving the module's own attributes and
+        # dropping the cached per-thread connection.
+        db.DATA = d
+        db.DB_PATH = os.path.join(d, "t.db")
+        db._local.__dict__.clear()
+        db.conn()  # build the schema in the temp database
+
+        def mkclip(name, frames=81, size="320x240", rate=16.8312, src="testsrc2"):
+            p = os.path.join(d, name)
+            import subprocess
+            subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "lavfi",
+                            "-i", f"{src}=size={size}:rate={rate}",
+                            "-frames:v", str(frames), "-pix_fmt", "yuv420p", p],
+                           check=True, capture_output=True)
+            return p
+
+        good = mkclip("good.mp4")
+        want = {"frames": 81, "fps": 16.8312, "width": 320, "height": 240,
+                "duration": 81 / 16.8312}
+
+        # --- a passing artefact records its evidence, and the queue stays empty.
+        f = run_artefact(good, "clip", want)
+        assert qc.worst(f) == qc.PASS, f
+        assert summary(good)[qc.PASS] > 0, "a passing check recorded nothing"
+        assert not queue(), "a clean artefact put something in the review queue"
+
+        # --- a broken one: same file, an expectation it does not meet, which is
+        # the differential -- one variable changed, and it is the EXPECTATION,
+        # so nothing about the file explains the difference.
+        run_artefact(good, "clip", {"frames": 505, "duration": 505 / 16.8312})
+        rows = queue()
+        assert rows, "a failing check did not reach the queue"
+        checks = {r["check_name"] for r in rows}
+        assert {"duration", "frame_count"} <= checks, checks
+        row = [r for r in rows if r["check_name"] == "frame_count"][0]
+        assert row["measured"] == "81" and row["expected"] == "505", dict(row)
+
+        # --- T3-5: re-running does not grow a second row for the same check
+        before = len(db.q("SELECT id FROM findings"))
+        run_artefact(good, "clip", {"frames": 505, "duration": 505 / 16.8312})
+        assert len(db.q("SELECT id FROM findings")) == before, \
+            "re-running QC duplicated findings instead of updating them"
+
+        # --- and a re-measurement does not forget that a human already looked.
+        # record()'s docstring claims status/dismissed_why/remedy survive a
+        # re-run; nothing asserted it until this line, and "the docstring says
+        # so" is how a claim goes stale. Adding status=excluded.status to the
+        # upsert fails here.
+        dur = [r for r in queue() if r["check_name"] == "duration"][0]
+        dismiss(dur["id"], "expected 505 was a typo in the re-check")
+        set_remedy(dur["id"], "leave it alone")
+        run_artefact(good, "clip", {"frames": 505, "duration": 505 / 16.8312})
+        again = get(dur["id"])
+        assert again["status"] == DISMISSED, "a re-run reopened a dismissed finding"
+        assert again["remedy"] == "leave it alone", "a re-run overwrote an edited remedy"
+        assert again["verdict"] == qc.REJECT, "the re-measurement itself was not stored"
+        reopen(dur["id"])
+
+        # --- T3-18: running QC enqueues nothing. Ever.
+        assert not db.q("SELECT id FROM jobs"), "QC enqueued a job on its own"
+
+        # --- T3-19: the edited remedy is what is stored, and it comes back
+        fid = row["id"]
+        edited = "re-render clip 3 at 505 frames, same seed, same anchor"
+        assert set_remedy(fid, edited)["remedy"] == edited
+        assert get(fid)["remedy"] == edited, "the edit did not survive a re-read"
+        try:
+            set_remedy(fid, "   ")
+        except ValueError as e:
+            assert "empty" in str(e), e
+        else:
+            raise AssertionError("an empty remedy was accepted")
+
+        # and with an album it is ALSO versioned, twice = two versions
+        set_remedy(fid, "first wording", album="Street Cats")
+        v = set_remedy(fid, "second wording", album="Street Cats")
+        hist = prompts.versions("Street Cats", "qc_remedy")
+        assert len(hist) == 2, [dict(h) for h in hist]
+        assert get(fid)["remedy_prompt_id"] == v["remedy_prompt_id"]
+
+        # --- T3-22: a dismissal needs a reason, and a dismissed finding leaves
+        # the open queue
+        try:
+            dismiss(fid, "")
+        except ValueError as e:
+            assert "reason" in str(e), e
+        else:
+            raise AssertionError("a finding was dismissed with no reason")
+        dismiss(fid, "the storyboard changed; 81 frames is correct now")
+        assert fid not in [r["id"] for r in queue()], "a dismissed finding is still open"
+        assert get(fid)["dismissed_why"]
+        assert reopen(fid)["status"] == OPEN
+
+        # --- approving refuses rather than marking it done and running nothing
+        try:
+            approve(fid)
+        except NotImplementedError as e:
+            assert "not wired" in str(e), e
+        else:
+            raise AssertionError("approve() claimed to have run a repair")
+        assert get(fid)["status"] == OPEN, "a refused approval still changed the row"
+
+    print("qc_service.py OK")
+
+
+if __name__ == "__main__":
+    demo()

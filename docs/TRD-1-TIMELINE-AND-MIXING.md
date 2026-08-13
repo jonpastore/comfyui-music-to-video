@@ -60,10 +60,28 @@ purpose. Keep it that way** — `SETS_MIXING_PLAN.md` says so and it is the reas
 **3.1 The channel model is stereo pan, per item.** Decided 2026-08-12 by Jon.
 "L/R split" is three different features and outside review was right that one has
 to be picked before any UI is drawn. It is one number, one ffmpeg filter, one
-automation lane:
+automation lane.
 
-    set_items.pan REAL DEFAULT 0        -- -1 hard left .. +1 hard right
+**BUILT 2026-08-13, and NOT as a column.** Pan is a key in the existing
+`effects_json`, validated by `effects.py` and applied in the one chain builder,
+because that path is already plumbed end to end — route, form, renderer — and a
+`set_items.pan` column would have created a second place for the same value
+before anything needed one. That is the defect §5.0(b) records for gain, which
+is already in two places. The column arrives with the timeline, or not at all.
+
+    effects_json: {"pan": 0.6}          -- -1 hard left .. +1 hard right
     pan=stereo|c0=<l>*c0|c1=<r>*c1
+
+**It is a BALANCE, not an equal-power pan law**, and the difference is the
+centre. cos/sin puts 0.707 on both channels at centre, which is -3 dB on every
+item nobody panned; attenuating only the opposite channel leaves centre at
+unity, so a set with no panning renders exactly as it did before the feature
+existed. At `pan: 0` no filter is emitted at all. Sources here are stereo
+tracks, so balance is the right operation anyway.
+
+Measured, not asserted: hard right leaves the right channel within 0.5 dB of
+source and the left more than 40 dB below it, the mirror holds for hard left,
+and centre is within 0.1 dB of source on both channels.
 
 Dual mono and mid/side are **not** built. The upgrade path is a `channel_mode`
 column added later with `pan` as its default, so nothing stored today has to
@@ -88,7 +106,7 @@ rounding rule and the case where audio and video disagree.
 
 Three deltas, and nothing that duplicates a value already stored:
 
-    ALTER TABLE set_items ADD COLUMN pan REAL DEFAULT 0
+    -- pan is NOT here: it is an effects_json key, see 3.1
     ALTER TABLE sets      ADD COLUMN out_fps REAL           -- NULL = derive from items
     ALTER TABLE sets      ADD COLUMN mode_audience TEXT DEFAULT 'normal'   -- easy|normal|advanced
 

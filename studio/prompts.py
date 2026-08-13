@@ -44,6 +44,11 @@ PROMPT_TYPES = {
     # are different sentences by definition.
     "tier_wording":  {"tiered": True,  "label": "Tier wording"},
     "positive":      {"tiered": True,  "label": "Full positive prompt"},
+    # A QC finding's proposed remedy. docs/TRD-3 T3-20: the remedy is an
+    # EDITABLE prompt and approving it is the human sign-off, so it gets the
+    # same history as every other prompt here rather than a bespoke store.
+    # Untiered: what is wrong with a render is not a function of its rating.
+    "qc_remedy":     {"tiered": False, "label": "QC remedy"},
 }
 
 MAX_LABEL = 80
