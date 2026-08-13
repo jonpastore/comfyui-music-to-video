@@ -491,11 +491,16 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
     }
 
 
-def validate(sb, exemplar=None):
+def validate(sb, exemplar=None, expect_scenes=None):
     """Raises ValueError listing every problem found, or returns None.
 
     exemplar defaults to the real few-shot template (_exemplar()), so callers
     get the copy/leak guards below for free without having to load it themselves.
+
+    expect_scenes is the count the caller PINNED (from scene_seconds). Pass it
+    and the storyboard is checked against that number; leave it None and the
+    old one-scene-per-lyric-section floor applies. The two rules are exclusive
+    on purpose -- see the comment at the count check below.
     """
     if exemplar is None:
         exemplar, _, _ = _exemplar()
@@ -521,9 +526,25 @@ def validate(sb, exemplar=None):
     # confirm that our own composer ran -- which says nothing about the storyboards
     # that arrive from anywhere else.
 
-    min_scenes = len(parse_sections(sb.get("audio_lyrics", "")))
-    if len(scenes) < min_scenes:
-        problems.append(f"only {len(scenes)} scenes for {min_scenes} lyric sections (need >= 1 per section)")
+    # Scene COUNT. Two rules, and which one applies depends on who chose the
+    # count -- see docs/TRD-2 3.4.
+    #
+    # expect_scenes set: the caller pinned a count from scene_seconds, so the
+    # storyboard is checked against what was ASKED FOR. The old one-per-lyric-
+    # section floor cannot apply here: a 195.8s song at 30s scenes is 7 scenes
+    # against 25 sections, which is the whole point of the decision, and this
+    # rule fed the retry loop -- so leaving it in place would have had the model
+    # "fix" a correct storyboard back to 25 scenes.
+    #
+    # expect_scenes None: the model chose the count (scene_seconds unset), and
+    # one scene per lyric section remains the right floor. Unchanged behaviour.
+    if expect_scenes is not None:
+        if len(scenes) != expect_scenes:
+            problems.append(f"{len(scenes)} scenes but {expect_scenes} were requested")
+    else:
+        min_scenes = len(parse_sections(sb.get("audio_lyrics", "")))
+        if len(scenes) < min_scenes:
+            problems.append(f"only {len(scenes)} scenes for {min_scenes} lyric sections (need >= 1 per section)")
 
     # Output-side minor check. The input filter in tiers.check_text() screens what
     # the user supplies; this screens what the MODEL returns, which is a separate
@@ -621,8 +642,21 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
     # scene_seconds=None (the default) hands the count to the model: it has the
     # lyrics and the track length, and a fixed seconds-per-scene made pacing a
     # slider rather than a reading of the song.
-    n_scenes = (max(len(sections), math.ceil(song["duration"] / scene_seconds))
-                if scene_seconds else None)
+    # DECIDED 2026-08-12 by Jon (docs/TRD-2 3.4): scene_seconds WINS. The old
+    # max(len(sections), ...) floored the count at one scene per lyric section,
+    # so Rear Entrance's 25 sections returned 25 scenes at 7.83s whether 15s or
+    # 30s was asked for -- "clip length defined by the storyboard" resolved to
+    # 7.83s and no amount of asking changed it. One scene is one clip now.
+    #
+    # The floor was in TWO live places. Deleting it here alone would have done
+    # nothing visible: validate() rejected a short storyboard, and `problems`
+    # feeds the RETRY LOOP, so the model was told to fix it and handed back 25
+    # scenes again. See validate(expect_scenes=...) below -- they move together.
+    #
+    # sections is still read: it is the min_scenes floor for the UNPINNED path
+    # (scene_seconds=None), where the model chooses the count and one scene per
+    # section is the right guidance.
+    n_scenes = math.ceil(song["duration"] / scene_seconds) if scene_seconds else None
 
     exemplar, exemplar_md, from_file = _exemplar()
     if progress and not from_file:
@@ -668,7 +702,7 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
             sb = _compose(song, tier, guardrail, style_note, lyrics, obj["scenes"], n_scenes, scene_seconds,
                           character_reference=obj.get("character_reference"),
                           world_reference=obj.get("world_reference"))
-            validate(sb, exemplar)
+            validate(sb, exemplar, expect_scenes=n_scenes)
             return sb
         except tiers.ContentRefused:
             # terminal: never retried, and its message is never fed back to the
@@ -878,6 +912,49 @@ def demo():
         sb = generate_storyboard(LYRICS, "pg13", GUARD, "neon world lock", SONG, model="grok-test")
         assert [s["scene_number"] for s in sb["scenes"]] == [1, 2], sb["scenes"]
         validate(sb)
+
+        # 1a. scene_seconds WINS -- the lyric-section floor is gone, both halves
+        # of it. docs/TRD-2 3.4, decided 2026-08-12.
+        #
+        # MANY has five sections against a 16s song, so a 8s request is 2 scenes
+        # and a 16s request is 1 -- both BELOW the section count, which is the
+        # case the old max() floor made unreachable. This one check catches a
+        # revert of EITHER site: put the max() back and the model is asked for 5
+        # and answers 2, which validate then rejects; put the one-per-section
+        # rule back into the pinned branch of validate() and the same rejection
+        # arrives from the other end. Either way the retry loop burns three
+        # attempts and raises RuntimeError instead of returning.
+        MANY = "[A]\na\n[B]\nb\n[C]\nc\n[D]\nd\n[E]\ne\n"
+        assert len(parse_sections(MANY)) == 5, "fixture drifted"
+        # three copies of the same answer, not one: under a revert the retry loop
+        # wants three, and a queue of one dies with StopIteration deep in the
+        # stub -- which reads as a broken harness rather than as the floor being
+        # back. With three it raises RuntimeError naming the real problem.
+        httpx.stream = queued([json.dumps({"scenes": good})] * 3)
+        sb_2 = generate_storyboard(MANY, "pg13", GUARD, "w", SONG, model="grok-test",
+                                   scene_seconds=8.0)
+        assert len(sb_2["scenes"]) == 2, f"16s at 8s/scene is 2 scenes, got {len(sb_2['scenes'])}"
+
+        httpx.stream = queued([json.dumps({"scenes": [scene(1, "wide", "A")]})] * 3)
+        sb_1 = generate_storyboard(MANY, "pg13", GUARD, "w", SONG, model="grok-test",
+                                   scene_seconds=16.0)
+        assert len(sb_1["scenes"]) == 1, f"16s at 16s/scene is 1 scene, got {len(sb_1['scenes'])}"
+        # monotonic: asking for LONGER scenes never returns MORE of them. The old
+        # formula returned 5 for both of the above and violated it every time the
+        # sections outnumbered the request.
+        assert len(sb_1["scenes"]) <= len(sb_2["scenes"]), "scene_seconds is not monotonic"
+
+        # 1a'. and the two count rules are exclusive, not stacked. The same
+        # storyboard is legal when 2 were requested and illegal when the model
+        # chose the count against five lyric sections.
+        two_of_five = _compose(SONG, "pg13", GUARD, "w", MANY, good, 2, 8.0)
+        validate(two_of_five, expect_scenes=2)
+        try:
+            validate(two_of_five)
+        except ValueError as e:
+            assert "lyric sections" in str(e), e
+        else:
+            raise AssertionError("unpinned path lost its one-scene-per-section floor")
 
         # 1b. distinct character_reference/world_reference from the model are
         # used as-is, not collapsed into style_note; omitted ones fall back to it

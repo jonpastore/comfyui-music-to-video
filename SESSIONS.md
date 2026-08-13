@@ -11,6 +11,7 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
+| `studio/grok.py` | A | TRD-2 §3.4: scene_seconds wins, the lyric-section floor goes, validate checks the count that was actually requested. B is closed; claiming anyway because the protocol does not depend on who is awake | 00:05 |
 | `docs/TRD-1-*.md`, `docs/TRD-2-*.md`, `docs/TRD-3-*.md` | A — **released 23:10** | writing TRD-1 and TRD-3, review pass over TRD-2. **Docs only — no source file is being edited.** | 22:40 |
 | `studio/creds.py` + `studio/fleet_watch.py` + `studio/test_selfchecks.py` | B — **released 23:05** | Slack alerting when a backend goes offline/online, per Jon | 22:30 |
 | `studio/pipeline.py` + `studio/check_integration.py` | B — **released 22:00** | requeue jobs when a backend goes offline mid-flight. Per Jon: ethan is down for a few hours | 21:45 |
