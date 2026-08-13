@@ -2128,3 +2128,35 @@ Append dated one-liners. Newest at the bottom.
   **Corrected in `prompt.txt` and the day-13 continuation.** The rule going
   forward: **give an agent a concrete task and a real model. Never conclude a
   lane is down from a trivial ping.**
+- 2026-08-13 (A) **THE COMPOSED xxx NUDE PROMPT IS LOGGED AND VALIDATED, and
+  Jon's instinct that it is fragmented was right on every count.** The real
+  string, composed by `make_anchor.prompt_for` with Street Cats' profile, is in
+  `docs/reviews/XXX-NUDE-PROMPT-AS-COMPOSED-2026-08-13.txt` (2250 chars front,
+  2313 back). grok's adversarial validation:
+  `docs/reviews/XXX-NUDE-PROMPT-REVIEW-grok-2026-08-13.md`.
+  Measured on the string itself:
+  - **15 negations** in a positive prompt, on a stack that SKIPS the negative
+    pass at cfg 1.0.
+  - **`skin` / `bare` / `shaved` / `human-toned` appear 9 times.**
+  - **The species first appears at char 1813 of 2519** — the last quarter.
+- 2026-08-13 (A) **grok's ranking, and rank 2 is the one I missed.** (1) the
+  negation bundles, each negated token being positive evidence; **(2) the prompt
+  OPENS with "nude ... She wears nothing at all" — and "nude/wears nothing"
+  co-occurs overwhelmingly with human bare skin in the prior, in the highest-
+  weight position, BEFORE the species exists**; (3) the nine skin tokens;
+  (4) explicit human-anatomy vocabulary with no fur anchor in the same breath;
+  (5) *"rather than smooth or featureless"* planting smooth and featureless;
+  (6) the reference-combine clause pulling clothing and skin off the refs;
+  (7) late species. **"Diffusion conditioning is front-heavy: early tokens set
+  identity, material and body plan; late tokens decorate."**
+  Its order: **species+material → body plan/view → fur as MATERIAL not denial →
+  explicit anatomy AS FURRED anatomy → head/face/tail → studio.** And plainly:
+  **do not open with "nude".**
+  On self-reference it is unambiguous: *"exactly as the body description
+  states"* is meta with no channel to resolve against, and *"rather than smooth
+  or featureless"* plants the attributes. **Instructing the model about the
+  prompt is not control.**
+  **NOTHING FOUND on minor/CSAM** — subject is specified adult, and it says the
+  welded 21+ constant is appropriate and should stay.
+  A full positive rewrite, ~1050 chars and zero negations, is in the review file
+  ready to test against the current one.
