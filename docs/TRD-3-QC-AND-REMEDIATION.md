@@ -410,5 +410,16 @@ tier 1.
 3. **When an image looks wrong, look at it.** Every finding in this document that
    a deterministic check would have missed was found by opening the picture, and
    a QC stage does not replace that — it decides which pictures to open.
-4. Baseline before and after: `cd studio && python3 -m pytest -q .` (225 at the
+4. Baseline before and after: `cd studio && python3 -m pytest -q .` (232 at the
    time of writing), `python3 check_integration.py`, and `grep -c "^def test_"`.
+
+5. **A REFUSAL or a PRESENCE is half a criterion.** Found by a second
+   independent reviewer, and it is systematic rather than incidental: a
+   criterion of the form "X is refused" or "the payload carries Y" stays green
+   when the whole feature is DELETED, because a feature that does not exist
+   refuses everything and a field nobody reads is still present. Every such
+   criterion is paired with a positive case that exercises the feature, or it is
+   marked **provisional** and says what it cannot yet distinguish.
+
+   One-sided in this document today, listed so nobody has to re-derive it:
+   `T3-1`, `T3-4` (fields present but never checked for sense), `T3-6`, `T3-14`, `T3-20`, `T3-22`, `T3-23`, `T3-24` and `T3-27`. `T3-18` is already marked provisional for exactly this reason and the same treatment applies to the rest of the repair criteria: while `approve()` raises, every one of them is satisfied by the absence of the feature they describe.

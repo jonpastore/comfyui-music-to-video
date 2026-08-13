@@ -522,5 +522,16 @@ The rules this project arrived at by being wrong, applied to this document:
    caught by the wrong bound, and a `demo()` branch never reached.
 3. **Never replace a slice that runs to the end of a file**, and check
    `grep -c "^def test_"` before and after. A deleted test does not fail.
-4. Baseline before and after: `cd studio && python3 -m pytest -q .` (225 at the
+4. Baseline before and after: `cd studio && python3 -m pytest -q .` (232 at the
    time of writing), `python3 check_integration.py`, `python3 mixer.py`.
+
+5. **A REFUSAL or a PRESENCE is half a criterion.** Found by a second
+   independent reviewer, and it is systematic rather than incidental: a
+   criterion of the form "X is refused" or "the payload carries Y" stays green
+   when the whole feature is DELETED, because a feature that does not exist
+   refuses everything and a field nobody reads is still present. Every such
+   criterion is paired with a positive case that exercises the feature, or it is
+   marked **provisional** and says what it cannot yet distinguish.
+
+   One-sided in this document today, listed so nobody has to re-derive it:
+   `T1-4` and `T1-24` (prohibitions restated as differentials, but the differential proves the mechanism, not that anything uses it) and `T1-23`, which stays green for as long as `duck` and `layer` are never built.

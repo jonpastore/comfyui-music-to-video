@@ -429,7 +429,18 @@ timing — `clip_plan` is the one, and every client calls it.
 4. **When an image looks wrong, look at it.** The identity collapse, the world
    that never rendered and the LoRA that did nothing were all found by opening
    the pictures, and all three passed every deterministic check.
-5. Baseline before and after: `cd studio && python3 -m pytest -q .` (225 at the
+5. Baseline before and after: `cd studio && python3 -m pytest -q .` (232 at the
    time of writing), `python3 check_integration.py`, and `grep -c "^def test_"`
    — a slice-to-end-of-file replacement once deleted four tests silently, and a
    deleted test does not fail.
+
+6. **A REFUSAL or a PRESENCE is half a criterion.** Found by a second
+   independent reviewer, and it is systematic rather than incidental: a
+   criterion of the form "X is refused" or "the payload carries Y" stays green
+   when the whole feature is DELETED, because a feature that does not exist
+   refuses everything and a field nobody reads is still present. Every such
+   criterion is paired with a positive case that exercises the feature, or it is
+   marked **provisional** and says what it cannot yet distinguish.
+
+   One-sided in this document today, listed so nobody has to re-derive it:
+   `T2-5` (restore is named but never exercised), `T2-6` (a no-op delete renumbers nothing), `T2-7` (provenance fields can hold anything), `T2-18` and `T2-33`/`T2-34` (a picker that marks EVERYTHING unavailable passes; it needs the paired positive), `T2-36`/`T2-37` (payload presence with no consumer). `T2-12a`'s stored measurement must also be asserted to MATCH the ceiling the code uses, or the record and the constant drift apart.
