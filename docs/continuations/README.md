@@ -3,7 +3,7 @@
 Session hand-off docs, oldest first. The **latest three live at the repo root**;
 everything older is moved here when a fourth is written.
 
-Most recent: **[CONTINUATION-2026-08-13-meowp-studio-day12.md](../../CONTINUATION-2026-08-13-meowp-studio-day12.md)**
+Most recent: **[CONTINUATION-2026-08-13-meowp-studio-day13.md](../../CONTINUATION-2026-08-13-meowp-studio-day13.md)**
 (at the repo root, along with the two before it).
 
 These docs are in `.gitignore` -- only this index is tracked. `git mv` fails on
@@ -32,7 +32,7 @@ At the root right now:
 
 | `CONTINUATION-2026-08-13-meowp-studio-day12.md` | **Deployed.** Five live anchor defects fixed, QC's 8n+1 bug, the TRD set consolidated to 7 documents with TRD-6 s0 holding what they all inherit. |
 
-The next continuation archives `CONTINUATION-2026-08-12-meowp-studio-day10.md`.
+The next continuation archives `CONTINUATION-2026-08-13-meowp-studio-day11.md`.
 
 ## Standalone hand-offs
 
@@ -42,3 +42,5 @@ not take part in the rotation above.
 | Doc | For |
 |---|---|
 | [`ETHAN-CONTINUE.md`](../../ETHAN-CONTINUE.md) | Bringing `ethan-wsl` up as a second ComfyUI backend: what is staged there, how to resume after the reboot that interrupted it, and why a 16 GB card does not help with the video renders |
+
+| `CONTINUATION-2026-08-13-meowp-studio-day13.md` | **The specification set completed, and one policy rewritten twice.** Ten TRDs, three PRDs, three DDDs and a style guide, every TRD externally reviewed and every one carrying a positive-half table and a built-state ledger. TRD-8/9/10 written to absorb five orphaned plans and ~4,600 lines of uncited code. The minor policy went from a blanket keyword refusal to a per-tier rule, then to an artefact lock after adversarial review found the hole the loosening opened. `T1-20d` fixed; canonical host shipped. **The PRDs, DDDs and the style guide have never been externally reviewed — that is the next session's job.** |
