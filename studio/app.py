@@ -922,8 +922,28 @@ def h_storyboard(args, progress):
     # RENDER time by guardrail.build_prompt() whatever the storyboard ends up
     # saying, which is what makes this safe to hand over.
     direction = (args.get("direction") or "").strip()
-    if direction:
-        guardrail = tiers.PINNED
+    # DO NOT replace the guardrail with PINNED when a direction is supplied.
+    #
+    # It used to, and the comment above defended it: the direction box is
+    # prefilled from the tier's TONE wording, so sending the tier row as well
+    # would show the model the same words twice. True, and it cost the tier its
+    # PERMISSION clause -- which is a different sentence from its tone.
+    #
+    # Measured on `rear-entrance_xxx.json`: all 25 scenes came back "fully
+    # clothed, tasteful and non-graphic, no explicit gesture" -- the MAINSTREAM
+    # wording -- while tiers.compose_guardrail("xxx") says "Explicit adult
+    # content is permitted... full nudity, sexual acts between consenting adults
+    # and graphic sexual imagery are in scope", and even `r` says "nudity,
+    # including graphic nudity, is in scope". A PG-13 body filed as xxx.
+    #
+    # The mechanism: grok._system_prompt is handed the tier's own wording with
+    # PINNED stripped out, so a guardrail of exactly PINNED leaves it EMPTY and
+    # the model is told nothing about what this tier permits. And because the
+    # box is prefilled, the normal path always supplies a direction -- so the
+    # tier never reached the model on any storyboard anyone actually generated.
+    #
+    # Duplicated tone wording is cosmetic. A tier that cannot say what it
+    # permits is the file whose job is to be true saying something false.
     # The cast the model is allowed to name. Only characters with an anchor at
     # THIS tier: naming someone with no anchor produces a scene the renderer
     # cannot keep consistent, which is the problem the cast exists to solve.

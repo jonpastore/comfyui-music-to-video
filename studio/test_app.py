@@ -1217,7 +1217,7 @@ def test_storyboard_direction_is_prefilled_from_the_tier_and_shows_its_limits():
         assert "Mainstream music-video tone" not in r.text
 
 
-def test_storyboard_direction_reaches_grok_and_is_stored_without_doubling_the_tier():
+def test_storyboard_direction_reaches_grok_and_the_tier_goes_with_it():
     with TestClient(appmod.app) as client:
         song = _upload_song(client, "Direction Sent Song", album="Dir Album")
         sid = song["id"]
@@ -1227,11 +1227,25 @@ def test_storyboard_direction_reaches_grok_and_is_stored_without_doubling_the_ti
                         sid)["id"])
 
         assert grok_calls["args"]["direction"] == "A heist, not a club night."
-        # The direction is prefilled FROM the tier and then edited, so it already
-        # carries that channel. Sending the tier row's wording as well would put
-        # it in front of the model twice -- but PINNED still goes, unconditionally.
-        assert grok_calls["guardrail"] == tiers.PINNED
-        assert "Mature after-hours" not in grok_calls["guardrail"]
+        # CHANGED 2026-08-13, and the old assertion is why this is worth spelling
+        # out. It required `guardrail == tiers.PINNED` exactly when a direction
+        # was given, on the reasoning that the direction box is prefilled from
+        # the tier and would otherwise show the model the same words twice.
+        #
+        # That threw away the tier's PERMISSION clause along with its tone.
+        # compose_guardrail returns one string -- "Mature after-hours nightlife
+        # tone" AND "nudity, including graphic nudity, is in scope" -- so there
+        # was no way to drop the duplicated half without dropping the other.
+        # grok._system_prompt strips PINNED back out before use, so a guardrail
+        # of exactly PINNED left the tier section EMPTY.
+        #
+        # Measured cost: every scene of rear-entrance_xxx came back "fully
+        # clothed, tasteful and non-graphic" -- mainstream wording filed as xxx.
+        # Duplicated tone is cosmetic; a tier that cannot say what it permits is
+        # a file whose job is to be true saying something false.
+        assert tiers.PINNED in grok_calls["guardrail"]
+        assert "Mature after-hours" in grok_calls["guardrail"], \
+            "the tier's own wording was dropped because a direction was supplied"
 
         # stored with the result: a storyboard you cannot see the prompt for is
         # one you cannot tune
@@ -5992,3 +6006,42 @@ def test_qc_job_kind_is_registered_and_enqueues_for_a_song():
         assert r.status_code in (200, 303), r.text
         job = db.one("SELECT * FROM jobs WHERE kind='qc' ORDER BY id DESC LIMIT 1")
         assert job and json.loads(job["args_json"])["song_id"] == s["id"], job
+
+
+def test_a_direction_does_not_strip_the_tier_from_the_storyboard_prompt():
+    """The tier's PERMISSION clause must reach grok even when a direction is given.
+
+    It did not, and the normal path always gives one: the direction box is
+    PREFILLED from the tier's tone wording, and `if direction: guardrail =
+    tiers.PINNED` then replaced the whole guardrail. grok._system_prompt is
+    handed the tier's own wording with PINNED stripped out, so that left it
+    EMPTY -- the model was told nothing about what the tier permits.
+
+    Measured consequence on the live album: every scene of rear-entrance_xxx
+    came back "fully clothed, tasteful and non-graphic", the MAINSTREAM wording,
+    filed as xxx.
+
+    The differential is direction vs no direction: the tier clause must survive
+    both, and tone duplication is not a reason to drop it.
+    """
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Tier Direction Song")
+        wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='transcribe'",
+                        song["id"])["id"])
+        tier_clause = tiers.compose_guardrail("r").replace(tiers.PINNED, "").strip()
+        assert tier_clause, "the r tier has no wording of its own to lose"
+
+        for direction in ("", "harsh flash, wet asphalt, low angle"):
+            r = client.post(f"/songs/{song['id']}/storyboard",
+                            data={"tier": "r", "model": "", "scene_seconds": "4.0",
+                                  "direction": direction})
+            assert r.status_code in (200, 303), r.text
+            job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' "
+                         "ORDER BY id DESC", song["id"])
+            assert wait_job(job["id"])["status"] == "done"
+
+            sent = grok_calls["guardrail"]
+            assert tiers.PINNED in sent, f"PINNED lost with direction={direction!r}"
+            assert tier_clause in sent, (
+                f"the r tier's own wording never reached grok with "
+                f"direction={direction!r} -- sent: {sent!r}")
