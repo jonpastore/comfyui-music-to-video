@@ -240,6 +240,34 @@ CATALOG = {
             "Licence: LTX-2.x Community Licence, free commercial use under $10M revenue. "
             "Its Acceptable Use Policy is incorporated and forbids sexually explicit output; "
             "tiers.PINNED already sits inside that line.",
+            "THE REFERENCE IMAGE DOES NOT HOLD IDENTITY BY ITSELF. The character has to be "
+            "described in the TEXT or the model reverts to its prior, which is an ordinary "
+            "human. Measured 2026-08-12 with a one-variable differential -- same reference "
+            "(an anthropomorphic black feline woman), same seed, same box, same 15 seconds, "
+            "species named in the prompt or not: named, feline throughout; not named, a "
+            "human woman by the halfway point, keeping only the harness. A 30s render "
+            "failed the same way by a quarter in, and a 60s one held for the full minute "
+            "purely because its prompt happened to say \"a black cat\". This is what "
+            "build_song's char_lock exists for -- it composes storyboard "
+            "`character_reference` into every clip prompt -- so an empty character_reference "
+            "renders a stranger and every deterministic check still passes.",
+            "CLIP LENGTH: 505 frames (30.00s) and 1009 frames (59.95s) both render on the "
+            "24 GB card, verified with ffprobe. The 8n+1 latent rule is the only hard limit "
+            "found; VRAM was not the wall it was assumed to be. But cost is SUPERLINEAR -- "
+            "257 frames took 46.2s and 505 took 373.1s on the same box, so 2x the frames "
+            "cost about 8x the time. Per second of finished video that is 3.0s of compute "
+            "at 15s against 12.4s at 30s.",
+            "FRAME RATE: this pipeline sends 16.8312, and the model's own nodes default to "
+            "25 (LTXVConditioning) and 24 (LTXVDurationPredictor). 16.8312 is not a reading "
+            "of LTX at all -- build_song derives it as LTX_LEN/CHUNK so that 81 frames last "
+            "exactly the 4.8125s that WAN 2.2 S2V's 77-frame chunk lasts, which kept the "
+            "clip allocation identical across models. Measured consequence at 15s, one clip "
+            "each: mean pixel change per second is comparable (8.35 at 16.8312, 7.72 at 25), "
+            "so it is NOT uniformly slow -- but the SHAPE differs. At 16.8312 the action is "
+            "front-loaded and decays (15.4 in the first second down to 4.7 in the last); at "
+            "25 it is flat across the clip (8.6 down to 7.7). Consistent with motion authored "
+            "for a 4.8s beat finishing early and then coasting. n=1 per side and the two "
+            "clips differ in content, so this wants a proper A/B before build_song changes.",
         ],
         "companions": {
             "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors": "CLIPLoader",
