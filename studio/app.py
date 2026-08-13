@@ -33,6 +33,8 @@ import publish
 import prompts
 import analyse
 import effects    # per-item audio DJ effects -- pure, no deps, validated for real (not stubbed)
+import qc          # tier-1 output checks: pure measurement, no db, no app
+import qc_service   # recording those findings and answering the review queue
 import video_fx   # per-item video look effects -- same, pure/no deps
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -1674,6 +1676,114 @@ def song_page(request: Request, id: int):
         "best_model": best, "render_tiers": render_tiers,
         **storyboard_form_ctx(song, form_tier, chat_models, best),
     })
+
+
+# --------------------------------------------------------------------- QC --
+#
+# docs/TRD-3. The checks live in qc.py (pure, no db) and the recording and queue
+# in qc_service.py (no FastAPI), so everything below is a thin call -- no
+# arithmetic, no defaulting, no decision. If a route handler decided something,
+# a mobile client could not.
+#
+# JSON ONLY, deliberately: a review-queue PAGE is a UI, and the UI/UX pass that
+# produces the style guide has not run. Building a page now would pre-empt it.
+
+
+@jobs.handler("qc")
+def h_qc(args, progress):
+    """Tier 1 over one song's artefacts at one tier.
+
+    EXPECTATIONS ARE ONLY PASSED WHERE THE STUDIO ACTUALLY KNOWS THEM, which is
+    less often than it should be. The assembled render is checked against the
+    song's own mp3 duration and must carry audio; clips and reference images get
+    the checks that need no expectation (opens, size, black, frozen, 8n+1).
+
+    Nothing stores what the clip workflow ASKED FOR -- frame count and fps are
+    build_song constants at submit time and no table records them per clip -- so
+    the duration and frame-count checks, which are the sharpest ones here, sit
+    idle on clips. That is a gap in the artefact model, not in the checks, and
+    inventing an expectation from the file itself would be a check comparing a
+    number against itself.
+    """
+    song = db.one("SELECT * FROM songs WHERE id=?", args["song_id"])
+    if not song:
+        return
+    tier = args.get("tier") or ""
+    found, seen = [], 0
+
+    for r in db.q("SELECT * FROM renders WHERE song_id=? AND tier=? ORDER BY id DESC",
+                  song["id"], tier)[:1]:
+        progress(f"qc: assembled render {os.path.basename(r['path'])}")
+        found += qc_service.run_artefact(
+            r["path"], "song",
+            {"duration": song["duration"], "want_audio": True} if song["duration"]
+            else {"want_audio": True})
+        seen += 1
+
+    for c in db.q("""SELECT * FROM clips WHERE song_id=? AND tier=? AND path IS NOT NULL
+                     ORDER BY clip_idx""", song["id"], tier):
+        progress(f"qc: clip {c['clip_idx']}")
+        found += qc_service.run_artefact(c["path"], "clip", {})
+        seen += 1
+
+    for f in db.q("SELECT * FROM refs WHERE song_id=? AND tier=? ORDER BY clip_idx",
+                  song["id"], tier):
+        found += qc_service.run_artefact(f["path"], "image", {})
+        seen += 1
+
+    counts = {v: sum(1 for x in found if x["verdict"] == v)
+              for v in (qc.PASS, qc.FLAG, qc.REJECT)}
+    return {"artefacts": seen, "checks": len(found), **counts}
+
+
+@app.post("/songs/{id}/qc")
+def start_qc(id: int, tier: str = Form("")):
+    get_song_or_404(id)
+    jobs.enqueue("qc", {"song_id": id, "tier": tier}, song_id=id)
+    return RedirectResponse(f"/songs/{id}", status_code=303)
+
+
+@app.get("/api/qc/findings")
+def api_qc_findings(status: str = "open", kind: str = "", tier: int = 0,
+                    include_pass: bool = False):
+    return JSONResponse({"findings": [
+        dict(r) for r in qc_service.queue(status=status or None, kind=kind or None,
+                                          tier=tier or None, include_pass=include_pass)]})
+
+
+@app.get("/api/qc/findings/{fid}")
+def api_qc_finding(fid: int):
+    try:
+        return JSONResponse(dict(qc_service.get(fid)))
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@app.post("/api/qc/findings/{fid}/remedy")
+def api_qc_remedy(fid: int, text: str = Form(""), album: str = Form("")):
+    try:
+        return JSONResponse(dict(qc_service.set_remedy(fid, text, album=album or None)))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/qc/findings/{fid}/dismiss")
+def api_qc_dismiss(fid: int, why: str = Form("")):
+    try:
+        return JSONResponse(dict(qc_service.dismiss(fid, why)))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/qc/findings/{fid}/approve")
+def api_qc_approve(fid: int):
+    """501, and it is the honest answer. Nothing routes a finding to an
+    actuator yet, so a 200 here would be a button that reports success and runs
+    nothing -- the defect this studio keeps producing."""
+    try:
+        qc_service.approve(fid)
+    except NotImplementedError as e:
+        raise HTTPException(501, str(e))
 
 
 @app.post("/songs/{id}/analyse")

@@ -18,6 +18,7 @@ import tiers   # real
 import jobs    # real
 import prompts # real
 import models  # real
+import qc_service  # real -- the QC review queue behind /api/qc
 import app as appmod
 
 from fastapi.testclient import TestClient
@@ -5937,3 +5938,57 @@ def test_generated_audio_is_kept_and_says_which_path_ran(monkeypatch, tmp_path):
                            "from_current": "1", "denoise": "0.6"}, "a span AND a resynthesis")):
             assert client.post(f"/songs/{sid}/audio/generate", data=bad).status_code == 400, \
                 f"{why} was accepted"
+
+
+def test_qc_review_queue_is_json_and_approve_refuses_rather_than_lying():
+    """docs/TRD-3 7: the whole loop is reachable over JSON with no HTML, so a
+    mobile client written later drives the same thing this does.
+
+    approve() is the one that matters. Nothing routes a finding to an actuator
+    yet, so a 200 here would be a button reporting success and running nothing --
+    which is the defect this studio keeps producing. It must be a 501.
+    """
+    with TestClient(appmod.app) as client:
+        qc_service.record([{
+            "path": "/tmp/qc-route-test.mp4", "kind": "clip", "tier": 1,
+            "check": "duration", "verdict": "reject", "measured": "4.8",
+            "expected": "30.0", "unit": "s", "detail": "short render",
+            "remedy": "re-render"}])
+        fid = db.one("SELECT id FROM findings WHERE path=?", "/tmp/qc-route-test.mp4")["id"]
+
+        r = client.get("/api/qc/findings")
+        assert r.status_code == 200, r.text
+        got = [f for f in r.json()["findings"] if f["id"] == fid]
+        assert got and got[0]["measured"] == "4.8" and got[0]["expected"] == "30.0", got
+
+        # the edited remedy is what is stored -- asserted by reading it back,
+        # not by checking that the form posted
+        r = client.post(f"/api/qc/findings/{fid}/remedy", data={"text": "re-render at 505 frames"})
+        assert r.status_code == 200 and r.json()["remedy"] == "re-render at 505 frames", r.text
+        assert client.get(f"/api/qc/findings/{fid}").json()["remedy"] == "re-render at 505 frames"
+        assert client.post(f"/api/qc/findings/{fid}/remedy", data={"text": "  "}).status_code == 400
+
+        # approving refuses, and the finding is untouched by the refusal
+        r = client.post(f"/api/qc/findings/{fid}/approve")
+        assert r.status_code == 501, r.status_code
+        assert client.get(f"/api/qc/findings/{fid}").json()["status"] == "open"
+
+        # a dismissal needs a reason, and a dismissed finding leaves the queue
+        assert client.post(f"/api/qc/findings/{fid}/dismiss", data={"why": ""}).status_code == 400
+        r = client.post(f"/api/qc/findings/{fid}/dismiss",
+                        data={"why": "storyboard changed, 4.8s is right"})
+        assert r.status_code == 200, r.text
+        assert fid not in [f["id"] for f in client.get("/api/qc/findings").json()["findings"]]
+
+        assert client.get("/api/qc/findings/999999").status_code == 404
+
+
+def test_qc_job_kind_is_registered_and_enqueues_for_a_song():
+    """The route and the handler are separate things and only the pair works --
+    a kind jobs.enqueue does not know raises ValueError rather than queueing."""
+    with TestClient(appmod.app) as client:
+        s = _upload_song(client, "QC Job Song")
+        r = client.post(f"/songs/{s['id']}/qc", data={"tier": "pg13"})
+        assert r.status_code in (200, 303), r.text
+        job = db.one("SELECT * FROM jobs WHERE kind='qc' ORDER BY id DESC LIMIT 1")
+        assert job and json.loads(job["args_json"])["song_id"] == s["id"], job
