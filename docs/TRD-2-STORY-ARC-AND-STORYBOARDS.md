@@ -173,12 +173,30 @@ Every place a model is chosen shows what the candidates are FOR, from
   is shown as unavailable rather than offered. `models.where()` answers this, and
   since 2026-08-12 it distinguishes "no box has it" from "no box could be asked".
 
-**Open, pending measurement:** the camera-control LoRAs. Every scene already
-carries a `camera` field that is prose the renderer may ignore. If
-`ltx-2-19b-lora-camera-control-*` applies to LTX-2.5 — the inner dimensions
-match at 4096 — then the storyboard's shot language becomes executable, and the
-`camera` field becomes a model selection rather than a description. Not
-specified here until the differential says it works.
+**MEASURED AND CLOSED 2026-08-12: the camera-control LoRAs do not work on
+LTX-2.5.** They load without error and they change the output, and they do not
+produce the camera motion they are named for.
+
+The differential, with a NEUTRAL prompt so the LoRA is the only possible source
+of camera movement — per-second horizontal frame shift, dolly-left LoRA at
+strength 1.0, same seed:
+
+    LoRA OFF   0, 0, 0, -3, -4, -4, -3, -1     a locked camera
+    LoRA ON   -1, 0, 3, 9, -9, -37, 30, -1     erratic, no direction
+
+The ON run is LESS coherent than the control. This is the failure this test was
+shaped to catch: the inner dimensions match at 4096 so it applies, but 2.5 is
+int8-quantised and a LoRA half-applied over quantised weights looks exactly like
+one that did not help.
+
+A first attempt was worthless and is recorded so it is not repeated: its prompt
+said "the camera dollies smoothly to the left", so BOTH arms dollied and the
+LoRA would have been credited for the text's work.
+
+So the `camera` field stays prose, and the 19B base model stays uninstalled --
+the LoRAs were the only argument for it. Retest only if a non-quantised 2.5
+build is ever used; n=1 LoRA at one strength is not a proof about all of them,
+but the burden was on the LoRA and it did not clear it.
 
 ## 7. Navigation
 
