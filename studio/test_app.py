@@ -6045,3 +6045,36 @@ def test_a_direction_does_not_strip_the_tier_from_the_storyboard_prompt():
             assert tier_clause in sent, (
                 f"the r tier's own wording never reached grok with "
                 f"direction={direction!r} -- sent: {sent!r}")
+
+
+def test_explicit_wording_cannot_be_saved_under_a_tier_that_forbids_it():
+    """docs/TRD-4 T4-5/T4-6/T4-7. The save path ran two screens -- minors, and
+    self-referential rule instructions -- and NEITHER asked whether the text
+    belonged at the tier it was being stored under, so explicit wording saved
+    cleanly under `g`.
+
+    Both directions, or the criterion certifies a save path that refuses
+    everything: the same text must SAVE at a tier that permits it.
+    """
+    explicit = "She stands fully nude, bare genitalia visible."
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Tier Policy Album", "kind": "playlist"})
+        base = {"album": "Tier Policy Album", "text": explicit, "label": "v1"}
+
+        for tier in ("g", "pg13"):
+            r = client.post("/anchors/prompt", data=dict(base, tier=tier))
+            assert r.status_code == 400, f"{tier} accepted explicit wording: {r.text[:200]}"
+            assert tier in r.text and "nudity" in r.text, r.text[:200]
+
+        # and the tiers that exist FOR it still take it
+        for tier in ("r", "xxx"):
+            if not db.one("SELECT id FROM tiers WHERE name=?", tier):
+                continue
+            r = client.post("/anchors/prompt", data=dict(base, tier=tier, label=f"v-{tier}"))
+            assert r.status_code == 200, f"{tier} refused wording it permits: {r.text[:200]}"
+
+        # ordinary wording is untouched at every tier
+        r = client.post("/anchors/prompt",
+                        data=dict(base, tier="g", label="plain",
+                                  text="Her entire body is covered in sleek jet-black fur."))
+        assert r.status_code == 200, r.text[:200]

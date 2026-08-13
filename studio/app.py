@@ -2668,6 +2668,13 @@ async def save_anchor_prompt(request: Request):
     try:
         tiers.check_text(text, "anchor prompt")
         tiers.check_override(text)
+        # ...and whether it belongs at THIS TIER. The two screens above ask
+        # "does this mention a minor" and "is this instructing the model about
+        # its own rules"; neither asked whether the text was allowed at the tier
+        # it is being stored under, so explicit wording saved cleanly under `g`.
+        # docs/TRD-4 T4-5/T4-6/T4-7 -- the tier's own allow_nudity decides, so
+        # this cannot disagree with what it permits at render time.
+        tiers.check_tier_policy(text, tier, "anchor prompt")
     except ValueError as e:
         raise HTTPException(400, str(e))
     try:
@@ -2912,7 +2919,12 @@ async def anchor_preflight(request: Request):
     form = await request.form()
     album = (form.get("album") or "").strip()
     tiers_sel = sorted({t for t in form.getlist("tier") if t})
-    views_sel = sorted({v for v in form.getlist("view") if v}) or ["front"]
+    # No default: these panels say what WILL render, and generate refuses an
+    # empty selection (docs/TRD-4 T4-1). Inventing "front" here would have the
+    # preview promise a sheet the render then refuses -- the editor promising
+    # what the renderer does not produce, in the one place whose whole job is
+    # to agree with it.
+    views_sel = sorted({v for v in form.getlist("view") if v})
     blockers, notes = [], []
 
     if not album:
@@ -3011,7 +3023,12 @@ async def anchor_preview(request: Request):
     cid = form.get("character_id")
     cid = int(cid) if cid not in (None, "") else None
     tiers_sel = sorted({t for t in form.getlist("tier") if t})
-    views_sel = sorted({v for v in form.getlist("view") if v}) or ["front"]
+    # No default: these panels say what WILL render, and generate refuses an
+    # empty selection (docs/TRD-4 T4-1). Inventing "front" here would have the
+    # preview promise a sheet the render then refuses -- the editor promising
+    # what the renderer does not produce, in the one place whose whole job is
+    # to agree with it.
+    views_sel = sorted({v for v in form.getlist("view") if v})
     chosen = anchor_render_settings(form)
     settings = resolved_settings(chosen)
     unedited = default_anchor_prompt(album, next(
@@ -3059,9 +3076,17 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
         raise HTTPException(400, f"no album called {album!r} -- create it on /playlists first")
 
     selected_tiers = sorted(set(t for t in tier if t))
-    selected_views = sorted(set(v for v in view if v)) or ["front"]
+    # NO SILENT DEFAULT. This was `or ["front"]`, so submitting with every view
+    # unticked rendered a front clothed sheet nobody asked for -- and the two
+    # controls then behaved differently, since an empty TIER has always been
+    # refused. docs/TRD-4 T4-1, T4-3, T4-4: each control names itself, because a
+    # form with two empty multi-selects and one generic error is a form you fix
+    # twice.
+    selected_views = sorted(set(v for v in view if v))
     if not selected_tiers:
         raise HTTPException(400, "select at least one tier")
+    if not selected_views:
+        raise HTTPException(400, "select at least one view")
     for t in selected_tiers:
         valid_tier_or_400(t)
     for v in selected_views:

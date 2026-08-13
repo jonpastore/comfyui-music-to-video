@@ -6,6 +6,7 @@ too -- the clause is applied by the code that builds a prompt, not stored in the
 storyboard JSON. This module only adds user-defined tiers on top.
 """
 import os
+import re
 import sys
 import time
 
@@ -155,6 +156,57 @@ def ensure_builtins():
 def allows_nudity(name):
     row = db.one("SELECT allow_nudity FROM tiers WHERE name=?", name)
     return bool(row["allow_nudity"]) if row else False
+
+
+# Wording that ASSERTS nudity or explicit sexual content. Used only to decide
+# whether text belongs at the tier it is being saved under -- never to refuse it
+# outright, because at `r` and `xxx` every one of these is legitimate and is in
+# fact what those tiers are FOR.
+#
+# A BAR, NOT A WALL, and deliberately so: it is a short list of unambiguous
+# words, not an attempt to classify prose. Somebody determined to describe
+# nudity without using any of them will succeed, and that is not what this
+# guards against -- it guards against the accident the studio actually had,
+# where explicit wording saved cleanly under `g` because nothing compared the
+# text to the tier at all. The same shape as guardrail.check_text's own
+# docstring: blunt, cheap, and refusing a category rather than a sentence.
+_EXPLICIT_TERMS = (
+    "nude", "nudity", "naked", "topless", "bottomless", "undressed",
+    "genital", "genitalia", "vulva", "vagina", "penis", "erection",
+    "areola", "nipple", "labia", "anus",
+    "penetration", "intercourse", "masturbat", "orgasm", "ejaculat",
+    "fellatio", "cunnilingus", "creampie", "cumshot",
+    "explicit sexual", "sexual act", "sex act", "having sex",
+)
+
+
+def check_tier_policy(text, tier, where="prompt"):
+    """Refuse text that asserts nudity or explicit content at a tier that
+    forbids it. Raises ValueError; returns the text unchanged otherwise.
+
+    THE SAVE PATH RUNS THE SAME QUESTION THE RENDER DOES. Until 2026-08-13 the
+    anchor save ran guardrail.check_text (does this mention a minor) and
+    check_override (is this trying to instruct the model about its own rules)
+    and NOTHING asked whether the text was allowed at the tier it was being
+    stored under -- so explicit wording saved cleanly under `g`. docs/TRD-4
+    T4-5, T4-6, T4-7.
+
+    The tier's own `allow_nudity` decides, so this cannot disagree with what the
+    tier permits at render time: one flag, read here and there.
+    """
+    if allows_nudity(tier):
+        return text
+    toks = _tokens(text)   # THE matcher, the one check_text uses
+    joined = " ".join(toks)
+    hits = sorted({t for t in _EXPLICIT_TERMS
+                   if (" " in t and re.search(r"\b" + t.replace(" ", r"\s+"), joined))
+                   or (" " not in t and any(tok.startswith(t) for tok in toks))})
+    if hits:
+        raise ValueError(
+            f"tier {tier!r} does not permit nudity or explicit content, and this "
+            f"{where} asserts it: {', '.join(hits)}. Save it under a tier that "
+            "does (r or xxx), or reword it.")
+    return text
 
 
 def all_tiers():
