@@ -11,6 +11,59 @@ Acceptance criteria are `T6-n` and each **can fail**.
 
 ---
 
+## 0. Rules every document inherits
+
+**Consolidated here 2026-08-13.** These were restated in TRD-1, TRD-2 and TRD-3
+in near-identical words — the API separation four times over as twelve criteria
+for four facts, and "a re-render is a new candidate" five times across five
+documents. One owner each; the others cite and add only what is theirs.
+
+### 0.1 Backend / front-end separation — `T6-A1`…`T6-A4`
+
+All business logic in the backend, the front end disconnected, so a replacement
+front end including mobile can be built later against the same API.
+
+- `T6-A1` **Every operation is reachable over JSON with no HTML involved.** A
+  curl script drives the feature end to end. Each document names its own loop:
+  TRD-1 a set from empty to rendered, TRD-2 the storyboard loop, TRD-3 the review
+  queue.
+- `T6-A2` **The HTML page and the JSON endpoint report the same numbers** for the
+  same object, asserted by comparing them in one test. Two answers means two
+  implementations.
+- `T6-A3` **The service module imports nothing from FastAPI** and its functions
+  are called directly by tests. If a test can only reach the logic through a
+  request, the logic is in the wrong place. A route handler contains no
+  arithmetic, no defaulting and no decision — if a route handler decides
+  something, a mobile client cannot.
+- `T6-A4` **No template computes anything.** Asserted by a differential, not a
+  grep: stub the service to return known values and assert the page shows them
+  unmodified. A template that rounds, sums or reformats a number is a second
+  implementation of that number.
+
+**The trust boundary is the tailnet binding and nothing else.** The studio has no
+authentication; a full JSON control plane inherits exactly that and no more, so
+a deployment that widens the bind widens everything.
+
+### 0.2 A new candidate, never an overwrite — `T6-A5`
+
+- `T6-A5` **Anything re-produced is written beside its predecessor, never over
+  it.** Set re-renders, refine passes, repaired candidates, re-rolled anchors and
+  reference frames. **Both survive and both are reachable** — listed and
+  selectable, or "keeps history" means files accumulating that nothing can reach.
+
+  Five documents each said this in their own words. The studio's whole design is
+  candidates plus a human pick, and an overwrite destroys the evidence that
+  anything was wrong along with the comparison that would show whether the
+  repair helped.
+
+### 0.3 Availability is three-valued — `T6-A6`
+
+- `T6-A6` `models.where()` answers `True`, `False` or `None`, and **`False` is a
+  refusal while `None` is a candidate.** Conflating them once made
+  `where("wan22_i2v_low", …)` return empty for the box that actually held the
+  refiner. Every consumer respects all three: storyboard planning, repair
+  routing, and the queue's capability match.
+
 ## 1. The queue is a wait state, not a timing match
 
 **Decided 2026-08-12 by Jon**, and recorded in the reconciliation: when a

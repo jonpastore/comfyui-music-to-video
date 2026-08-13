@@ -451,6 +451,12 @@ per-item levelling can be switched off without the set losing its level.
 
 ## 10. Backend / front-end separation
 
+**INHERITED from TRD-6 §0.1** (`T6-A1`…`T6-A4`) — the four rules were restated
+here, in TRD-2 and in TRD-3 in near-identical words, twelve criteria for four
+facts. They are not repeated; what follows is only what is specific to the
+timeline, which is the feature most exposed to them.
+
+
 **This is a requirement, not a nicety**, and TRD-1 is the document most exposed
 to it: the timeline is the most presentation-shaped feature in the studio, and
 it is the one that must survive a mobile client being written against the same
@@ -464,37 +470,8 @@ items, joins the songs, decides which path (audio vs video), builds every item
 dict, and enqueues — all inside the route handler, all unreachable from any
 client that is not this HTML page.
 
-**The rule for everything specified here:**
-
-1. All business logic lives in a service module (`sets_service.py` or the
-   equivalent), which takes and returns plain data and imports nothing from
-   FastAPI.
-2. Every operation is a JSON endpoint over that service. The HTML view is **one
-   client of the same service call**, not a second path.
-3. A route handler contains no arithmetic, no filter-graph decisions, and no
-   defaulting. If a route handler decides something, a mobile client cannot.
-
-- `T1-27` **Every set operation is reachable over JSON with no HTML involved**:
-  create, add/remove/reorder items, edit an item, draw automation, fetch peaks,
-  price the length, render, list renders. A curl script drives a set from empty
-  to rendered.
-- `T1-28` The HTML page and the JSON endpoint report the **same numbers for the
-  same set**, asserted by comparing them in one test. Two answers means two
-  implementations.
-- `T1-29` The service module has no FastAPI import, and its functions are called
-  by the tests directly. If a test can only reach the logic through a request,
-  the logic is in the wrong place.
-- `T1-29a` **The JSON API's trust boundary is stated, not assumed.** All three
-  TRDs require full JSON driveability with no HTML, which turns a
-  server-rendered app into a control plane. The studio binds tailnet-only and
-  has no authentication, and that is the whole of its security model today. Any
-  client written against this API inherits that and nothing else: the binding is
-  the boundary, so a deployment that widens the bind widens everything. Recorded
-  because a review asked where authz lives and the honest answer is "the network".
-- `T1-30` **No template computes anything.** Asserted by a differential, not a
-  grep: stub the service to return known values and assert the page shows those
-  values unmodified. A template that rounds, sums or reformats a number is a
-  second implementation of that number.
+The service module for this document is `sets_service.py` or its equivalent.
+`T6-A1`'s named loop here: a set from empty to rendered over JSON alone.
 
 ## 11. What TRD-1 does not own
 

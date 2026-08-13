@@ -381,22 +381,20 @@ decision from one whose remedy is "re-run the upscale".
 
 ## 7. Backend / front-end separation
 
+**INHERITED from TRD-6 §0.1** (`T6-A1`…`T6-A4`). Not restated. QC's own loop is
+run, list, edit remedy, approve, re-check — and `T3-30` stays because it is
+stronger than `T6-A3`: a check must be callable with a path and an expectation
+and NO database at all, so it can be run over a directory of old output.
+
+
 Same rule as TRD-1, and QC is the easier case because a finding is data.
 
-1. Checks live in a service module that imports nothing from FastAPI and takes a
-   path plus the expected values, returning findings as plain data.
-2. Every operation is a JSON endpoint: run QC, list findings, filter by
-   kind/tier/status, read one, edit its remedy prompt, approve, dismiss.
-3. The review queue page is **one client** of that API.
+`qc.py` is pure measurement and touches no database; `qc_service.py` is the
+service module. That split is stronger than `T6-A3` asks for and is kept.
 
-- `T3-29` The whole review loop — run, list, edit remedy, approve, re-check — is
-  driveable over JSON with no HTML involved.
 - `T3-30` A check function is callable from a test with a path and an expectation
   and returns a finding, with no request, no database and no app import. A check
   that needs the web layer to run cannot be run over a directory of old output.
-- `T3-31` The HTML queue and the JSON endpoint report the same counts and the
-  same verdicts for the same artefacts.
-
 ## 8. Where it runs
 
 QC **measurement** runs wherever the studio runs, on the file `collect()` already

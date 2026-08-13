@@ -602,27 +602,19 @@ is the last creative step before publish and is currently orphaned.
 
 ## 8. Backend / front-end separation
 
+**INHERITED from TRD-6 §0.1** (`T6-A1`…`T6-A4`). Not restated. TRD-2's own loop
+is the one `T6-A1` names for this document: read the arc, propose one, accept it,
+generate a storyboard, edit a scene, read the time meter, list unanchored leads.
+
+
 **A requirement, not a nicety.** All business logic in the backend; the front end
 disconnected, so a replacement front end — including mobile — can be built later
 against the same API. Everything in §4, §5 and §7 above is therefore specified as
 data first and presentation second.
 
-1. Arc generation, storyboard generation, scene editing, casting and the time
-   meter live in a service module that imports nothing from FastAPI.
-2. Every one of them is a JSON endpoint. The Jinja page is **one client**.
-3. A route handler contains no arithmetic, no defaulting and no prompt
-   composition. If a route handler decides something, a mobile client cannot.
+The service module here covers arc generation, storyboard generation, scene
+editing, casting and the time meter.
 
-- `T2-38` The whole storyboard loop is driveable over JSON with no HTML: read
-  the arc, propose one, accept it, generate a storyboard, edit a scene, read the
-  time meter, list the unanchored leads.
-- `T2-39` The HTML page and the JSON endpoint report the same scene count, the
-  same clip length and the same warnings for the same storyboard. Two answers
-  means two implementations.
-- `T2-40` **No template computes anything.** Asserted by a differential: stub the
-  service to return known values and assert the page shows those values
-  unmodified. A template that sums scene seconds is a second implementation of
-  the time meter, and it is the one that will disagree.
 - `T2-41` Scene timing has exactly one implementation, `build_song.clip_plan()`.
   **This was FALSE when written and is true as of 2026-08-13.**
   `app.storyboard_scenes` computed every scene's `start`, `end` and `length` as
