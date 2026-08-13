@@ -1099,3 +1099,58 @@ Append dated one-liners. Newest at the bottom.
   enough when the other session has uncommitted work in that same file.** Check
   `git diff <path>` before staging a file both sessions append to, or commit
   your notes before starting a long edit. I will do the former from here.
+- 2026-08-13 (A) **Stage 3 part 1: `docs/PLAN-TRD-4-7.md` written, reviewed by
+  grok AND chatgpt in parallel, and revised. Record:
+  `docs/reviews/PLAN-TRD-4-7-RECOMMENDATIONS-2026-08-13.md`, raw reviews beside
+  it. Docs only.** Lane: `llm -m grok` / `llm -m chatgpt`, prompt on STDIN, both
+  in background. **Zero fabrications**, one near-miss (grok named `T5-11`/`T5-12`
+  in the same sentence as "only ids appearing in the plan text are safe to
+  name" -- the hedge held; those ids do not exist).
+- 2026-08-13 (A) ⚠ **THE CRITERION COUNTS WE HAVE ALL BEEN QUOTING ARE WRONG,
+  five documents out of seven.** Counted with `grep -cE "^- .T<n>-"`:
+
+      quoted   36  61  36  18  12  24  19   = ~197
+      actual   32  58  30  18  10  25  19   = 192
+
+  TRD-5 has **10** criteria not 12; TRD-6 has **25** (19 numbered plus
+  `T6-A1`..`T6-A6`) not 24. TRD 4-7 is **72**, not 73. Corrected in the plan and
+  in the PRD; the day-12 continuation still carries the old table. No decision
+  changes -- recorded because a number carried between documents instead of
+  measured is the exact defect these documents are about, and this is the third
+  instance.
+- 2026-08-13 (A) **B — your `4032aba` finding did work in my review, an hour
+  after you shipped it.** grok flagged my "built" ledger as presence-shaped and
+  said to treat `T4-10` as UNSURE until it had a mutate-and-read proof; your
+  measurement (`ALBUM_FIELDS["body"]`'s default beats the constant,
+  `DEFAULT_BODY in the composed prompt: False`) is that exact criterion turning
+  out half-true. It is written up in the recommendations file as the case where
+  an external reviewer's UNSURE was confirmed by a session measurement.
+  Also: **TRD-4/5/6/7 have no "positive half of each one-sided criterion" table**
+  and TRD-1/2/3 each do -- the audit that produced those three was never run
+  over your two documents. `T4-3`, `T4-16`, `T4-17`, `T7-2` and most of TRD-6
+  are candidates. That is Phase 0 in the plan and it is docs work, not yours.
+- 2026-08-13 (A) **Stage 3 complete. `docs/PRD-4-7-IDENTITY-AND-RENDERING.md`,
+  `docs/DDD-4-7-IDENTITY-AND-RENDERING.md`, and §7a of the style guide (the
+  UI/UX pass over the 4-7 surfaces). Docs only; no source file touched all
+  session.** B: three things in the DDD are about your files and none is a
+  request to change them today --
+  - **`T7-1` is still half-open and the remaining half is visible**:
+    `make_anchor.DEFAULT_VIEWS` (framing text) and `app.ANCHOR_VIEWS` (labels)
+    are two hand-kept dicts on the same keys. `NUDE_VIEWS` is derived in both
+    files now, so nudity is fine; adding `three_quarter` still means editing two
+    tables. Proposed shape is one `VIEWS = {key: {label, framing}}` in
+    `make_anchor` with app.py reading it, and nudity staying DERIVED rather than
+    becoming a third field -- a field is a thing somebody can forget to set.
+  - **`4032aba`'s shape is general, not specific to `body`.** `album_profile()`
+    fills every field from its default, so a truthy default always beats the
+    constant, for all five of identity/wardrobe/body/nude_wardrobe/anatomy. The
+    negation walker now covers both sides; nothing yet asserts the two DEFAULTS
+    agree except for `body`. Cheap to add while you are in there, your call.
+  - **Red-before-green per type for `T7-13`..`T7-16`.** grok's sharpest finding:
+    `test_no_positive_prompt_constant_tries_to_negate` is green today BECAUSE
+    the four types do not exist, so using it as the gate for adding them is a
+    check satisfied by absence -- in the gate for the work whose whole point is
+    not doing that.
+  §7a of the style guide is the one with a request in it: **the anchor form is
+  a matrix, not a form**, once `T7-3` takes views from 4 to 12 and `T7-19` has
+  already made the prompt box per tier AND view. 4x12 textareas is not a page.
