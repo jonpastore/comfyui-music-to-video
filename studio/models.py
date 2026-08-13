@@ -408,7 +408,14 @@ CATALOG = {
     "wan22_i2v_low": {
         "role": "refine",
         "proven": "opportunistic",   # nothing here has measured whether it helps s2v output
-        "weights_gib": 13.31,   # one file
+        "weights_gib": 13.31,   # the UNET alone
+        # WHAT IT ACTUALLY COSTS RESIDENT, and fits() uses this instead. The
+        # note below has said 20.5 GB in prose since 2026-08-12 while the
+        # arithmetic kept answering from 13.31 -- so fits("wan22_i2v_low",
+        # 15.92) said TRUE for ethan's card, on a model that cannot be held
+        # there. A note the code does not read is the defect this catalogue
+        # exists to prevent, wearing the catalogue's own clothes.
+        "resident_gib": 20.5,   # 13.31 UNET + 6.3 umt5 + 0.24 vae
         "label": "WAN 2.2 I2V 14B low-noise (refiner pass)",
         "file": "Wan2.2/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
         "loader": "UNETLoader",
@@ -619,7 +626,11 @@ def fits(key, vram_gib):
     m = CATALOG.get(key)
     if not m or not vram_gib or not m.get("weights_gib"):
         return None
-    return m["weights_gib"] <= vram_gib
+    # resident_gib when the real cost has been MEASURED and differs, because a
+    # graph loads more than its UNET: the refiner is 13.31 of weights and 20.5
+    # resident once its umt5 text encoder and VAE are counted, and answering
+    # from the UNET alone said an unstageable model fits.
+    return m.get("resident_gib", m["weights_gib"]) <= vram_gib
 
 
 def spellings(name):
@@ -896,6 +907,14 @@ def demo():
     db.DATA = tempfile.mkdtemp()
     db.DB_PATH = _os.path.join(db.DATA, "t.db")
     db._local.__dict__.clear()
+
+    # The refiner does NOT fit ethan's 15.92 GiB card, and fits() must say so.
+    # It answered True until 2026-08-13 because it read the UNET's 13.31 and not
+    # the 20.5 the graph actually loads -- a number its own notes carried.
+    assert fits("wan22_i2v_low", 15.92) is False, \
+        "fits() is answering from weights_gib again; the refiner needs 20.5 GiB resident"
+    assert fits("wan22_i2v_low", 23.42) is True, "the refiner does fit a 24 GB card"
+    assert fits("z_image_turbo", 15.92) is True, "Z-Image is 6.7 GiB and fits ethan"
 
     # IGNORED is a decision list, not a dumping ground: every entry carries a
     # reason, and nothing is both catalogued and ignored.
