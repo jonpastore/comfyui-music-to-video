@@ -285,6 +285,60 @@ nothing anyone needs.
   the explicit path refuses** — and the second is what `T8-4` and `T10-16`
   already assert.
 
+#### What adversarial review found, and the one finding that is mine
+
+Reviewed 2026-08-13 by grok and chatgpt, briefed to find the way it fails rather
+than to approve it (`docs/reviews/MINOR-POLICY-REVIEW-*`). It found six bypass
+paths. **Three are closed below. One is the acknowledged classifier gap. And one
+is a hole this policy CREATED, which I did not see when I wrote it.**
+
+- `T10-23` **The asset side channel is closed, and it is the serious one.**
+  The policy binds *text* — fields, prompts, escalation. **It does not bind
+  binary artefacts, and `T10-18` permits DEPICTING a minor at `g`/`pg13`.** So
+  the click-path is: render the niece's video at `g` (now allowed), export a
+  frame, and attach it in an `r`/`xxx` album as an anchor, an identity
+  reference, an init image or a character pack. **Every text rule holds and a
+  child's likeness reaches an explicit render.** The permission I added is what
+  opened it.
+
+  So: **an image rendered under a child-permitting lock is itself locked.** It
+  carries that provenance, it cannot be selected as a reference, anchor, plate
+  or init image by a work at `r` or `xxx`, and the refusal names the source. An
+  artefact's tier travels with the artefact, not with the project it is pasted
+  into.
+
+- `T10-24` **Screening happens on the FINAL composed string, after every merge
+  and after `PINNED` is welded on** — not on the field as typed. A check that
+  runs pre-composition is a check on something else: scene generation, cast
+  extraction, title and slug derivation, per-view overrides and template merges
+  all assemble text after the field was screened, which is how *"mother and
+  daughter"* typed into a narrative field arrives in a cast list and then in a
+  prompt. `T10-19a`'s named-field allowance decides what may be *entered*; this
+  decides what may be *sent*, and both run.
+
+- `T10-25` **There is no tier-less draft.** A work with no tier set is treated
+  as `xxx` for this rule — the most restrictive, not the least. Review found
+  that content can be written before a lock exists and escalated before any save
+  hook fires; failing closed on an unset tier removes the window rather than
+  timing it.
+
+- `T10-26` **Non-nude sexualisation of a depicted minor is refused at every
+  tier.** `g`/`pg13` permit depiction because "no nudity path exists" — and
+  review correctly found that nudity is not the only way to sexualise. Suggestive
+  framing, lingerie-adjacent costume and fetish camera language applied to a
+  depicted minor fall between `pg13`'s permission and `r`'s mention-only rule and
+  are covered by neither. **This is the "anything close to it" line, and it is
+  absolute.**
+
+**What is NOT closed, stated rather than buried: the unworded depiction.** A
+figure described as petite, doll-like, undeveloped or school-adjacent, with no
+age word anywhere, passes every lexical screen in this document — and then
+contradicts `PINNED`, which is the contradiction this stack resolves badly. The
+guardrail's own comment already admits it *"needs a classifier"*. **No criterion
+here closes it, and none pretends to.** It is the strongest argument for the
+21-year margin in `T10-18c`, and the reason `T10-23` binds artefacts rather than
+trusting the text screen to be complete.
+
 **What this changes about risk, stated plainly rather than buried.** It makes the
 studio *more* capable — a child may now be referenced somewhere, where before
 nothing could — and that is a larger surface, not a smaller one. What makes it

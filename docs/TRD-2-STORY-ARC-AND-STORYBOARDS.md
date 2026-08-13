@@ -268,11 +268,14 @@ each with the invariant that succeeds it; do not delete them.
 caller derives time as `idx * CHUNK` again. `app.py`'s copy is already gone
 (§3.4); `build_song.py:328, 364, 410` remain.
 
-**F-2 One legal-length rule serves both models.** `EmptyLTXVLatentVideo.length`
-is `step: 8`, `WanSoundImageToVideo.length` is `step: 4`, and every `8n+1` is
-also `4(2n)+1` — so **frames ≡ 1 (mod 8) is legal for both**. One rule, no
-per-model fork. Verified against cerberus `/object_info`; both accept
-`max: 16384`. This is what `T2-12a` rounds to.
+**F-2 One legal-length rule serves both models — owned by TRD-5 `T5-10`, cited
+here.** The rule about the two nodes' declared steps is a renderer fact and
+lived in this section and in `T5-10` in near-identical words; **consolidated
+2026-08-13** for the same reason as W1-1 above.
+
+What is TRD-2's: **`T2-12a` rounds a planned scene length TO that rule** before
+anything is submitted, so the storyboard's arithmetic and the renderer's agree
+and an illegal request fails in planning rather than at the sampler.
 
 **F-3 `refs` keying does not move.** `UNIQUE(song_id, tier, clip_idx, seed)`
 stays and `clip_idx` stays an ordinal. What changes is the *length* of clip 17,
@@ -283,19 +286,21 @@ never which scene it belongs to.
   approved `(clip_idx, seed)` is identical. This is the criterion that stops the
   work quietly invalidating a human's approvals.
 
-**W1-1 Per-model ceilings, each a named constant with its measurement beside
-it.** `T2-12` owns the criterion; these are the values.
-- **LTX: 15 s**, and it is a **cost** ceiling, not a capability one. 505 frames
-  / 30.004 s and 1009 / 59.949 s both render on a 24 GB card. Cost is
-  superlinear: 3.0 s of compute per finished second at 15 s against 12.4 s at
-  30 s.
-- **s2v: 4.8125 s, provisionally and labelled so.** The `LEN = 77` at
-  `build_song.py:23` is a **choice**, not a node limit — the node accepts
-  `min: 1` and the comment claims only a floor. Whether WAN S2V stays coherent
-  past its ~5 s training segment is **unmeasured**. Either measure it on the
-  8n+1 ladder (77, 153, 257) and record the result, or leave the constant and
-  say in the comment that it is unmeasured rather than proven. **A ceiling
-  presented as measured when it was chosen fails `T2-12`.**
+**W1-1 Per-model ceilings — `T2-12` owns the criterion, TRD-5 §5 owns the
+values, and this cites them.**
+
+**Consolidated 2026-08-13.** This section carried the LTX and s2v numbers in
+full — the 505/1009-frame renders, the 3.0-vs-12.4 s superlinearity, `LEN = 77`
+being a choice rather than a node limit — and so does TRD-5 §5, near-verbatim.
+TRD-5 §5 already said it owned them (*"the **values** are renderer facts and
+belong here"*) and this document kept a copy anyway. **Two copies of a measured
+number are free to drift**, and this project's own rule is that the second copy
+is the defect rather than the risk — the same finding as twelve criteria for
+four facts in `cfe7979`.
+
+What is TRD-2's and stays here: **planning must ASK for a length that respects
+whatever ceiling TRD-5 records**, and `T2-12a` rounds that request to a legal
+frame count. The numbers themselves are read from TRD-5 §5, never restated.
 
 **W1-2 The audio trim window follows the clip.** `TrimAudioDuration` at
 `build_song.py:364` takes `start_index = i * CHUNK, duration = CHUNK`; both

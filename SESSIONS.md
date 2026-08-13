@@ -1809,3 +1809,36 @@ Append dated one-liners. Newest at the bottom.
   GiB file), so **gamingpc is the only candidate**, and jobs 230/232 took 35 and
   22 minutes serialised on one box.
   **When it lands, re-check `models.where` and expect two boxes.**
+- 2026-08-13 (A) **Phase 0 consolidation finally done** (it was proposed this
+  morning and no phase did it). TRD-2 F-2 and W1-1 now CITE TRD-5 `T5-10` and
+  TRD-5 §5 instead of carrying the 8n+1 rule and the per-model ceilings in full
+  — two copies of a measured number, near-verbatim, exactly what `cfe7979`
+  consolidated for the API rules. And **TRD-6 §0.4 is new: `T6-A7`..`T6-A10`**,
+  the verification rules that all ten documents were restating and had already
+  drifted (TRD-1 §13 had five numbered rules, TRD-5 §7 a paragraph, and only
+  three of ten mentioned the `grep -c` count). `T6-A10` is B's rule from this
+  morning: **assert through the shared entry point, never through the function
+  it wraps.**
+- 2026-08-13 (A) ⚠ **THE MINOR POLICY WENT TO ADVERSARIAL REVIEW AND FOUND A
+  HOLE I CREATED.** grok and chatgpt, briefed to break it rather than approve
+  it. Six bypass paths; four folded as `T10-23`..`T10-26`. The serious one:
+  **the policy binds TEXT, and `T10-18` permits DEPICTING a minor at
+  `g`/`pg13`** — so render the niece's video at `g`, export a frame, attach it
+  in an `r`/`xxx` album as an anchor or init image, and **every text rule holds
+  while a child's likeness reaches an explicit render.** The permission I added
+  is what opened it. `T10-23` closes it: **an artefact rendered under a
+  child-permitting lock is itself locked and travels with its own tier**, and
+  cannot be selected as a reference by an explicit work.
+  Also folded: `T10-24` screening runs on the FINAL COMPOSED string after
+  `PINNED` is welded on, not the field as typed (scene generation, cast
+  extraction and template merges all assemble text after the field was
+  screened); `T10-25` **a tier-less draft is treated as `xxx`**, the most
+  restrictive, because content can otherwise be written before a lock exists;
+  `T10-26` **non-nude sexualisation of a depicted minor is refused at every
+  tier** — nudity is not the only way, and it fell between `pg13`'s permission
+  and `r`'s mention-only rule.
+  **NOT closed and said so in the document: the unworded depiction.** Petite,
+  doll-like, undeveloped, school-adjacent, with no age word, passes every
+  lexical screen here and then contradicts `PINNED`. The guardrail's own comment
+  says it needs a classifier. **No criterion closes it and none pretends to** —
+  it is the strongest argument for the 21 margin and for binding artefacts.

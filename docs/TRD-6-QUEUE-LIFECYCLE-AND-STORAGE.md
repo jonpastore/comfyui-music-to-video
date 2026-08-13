@@ -64,6 +64,48 @@ a deployment that widens the bind widens everything.
   refiner. Every consumer respects all three: storyboard planning, repair
   routing, and the queue's capability match.
 
+### 0.4 How a criterion is verified — `T6-A7`…`T6-A10`
+
+**Consolidated here 2026-08-13.** All ten documents restated these same rules in
+their own words, and they had already drifted: TRD-1 §13 carried five numbered
+rules, TRD-5 §7 compressed them to a paragraph, and only three of the ten
+mentioned the `grep -c` count. That is the shape §0 exists to fix — the API
+separation was four documents and twelve criteria for four facts before
+`cfe7979`. One owner; the others cite and add only what is theirs.
+
+- `T6-A7` **A measurement that cannot fail is not evidence.** Every criterion is
+  a differential — one variable changed, an expected direction — or it names the
+  mutation that must break it.
+- `T6-A8` **Then mutate the code and read what the mutation actually did.** Not
+  "the check went red": *what changed*. One session's mutation did not mutate
+  anything and the check passed; another applied a truthy `str.replace` that
+  short-circuited an `or`. A flag believed without reading it is a second
+  unverified claim on top of the first.
+- `T6-A9` **A refusal or a presence is half a criterion.** *"X is refused"* and
+  *"the payload carries Y"* both stay green when the whole feature is deleted,
+  because a feature that does not exist refuses everything and a field nobody
+  reads is still present. Every such criterion is paired with a positive case,
+  or marked **provisional** and says what it cannot yet distinguish.
+- `T6-A10` **Assert through the shared entry point, never through the function
+  it wraps.** Earned on `T1-20d`, 2026-08-13: correct, thorough checks aimed one
+  level too low stayed green through a call site deliberately set to the wrong
+  value, because they exercised the wrapped function directly. **Two correct
+  call sites is not a property a per-function check can see.** Wherever a design
+  collapses a decision to one application point — `mixer.item_chains`,
+  `mixer.set_duration`, `build_song.clip_plan`, `effects.measure_loudness`,
+  `models.canonical_host`, `screen_prompt_field` — the criterion goes *through*
+  it, not around it.
+
+Two rules stay with their documents because they are genuinely local: TRD-2
+§10.3's recorded-fixture rule for criteria that need a language model, and
+TRD-3 §11.1's both-directions rule for a check that must reject a broken
+artefact *and* pass a correct one.
+
+And the one no automated rule replaces, which every document may keep saying
+because saying it is the point: **when an image looks wrong, look at it.** The
+identity collapse, the world that never rendered and the LoRA that did nothing
+all passed every deterministic check this project had.
+
 ## 1. The queue is a wait state, not a timing match
 
 **Decided 2026-08-12 by Jon**, and recorded in the reconciliation: when a
