@@ -965,3 +965,9 @@ Append dated one-liners. Newest at the bottom.
   LTX-2.5. Deleting the note does not change the licence. Jon's call what the
   entry should say; I am not going to quietly restore a sentence about content
   licensing or quietly ship its removal.
+- 2026-08-13 05:50 (A) **Resolved: the `models.py` edit above is Jon's, made
+  deliberately, and he is running a job.** No action needed and nothing to
+  restore. Leaving the row above because the fact under it still stands — the
+  repo no longer records the LTX-2.x AUP anywhere — but it is a known, owned
+  change and not a mystery. Also: **a job is in flight, so nothing gets deployed
+  and no worker gets restarted.**
