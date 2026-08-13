@@ -386,10 +386,18 @@
        gone the moment you navigated away. A new row per save, because a prompt is
        tuned by comparing renders and the one you want back is usually the last
        but one. #}
-    <div class="field-row prompt-versions" data-tier="{{ p.name }}">
+    {# ONE BOX PER VIEW. A single box per tier went verbatim to every view of it,
+       so an edit made while looking at the front sheet also governed the back
+       and the nude ones -- overriding the per-view framing sentence and the nude
+       wardrobe swap, which is the only thing that makes a nude sheet nude. The
+       hint below used to document that trap rather than remove it.
+       docs/TRD-7 T7-19. #}
+    {% for vb in p.views %}
+    <div class="view-prompt" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
+    <div class="field-row prompt-versions" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
       <label>
         <span class="label-text">Saved prompts{{ help("prompt_versions") }}</span>
-        <select class="prompt-version-pick" data-tier="{{ p.name }}">
+        <select class="prompt-version-pick" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
           <option value="">composed from the album profile (the default)</option>
           {% for v in p.versions %}
           <option value="{{ v.id }}" data-text="{{ v.text }}">
@@ -399,43 +407,49 @@
       </label>
       <label>Name this version
         <input type="text" class="prompt-version-label" data-tier="{{ p.name }}"
+               data-view="{{ vb.key }}"
                maxlength="80" placeholder="e.g. tighter fur wording"></label>
-      <button type="button" class="prompt-save" data-tier="{{ p.name }}">Save prompt</button>
+      <button type="button" class="prompt-save" data-tier="{{ p.name }}"
+              data-view="{{ vb.key }}">Save prompt</button>
       <button type="button" class="version-delete danger btn-sm" data-tier="{{ p.name }}"
+              data-view="{{ vb.key }}"
               disabled title="Select a saved version to delete it">Delete version</button>
       {# Which saved version this sheet is actually being rendered from, so
          usage_count counts RENDERS and not the times a wording was looked at
          and rejected. Set by the picker, cleared when the box is edited away
          from it. #}
       <input type="hidden" name="used_version" class="used-version"
-             data-tier="{{ p.name }}" value="">
-      <span class="prompt-save-note muted row-note" data-tier="{{ p.name }}"></span>
+             data-tier="{{ p.name }}" data-view="{{ vb.key }}" value="">
+      <span class="prompt-save-note muted row-note" data-tier="{{ p.name }}"
+            data-view="{{ vb.key }}"></span>
     </div>
     {# What this box was COMPOSED as. hx-include sends the whole form on every
        swap, so ticking a view sent the old text back and /anchors/form seeded
        the new panel from it -- the box then held the default for the view you
-       just left. Submitting compares against the default for the view you are
-       now on, so an untouched box looked EDITED and went verbatim to every
-       sheet: pick nude-only and the nude views rendered the clothed FRONT VIEW
-       wording, wardrobe and all. Carrying this lets the swap tell "untouched"
-       from a real edit instead of having to guess. #}
-    <input type="hidden" name="prompt_default_{{ p.name }}" value="{{ p.composed }}">
-    <label>Prompt &mdash; what {{ p.name | tiername }}'s character sheets are built from
-      <textarea name="prompt_{{ p.name }}" rows="8" class="counted"
+       just left. Carrying this lets the swap tell "untouched" from a real edit
+       instead of having to guess. #}
+    <input type="hidden" name="prompt_default_{{ p.name }}__{{ vb.key }}"
+           value="{{ vb.composed }}">
+    <label>Prompt &mdash; the {{ p.name | tiername }}
+      <strong>{{ vb.label }}</strong> sheet{% if vb.nude %} (the album's wardrobe wording is
+      dropped on this one){% endif %}
+      <textarea name="{{ vb.field }}" rows="8" class="counted"
                 data-max="{{ max_anchor_prompt }}"
-                maxlength="{{ max_anchor_prompt }}">{{ p.prompt }}</textarea>
-      <span class="char-count muted" data-for="prompt_{{ p.name }}"></span>
+                maxlength="{{ max_anchor_prompt }}">{{ vb.prompt }}</textarea>
+      <span class="char-count muted" data-for="{{ vb.field }}"></span>
     </label>
+    </div>
+    {% endfor %}
   </div>
   {% endfor %}
-  <p class="hint">Composed from this album's identity, wardrobe and body wording plus the
-    chosen view, shown for the first view selected.
-    <strong>Leave it untouched and each view composes its own</strong> &mdash; the back views
-    get a BACK VIEW sentence, and a nude view drops the album's wardrobe wording entirely,
+  <p class="hint">Each box is composed from this album's identity, wardrobe and body wording
+    plus <em>its own</em> view.
+    <strong>Leave one untouched and that view composes its own</strong> &mdash; a back view
+    gets a BACK VIEW sentence, and a nude view drops the album's wardrobe wording entirely,
     which is the only way a nude sheet comes out nude.
-    <strong>Edit it and that text is used verbatim for every view of this tier</strong>,
-    which means it overrides both of those. Edit it to describe the character, not the
-    pose &mdash; a prompt beginning "FRONT VIEW" renders a front view on the back sheet.</p>
+    <strong>Edit one and that text is used verbatim for that sheet only</strong>; the other
+    views of the same tier are unaffected, so an edit governs the sheet you are looking at
+    and nothing else.</p>
   {% else %}
   <p class="hint">Tick at least one tier.</p>
   {% endif %}

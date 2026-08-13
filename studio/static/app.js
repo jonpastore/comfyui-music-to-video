@@ -485,8 +485,8 @@ function initAnchorPrompts() {
   document.addEventListener("change", function (e) {
     var pick = e.target.closest && e.target.closest(".prompt-version-pick");
     if (!pick) return;
-    var form = anchorForm();
-    var box = form && form.querySelector('[name="prompt_' + pick.dataset.tier + '"]');
+    var blk = promptBlock(pick);
+    var box = blk && blk.querySelector("textarea");
     if (!box) return;
     var opt = pick.options[pick.selectedIndex];
     // the empty option means "the composed default" -- reloading is the honest
@@ -494,7 +494,7 @@ function initAnchorPrompts() {
     if (!opt.value) { location.reload(); return; }
     box.value = opt.dataset.text || "";
     box.dispatchEvent(new Event("input", {bubbles: true}));   // refresh the counter
-    markUsedVersion(box, pick.dataset.tier || "", opt.value);
+    markUsedVersion(box, blk, opt.value);
     syncVersionDelete(pick);
   });
 
@@ -504,9 +504,10 @@ function initAnchorPrompts() {
     var form = anchorForm();
     if (!form) return;
     var tier = save.dataset.tier;
-    var box = form.querySelector('[name="prompt_' + tier + '"]');
-    var note = form.querySelector('.prompt-save-note[data-tier="' + tier + '"]');
-    var label = form.querySelector('.prompt-version-label[data-tier="' + tier + '"]');
+    var blk = promptBlock(save);
+    var box = blk && blk.querySelector("textarea");
+    var note = blk && blk.querySelector(".prompt-save-note");
+    var label = blk && blk.querySelector(".prompt-version-label");
     if (!box) return;
     // A version with no name is a version you cannot find again: the picker
     // lists them by name, so an unnamed one reads as "unnamed" beside every
@@ -534,7 +535,7 @@ function initAnchorPrompts() {
     say2(note, "saving...");
     api("/anchors/prompt", body).then(function (d) {
       say2(note, "saved " + (d.label || "unnamed"));
-      var pick = form.querySelector('.prompt-version-pick[data-tier="' + tier + '"]');
+      var pick = blk && blk.querySelector(".prompt-version-pick");
       if (pick && d.versions) {
         var keep = pick.options[0];
         pick.innerHTML = "";
@@ -566,7 +567,7 @@ function initAnchorPrompts() {
     if (!box || !opt.value) return;
     box.value = opt.dataset.text || "";
     box.dispatchEvent(new Event("input", {bubbles: true}));
-    markUsedVersion(box, "", opt.value);
+    markUsedVersion(box, null, opt.value);   // the negative has no per-view block
     syncAnchorMode();
     syncVersionDelete(pick);
   });
@@ -627,11 +628,11 @@ function initAnchorPrompts() {
     if (!del) return;
     var form = anchorForm();
     if (!form) return;
-    var tier = del.dataset.tier || "";
-    var pick = form.querySelector(tier ? '.prompt-version-pick[data-tier="' + tier + '"]'
-                                       : ".negative-version-pick");
-    var note = form.querySelector(tier ? '.prompt-save-note[data-tier="' + tier + '"]'
-                                       : ".negative-save-note");
+    var blk = promptBlock(del);
+    var pick = blk ? blk.querySelector(".prompt-version-pick")
+                   : form.querySelector(".negative-version-pick");
+    var note = blk ? blk.querySelector(".prompt-save-note")
+                   : form.querySelector(".negative-save-note");
     if (!pick || !pick.value || pick.value === "default") return;
     var opt = pick.options[pick.selectedIndex];
     if (!confirm("Delete the saved version “" + opt.textContent.trim() + "”?")) return;
@@ -779,7 +780,16 @@ function initRunHistory() {
 // count a RENDER as usage rather than a look. Cleared as soon as the text is
 // edited: a wording you altered is no longer the version you loaded, and
 // counting it would make the history's usage numbers describe something else.
-function markUsedVersion(box, tier, vid) {
+// One saved-prompt row per VIEW, so everything about a row is resolved inside
+// its own block. A form-wide lookup by data-tier alone reaches the FIRST view's
+// box, which would save the front sheet's wording as the back sheet's and load
+// it back the same way -- the cross-view leak T7-19 removed from the render
+// path, reappearing in the editor. Null for the negative, which has no block.
+function promptBlock(el) {
+  return (el && el.closest) ? el.closest(".view-prompt") : null;
+}
+
+function markUsedVersion(box, blk, vid) {
   var form = anchorForm();
   if (!form || !box) return;
   // Only a real version id. The negative picker's last option is the sentinel
@@ -789,8 +799,8 @@ function markUsedVersion(box, tier, vid) {
   // not, which is how a sentinel handled in one place and not the other gets
   // through.
   if (!/^\d+$/.test(String(vid || ""))) vid = "";
-  var sel = tier ? '.used-version[data-tier="' + tier + '"]' : ".used-version:not([data-tier])";
-  var hidden = form.querySelector(sel);
+  var hidden = blk ? blk.querySelector(".used-version")
+                   : form.querySelector(".used-version:not([data-tier])");
   if (!hidden) return;
   hidden.value = vid || "";
   if (!box.dataset.versionWatched) {
@@ -877,10 +887,10 @@ function say2(el, msg, bad) {
 // (on the negative) is the generic starting point; neither is a row.
 function syncVersionDelete(pick) {
   if (!pick) return;
-  var tier = pick.dataset.tier || "";
+  var blk = promptBlock(pick);
   var form = anchorForm();
-  var del = form && form.querySelector(tier ? '.version-delete[data-tier="' + tier + '"]'
-                                            : ".version-delete:not([data-tier])");
+  var del = blk ? blk.querySelector(".version-delete")
+                : form && form.querySelector(".version-delete:not([data-tier])");
   if (!del) return;
   var real = pick.value && pick.value !== "default";
   del.disabled = !real;

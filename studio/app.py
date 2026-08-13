@@ -2130,6 +2130,24 @@ def _build_refs():
     return build_refs
 
 
+def _make_anchor():
+    """Same reason as _build_refs: the composer is a repo-root CLI script."""
+    import make_anchor
+    return make_anchor
+
+
+def anchor_prompt_field(tier, view):
+    """The form field one tier's ONE VIEW writes its prompt into.
+
+    Per tier AND view. Four routes read these boxes -- the form, the plan, the
+    preview and the submit -- and a field name spelled out at each of them is
+    how three of them agree and the fourth renders something else. `__` is the
+    separator because a view key never contains one, so the suffix splits back
+    exactly (see /anchors/form, which carries these keys opaquely).
+    """
+    return f"prompt_{tier}__{view}"
+
+
 ANCHOR_MODES = ("fast", "quality")
 # ONE default, read by both the form parser and the settings resolver. They had
 # their own, and they disagreed: anchor_render_settings defaulted to quality
@@ -2962,16 +2980,16 @@ async def anchor_preflight(request: Request):
     if not refs:
         blockers.append("Pick at least one saved reference image, or upload one.")
 
-    # The per-tier prompt boxes, through the SAME three checks the route runs.
-    # Collected rather than raised, so a screening refusal and a length refusal
-    # both show at once instead of one revealing the next.
-    for t in tiers_sel:
-        text = (form.get(f"prompt_{t}") or "").strip()
+    # The per-tier-and-view prompt boxes, through the SAME three checks the route
+    # runs. Collected rather than raised, so a screening refusal and a length
+    # refusal both show at once instead of one revealing the next.
+    for t, v in combos:
+        text = (form.get(anchor_prompt_field(t, v)) or "").strip()
         if not text:
             continue
         if len(text) > MAX_ANCHOR_PROMPT:
-            blockers.append(f"The {t.upper()} prompt is {len(text)} characters; keep it under "
-                            f"{MAX_ANCHOR_PROMPT}.")
+            blockers.append(f"The {t.upper()} {ANCHOR_VIEWS.get(v, v)} prompt is {len(text)} "
+                            f"characters; keep it under {MAX_ANCHOR_PROMPT}.")
         try:
             tiers.check_text(text, f"{t.upper()} anchor prompt")
             tiers.check_override(text)
@@ -3031,14 +3049,15 @@ async def anchor_preview(request: Request):
     views_sel = sorted({v for v in form.getlist("view") if v})
     chosen = anchor_render_settings(form)
     settings = resolved_settings(chosen)
-    unedited = default_anchor_prompt(album, next(
-        (k for k in ANCHOR_VIEWS if k in set(views_sel)), "front"), cid)
     out = []
     for p in anchor_plan(tiers_sel, views_sel):
-        typed = (form.get(f"prompt_{p['tier']}") or "").strip()
-        if typed and typed == (unedited or "").strip():
-            typed = ""          # untouched: each view composes its own, as at render
         for v in p["views"]:
+            # Each box against ITS OWN view's default, exactly as the submit does
+            # it -- this panel exists to agree with the renderer, so it reads the
+            # same field and makes the same comparison. docs/TRD-7 T7-19.
+            typed = (form.get(anchor_prompt_field(p["tier"], v)) or "").strip()
+            if typed and typed == (default_anchor_prompt(album, v, cid) or "").strip():
+                typed = ""      # untouched: this view composes its own, as at render
             out.append(anchor_prompt_preview(album, p["tier"], v, cid, typed,
                                               form.get("negative") or "", settings))
     return JSONResponse({"sheets": out, "settings": settings,
@@ -3102,30 +3121,31 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
                                   "permits nudity, so there is nothing to render. Tick a clothed "
                                   "view, or turn nudity on for a tier under Tiers.")
 
-    # One prompt per tier, named prompt_<tier>. Every one is screened: a tier's
-    # own box is a free-text field like any other.
+    # One prompt per tier AND VIEW, named prompt_<tier>__<view>. Every one is
+    # screened: a box on this form is a free-text field like any other.
     form = await request.form()
-    # what the form prefilled, so an untouched box can be told apart from a
-    # deliberate edit -- composed for the first selected view, exactly as
-    # anchor_form_ctx does it
-    # the SAME view anchor_form_ctx prefills from: ANCHOR_VIEWS order, not the
-    # alphabetical order selected_views happens to be in. Using the wrong one
-    # compares against a prompt the form never showed, so every prompt looks
-    # edited and the per-view composition never happens.
-    _first_view = next((k for k in ANCHOR_VIEWS if k in set(selected_views)), "front")
-    unedited_default = default_anchor_prompt(album, _first_view, character_id)
-    tier_prompts = {}
-    for t in selected_tiers:
-        text = (form.get(f"prompt_{t}") or "").strip()
+    # Each box is compared against the default composed FOR ITS OWN VIEW, so an
+    # untouched box can be told apart from a deliberate edit. There used to be
+    # one box per tier and one comparison against the first selected view's
+    # default, which is what made an edit apply to every view of its tier --
+    # overriding the framing sentence and the nude wardrobe swap on every sheet
+    # but the one the operator was looking at. docs/TRD-7 T7-19.
+    view_prompts = {}
+    for t, v in combos:
+        text = (form.get(anchor_prompt_field(t, v)) or "").strip()
         if len(text) > MAX_ANCHOR_PROMPT:
-            raise HTTPException(400, f"the {t.upper()} prompt is {len(text)} characters; keep it "
-                                      f"under {MAX_ANCHOR_PROMPT}")
+            raise HTTPException(400, f"the {t.upper()} {ANCHOR_VIEWS.get(v, v)} prompt is "
+                                      f"{len(text)} characters; keep it under "
+                                      f"{MAX_ANCHOR_PROMPT}")
         try:
             tiers.check_text(text, f"{t.upper()} anchor prompt")
             tiers.check_override(text)
         except ValueError as e:
             raise HTTPException(400, str(e))
-        tier_prompts[t] = text
+        if text and text == (default_anchor_prompt(album, v, character_id) or "").strip():
+            # untouched: send it as EMPTY so make_anchor composes this view's own
+            text = ""
+        view_prompts[(t, v)] = text
 
     # TIER WORDING, arriving as tone_<tier> for the same reason the prompts do.
     # Stored BEFORE anything is queued, so the wording the box showed is the
@@ -3190,19 +3210,20 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     n = max(1, min(int(n), 8))
     sweep = cfg_sweep_points(form, render, combos)
     # An UNEDITED prompt is sent as empty so make_anchor composes it PER VIEW.
+    # That comparison happened above, per box, against its own view's default.
     #
-    # make_anchor.py:169 is `args.prompt.strip() or prompt_for(view, ...)`, so an
-    # explicit prompt REPLACES the per-view composition entirely -- and the form
-    # always prefills the box, so a prompt was always sent. The consequences were
-    # exactly what a user reported after rendering twelve sheets: every "back"
-    # sheet carried the FRONT VIEW sentence and looked like the front, and no
-    # nude sheet was nude, because prompt_for's NUDE_WARDROBE swap
-    # ("the album's wardrobe wording is the one thing that must NOT be used")
-    # never ran. Twelve tier/view combinations received one identical prompt.
+    # make_anchor's `--prompt` is `args.prompt.strip() or prompt_for(view, ...)`,
+    # so an explicit prompt REPLACES the per-view composition entirely -- and the
+    # form always prefills the box, so a prompt was always sent. The consequences
+    # were exactly what a user reported after rendering twelve sheets: every
+    # "back" sheet carried the FRONT VIEW sentence and looked like the front, and
+    # no nude sheet was nude, because prompt_for's NUDE_WARDROBE swap ("the
+    # album's wardrobe wording is the one thing that must NOT be used") never
+    # ran. Twelve tier/view combinations received one identical prompt.
     #
-    # An EDITED prompt is still honoured, and still applies to every view of its
-    # tier -- the form says so, because that edit does override the framing and
-    # the nude swap.
+    # An EDITED prompt is still honoured verbatim, and now reaches ONLY the view
+    # whose box it was typed into: every box is composed for its own view, so the
+    # sheet an edit governs is the sheet the operator was looking at.
     #
     # A CFG SWEEP replaces the per-combination loop with a per-GUIDANCE one: the
     # single tier and view, rendered once at every cfg value, n candidates each.
@@ -3212,9 +3233,7 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     plan_points = ([(t, v, None) for t, v in combos] if not sweep else
                    [(combos[0][0], combos[0][1], c) for c in sweep["cfgs"]])
     for t, v, cfg in plan_points:
-        text = tier_prompts[t]
-        if text and text.strip() == (unedited_default or "").strip():
-            text = ""
+        text = view_prompts[(t, v)]
         this_render = render if cfg is None else dict(render, cfg=cfg, seed=sweep["seed"])
         this_n = n if cfg is None else sweep["n"]
         # The run row goes in FIRST, so what was sent survives a job that fails.
@@ -3498,9 +3517,6 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
              for k, v in ANCHOR_VIEWS.items()]
     chosen_views = [v["key"] for v in views if v["key"] in set(selected_views)] or ["front"]
     plan = anchor_plan(selected, chosen_views)
-    # the prompt is composed for the FIRST chosen view; the others differ only
-    # in their framing sentence, which make_anchor swaps in per view
-    default_prompt = default_anchor_prompt(album, chosen_views[0], character_id)
     typed_prompts = typed_prompts or {}
     # The negative is the ALBUM's, and DEFAULT_NEGATIVE is only where an album
     # that has never saved one starts. Its terms are failure modes of THIS
@@ -3530,12 +3546,27 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
         "tier_panels": [{"name": t, "text": (tones or {}).get(t, tier_tone(t, album)),
                          "tier_default": tiers.tier_text(t).strip(),
                          "overridden": bool(tiers.override_text(album, t)),
-                         "prompt": typed_prompts.get(t, default_prompt),
-                         # What this panel WOULD have composed, shipped as a hidden
-                         # field so the next swap can tell an untouched box from a
-                         # real edit. Without it the form cannot distinguish them
-                         # and has to either discard edits or carry stale text.
-                         "composed": default_prompt,
+                         # ONE BOX PER VIEW, not one per tier. A single box per
+                         # tier was sent verbatim to every view of it, so an edit
+                         # made while looking at the front sheet also governed the
+                         # back and the nude ones -- overriding both the per-view
+                         # framing sentence and the nude wardrobe swap, which is
+                         # the only thing that makes a nude sheet nude. The form's
+                         # own hint documented the trap rather than removing it.
+                         # docs/TRD-7 T7-19.
+                         "views": [{"key": v, "label": ANCHOR_VIEWS.get(v, v),
+                                    "field": anchor_prompt_field(t, v),
+                                    "nude": _make_anchor().is_nude_view(v),
+                                    "prompt": typed_prompts.get(f"{t}__{v}", composed),
+                                    # What this box WOULD have composed, shipped as a
+                                    # hidden field so the next swap can tell an
+                                    # untouched box from a real edit. Without it the
+                                    # form cannot distinguish them and has to either
+                                    # discard edits or carry stale text.
+                                    "composed": composed}
+                                   for v, composed in
+                                   ((v, default_anchor_prompt(album, v, character_id))
+                                    for v in chosen_views)],
                          "versions": anchor_prompt_versions(album, t, character_id)}
                         for t in selected],
         # the album+character's saved base images, so a sheet can be generated
