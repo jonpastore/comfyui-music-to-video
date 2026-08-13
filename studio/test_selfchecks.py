@@ -43,7 +43,7 @@ SMOKE = ["db"]
 # These shell out to ffmpeg and take real seconds. They are also the ones
 # holding the measurements the continuation docs quote, so they are worth the
 # wait -- run `pytest -m "not slow"` to skip them.
-SLOW = ["mixer", "pipeline", "qc", "qc_service"]
+SLOW = ["mixer", "pipeline", "qc", "qc_service", "automation"]
 
 # The workflow BUILDERS live at the repo root, not in studio/, and their
 # self-checks were in exactly the state this file's docstring describes: written,

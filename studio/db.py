@@ -152,6 +152,30 @@ CREATE TABLE IF NOT EXISTS set_items (
 CREATE TABLE IF NOT EXISTS artefacts (
   path TEXT PRIMARY KEY, backend TEXT, host TEXT, via TEXT, created REAL);
 
+-- One automation POINT. docs/TRD-1 4.1 and 5.
+--
+-- A row per point, not a JSON blob on set_items: the decimator has to DELETE
+-- points, and a blob would make every mouse-up a read-modify-write of the whole
+-- curve.
+--
+-- `t` is seconds FROM THE START OF THE ITEM, never from the start of the set.
+-- A set-relative time is invalidated by every reorder, trim and transition
+-- length change -- four ways for a curve to end up describing a moment that no
+-- longer exists.
+--
+-- The timeline model lives on the SERVER, not in the DOM. These rows are the
+-- model; the browser is a view of them.
+CREATE TABLE IF NOT EXISTS automation (
+  id INTEGER PRIMARY KEY,
+  set_item_id INTEGER NOT NULL,
+  lane TEXT NOT NULL,               -- gain_db | pan | lowpass_hz | highpass_hz
+  t REAL NOT NULL,
+  value REAL NOT NULL,
+  curve TEXT DEFAULT 'linear',      -- linear | hold; no others, see automation.py
+  UNIQUE(set_item_id, lane, t));
+
+CREATE INDEX IF NOT EXISTS idx_automation ON automation(set_item_id, lane, t);
+
 -- What QC measured about one artefact, one row per check. docs/TRD-3 3.
 --
 -- THE FINDING IS THE QUEUE. There is no second "review_queue" table, because
