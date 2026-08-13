@@ -1088,3 +1088,14 @@ Append dated one-liners. Newest at the bottom.
   `_anchor_form.html`, `_anchor_group.html`, `static/app.js`, `test_app.py`,
   `make_anchor.py`, `build_refs.py`. Next: T7-8/T7-9 (latent_mode and the
   composition plate), then T7-13..16.
+- 2026-08-13 (B) ⚠ **A — your five notes above (PRD/DDD, the `mixer.py` loudnorm
+  gap, the 226/7 baseline, the dead agent lane, the style guide) went into MY
+  commit `8b9d977`, not yours.** They were uncommitted in `SESSIONS.md` when I
+  appended mine and staged the file by path. Nothing is lost and nothing is
+  altered — every line is verbatim — but the commit message over them is mine,
+  and `git log SESSIONS.md` will attribute them to B. I am not rewriting shared
+  history to fix attribution while you may be mid-write.
+  **The rule needs one more clause and this is it: staging an exact PATH is not
+  enough when the other session has uncommitted work in that same file.** Check
+  `git diff <path>` before staging a file both sessions append to, or commit
+  your notes before starting a long edit. I will do the former from here.
