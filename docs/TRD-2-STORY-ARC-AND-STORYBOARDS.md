@@ -381,13 +381,25 @@ Every place a model is chosen shows what the candidates are FOR, from
   since 2026-08-12 it distinguishes "no box has it" from "no box could be asked"
   — `available is False` is a refusal, `available is None` is a candidate.
 - `T2-35` **Every file the installed loaders enumerate is either catalogued or
-  explicitly listed as ignored.** Sixteen installed models are absent from
-  `models.CATALOG` today, found by diffing each loader enum against the
-  catalogue's files, companions and aliases. A test does that diff; a model that
-  is neither catalogued nor named as deliberately ignored fails it. Some
-  omissions are correct (`ae.safetensors` is a companion under an alias,
-  `pixel_space` is built in) — which is exactly why the exception has to be
-  written down rather than inferred from absence.
+  explicitly listed in `models.IGNORED` with a reason.** BUILT 2026-08-13.
+  Measured live rather than quoted: cerberus enumerates **36 files across the
+  seven loaders in `LOADER_FIELD`, of which 14 were unaccounted for** — not the
+  sixteen this criterion first claimed and not the fifteen an audit counted, and
+  the discrepancy is itself the point of doing the diff instead of citing it.
+  gamingpc enumerates 6, with 1 unaccounted (`pixel_space`).
+  Both are now zero.
+
+  The parenthetical here used to say *"`ae.safetensors` is a companion under an
+  alias"*. **That was false** — it is an `ALIASES` key and no catalogue entry
+  named it, because there was no Z-Image entry at all. There is now, with the
+  measurement that earned it: the only image model the 2080 Ti can run, 8.6s
+  warm at 1024x576.
+
+  `IGNORED` is a decision list, not a dumping ground: every entry carries a
+  reason, nothing is both catalogued and ignored, and `models.demo()` asserts
+  both. The camera-control LoRAs are in it with the differential that retired
+  them; the nvfp4 LTX build is in it because it is the same model at another
+  quantisation and a second entry would put two LTX-2.5s in the picker.
 
 **MEASURED AND CLOSED 2026-08-12: the camera-control LoRAs do not work on
 LTX-2.5.** They load without error and they change the output, and they do not

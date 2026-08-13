@@ -125,7 +125,100 @@ UNKNOWN_BACKEND = ("opportunistic", "not in BACKEND_STABILITY -- assumed unrelia
 # later cannot quietly arrive claiming to be production-ready.
 PROVEN = ("stable", "opportunistic")
 
+# Files a loader enumerates that are DELIBERATELY not catalogued. Measured
+# against the live boxes 2026-08-13: cerberus enumerates 36 files across the
+# seven loaders in LOADER_FIELD, and these are the ones with no entry.
+#
+# The point of the list is that absence becomes a DECISION instead of a gap.
+# docs/TRD-2 T2-35 asserts every enumerated file is either catalogued or named
+# here, so a model arriving on a box can no longer be invisible to routing --
+# which is how a workflow comes to name a file `where()` says nobody has.
+#
+# T2-35 also claimed "ae.safetensors is a companion under an alias". It is not:
+# it is an ALIASES key and no CATALOG entry names it, because there was no
+# Z-Image entry at all until today. That parenthetical was wrong.
+IGNORED = {
+    "pixel_space":
+        "ComfyUI's built-in latent-passthrough VAE, not a file on disk. Enumerated "
+        "by VAELoader on every box including ones holding no VAEs at all.",
+    "OfficialStableDiffusion/sd_xl_base_1.0.safetensors":
+        "SDXL base, from a SwarmUI default install. Nothing here uses it and "
+        "Qwen-Image-Edit supersedes it for every reference job.",
+    "taeltx2_3.safetensors":
+        "Tiny autoencoder for LTX PREVIEW decoding, used by the sampler's live "
+        "preview, never by a render. Cataloguing it would offer it as a VAE.",
+    # --- the LTX-2 19B family. LTX-2.5 supersedes it: measured stable on two
+    # boxes, renders 30s and 60s, and is audio-conditioned.
+    "ltx-2-19b-dev-fp8.safetensors":
+        "LTX-2 19B base. Superseded by 2.5 and deliberately not wired -- the "
+        "camera LoRAs below were the only argument for installing it.",
+    "ltx-2-19b-distilled-lora-384.safetensors":
+        "Distilled LoRA for the 19B base, which is not wired.",
+    "LTX-2/ltx-2-19b-ic-lora-detailer.safetensors":
+        "Detailer LoRA for the 19B base, which is not wired.",
+    "LTX-2/ltx-2-19b-lora-camera-control-static.safetensors":
+        "MEASURED NOT TO WORK on LTX-2.5 (docs/TRD-2 6). Dimensionally "
+        "compatible at 4096, applies without error, changes pixels, and produces "
+        "no camera move -- a LoRA half-applied over int8-quantised weights.",
+    "ltx-2-19b-lora-camera-control-dolly-left.safetensors":
+        "Same measurement: neutral prompt, same seed, LoRA off gives a locked "
+        "camera (0,0,0,-3,-4) and LoRA on gives incoherent noise (+9,-9,-37,+30). "
+        "The `camera` storyboard field stays prose because of this.",
+    # --- Qwen LoRAs nobody has measured
+    "Qwen-Image-Edit-Unblur-Upscale_15.safetensors":
+        "Unblur/upscale LoRA for Qwen-Image-Edit. Never measured here; "
+        "make_postproc uses RealESRGAN for upscaling instead.",
+    "qwen-edit-skin.safetensors":
+        "Skin-detail LoRA for Qwen-Image-Edit. Never measured here.",
+    "qwen_3_4b_fp8_mixed.safetensors":
+        "Qwen3 4B text encoder. The reference path uses qwen_2.5_vl_7b; this is "
+        "a smaller alternative nothing is written against.",
+    "ltx-2.5-22b-distilled-transformer-nvfp4.safetensors":
+        "The SAME model as ltx25 at a different quantisation -- 17.4 GiB nvfp4 "
+        "against 20.03 int8 -- downloaded as the VRAM fallback and named in "
+        "ltx25's purpose text and build_song.LTX25_MODEL_NVFP4. Not a second "
+        "catalogue entry, because that would put two LTX-2.5s in the picker and "
+        "the choice between them is a VRAM decision no scheduler here makes yet.",
+    "ZImage/SwarmUI_Z-Image-Turbo-FP8Mix.safetensors":
+        "SwarmUI's own copy of the Z-Image checkpoint catalogued as z_image_turbo "
+        "-- same weights under SwarmUI's path. See ALIASES.",
+}
+
+
 CATALOG = {
+    "z_image_turbo": {
+        "role": "reference",
+        "label": "Z-Image Turbo (fp8 mixed)",
+        "file": "z_image_turbo_fp8mix.safetensors",
+        "loader": "UNETLoader",
+        "cli": "zimage",
+        "companions": {"ae.safetensors": "VAELoader"},
+        "weights_gib": 6.7,
+        "proven": "opportunistic",
+        "purpose": (
+            "Z-Image Turbo. THE ONLY IMAGE MODEL THE 2080 Ti CAN RUN, which is why "
+            "it is here at all: measured 2026-08-12, a real 1024x576 render in 60.8s "
+            "cold and 8.6s warm on peaches, RGB std 56.2. Per pixel the 5090 is 3.5x "
+            "faster, so fp8 storage without fp8 matmul is a tax and not a wall.\n"
+            "What conditions it is `reference_latents` through the VAE -- `omni` mode "
+            "switches on when len(ref_latents) > 0, NOT on a CLIP encoder. The "
+            "checkpoint has 794 tensors and NO siglip_embedder, so a CLIP-vision "
+            "encoder wired into TextEncodeZImageOmni loads, does real work (64.0s vs "
+            "44.2s) and its output is discarded -- byte-identical PNGs at two "
+            "independent seeds. It wants a Z-Image OMNI checkpoint, which is not here.\n"
+            "TRAP: `auto_resize_images` scales to ~1MP and rounds to /8, but Z-Image "
+            "patchifies 2x2 and needs /16. The album's 896x1216 anchor becomes "
+            "880x1192 -> latent 110x149, and 149 is odd: a hard crash in 0.4s, seven "
+            "times running. Set it false and feed a /16-clean anchor."),
+        "notes": [
+            "UNPROVEN FOR ANCHORS. Every anchor this project has rendered came from "
+            "Qwen-Image-Edit 2511, which takes the uploaded samples as direct image "
+            "conditioning; Z-Image has never been on the anchor path.",
+            "Its VAE is spelled differently per box -- ae.safetensors on cerberus, "
+            "z_image_ae.safetensors on peaches -- so a workflow naming one is refused "
+            "by the other until pipeline._retarget rewrites it. See ALIASES.",
+        ],
+    },
     "qwen_image_edit_2511": {
         "role": "reference",
         "proven": "stable",   # every reference frame and every anchor this project has rendered
@@ -803,6 +896,16 @@ def demo():
     db.DATA = tempfile.mkdtemp()
     db.DB_PATH = _os.path.join(db.DATA, "t.db")
     db._local.__dict__.clear()
+
+    # IGNORED is a decision list, not a dumping ground: every entry carries a
+    # reason, and nothing is both catalogued and ignored.
+    for f, why in IGNORED.items():
+        assert why and len(why) > 40, f"IGNORED[{f}] has no real reason"
+    catalogued = {m["file"] for m in CATALOG.values() if m.get("file")}
+    for m in CATALOG.values():
+        catalogued |= set(m.get("companions") or {})
+    both = catalogued & set(IGNORED)
+    assert not both, f"catalogued AND ignored: {sorted(both)}"
 
     # every catalogue entry is complete -- a half-filled one renders a blank
     # "what is it for" in the UI, which is the whole point of the module
