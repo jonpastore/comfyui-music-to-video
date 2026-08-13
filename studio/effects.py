@@ -17,6 +17,8 @@ unglamorous thing that matters most -- everything else here is off unless a
 set item asks for it.
 """
 import json
+import re
+import subprocess
 
 # --- filter_sweep -----------------------------------------------------
 # Measured on this box's ffmpeg (6.1.1): highpass/lowpass's "f" option does
@@ -139,6 +141,49 @@ def phaser():
 def flanger():
     """Fixed-parameter flanger. Off by default -- see DEFAULT_EFFECTS."""
     return "flanger=delay=5:depth=2:regen=0"
+
+
+def measure_loudness(path):
+    """Measured integrated loudness and true peak of a rendered file.
+
+    {"lufs": float, "true_peak_db": float}. EBU R128 via ffmpeg's own ebur128,
+    read off the Summary block it prints at end of stream.
+
+    THIS IS THE ONE IMPLEMENTATION. docs/TRD-1 T1-25 and docs/TRD-3 4.3 both
+    measure loudness and both call this: the export path names it on the asset
+    row, QC's audio tier compares it against the target. Two implementations
+    would eventually disagree, and a disagreement between two loudness numbers
+    is invisible until someone plays the file.
+
+    It lives here, next to LOUDNORM_I and loudnorm_filter(), because those
+    already own what the target IS -- measuring against a target from another
+    module is how the two drift apart.
+
+    Raises RuntimeError if ebur128 printed no summary. That is deliberate and it
+    is this project's most-repeated lesson: a filter that emits nothing returns
+    0.0 to a caller that cannot tell the difference between silence and no
+    reading, and the comparison then passes on no data.
+    """
+    r = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "info", "-i", path, "-af", "ebur128=peak=true",
+         "-f", "null", "-"],
+        capture_output=True, text=True)
+    # Summary block, last occurrence:  I:  -14.2 LUFS  /  Peak:  -1.0 dBFS
+    lufs = peak = None
+    for line in r.stderr.splitlines():
+        s = line.strip()
+        m = re.match(r"^I:\s+(-?\d+(?:\.\d+)?)\s+LUFS", s)
+        if m:
+            lufs = float(m.group(1))
+        m = re.match(r"^Peak:\s+(-?\d+(?:\.\d+)?)\s+dBFS", s)
+        if m:
+            peak = float(m.group(1))
+    if lufs is None:
+        raise RuntimeError(
+            "ebur128 printed no integrated loudness for %s -- refusing to report 0.0 "
+            "for a measurement that did not happen:\n%s"
+            % (path, "\n".join(r.stderr.splitlines()[-15:])))
+    return {"lufs": lufs, "true_peak_db": peak}
 
 
 def loudnorm_filter():

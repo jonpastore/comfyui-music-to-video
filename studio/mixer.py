@@ -1016,6 +1016,15 @@ def mix_audio(items, out_path, progress=None):
     return out_path
 
 
+# How far a rendered set may sit from what set_duration() predicted before it is
+# a defect rather than container rounding. ONE constant: docs/TRD-1 T1-7 checks
+# it at build time and docs/TRD-3 T3-11 checks it on the artefact, and the two
+# documents originally each carried the literal 0.05 -- two copies of a number
+# free to drift into a check that passes while its twin fails. qc.py imports
+# this rather than restating it.
+SET_DURATION_TOLERANCE = 0.05
+
+
 def set_duration(items, key="video"):
     """Predicted set length: item durations (after in_secs/out_secs trim and
     any beatmatch snap) minus each transition's overlap, walked the same way

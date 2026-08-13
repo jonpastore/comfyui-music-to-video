@@ -152,6 +152,42 @@ CREATE TABLE IF NOT EXISTS set_items (
 CREATE TABLE IF NOT EXISTS artefacts (
   path TEXT PRIMARY KEY, backend TEXT, host TEXT, via TEXT, created REAL);
 
+-- What QC measured about one artefact, one row per check. docs/TRD-3 3.
+--
+-- THE FINDING IS THE QUEUE. There is no second "review_queue" table, because
+-- two stores of the same finding are two places for it to be in different
+-- states -- and the review queue is just the open rows.
+--
+-- measured/expected/unit are carried on every check that has them: a finding
+-- that says only "failed" cannot be argued with, and cannot be re-checked
+-- after a repair to see whether the repair helped.
+--
+-- remedy_prompt_id points at prompt_versions. The remedy is an EDITABLE,
+-- VERSIONED prompt and approving it is the human sign-off -- QC never
+-- auto-heals. repair_path is the NEW candidate and is never the input path:
+-- an overwrite destroys the evidence that anything was wrong along with the
+-- comparison that would show whether the repair helped.
+--
+-- Join to artefacts on `path` for which box produced it. Group by artefacts.host,
+-- never by backend -- Swarm renumbers backend ids when one is added.
+CREATE TABLE IF NOT EXISTS findings (
+  id INTEGER PRIMARY KEY,
+  path TEXT NOT NULL,
+  kind TEXT NOT NULL,                 -- image|audio|clip|song|set
+  tier INTEGER NOT NULL,
+  check_name TEXT NOT NULL,
+  verdict TEXT NOT NULL,              -- pass|flag|reject
+  measured TEXT, expected TEXT, unit TEXT,
+  detail TEXT,
+  remedy TEXT,                        -- what approving it would RUN
+  remedy_prompt_id INTEGER,           -- prompt_versions.id; editable, versioned
+  status TEXT DEFAULT 'open',         -- open|approved|running|repaired|dismissed
+  dismissed_why TEXT,
+  repair_path TEXT,
+  created REAL, resolved REAL,
+  UNIQUE(path, check_name));
+
+CREATE INDEX IF NOT EXISTS idx_findings ON findings(status, kind, tier);
 CREATE INDEX IF NOT EXISTS idx_set_items ON set_items(set_id, position);
 CREATE INDEX IF NOT EXISTS idx_anchors ON anchors(scope_kind, scope_value, tier, view);
 CREATE INDEX IF NOT EXISTS idx_characters ON characters(scope_value, name);
