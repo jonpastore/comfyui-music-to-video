@@ -184,8 +184,22 @@ answerable for all four, which is what a one-per-section rule was approximating.
   for it.
 - `T2-12` The render ceiling is a **measured constant with its measurement
   recorded**, not a guess. 505 frames / 30.004 s and 1009 frames / 59.949 s both
-  rendered on a 24 GB card; the upper limit is untested above that. A ceiling
-  raised without a new measurement beside it fails review.
+  rendered on a 24 GB card; the upper limit is untested above that.
+  **Checkable, not a review convention**: the ceiling is stored with the
+  measurement that produced it — frames, seconds, card, date — and a test
+  asserts that record exists and parses, so raising the constant without
+  recording a new measurement fails the suite rather than failing someone's
+  attention. "Fails review" was the whole assertion until an independent pass
+  pointed out that no check can go red on it.
+- `T2-12a` **A scene length is rounded to a LEGAL frame count before it is
+  rendered, and TRD-2 owns the rounding.** `T3-7` enforces LTX's 8n+1 latent rule
+  on the finished clip, and §3.4 now derives clip length from `scene_seconds`
+  and a measured ceiling — but nothing between the two required the REQUESTED
+  frame count to be legal. Scene lengths are now arbitrary reals (195.792 / 7 =
+  27.97 s), so this is a hole the scene-driven decision opened: whoever converts
+  seconds to frames rounds to the nearest `8n+1` at the clip's fps and records
+  the rounded length, so the storyboard's arithmetic and the renderer's agree.
+  A requested length that is not 8n+1 fails here rather than at the sampler.
 - `T2-13` `CHUNK` is no longer imported as a clip-length constant by
   `build_storyboard`, `build_refs` or `reroll_refs`. Clip count comes from the
   storyboard. A test asserts two songs with different scene lengths produce

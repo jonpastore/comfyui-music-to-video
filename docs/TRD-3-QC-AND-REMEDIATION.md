@@ -130,7 +130,10 @@ places for a finding to exist in different states.
   that has them. A finding that says only "failed" cannot be argued with, and
   cannot be re-checked after a repair.
 - `T3-5` Running QC twice over an unchanged artefact produces one finding per
-  check, not two. Re-running is the normal case after a repair.
+  check, not two. Re-running is the normal case after a repair. **The fixture is
+  an artefact known to FAIL at least one check**, asserted before the second run:
+  with a clean fixture, or with every check deleted, "no duplicates" is 0 = 0 and
+  the criterion is vacuously green.
 - `T3-6` A finding's `repair_path` is never equal to its `path`. **A repair
   produces a new candidate and never overwrites** — the studio's whole design is
   candidates plus a human pick, and an overwrite destroys the evidence that
@@ -267,7 +270,11 @@ PASS/FAIL because the finding arrives actionable.
 
 - `T3-18` Nothing runs a repair without an explicit approval. Asserted by
   running QC over a set of deliberately broken artefacts and confirming zero
-  jobs were enqueued.
+  jobs were enqueued — **and by the same fixture, once approved, enqueuing
+  exactly one**. Without the second half, "zero jobs" is equally satisfied by
+  having no repair capability at all, which is today's state: `approve()` raises
+  and this criterion is therefore **provisional** until repair routing exists.
+  It currently cannot tell "refuses to auto-heal" from "cannot heal".
 - `T3-19` The remedy prompt is **editable before approval**, and the edited text
   is what runs. A differential: approve the same finding twice with two different
   remedy texts and confirm two different jobs were submitted — not by checking
@@ -298,6 +305,10 @@ The actuators exist; what has never been measured is whether they help.
 - `T3-25` Repair of a remote box's output is refused with a clear reason until
   the artefact can demonstrably be moved back. Stated as a precondition, because
   the plan's blocker was about moving an output and what shipped stages an input.
+  **The precondition is a callable check, not a sentence**: something answers
+  "can an output be moved from this host", the refusal quotes it, and when it
+  starts answering yes the refusal stops. A criterion that only ever refuses is
+  green forever and never notices the day the blocker lifts.
 - `T3-26` **Whether the refiner helps is tier 3's first measurement, not its
   assumption.** It is catalogued `proven: opportunistic` precisely because
   nothing has measured it. A refine pass that does not improve the tier-2 score
@@ -317,7 +328,7 @@ decision from one whose remedy is "re-run the upscale".
 | soft or low-detail clip | upscale pass (`make_postproc`) | it will not add identity |
 | identity drift **within** a chained clip | re-render the chain from the last good frame | a per-frame fix; the drift is generative |
 | identity wrong from the first frame | edit the **text**, then re-render | swapping the reference image will not fix it — measured |
-| audio loudness off target | re-run loudnorm | — |
+| audio loudness off target | re-run loudnorm **at the master** | it must NOT re-run per-item loudnorm on an item carrying a `gain_db` automation curve — that is the flattening `T1-9a` exists to prevent, and this row said plain "re-run loudnorm" until a review caught it |
 | set duration ≠ prediction | a bug in the model→graph path | never "fixed" by re-rendering |
 
 - `T3-27` Every check names its remedy class, and a check with no remedy says so
@@ -367,8 +378,13 @@ tier 1.
   a manifest of what was pushed where.
 - **The storyboard and the arc.** TRD-2. QC checks the output; TRD-2 decides
   what was asked for.
-- **The set timeline and its render.** TRD-1. The one shared measurement is
-  loudness, taken once (TRD-1 `T1-25`).
+- **The set timeline and its render.** TRD-1. **Two** things are shared, not
+  one: loudness (`effects.measure_loudness`, TRD-1 `T1-25`) and the set-duration
+  tolerance (`mixer.SET_DURATION_TOLERANCE`, `T1-7` and `T3-11`). Each is one
+  implementation with two callers.
+  And the boundary is not "TRD-1 never measures output" — it measures its own
+  render to prove a feature works, which is what `T1-9b` and `T1-12` are for.
+  TRD-3 measures artefacts to find out when something has stopped working.
 
 ## 10. Explicitly not building
 

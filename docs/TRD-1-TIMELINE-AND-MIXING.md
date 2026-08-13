@@ -130,9 +130,13 @@ ways for the curve to end up describing a moment that no longer exists.
 - `T1-1` Reordering a set, or changing any item's `in_secs`/`out_secs`/`secs`,
   leaves every automation row's `(lane, t, value)` unchanged. Asserted by
   reading the rows before and after, not by inspecting the reorder handler.
+  **The item must carry at least one stored curve first**, and the test asserts
+  the row count is non-zero before it compares: "unchanged" is otherwise
+  satisfied by an empty table, and deleting the whole write path would pass.
 - `T1-2` Deleting a set item deletes its automation rows. An orphan row that a
   later `set_item_id` reuse could pick up is a curve appearing on an item nobody
-  drew one on.
+  drew one on. **Same non-vacuity rule**: rows must exist before the delete, or
+  "no orphans" is true by construction.
 
 ### 4.2 The model is the export
 
@@ -338,7 +342,10 @@ requires real automation that the other modes expose as individual controls.
   normal mode's stated purpose.
 - `T1-20` Switching audience never changes stored values. Round-trip
   easy → advanced → easy and assert every `set_items` column and every
-  automation row is unchanged.
+  automation row is unchanged. **Paired with an assertion that the audiences
+  differ at all** — that the affordance set returned for easy is not the one
+  returned for advanced. Alone this criterion passes when the mode switch is a
+  no-op, which is the "easy is a CSS class" outcome §7 exists to refuse.
 
 ## 8. The join graph: `duck` and `layer`
 
@@ -367,6 +374,27 @@ is right.
 - `T1-23` Both remain refused with a message naming the reason at **every**
   entry point until they render, as they are today. An effect accepted and
   silently ignored is the defect this whole document is about.
+
+## 8a. The master stage
+
+Named here because §5.0(c) sends levelling to "the master" and §7's easy mode
+promises a "one-button master", and **no section said what the master IS**. An
+independent review found it: two features route work to a stage this document
+never specified.
+
+The master is **one chain applied to the assembled set, after every item and
+every join**, in a fixed order: sum → (optional) master EQ → limiter → single
+`loudnorm` → export. Fixed, not configurable, because the whole point is that
+per-item levelling can be switched off without the set losing its level.
+
+- `T1-20a` There is exactly ONE `loudnorm` in a rendered set's filter graph when
+  any item carries a gain curve: none on that item, one at the master. Asserted
+  on the generated graph by counting, both halves.
+- `T1-20b` A set whose items all keep per-item loudnorm renders with NO master
+  loudnorm, so today's behaviour is unchanged for every set that does not draw a
+  curve. The master appears because something asked for it, not by default.
+- `T1-20c` Easy mode's one-button master is this same chain with recorded
+  parameters (`T1-19`), not a second implementation of it.
 
 ## 9. Export
 
@@ -421,6 +449,13 @@ client that is not this HTML page.
 - `T1-29` The service module has no FastAPI import, and its functions are called
   by the tests directly. If a test can only reach the logic through a request,
   the logic is in the wrong place.
+- `T1-29a` **The JSON API's trust boundary is stated, not assumed.** All three
+  TRDs require full JSON driveability with no HTML, which turns a
+  server-rendered app into a control plane. The studio binds tailnet-only and
+  has no authentication, and that is the whole of its security model today. Any
+  client written against this API inherits that and nothing else: the binding is
+  the boundary, so a deployment that widens the bind widens everything. Recorded
+  because a review asked where authz lives and the honest answer is "the network".
 - `T1-30` **No template computes anything.** Asserted by a differential, not a
   grep: stub the service to return known values and assert the page shows those
   values unmodified. A template that rounds, sums or reformats a number is a
@@ -441,8 +476,23 @@ guess at:
 - **The song-level audio editor and the media menu.** Deferred; they share this
   timeline model, which is why they come after this document and not with it.
 - **Clip length, storyboards, scenes.** TRD-2.
-- **Any check on the rendered output.** TRD-3. TRD-1 renders; TRD-3 measures.
-  The one place they touch is §9's loudness, and it is measured once.
+- **Ongoing QC of stored artefacts.** TRD-3. **Not** "any check on the rendered
+  output", which is what this line said until an independent review pointed out
+  that seven of TRD-1's own criteria measure rendered output — `T1-3`, `T1-9b`,
+  `T1-12`, `T1-17`, `T1-18`, `T1-21` and `T1-25` — and that the rule as written
+  forbade the very differentials that make them able to fail.
+
+  The real split: **TRD-1 measures its own render to prove the feature works;
+  TRD-3 measures artefacts to find out when one has stopped working.** A drawn
+  gain curve reaching the audio (`T1-9b`) is an acceptance test for automation.
+  A clip being the length its workflow asked for is QC. Both are measurements of
+  a rendered file and they are not the same job.
+
+  **They share exactly two things, not one**, and the "one place they touch"
+  claim here was wrong: §9's loudness (`effects.measure_loudness`, TRD-3 §4.3
+  calls it) and the set-duration tolerance (`mixer.SET_DURATION_TOLERANCE`,
+  `T1-7` and `T3-11`). Both are one implementation with two callers, which is
+  the point — but there are two of them.
 
 ## 12. Explicitly not building
 
