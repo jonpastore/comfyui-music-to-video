@@ -514,9 +514,11 @@ The studio has two live instances of the same defect and both are UI-visible:
 
 - **`--refine` on `ltx25`** returns before the refine block and says nothing
   (`T5-1`). The catalogue default. A checkbox that does nothing.
-- **Five of six `DENOISE_CHOICES`** are labelled *"on an anchor this returns
-  noise"* and are correct, because `latent_mode` is pinned to `"empty"`
-  (`T7-8`).
+- **Five of six `DENOISE_CHOICES`** *were* labelled *"on an anchor this returns
+  noise"*, correctly, because `latent_mode` was pinned to `"empty"`. **`T7-8`
+  shipped 2026-08-13 (`d3f2f6a`) and unpinned it** — corrected after review
+  caught this section still presenting a fixed defect as live. What follows is
+  now a rule to **hold**, not a defect to fix.
 
 The second is the honest version of the first — it at least tells you. The rule
 that generalises both, and `plan-panel`'s own comment already states it:

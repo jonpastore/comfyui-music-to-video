@@ -148,7 +148,13 @@ unbuilt work and are not" — the ledger with line counts is DDD §1.
    demonstrates it and is the pattern to copy. Doing this after the features
    means writing them twice.
 
-### P1 — the timeline, which is the biggest single gap
+### P1 — SUPERSEDED BY §6.0, kept for its dependency edges
+
+**Read §6.0 first: Jon put the timeline LAST.** This block was written with the
+timeline first and its ORDER no longer holds; its *edges* still do, which is why
+it is not deleted — the master stage really is a prerequisite for automation
+being usable, and audiences really do need the master. Follow §6.0's capability
+order and take the dependencies from here.
 
 3. Clock and rounding (`T1-5`, `T1-6`); peaks and the waveform data model
    (`T1-13`…`T1-15`); the proxy-preview contract (`T1-16`, `T1-17`).

@@ -119,8 +119,13 @@ statement of it:
 4. **Finish TRD-4's remainder** (P1-P3), most of which is differentials for
    behaviour that already exists.
 5. **Make `--refine` honest** (P7).
-6. **The queue last** (P8, P9), except `T6-13a`, which is one column and blocks
-   the TRD-1-3 clip-length chain.
+6. **The queue — CORRECTED.** An earlier draft of this line said "last, except
+   `T6-13a`". **Jon decided 2026-08-13 to build TRD-6 IN FULL**: the pull model,
+   the lifecycle and the identity rules are all in scope, and `T6-13a` still goes
+   first *inside* it because the clip-length chain waits on that one column.
+   `PRD-1-3` §6.0 carried this decision and this file did not — **two documents
+   disagreeing about scope on the same day**, found by the first external review
+   of this layer.
 
 ## 6. Scope
 
@@ -166,6 +171,7 @@ coordinator (TRD-6 §7).
   marking it done from the prompt text is the failure mode. **Blocked on the
   anchor sheet Jon is regenerating.**
 - **`chosen` is 0 on every anchor.** Same blocker. No prompts are invented for it.
-- **Whether TRD-6 gets built at all this cycle.** It is 25 criteria that rewrite
-  machinery which currently works, and nothing in TRD-4/5/7 blocks on it except
-  `T6-13a`. It is the one place a smaller shippable scope is obviously available.
+- ~~Whether TRD-6 gets built at all this cycle.~~ **DECIDED: in full.** Struck
+  rather than deleted, because the argument against it is still true — 25
+  criteria rewriting machinery that currently works — and it was heard and
+  overruled. Worth having in front of whoever finds it expensive later.
