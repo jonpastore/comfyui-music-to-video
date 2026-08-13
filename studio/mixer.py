@@ -649,6 +649,45 @@ def _duck_join(running_a, nxt_a, out_a, offset, secs, comp, i):
     ]
 
 
+def master_engaged(items):
+    """Whether this SET renders a master loudnorm. docs/TRD-1 T1-20d.
+
+    A SET-LEVEL fact, and that is the whole point of it being a function. It
+    used to be decided twice from two different tests: _master_lines engaged the
+    master when ANY item suppressed its own loudnorm, while _audio_chain
+    suppressed only for the item carrying the curve. So an UNCURVED item in a
+    set that has a curve kept its own loudnorm AND passed through the master --
+    two dynamic normalisers in series on one signal path, which is the level
+    being pulled twice on exactly the item nobody drew a curve on.
+
+    Counting loudnorm per signal path, calling the real functions:
+
+        both curved          per-item=[0, 0]  master=1   worst path = 1
+        neither curved       per-item=[1, 1]  master=0   worst path = 1
+        one curved, one not  per-item=[0, 1]  master=1   worst path = 2   <-- bug
+
+    One reading, both callers, so the two cannot disagree again.
+    """
+    return any((it.get("automation") or {}).get("suppress_loudnorm") for it in items)
+
+
+def item_chains(items):
+    """The per-item audio chain for every item in a set, master decision applied.
+
+    ONE wiring point, and that is the reason it exists rather than each caller
+    calling _audio_chain in its own loop. The video path and the audio path each
+    built their own chains, so the set-level master flag had to be threaded
+    correctly in two places -- and a mutation passing master=False at the video
+    site alone left every assertion in this file green, because they exercise
+    _audio_chain directly. Two renders of one document disagreeing about the mix
+    is the exact failure _check_join_effects already exists to prevent; this is
+    the same failure one stage earlier. docs/TRD-1 T1-20d.
+    """
+    master = master_engaged(items)
+    return [_audio_chain(it.get("gain_db"), it.get("effects_json"),
+                         it.get("automation"), master=master) for it in items]
+
+
 def _master_lines(items, lines, running):
     """THE MASTER STAGE. docs/TRD-1 8a.
 
@@ -661,13 +700,13 @@ def _master_lines(items, lines, running):
     somebody drew one, and "the graph has a loudnorm in it" is not something a
     duration check would ever notice.
     """
-    if any((it.get("automation") or {}).get("suppress_loudnorm") for it in items):
+    if master_engaged(items):
         lines = lines + [f"[{running}]{effects.loudnorm_filter()}[master]"]
         running = "master"
     return lines, running
 
 
-def _audio_chain(gain_db, effects_json, auto=None):
+def _audio_chain(gain_db, effects_json, auto=None, master=False):
     """Per-item audio filter fragments, comma-joinable, ending with
     loudnorm (on by default -- see effects.py's own docstring: it's the
     unglamorous one that matters most).
@@ -721,8 +760,14 @@ def _audio_chain(gain_db, effects_json, auto=None):
     # item with a drawn level curve would have that curve flattened by a filter
     # two stages after it. The item's own loudnorm comes off and the caller adds
     # one at the master instead.
+    #
+    # `master` is the SET-level answer from master_engaged(), and it is why this
+    # takes an argument the item dict cannot supply: an item can only see its own
+    # automation, so it could never tell that ANOTHER item's curve had engaged a
+    # master loudnorm downstream of it. It kept its own, passed through the
+    # master, and got normalised twice. docs/TRD-1 T1-20d.
     auto = auto or {}
-    if auto.get("suppress_loudnorm"):
+    if auto.get("suppress_loudnorm") or master:
         cfg = dict(cfg) if isinstance(cfg, dict) else json.loads(cfg or "{}")
         cfg["loudnorm"] = False
     frags += effects.parse_effects(cfg)["chain"]
@@ -868,12 +913,15 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
     # supposed to land on -- which is the entire reason sec 2 anchors to sec 0's
     # numbers instead of inventing its own clock.
     brands = []
+    # Built ONCE for the whole set, before any item's line is emitted: an item
+    # cannot see another item's curve, and that is exactly what decides whether
+    # its own loudnorm comes off. docs/TRD-1 T1-20d.
+    chains = item_chains(items)
     for idx, info in enumerate(infos):
         video_extra = _video_fragment(items[idx].get("effects_json"))
         lines.append(_normalize_filter(idx, w, h, fps, video_extra))
         if info["has_audio"]:
-            chain = _audio_chain(items[idx].get("gain_db"), items[idx].get("effects_json"),
-                             items[idx].get("automation"))
+            chain = chains[idx]
             vol = f"{chain}," if chain else ""
             lines.append(f"[{idx}:a]{vol}aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a{idx}n]")
         else:
@@ -1030,9 +1078,11 @@ def mix_audio(items, out_path, progress=None):
     # renders of one document disagreeing about the mix
     _check_join_effects(items)
     lines = []
+    # The SAME builder the video path uses, so the two renders of one document
+    # cannot disagree about the mix.
+    chains = item_chains(items)
     for i, it in enumerate(items):
-        chain = _audio_chain(it.get("gain_db"), it.get("effects_json"),
-                             it.get("automation"))
+        chain = chains[i]
         vol = f"{chain}," if chain else ""
         lines.append(f"[{i}:a]{vol}aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a{i}n]")
     running, running_dur = "a0n", durations[0]
@@ -1553,6 +1603,43 @@ def demo():
         # and a set nobody drew a curve on is untouched -- no master, no change
         nl, nr = _master_lines([plain_item, plain_item], ["x"], "a3")
         assert (nl, nr) == (["x"], "a3"), (nl, nr)
+
+        # TWO LOUDNORMS IN SERIES, counted per SIGNAL PATH. docs/TRD-1 T1-20d.
+        #
+        # The assertion above says "exactly ONE loudnorm in the graph" and only
+        # ever counted the master LINE. It was true of that line and false of the
+        # graph: _master_lines engaged the master when ANY item suppressed its
+        # own, while _audio_chain suppressed only for the item carrying the
+        # curve, so the UNCURVED item in a mixed set kept its loudnorm AND passed
+        # through the master. Two dynamic normalisers in series, on precisely the
+        # item nobody drew a curve on.
+        #
+        # Counted end to end rather than asserted per function: the defect lived
+        # in the DISAGREEMENT between two functions that each looked right alone,
+        # so a per-function check is what missed it for as long as it existed.
+        for label, autos, want_master in (
+                ("both curved", [{"suppress_loudnorm": True}] * 2, 1),
+                ("neither curved", [{"suppress_loudnorm": False}] * 2, 0),
+                ("one curved, one not",
+                 [{"suppress_loudnorm": True}, {"suppress_loudnorm": False}], 1)):
+            its = [{"automation": a} for a in autos]
+            # through item_chains, the ONE builder both render paths use -- not
+            # _audio_chain directly. Asserting on _audio_chain left the wiring
+            # unguarded: a mutation passing master=False at the video call site
+            # kept every check in this file green.
+            per = [c.count("loudnorm") for c in item_chains(its)]
+            mls, _ = _master_lines(its, [], "a0")
+            n_master = sum(l.count("loudnorm") for l in mls)
+            assert n_master == want_master, (label, n_master, want_master)
+            worst = max(p + n_master for p in per)
+            assert worst == 1, (
+                f"{label}: {worst} loudnorms in series on one signal path "
+                f"(per-item={per}, master={n_master}). A set is levelled ONCE.")
+        # ...and the widening that looks like the fix is not it: engaging the
+        # master for everyone WITHOUT taking the per-item ones off would make
+        # "neither curved" 2-in-series, which is worse than the bug on the path
+        # that is currently correct. Hence one set-level reading, both callers.
+        assert not master_engaged([{"automation": {"suppress_loudnorm": False}}])
 
         # aecho APPENDS its delay, and _item_duration is otherwise pure trim
         # arithmetic -- the editor was short by exactly the delay, up to 2s.
