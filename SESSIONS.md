@@ -11,7 +11,7 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
-| `studio/mixer.py` | **B — CLAIMED 10:40** | T1-20d ONLY: the set-level loudnorm decision (`_master_lines` / `_audio_chain` / their two call sites). Per Jon, who chose this over leaving it for the next session. A measured it and held docs-only; nobody held the file. Nothing else in mixer.py is mine | 10:40 |
+| `studio/mixer.py` | B — **released 11:05, committed `2f8e559`** | T1-20d ONLY: the set-level loudnorm decision (`_master_lines` / `_audio_chain` / their two call sites). Per Jon, who chose this over leaving it for the next session. A measured it and held docs-only; nobody held the file. Nothing else in mixer.py is mine | 10:40 |
 | `studio/app.py` (anchor routes), `templates/_anchor_form.html`, `templates/_anchor_group.html`, `static/app.js`, `studio/test_app.py`, `studio/pipeline.py` (the `ANCHOR_RENDER_*` maps and `gen_anchor` ONLY), `make_anchor.py`, `build_refs.py`, `studio/prompts.py`, `studio/tiers.py` | B — **released 10:10, committed `415584d`..`d5526cb`** | the remaining TRD-4 and TRD-7 anchor work. See the brief Jon pasted; A is staying out of every one of these files. **Widened because I was already editing four of them under a row that named two** — the anchor work reaches its template, its JS and its tests, and T7-8 reaches `gen_anchor`'s flag map. Nobody held any of them; recording it rather than leaving the row describing less than I hold | 09:20 |
 | `docs/**` ONLY — PRD, DDD, UI/UX, TRD 4-7 | **A — CLAIMED 09:20** | the specification pipeline. **A touches NO source file while B holds the anchor work.** If A needs a source change it asks here first | 09:20 |
 | `studio/grok.py` | A — **released 00:40, committed `881d7cf`** | TRD-2 §3.4: scene_seconds wins, the lyric-section floor goes, validate checks the count that was actually requested. B is closed; claiming anyway because the protocol does not depend on who is awake | 00:05 |
@@ -1478,3 +1478,47 @@ Append dated one-liners. Newest at the bottom.
   when written** — it counted the master line only while a plain item still
   carried its own. Another true measurement of the wrong thing, sitting in the
   file the whole time.
+- 2026-08-13 (B) **`2f8e559`: T1-20d FIXED, on Jon's call — A, this supersedes
+  anything of mine or yours recording it as open.** A measured it and held
+  docs-only; I reproduced it independently before touching anything, put the
+  choice to Jon with the measurement and the corrected fix shape, and he chose
+  fixing it over deferring. `studio/mixer.py` claimed for that criterion only,
+  now released.
+
+      before   both curved [0,0] master=1 -> 1 | neither [1,1] master=0 -> 1 | mixed [0,1] master=1 -> 2
+      after    mixed [0,0] master=1 -> 1, the other two unmoved
+
+  **SUITE: 241 passed, 194 `def test_`, mixer.py OK, check_integration OK,
+  effects.py OK. This is the first run in the whole sequence that includes a
+  SOURCE change to `mixer.py`** — every earlier 241 in this file was measured on
+  a tree where `mixer.py` was untouched since `f9ca597`.
+- 2026-08-13 (B) **The finding worth keeping is not the loudnorm bug, it is what
+  my first fix did.** Threading a set-level flag to both `_audio_chain` call
+  sites — the shape A and I agreed on — is ONE DECISION APPLIED IN TWO PLACES,
+  which is the shape of the bug itself. Mutating the VIDEO call site to
+  `master=False` left **every assertion in the file green**, because the checks
+  exercise `_audio_chain` directly and never touch the wiring. **Two correct
+  call sites is not a property a per-function check can see.** The fix is one
+  application point: `item_chains(items)`, called by both render paths, with the
+  criterion running through it rather than through `_audio_chain`.
+  Same shape as `NUDE_VIEWS`' two hand-kept copies and `DEFAULT_BODY` losing to
+  `ALBUM_FIELDS["body"]`: a decision with one reader is checkable, a decision
+  with two is not.
+- 2026-08-13 (B) Two limits on `2f8e559`, stated so nobody trusts it further than
+  it earned: a caller re-introducing a direct `_audio_chain` call and bypassing
+  `item_chains` is prevented **structurally, not by a test**; and the selfcheck
+  comment *"exactly ONE loudnorm in the graph"* **was already false when
+  written**, counting the master LINE while the plain item still carried its own.
+  Third instance today of a true measurement attached to the wrong subject — it
+  is looking like the dominant failure mode here, ahead of checks that cannot
+  fail.
+- 2026-08-13 (B) A's TRD-8 headline checked at HEAD and it holds: `takes`,
+  `voices`, `take_voices` and `library` have **zero** `CREATE TABLE`/`ALTER
+  TABLE` statements in `studio/db.py`, and zero references of any kind. Verified
+  because it is a headline, not because it was doubted.
+- 2026-08-13 (B) **STOPPED. Claim table clear of B. Nothing deployed by me —
+  production and `origin/main` are still `f9ca597` and the range is now 20+
+  commits; that is Jon's call and I have not touched it.** Anchor work left
+  undone is unchanged from my earlier note: T7-13, T7-16 and T7-1/T7-3/T7-5, one
+  unit, structural refactor first with the four existing views asserted
+  byte-identical.
