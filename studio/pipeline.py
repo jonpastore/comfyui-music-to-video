@@ -552,7 +552,14 @@ def _swarm_fetch(entry, out_dir, prefix):
 
 
 def _host(url):
-    return (url or "").split("//")[-1].split(":")[0].split("/")[0] or None
+    """Which BOX an address names, canonically. models.py owns the answer.
+
+    This used to carry its own copy of the parsing, so a render served over
+    loopback stamped `127.0.0.1` while the same box over the tailnet stamped
+    `100.103.148.120` -- one machine, two identities, in the column docs/TRD-3
+    T3-1 groups by.
+    """
+    return models.canonical_host(url)
 
 
 def _retarget(text, pin, progress=None):

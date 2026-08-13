@@ -114,12 +114,47 @@ ALIASES = {
 #
 # This says nothing about SPEED. Backend 1 is the fastest box here and is still
 # opportunistic, because it is somebody's desktop.
+# The studio's own box, under the name every OTHER box would call it. Backend 0's
+# Swarm address is 127.0.0.1:8188 because the studio runs on that machine, so a
+# render served over loopback and one served over the tailnet are the SAME BOX
+# under two names.
+#
+# That matters beyond tidiness: docs/TRD-3 T3-1 groups artefacts by `host`
+# precisely because Swarm renumbers backend ids, and until this existed the
+# artefacts table carried `127.0.0.1` -- so cerberus reported as two boxes, or as
+# a box whose name means "wherever I am". Measured 2026-08-13: all 12 stamped
+# artefacts read host=127.0.0.1.
+SELF_HOST = "100.103.148.120"
+_LOOPBACK = frozenset({"127.0.0.1", "localhost", "::1", "0.0.0.0", "[::1]"})
+
 BACKEND_STABILITY = {
-    "127.0.0.1": ("stable", "cerberus, the box the studio itself runs on"),
-    "100.103.148.120": ("stable", "cerberus over the tailnet, same box"),
+    # ONE key for cerberus. The loopback spelling used to sit here too and is
+    # gone deliberately -- canonical_host() resolves it before any lookup, so a
+    # second entry could only ever disagree with this one.
+    SELF_HOST: ("stable", "cerberus, the box the studio itself runs on"),
     "100.107.235.105": ("opportunistic", "gamingpc -- a desktop somebody uses"),
     "100.95.184.29": ("opportunistic", "peaches-unraid -- shares a NAS with other services"),
 }
+
+
+def canonical_host(address):
+    """The durable identity of a box, from an address or a bare host.
+
+    ONE OWNER FOR THIS, and it is the point of the function existing rather than
+    the parsing being inlined. The same three-`split` string lived in
+    `backend_stability()` here and in `pipeline._host()` there, which is one
+    decision applied in two places -- the shape that produced the T1-20d
+    loudnorm defect on 2026-08-13. Both call this now.
+
+    Loopback resolves to SELF_HOST because the studio runs on that box: an
+    address of 127.0.0.1 is not "unknown", it is cerberus answering itself.
+    Anything else is returned as given, and an unknown box stays unknown -- the
+    safe direction to be wrong in is "do not depend on it".
+    """
+    host = (address or "").split("//")[-1].split(":")[0].split("/")[0].strip().lower()
+    if not host:
+        return None
+    return SELF_HOST if host in _LOOPBACK else host
 UNKNOWN_BACKEND = ("opportunistic", "not in BACKEND_STABILITY -- assumed unreliable")
 
 # What a MODEL has been proven to do here, which is a different question again.
@@ -796,8 +831,7 @@ def catalog(role=None, object_info=None, url=None):
 def backend_stability(address):
     """(stability, why) for a backend address. Unknown boxes are opportunistic:
     the safe direction to be wrong in is "do not depend on it"."""
-    host = (address or "").split("//")[-1].split(":")[0].split("/")[0]
-    return BACKEND_STABILITY.get(host, UNKNOWN_BACKEND)
+    return BACKEND_STABILITY.get(canonical_host(address), UNKNOWN_BACKEND)
 
 
 def by_backend(backends, role=None):
@@ -1167,6 +1201,25 @@ def demo():
     assert backend_stability("http://100.107.235.105:8188")[0] == "opportunistic", \
         "the fastest box here is somebody's desktop"
     assert backend_stability("http://127.0.0.1:8188")[0] == "stable"
+
+    # ONE BOX, ONE IDENTITY. The loopback and tailnet spellings of cerberus must
+    # canonicalise to the same string, because docs/TRD-3 T3-1 groups artefacts
+    # by `host` and two spellings report one box as two. Asserted through
+    # canonical_host -- the shared entry point -- rather than through each
+    # caller, so a caller that stops using it cannot stay green (the T1-20d
+    # lesson, 2026-08-13).
+    assert canonical_host("http://127.0.0.1:8188") == SELF_HOST
+    assert canonical_host("localhost") == SELF_HOST
+    assert canonical_host("http://100.103.148.120:8188") == SELF_HOST
+    assert canonical_host("http://127.0.0.1:8188") == canonical_host(
+        "http://100.103.148.120:8188"), "loopback and tailnet must be one box"
+    # An unknown box stays unknown and is NOT rewritten to self.
+    assert canonical_host("http://100.107.235.105:8188") == "100.107.235.105"
+    assert canonical_host(None) is None and canonical_host("") is None
+    # And the stability table must carry exactly one cerberus key, or the two
+    # could drift apart again.
+    assert sum(1 for h in BACKEND_STABILITY if canonical_host(h) == SELF_HOST) == 1, \
+        "cerberus must appear once in BACKEND_STABILITY"
     assert backend_stability("http://10.0.0.99:8188") == UNKNOWN_BACKEND, \
         "an unlisted box was assumed dependable"
     assert backend_stability(None)[0] == "opportunistic"
