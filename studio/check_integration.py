@@ -305,6 +305,36 @@ if pipeline:
                 assert models.resolve(alt, {canon, alt}) == alt, (canon, alt)
 
     check("an alias group resolves from either spelling", _an_alias_group_reads_both_ways)
+
+    def _an_offline_box_requeues_but_a_refusal_does_not():
+        """pipeline and jobs must agree on which failures are worth retrying.
+
+        This is a SEAM, and the two halves live in different files: pipeline
+        decides how to phrase an exhausted backend walk, jobs._TRANSIENT decides
+        what to retry on. They agree today by one shared token, and nothing
+        else forces them to keep agreeing -- rename the phrase in either file and
+        jobs stop being requeued, silently, with no test failing anywhere else.
+
+        Jon takes ethan-wsl offline for hours at a time, so this is the live case.
+        """
+        import jobs
+        gone = RuntimeError(
+            "cannot reach SwarmUI backends for wf.json: every box that could run it "
+            "is offline or went away mid-render (No backends match ...)")
+        assert jobs._is_transient(gone), \
+            "pipeline's offline-backend wording no longer matches jobs._TRANSIENT, "\
+            "so a job lost to a powered-off box dies instead of being requeued"
+        refused = RuntimeError(
+            "No backends match the settings of the request given! Backends refused for "
+            "the following reason(s):\n- The custom workflow contains an unsupported "
+            "node type 'EmptyImage'.")
+        assert not jobs._is_transient(refused), \
+            "a workflow every box REFUSED is queued for retry; it will fail identically"
+        assert pipeline._backend_vanished(str(gone))
+        assert not pipeline._backend_vanished(str(refused))
+
+    check("an offline box requeues, a refused workflow does not",
+          _an_offline_box_requeues_but_a_refusal_does_not)
     check("pipeline._retarget", lambda: sig(pipeline, "_retarget", ["text", "pin"]))
 
 grok = optional_import("grok")

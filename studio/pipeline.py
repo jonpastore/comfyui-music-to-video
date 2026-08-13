@@ -650,6 +650,38 @@ def _stamp(paths, backend, host, via, progress=None):
             return
 
 
+# A backend that WENT AWAY, as opposed to a workflow a backend REFUSED. Both
+# arrive as the same "No backends match the settings of the request given!"
+# headline, so the headline cannot be the discriminator -- the REASON line is.
+#
+# Measured 2026-08-12 with ethan-wsl actually powered off:
+#   gone     "Specific backend ID# requested in advanced parameters did not match"
+#   gone     "no backends available"
+#   REFUSED  "The custom workflow contains an unsupported node type 'EmptyImage'"
+#   REFUSED  "Model in folder 'vae' with filename 'x' not found"
+#
+# The distinction is the whole point. A box that is off comes back, so the job
+# should be requeued; a workflow naming a node or a model that does not exist
+# will fail identically forever, and retrying it three times just fails three
+# times more slowly -- which is exactly what jobs._is_transient warns about.
+_BACKEND_GONE = ("did not match", "no backends available", "no backends match",
+                 "backend is not running", "websocket", "connection",
+                 # our own message when a render never returns. At SUBMIT_TIMEOUT
+                 # of 1800s against a 1009-frame clip that takes 407s, a timeout
+                 # is a box that stopped answering, not a big render.
+                 "did not finish within")
+
+
+def _backend_vanished(msg):
+    """Did this attempt fail because a BOX went away, rather than because the
+    workflow was refused? Refusal reasons win: a message naming a missing model
+    or an unsupported node is a real error even when it also mentions backends."""
+    m = str(msg).lower()
+    if "unsupported node type" in m or "not found" in m or "invalid" in m:
+        return False
+    return any(t in m for t in _BACKEND_GONE)
+
+
 def submit_swarm(wf_dir, prefix_dir, pattern, progress=None):
     """submit_dir + collect for RENDER_BACKEND=swarm, and they cannot be split.
 
@@ -699,6 +731,15 @@ def submit_swarm(wf_dir, prefix_dir, pattern, progress=None):
                 progress(f"{name}: refused by "
                          f"{'backend ' + str(pin) if pin is not None else 'SwarmUI'}: {e}")
         if entries is None:
+            # EVERY box refusing because it is GONE is a different failure from
+            # every box refusing the workflow, and the job queue has to be able
+            # to tell them apart -- one is worth requeuing and the other is not.
+            # Phrased with the token jobs._TRANSIENT already knows, so the
+            # vocabulary lives in one place rather than two lists drifting apart.
+            if last is not None and _backend_vanished(last):
+                raise RuntimeError(
+                    f"cannot reach SwarmUI backends for {name}: every box that could "
+                    f"run it is offline or went away mid-render ({last})") from last
             raise last or RuntimeError(f"no backend would run {name}")
         mine = [p for p in collect(prefix_dir, pattern)
                 if p not in seen and os.path.basename(p).startswith(prefix + "_")]
@@ -1639,6 +1680,66 @@ def demo():
             assert os.listdir(sheets) == [], os.listdir(sheets)
             assert len(stamped) == before_dead, \
                 f"a render nothing produced was recorded as an artefact: {stamped[before_dead:]}"
+            # ...and the exhausted walk said WHY in a way the job queue can act
+            # on. Every box refusing the WORKFLOW is a real error: retrying it
+            # only fails more slowly.
+            import jobs as _jobs
+            try:
+                _submit_and_collect(d, "anchor_v2", "*.png", said.append)
+                raise AssertionError("unreachable")
+            except RuntimeError as e:
+                assert not _jobs._is_transient(e), \
+                    f"a workflow every box REFUSED was queued for retry: {e}"
+
+            # 5c. THE BOX WENT AWAY, which is the opposite case and must requeue.
+            # Measured against ethan-wsl powered off 2026-08-12: SwarmUI answers
+            # "No backends match ... Specific backend ID# requested in advanced
+            # parameters did not match", which matches none of jobs._TRANSIENT --
+            # so before this the job DIED instead of waiting for the box to come
+            # back. Jon takes that machine offline for hours at a time.
+            tries.clear()
+
+            def all_gone(path, payload, timeout=30):
+                if path.endswith("ListBackends"):
+                    return {str(i): {"status": "running", "title": f"box{i}"} for i in range(3)}
+                tries.append(path)
+                return {"error": "No backends match the settings of the request given! "
+                                 "Backends refused for the following reason(s):\n"
+                                 "- Specific backend ID# requested in advanced parameters "
+                                 "did not match"}
+
+            globals()["_swarm_call"] = _swarm(all_gone)
+            try:
+                _submit_and_collect(d, "anchor_v2", "*.png", said.append)
+                raise AssertionError("a render no box could take returned a result")
+            except RuntimeError as e:
+                assert _jobs._is_transient(e), \
+                    f"a job lost to an OFFLINE box was not queued for retry: {e}"
+                assert "offline or went away" in str(e), e
+            assert len(tries) == 4, tries      # still walked every box first
+
+            # 5d. AND THE CLASSIFIER ITSELF, against the four strings SwarmUI
+            # really produced on this fleet. The refusal cases matter most: they
+            # arrive under the SAME "No backends match" headline as a dead box,
+            # so a classifier reading the headline calls a permanently broken
+            # workflow retryable and fails three times instead of once. The
+            # earlier test could not catch that -- its fake said "no model",
+            # which matches no backend-gone token, so the guard never ran.
+            gone = ["No backends match the settings of the request given! Backends refused "
+                    "for the following reason(s):\n- Specific backend ID# requested in "
+                    "advanced parameters did not match",
+                    "did not finish within 1800s"]
+            refused = ["No backends match the settings of the request given! Backends "
+                       "refused for the following reason(s):\n- The custom workflow "
+                       "contains an unsupported node type 'EmptyImage'.",
+                       "Model in folder 'vae' with filename "
+                       "'qwen_image_vae.safetensors' not found."]
+            for m in gone:
+                assert _backend_vanished(m), f"a vanished box read as a refusal: {m[:60]}"
+            for m in refused:
+                assert not _backend_vanished(m), \
+                    f"a REFUSED workflow read as a vanished box, so it will retry "\
+                    f"and fail again: {m[:60]}"
 
             # 5b. AND THE WALK NAMES THE FILE EACH BOX USES. Without this the
             # walk is theatre for any model spelled differently per box: every

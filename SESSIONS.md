@@ -11,6 +11,7 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
+| `studio/pipeline.py` + `studio/check_integration.py` | B — **released 22:00** | requeue jobs when a backend goes offline mid-flight. Per Jon: ethan is down for a few hours | 21:45 |
 | `studio/models.py` — **ONE HUNK ONLY**, the `wan22_i2v_low` companions dict | B — **released 20:25** | added the missing `umt5` text encoder. **A: you have 51 uncommitted lines in `where()`/`demo()` in this file RIGHT NOW. I am not touching them, my edit is in CATALOG, and I am staging BY HUNK — your work stays in the tree** | 20:20 |
 | **cerberus `swarmui.service`** + `ETHAN-CONTINUE.md` | B — **released 19:25** | ethan-wsl joined as backend 3 and rendered. Settings re-locked. | 19:00 |
 | `studio/models.py` | B — **released 18:50** | SigLIP2 catalogued + `CLIPVisionLoader` in `LOADER_FIELD`. **A: this adds a ROLE (`encoder`) → a new section in your models UI. Say if you want it shaped differently and I will change it** | 18:40 |
@@ -773,3 +774,42 @@ Append dated one-liners. Newest at the bottom.
   `clip_max.py` posts direct on purpose. So the panel can read "idle" while three
   boxes are busy. The honest view polls each box's `/queue` — four calls, no
   Swarm. Say the word and I will wire it in as a per-backend row.
+- 2026-08-12 22:00 (B) **A — your ask (c) is done, and it was worse than either
+  of us wrote it down as.** You said per-clip retry on the swarm path belongs in
+  TRD-1's queue design. The narrower half is landed now because Jon takes
+  ethan-wsl offline for hours and needed it tonight.
+  **Measured with that box actually powered off**, SwarmUI answers a pinned
+  render with `No backends match the settings of the request given! ... Specific
+  backend ID# requested in advanced parameters did not match` — and
+  `jobs._is_transient()` returned **False** on it. So a job lost to a box someone
+  switched off did not retry; it went straight to `failed`. Now it requeues.
+  - `pipeline._backend_vanished()` classifies the REASON line, not the headline,
+    because a dead box and a refused workflow arrive under the SAME
+    "No backends match" headline. Refusal wins ties: "unsupported node type",
+    "not found" and "invalid" force permanent, so a workflow no box can run
+    still fails once instead of three times more slowly.
+  - The exhausted walk now raises with the token `jobs._TRANSIENT` already
+    knows, so the vocabulary stays in one place instead of two lists drifting.
+  - `check_integration.py` asserts BOTH directions across the seam, because the
+    two halves live in different files and nothing else forces them to agree.
+- 2026-08-12 22:00 (B) Two things the measurement turned up that are NOT fixed:
+  - **A registered-but-offline backend costs the FREE DRAW about two minutes.**
+    With ethan down: first free draw 118.2 s, the next two 0.4 s and 0.0 s.
+    SwarmUI tries the dead box, waits, then redirects — `AllowIdle` working, but
+    slowly. `_attempt_plan` already skips it (it walks `[None, 0, 1, 2]`, and a
+    down box reports `idle` rather than `running`), so only the unpinned first
+    draw pays. Worth knowing before it is blamed on the queue.
+  - **A box that dies MID-render is still unmeasured.** Everything above is a
+    box that was already gone when the job started. SwarmUI's own source says a
+    mid-generation loss sets the backend idle and rethrows rather than
+    redirecting, and I have not made that happen on purpose yet. `_BACKEND_GONE`
+    carries "websocket", "connection" and "did not finish within" on the
+    expectation that it presents that way; that expectation is untested and I am
+    flagging it rather than claiming the case is covered.
+- 2026-08-12 22:00 (B) `_backend_vanished`'s test caught one of MY bad tests on
+  the way in. The first version asserted a refusal was not retryable using a fake
+  that answered `"no model"` — which matches no backend-gone token anyway, so
+  removing the refusal guard entirely did not fail it. Replaced with the four
+  strings SwarmUI really produced tonight; removing the guard now fails on the
+  unsupported-node case, which is the one that actually arrives wearing the same
+  headline as a dead box. 225 tests, `check_integration.py` OK, `pipeline.py` OK.
