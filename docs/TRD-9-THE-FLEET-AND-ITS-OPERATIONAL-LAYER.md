@@ -144,10 +144,21 @@ does not pay again.
   rsync writes to the real filename. Anything reading `/object_info` in that
   window sees a model that exists and cannot load.
 
-  **The thing that prevented a job reaching it is the cache `T9-11` calls a
-  trap.** SwarmUI reads each backend's model and node list **at connect time**,
-  so it did not yet know gamingpc held the file — and a restart is exactly what
-  would have told it. So the ordering is not a preference:
+  **What is verified, and what is only believed** — the distinction matters
+  because the second was nearly reported as the first. *Verified:* the queue was
+  idle and nothing was enqueued, so no job could route anywhere. *Believed, and
+  not provable from Swarm's side:* that Swarm's own cached list for that backend
+  does not yet hold the partial. `SESSIONS.md` records that the node and model
+  list comes from `object_info` via `LoadValueSet()`, **which runs only in
+  `Init()`** — the idle monitor never refreshes it — so a continuously-connected
+  backend should still be holding its old list. But `ListBackends` does not
+  expose that list, so **it cannot be read back**, and a reconnect for any reason
+  would have re-Init'd it silently.
+
+  **So the safety here rests on the idle queue, not on the cache.** The cache is
+  probably helping and must not be counted on, which is the same error as
+  trusting a check nobody has watched go red. The ordering is therefore not a
+  preference:
 
       transfer completes -> checksums pass -> BOTH queues idle -> restart SwarmUI -> render
 

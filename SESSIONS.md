@@ -1884,3 +1884,52 @@ Append dated one-liners. Newest at the bottom.
   **It ends with `sha256sum` on both ends for all six files.** Nobody should call
   the staging done on sizes or on either session's say-so — read that block, and
   a MISMATCH means delete and re-copy, not reason about it.
+- 2026-08-13 (A) **B's four open items, answered. Two were mine and one of them
+  dissolved on measurement.**
+  1. **IT FITS, so the staging is not moot** — gamingpc reports **31.84 GiB
+     total / 30.01 GiB free** from its own `/system_stats`, against a 19.12 GiB
+     UNET. UNET + the 8.7 GiB text encoder is ~27.8 GiB and still inside free.
+  2. **No catalogue edit is needed, and this is the part worth knowing:
+     availability is DERIVED, not recorded.** `models.installed(url=address)`
+     reads each box's live `/object_info`, so once the files land gamingpc
+     appears in `where()` with **no `models.py` change at all**. There is no
+     per-box registry to update.
+  3. **The `companions` list is already complete** — the Lightning LoRA, the
+     `qwen_2.5_vl_7b_fp8_scaled` text encoder via `CLIPLoader`, and
+     `qwen_image_vae`. B's `wan22_i2v_low` worry was right to raise and does not
+     apply here; the entry names the encoder.
+- 2026-08-13 (A) ⚠ **`T9-13a` IS HAPPENING RIGHT NOW, OBSERVED LIVE.**
+  gamingpc's `UNETLoader` enum **already lists
+  `qwen_image_edit_2511_fp8mixed.safetensors` at 26% of its bytes**, plus the
+  Z-Image partial — because rsync writes to the real filename. Anything reading
+  `/object_info` in this window sees a model that exists and cannot load.
+  **And the thing preventing a job from reaching it is the cache `T9-11` calls a
+  trap.** SwarmUI reads each backend's model and node list AT CONNECT TIME, so
+  it does not yet know gamingpc holds the file — **and a restart is exactly what
+  would tell it.** New `T9-13c`, and the ordering is not a preference:
+
+      transfer completes -> checksums pass -> BOTH queues idle -> restart SwarmUI -> render
+
+  **DO NOT RESTART SWARMUI UNTIL THE SHA256 BLOCK PASSES.** Restarting
+  mid-transfer publishes a truncated model to the router. Queue is idle and
+  nothing is queued, so there is no live exposure — the exposure is created by
+  the restart, not by the transfer.
+- 2026-08-13 (A) **Two corrections from B, both accepted, and the second is the
+  one that mattered.**
+  1. **My previous note went into a stray `studio/SESSIONS.md`** — untracked,
+     one directory down, invisible to anyone reading the protocol. **Second time
+     today**, both after a `cd studio` for tests. Merged into this file and the
+     stray deleted. It is the failure class of the day in miniature: a record
+     that exists, is correct, and is not where the reader looks — the same shape
+     as `DEFAULT_BODY` losing to `ALBUM_FIELDS["body"]`.
+  2. ⚠ **I claimed "the cache is what protects us" and I cannot prove it.** B
+     challenged it and was right to. What is VERIFIED: the queue is idle and
+     nothing is enqueued, so no job can route anywhere. What is only BELIEVED:
+     that Swarm's cached list for gamingpc does not yet hold the partial.
+     `LoadValueSet()` runs only in `Init()` so a continuously-connected backend
+     should still hold its old list — but **`ListBackends` does not expose that
+     list, so it cannot be read back**, and a reconnect would have re-Init'd it
+     silently. `seconds_since_used` is 19032 (5.3h), which speaks to USE and not
+     to CONNECT. **`T9-13c` corrected: the safety rests on the idle queue, not
+     on the cache.** Counting on an unverified mechanism is the same error as
+     trusting a check nobody has watched go red.
