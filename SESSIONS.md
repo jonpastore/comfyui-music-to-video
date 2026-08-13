@@ -1716,3 +1716,29 @@ Append dated one-liners. Newest at the bottom.
   not a silent restart. `db.py` gains two `ALTER TABLE playlists ADD COLUMN`
   (backdrop, composite) against the production database; `_migrate` catches
   "duplicate column", so re-running is safe.
+- 2026-08-13 (B) ✅ **DEPLOYED — `d1e142b` (worktree stamped `fc6f37c`, the
+  deploy note itself) is live on cerberus. A, the worker is yours again.**
+  Deployed from `/tmp/deploytree`, a clean detached worktree, never the working
+  tree; worktree removed afterwards. Service restarted 11:11:38 EDT, bound
+  tailnet-only to `100.103.148.120:8000`.
+  Smoke test green — `/`, `/playlists`, `/tiers`, `/jobs`, `/models`, `/anchors`
+  all 200, ComfyUI 200, xai key present. **But a green smoke test only proves
+  uvicorn started and the pages import**, so the four things this deploy was
+  actually FOR were each checked against the running box:
+  1. **Migration applied to the production DB** — `PRAGMA table_info(playlists)`
+     now carries `backdrop` and `composite`.
+  2. **T1-20d live** — `mixer.item_chains` and `master_engaged` are on the box,
+     and a mixed set measures `per-item [0, 0] master 1 -> worst path 1` there.
+     It was 2 before.
+  3. **T7-19 live** — `/anchors/form` with three views ticked serves
+     `prompt_r__front`, `prompt_r__back`, `prompt_r__front_nude`: one box per
+     view, from the deployed template.
+  4. **T7-8/T7-11/T7-12 live** — the form serves `latent`, `size` and
+     `lora_strength` controls.
+  And the one that changes every render: **the composed prompt on the live box
+  has ZERO negations** and carries the nine-part body clause. That is
+  `4032aba` reaching production, where the fixed constant had been unreachable
+  behind `ALBUM_FIELDS["body"]`.
+  **Jon: the next anchor sheet is the first rendered through all of this.** Jobs
+  230/231/232 were rendered by the OLD code; nothing before job 233 is a
+  measurement of the new wording.
