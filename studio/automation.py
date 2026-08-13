@@ -24,13 +24,11 @@ before writing it:
    the renderer knows to take per-item loudnorm off for an item that has a gain
    curve. See docs/TRD-1 5.0(c).
 
-NOT WIRED INTO THE RENDERER YET, and that is stated here rather than discovered:
-mixer._audio_chain takes (gain_db, effects_json) and has no set_item_id, so
-nothing in mix_audio or render_set consults these curves or asks
-wants_master_loudnorm(). A curve saved today is stored, decimated, readable and
-emittable, and it does NOT reach a rendered set. Wiring it means threading the
-item id through _build_render_set_filter and mix_audio, which is a change to the
-render path and wants doing in daylight.
+WIRED INTO THE RENDERER 2026-08-13. `item_audio()` returns the fragments and the
+loudnorm decision as plain data; app.py puts that on the item dict and
+mixer._audio_chain applies it, so a curve drawn on a set item now reaches the
+rendered audio. mixer still imports neither this module nor db -- the curve
+travels as a value, exactly as effects_json does.
 
     python3 automation.py        # self-check
 """
@@ -278,6 +276,26 @@ def _pan_fragment(pts):
         "Building this means splitting the item into per-channel volume "
         "staircases, which is a change to the join graph -- see docs/TRD-1 8, "
         "the same shape as duck and layer.")
+
+
+def item_audio(set_item_id):
+    """What the renderer needs from this item's curves, as plain data.
+
+    {"frags": [filter, ...], "suppress_loudnorm": bool}. Carried in the item
+    dict exactly as effects_json is, so mixer never imports this module, never
+    touches the database and stays pure media code -- the same reason the curve
+    is decimated here and not there.
+
+    suppress_loudnorm is docs/TRD-1 5.0(c): an item with a drawn gain curve
+    renders with per-item loudnorm OFF and is levelled at the master, because
+    loudnorm is dynamic and runs last and would otherwise flatten the curve.
+    """
+    frags = []
+    for lane in ("gain_db", "lowpass_hz", "highpass_hz"):
+        pts = read(set_item_id, lane)
+        if pts:
+            frags.append(fragment(lane, pts))
+    return {"frags": frags, "suppress_loudnorm": wants_master_loudnorm(set_item_id)}
 
 
 def wants_master_loudnorm(set_item_id):

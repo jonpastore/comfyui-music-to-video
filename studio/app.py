@@ -36,6 +36,7 @@ import publish
 import prompts
 import analyse
 import effects    # per-item audio DJ effects -- pure, no deps, validated for real (not stubbed)
+import automation  # set-item curves: fragments + the loudnorm decision
 import qc          # tier-1 output checks: pure measurement, no db, no app
 import qc_service   # recording those findings and answering the review queue
 import video_fx   # per-item video look effects -- same, pure/no deps
@@ -5939,6 +5940,9 @@ def render_set_route(id: int):
                           "secs": it["secs"], "in_secs": it["in_secs"], "out_secs": it["out_secs"],
                           "hold": _hold_of(it),
                           "gain_db": it["gain_db"], "effects_json": it["effects_json"],
+                          # the item's drawn curves, as plain data: the fragments and
+                          # whether per-item loudnorm comes off for a gain curve
+                          "automation": automation.item_audio(it["id"]),
                           **_beatmatch_fields(it, songs[it["song_id"]])})
     else:
         if not row["tier"]:
@@ -5954,6 +5958,9 @@ def render_set_route(id: int):
                               "in_secs": it["in_secs"], "out_secs": it["out_secs"],
                               "hold": _hold_of(it), "brand_path": _brand_of(it, row),
                               "gain_db": it["gain_db"], "effects_json": it["effects_json"],
+                              # the item's drawn curves, as plain data: the fragments and
+                              # whether per-item loudnorm comes off for a gain curve
+                              "automation": automation.item_audio(it["id"]),
                               **_beatmatch_fields(it, songs[it["song_id"]])})
         if missing:
             raise HTTPException(400, f"tier '{row['tier']}' has no video for: {', '.join(missing)}")

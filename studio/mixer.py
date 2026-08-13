@@ -649,7 +649,25 @@ def _duck_join(running_a, nxt_a, out_a, offset, secs, comp, i):
     ]
 
 
-def _audio_chain(gain_db, effects_json):
+def _master_lines(items, lines, running):
+    """THE MASTER STAGE. docs/TRD-1 8a.
+
+    One loudnorm, after every item and every join, and ONLY when some item had
+    its own suppressed for a gain curve -- otherwise a set that draws no curve
+    renders exactly as it did before automation existed.
+
+    Its own function so it can be asserted without rendering: a master stage
+    that quietly stopped being added is a set losing its level precisely where
+    somebody drew one, and "the graph has a loudnorm in it" is not something a
+    duration check would ever notice.
+    """
+    if any((it.get("automation") or {}).get("suppress_loudnorm") for it in items):
+        lines = lines + [f"[{running}]{effects.loudnorm_filter()}[master]"]
+        running = "master"
+    return lines, running
+
+
+def _audio_chain(gain_db, effects_json, auto=None):
     """Per-item audio filter fragments, comma-joinable, ending with
     loudnorm (on by default -- see effects.py's own docstring: it's the
     unglamorous one that matters most).
@@ -692,7 +710,23 @@ def _audio_chain(gain_db, effects_json):
     resolved = column if column else inline
     if resolved:
         frags.append(effects.gain(resolved))
+
+    # AUTOMATION. `auto` is {"frags": [...], "suppress_loudnorm": bool}, built by
+    # automation.item_audio() and carried in the item dict exactly as
+    # effects_json is -- mixer stays pure media code and never touches the
+    # database or the curve model.
+    #
+    # suppress_loudnorm is docs/TRD-1 5.0(c) reaching the renderer at last:
+    # loudnorm is a DYNAMIC normaliser and parse_effects appends it LAST, so an
+    # item with a drawn level curve would have that curve flattened by a filter
+    # two stages after it. The item's own loudnorm comes off and the caller adds
+    # one at the master instead.
+    auto = auto or {}
+    if auto.get("suppress_loudnorm"):
+        cfg = dict(cfg) if isinstance(cfg, dict) else json.loads(cfg or "{}")
+        cfg["loudnorm"] = False
     frags += effects.parse_effects(cfg)["chain"]
+    frags += list(auto.get("frags") or [])
     return ",".join(frags)
 
 
@@ -838,7 +872,8 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
         video_extra = _video_fragment(items[idx].get("effects_json"))
         lines.append(_normalize_filter(idx, w, h, fps, video_extra))
         if info["has_audio"]:
-            chain = _audio_chain(items[idx].get("gain_db"), items[idx].get("effects_json"))
+            chain = _audio_chain(items[idx].get("gain_db"), items[idx].get("effects_json"),
+                             items[idx].get("automation"))
             vol = f"{chain}," if chain else ""
             lines.append(f"[{idx}:a]{vol}aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a{idx}n]")
         else:
@@ -996,7 +1031,8 @@ def mix_audio(items, out_path, progress=None):
     _check_join_effects(items)
     lines = []
     for i, it in enumerate(items):
-        chain = _audio_chain(it.get("gain_db"), it.get("effects_json"))
+        chain = _audio_chain(it.get("gain_db"), it.get("effects_json"),
+                             it.get("automation"))
         vol = f"{chain}," if chain else ""
         lines.append(f"[{i}:a]{vol}aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a{i}n]")
     running, running_dur = "a0n", durations[0]
@@ -1021,6 +1057,8 @@ def mix_audio(items, out_path, progress=None):
                 lines.append(f"[{running}][a{i + 1}n]acrossfade=d={secs:.3f}[{out}]")
         running_dur += _advance(it, durations[i + 1])
         running = out
+
+    lines, running = _master_lines(items, lines, running)
 
     tmp = _atomic_out(out_path)
     inputs = []
@@ -1490,6 +1528,31 @@ def demo():
         assert _audio_chain(0, json.dumps({"gain_db": -3.0})).startswith("volume=-3.000dB")
         # neither set: no gain stage at all, so the ordinary item is untouched
         assert not [f for f in _audio_chain(0, None).split(",") if f.startswith("volume=")]
+
+        # AUTOMATION REACHES THE CHAIN, and takes per-item loudnorm off with it.
+        # docs/TRD-1 5.0(c): loudnorm is dynamic and parse_effects appends it
+        # LAST, so an item with a drawn level curve would have that curve
+        # flattened two stages later. The item is levelled at the master instead.
+        auto = {"frags": ["asendcmd=commands='0.000 volume volume -12.000dB'"],
+                "suppress_loudnorm": True}
+        curved = _audio_chain(0, None, auto)
+        assert "asendcmd" in curved, "the automation fragment never reached the chain"
+        assert "loudnorm" not in curved, \
+            "an item with a gain curve kept its own loudnorm, which flattens the curve"
+        # and an item WITHOUT a curve is completely unchanged
+        assert "loudnorm" in _audio_chain(0, None), "the ordinary item lost its loudnorm"
+        assert "asendcmd" not in _audio_chain(0, None)
+
+        # THE MASTER STAGE, asserted both ways (docs/TRD-1 8a, T1-20a/T1-20b).
+        curved_item = {"automation": {"suppress_loudnorm": True}}
+        plain_item = {"automation": {"suppress_loudnorm": False}}
+        ml, mr = _master_lines([plain_item, curved_item], ["x"], "a3")
+        assert mr == "master" and len(ml) == 2 and "loudnorm" in ml[-1], ml
+        # exactly ONE loudnorm in the graph: none on the curved item, one here
+        assert ml[-1].count("loudnorm") == 1, ml[-1]
+        # and a set nobody drew a curve on is untouched -- no master, no change
+        nl, nr = _master_lines([plain_item, plain_item], ["x"], "a3")
+        assert (nl, nr) == (["x"], "a3"), (nl, nr)
 
         # aecho APPENDS its delay, and _item_duration is otherwise pure trim
         # arithmetic -- the editor was short by exactly the delay, up to 2s.
