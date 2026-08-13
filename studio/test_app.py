@@ -1539,6 +1539,48 @@ def test_build_refs_attaches_cast_as_image2_and_names_them_inside_the_guardrail(
     assert [s[0] for s in with_base] == [3], with_base
 
 
+def test_a_duet_still_reaches_the_graph_as_two_named_people():
+    """THE POSITIVE HALF OF T7-10. The same-character fix (name=None, so a third
+    photograph of one character stops asserting a second person) removed wording
+    from the one mechanism that exists to tell two anchors APART. Refusing
+    "the character in image 3 is reference 3" stays green with the naming
+    deleted outright, so the capability it was built for needs its own
+    criterion. TRD-4 T4-12, docs/TRD-7 T7-10.
+
+    Two cast members, not one: the single-member case is covered above, and it
+    cannot fail on a slot collision or a name/file swap -- there is only one of
+    each to get wrong."""
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import build_refs
+
+    scene = {"scene_number": 4, "image_prompt": "a booth at closing time",
+             "negative_prompt": "", "characters": ["Nyx", "Ghost"]}
+    wf = build_refs.workflow(scene, "meowp.png", None, "empty", 1280, 720, 11,
+                             extra_refs=[("Nyx", "nyx.png", "a white-furred rival"),
+                                          ("Ghost", "ghost.png", "a grey tom")])
+    enc = wf["11"]["inputs"]
+    prompt = enc["prompt"]
+
+    # three distinct people in three distinct slots, and the protagonist keeps 1
+    assert enc["image1"] == ["8", 0], enc
+    slot_file = {}
+    for slot in ("image2", "image3"):
+        assert slot in enc, (slot, enc)
+        scale_id = enc[slot][0]
+        slot_file[slot] = wf[str(int(scale_id) - 1)]["inputs"]["image"]
+    assert slot_file == {"image2": "nyx.png", "image3": "ghost.png"}, slot_file
+
+    # each is NAMED, by the slot its own file is wired to. Asserting only that
+    # both names appear would pass with both wired to one image, which is the
+    # blend this mechanism exists to prevent.
+    assert "The character in image 2 is Nyx: a white-furred rival." in prompt, prompt
+    assert "The character in image 3 is Ghost: a grey tom." in prompt, prompt
+    # ...and neither is described as another photograph of the protagonist, which
+    # is what the same-character form would say if name=None leaked into the
+    # cast path
+    assert "another photograph of the same character" not in prompt, prompt
+
+
 def _png_bytes(w=8, h=8):
     path = tempfile.mktemp(suffix=".png")
     subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", f"color=c=black:s={w}x{h}",
