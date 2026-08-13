@@ -652,11 +652,27 @@ def _duck_join(running_a, nxt_a, out_a, offset, secs, comp, i):
 def _audio_chain(gain_db, effects_json):
     """Per-item audio filter fragments, comma-joinable, ending with
     loudnorm (on by default -- see effects.py's own docstring: it's the
-    unglamorous one that matters most). gain_db is the item's own existing
-    field, applied first and separately from effects_json's -- effects_json
-    never carries its own "gain_db" from this caller, so parse_effects's
-    internal gain stage stays inert unless a set item's JSON explicitly asks
-    for one.
+    unglamorous one that matters most).
+
+    GAIN COMES FROM ONE PLACE AND IS NEVER SUMMED. docs/TRD-1 5.0(b).
+
+    There are two inputs for it and there always were: the item's own gain_db
+    column, and a "gain_db" key inside effects_json. This function's docstring
+    used to assert that "effects_json never carries its own gain_db from this
+    caller" -- which is true of the code that calls it and false of the form the
+    user types into, because the set editor exposes the Gain field and the raw
+    effects_json textarea side by side. An item with -3 in both rendered at -6
+    dB, silently, and nothing anywhere said which one the user meant.
+
+    The rule: the COLUMN wins. effects_json's key is an alias for it, read only
+    when the column is zero, and it is stripped before parse_effects sees it so
+    the gain stage cannot be emitted twice.
+
+    Resolved rather than refused, deliberately: a refusal here fires at RENDER
+    time, on a set somebody already saved, which is the worst moment to discover
+    it. The ambiguity is refused at the point of ENTRY instead -- app.py's
+    effects_json validation rejects a gain_db key and names the Gain field --
+    so no new item can carry both while an old one still renders.
 
     A duck is not read here and that is not the same as being dropped: it is a
     two-input effect consumed at the JOIN by _duck_join, out of the transition
@@ -664,11 +680,19 @@ def _audio_chain(gain_db, effects_json):
     out of "chain" for that reason. An item whose duck reaches NO join -- a cut,
     or the last item in the set -- is refused by _build_render_set_filter and
     mix_audio rather than silently ignored."""
+    column = float(gain_db or 0.0)
+    cfg, inline = effects_json, 0.0
+    if effects_json:
+        data = json.loads(effects_json) if isinstance(effects_json, str) else dict(effects_json)
+        if isinstance(data, dict) and data.get("gain_db"):
+            inline = float(data["gain_db"])
+            cfg = {**data, "gain_db": 0.0}   # parse_effects must not emit it too
+
     frags = []
-    gain_db = float(gain_db or 0.0)
-    if gain_db:
-        frags.append(f"volume={gain_db:.3f}dB")
-    frags += effects.parse_effects(effects_json)["chain"]
+    resolved = column if column else inline
+    if resolved:
+        frags.append(effects.gain(resolved))
+    frags += effects.parse_effects(cfg)["chain"]
     return ",".join(frags)
 
 
@@ -1451,6 +1475,21 @@ def demo():
             "duck leaked into the single-input per-item chain, which has no sidechain"
         assert _duck_fragment(json.dumps({"duck": 0.5})), \
             "the join can no longer see a duck, so it would render as a no-op"
+
+        # GAIN IS ONE VALUE FROM TWO INPUTS, AND IT IS NEVER SUMMED.
+        # docs/TRD-1 5.0(b). The set editor shows the Gain field and the raw
+        # effects_json box side by side, so -3 in both used to render at -6 dB
+        # with nothing saying which the user meant.
+        both = _audio_chain(-3.0, json.dumps({"gain_db": -3.0}))
+        vols = [f for f in both.split(",") if f.startswith("volume=")]
+        assert vols == ["volume=-3.000dB"], f"gain was summed or emitted twice: {vols}"
+        # the column wins when both are set...
+        assert _audio_chain(-6.0, json.dumps({"gain_db": -3.0})).startswith("volume=-6.000dB")
+        # ...and the json is an ALIAS, read only when the column is silent, so an
+        # already-saved item that used it still renders at the level it asked for
+        assert _audio_chain(0, json.dumps({"gain_db": -3.0})).startswith("volume=-3.000dB")
+        # neither set: no gain stage at all, so the ordinary item is untouched
+        assert not [f for f in _audio_chain(0, None).split(",") if f.startswith("volume=")]
 
         # aecho APPENDS its delay, and _item_duration is otherwise pure trim
         # arithmetic -- the editor was short by exactly the delay, up to 2s.

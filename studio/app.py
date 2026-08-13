@@ -50,7 +50,14 @@ MAX_MP3 = 50 * 1024 * 1024
 MAX_IMAGE = 20 * 1024 * 1024
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 MAX_REROLL_CLIPS = 64
-GAIN_DB_RANGE = (-30.0, 30.0)
+# The FORM's gain bound is the FILTER BUILDER's bound, imported rather than
+# retyped. These were (-30, +30) here and (-60, +24) in effects.gain() -- two
+# sanity bounds for one field, which never fired only because the gain_db column
+# did not go through effects.gain() until 2026-08-13. It does now, so a value
+# this form accepted at +30 would have raised at RENDER time, on a set already
+# saved. One source, and the filter builder owns it because it is the thing that
+# has to emit a filter ffmpeg accepts.
+GAIN_DB_RANGE = (effects.GAIN_MIN_DB, effects.GAIN_MAX_DB)
 
 # A BLANK form field arrives as "", and a bare Optional[int]/Optional[float]
 # answers 422 rather than None. Both places that hit this mean "not given":
@@ -602,6 +609,15 @@ def clamp_set_item_effects(effects_json):
     unsupported = [k for k in _UNSUPPORTED_EFFECT_KEYS if k in data]
     if unsupported:
         raise HTTPException(400, f"not supported in set rendering yet: {', '.join(unsupported)}")
+    # gain_db has a field of its own on this same form, so accepting it here too
+    # gives one value two inputs -- and an item with -3 in both rendered at -6 dB
+    # with nothing saying which was meant. mixer._audio_chain resolves an already
+    # saved item (the column wins, never summed); this refuses a NEW one, because
+    # entry is the right place to reject an ambiguity and render time is the
+    # worst. docs/TRD-1 5.0(b).
+    if data.get("gain_db"):
+        raise HTTPException(400, "put gain in the Gain (dB) field, not in effects_json -- "
+                                 "they are one value, and the field is the one that wins")
     # parse_effects ignores keys it does not know, so a typo like "eq_kil" would
     # be stored and then silently do nothing at render. Accepted-and-ignored is
     # the one outcome this form must not have.

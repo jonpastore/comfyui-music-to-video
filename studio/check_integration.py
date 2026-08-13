@@ -8,7 +8,7 @@ it is the only thing standing between a custom tier and unrestricted output.
 
 Run: python3 check_integration.py     (no GPU, no network, no ComfyUI)
 """
-import inspect, json, os, sys, tempfile
+import inspect, json, os, re, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -476,6 +476,27 @@ if effects:
     check("effects.parse_effects default is loudnorm-on, everything else off", lambda: (
         None if effects.parse_effects(None) == {"chain": [effects.loudnorm_filter()], "duck": None}
         else (_ for _ in ()).throw(AssertionError("DEFAULT_EFFECTS drifted from parse_effects(None)"))))
+
+    # The form's gain bound and the filter builder's were (-30, +30) and
+    # (-60, +24): two sanity bounds for one field, which never fired only
+    # because the gain_db column did not pass through effects.gain() until
+    # 2026-08-13. It does now, so a value the form accepted at +30 would raise
+    # at RENDER time on an already-saved set. app.py imports the range; this
+    # asserts across the seam, because nothing else forces the two to agree.
+    # This checks the DEFINITION, not the value: nothing here imports app.py,
+    # so it cannot read the tuple. What it can prove is that app.py DERIVES the
+    # bound instead of typing a second literal, which is the only way the two
+    # can drift. A source check proves the code exists and not that anything
+    # reaches it -- the reaching is covered by test_app's gain_db bound tests.
+    check("app's gain bound is DERIVED from effects, not a second literal", lambda: (
+        None if re.search(r"GAIN_DB_RANGE\s*=\s*\(\s*effects\.GAIN_MIN_DB\s*,"
+                          r"\s*effects\.GAIN_MAX_DB\s*\)",
+                          open(os.path.join(HERE, "app.py")).read())
+        else (_ for _ in ()).throw(AssertionError(
+            "app.GAIN_DB_RANGE is a literal again. It was (-30, +30) here and "
+            f"({effects.GAIN_MIN_DB}, {effects.GAIN_MAX_DB}) in effects.gain(), "
+            "and since the gain_db column now passes through effects.gain() a "
+            "value the form accepts must be one the filter builder will emit"))))
 
 video_fx = optional_import("video_fx")
 if video_fx:

@@ -4000,6 +4000,13 @@ def test_unknown_effect_keys_are_refused_rather_than_silently_ignored():
         r = client.post(f"/sets/{sid}/items/{iid}",
                         data=dict(base, effects_json='{"eq_kill": {"low_db": -6}}'))
         assert r.status_code in (200, 303), r.text
+        # gain_db has a FIELD on this same form, so accepting it here too gives
+        # one value two inputs -- an item with -3 in both rendered at -6 dB and
+        # nothing said which was meant. Refused at entry; mixer resolves an
+        # already-saved one with the column winning. docs/TRD-1 5.0(b).
+        r = client.post(f"/sets/{sid}/items/{iid}",
+                        data=dict(base, effects_json='{"gain_db": -3}'))
+        assert r.status_code == 400 and "Gain (dB) field" in r.text, r.text
 
 
 def test_timeline_widths_come_from_the_same_helper_the_renderer_uses():
