@@ -315,6 +315,12 @@ MIGRATIONS = [
     # it; without it the duration and frame-count checks have nothing to compare
     # to and do not run. Derived from the submitted graph, never from the file.
     "ALTER TABLE artefacts ADD COLUMN expect_json TEXT",
+
+    # What scene_seconds this storyboard was GENERATED with. The divisor for
+    # every clip-length answer about this song (build_song.clip_seconds). NULL
+    # means a storyboard from before clip length was per song, and the answer is
+    # CHUNK -- so nothing already on disk changes length.
+    "ALTER TABLE storyboards ADD COLUMN scene_seconds REAL",
     # The render settings this candidate was actually produced with, as the
     # JSON that pipeline.gen_anchor turned into command-line flags. A CFG sweep
     # puts a dozen sheets in one group that differ only by guidance, and

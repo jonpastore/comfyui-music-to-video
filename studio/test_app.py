@@ -1345,7 +1345,7 @@ def test_storyboard_page_timing_matches_the_renderers_own_clip_plan():
         assert rows[0]["start"] == 0.0
         for a, b in zip(rows, rows[1:]):
             assert a["end"] == b["start"], f"gap between scene {a['num']} and {b['num']}"
-        assert rows[-1]["end"] == pytest.approx(nclips * appmod.CHUNK)
+        assert rows[-1]["end"] == pytest.approx(nclips * build_song.clip_seconds())
 
 
 def test_storyboard_coverage_flags_pacing_written_for_a_different_length():

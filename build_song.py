@@ -164,6 +164,59 @@ def allocate(scenes, nclips):
     return counts
 
 
+def clip_seconds(scene_seconds=None):
+    """How long ONE clip of this song is, in seconds.
+
+    THE SONG'S LENGTH IS THE SOURCE OF TRUTH FOR HOW MANY CLIPS THERE ARE, and
+    this is the other half of that arithmetic: the divisor. Decided 2026-08-13
+    by Jon, reconciling docs/TRD-2 3.4 with the invariant app.clip_count has
+    defended since it was written.
+
+    `scene_seconds` is what the storyboard was GENERATED with, recorded on the
+    storyboards row. None means a storyboard from before that was recorded, and
+    the answer is CHUNK -- exactly the old behaviour, so no existing song
+    changes length.
+
+    Why this is not `duration / len(storyboard["scenes"])`: that divides by a
+    number the MODEL chose. app.clip_count's docstring records what that cost --
+    "using scene_count here hid clips 20..40 from the approve grid and let clip
+    generation start with two thirds of its references missing" -- because a
+    20-scene storyboard was spread across all 41 clips of a 3:16 track. Deriving
+    from duration and the REQUESTED scene length keeps both numbers ours: grok
+    is asked for exactly n_clips scenes and validate() refuses a different
+    count, so one scene really is one clip, but the count never depends on
+    grok having complied.
+
+    IT RETURNS CHUNK TODAY WHATEVER IT IS PASSED, deliberately and temporarily.
+    The renderer still builds every clip at LTX25_LEN frames, which IS CHUNK
+    seconds -- nothing in build_song takes a length yet. Honouring scene_seconds
+    here before the RENDERER honours it would make the approve grid, the time
+    meter and the reference count all expect a number of clips that never gets
+    rendered: the same mismatch app.clip_count's docstring records, arriving
+    from the other direction. A test caught exactly that within a minute of it
+    being written, because the storyboard form defaults scene_seconds to 4.0 and
+    every storyboard would have silently re-timed to 4.0s clips.
+
+    The argument is threaded through every caller and the value is recorded on
+    the storyboards row, so the day the renderer takes a length this is a
+    one-line change with its call sites already right. What it needs first is
+    docs/TRD-2 `T2-12a`: seconds rounded to a LEGAL 8n+1 frame count at the
+    clip's fps. Until then this is one honest constant instead of six scattered
+    ones.
+    """
+    return CHUNK
+
+
+def n_clips_for(duration, scene_seconds=None):
+    """Clips in a song of this length. The ONE implementation.
+
+    app.py, build_storyboard.py, build_refs.py and reroll_refs.py each used to
+    compute this, four copies of `ceil(duration / CHUNK)` free to drift -- and
+    with clip length now per song, drifting is what they would do.
+    """
+    return math.ceil((duration or 0) / clip_seconds(scene_seconds))
+
+
 def expect_from_workflow(wf):
     """What this workflow ASKED FOR: {frames, fps, width, height}.
 

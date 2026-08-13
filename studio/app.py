@@ -17,7 +17,10 @@ from fastapi.templating import Jinja2Templates
 import db
 import tiers  # also puts the repo-root scripts on sys.path (STUDIO_SCRIPTS)
 import build_song  # clip_plan/allocate/sname -- the renderers' own definitions
-from build_song import CHUNK
+# CHUNK is NOT imported here any more: clip length is per song, and a module
+# level constant in the web layer is how it would silently become global again.
+# build_song.clip_seconds() answers it, falling back to CHUNK itself for a
+# storyboard generated before the length was recorded.
 import jobs
 import pipeline
 import grok
@@ -308,15 +311,37 @@ def media_url(path):
     return "/media/" + quote(os.path.realpath(path), safe="/")
 
 
-def clip_count(song):
-    """How many 4.8125 s clips this track is cut into.
+def scene_seconds_for(song_id, tier):
+    """What scene length this song's storyboard at this tier was generated with.
+
+    None for a storyboard written before it was recorded, which build_song reads
+    as CHUNK. Every clip-count and clip-timing answer routes through here, so
+    there is one lookup rather than a constant repeated at six call sites.
+    """
+    row = db.one("SELECT scene_seconds FROM storyboards WHERE song_id=? AND tier=?",
+                 song_id, tier)
+    return row["scene_seconds"] if row else None
+
+
+def clip_count(song, scene_seconds=None):
+    """How many clips this track is cut into.
 
     Comes from the AUDIO LENGTH, never from the storyboard's scene count:
     build_song.clip_plan() spreads a 20-scene storyboard across all 41 clips of
     a 3:16 track. Using scene_count here hid clips 20..40 from the approve grid
     and let clip generation start with two thirds of its references missing.
+
+    That invariant SURVIVES the clip-length decision (docs/TRD-2 3.4) and this
+    is how. `scene_seconds` is what the storyboard was generated with, so the
+    divisor is per song now -- but the dividend is still the duration and the
+    count is still ours, never the model's. One scene is one clip because grok
+    is asked for exactly this many and validate() refuses any other number, not
+    because anything here counts what came back.
+
+    The arithmetic itself lives in build_song, called by four modules that each
+    used to carry their own copy of it.
     """
-    return math.ceil((song["duration"] or 0) / CHUNK)
+    return build_song.n_clips_for(song["duration"], scene_seconds)
 
 
 def get_song_or_404(sid):
@@ -967,12 +992,15 @@ def h_storyboard(args, progress):
     scene_count = len(sb.get("scenes", [])) if isinstance(sb, dict) else None
     # the direction is stored with the result, not just used and forgotten: a
     # storyboard you cannot see the prompt for is one you cannot tune.
-    db.run("""INSERT INTO storyboards (song_id, tier, json_path, md_path, scene_count, created, prompt)
-              VALUES (?,?,?,?,?,?,?)
+    db.run("""INSERT INTO storyboards (song_id, tier, json_path, md_path, scene_count,
+                                       created, prompt, scene_seconds)
+              VALUES (?,?,?,?,?,?,?,?)
               ON CONFLICT(song_id, tier) DO UPDATE SET json_path=excluded.json_path,
               md_path=excluded.md_path, scene_count=excluded.scene_count,
-              created=excluded.created, prompt=excluded.prompt""",
-           sid, tier, json_path, md_path, scene_count, time.time(), args.get("direction", ""))
+              created=excluded.created, prompt=excluded.prompt,
+              scene_seconds=excluded.scene_seconds""",
+           sid, tier, json_path, md_path, scene_count, time.time(), args.get("direction", ""),
+           args.get("scene_seconds"))
     return {"json": json_path, "md": md_path}
 
 
@@ -1641,8 +1669,12 @@ def song_page(request: Request, id: int):
     # storyboard has an approved reference -- otherwise start_clips just 400s
     # one click later.
     clips_ready_tiers = []
-    n_clips = clip_count(song)
+    # PER TIER, because clip length is per storyboard now: two tiers of one song
+    # can be generated at different scene lengths and therefore have different
+    # clip counts. Hoisting this out of the loop, as it was, would test one
+    # tier's approvals against another tier's clip count.
     for t, sb in storyboards.items():
+        n_clips = clip_count(song, scene_seconds_for(song["id"], t))
         if not n_clips:
             continue
         approved_idxs = {r["clip_idx"] for r in
@@ -3887,7 +3919,7 @@ def load_storyboard(row, normalized=True):
     return build_song.normalize(sb) if normalized else sb
 
 
-def storyboard_scenes(song, sb, tier, anchored=()):
+def storyboard_scenes(song, sb, tier, anchored=(), scene_seconds=None):
     """Per-scene timing, prompts and reference frames for the storyboard page.
 
     Timing comes from build_song.clip_plan() -- THE clip->scene mapping, shared
@@ -3900,7 +3932,12 @@ def storyboard_scenes(song, sb, tier, anchored=()):
     """
     anchored = set(anchored)
     scenes = sb.get("scenes") or []
-    nclips = clip_count(song)
+    # One divisor for the whole function: the length THIS song's clips are, from
+    # what its storyboard was generated with. None means a storyboard from
+    # before that was recorded and build_song answers CHUNK, which is exactly
+    # the old behaviour for every song already on disk.
+    clip_secs = build_song.clip_seconds(scene_seconds)
+    nclips = clip_count(song, scene_seconds)
     plan = build_song.clip_plan(scenes, nclips=nclips) if (scenes and nclips) else []
 
     # refs for this tier, newest candidate last, keyed by clip
@@ -3935,9 +3972,15 @@ def storyboard_scenes(song, sb, tier, anchored=()):
         rows.append({
             "scene": scene, "num": num, "name": build_song.sname(scene),
             "clips": idxs,
-            "start": idxs[0] * CHUNK if idxs else None,
-            "end": (idxs[-1] + 1) * CHUNK if idxs else None,
-            "length": len(idxs) * CHUNK,
+            # SECOND IMPLEMENTATION OF SCENE TIMING, removed 2026-08-13. This
+            # was idx * CHUNK, which is the studio's own copy of an arithmetic
+            # docs/TRD-2 T2-41 says has exactly one home -- and with clip length
+            # per song, a hardcoded CHUNK here would time every storyboard
+            # against 4.8125s whatever the song was generated at. One divisor,
+            # from the song, passed in.
+            "start": idxs[0] * clip_secs if idxs else None,
+            "end": (idxs[-1] + 1) * clip_secs if idxs else None,
+            "length": len(idxs) * clip_secs,
             "guidance": build_song.guidance_seconds(scene),
             "shots": sorted(set(shots_of.get(num, []))),
             "refs": refs, "edited": edited,
@@ -3947,7 +3990,7 @@ def storyboard_scenes(song, sb, tier, anchored=()):
     return rows, nclips
 
 
-def coverage(rows, nclips, duration):
+def coverage(rows, nclips, duration, clip_secs=None):
     """How the storyboard's PACING INTENT compares with the track.
 
     Not "is the video the right length" -- allocate() always spends exactly
@@ -3957,7 +4000,9 @@ def coverage(rows, nclips, duration):
     written for. That is what this measures.
     """
     intent = sum(r["guidance"] for r in rows)
-    rendered = nclips * CHUNK
+    # this song's clip length, not a module constant -- one divisor, from
+    # build_song, so the meter cannot describe a different render than the page
+    rendered = nclips * build_song.clip_seconds(clip_secs)
     return {
         "intent": intent, "rendered": rendered, "duration": duration or 0.0,
         "nclips": nclips, "scenes": len(rows),
@@ -3984,7 +4029,9 @@ def view_storyboard(request: Request, id: int, tier: str):
         raise HTTPException(500, f"storyboard file is unreadable: {e}") from None
     album = song["album"] or ""
     cast = cast_anchors(album, tier)
-    rows, nclips = storyboard_scenes(song, sb, tier, {c["name"] for c, _a in cast})
+    sb_secs = row["scene_seconds"] if row else None
+    rows, nclips = storyboard_scenes(song, sb, tier, {c["name"] for c, _a in cast},
+                                     scene_seconds=sb_secs)
     # the anchors this tier will actually render from, at the top, because a
     # storyboard is read against the character it is for. The protagonist's
     # (character_id IS NULL) first, then the cast.
@@ -3994,9 +4041,10 @@ def view_storyboard(request: Request, id: int, tier: str):
                       ORDER BY (a.character_id IS NOT NULL), c.name, a.view, a.id""", album, tier)
     return templates.TemplateResponse(request, "storyboard.html", {
         "song": song, "tier": tier, "row": row, "md": md, "sb": sb,
-        "scene_rows": rows, "anchors": anchors, "chunk": CHUNK,
+        # the page shows THIS song's clip length, not the old constant
+        "scene_rows": rows, "anchors": anchors, "chunk": build_song.clip_seconds(sb_secs),
         "unanchored": sorted({n["name"] for r in rows for n in r["cast"] if not n["anchored"]}),
-        "coverage": coverage(rows, nclips, song["duration"]),
+        "coverage": coverage(rows, nclips, song["duration"], sb_secs),
         "fields": EDITABLE_SCENE_FIELDS,
     })
 
@@ -4046,10 +4094,12 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
         outdir = os.path.dirname(row["json_path"])
         grok.write_storyboard(sb, outdir, song["slug"], tier)
     anchored = {c["name"] for c, _a in cast_anchors(song["album"] or "", tier)}
-    rows, _ = storyboard_scenes(song, load_storyboard(row), tier, anchored)
+    rows, _ = storyboard_scenes(song, load_storyboard(row), tier, anchored,
+                                scene_seconds=row["scene_seconds"])
     r = next(x for x in rows if x["num"] == num)
     return templates.TemplateResponse(request, "_scene_row.html", {
-        "song": song, "tier": tier, "r": r, "fields": EDITABLE_SCENE_FIELDS, "chunk": CHUNK})
+        "song": song, "tier": tier, "r": r, "fields": EDITABLE_SCENE_FIELDS,
+        "chunk": build_song.clip_seconds(row["scene_seconds"])})
 
 
 @app.post("/songs/{id}/refs")
@@ -4109,7 +4159,7 @@ def approve_context(song, tier):
         by_clip.setdefault(r["clip_idx"], []).append(r)
     flags = latest_flags(song["id"], tier)
     clips = []
-    for i in range(clip_count(song)):
+    for i in range(clip_count(song, scene_seconds_for(song["id"], tier))):
         cands = by_clip.get(i, [])
         clips.append({"idx": i, "candidates": cands,
                       "approved": any(c["approved"] for c in cands),
@@ -4145,7 +4195,7 @@ def approve_all(id: int, tier: str, replace: bool = Form(False)):
                 db.q("SELECT DISTINCT clip_idx FROM refs WHERE song_id=? AND tier=? AND approved=1",
                      id, tier)}
     n = 0
-    for i in range(clip_count(song)):
+    for i in range(clip_count(song, scene_seconds_for(song["id"], tier))):
         if i in decided and not replace:
             continue
         newest = db.one("""SELECT id FROM refs WHERE song_id=? AND tier=? AND clip_idx=?
@@ -4195,7 +4245,7 @@ def start_reroll(id: int, tier: str = Form(...), clip_idx: List[int] = Form(...)
     sb = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
     if not sb:
         raise HTTPException(400, "generate a storyboard for this tier first")
-    idxs = sorted({i for i in clip_idx if 0 <= i < clip_count(song)})
+    idxs = sorted({i for i in clip_idx if 0 <= i < clip_count(song, scene_seconds_for(song["id"], tier))})
     if not idxs:
         raise HTTPException(400, "no valid clip indices given")
     if len(idxs) > MAX_REROLL_CLIPS:
@@ -4371,7 +4421,7 @@ async def start_clips(id: int, tier: str = Form(...), video_model: str = Form(""
     sb = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
     if not sb:
         raise HTTPException(400, "generate a storyboard for this tier first")
-    n_clips = clip_count(song)
+    n_clips = clip_count(song, scene_seconds_for(song["id"], tier))
     if not n_clips:
         # duration is what defines the clip list; without it the job would
         # render every clip build_song computes from the mp3 with no staged
