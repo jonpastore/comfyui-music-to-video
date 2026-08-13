@@ -1704,3 +1704,15 @@ Append dated one-liners. Newest at the bottom.
   characters** -- Jon's "R may mention, never sexually" maps onto how the real
   rating actually works, and the absolute line sits at the adult tier where he
   put it.
+- 2026-08-13 (B) ⚠ **DEPLOYING NOW, per Jon. A — do not restart the worker or
+  queue anything until the follow-up line below says it is done.** From a clean
+  detached worktree at `d1e142b`, never the working tree. Preconditions checked
+  first, all three: ComfyUI on cerberus `{"queue_running": [], "queue_pending":
+  []}`; the studio's own job table has **nothing running or queued** (last three
+  are anchor jobs 230/231/232, done/failed/done); `git status` clean and HEAD ==
+  `origin/main`. Two things in this deploy change RENDERED OUTPUT — the body
+  clause now composes without the negation, and a mixed set no longer
+  double-normalises the uncurved item — so it wants a deliberate before/after,
+  not a silent restart. `db.py` gains two `ALTER TABLE playlists ADD COLUMN`
+  (backdrop, composite) against the production database; `_migrate` catches
+  "duplicate column", so re-running is safe.
