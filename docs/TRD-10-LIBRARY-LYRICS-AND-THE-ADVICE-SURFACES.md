@@ -152,20 +152,76 @@ guardrail's own comment admits the real gap: a childlike figure described
 without any blocked term *"needs a classifier"* and is not caught today. So the
 blunt rule pays a real cost and does not buy the protection it is named for.
 
+**A correction to that, before the design, because it was overstated.** The
+blunt input filter is **not** merely a keyword screen that buys nothing. The
+guardrail's own comment records why: *"the image pipeline runs at cfg 1.0, where
+ComfyUI skips the negative pass entirely — a 'no children' negative prompt is
+literally inert on this stack. Positive-text steering plus refusing the input
+are therefore the only controls that actually do anything here."* **The input
+refusal is one of exactly two working controls on the render path.** The gap
+around unworded childlike depiction is real, and it does not make the filter
+ornamental. Any loosening has to be justified against that, not against the
+weaker claim.
+
+**And the decisive technical fact, which this project has already measured.**
+`PINNED` is welded onto every render prompt and asserts *"Every character is an
+adult woman or man of at least 21 years, with fully adult face, body and
+proportions."* **A prompt that carries `PINNED` and also references a child is a
+self-contradicting prompt** — and day 4 measured what this stack does with
+those: the nude clause asserted bare skin beside "entire body covered in
+jet-black fur", and a fixed-seed sweep watched the model resolve the
+contradiction *harder* as guidance rose, two of three seeds rendering a human
+body with a cat's head by cfg 7.0. **A contradiction between "everyone is 21+"
+and a child reference is the one contradiction that must never be handed to a
+sampler.**
+
+That is what fixes the tier line: the question is not "may a child be
+mentioned" but **"may a child reference enter text that reaches a render
+prompt"** — and at `r` and `xxx` the answer is no, whatever the tier permits
+elsewhere.
+
 **The design: a minor reference and explicit capability can never coexist, and
 they are kept apart structurally rather than by screening prose.**
 
-- `T10-18` **A minor may be referenced where explicit content is structurally
-  impossible, and nowhere else.** Lyrics, title, and scene text on a song or
-  album locked to a non-explicit tier are permitted. The lock is: tier `g` or
-  `pg13`, `allow_nudity` false, no nude view reachable, and no explicit wording
-  in the album profile. **A song for a child is a first-class thing this studio
-  can make.**
-- `T10-19` **The lock cannot be lifted while the reference exists.** Escalating
-  such a song or album to `r`/`xxx`, enabling nudity on it, or adding a nude view
-  is **refused, naming the reference that blocks it**. This is the criterion that
-  actually prevents the harm: not the mention, but the **escalation path** from a
-  child-referencing work to an explicit one.
+**Decided 2026-08-13 by Jon, per tier:**
+
+| tier | a minor may be… | and never… |
+|---|---|---|
+| `g`, `pg13` | referenced **and depicted** | — there is no nudity or explicit path to reach |
+| `r` | **mentioned in lyrics and narrative text only** | depicted, cast, anchored, or present in **any text that reaches a render prompt** |
+| `xxx` | **never mentioned, anywhere, at all** | — absolute, no exception, no override |
+
+- `T10-18` **At `g` and `pg13`, a minor may be referenced and depicted**, because
+  explicit content is structurally impossible there: `allow_nudity` false, no
+  nude view reachable, no explicit wording in the album profile. **A song for a
+  child, and a video for it, is a first-class thing this studio can make.**
+- `T10-18a` **At `r`, a minor may be mentioned in lyrics and narrative text and
+  must never reach a render prompt.** An `r` work may say a child exists in its
+  story; it may not render one, cast one, anchor one, or carry the reference into
+  any `image_prompt`, `video_motion_prompt`, scene text, character field or album
+  profile field. **The boundary is the prompt, not the tier**, for the reason
+  above: `PINNED` asserts every character is 21+, and a prompt asserting both is
+  the contradiction this stack resolves badly.
+- `T10-18b` **At `xxx`, a minor reference is refused everywhere in the work** —
+  lyrics included, with no locked-context exception. Jon's words, and they are
+  the right line: *anything with xxx should never mention children ever.* The
+  `r` allowance does not extend upward, and a work escalated to `xxx` is checked
+  in full at the moment of escalation (`T10-19`), not only at save.
+- `T10-19` **Escalation is re-checked in full, at the moment of escalation.**
+  Moving a work to a higher tier, enabling nudity, or adding a nude view
+  re-screens **everything the work already contains** against the destination
+  tier's rule, and refuses **naming the reference that blocks it** — a `g` work
+  mentioning a child cannot become `xxx` at all, and cannot become `r` while the
+  reference sits in any field that reaches a render prompt. This is the criterion
+  that prevents the actual harm: **not the mention, but the escalation path**
+  from a child-referencing work to an explicit one.
+- `T10-19a` **The `r` allowance is enforced at the prompt boundary, and it is a
+  positive check, not a filter.** Every string that reaches a render — composed
+  positive prompt, scene fields, character fields, album profile — is screened
+  at `r` exactly as it is at `xxx`. **Only lyrics and narrative fields carry the
+  allowance**, and the set of fields that carry it is a named list, not "whatever
+  is not a prompt". A field added later is outside the allowance until somebody
+  adds it deliberately.
 - `T10-20` **No override mechanism reaches `T10-19`.** Not `tier_overrides`, not
   the album profile, not tier wording, not a per-view prompt override, not an
   operator confirmation. A refusal that a determined operator can click through
@@ -228,7 +284,10 @@ places.
 | `T10-7` the pre-write count is the real count | passes if the count is always zero or writes are disabled | a batch with a **non-zero** predicted count writes **exactly that many** — the 12-vs-9 case by name |
 | `T10-14` "does this match?" is refused as a prompt shape | classic one-sided refusal | **"describe what differs" is accepted** and returns non-verdict text on the same surface |
 | `T10-17` one shared guard, no per-module copy | absence of copies is true when modules stop screening | disallowed text through **each of the four modules** is refused **via `screen_prompt_field`**, and an in-bound string passes |
-| `T10-18` a minor may be referenced in a locked context | passes if nothing can ever be locked, i.e. the feature is absent | **a song referencing a child generates, and its G-tier video renders** — the niece case, end to end |
+| `T10-18` `g`/`pg13` may reference and depict | passes if nothing can ever be locked, i.e. the feature is absent | **a song referencing a child generates, and its G-tier video renders** — the niece case, end to end |
+| `T10-18a` `r` mentions but never renders | passes if `r` refuses everything, or if nothing at `r` ever renders | an `r` work **with the mention in lyrics generates its song AND renders its video**, with the reference absent from every prompt string |
+| `T10-18b` `xxx` never mentions | passes if `xxx` is unreachable | a **clean** `xxx` work still generates and renders normally |
+| `T10-19a` the allowance is a named field list | absence of leakage is true when no field carries the allowance | a lyric field **does** carry it and a scene field **does not**, asserted per field |
 | `T10-19` the lock cannot be lifted | passes if escalation is impossible for every work | a work **with no reference escalates normally** to `r`/`xxx` |
 | `T10-20` no override reaches it | absence of a bypass is true when there are no overrides at all | overrides **still work** for everything else — asserted on a non-locked album |
 | `T10-21` removing a reference does not silently unlock | passes if unlocking never happens | an **explicit** unlock on a cleaned work **does** succeed, and prior renders keep their attribution |

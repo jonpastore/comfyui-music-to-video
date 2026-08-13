@@ -1633,3 +1633,40 @@ Append dated one-liners. Newest at the bottom.
   screen never was.**
   `guardrail.check_text`'s docstring needs the same correction when someone
   holds that file -- it currently records a justification that is no longer true.
+- 2026-08-13 (A) **MINOR POLICY, decided by Jon and now per tier. Supersedes my
+  `T10-18` of an hour ago.**
+
+      g, pg13   may be referenced AND depicted   (no nudity path exists to reach)
+      r         may be MENTIONED in lyrics and narrative ONLY -- never depicted,
+                cast, anchored, or present in any text that reaches a render prompt
+      xxx       NEVER mentioned, anywhere, at all -- absolute, no override
+
+- 2026-08-13 (A) ⚠ **And a correction to my own reasoning, in the direction that
+  matters most.** I told Jon the blunt input filter "does not buy the protection
+  it is named for". **That was overstated and wrong.** `guardrail.py`'s own
+  comment records why: *"the image pipeline runs at cfg 1.0, where ComfyUI skips
+  the negative pass entirely -- a 'no children' negative prompt is literally
+  inert on this stack. Positive-text steering plus refusing the input are
+  therefore the only controls that actually do anything here."* **The input
+  refusal is one of exactly TWO working controls on the render path.** The
+  unworded-childlike-depiction gap is real and does not make the filter
+  ornamental. Any loosening argues against that, not against the weaker claim.
+- 2026-08-13 (A) **The decisive reason `r` may mention but must never let the
+  reference reach a prompt, and it is this project's OWN measurement.** `PINNED`
+  is welded onto every render prompt and asserts *"Every character is an adult
+  woman or man of at least 21 years, with fully adult face, body and
+  proportions."* **A prompt carrying PINNED and also referencing a child is a
+  self-contradicting prompt** -- and day 4 measured what this stack does with
+  those: bare skin asserted beside "entire body covered in jet-black fur", and a
+  fixed-seed sweep watched the model resolve it HARDER as guidance rose, two of
+  three seeds rendering a human body with a cat's head by cfg 7.0.
+  **"Everyone is 21+" against a child reference is the one contradiction that
+  must never be handed to a sampler.** So the boundary is the PROMPT, not the
+  tier: `T10-19a` screens every string that reaches a render at `r` exactly as
+  at `xxx`, and the allowance is a **named field list** -- a field added later is
+  outside it until somebody adds it deliberately.
+- 2026-08-13 (A) `guardrail.check_text`'s docstring still records the old
+  justification ("costs nothing anyone actually needs") which Jon has falsified,
+  AND the comment above `MINOR_TERMS` is the load-bearing one that must NOT be
+  softened when someone edits that file. Both want attention from whoever holds
+  `guardrail.py` -- this is specification only and **no code has changed**.
