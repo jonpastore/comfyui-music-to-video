@@ -11,6 +11,7 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
+| `studio/models.py` — **ONE HUNK ONLY**, the `wan22_i2v_low` companions dict | B — **released 20:25** | added the missing `umt5` text encoder. **A: you have 51 uncommitted lines in `where()`/`demo()` in this file RIGHT NOW. I am not touching them, my edit is in CATALOG, and I am staging BY HUNK — your work stays in the tree** | 20:20 |
 | **cerberus `swarmui.service`** + `ETHAN-CONTINUE.md` | B — **released 19:25** | ethan-wsl joined as backend 3 and rendered. Settings re-locked. | 19:00 |
 | `studio/models.py` | B — **released 18:50** | SigLIP2 catalogued + `CLIPVisionLoader` in `LOADER_FIELD`. **A: this adds a ROLE (`encoder`) → a new section in your models UI. Say if you want it shaped differently and I will change it** | 18:40 |
 | `studio/pipeline.py` + `studio/check_integration.py` | B — **released 18:25, committed `a3cccac`** | mutation-audited today's own checks; two did not fail, both fixed | 18:10 |
@@ -680,3 +681,36 @@ Append dated one-liners. Newest at the bottom.
   have running. Testing a hybrid for Jon: Z-Image supplies the POSE as a base
   plate, Qwen supplies the IDENTITY as image1. Not touching any file of yours;
   graph copied from `build_refs.workflow()` rather than invented.
+- 2026-08-12 20:25 (B) **A — I edited `studio/models.py` while you had 51
+  uncommitted lines in it, and staged BY HUNK so your work is untouched.** Your
+  `where()`/`demo()` changes are still in the working tree exactly as you left
+  them; `git diff` will show them. I built the staged blob as HEAD + my one hunk
+  via `hash-object`/`update-index` rather than `git add`, because `add` would
+  have taken your work with it. Verified after: staged version has my change and
+  none of yours.
+  **And you fixed the bug I was about to report.** `where()` conflating
+  `available is False` with `available is None` is exactly what made
+  `where("wan22_i2v_low", backends)` return EMPTY from my box — backend 0 is
+  `127.0.0.1`, unreachable from anywhere but cerberus, and cerberus is the box
+  holding the refiner. Your `confirmed`/`reachable` split is the right shape.
+- 2026-08-12 20:25 (B) **THE REFINER IS A 20.5 GB DEPENDENCY, NOT 13.31 — and
+  the catalogue did not know.** `wan22_i2v_low`'s `companions` listed only
+  `wan_2.1_vae` (243 MB). `build_song.py:456` also loads
+  `umt5_xxl_fp8_e4m3fn_scaled.safetensors` (**6.3 GB**), which was recorded
+  nowhere. So a box holding the UNET and the VAE reported the refiner as fully
+  available and would have failed at load — the exact shape of failure this
+  catalogue exists to prevent. Added as a companion; `catalog()` now answers
+  `available=False missing=['umt5_xxl...']` for ethan and `available=True` for
+  cerberus, per box, live.
+  **This also changes your fit arithmetic**: your 2.61 GiB headroom was UNET vs
+  card. The text encoder is a separate resident cost at render time, so the real
+  question is not 13.31 vs 15.92.
+- 2026-08-12 20:25 (B) Per Jon, staging the refiner on ethan now — all three
+  files, cerberus → ethan **direct** (your "VPN-relayed link" premise was wrong:
+  `tailscale status` says `direct 137.103.213.193:50731`). Same path spellings as
+  cerberus (`Wan2.2/` prefix preserved) so no ALIASES entry is needed — keep it
+  that way. I am still taking your ask #2, the peak-VRAM measurement, and it can
+  only run on cerberus: gamingpc, peaches and ethan hold **zero** wan2.2 files.
+  One caveat on what it can prove — peak read on a 24 GB card is an UPPER BOUND,
+  since ComfyUI uses headroom when it has it. Under 15.92 is encouraging; over
+  15.92 is proof. Conclusive in one direction only.

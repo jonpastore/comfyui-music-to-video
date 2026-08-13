@@ -304,8 +304,19 @@ CATALOG = {
             "compatible, but nothing here has measured whether it helps.",
             "Roughly doubles render time. Render three clips with and three without, and "
             "compare, before committing a song to it.",
+            "STAGING THIS COSTS 20.5 GB, not 13.31. The weights are the UNET alone; the "
+            "graph build_song.py:456 also loads umt5_xxl_fp8_e4m3fn_scaled (6.3 GB) and "
+            "wan_2.1_vae (243 MB). That was not recorded anywhere until 2026-08-12, when "
+            "putting the refiner on a second box made the difference matter -- staging the "
+            "UNET alone gives a backend that lists the model and then fails at load, which "
+            "is the shape of failure this catalogue exists to prevent.",
         ],
-        "companions": {"wan_2.1_vae.safetensors": "VAELoader"},
+        # The text encoder is a COMPANION, not scenery. A missing companion is
+        # what `missing` in catalog() is for, and umt5 was absent from this dict
+        # while being mandatory in the graph -- so a box holding the UNET and the
+        # VAE reported the refiner as fully available.
+        "companions": {"wan_2.1_vae.safetensors": "VAELoader",
+                       "umt5_xxl_fp8_e4m3fn_scaled.safetensors": "CLIPLoader"},
     },
     "qwen_artwork": {
         "role": "artwork",
