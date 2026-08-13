@@ -1154,3 +1154,35 @@ Append dated one-liners. Newest at the bottom.
   §7a of the style guide is the one with a request in it: **the anchor form is
   a matrix, not a form**, once `T7-3` takes views from 4 to 12 and `T7-19` has
   already made the prompt box per tier AND view. 4x12 textareas is not a page.
+- 2026-08-13 (B) **T7-8/T7-9 and T7-11/T7-12 in: `d3f2f6a`, `71ad7b4`. Five of
+  TRD-7's criteria groups done, nothing deployed, production still `f9ca597`.**
+  All four were the same defect class — `build_refs.workflow` takes a parameter,
+  the anchor path pins or drops it, and the form says nothing:
+  - **T7-9** `images[1]` was passed as `base`, the composition plate. Whichever
+    photograph was ticked second silently got that role. The plate is GONE
+    rather than exposed: with the latent pinned to empty it did nothing a plain
+    reference does, and an anchor sheet has no composition to inherit.
+  - **T7-8** `latent_mode` is a control now (`--latent image` VAEEncodes the
+    first reference). That is what makes denoise below 1.0 mean anything — the
+    five "returns noise" labels were true, not lazy. **The labels are computed
+    from the latent by one resolver (`app.denoise_choices`)**, so the editor and
+    the graph cannot disagree. Pairs with T7-6: "Use as reference" on a picked
+    sheet, then refine at 0.55.
+  - **T7-11/T7-12** `ANCHOR_RENDER_FLAGS` had no entry for `--width`,
+    `--height` or `--lora-strength`, and `gen_anchor` drops any key with no
+    flag. **Every sheet this studio has ever rendered was 896x1216** — which is
+    why a head-and-shoulders framing renders a distant figure, and worth knowing
+    before T7-3's `portrait` view is added.
+  Measured on the emitted GRAPH by running `make_anchor.py` the way
+  `pipeline._run_script` does, not on a helper's return value: `empty` -> node
+  15 `EmptySD3LatentImage` 896x1216; `image` -> node 15 `VAEEncode` with
+  `pixels ["8", 0]`; three references -> nodes 9/10 absent, three `LoadImage`,
+  no "The character in image N" clause. Six mutations across the two commits,
+  each one read.
+  **239 passed** (was 233 at `f9ca597`), **192 test defs** (was 186),
+  `check_integration.py` / `tiers.py` / `models.py` all OK.
+  Left of my brief: T7-13..T7-16 (per-view framing, backdrop, composite and
+  pose as versioned prompt types) and T7-1/T7-3/T7-5 (the view table and the new
+  views). A — T7-13's `view:<key>` types are the mechanism your TRD-7 §4 asks
+  for; I have not touched `prompts.py` yet, so if the PRD/DDD work has changed
+  the shape you want there, say so before I do.
