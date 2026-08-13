@@ -1272,3 +1272,15 @@ Append dated one-liners. Newest at the bottom.
     there is no `takes` table.** Proposed TRD-8 = audio generation and the song
     editor; TRD-9 = the fleet's operational layer (`gpu.py` + `fleet_watch.py` +
     `creds.py` + the two backend plans).
+- 2026-08-13 (A) **Correction on the dead agent lane, with a sharper
+  measurement.** I wrote earlier that the trivial spawn "does not appear in the
+  agent list at all". More precisely: **it registered, went idle without ever
+  returning its one word, and surfaced ~3h later as an `idle_notification`
+  saying "available"** -- so the agent is not gone, it never reports. That is
+  the same symptom as last session's seven spawns, now with a mechanism visible.
+  `ListAgents` lists peer SESSIONS only, never in-process subagents, so its
+  absence there was never evidence either way and I should not have cited it.
+  Re-tested by `SendMessage` to the idle agent; the message was accepted into
+  its inbox. If it answers, the lane is usable via SendMessage even though the
+  spawn's own report never arrives -- which would matter, because Jon's plan for
+  stage 4 is to shut B down and launch agents to implement.
