@@ -38,6 +38,14 @@ PROVIDERS = {
     "openai": {"label": "OpenAI", "env": "OPENAI_API_KEY",
                "file": os.path.expanduser("~/.config/morpheus/openai.env"),
                "note": "second album-arc backend"},
+    # A webhook URL is a BEARER secret: anyone holding it can post to the channel,
+    # there is no second factor, and it cannot be scoped. So it goes through the
+    # same door as the API keys rather than into a config file in the repo --
+    # which is also why fleet_watch.py reads it via creds.get and never takes it
+    # as an argument that would end up in a process list or a shell history.
+    "slack_webhook": {"label": "Slack incoming webhook", "env": "SLACK_WEBHOOK_URL",
+                      "file": os.path.expanduser("~/.config/meowp-studio/slack.env"),
+                      "note": "fleet_watch backend up/down alerts"},
 }
 
 # A plain KEY=VALUE file for anything not covered above, searched for every

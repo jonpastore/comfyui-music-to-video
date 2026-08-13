@@ -29,6 +29,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PURE = ["effects", "video_fx", "beatmatch", "mixadvice", "tiers", "prompts",
         "publish", "models", "jobs", "gpu", "chat", "creds", "arc", "analyse"]
 
+# Same idea, but their bare invocation DOES something -- fleet_watch scans the
+# live fleet when run with no arguments, which is the right CLI behaviour and the
+# wrong test. They are run with --demo instead of being left unchecked.
+DEMO_FLAG = ["fleet_watch"]
+
 # No demo() and no __main__ -- running it just imports the module and builds the
 # schema. That is still worth doing (an import error or a broken migration shows
 # up here) but there is no OK line to look for, so it is checked on exit status
@@ -84,4 +89,10 @@ def test_module_selfcheck_slow(mod):
 @pytest.mark.parametrize("mod", ROOT_SCRIPTS)
 def test_root_script_selfcheck(mod):
     out = _run(mod, timeout=120, argv=["--demo"], cwd=ROOT)
+    assert "OK" in out, f"{mod}.py did not report OK: {out[-300:]}"
+
+
+@pytest.mark.parametrize("mod", DEMO_FLAG)
+def test_module_selfcheck_demo_flag(mod):
+    out = _run(mod, timeout=120, argv=["--demo"])
     assert "OK" in out, f"{mod}.py did not report OK: {out[-300:]}"

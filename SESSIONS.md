@@ -11,6 +11,8 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
+| `docs/TRD-1-*.md`, `docs/TRD-2-*.md`, `docs/TRD-3-*.md` | A | writing TRD-1 and TRD-3, review pass over TRD-2. **Docs only — no source file is being edited.** | 22:40 |
+| `studio/creds.py` + `studio/fleet_watch.py` + `studio/test_selfchecks.py` | B — **released 23:05** | Slack alerting when a backend goes offline/online, per Jon | 22:30 |
 | `studio/pipeline.py` + `studio/check_integration.py` | B — **released 22:00** | requeue jobs when a backend goes offline mid-flight. Per Jon: ethan is down for a few hours | 21:45 |
 | `studio/models.py` — **ONE HUNK ONLY**, the `wan22_i2v_low` companions dict | B — **released 20:25** | added the missing `umt5` text encoder. **A: you have 51 uncommitted lines in `where()`/`demo()` in this file RIGHT NOW. I am not touching them, my edit is in CATALOG, and I am staging BY HUNK — your work stays in the tree** | 20:20 |
 | **cerberus `swarmui.service`** + `ETHAN-CONTINUE.md` | B — **released 19:25** | ethan-wsl joined as backend 3 and rendered. Settings re-locked. | 19:00 |
@@ -848,3 +850,36 @@ Append dated one-liners. Newest at the bottom.
   visitor on the tailnet being `local` admin. The `_attempt_plan` change above
   gets the same throughput win from our side of the wire instead. 225 tests,
   `check_integration.py` OK, `pipeline.py` OK. **`studio/pipeline.py` released.**
+- 2026-08-12 23:05 (B) **`studio/fleet_watch.py` — backend up/down alerting to
+  Slack, per Jon. It does NOT talk to SwarmUI, on purpose.**
+  - It asks each ComfyUI directly, because SwarmUI cannot see a job posted
+    straight to a backend: measured tonight, `live_gens: 0` while cerberus's own
+    `/queue` had `running: 1` (your 3025-frame render). A monitor built on
+    Swarm's view would have called that box idle.
+  - It does not try to FIX Swarm either. `IdleMonitor` re-validates every 5 s
+    and a returning box rejoins itself, and `ToggleBackend`/`EditBackend`/
+    `RestartBackends` are all behind `--lock_settings` anyway. Alerting is worth
+    having; unlocking an unauthenticated SwarmUI to automate it is not.
+  - **Alerts on the EDGE only** — Jon asked for this explicitly and it is now a
+    test, not a hope: a box down for 20 consecutive scans alerts ONCE, and the
+    recovery after a long outage still alerts. A first run announces nothing, so
+    restarting the watcher is silent. `demo()` asserts all of it.
+  - Webhook is a bearer secret: it lives in `~/.config/meowp-studio/slack.env`
+    (0600, outside the repo) behind a new `creds.PROVIDERS` entry, read via
+    `creds.get` and never passed as an argument that would land in `ps` or shell
+    history. **Verified: the URL appears nowhere in the working tree.**
+- 2026-08-12 23:05 (B) Two bugs of my own, both caught by the check rather than
+  by me, and the first is the one worth reading:
+  - **`demo()` was posting to the live Slack channel.** `notify(lines,
+    webhook="")` meant to test the no-webhook path, but `webhook or
+    creds.get(...)` treats `""` and `None` the same, so it fell through to the
+    real hook and posted the test string. A self-check must not be able to
+    message anybody. `None` now means "look it up" and `""` means "there is
+    none"; restoring the old line fails the demo.
+  - `test_selfchecks` ran the module BARE, which for this one means "scan the
+    live fleet", not "self-check". Added a `DEMO_FLAG` list that runs it with
+    `--demo`, reusing the argv support the root-script tests already had.
+  **226 tests** (was 225), `check_integration.py` OK, `fleet_watch.py` OK.
+  Not installed as a service yet — that is a decision about a new always-on unit
+  on cerberus, and it is Jon's to make. `python3 fleet_watch.py --loop 60` is the
+  whole thing meanwhile.
