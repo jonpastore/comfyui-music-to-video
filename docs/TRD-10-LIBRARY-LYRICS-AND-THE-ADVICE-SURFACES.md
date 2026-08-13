@@ -402,3 +402,27 @@ places.
 | `T10-12` advice writes nothing directly | passes with the advice surface deleted | **accepting** a proposal writes, and records the model |
 | `T10-13` vision output is never a verdict | passes if `classify_sheet` is never called | it **is** called and its text **is** attached to a finding |
 | `T10-16` the image guardrail is off audio | passes if nothing is screened anywhere | the **image path still refuses** the same string |
+
+
+---
+
+## Status against the tree, 2026-08-13
+
+Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
+not folded into the criteria above — *a criterion edited to describe what was
+built is no longer a criterion, it is a changelog with a prefix.*
+
+**"built" means a check can go red, not that the code exists.** `T4-10` read as
+done all day while `app.ALBUM_FIELDS["body"]` quietly beat it, so a ledger that
+repeats that is worse than none. Production is `c01c977`+; `origin/main` is
+current.
+
+| criterion | state | commit | what was measured |
+|---|---|---|---|
+| the four modules | **built, before this document** | earlier | `lyrics.py` 405, `chat.py` 330, `mixadvice.py` 247, `vision.py` 516 — 1,498 lines that no TRD cited until now |
+| `T10-1` backend chosen per call | **built, unchecked** | earlier | both `lyrics.py` and `vision.py` choose at call time, deliberately; no differential asserts it |
+| `T10-3`…`T10-7` bulk edit | **not built** | — | the whole of `LIBRARY_BULK_EDIT_PLAN`, absorbed here today |
+| `T10-11`…`T10-15` the advice rules | **not built** | — | model-authored text is not marked in any payload |
+| `T10-17` one shared guard | **built** | earlier | `screen_prompt_field`; `MAX_PROMPT_FIELD` replaced `MAX_CHARACTER_FIELD` |
+| **`T10-18`…`T10-26` the minor policy** | **NOT BUILT — specification only** | today | **the studio today still refuses any minor reference everywhere.** The niece's song works; her video does not until this is built. Adversarially reviewed and four bypasses folded, including `T10-23`, a hole the loosening itself opened |
+| `T10-18c` `PINNED` ≥ 18 | **held, undocumented in code** | — | `PINNED` says 21. Researched today: 18 is the legal floor, 21 is a margin against the model's distribution, and `guardrail.py`'s docstring still carries the justification Jon falsified |

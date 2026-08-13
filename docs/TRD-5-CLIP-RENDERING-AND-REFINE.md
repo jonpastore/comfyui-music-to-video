@@ -195,3 +195,25 @@ same way. Meanwhile **no document says who wires those nodes into
 `build_song`**: TRD-2 owns the criterion that clip N+1 starts on clip N's last
 frame, TRD-5 owns the graph, and neither claims the implementation. That is the
 shape of the hole TRD-6 was written to fill. The sentence belongs in §2, not §6.
+
+
+---
+
+## Status against the tree, 2026-08-13
+
+Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
+not folded into the criteria above — *a criterion edited to describe what was
+built is no longer a criterion, it is a changelog with a prefix.*
+
+**"built" means a check can go red, not that the code exists.** `T4-10` read as
+done all day while `app.ALBUM_FIELDS["body"]` quietly beat it, so a ledger that
+repeats that is worse than none. Production is `c01c977`+; `origin/main` is
+current.
+
+| criterion | state | commit | what was measured |
+|---|---|---|---|
+| `T5-8` upscaler availability is `True`/`False`, never `None` | **built** | earlier | `ltx25_latent_upscaler` catalogued, and `models.installed()` taught ComfyUI's newer enum shape — it had been seeing **7 files on a box with 37** |
+| `T5-1`…`T5-4` refine on LTX | **not built** | — | **`--refine` is still a silent no-op on `ltx25`, the catalogue default.** `build_song.workflow()` returns for the LTX families before the refine block |
+| `T5-5`/`T5-6` the VRAM measurement | **not measured** | — | the base render already peaks at 23.4 of 23.9 GB on cerberus; whether variant B fits is unknown and is the thing to measure first |
+| `T5-7` geometry at assembly | **not built** | — | |
+| `T5-9`/`T5-10` ceilings and the legal-length rule | **documented, not enforced** | today | TRD-2 now cites this document for both rather than carrying its own copy; nothing yet refuses an illegal length |

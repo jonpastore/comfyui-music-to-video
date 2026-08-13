@@ -257,3 +257,28 @@ building it.
 **Not one-sided:** `T6-A2`, `T6-A3`, `T6-A4`, `T6-A6`, `T6-1`, `T6-3`, `T6-7`,
 `T6-8`, `T6-14`, `T6-15`, `T6-17` — each already carries a kill, a differential
 or an idempotency check that can fail.
+
+
+---
+
+## Status against the tree, 2026-08-13
+
+Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
+not folded into the criteria above — *a criterion edited to describe what was
+built is no longer a criterion, it is a changelog with a prefix.*
+
+**"built" means a check can go red, not that the code exists.** `T4-10` read as
+done all day while `app.ALBUM_FIELDS["body"]` quietly beat it, so a ledger that
+repeats that is worse than none. Production is `c01c977`+; `origin/main` is
+current.
+
+| criterion | state | commit | what was measured |
+|---|---|---|---|
+| `T6-11` the request is persisted at submit | **built** | earlier | `artefacts.expect_json`, written by `pipeline._stamp_expect` from the built graph |
+| `T6-4` vanished vs refused | **built** | earlier | `pipeline._backend_vanished()`; both arrive under one headline so the REASON line is the discriminator |
+| `T6-15` the findings upsert is idempotent | **built** | earlier | |
+| `T6-17` migrations keep old rows working | **convention, held** | earlier | every column added this week works NULL |
+| `T6-A7`…`T6-A10` verification rules | **new today** | today | consolidated here from all ten documents, which had already drifted. `T6-A10` is session B's: assert through the shared entry point |
+| `T6-8` canonical identity | **partial** | `e20346f` | the HOST half is done — `models.canonical_host()`, one box one identity, 15 production rows repaired. The PATH half is untouched |
+| **`T6-13a` one duration authority** | **not built — and it is the small one that unblocks the most** | — | TRD-1 §3.2, TRD-2 §3.4 and TRD-3 §4.4 all read "the song's length" and none says from where. One column, and `T2-12a` waits behind it |
+| `T6-1`…`T6-7`, `T6-9`, `T6-10`, `T6-12`, `T6-14`, `T6-16` | **not built** | — | the pull queue, the lifecycle and cascade policy. **Jon decided 2026-08-13 to build this in full** rather than take `T6-13a` alone |

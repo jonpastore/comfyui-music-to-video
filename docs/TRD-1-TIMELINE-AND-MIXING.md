@@ -593,3 +593,30 @@ the criterion stops being satisfied by the feature's absence.
 | `T1-4` no cached graph | mutate a stored value and assert the regenerated graph CHANGES — proves regeneration happens, not merely that no cache exists |
 | `T1-23` `duck`/`layer` refused everywhere | when either ships, the same fixture must RENDER and be measured (`T1-21`, `T1-22`). Until then this certifies only that nothing is silently accepted, and says so |
 | `T1-24` a format is a row | add a test-only row and RENDER through it; asserting the table is a table proves nothing reaches ffmpeg |
+
+
+---
+
+## Status against the tree, 2026-08-13
+
+Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
+not folded into the criteria above — *a criterion edited to describe what was
+built is no longer a criterion, it is a changelog with a prefix.*
+
+**"built" means a check can go red, not that the code exists.** `T4-10` read as
+done all day while `app.ALBUM_FIELDS["body"]` quietly beat it, so a ledger that
+repeats that is worse than none. Production is `c01c977`+; `origin/main` is
+current.
+
+| criterion | state | commit | what was measured |
+|---|---|---|---|
+| `T1-9a`/`T1-9c` automation curves | **built** | earlier | `automation.py`: lanes, RDP decimation, `MAX_POINTS = 64`, `asendcmd` emission through the mechanism `effects.filter_sweep` already used |
+| `T1-9b` a drawn curve survives to output | **NOT MEASURED** | — | the RMS-per-second differential has never been run. The curve reaches the graph; nothing has confirmed it reaches the audio |
+| `T1-20a`/`T1-20b` master stage | **built** | earlier | `mixer._master_lines`, engaged only when an item suppressed its own loudnorm |
+| `T1-20d` exactly one loudnorm per path | **built** | `2f8e559` | mixed set measured `per-item=[0,0] master=1` → worst path **1**, was **2**. Reproduced independently by both sessions. Fix is `master_engaged` + `item_chains`, one application point |
+| `T1-7`/`T1-8` predicted length = rendered | **partial** | — | `mixer.set_duration()` exists and is the one implementation; the four-feature fixture in `T1-7` has not been run |
+| `T1-27`/`T1-28` interstitial card | **not built** | — | folded in today from `ALBUM_ARC_AND_STAGING_PLAN` §3; nothing implements it |
+| `T1-13`…`T1-17` peaks, preview | **not built** | — | only `mixer.waveform_png()` exists, a picture and not data |
+| `T1-18`…`T1-20` audiences | **not built** | — | no `sets.mode_audience` column |
+| `T1-21`…`T1-23` `duck`/`layer` | **refused, honestly** | — | still refused at every entry point, which is `T1-23` and is the correct state |
+| the timeline itself | **not built** | — | `set_edit.html` is a stack of forms; `.timeline`/`.tl-block` is a proportional strip with no time axis |

@@ -238,3 +238,30 @@ found eight more, six overlapping. `docs/reviews/TRD8910-*`.
 | `T9-9` an empty backend is refused | passes if no backend can be registered | a **stocked** backend registers and renders |
 | `T9-14` a render is refused on shared-card pressure | passes if renders never start | with the card free, the same render **starts** |
 | `T9-17` an unreachable transport degrades | passes if alerting is deleted | with the transport reachable, the alert **arrives** |
+
+
+---
+
+## Status against the tree, 2026-08-13
+
+Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
+not folded into the criteria above — *a criterion edited to describe what was
+built is no longer a criterion, it is a changelog with a prefix.*
+
+**"built" means a check can go red, not that the code exists.** `T4-10` read as
+done all day while `app.ALBUM_FIELDS["body"]` quietly beat it, so a ledger that
+repeats that is worse than none. Production is `c01c977`+; `origin/main` is
+current.
+
+**This document is the inverse of the others: the machinery is built and in
+production, and almost none of it has a check.** That is the point of writing it.
+
+| criterion | state | commit | what was measured |
+|---|---|---|---|
+| the whole of §2 — the seam, retargeting, the retry walk, staging, alerting | **built and live** | earlier | `RENDER_BACKEND=swarm` in production; four backends; every artefact stamped `via=swarm` |
+| `T9-1`/`T9-2` retargeting | **built, unchecked** | earlier | proven once on the live fleet: refused as written, **rendered in 9.7 s once retargeted**. No criterion asserts it today |
+| `T9-3` the free draw is byte-identical | **built, and its check was rewritten once** | earlier | a mutation audit found the original could not fail for the reason it named; it now asserts identity and counts `ListBackends` calls |
+| `T9-6` vanished requeues, refused does not | **built** | earlier | `pipeline._backend_vanished` |
+| **`T9-13a` a file is not a model** | **OBSERVED LIVE, unfixed** | today | gamingpc's `UNETLoader` enum listed the Qwen UNET **at 26% of its bytes**. Three files sat truncated at real filenames at 19%, 46% and 76%. `models.installed()` reads the enum, never the bytes |
+| `T9-13c` staging sequence | **written today, untested** | today | transfer → checksums → queues idle → restart → render. **The safety rests on the idle queue, not on Swarm's cache**, which cannot be read back |
+| `T9-4`, `T9-5`, `T9-7`…`T9-12`, `T9-14`…`T9-17` | **behaviour exists, no checks** | — | including the four measurement traps, each of which cost a wrong diagnosis once |

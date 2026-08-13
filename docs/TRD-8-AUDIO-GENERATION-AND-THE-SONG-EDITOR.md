@@ -208,3 +208,26 @@ Found by review, and named rather than quietly dropped.
 editor **and the media menu**"*, this document claims that deferral, and §6's
 criteria cover only the editor. The media menu has **no owner** — recorded here
 rather than silently absorbed.
+
+
+---
+
+## Status against the tree, 2026-08-13
+
+Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
+not folded into the criteria above — *a criterion edited to describe what was
+built is no longer a criterion, it is a changelog with a prefix.*
+
+**"built" means a check can go red, not that the code exists.** `T4-10` read as
+done all day while `app.ALBUM_FIELDS["body"]` quietly beat it, so a ledger that
+repeats that is worse than none. Production is `c01c977`+; `origin/main` is
+current.
+
+| criterion | state | commit | what was measured |
+|---|---|---|---|
+| the audio stage itself | **built, before this document** | 2026-08-12 | `make_audio.py`, the `audio` job kind, a route, a form; takes copied into the data dir |
+| `T8-6`…`T8-9` the splice repair path | **built** | `871d820` | the edge-span defect: a 20 s track spliced at 0.1 s came back 20.193 s with audio missing. After: 20.036 s against 20.036 s. `mixer.bridge_seconds` owns the arithmetic |
+| `T8-4` the audio path accepts a child mention | **built** | `1cac5bb` | the image guardrail is off the audio path, measured — "nursery rhyme for children" had been refused |
+| **`T8-1`…`T8-3` the take model** | **NOT BUILT, and it is the headline** | — | `takes`, `voices`, `take_voices`, `library` — **all four have zero references in `db.py`**, verified independently by both sessions. Takes are `assets` rows, so **a take cannot say what it was asked for** |
+| `T8-10`…`T8-12` voices and consent | **not built** | — | `T8-12` is **provisional**: green by construction while no cloning path exists |
+| `T8-13`…`T8-15` the song editor | **not built** | — | deferred by TRD-1 §11 and claimed here |

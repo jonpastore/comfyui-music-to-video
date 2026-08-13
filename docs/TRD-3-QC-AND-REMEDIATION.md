@@ -481,3 +481,28 @@ that — only `approve()` doing something does.
 | `T3-23` repair routing asks `where()`/`fits()` | paired positive: a correctly-named model on a box that holds it is SUBMITTED. Refusal-only passes with repair deleted |
 | `T3-24` the 20.5 GB arithmetic | assert it decides a real box selection: the refiner must be routed away from a 15.92 GiB card and to a 24 GiB one |
 | `T3-27` every check names a remedy class | assert the class is ACTIONABLE where one exists — the approve path uses it — and that a check with no remedy says so rather than offering a button |
+
+
+---
+
+## Status against the tree, 2026-08-13
+
+Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
+not folded into the criteria above — *a criterion edited to describe what was
+built is no longer a criterion, it is a changelog with a prefix.*
+
+**"built" means a check can go red, not that the code exists.** `T4-10` read as
+done all day while `app.ALBUM_FIELDS["body"]` quietly beat it, so a ledger that
+repeats that is worse than none. Production is `c01c977`+; `origin/main` is
+current.
+
+| criterion | state | commit | what was measured |
+|---|---|---|---|
+| **tier 1, §4 entire** | **built** | earlier | `studio/qc.py` — `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise`. Every threshold measured, every `_readings()` raises rather than returning 0.0 |
+| `T3-2` no hardcoded expectation | **built** | earlier | expectations read from the submitted workflow via `build_song.expect_from_workflow` |
+| `T3-7` the model's own latent step | **built** | `d4a39c2` | asserted both ways on one 77-frame file: passes at step 4, flags at step 8 naming 81 |
+| `T3-4` measured/expected/unit | **built** | earlier | on every check that has them |
+| `T3-5` re-running does not duplicate | **built** | earlier | `UNIQUE(path, check_name)`; the mutation audit found the upsert alone was not the guard |
+| `T3-1` group by host | **partial** | `e20346f` | the host column is now canonical — one box, one identity — but the grouped report itself is not built |
+| **tier 2, §5 entire** | **not built** | — | no calibration, no embedding metric. `T3-13`…`T3-16` are the order and none has run |
+| **tier 3, §6 entire** | **not built** | — | **`approve()` raises.** `T3-6` and `T3-18` are therefore **provisional** and cannot tell "refuses to auto-heal" from "cannot heal" |

@@ -686,3 +686,29 @@ timing — `clip_plan` is the one, and every client calls it.
 | `T2-36` help text carried | assert a control with no help text is absent from the payload rather than present-and-empty, and that warnings are marked distinctly from notes |
 | `T2-16` multi-song apply | with confirmation it writes to exactly the songs confirmed, asserted by count |
 | `T2-37` arc in the playlist payload | assert a playlist WITHOUT an arc omits the field, so "always present" cannot pass for it |
+
+
+---
+
+## Status against the tree, 2026-08-13
+
+Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
+not folded into the criteria above — *a criterion edited to describe what was
+built is no longer a criterion, it is a changelog with a prefix.*
+
+**"built" means a check can go red, not that the code exists.** `T4-10` read as
+done all day while `app.ALBUM_FIELDS["body"]` quietly beat it, so a ledger that
+repeats that is worse than none. Production is `c01c977`+; `origin/main` is
+current.
+
+| criterion | state | commit | what was measured |
+|---|---|---|---|
+| `T2-1`…`T2-4` the arc | **built** | earlier | `studio/arc.py`, JSON canonical, `to_md`, screened both directions |
+| `T2-8a` the section floor is gone | **built** | `881d7cf` | both live sites moved together; the `validate()` site was the one that would have regenerated 25 scenes and made the formula fix look inert |
+| `T2-35` every enumerated file catalogued | **built** | earlier | measured live: cerberus enumerates 36 files across seven loaders, 14 were unaccounted, now zero |
+| `T2-41` scene timing has one implementation | **built** | earlier | `app.storyboard_scenes` no longer computes `idx * CHUNK` inline |
+| **`T2-12a` legal frame count** | **NOT BUILT — and it blocks the most** | — | the whole variable-clip-length chain waits here. `build_song.clip_seconds()` still returns `CHUNK` whatever it is passed, deliberately, because the renderer builds every clip at `LTX25_LEN` |
+| `T2-13a`/`T2-13c` approve grid | **blocked** | — | on `T2-12a` |
+| `T2-14a`…`T2-14c` grok's prompt quantum | **not built** | — | `_user_prompt` still tells the model clips are fixed at 4.8125 s |
+| §4 wands, §5 meter, §5.3 casting | **not built** | — | |
+| `T2-42`…`T2-48` per-scene model (W2) | **not built** | — | |
