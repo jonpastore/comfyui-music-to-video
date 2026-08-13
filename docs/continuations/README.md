@@ -3,7 +3,7 @@
 Session hand-off docs, oldest first. The **latest three live at the repo root**;
 everything older is moved here when a fourth is written.
 
-Most recent: **[CONTINUATION-2026-08-13-meowp-studio-day11.md](../../CONTINUATION-2026-08-13-meowp-studio-day11.md)**
+Most recent: **[CONTINUATION-2026-08-13-meowp-studio-day12.md](../../CONTINUATION-2026-08-13-meowp-studio-day12.md)**
 (at the repo root, along with the two before it).
 
 These docs are in `.gitignore` -- only this index is tracked. `git mv` fails on
@@ -26,11 +26,13 @@ At the root right now:
 
 | Doc | Session |
 |---|---|
-| `CONTINUATION-2026-08-12-meowp-studio-day9.md` | **Infrastructure, not features.** LTX-2.5 as the default renderer, the cu130 finding that had every quantised matmul running eager, five anchor-form defects, peaches-unraid as a real backend, and the fleet allocation |
+| [CONTINUATION-2026-08-12-meowp-studio-day9.md](CONTINUATION-2026-08-12-meowp-studio-day9.md) | **Infrastructure, not features.** LTX-2.5 as the default renderer, the cu130 finding that had every quantised matmul running eager, five anchor-form defects, peaches-unraid as a real backend, and the fleet allocation |
 | `CONTINUATION-2026-08-12-meowp-studio-day10.md` | **Measurement, then specification.** 30s and 60s clips render; identity comes from the TEXT and not the reference image; swarm on in production; production video was dead at argparse; TRD-2 drafted. **Holds the standing instruction for the TRD -> PRD -> DDD -> style guide -> critique pipeline.** |
 | `CONTINUATION-2026-08-13-meowp-studio-day11.md` | **The TRDs finished, then built from.** All three TRDs written with 106 failable criteria; the loudnorm finding that would have flattened every level curve the DAW draws; scene_seconds winning over a floor that sat in two places; QC tier 1 with every threshold measured rather than picked. **Nothing deployed.** |
 
-The next continuation archives `CONTINUATION-2026-08-12-meowp-studio-day9.md`.
+| `CONTINUATION-2026-08-13-meowp-studio-day12.md` | **Deployed.** Five live anchor defects fixed, QC's 8n+1 bug, the TRD set consolidated to 7 documents with TRD-6 s0 holding what they all inherit. |
+
+The next continuation archives `CONTINUATION-2026-08-12-meowp-studio-day10.md`.
 
 ## Standalone hand-offs
 

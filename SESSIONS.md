@@ -11,6 +11,8 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
+| `studio/app.py` (anchor routes + `_anchor_form.html`), `make_anchor.py`, `build_refs.py`, `studio/prompts.py`, `studio/tiers.py` | **B — CLAIMED 09:20** | the remaining TRD-4 and TRD-7 anchor work. See the brief Jon pasted; A is staying out of every one of these files | 09:20 |
+| `docs/**` ONLY — PRD, DDD, UI/UX, TRD 4-7 | **A — CLAIMED 09:20** | the specification pipeline. **A touches NO source file while B holds the anchor work.** If A needs a source change it asks here first | 09:20 |
 | `studio/grok.py` | A — **released 00:40, committed `881d7cf`** | TRD-2 §3.4: scene_seconds wins, the lyric-section floor goes, validate checks the count that was actually requested. B is closed; claiming anyway because the protocol does not depend on who is awake | 00:05 |
 | `docs/TRD-*.md`, `studio/grok.py`, `studio/qc.py`, `studio/qc_service.py`, `studio/effects.py`, `studio/mixer.py`, `studio/db.py`, `studio/prompts.py`, `studio/test_selfchecks.py` | A — **released 05:40** | TRD-1 and TRD-3 written, TRD-2 reviewed, then built from: the scene_seconds floor, QC tier 1, the findings queue, pan. Started as docs-only at 22:40; source work began 00:05 when Jon changed the instruction to build. | 22:40 |
 | `studio/creds.py` + `studio/fleet_watch.py` + `studio/test_selfchecks.py` | B — **released 23:05** | Slack alerting when a backend goes offline/online, per Jon | 22:30 |
@@ -981,3 +983,22 @@ Append dated one-liners. Newest at the bottom.
   Whole-second ranges parse identically either way, which is why every
   grok-written board hid it. **The 231-test run at 06:50 included this change and
   was green.** Not committed by me; it wants its author's commit message.
+
+- 2026-08-13 09:20 (A) **Deployed and pushed: `cfe7979` is origin/main AND
+  production.** Six pages 200, ComfyUI 200, xai key present, and all six anchor
+  changes verified present in `~/meowp-studio/` on cerberus rather than assumed
+  (`app/app.py` and `scripts/`, note the deployed layout is not the repo layout).
+  Both queues were checked idle first. 233 tests, 186 `def test_`.
+- 2026-08-13 09:20 (A) **B — the file split is clean and I intend to keep it that
+  way: you have every anchor file, I have `docs/**` and nothing else.** The one
+  place we could still collide is `studio/app.py`, which you hold entirely; if I
+  find something in it that the PRD/DDD work needs, I will ask here rather than
+  edit. Five anchor defects are already fixed and deployed (day 12's
+  continuation lists them) — **5 of TRD-4's 18 criteria, 0 of TRD-7's 19.** If a
+  verifier reports the rest missing that is correct, not a regression.
+- 2026-08-13 09:20 (A) One trap for the anchor work, measured: `_NEGATION_ALLOWED`
+  is now EMPTY and `test_no_positive_prompt_constant_tries_to_negate` walks all
+  six positive constants with no exemptions. Any new prompt type you add
+  (`view:<key>`, `backdrop`, `composite`, `pose` — TRD-7 §4) is walked by it too,
+  so a new constant that says "no" fails the suite. That is deliberate: "no
+  smoke" put smoke on every sheet for the life of the project.
