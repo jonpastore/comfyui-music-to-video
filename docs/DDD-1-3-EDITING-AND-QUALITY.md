@@ -1,0 +1,344 @@
+# DDD · Design for TRD 1-3
+
+Status: written 2026-08-13. Product framing and sequencing:
+`docs/PRD-1-3-EDITING-AND-QUALITY.md`. Contract: `docs/TRD-1-TIMELINE-AND-MIXING.md`,
+`docs/TRD-2-STORY-ARC-AND-STORYBOARDS.md`, `docs/TRD-3-QC-AND-REMEDIATION.md`.
+Rules inherited from `TRD-6 §0` are cited, never restated.
+
+**Every "built" and "not built" below was read off the tree at `f9ca597`, not
+off a document.** TRD-3 §2.1 records what happens otherwise: a "do not rebuild"
+table that omitted the QC implementation, which is the omission most likely to
+cost a rewrite. Where a claim here is a measurement, the command that produced it
+is named.
+
+---
+
+## 1. What exists today
+
+| module | lines | owns | state against its TRD |
+|---|---|---|---|
+| `studio/app.py` | 6331 | 113 routes, and most of the logic behind them | the structural problem, §2 |
+| `studio/mixer.py` | 2116 | set duration, both filter graphs, overlap arithmetic, beatmatch, ramps, splice | TRD-1's engine. Built; one measured gap, §5.2 |
+| `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` **and** `T3-9`/§4.3 |
+| `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `fragment`, `item_audio`, `wants_master_loudnorm` | built |
+| `studio/qc.py` | 642 | TRD-3 tier 1 in full: `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise` | built |
+| `studio/qc_service.py` | 308 | findings, queue, remedy edit, dismiss, reopen; `approve()` **raises** | built except repair |
+| `studio/arc.py` | 327 | TRD-2 §3.1/§3.2: JSON-canonical arc, `to_md`, `validate`, `for_song`, screened both directions | built |
+| `studio/prompts.py` | 265 | TRD-2 §3.3 versioning, reused by `T3-20` | built |
+| `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
+| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow` | the one timing owner; `clip_seconds` is pinned, §5.5 |
+| `studio/db.py` | 559 | schema | `automation`, `findings`, `artefacts` landed; two `sets` columns did not, §4 |
+| `studio/vision.py` | 516 | VLM calls, local-first | **not** tier 2, §5.6 |
+
+Deliberately absent, verified by `grep -rn` over `studio/*.py` and the root
+scripts: no master-chain configuration, no peaks store, no calibration table, no
+embedding metric (`siglip2_naflex` appears only as a `models.py` catalogue
+entry), no `insightface`.
+
+## 2. The structural problem, and the pattern that already solves it
+
+`app.py` is 6331 lines and 113 routes, of which **five return JSON** —
+`/api/qc/findings*`. Everything else is a route handler that reads rows, decides,
+formats and returns HTML. `render_set_route` is TRD-1 §10's named example: it
+reads the items, joins the songs, chooses the audio-or-video path, builds every
+item dict and enqueues, all inside the handler and all unreachable from a client
+that is not this page.
+
+`T6-A1`…`T6-A4` are the requirement. **`qc_service.py` is the pattern and it
+already works**: `qc.py` is pure measurement that touches no database, so it runs
+over a directory of old output (`T3-30`); `qc_service.py` persists and imports
+nothing from FastAPI; the five routes are thin. Copy that shape, do not invent a
+second one.
+
+Two new modules, same shape:
+
+    sets_service.py        TRD-1   sets, items, automation, peaks, preview, render, export
+    storyboard_service.py  TRD-2   arc flows, storyboard generation, scene edit, time meter, casting
+
+`arc.py` and `automation.py` are already FastAPI-free and become their
+dependencies rather than being folded in. The boundary rule that decides what
+moves: **a route handler contains no arithmetic, no defaulting and no decision**
+(`T6-A3`). `app.storyboard_scenes` computing `idx * CHUNK` inline is the defect
+this prevents, and `T2-41` records that it was real and is now fixed.
+
+Migration is per-loop, not per-file. Move one journey (PRD §4) at a time, and
+`T6-A2` is the check that the move was faithful: the HTML page and the JSON
+endpoint report the same numbers, asserted by comparing them in one test.
+
+## 3. API surface
+
+Named per journey, because `T6-A1` requires a curl script to drive each one end
+to end. Shapes only — the fields are the TRDs'.
+
+**A · set timeline** — `GET/POST /api/sets`, `/api/sets/{id}` (model in full:
+items, automation, predicted duration, rounding deltas), `/api/sets/{id}/items`,
+`.../items/{iid}/automation/{lane}` (POST raw points, response is the **stored,
+decimated** curve — the client re-reads what was kept, §5.3),
+`/api/sets/{id}/peaks?z=`, `/api/sets/{id}/preview` (returns `is_proxy` and
+`not_applied`), `/api/sets/{id}/preview/render?at=&secs=`,
+`/api/sets/{id}/render`, `/api/sets/{id}/renders` (every candidate, `T1-26`,
+`T6-A5`).
+
+**B · arc and storyboard** — `GET/POST /api/playlists/{id}/arc`,
+`.../arc/propose` (proposal is not saved until accepted, `T2-15`),
+`GET/POST /api/songs/{id}/storyboard/{tier}`, `.../scene/{n}`,
+`.../meter`, `.../cast`. The generation prompt and **the limits that apply to it**
+travel in the same response (`T2-18`).
+
+**C · QC** — exists. `/api/qc/findings`, `/{fid}`, `/{fid}/remedy`,
+`/{fid}/dismiss`, `/{fid}/approve`.
+
+Every list response carries help text per control, with warnings marked
+distinctly from notes (`T2-36`) — a client that cannot tell them apart hides the
+wrong one, and day 8's rule is that the warnings do not move.
+
+## 4. Schema deltas still required
+
+Landed already: `automation`, `findings`, `artefacts`, and `storyboards.scene_seconds`.
+
+Still needed, and no more than this:
+
+    ALTER TABLE sets ADD COLUMN out_fps REAL;                        -- NULL = derive from items
+    ALTER TABLE sets ADD COLUMN mode_audience TEXT DEFAULT 'normal'; -- easy|normal|advanced
+
+    -- Tier 2 cannot store a threshold without the calibration that earned it (T3-14).
+    CREATE TABLE IF NOT EXISTS calibrations (
+      id INTEGER PRIMARY KEY,
+      metric TEXT NOT NULL,          -- which extractor and version
+      dataset TEXT NOT NULL,         -- e.g. zimage_sweep
+      n_good INTEGER, n_bad INTEGER,
+      separation REAL, overlap REAL, -- the report T3-13 requires
+      scores_json TEXT NOT NULL,     -- every individual file's score; the report is data
+      threshold REAL,                -- NULL when the distributions overlap (T3-16)
+      created REAL
+    );
+
+Peaks are **not** a table. They are a binary min/max array written beside the
+song by the existing `analyse` job and served decimated (§5.4).
+
+`pan` stays an `effects_json` key and does **not** become a column — TRD-1 §3.1
+decided that and the reason is §5.0(b)'s: a column would be a second place for
+the value before anything needs one. Gain already had two places and cost a
+silent -6 dB (mixer.py `_audio_chain`'s own docstring).
+
+## 5. Subsystem designs
+
+### 5.1 The clock, and one place that rounds
+
+`T1-5`/`T1-6` need nearest-frame rounding on video, exact seconds on audio, and
+the delta **reported**. One function in `mixer.py` beside `set_duration`:
+
+    frame_round(t, fps) -> (t_rounded, delta)
+
+Every join asks it; nothing else rounds. `GET /api/sets/{id}` carries the
+per-join delta and the summed |delta|, so `T1-6`'s bound is checkable from the
+model without rendering. Truncation is the mutation that must break it: the
+losses all share a sign and accumulate at 0.0594 s per join at 16.8312 fps, which
+is the RIFE one-frame bug's shape — it plays, it looks fine, it is the wrong
+length.
+
+### 5.2 The master stage — built, with one measured gap
+
+`mixer._master_lines` (mixer.py:652) exists and implements TRD-1 §8a: one
+`loudnorm` after every item and every join, engaged only when some item
+suppressed its own, so a set that draws no curve renders exactly as it did before
+automation existed (`T1-20b`). `_audio_chain` takes the item's own `loudnorm` off
+when `automation.item_audio()` says `suppress_loudnorm` (mixer.py:725).
+
+**`T1-20d` is not satisfied for a MIXED set, and it is measured, not suspected.**
+`_master_lines` engages when *any* item suppresses, while `_audio_chain`
+suppresses only for the items that carry a curve — so an uncurved item in a set
+that has one keeps its own `loudnorm` **and** passes through the master. Counting
+`loudnorm` per signal path, calling the real `_audio_chain` and `_master_lines`:
+
+    both curved          per-item=[0, 0]  master=1   worst path = 1
+    neither curved       per-item=[1, 1]  master=0   worst path = 1
+    one curved, one not  per-item=[0, 1]  master=1   worst path = 2   <-- two in series
+
+Two normalisers in series is the second working against the first, which is
+exactly the sentence `T1-20d` was added to enforce. **The fix is one line at
+mixer.py:664's condition reaching mixer.py:725's**: engaging the master strips
+per-item `loudnorm` from every item, not only curved ones. Mutated in memory to
+do that, the mixed case drops to 1 and the other two rows do not move — so the
+measurement responds to that rule and to nothing else.
+
+Not fixed here: `mixer.py` is source, this document's session holds `docs/**`
+only, and implementation is stage 4. Logged in `SESSIONS.md`.
+
+### 5.3 Automation — built; what remains is reach
+
+`automation.py` owns the model, decimates on write with RDP plus a hard
+`MAX_POINTS = 64`, and emits through `asendcmd`, which is the mechanism
+`effects.filter_sweep` already uses — one emitter, one cap, and `sweep` becomes a
+preset that writes points rather than a second automation system.
+
+What is left is the criteria that prove the lanes **reach the render**: `T1-12`
+per lane, as a differential (`gain_db` by RMS/s, `pan` by L/R energy ratio, the
+filter lanes by band energy). This is the criterion that catches a lane wired
+into the UI and not into the graph, which is how `_apply_beatmatch` was
+unreachable for a whole session.
+
+### 5.4 Peaks and preview
+
+Peaks: computed on the **existing** `analyse` job, which already decodes the file
+— do not decode it twice. Stored beside the song, served decimated at
+`PEAKS_MAX_POINTS = 2048` per request. Decimation is a **min/max reduce, not a
+resample** (`T1-14`): a waveform that under-reports a peak lies about where the
+loud part is.
+
+The limit is stated in the design because it will otherwise be discovered by a
+feature request: `analyse.py` loads mono at 22050 Hz, chosen because it matched
+the measured tempo and halved load time. That is an envelope. A stereo waveform,
+or anything claiming to show clipping, is a **second decode** and must be asked
+for deliberately.
+
+Preview: the browser plays source files with gain and position applied. **No
+second DSP engine in Web Audio.** The proxy declaration is data —
+`{"is_proxy": true, "not_applied": [...]}` — computed from the item's actual
+effects, so `T1-16`'s test (add an effect, see it appear in `not_applied`) fails
+a static list. "Render preview" goes through the *same* code path as a full
+render, bounded to a span, and is the only preview that claims accuracy.
+
+### 5.5 Clip length: one blocked chain, and the order it unblocks in
+
+`build_song.clip_seconds()` **returns `CHUNK` whatever it is passed**, and its
+docstring says why: the renderer still builds every clip at `LTX25_LEN` frames,
+so honouring the stored `scene_seconds` first would re-time every storyboard to
+4.0 s (the form's default) while 4.8125 s clips keep rendering — the approve-grid
+bug from the other direction, and a test caught it within a minute.
+
+The argument is already threaded through every caller and the value is already
+recorded on the `storyboards` row. So the order is fixed and short:
+
+1. `T2-12a`: seconds → nearest **legal** frame count at the clip's fps. F-2's
+   rule is that `frames ≡ 1 (mod 8)` serves both models, since every `8n+1` is
+   also `4(2n)+1`; the tie-break is half-to-even (77 is equidistant from 73 and
+   81, and the code lands on 81).
+2. The renderer takes a length.
+3. `clip_seconds` returns it — **one line**, call sites already correct.
+4. Only then `T2-13a`, `T2-13c` (the approve grid must still show every clip),
+   `T2-8`/`T2-9`.
+
+`W1-4` sits alongside and is a **prompt**, not code: `grok._user_prompt` still
+tells the model the renderer emits fixed 4.8125 s clips and to round every
+`duration_guidance` to multiples of it. Leaving it changes nothing that runs and
+everything that comes back — the same shape as the section floor, where the
+formula was fixed and `validate()` quietly regenerated the old answer. The
+function is pure; assert on its return value (`T2-14a`…`T2-14c`), never by
+grepping the source.
+
+### 5.6 Tier 2 is a calibration, not a metric
+
+`vision.py` is a VLM caller and is **not** the tier-2 path. TRD-3 §10 forbids a
+VLM verdict by name — asked "does this match?", a model answers yes — though it
+may write a *description* attached to a finding.
+
+Design, in the order `T3-13`…`T3-16` fix:
+
+1. Extractor over `zimage_sweep/`'s **12 known-bad and 6 known-good** images
+   (same prompt, same anchor, same day; on two seeds the model draws bare human
+   legs with a cat's head at every step count, on the third it holds fur head to
+   toe). `siglip2_naflex` is installed on peaches and is the right shape;
+   `insightface` is the alternative.
+2. Write a `calibrations` row: both distributions, the overlap, the separation,
+   and **every individual file's score**. That report is the deliverable.
+3. No threshold, no gate, no UI until the row exists. If the distributions
+   overlap, the report says so and the gate is not built — `T3-16` calls that a
+   success, and the failure mode it avoids is shipping a threshold that splits
+   noise.
+4. `T3-15` is the regression guard: the metric must not rank a deliberate pose
+   change as an identity failure. It is asserted against the recorded pair that
+   pixel distance got backwards — 41.1 for the wrong render, 64.7 for the right
+   one.
+
+Reported per artefact: a calibrated compliance percentage, a **variation** figure
+across the sampled frames, and the sample count both came from. Variation is the
+one that matters more now than it did: chained clips start from a generated
+frame, not an approved reference, so drift *within* a long clip is the reachable
+failure.
+
+### 5.7 What has to exist before `approve()` stops raising
+
+`qc_service.approve()` raises today, deliberately — a button that marks something
+approved and runs nothing is the defect this project keeps finding. Three things
+turn it into a call, and until all three land `T3-6` and `T3-18` stay
+**provisional** because they are satisfied by the subsystem's absence:
+
+1. **Remedy → action mapping.** Every check already declares a remedy class
+   (`T3-27`); approving must dispatch it to a real actuator — `fix_ref.py` for
+   images, `make_postproc.py` for clips, a re-render for the rest.
+2. **Routing that asks first.** `models.where()` and `models.fits()` choose the
+   box, `models.resolve()` names the file *that box* uses, and `T6-A6`'s three
+   values are respected — `False` refuses, `None` is a candidate. The refiner is
+   ~19.6 GiB resident and fits neither peaches (10.58 GiB) nor a 15.92 GiB card,
+   so "clean up peaches output" means peaches renders and cerberus refines, and
+   the artefact crosses boxes.
+3. **A callable cross-box precondition** (`T3-25`), not a sentence: something
+   answers "can an output be moved back from this host", the refusal quotes it,
+   and when it answers yes the refusal stops. Its positive half must be
+   exercised with the check forced true, or the refusal is green forever and
+   never notices the day the blocker lifts.
+
+Every repair writes a **new candidate beside the original** (`T6-A5`), both
+scored, so "did the repair help" is answerable rather than asserted.
+
+## 6. Build order
+
+The PRD's §6 in dependency form. An arrow is a hard edge taken from the
+documents, not a preference.
+
+    T2-12a (legal frame count)  ->  renderer takes a length  ->  clip_seconds honours it
+                                                              ->  T2-13a, T2-13c, T2-8, T2-9
+                                                              ->  W2 per-scene models (T2-48)
+
+    qc_service pattern  ->  sets_service     ->  clock/rounding, peaks, preview
+                                             ->  master fix (5.2)  ->  audiences (T1-18..T1-20)
+                        ->  storyboard_service ->  arc flows, meter, casting
+
+    zimage_sweep scored  ->  calibrations row  ->  threshold (only if separated)  ->  tier 2 UI
+    remedy dispatch + routing + T3-25 check    ->  approve() stops raising  ->  T3-6, T3-18 real
+
+`duck` and `layer` are off this graph on purpose: refused everywhere and honestly
+so (`T1-23`), and `layer` goes first when they are scheduled because `xfade`
+already positions both streams, where `duck`'s `sidechaincompress` needs
+`adelay` + `asplit` to time-align an accumulated chain.
+
+## 7. How this design is verified
+
+The four rules the project arrived at by being wrong, as they apply to building
+from this document:
+
+1. **Differential, or name the mutation.** Every criterion in the three TRDs
+   already does one or the other.
+2. **Then mutate and read what the mutation actually did.** Twelve mutations
+   against one session's own checks found two that could not fail, and one of
+   those was hiding a real defect. Another mutation did not mutate anything and
+   the check passed — which is how a check that proves nothing survives an audit.
+   §5.2 above is written the way it is for that reason: the mutation moved one
+   row and left the other two alone.
+3. **A refusal or a presence is half a criterion.** Each TRD carries a table of
+   its one-sided criteria paired with the positive case that must also pass.
+   Those tables are the work, not commentary.
+4. **`grep -c "^def test_"` before and after, and never replace a slice that
+   runs to the end of a file.** A deleted test does not fail. Baseline is green
+   before and after — the count is deliberately not written into this document,
+   because it was copied into three and all three went stale.
+
+Plus the one that no automated check replaces: **when an image looks wrong, look
+at it.** The identity collapse, the world that never rendered and the LoRA that
+did nothing all passed every deterministic check this project had. QC does not
+replace opening the picture; it decides which pictures to open.
+
+## 8. Design risks
+
+- **The service split stalls half-done**, leaving two ways to reach the same
+  logic. `T6-A2` is the guard and it must be written per loop as the loop moves,
+  not at the end.
+- **Peaks get used as a quality signal.** They are a 22050 Hz mono envelope.
+  Anything about clipping needs the second decode, stated in §5.4 so it is a
+  decision rather than a discovery.
+- **Tier 2 ships a threshold anyway** because a number exists and looks
+  authoritative. §5.6's order is the whole defence, and `T3-14` refuses the
+  configuration rather than trusting discipline.
+- **`T2-12a` is treated as small.** It is one rounding rule, and four criteria,
+  the approve grid, the time meter and the reference count all sit behind it.

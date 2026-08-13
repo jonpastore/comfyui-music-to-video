@@ -1,0 +1,201 @@
+# PRD · The studio's editing and quality surface (TRD 1-3)
+
+Status: written 2026-08-13. Covers `docs/TRD-1-TIMELINE-AND-MIXING.md`,
+`docs/TRD-2-STORY-ARC-AND-STORYBOARDS.md`, `docs/TRD-3-QC-AND-REMEDIATION.md`.
+Design that satisfies it: `docs/DDD-1-3-EDITING-AND-QUALITY.md`.
+
+**What this document adds, and what it deliberately does not.** The three TRDs
+already hold ~133 acceptance criteria, and they are the contract — this does not
+restate one of them. What no TRD has is the layer above: who is served, what
+counts as the product working, **and what order the work happens in**. Each TRD
+names what it does not own; none says what ships first. Sequencing is §6 and it
+is the reason this document exists.
+
+Rules inherited from `TRD-6 §0` (`T6-A1`…`T6-A6`) apply throughout and are cited,
+never repeated. Prohibitions live in TRD-1 §12, TRD-2 §9 and TRD-3 §10.
+
+---
+
+## 1. Who this is for
+
+**One operator, on a tailnet.** The studio has no authentication and the trust
+boundary is the bind address and nothing else (`TRD-6 §0.1`). Every requirement
+below is written for a single person producing a catalogue, not for a team and
+not for a tenant.
+
+The work is albums of music videos: a song becomes a storyboard, the storyboard
+becomes reference frames and clips, the clips assemble into a song video, and
+songs assemble into sets. Identity — one character, recognisably the same across
+an album — is the thing the whole pipeline is trying to hold onto, and it is what
+this project has most often lost.
+
+## 2. The product, in one sentence
+
+TRD 1-3 are the three surfaces where a **human decides**: the set timeline
+decides what an audience hears, the arc and storyboards decide what the album is
+about, and QC decides whether what came back is what was asked for.
+
+Everything else in the studio is machinery that runs unattended. These three are
+not, and they fail differently: machinery fails loudly, a decision surface fails
+by *looking right*.
+
+## 3. The product rule that outranks every other requirement
+
+**The editor must not promise what the renderer does not produce.**
+
+Day 4's Traps section, found and fixed six times, and all three of these surfaces
+are editors sitting over a renderer. The three named product problems are each
+one instance of it:
+
+| surface | the problem today | source |
+|---|---|---|
+| set timeline | a set is a stack of forms; the only picture of the result is a number, and no time axis, waveform or automation exists | TRD-1 §1 |
+| arc & storyboards | songs are storyboarded independently, so an album is twelve unrelated stories that share a character; `scene_seconds` could not lengthen a scene and nothing in the UI revealed it | TRD-2 §1 |
+| QC | nothing checks output. The identity collapse, the world that never rendered and the LoRA that did nothing all passed every deterministic check and were found by opening the picture | TRD-3 §1 |
+
+A second rule follows from the third row and applies to the whole of TRD-3:
+**a number that has not been shown to separate known-good from known-bad gates
+nothing.** A confident green tick on a render nobody looked at is worse than no
+check at all — that is TRD-3 §1's measured 41.1-vs-64.7 inversion, where a
+plausible metric ranked the wrong image first.
+
+## 4. The three journeys
+
+Stated as journeys because `T6-A1` requires each one to be drivable over JSON
+with no HTML involved, and it names these three as the loops to prove it with.
+
+**A · Build a set and render it.** Add songs, drag the joins, draw a level
+curve, hear a proxy, render a real 20-second preview of one join, render the
+whole thing — and the length shown while editing is the length of the file.
+
+**B · Give the album a story and storyboard against it.** Write or generate an
+arc, accept it, generate each song's storyboard as a scene *of that arc*, edit a
+scene, read a time meter that agrees with the song, and see which leads still
+have no anchor.
+
+**C · Find out what came back wrong.** After renders land, a queue of findings,
+each carrying what was measured against what was asked for, an editable remedy
+prompt, and an approve button. Nothing repairs itself.
+
+## 5. What "working" means
+
+Product outcomes, each with the TRD criterion that already proves it. These are
+the eight things that must become true; they are not a new contract.
+
+| # | outcome | proven by |
+|---|---|---|
+| P1 | The number on the screen is the number in the file — set length, to 0.05 s, with echo, hold, beatmatch and trim all in play | `T1-7`, `T1-8`, `T3-11` |
+| P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b`, `T1-12`, `T1-20d` |
+| P3 | Every surface is drivable with no browser, and the page and the JSON agree | `T6-A1`…`T6-A4`, `T1-3`, `T2-41` |
+| P4 | An album's songs are scenes of one story, demonstrably — arc content appears in the storyboard and is absent when the arc is | `T2-20`, `T2-21`, `T2-22` |
+| P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every clip | `T2-8`, `T2-12a`, `T2-13a`, `T2-13c` |
+| P6 | Every rendered artefact is measured against the workflow that asked for it, never against a constant | `T3-2`, `T3-4`, `T3-7` |
+| P7 | A finding arrives actionable — measured, expected, unit, a remedy class, and an editable prompt — and nothing runs without approval | `T3-18`, `T3-19`, `T3-27` |
+| P8 | Identity failures are attributed to the text, never to the reference image | `T2-31`, `T2-32`, `T3-17`, `T3-28` |
+
+**P8 is the one to defend hardest.** It is measured, not theoretical: same
+reference, same seed, same box, species named in the prompt or not — named gives
+a feline throughout, unnamed gives an ordinary human woman by the halfway point
+keeping only the harness. A remedy that proposes swapping the reference image
+teaches the operator a false lesson, which is why `T3-28` forbids it by name.
+
+## 6. Sequencing — the part the TRDs do not have
+
+Each TRD disowns what it does not cover; none of them orders the work. This is
+that order. Every edge below is a real dependency taken from the documents, not
+a preference.
+
+### Already built and deployed (do not rebuild)
+
+`studio/qc.py` (TRD-3 tier 1 in full), `studio/qc_service.py` + `db.findings` +
+`/api/qc/*`, `studio/automation.py` + `db.automation` (TRD-1 §5's curve model,
+decimation and filter emission), `studio/arc.py` + the arc routes (TRD-2 §3.1's
+JSON-canonical arc), `db.artefacts` (tier 0), `prompts.py` (TRD-2 §3.3's
+versioning, reused by `T3-20`). TRD-3 §2.1 is explicit that §4 and §6 "read as
+unbuilt work and are not" — the ledger with line counts is DDD §1.
+
+### P0 — unblock, then separate
+
+1. **`T2-12a` — round a scene length to a legal frame count.** Everything about
+   variable clip length is stuck behind this one item. `T2-13a` records why:
+   `build_song.clip_seconds()` returns `CHUNK` whatever it is passed, because the
+   renderer still builds every clip at `LTX25_LEN` frames, and honouring the
+   stored `scene_seconds` first would re-time every storyboard while 4.8125 s
+   clips keep rendering. **Nothing in P5 can start until this lands.**
+2. **The service split**, TRD-1 and TRD-2 (`T6-A3`). `qc_service.py` already
+   demonstrates it and is the pattern to copy. Doing this after the features
+   means writing them twice.
+
+### P1 — the timeline, which is the biggest single gap
+
+3. Clock and rounding (`T1-5`, `T1-6`); peaks and the waveform data model
+   (`T1-13`…`T1-15`); the proxy-preview contract (`T1-16`, `T1-17`).
+4. The master stage (`T1-20a`…`T1-20d`). It is a prerequisite for automation
+   being *usable*, not an enhancement: without it, per-item `loudnorm` flattens
+   every curve `automation.py` can already store and render.
+5. Audiences (`T1-18`…`T1-20`), which need the master because easy mode's
+   one-button master **is** that chain (`T1-20c`).
+
+### P2 — the arc through to the storyboard
+
+6. `T2-8b`/`T2-8c` tiling and section coverage, then the wand flows (§4.1–4.3),
+   the time meter (§5.1), casting (§5.3).
+7. Per-scene model choice, W2 (`T2-42`…`T2-48`) — last, because `T2-45` needs
+   `models.where()`'s three-valued answer respected at enqueue and `T2-48` needs
+   per-model ceilings, which is P0 item 1 again.
+
+### P3 — QC tier 2 and repair
+
+8. Tier 2, **calibration first and in this order**: score the 18 images of
+   `zimage_sweep/`, report both distributions, and build no threshold and no UI
+   until that report exists (`T3-13`, `T3-14`, `T3-16`). If they overlap, the
+   gate is not built and that is a successful outcome.
+9. Repair routing, which is what stops `approve()` raising and is the only thing
+   that turns `T3-6` and `T3-18` from provisional into real.
+
+### Deferred to another document, on purpose
+
+The queue and the wait-state scheduler (**TRD-6**, and it exists because TRD-1
+§11 and TRD-3 §9 both disowned it); garbage collection; the song-level audio
+editor; `duck` and `layer` until `T1-21`/`T1-22` can be measured.
+
+## 7. Risks
+
+Each is a thing this project has already done once, not a hypothetical.
+
+1. **A check that cannot fail.** ~20 criteria across the three documents were
+   one-sided — "X is refused", "the payload carries Y" — and stay green when the
+   whole feature is deleted. Each TRD now carries a table pairing them with a
+   positive half; those tables are requirements, not commentary.
+2. **A second implementation of a number.** Twelve criteria for four facts;
+   `CHUNK` read in five modules; scene timing computed twice; gain in two places
+   before automation would have made three. Every new value gets one owner and
+   the others cite it.
+3. **A metric that is confidently backwards.** §3, and it is why tier 2 is
+   calibration-gated rather than threshold-first.
+4. **Preview trusted over the render.** `T1-16` makes the proxy warning part of
+   the API response rather than a sentence in one template, because a mobile
+   client will not carry a sentence.
+5. **Documents drifting from the code.** Every line-number citation in TRD-2 §3.4
+   went stale within a day. Cite behaviour and function names; cite line numbers
+   only alongside the behaviour that identifies them.
+
+## 8. Open, and needing Jon
+
+- **Scope.** **192** criteria across seven TRDs, of which these three hold
+  **120** — 32 / 58 / 30. (Counted 2026-08-13 with `grep -cE "^- .T<n>-"`. The
+  figures quoted everywhere until then — ~197 total, 36 / 61 / 36 — were wrong
+  for five of the seven documents, and had been carried between documents rather
+  than measured. The correction changes no decision; it is recorded because a
+  number copied instead of counted is the defect these documents are about.)
+  This is the whole remaining project. If a smaller shippable scope is wanted,
+  §6's P0 and P1 are the smallest cut that produces something usable — the
+  timeline is the one surface where the current experience is "a stack of forms
+  and a number".
+- **`duck` and `layer`.** Refused everywhere today and honestly so (`T1-23`).
+  They stay refused until measured, and that is a decision to schedule, not a
+  bug to fix.
+- **Live-model tests.** TRD-2 §10.3 requires fixtures in the default suite and
+  one deliberately live test kept out of it. Nobody has decided how the live one
+  is run or how often the fixtures are re-recorded, and a fixture that no longer
+  resembles what the model returns is a check measuring its own history.
