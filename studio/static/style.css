@@ -654,8 +654,20 @@ button.toggle.off { color: var(--muted); }
 .mpa-note { margin: 0.35rem 0 0; font-style: italic; }
 
 /* ---- anchor candidates: pick and delete side by side ---- */
-.candidate-actions { display: flex; gap: 0.4rem; margin-top: 0.35rem; }
-.candidate-actions form { margin: 0; }
+/* Three actions -- Pick, Use as reference, Delete -- inside a grid cell whose
+   minimum is 160px. Without wrapping, "Use as reference" is wide enough to push
+   Delete OUT of the tile and over the neighbouring candidate, which is what it
+   did: a destructive control rendered on top of a different image than the one
+   it deletes. Wrapping is the fix; `min-width: 0` lets a button shrink inside
+   the row rather than forcing the overflow it was causing. */
+.candidate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+.candidate-actions form { margin: 0; min-width: 0; }
+.candidate-actions button { max-width: 100%; }
 .delete-anchor-group { margin-top: 0.75rem; }
 
 /* ---- section headers with their own actions ---- */

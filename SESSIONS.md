@@ -2160,3 +2160,26 @@ Append dated one-liners. Newest at the bottom.
   welded 21+ constant is appropriate and should stay.
   A full positive rewrite, ~1050 chars and zero negations, is in the review file
   ready to test against the current one.
+- 2026-08-13 (A) **LAYOUT BUG FIXED, and it was a destructive control in the
+  wrong place.** `.candidate-actions` was `display:flex` with **no
+  `flex-wrap`**, inside a grid cell whose minimum is 160px. "Use as reference"
+  is wide enough that **Delete overflowed the tile and rendered on top of the
+  NEIGHBOURING candidate** — a delete button sitting over a different image than
+  the one it deletes. Fixed with `flex-wrap: wrap` plus `min-width: 0` on the
+  forms so a button shrinks instead of forcing the overflow. 241 passed, 194
+  defs, `check_integration` OK. **NOT deployed: jobs 235/236/237 are running and
+  the rule is never mid-render.**
+- 2026-08-13 (A) **AND THE SCREENSHOT ITSELF CARRIED A FINDING.** Catatonic's
+  `g/front` sheets **are cat-people** — black feline face, ears, tail, catsuit —
+  while the `xxx/back_nude` sheet from the same album is **a plain human woman**.
+  **Catatonic's album profile is EMPTY for both**, so the cat in the clothed
+  sheets came from the REFERENCE IMAGES, and the nude path overrode it.
+  The difference between the two paths is exactly the wording: the nude path
+  **drops the wardrobe clause and adds 15 negations and 9 skin words**.
+  **Caveat, stated because it matters: the clothed sheets came from the OLD
+  code, so tier, view and code version all differ and this is not yet a
+  controlled comparison.** The clean test is one render of Catatonic
+  **`xxx/front` (clothed, new code)** — same album, same empty profile, same
+  code, isolating nude-vs-clothed. **That is the single most informative render
+  left and it has not been run.** Jobs 236/237 (Street Cats nude, new code) are
+  queued and test the prediction from the other direction.
