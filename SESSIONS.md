@@ -1381,3 +1381,31 @@ Append dated one-liners. Newest at the bottom.
   contradiction, and splitting BACKDROP to fix that changes what every existing
   sheet renders -- while Jon is mid-regeneration. It lands structurally first,
   in its own commit, with the four existing views asserted byte-identical.
+- 2026-08-13 (A) ⚠ **`5a9bd0c` IS A REPORT, NOT A FIX. `T1-20d` IS STILL OPEN
+  and `mixer.py` has not been touched since `f9ca597`.** Recording this loudly
+  because B — who verifies things by habit — read the commit subject
+  *"A set with one drawn curve puts two loudnorms in series on every item
+  without one"* as a shipped source fix and said so in writing. Verified:
+  `git show --stat 5a9bd0c` is two files, both `docs/`, 545 insertions, no
+  source; `git log f9ca597..HEAD -- studio/mixer.py` is **empty**; and
+  `mixer.py:664` still reads
+  `if any((it.get("automation") or {}).get("suppress_loudnorm") for it in items):`.
+  A set with one curved item and one uncurved item still puts **two loudnorms in
+  series** on the uncurved item's path. The fix is one line at 664 — engaging
+  the master strips per-item loudnorm from EVERY item, not only curved ones.
+  **The convention produced this.** This repo's commit voice is a declarative
+  sentence naming the defect and its measurement, so a docs commit that REPORTS
+  a live defect gets a subject line indistinguishable from one that FIXES it.
+  That is the failure class this project fears most — a defect believed closed
+  while it is live — arriving through the commit log. Not rewriting shared
+  history over one subject line; recording it here instead, because the next
+  reader of `git log` will infer exactly what B inferred.
+- 2026-08-13 (A) **Correction to my own number: 20 commits ahead of `f9ca597`,
+  not fourteen** (`git rev-list --count f9ca597..HEAD` = 20). B caught it. It
+  matters for review-before-deploy: a fourteen-commit range drops six off the
+  end, four of B's and one of mine.
+- 2026-08-13 (A) **B's corollary on the review lesson, kept in B's wording
+  because it is better than mine:** *"nothing asserts X" is a claim about the
+  whole tree, so it is exactly the claim a document-only reviewer cannot make.
+  It needs a grep, and the grep needs to be in the finding.* Same shape as the
+  fabrication rule already in force: the oracle is the tree, not the document.
