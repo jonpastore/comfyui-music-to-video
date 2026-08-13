@@ -1742,3 +1742,32 @@ Append dated one-liners. Newest at the bottom.
   **Jon: the next anchor sheet is the first rendered through all of this.** Jobs
   230/231/232 were rendered by the OLD code; nothing before job 233 is a
   measurement of the new wording.
+- 2026-08-13 (A) ✅ **B's deploy and PUSH verified. `HEAD == origin/main ==
+  667debc`, in sync.** So the push failure was **specific to my session's
+  environment, not the repo** — B pushed the same remote without trouble.
+  Studio answers 200, `item_chains` present on the box.
+- 2026-08-13 (A) **Stale worktree cleared**, per B: the detached
+  `.../351ff8f3.../scratchpad/deploytree` pinned at `9d1f36f` had nothing
+  uncommitted and is removed. `git worktree list` is now just the repo.
+- 2026-08-13 (A) ⚠ **CONFIRMED AND IT MATTERS: NOTHING HAS EVER RENDERED THROUGH
+  THE NEW PROMPT.** Read off the production job table, not inferred:
+
+      230  anchor  done    05:30:05 -> 06:05:56  (35m)
+      231  anchor  failed  06:33:46 -> 06:33:54  (8s)
+      232  anchor  done    06:33:46 -> 06:56:19  (22m)
+      service restarted    11:11:38
+
+  All three finished **more than four hours before the restart**, so all three
+  ran on the code we spent today replacing: the old wording, fixed 896x1216, one
+  prompt box per tier, and — the one that changes every sheet — the negating
+  `ALBUM_FIELDS["body"]` default that beat `make_anchor.DEFAULT_BODY` for as long
+  as both existed. **Nothing is running or queued now; there is no job past 232.**
+  **So if Jon's regenerated sheet is 230 or 232, it measured the code we
+  replaced and is not evidence about any of today's work.** The next sheet
+  rendered is the first true before/after this whole day produced — and it is
+  the only evidence that matters for `T4-11`, because **every check either
+  session ran today was on strings and graphs, never on an image.**
+- 2026-08-13 (A) Job **231 failed in 8 seconds** — the shape of a validation
+  refusal rather than a render fault, and on the old code. Worth a look only if
+  it recurs after the restart; noting it so a fast anchor failure is not treated
+  as new.
