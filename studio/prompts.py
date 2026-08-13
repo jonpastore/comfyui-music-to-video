@@ -39,6 +39,12 @@ PROMPT_TYPES = {
     "body":          {"tiered": False, "label": "Body consistency"},
     "nude_wardrobe": {"tiered": False, "label": "Nude wording"},
     "anatomy":       {"tiered": False, "label": "Anatomy on nude sheets"},
+    # Constants until docs/TRD-7 T7-14/T7-15: the studio backdrop reaches every
+    # sheet, and the composite clause decides whether several references are one
+    # character or several. Untiered -- what a studio looks like and how many
+    # people are in the frame are not functions of the rating.
+    "backdrop":      {"tiered": False, "label": "Backdrop and framing"},
+    "composite":     {"tiered": False, "label": "Multiple references"},
     "negative":      {"tiered": False, "label": "Negative prompt"},
     # The one that genuinely varies by rating: what R permits and XXX permits
     # are different sentences by definition.

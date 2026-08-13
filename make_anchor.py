@@ -241,6 +241,13 @@ def anchor_from(data):
         "nude_wardrobe": data.get("nude_wardrobe") or NUDE_WARDROBE,
         # What a nude sheet DEPICTS. Empty unless the profile says otherwise.
         "anatomy": data.get("anatomy") or DEFAULT_ANATOMY,
+        # The studio and the multi-reference clause, per album. Constants with
+        # no override until now, and both reach every sheet -- an album shot
+        # against a black cyclorama had nowhere to say so, and a project whose
+        # references are stills rather than photographs could not reword what
+        # "the same character" means. docs/TRD-7 T7-14, T7-15.
+        "backdrop": data.get("backdrop") or BACKDROP,
+        "composite": data.get("composite") or COMPOSITE,
         "views": views,
     }
 
@@ -262,8 +269,8 @@ def prompt_for(view, anchor=None, n_refs=1):
     if n_refs > 1:
         # several unlabelled references are read as several PEOPLE unless the
         # prompt says otherwise
-        parts.insert(1, COMPOSITE)
-    parts.append(BACKDROP)
+        parts.insert(1, a.get("composite") or COMPOSITE)
+    parts.append(a.get("backdrop") or BACKDROP)
     return " ".join(p.strip() for p in parts if p and p.strip())
 
 

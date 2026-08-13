@@ -4981,6 +4981,34 @@ ALBUM_FIELDS = {
         "Re-assert colouring PER BODY PART. One mention at the top does not hold below the "
         "waist -- this is the fix for a black-furred character rendering with human-toned "
         "legs, and it has to be positive wording, not a negative."),
+    # The studio backdrop and the multi-reference clause. Both were constants in
+    # make_anchor with no override and no history, and both reach every sheet:
+    # BACKDROP is the studio, the lighting lock and the framing in one string,
+    # COMPOSITE is what stops three photographs of one character rendering as
+    # three people. Defaults are WORD FOR WORD make_anchor.BACKDROP and
+    # make_anchor.COMPOSITE, asserted by
+    # test_no_positive_prompt_constant_tries_to_negate -- the body clause is
+    # already one lesson in what two copies of one sentence cost.
+    # docs/TRD-7 T7-14, T7-15.
+    "backdrop": (
+        "Backdrop and framing",
+        "The background is one flat sheet of neutral mid-grey, evenly lit and completely empty, "
+        "with the floor the same unbroken grey as the wall behind her and a soft contact shadow "
+        "under her feet. She stands upright and unsupported in an empty studio, clear of the "
+        "edges of the frame. Even neutral studio lighting, white balanced, daylight colour "
+        "temperature, the same light on both sides of her. Clean neutral studio character "
+        "sheet, crisp air, sharp focus, high detail, full body head to toe inside the frame.",
+        "Reaches every sheet, so it is the widest-acting text here. Say what IS there: the "
+        "absences that belong to a backdrop (no smoke, no scenery) go in the negative prompt "
+        "on the Anchors page, and naming them here draws them -- that is not a rule of thumb, "
+        "it put smoke round the edge of every sheet this studio rendered for a month."),
+    "composite": (
+        "Multiple references",
+        "All of the reference images show the SAME single character from different angles or in "
+        "different outfits. Combine them into one coherent character: exactly one figure, alone "
+        "in the frame, standing by herself.",
+        "Used only when more than one base image is attached. Without it several unlabelled "
+        "references read as several PEOPLE and the sheet comes back as a group shot."),
     # The nude swap, per album, because the default is wrong for anything that
     # is not bare-skinned. make_anchor's own default says "bare skin over the
     # whole body", which on a furred character lands in the same prompt as
@@ -5021,7 +5049,8 @@ DESCRIBABLE = ("identity", "wardrobe", "body")
 # EVERYTHING make_anchor.prompt_for composes from. The form edits these, the run
 # records them and gen_anchor ships them as one profile dict -- so a field
 # missing from this tuple is a field whose edit reaches nothing.
-ANCHOR_PROFILE_FIELDS = ("identity", "wardrobe", "body", "nude_wardrobe", "anatomy", "views")
+ANCHOR_PROFILE_FIELDS = ("identity", "wardrobe", "body", "nude_wardrobe", "anatomy",
+                         "backdrop", "composite", "views")
 
 
 # NOTHING is taken from the global profile FILE any more, and that is a

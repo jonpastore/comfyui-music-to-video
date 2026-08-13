@@ -355,6 +355,16 @@ MIGRATIONS = [
     # compared side by side, and nothing in the anchors table records which.
     "ALTER TABLE characters ADD COLUMN nude_wardrobe TEXT",
     "ALTER TABLE characters ADD COLUMN anatomy TEXT",
+    # The studio backdrop and the multi-reference clause, per album. Both were
+    # constants in make_anchor with no override and no history, and both are
+    # load-bearing prompt text: BACKDROP is five clauses of studio, lighting,
+    # framing and focus that reach EVERY sheet, and COMPOSITE is the sentence
+    # deciding whether three references are one character or three. An album
+    # shot against a black cyclorama, or a project whose references are stills
+    # rather than photographs, needs different words and had nowhere to put
+    # them. docs/TRD-7 T7-14, T7-15.
+    "ALTER TABLE playlists ADD COLUMN backdrop TEXT",
+    "ALTER TABLE playlists ADD COLUMN composite TEXT",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and
