@@ -28,6 +28,27 @@ document does not invent a mechanism for it. What is proven is that nothing
 stops it being *saved* there (§3). Whether it was also *rendered* there needs
 the reproduction in `T4-13`.
 
+## 1a. The boundary with TRD-7
+
+`docs/TRD-7` was written the same day and the two must not drift into one
+subject. **TRD-4 owns who the character is and how the positive prompt is
+built; TRD-7 owns how many different sheets of them you can ask for and whether
+they stay the same person.** Three criteria here have their anchor-path
+realisation there, and neither document restates the other:
+
+- `T4-12`'s slot naming → `T7-10`. Verified independently 2026-08-13:
+  `make_anchor.py:339` names the third image `f"reference {i + 3}"`, and
+  `cast_clause` then writes *"The character in image 3 is reference 3"* into a
+  prompt whose composite clause says every reference is the same character. The
+  mechanism exists to tell two anchors apart in a duet frame; pointed at one
+  character's three photographs it **asserts a second person**.
+- `T4-6`'s tier gating → `T7-2`. `NUDE_VIEWS` is two hand-kept copies
+  (`app.py:135`, `make_anchor.py:167`), so a nude view added to one renders at
+  `g` with the album's wardrobe wording — a tier violation produced by an
+  omission, on the render path rather than the save path this document guards.
+- `T4-13`'s lighting lock → `T7-14`, which makes `BACKDROP` a versioned prompt
+  so the lock has somewhere to live per album.
+
 ## 2. No silent defaults
 
 - `T4-1` Generating with **zero views selected** is refused, naming the control.
