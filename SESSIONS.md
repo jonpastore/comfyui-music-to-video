@@ -1284,3 +1284,28 @@ Append dated one-liners. Newest at the bottom.
   its inbox. If it answers, the lane is usable via SendMessage even though the
   spawn's own report never arrives -- which would matter, because Jon's plan for
   stage 4 is to shut B down and launch agents to implement.
+- 2026-08-13 (A) ⚠ **THE IN-PROCESS SUBAGENT LANE IS DEAD IN BOTH DIRECTIONS,
+  and this breaks Jon's plan for the next phase as literally written.** Measured,
+  not inferred:
+  - Spawn a trivial subagent ("reply ALIVE"): it registers and **never reports**.
+  - ~3h later it emits an `idle_notification` saying "available" -- so it is
+    alive, it just never returns anything.
+  - `SendMessage` DIRECTLY to that idle subagent: accepted into its inbox,
+    **no reply**, and 54 minutes later a second idle notification arrives.
+  So: no result from a spawn, and no result from a message to a spawn. That is
+  seven spawns last session plus one spawn and one direct message this session,
+  all with the same outcome. **Nothing should be planned around
+  Agent/Task subagents until this is fixed.**
+  Jon's stage 4 is "shut down session B, launch up to 5 agents to implement the
+  rest". As written that cannot run.
+- 2026-08-13 (A) **What IS measured to work, and the peer lane is now under
+  test.** `llm -m grok` / `llm -m chatgpt` with the prompt on STDIN: proven four
+  times today (the UI/UX consult, the plan review, and both TRD 4-7 reviews),
+  zero fabrications each time when the brief demands UNSURE and accepts NOTHING
+  FOUND. The peer-SESSION lane is a DIFFERENT mechanism from subagents and has
+  never actually been tested here -- A and B have only ever talked through this
+  file. I have just sent B a real message through it. Note for whoever reads
+  this next: `SendMessage` refused the bare name and required the ref
+  (`ComfyUISessionB [bd77b3]`), so peer sends need the ref from `ListAgents`.
+  **If the peer lane works, the parallel-execution plan should use peer sessions
+  rather than subagents -- which is an argument for NOT shutting B down.**
