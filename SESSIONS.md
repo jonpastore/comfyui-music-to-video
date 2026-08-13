@@ -1002,3 +1002,89 @@ Append dated one-liners. Newest at the bottom.
   (`view:<key>`, `backdrop`, `composite`, `pose` — TRD-7 §4) is walked by it too,
   so a new constant that says "no" fails the suite. That is deliberate: "no
   smoke" put smoke on every sheet for the life of the project.
+- 2026-08-13 (A) **PRD and DDD for TRD 1-3 written — `docs/PRD-1-3-EDITING-AND-QUALITY.md`
+  and `docs/DDD-1-3-EDITING-AND-QUALITY.md`. Docs only; no source file touched.**
+  Both cite criteria rather than restating them, and the built/not-built ledger
+  was read off the tree at `f9ca597`, not off a document — TRD-3 §2.1 records
+  what happens otherwise.
+- 2026-08-13 (A) ⚠ **A LIVE GAP IN `mixer.py`, measured, NOT fixed — `T1-20d`,
+  two loudnorms in series on a mixed set.** `_master_lines` (mixer.py:664)
+  engages the master when ANY item suppresses its own loudnorm, while
+  `_audio_chain` (mixer.py:725) suppresses only for items carrying a curve. So
+  an UNCURVED item in a set that has a curve keeps its own loudnorm AND passes
+  the master. Counting loudnorm per signal path, calling the real functions:
+
+      both curved          per-item=[0, 0]  master=1   worst path = 1
+      neither curved       per-item=[1, 1]  master=0   worst path = 1
+      one curved, one not  per-item=[0, 1]  master=1   worst path = 2
+
+  `T1-20d`'s own sentence is the fix: engaging the master strips per-item
+  loudnorm from EVERY item, not only curved ones. Mutated in memory to do that,
+  the mixed row drops to 1 and the other two do not move — so the measurement
+  responds to that rule and to nothing else. **Not fixed: `mixer.py` is source,
+  my claim is `docs/**` only, and implementation is stage 4 of Jon's pipeline.**
+  Nobody holds `mixer.py` right now; it is one line at 664's condition.
+- 2026-08-13 (A) Working-tree baseline while B is mid-edit: **226 passed, 7
+  failed**, 186 `def test_`. Every failure is an anchor/view/form test and B has
+  uncommitted `app.py` / `_anchor_form.html` / `app.js` — B's in-flight work, not
+  a regression, and not mine to touch.
+- 2026-08-13 (A) **The in-process agent lane is still dead.** One trivial spawn
+  ("reply ALIVE"), no report, and it does not appear in the agent list at all.
+  Same as last session's seven. Using `llm -m chatgpt` / `llm -m grok` with the
+  prompt on STDIN and saying so each time, per Jon's brief.
+- 2026-08-13 (A) **UI/UX definition and style guide written —
+  `docs/UIUX-DEFINITION-AND-STYLE-GUIDE.md`. Docs only.** chatgpt consulted via
+  `llm -m chatgpt` with the prompt on STDIN (7.4 KB in, 36 KB back), because the
+  agent lane is dead; **zero fabrications**, every heading and class it cited
+  checked back against `style.css`. What was folded in and what was rejected is
+  §7 of the document, with reasons.
+  Three things in it are B's to know, since they touch files B holds:
+  - **`plan-panel` is the most under-used component in the studio.** The
+    preflight block (`.plan-panel`/`.plan-line`/`.plan-blocker`/`button.blocked`)
+    exists and is used by **`_anchor_form.html` and nothing else**. Its own
+    comment states the rule the whole app needs -- "the Generate button is
+    MARKED, never disabled". The style guide promotes it to every control that
+    spends GPU time. **No change proposed to the anchor form itself.**
+  - **A set timeline already exists** (`.timeline`/`.tl-block`, `set_edit.html`),
+    blocks flex-sized by real post-trim play length. I had it down as unbuilt
+    until I read the stylesheet. What TRD-1 adds is a time axis, draggable
+    joins, automation lanes and a playhead -- and peaks as DATA, because
+    `mixer.waveform_png()` as a background-image cannot be dragged (`T1-13`).
+  - **The palette is Tokyo Night** -- `--accent #7aa2f7` and `--danger #f7768e`
+    are its blue and red exactly. Worth recording so the next colour comes out
+    of the palette instead of being invented; chatgpt proposed its cyan for the
+    success role and the palette has a green.
+  Measured, all re-runnable: 14 distinct font-sizes, 18 spacing values, 6 radii
+  (no scale for any of the three) against 9 colour tokens that carry measured
+  contrast ratios; **2 `:focus-visible` rules in 1247 lines**; ~20 page-scoped
+  CSS sections and page-scoped `init*` functions in `app.js`. Counted and NOT
+  findings: 1 `!important`, 10 inline `style=` in 3481 template lines,
+  `prefers-reduced-motion` honoured, `<dialog>`/`<details>` used natively.
+- 2026-08-13 (B) **T7-19 and T7-6 are in, plus a defect the mutation output
+  exposed. Three commits, `415584d` / `4032aba` / `d315c6f`, all on top of
+  `f9ca597`. Nothing deployed — production is still at `f9ca597`.**
+  - `415584d` **T7-19**: the anchor prompt box is now per tier AND VIEW
+    (`prompt_<tier>__<view>`). One box per tier was sent verbatim to every view,
+    so an edit typed at the front sheet overrode the BACK VIEW framing and the
+    NUDE_WARDROBE swap on the others. Three mutations, each read: the back and
+    front_nude sheets came back holding `"FRONT VIEW character reference sheet
+    of ..."` — the reported symptom, reproduced on demand.
+  - `4032aba` ⚠ **A, this one is worth your attention for TRD-4: T4-10/T4-11
+    were only half true and the docs say they are done.** `_NEGATION_ALLOWED`
+    was emptied and `make_anchor.DEFAULT_BODY` rewritten positively — but
+    `app.ALBUM_FIELDS["body"]`'s DEFAULT still read *"...with no lighter or
+    differently-toned patches anywhere"*, and that is the one that renders:
+    `album_profile()` fills every field from its default, so a truthy value
+    always reaches `anchor_from()` and always beats the constant. Measured on a
+    fresh album: `make_anchor.DEFAULT_BODY in the composed prompt: False`. The
+    negation walker now covers the studio's own defaults and asserts the two
+    bodies are the same string.
+  - `d315c6f` **T7-6**: "Use as reference" on an anchor tile. The row points at
+    the sheet's own file, no copy; deleting the ref keeps the file, deleting the
+    anchor cascades to its borrowed refs.
+  Baseline held at every commit: **234 passed** (was 233, +1 new test), **187
+  test defs** (was 186), `check_integration.py` OK, `tiers.py` / `models.py` OK.
+  Still mine and still claimed: `studio/app.py` anchor routes,
+  `_anchor_form.html`, `_anchor_group.html`, `static/app.js`, `test_app.py`,
+  `make_anchor.py`, `build_refs.py`. Next: T7-8/T7-9 (latent_mode and the
+  composition plate), then T7-13..16.
