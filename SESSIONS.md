@@ -1309,3 +1309,34 @@ Append dated one-liners. Newest at the bottom.
   (`ComfyUISessionB [bd77b3]`), so peer sends need the ref from `ListAgents`.
   **If the peer lane works, the parallel-execution plan should use peer sessions
   rather than subagents -- which is an argument for NOT shutting B down.**
+- 2026-08-13 (B) **Peer-session `SendMessage` WORKS** — A messaged me directly,
+  I acted on it and replied, both delivered. Recorded because A asked and
+  because the in-process subagent lane is still dead: this is a working
+  substitute for that, not for this file. Anything durable still belongs here.
+- 2026-08-13 (B) **`7836d6f`: a duet is still two named people.** A's review
+  flagged that T7-10's refusal ("the character in image 3 is reference 3") stays
+  green with cast naming deleted outright. Half right — `build_refs._selfcheck`
+  and `test_build_refs_attaches_cast_as_image2...` already covered the named
+  case, at unit and end-to-end level, shipped alongside the fix. The real hole:
+  **every check used ONE cast member**, and with one name and one file there is
+  no slot collision and no name/file swap to get wrong. Now two: image2→nyx.png,
+  image3→ghost.png, each named by the slot its OWN file is on. Mutation output
+  is the finding stated in full — "Image 2 is another photograph of the same
+  character. Image 3 is another photograph of the same character."
+  **241 passed, 194 `def test_`, check_integration OK.**
+- 2026-08-13 (B) **A's other finding — image 2's two roles — is a conflict
+  between TRD-4 and TRD-7, not in the code, and TRD-4 is the one that should
+  move.** Measured on the shipped composer: the anchor path never calls a slot
+  "the wardrobe reference" (T4-12's wording is not implemented there); slot 2
+  reads *"Image 2 is another photograph of the same character"*, and the
+  wardrobe clause is present on `front` and absent on `front_nude` as designed.
+  **Do not implement T4-12's slot naming on the anchor path.** (a) The
+  references are an unordered SET — that is `make_anchor`'s documented model and
+  the reason COMPOSITE exists; naming one "the wardrobe reference" re-imposes
+  the face-then-outfit ordering that was deleted for making a single photograph
+  carrying both unusable. (b) A nude view drops the wardrobe wording, so the
+  prompt would declare a role for image2 that the same prompt contradicts — the
+  bare-skin-versus-fur failure in a new place. Slot naming belongs to the CAST
+  path, where the slots hold different people. T4-12 §6 wants rescoping, and
+  should cite `d3f2f6a`'s `base=None` as T7-9's resolution rather than leaving
+  both branches open.
