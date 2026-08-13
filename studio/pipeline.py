@@ -898,6 +898,18 @@ ANCHOR_RENDER_FLAGS = {"mode": "--mode", "negative": "--negative",
                        # reference, so denoise below 1.0 refines an existing sheet
                        # instead. docs/TRD-7 T7-8.
                        "latent": "--latent",
+                       # The Lightning LoRA weight. build_refs.sampler_settings
+                       # forces it to 0 when cfg > 1 -- a 4-step distillation
+                       # driven at cfg 4.5 is mush -- UNLESS it is passed
+                       # explicitly, which is the deliberate escape that module
+                       # kept and the studio could not reach. docs/TRD-7 T7-11.
+                       "lora_strength": "--lora-strength",
+                       # Sheet size. Fixed at make_anchor's 896x1216 because
+                       # gen_anchor never passed either flag, so a head-and-
+                       # shoulders framing rendered a distant figure in a full-
+                       # body frame. Ignored in latent=image mode, which inherits
+                       # the reference's size. docs/TRD-7 T7-12.
+                       "width": "--width", "height": "--height",
                        # The BASE seed. Omitted means make_anchor draws a random
                        # one, which is what makes a second click of Generate
                        # produce different sheets, and that stays the default.

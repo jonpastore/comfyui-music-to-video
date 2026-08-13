@@ -244,6 +244,20 @@
         </select>
       </label>
     </div>
+    {# Sheet size. Every sheet this studio ever rendered was 896x1216 because
+       gen_anchor passed neither flag, so a head-and-shoulders framing asked for
+       inside a full-body portrait frame rendered a distant figure.
+       docs/TRD-7 T7-12. #}
+    <div class="field-row">
+      <label>
+        <span class="label-text">Sheet size{{ help("size") }}</span>
+        <select name="size" {% if latent == "image" %}disabled{% endif %}>
+          {% for value, label in size_choices %}
+          <option value="{{ value }}" {% if value == last.get("size") %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
     {% if latent == "image" %}
     <p class="hint"><span class="tag">refining the first reference</span>
       The sheet is re-rendered from your first base image, so denoise below 1.0 is the point of
@@ -283,6 +297,18 @@
           <span class="label-text">Scheduler{{ help("scheduler") }}</span>
           <select name="scheduler"><option value="">mode default (quality = karras)</option>
             {% for x in schedulers %}<option value="{{ x }}" {% if last.get("scheduler") == x %}selected{% endif %}>{{ x }}</option>{% endfor %}</select>
+        </label>
+        {# The escape hatch build_refs.sampler_settings deliberately kept and the
+           studio could not reach: raising CFG above 1.0 forces this to 0 UNLESS
+           it is set explicitly. docs/TRD-7 T7-11. #}
+        <label>
+          <span class="label-text">Lightning LoRA{{ help("lora_strength") }}</span>
+          <select name="lora_strength">
+            <option value="">mode decides (fast = 1.0, quality = 0.0)</option>
+            {% for value, label in lora_choices %}
+            <option value="{{ value }}" {% if last.get("lora_strength") is not none and value | float == last.get("lora_strength") | float %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
         </label>
       </div>
       {# Quality mode is already DPM++ 2M Karras. The spec asks for it as the

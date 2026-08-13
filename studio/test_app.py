@@ -2279,6 +2279,70 @@ def test_the_denoise_labels_are_worded_for_the_latent_they_apply_to():
         assert not any("returns noise" in n for n in plan["notes"]), plan["notes"]
 
 
+def test_the_two_knobs_the_renderer_declared_and_the_studio_could_not_reach(patch_stub):
+    """make_anchor declares --lora-strength and --width/--height. gen_anchor's
+    ANCHOR_RENDER_FLAGS had an entry for neither, so every sheet was 896x1216
+    and the LoRA escape hatch build_refs.sampler_settings deliberately kept was
+    unreachable from the studio. docs/TRD-7 T7-11, T7-12."""
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="", render=None: (
+        seen.append(dict(render or {})) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Knobs Album"})
+        base = {"album": "Knobs Album", "tier": "r", "view": "front", "n": "1",
+                "mode": "quality"}
+        img = [("images", ("k.png", _png_bytes(), "image/png"))]
+
+        # unset: neither is sent, so make_anchor's own defaults apply and this
+        # cannot change a render nobody asked to change
+        client.post("/anchors", data=base, files=img)
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert "lora_strength" not in seen[-1] and "width" not in seen[-1], seen[-1]
+
+        # set: both travel, and the size arrives as the PAIR the flags take
+        client.post("/anchors", data={**base, "size": "1024x1024", "lora_strength": "0.5"},
+                    files=img)
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert seen[-1]["width"] == 1024 and seen[-1]["height"] == 1024, seen[-1]
+        assert seen[-1]["lora_strength"] == 0.5, seen[-1]
+        # every key here has a flag, or gen_anchor drops it silently
+        import pipeline as _pipeline
+        assert set(seen[-1]) <= set(_pipeline.ANCHOR_RENDER_KEYS), (
+            set(seen[-1]) - set(_pipeline.ANCHOR_RENDER_KEYS))
+
+        # THE INTERLOCK STILL HOLDS, and this is why lora_strength is in
+        # SAMPLER_KEYS: quality mode is cfg 4.5, which forces the LoRA to 0
+        # unless it was passed explicitly. Both directions, or "the escape works"
+        # would stay green with the interlock deleted.
+        assert appmod.resolved_settings({"mode": "quality"})["lora_strength"] == 0.0
+        assert appmod.resolved_settings({"mode": "fast", "cfg": 4.5})["lora_strength"] == 0.0
+        assert appmod.resolved_settings(
+            {"mode": "fast", "cfg": 4.5, "lora_strength": 0.5})["lora_strength"] == 0.5
+
+        # a size the model was not packaged for is refused rather than sent on to
+        # ComfyUI, which answers one queue round-trip later
+        r = client.post("/anchors", data={**base, "size": "900x1200"}, files=img)
+        assert r.status_code == 400 and "sheet size" in r.text, r.text[:200]
+        r = client.post("/anchors", data={**base, "lora_strength": "2.0"}, files=img)
+        assert r.status_code == 400 and "between" in r.text, r.text[:200]
+
+
+def test_the_sheet_size_reaches_the_latent(tmp_path):
+    """The size has to arrive at EmptySD3LatentImage, not merely at the CLI: a
+    flag the script accepts and does not apply renders the old shape and reports
+    success. docs/TRD-7 T7-12."""
+    d = str(tmp_path)
+    img = os.path.join(d, "s.png")
+    open(img, "wb").write(_png_bytes())
+    wf, out = _emit_anchor_workflow(d, [img], ["--width", "1024", "--height", "1024"])
+    assert wf["15"]["inputs"] == {"width": 1024, "height": 1024, "batch_size": 1}, wf["15"]
+    assert "1024x1024" in out, out
+    # ...and the summary line stops claiming a size that image mode ignores
+    _, out = _emit_anchor_workflow(d, [img], ["--latent", "image", "--width", "1024"])
+    assert "1024" not in out and "inherited from the reference" in out, out
+
+
 def test_a_rendered_anchor_can_condition_the_next_sheet(patch_stub):
     """Clips stay on-model because gen_refs hands the chosen anchor to the model
     as image1. The anchors form could only read `assets` of kind `anchor_ref`,

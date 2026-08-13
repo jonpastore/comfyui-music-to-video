@@ -2312,6 +2312,31 @@ LATENT_CHOICES = (
     ("image", "from the first reference — refine it, keeping its composition and size"),
 )
 DEFAULT_LATENT = "empty"
+
+# Sheet size, as a chosen PAIR. gen_anchor never passed --width/--height, so
+# every sheet this studio has rendered was make_anchor's 896x1216 -- which is a
+# full-body portrait frame, and a head-and-shoulders framing asked for inside it
+# renders a distant figure. Offered as presets rather than two free numbers
+# because a latent that is not a multiple of 16 is a refusal from ComfyUI one
+# queue round-trip later, and because these are the shapes the model was
+# packaged for. The first entry is make_anchor's own default and stays first.
+# docs/TRD-7 T7-12.
+SIZE_CHOICES = (
+    ("896x1216", "896 × 1216 — the standing full-body sheet (the default)"),
+    ("832x1216", "832 × 1216 — taller and narrower; more headroom, tighter sides"),
+    ("1024x1024", "1024 × 1024 — square; head-and-shoulders and seated framings"),
+    ("1216x832", "1216 × 832 — landscape; a lying or reclining sheet"),
+    ("1152x896", "1152 × 896 — gentle landscape"),
+)
+# The Lightning LoRA weight, as the three points that mean something plus the
+# two between them. Blank stays the default and means "the mode decides".
+LORA_CHOICES = (
+    ("1.0", "1.0 — the Lightning distillation at full strength (fast mode's own)"),
+    ("0.75", "0.75"),
+    ("0.5", "0.5 — half; between the two modes, and unmeasured here"),
+    ("0.25", "0.25"),
+    ("0.0", "0.0 — LoRA off, which is what quality mode does to allow CFG above 1"),
+)
 DENOISE_VALUES = ("0.35", "0.45", "0.55", "0.65", "0.75", "1.0")
 
 
@@ -2410,6 +2435,23 @@ ANCHOR_HELP = {
         "a point, more detail; past roughly 30 on this model the returns are hard to see.",
         "4 is the Lightning LoRA's own count and is only meaningful at CFG 1.0 with the LoRA "
         "on. Four steps <em>without</em> the LoRA is an undercooked image, not a fast one."]},
+    "size": {"label": "Sheet size", "body": [
+        "The latent's dimensions, and therefore the frame the character is composed into.",
+        "Every sheet this studio rendered before now was 896&times;1216 &mdash; a standing "
+        "full-body frame &mdash; because the size was never passed to the renderer at all. A "
+        "head-and-shoulders or seated framing asked for inside that frame comes back as a "
+        "distant figure with empty space above and below it: the prompt was followed and the "
+        "shape fought it.",
+        "Ignored when the sampler starts from a reference, which inherits that image's size."]},
+    "lora_strength": {"label": "Lightning LoRA", "body": [
+        "How strongly the 4-step Lightning distillation is applied. Fast mode is 1.0, quality "
+        "mode is 0.0, and the two modes are exactly this knob plus the step count.",
+        "Left on <em>mode decides</em>, raising CFG above 1.0 forces it to 0 &mdash; a 4-step "
+        "distillation driven at CFG 4.5 is mush. Setting it here overrides that interlock, "
+        "which is the one case build_refs deliberately allows: a partial weight at moderate "
+        "guidance is the experiment nobody here has run.",
+        "Nothing between 0.0 and 1.0 has been measured on this pipeline. Treat a value in the "
+        "middle as an experiment, and pin the seed before you judge it."]},
     "latent": {"label": "Sampler starts from", "body": [
         "<strong>empty latent</strong> is pure noise at the size you asked for &mdash; a new "
         "sheet, and the only thing this form could do until now.",
@@ -2537,6 +2579,19 @@ def anchor_render_settings(form):
                                   f"{', '.join(k for k, _ in LATENT_CHOICES)}")
     out["latent"] = latent
 
+    # Sheet size, as a chosen pair rather than two free numbers: these are the
+    # shapes this model was packaged to render and a latent that is not a
+    # multiple of 16 is a refusal from ComfyUI, one queue round-trip later.
+    # Absent means make_anchor's own default, which is today's behaviour.
+    # docs/TRD-7 T7-12.
+    size = (form.get("size") or "").strip()
+    if size:
+        if size not in dict(SIZE_CHOICES):
+            raise HTTPException(400, f"the sheet size must be one of "
+                                      f"{', '.join(k for k, _ in SIZE_CHOICES)}")
+        w, h = size.split("x")
+        out["width"], out["height"] = int(w), int(h)
+
     # The base seed. Blank means make_anchor draws a random one, which is what
     # makes a second click of Generate produce different sheets -- so blank
     # stays the default and is not silently replaced with a number. Set it to
@@ -2546,6 +2601,14 @@ def anchor_render_settings(form):
     # make_anchor spaces the n candidates off it deterministically (base + k*137).
     for key, lo, hi, cast in (("steps", 1, 60, int), ("cfg", 1.0, 12.0, float),
                               ("denoise", 0.1, 1.0, float),
+                              # The Lightning LoRA weight. Left blank the mode
+                              # decides, and raising cfg above 1.0 still forces
+                              # it to 0 (build_refs.sampler_settings) -- passing
+                              # it here is the explicit escape that interlock
+                              # deliberately kept, and the studio could not reach
+                              # it because ANCHOR_RENDER_FLAGS had no entry for
+                              # the flag make_anchor already declared.
+                              ("lora_strength", 0.0, 1.0, float),
                               ("seed", 1, 2 ** 31 - 2, int)):
         raw = (form.get(key) or "").strip()
         if raw == "":
@@ -2719,7 +2782,12 @@ def run_summary(row):
     return " · ".join(b for b in bits if b)
 
 
-SAMPLER_KEYS = ("steps", "cfg", "sampler_name", "scheduler", "denoise")
+# What resolved_settings hands to build_refs.sampler_settings -- the KSampler's
+# own knobs. width/height are NOT here: they size the latent, not the sampler,
+# and passing them would have sampler_settings quietly drop them (it only copies
+# keys already in FAST/QUALITY) while the badge on a candidate claimed they were
+# part of the settings.
+SAMPLER_KEYS = ("steps", "cfg", "sampler_name", "scheduler", "denoise", "lora_strength")
 
 
 def resolved_settings(render):
@@ -3710,6 +3778,7 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
         # saying whether a denoise value does anything at all.
         "steps_choices": STEPS_CHOICES,
         "latent_choices": LATENT_CHOICES, "latent": last_latent,
+        "size_choices": SIZE_CHOICES, "lora_choices": LORA_CHOICES,
         "denoise_choices": denoise_choices(last_latent),
         # (candidates per point, total sheets) -- the cost is computed here so
         # the form states it rather than leaving it to be discovered
