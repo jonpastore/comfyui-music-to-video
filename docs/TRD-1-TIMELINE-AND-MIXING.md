@@ -474,7 +474,10 @@ client that is not this HTML page.
 Named explicitly so the cross-TRD review has boundaries to check rather than
 guess at:
 
-- **The render queue and the wait-state scheduler.** Decided 2026-08-12: when a
+- **The render queue and the wait-state scheduler — now `docs/TRD-6`.** It was
+  disowned here, disowned by TRD-3 §9, and only narrowly owned by TRD-2 `T2-11`,
+  which two independent reviews both flagged: a dependency three documents
+  disown is one nobody builds. Decided 2026-08-12: when a
   resource frees it takes the next queued item that matches it; no timing match,
   no forecast fan-out; "ready" is expressed separately from "queued" so a chained
   clip is not handed out before the frame it needs exists. That model is
@@ -544,3 +547,14 @@ The rules this project arrived at by being wrong, applied to this document:
 
    One-sided in this document today, listed so nobody has to re-derive it:
    `T1-4` and `T1-24` (prohibitions restated as differentials, but the differential proves the mechanism, not that anything uses it) and `T1-23`, which stays green for as long as `duck` and `layer` are never built.
+
+### The positive half of each one-sided criterion
+
+Naming them was not pairing them. Each row is the case that must ALSO pass, so
+the criterion stops being satisfied by the feature's absence.
+
+| criterion | its positive half |
+|---|---|
+| `T1-4` no cached graph | mutate a stored value and assert the regenerated graph CHANGES — proves regeneration happens, not merely that no cache exists |
+| `T1-23` `duck`/`layer` refused everywhere | when either ships, the same fixture must RENDER and be measured (`T1-21`, `T1-22`). Until then this certifies only that nothing is silently accepted, and says so |
+| `T1-24` a format is a row | add a test-only row and RENDER through it; asserting the table is a table proves nothing reaches ffmpeg |

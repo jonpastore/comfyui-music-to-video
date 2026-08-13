@@ -247,6 +247,147 @@ scene count, and nothing here does.
   original bug from the other direction, and a test caught it within a minute.
   Unblocked by `T2-12a` (round to a legal 8n+1 frame count), not before.
 
+### 3.5 Variable clip length — what satisfying §3.4 touches (W1)
+
+§3.4 took the decisions and owns their criteria (`T2-8`…`T2-13`). This section is
+what implementing them touches, so the blast radius is written down rather than
+discovered. **Seven modules read `CHUNK`** — `build_song`, `build_refs`,
+`reroll_refs`, `build_storyboard`, `grok`, `app`, `mixer` — and the three tests
+at `test_app.py:1348, 2515, 2582-2583` pin the current invariant **on purpose**:
+they are the guard that stopped clip allocation moving when LTX arrived. Replace
+each with the invariant that succeeds it; do not delete them.
+
+**F-1 A clip becomes a record, not an index.** `clip_plan()` returns
+`(idx, scene_number, start_s, duration_s, model, frames, fps)` per clip and no
+caller derives time as `idx * CHUNK` again. `app.py`'s copy is already gone
+(§3.4); `build_song.py:328, 364, 410` remain.
+
+**F-2 One legal-length rule serves both models.** `EmptyLTXVLatentVideo.length`
+is `step: 8`, `WanSoundImageToVideo.length` is `step: 4`, and every `8n+1` is
+also `4(2n)+1` — so **frames ≡ 1 (mod 8) is legal for both**. One rule, no
+per-model fork. Verified against cerberus `/object_info`; both accept
+`max: 16384`. This is what `T2-12a` rounds to.
+
+**F-3 `refs` keying does not move.** `UNIQUE(song_id, tier, clip_idx, seed)`
+stays and `clip_idx` stays an ordinal. What changes is the *length* of clip 17,
+never which scene it belongs to.
+
+- `T2-13b` **Every approved reference frame survives a re-plan.** Read `refs`
+  before and after re-planning the same storyboard and assert the set of
+  approved `(clip_idx, seed)` is identical. This is the criterion that stops the
+  work quietly invalidating a human's approvals.
+
+**W1-1 Per-model ceilings, each a named constant with its measurement beside
+it.** `T2-12` owns the criterion; these are the values.
+- **LTX: 15 s**, and it is a **cost** ceiling, not a capability one. 505 frames
+  / 30.004 s and 1009 / 59.949 s both render on a 24 GB card. Cost is
+  superlinear: 3.0 s of compute per finished second at 15 s against 12.4 s at
+  30 s.
+- **s2v: 4.8125 s, provisionally and labelled so.** The `LEN = 77` at
+  `build_song.py:23` is a **choice**, not a node limit — the node accepts
+  `min: 1` and the comment claims only a floor. Whether WAN S2V stays coherent
+  past its ~5 s training segment is **unmeasured**. Either measure it on the
+  8n+1 ladder (77, 153, 257) and record the result, or leave the constant and
+  say in the comment that it is unmeasured rather than proven. **A ceiling
+  presented as measured when it was chosen fails `T2-12`.**
+
+**W1-2 The audio trim window follows the clip.** `TrimAudioDuration` at
+`build_song.py:364` takes `start_index = i * CHUNK, duration = CHUNK`; both
+become the clip record's own `start_s` and `duration_s`. This is what makes a
+48-second scene condition on its own 48 seconds of music.
+
+**W1-3 The approve grid must not regress**, and this change walks straight back
+through the ground that bug was found on. Under W1 the count comes from
+enumerating clip records — neither audio length nor scene count.
+
+- `T2-13c` **A song whose storyboard has fewer scenes than clips still shows
+  every clip in the approve grid.** The explicit regression test for
+  *"using scene_count hid clips 20..40 and let clip generation start with two
+  thirds of its references missing"*.
+
+**W1-4 grok's prompt states the quantum and must stop.** `grok._user_prompt()`
+(`grok.py:401-431`) tells the model the renderer *"emits fixed clips of exactly
+4.8125 s… Nothing shorter or longer can be produced"* and to round every
+`duration_guidance` to multiples of it. **This is a prompt, not code**: leaving
+it changes nothing that runs and everything that comes back — the same shape as
+the section floor, where the formula was fixed and `validate()` quietly
+regenerated the old answer. The function is pure; call it directly.
+
+- `T2-14a` For a song planned with variable clip lengths the composed prompt
+  contains **no fixed clip quantum**: not the `CHUNK` value in any formatting,
+  not *"Nothing shorter or longer can be produced"*, and no instruction to round
+  `duration_guidance` to multiples of a constant.
+  *Mutation: restore any one of the three sentences → red.*
+- `T2-14b` The clip-length text is **derived, not replaced by a new constant**.
+  Compose for two songs whose planning differs — different per-model ceilings, or
+  one song at two `scene_seconds` — and assert the TIMING blocks differ in their
+  clip-length statement. *Mutation: swap 4.8125 for 15.0 and keep the sentence
+  shape → `T2-14a` passes and this fails, which is why it is separate.*
+- `T2-14c` **What the block is FOR survives.** The prompt still states the track
+  length and still requires the scene durations to sum to approximately it —
+  `_user_prompt`'s own docstring records why: *"without the duration it invents
+  scene times that do not add up to the track"*. *Mutation: delete the TIMING
+  block wholesale → `T2-14a` passes and this fails.*
+
+All three assert on the **return value** of `_user_prompt`, which is the string
+actually sent. Grepping the source proves the text exists, not that anything
+composes it.
+
+**W1-5 One output fps per song.** s2v renders at 16.0 and LTX at 16.8312; today
+they are made to agree deliberately (`LTX_FPS = LTX_LEN / CHUNK`), and under W1
+and W2 they need not. `mixer.assemble_song`'s fast path is a concat demuxer
+whose comment already names *"encoder-parameter drift between clips"* as a
+hazard, and mixed fps is a new instance of it.
+
+- `T2-13d` Every clip of one song is normalised to one output fps, asserted on
+  the **fps of the assembled file**, not of the plan.
+
+**W1-6 Assembly's stated assumption stops being true.** `mixer.assemble_song`
+says *"clips are quantised to 4.8125s so the video always overruns"*. The
+function is already length-agnostic and clamps with `-t audio_dur`: **keep the
+clamp, correct the comment.** Under variable lengths the clips should sum to
+approximately the song, so an overrun becomes a signal rather than the norm.
+
+- `T2-13e` A plan whose clip durations miss the track length by more than one
+  clip is refused **before render**, not absorbed by the clamp.
+
+**W1-7 Chained clips have a node already.** `LTXVAddGuide`, `LTXVAddGuideMulti`
+and `LTXVAddGuidesFromBatch` are installed on cerberus and inject a guide frame
+at a given index. `T2-10` requires clip N+1's first frame to be clip N's last —
+**do not build frame handoff from scratch.**
+
+## 6a. Per-scene model choice (W2)
+
+**Owned by no document until now.** `build_song.workflow()` already branches on
+`video_model` per call; it receives one value for the whole song, and that is
+the whole limitation.
+
+- `T2-42` A scene may carry a `video_model`; absent, the render's
+  `--video-model` applies.
+- `T2-43` It lives in the **storyboard, beside `camera`**. "This shot needs lip
+  sync" is a directorial fact about the scene, not a render setting. Editable
+  through `EDITABLE_SCENE_FIELDS` and readable over JSON like every other scene
+  field.
+- `T2-44` A scene naming a model absent from `models.renderable("video")` is
+  **refused at save**, naming the scene number and the bad value — not at render
+  time and not silently defaulted.
+- `T2-45` A mixed-model song is refused **before enqueue** if any named model is
+  unavailable on every reachable backend per `models.where()`, respecting its
+  three-valued answer: `False` is a refusal, `None` is a candidate. Failing at
+  clip 31 of 42 is the outcome this exists to prevent.
+- `T2-46` A scene requesting `ref_motion` or `control_video` **pins to
+  cerberus**: both load through `LoadVideosFromFolder`, a kjnodes node present on
+  cerberus and **absent on gamingpc** (verified against both `/object_info`). The
+  rest of the song must still route freely.
+- `T2-47` **The differential that proves two renderers ran**: one storyboard,
+  two scenes, one marked `s2v` and one left `ltx25`, rendered in a single job —
+  and the two output clips carry the models' own frame counts and fps. Asserting
+  the plan holds two model names proves the field posts, not that two renderers
+  ran.
+- `T2-48` Per-scene model and per-model ceilings compose: a 30 s scene marked
+  `s2v` splits into s2v-sized clips, a 30 s scene on `ltx25` into 15 s ones, and
+  each tiles its own scene exactly (`T2-8b`).
+
 ## 4. Generation flows
 
 ### 4.1 The arc wand
@@ -515,3 +656,16 @@ timing — `clip_plan` is the one, and every client calls it.
 
    One-sided in this document today, listed so nobody has to re-derive it:
    `T2-5` (restore is named but never exercised), `T2-6` (a no-op delete renumbers nothing), `T2-7` (provenance fields can hold anything), `T2-18` and `T2-33`/`T2-34` (a picker that marks EVERYTHING unavailable passes; it needs the paired positive), `T2-36`/`T2-37` (payload presence with no consumer). `T2-12a`'s stored measurement must also be asserted to MATCH the ceiling the code uses, or the record and the constant drift apart.
+
+### The positive half of each one-sided criterion
+
+| criterion | its positive half |
+|---|---|
+| `T2-5` restore | actually RESTORE a version and assert the arc text returns to it. "Retrievable and restorable" was never exercised |
+| `T2-6` delete does not renumber | assert a delete HAPPENED first (row count drops by one), or a no-op delete renumbers nothing and passes |
+| `T2-7` provenance recorded | assert the recorded model equals the model that was ASKED for, and the timestamp lies between the call's start and end. Fields that merely exist can hold anything |
+| `T2-18` limits in the response | assert the returned limit is the one ENFORCED: submit text one character over it and confirm the refusal quotes the same number |
+| `T2-33` picker reads `renderable()` | add a model to the catalogue and assert it APPEARS without a UI change; a picker that calls the function and discards it passes otherwise |
+| `T2-34` unavailable shown as unavailable | paired positive: an AVAILABLE model is offered. Marking everything unavailable satisfies the negative half alone |
+| `T2-36` help text carried | assert a control with no help text is absent from the payload rather than present-and-empty, and that warnings are marked distinctly from notes |
+| `T2-37` arc in the playlist payload | assert a playlist WITHOUT an arc omits the field, so "always present" cannot pass for it |

@@ -391,8 +391,11 @@ tier 1.
 
 ## 9. What TRD-3 does not own
 
-- **The queue and scheduler.** TRD-3 enqueues repair jobs and depends on the
-  wait-state model decided 2026-08-12; it does not specify it.
+- **The queue and scheduler — `docs/TRD-6`**, which exists because this section
+  and TRD-1 §11 both disowned it. TRD-3 enqueues repair jobs and depends on the
+  wait-state model decided 2026-08-12; TRD-6 specifies it, along with the
+  artefact lifecycle, path identity and the persisted workflow request that
+  `T3-2` compares against.
 - **Garbage collection.** Deferred by name in the reconciliation because it needs
   the manifest schema that this document's artefact model largely defines. TRD-3
   must therefore not make the `findings`/`artefacts` shape harder to extend into
@@ -445,3 +448,20 @@ tier 1.
 
    One-sided in this document today, listed so nobody has to re-derive it:
    `T3-1`, `T3-4` (fields present but never checked for sense), `T3-6`, `T3-14`, `T3-20`, `T3-22`, `T3-23`, `T3-24` and `T3-27`. `T3-18` is already marked provisional for exactly this reason and the same treatment applies to the rest of the repair criteria: while `approve()` raises, every one of them is satisfied by the absence of the feature they describe.
+
+### The positive half of each one-sided criterion
+
+`T3-6` and `T3-18` stay **provisional** and are not in this table: both are
+satisfied today by the absence of the repair subsystem, and no wording fixes
+that — only `approve()` doing something does.
+
+| criterion | its positive half |
+|---|---|
+| `T3-1` group by host, NULL bucketed | assert a report over artefacts from TWO hosts shows two groups with the right counts. A crippled report that only ever emits "unattributed" passes otherwise |
+| `T3-4` measured/expected/unit recorded | the named checks must carry all three AND the values must be the ones measured — assert `measured` equals an independently computed reading, not merely that it is non-null |
+| `T3-14` no threshold without calibration | paired positive: WITH a calibration row a threshold CAN be set. Deleting threshold configuration entirely satisfies the refusal |
+| `T3-20` remedy versioned in `prompts` | assert the version that RUNS is the one stored — the same id, read back after approval. Storage rules alone do not prove use |
+| `T3-22` dismissed stays dismissed | paired positive: a dismissed finding REAPPEARS when the artefact changes. Deleting change detection satisfies the first half forever |
+| `T3-23` repair routing asks `where()`/`fits()` | paired positive: a correctly-named model on a box that holds it is SUBMITTED. Refusal-only passes with repair deleted |
+| `T3-24` the 20.5 GB arithmetic | assert it decides a real box selection: the refiner must be routed away from a 15.92 GiB card and to a 24 GiB one |
+| `T3-27` every check names a remedy class | assert the class is ACTIONABLE where one exists — the approve path uses it — and that a check with no remedy says so rather than offering a button |
