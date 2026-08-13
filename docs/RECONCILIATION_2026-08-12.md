@@ -297,6 +297,54 @@ desktop. It contributes at 2.59x the cost of cerberus and that is worth having.
 Recorded so nobody re-derives the 2.59x as a bug and goes looking for a fix that
 does not exist.
 
+## The decision needs one more turn of the screw — `scene_seconds` cannot lengthen a scene
+
+Found 2026-08-12 while generating the xxx storyboard for Rear Entrance at 15s and
+30s scenes. `grok.generate_storyboard`:
+
+    n_scenes = max(len(sections), math.ceil(song["duration"] / scene_seconds))
+
+Rear Entrance has **25 lyric sections**, so:
+
+| requested | ceil(195.792 / s) | sections | actual scenes | avg scene |
+|---|---|---|---|---|
+| 15s | 14 | 25 | **25** | 7.83s |
+| 30s | 7 | 25 | **25** | 7.83s |
+
+The `max()` floors it: once the lyric sections outnumber the requested count,
+asking for longer scenes has no effect at all. Both runs produce the same 25
+scenes, and grok's own `duration_guidance` came back "4-6 sec" / "7-10 sec" /
+"9-11 sec" -- it wrote to the song's natural pacing.
+
+**So "clip length is defined by the storyboard" resolves to 7.83s, not 30s.**
+
+The storyboard's own strategy block explains why, and it is a deliberate design
+rather than an accident:
+
+    "coverage_model": "coverage-based; scenes are shot opportunities, not final clips"
+
+Scenes and clips are already decoupled. `build_storyboard.py:213` computes
+`nclips = ceil(dur / CHUNK)` and `allocate()` maps scenes onto clips. At
+CHUNK=4.8125 that is 41 clips for 25 scenes -- a clip is a slice of a scene,
+which is what "shot opportunity" means. At CHUNK=30 it inverts: **7 clips for 25
+scenes, so each clip must swallow ~3.6 scenes**, and a clip sends exactly one
+`video_motion_prompt`.
+
+Two coherent answers, and this is a decision, not a bug:
+
+1. **Scenes drive clips.** Change the formula so `scene_seconds` wins and grok is
+   asked for 7 long scenes. The storyboard becomes the timeline. Cost: coarser
+   shot description, and grok is writing against the lyrics' section structure
+   rather than with it.
+2. **Clips span scenes.** Keep 25 coverage scenes and merge each clip's scenes
+   into one motion prompt. Keeps grok reading the song naturally; needs a merge
+   step that does not exist, and a merged prompt is a new failure surface.
+
+**Recommended: (1).** A 30s clip is one continuous camera move, and describing it
+with four stitched shot descriptions is how a prompt comes to fight itself --
+the same class of defect as the contradictory nude clause, arriving through
+composition rather than through wording.
+
 ## Still open
 
 The **render ceiling above 30s has not been found.** The ladder that produced the
