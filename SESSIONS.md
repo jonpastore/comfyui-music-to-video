@@ -1933,3 +1933,29 @@ Append dated one-liners. Newest at the bottom.
      to CONNECT. **`T9-13c` corrected: the safety rests on the idle queue, not
      on the cache.** Counting on an unverified mechanism is the same error as
      trusting a check nobody has watched go red.
+- 2026-08-13 (A) ✅ **Qwen staging DONE and VERIFIED — all six files sha256 OK
+  both ends, zero MISMATCH**, and `grep -cE "MISMATCH|FAILED|SOURCE MISSING"`
+  over the whole run is **0**. Read from `~/stage_gamingpc.log` myself rather
+  than taken on B's word. The UNET that had two concurrent writers was deleted
+  and re-copied from scratch, not resumed — which is why it can be trusted
+  rather than merely being the right length. **`T9-13a` is cleared: the enum is
+  no longer advertising anything truncated.**
+- 2026-08-13 (A) **AND THE SWARMUI RESTART IS NOT NEEDED — B's open question,
+  answered from the code rather than from Swarm.** The studio submits
+  `comfyworkflowraw` with `exactbackendid` (`pipeline.py:487-489`), so
+  **ComfyUI on the target box validates the filenames itself** and Swarm's
+  cached per-backend model list is never consulted on our path. This file
+  already recorded it on 2026-08-12: the stale list is *"harmless for our
+  raw+pinned path, since ComfyUI validates filenames itself, but Swarm's own
+  model-based routing would be stale until a re-init"* — **and we do not use
+  that routing.** gamingpc's `/object_info` enumerates all six files.
+  **No production service restart was performed and none is warranted**, which
+  is also the right answer with Jon away. If Swarm's OWN routing is ever wanted,
+  that is when a restart earns itself, queues idle first.
+- 2026-08-13 (A) **What is still unproven, and it is the only thing left: it has
+  never been RUN.** Files plus checksums plus an enum is not a render. 30.01 GiB
+  free against a 19.12 GiB UNET plus an 8.7 GiB text encoder fits on paper and
+  has never been executed. **The first anchor render pinned to backend 1 settles
+  two open things at once** — whether gamingpc can serve anchors, and what the
+  new prompt actually produces. `prompt.txt` updated; its most prominent item
+  had gone stale.
