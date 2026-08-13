@@ -425,6 +425,37 @@ per-item levelling can be switched off without the set losing its level.
   against the first. Engaging the master strips per-item `loudnorm` from every
   item, not only curved ones. *Found by review; the text permitted the double.*
 
+## 8b. The interstitial card
+
+**Folded in 2026-08-13 from `docs/ALBUM_ARC_AND_STAGING_PLAN.md` §3, which no
+TRD owned.** Its two siblings in that plan are already built — fade-to-black is
+a transition kind in `mixer.py`, and the branding overlay has its `brand_path`
+columns and its renderer — and only this one is unbuilt and unclaimed. It is a
+timeline feature, so it is TRD-1's.
+
+A title or branding card as **its own timeline item, with its own duration**:
+
+    [song A][ MEOW P — 3s ][song B]
+
+The plan's reasoning is right and is kept: this is *"a beat in the running
+order, not a decoration on one"*, and **it changes set length**, so it goes
+through `set_duration()` and both render paths as a first-class item — a
+`set_items` row whose `song_id` is NULL, carrying an image path and a duration.
+
+That nullable `song_id` is the only schema wrinkle, and the plan argues for it
+correctly: **the alternative is a parallel list of "things between songs" that
+every length calculation has to learn about separately** — which is a second
+place that computes set length, forbidden by §12.
+
+- `T1-27` A set containing a card renders it, and **`mixer.set_duration()`
+  prices it**: the predicted length includes the card's duration and matches the
+  rendered file within `SET_DURATION_TOLERANCE`. A card that renders but is not
+  priced is the oldest defect in this document arriving through a new item type.
+- `T1-28` A card is a `set_items` row with `song_id` NULL, and **every path that
+  walks items tolerates it** — reorder, trim, transition, automation lanes, and
+  the export. Asserted by putting a card first, last, and between two beatmatched
+  songs; the join arithmetic must not assume a neighbouring song exists.
+
 ## 9. Export
 
 - `T1-24` **Adding an export format is a row, not a code change.** The format

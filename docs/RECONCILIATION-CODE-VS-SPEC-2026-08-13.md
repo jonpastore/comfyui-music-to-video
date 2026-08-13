@@ -144,6 +144,43 @@ the submitted request is kept · 5 SQLite concurrency · 6 migration and retenti
 continuation and elsewhere is wrong for five of the seven — see
 `docs/reviews/PLAN-TRD-4-7-RECOMMENDATIONS-2026-08-13.md`.
 
+## 4a. What was actually folded, 2026-08-13
+
+Cataloguing is not folding, and the first version of this document only
+catalogued. Every orphan now has an owner or an explicit destination.
+
+| orphan | lines | folded into |
+|---|---|---|
+| `AUDIO_BUILDOUT_PLAN.md` | 785 | **`docs/TRD-8-AUDIO-GENERATION-AND-THE-SONG-EDITOR.md`**, new. Its `takes`/`voices` model, the splice repair path, the deliberate absence of the image guardrail, and TRD-1 §11's deferred song-level audio editor |
+| `SWARM_PIPELINE_PLAN.md` | 382 | **`docs/TRD-9-THE-FLEET-AND-ITS-OPERATIONAL-LAYER.md`**, new. Routing, retargeting, the retry walk, and §5's four measurement traps as criteria |
+| `UNRAID_BACKEND_PLAN.md` | 387 | **TRD-9.** Backend registration, the empty-backend hazard, "no SwarmUI here" |
+| `ALBUM_ARC_AND_STAGING_PLAN.md` §3 | — | **TRD-1 §8b**, `T1-27`/`T1-28`. The full-screen interstitial card: a `set_items` row with `song_id` NULL that `set_duration()` must price |
+| `ALBUM_ARC_AND_STAGING_PLAN.md` §5 | — | **TRD-9 §7**, credentials and alerting |
+| `ALBUM_ARC_AND_STAGING_PLAN.md` §1, §2 | — | **already built** — fade-to-black is a transition kind in `mixer.py`, the branding overlay has its `brand_path` columns. Belongs to TRD-1 §2's do-not-rebuild list |
+| `ALBUM_ARC_AND_STAGING_PLAN.md` §4 | — | **already TRD-2** and built as `arc.py` |
+| `LIBRARY_BULK_EDIT_PLAN.md` | 229 | **not folded — the one remaining orphan.** §5 row 4 |
+
+**New criteria added by the fold: 2 in TRD-1 (`T1-27`, `T1-28`), 15 in TRD-8,
+17 in TRD-9.** The count moves from 192 to **226**, and every added criterion
+describes behaviour that already existed unspecified, or was written down in a
+plan nobody owned.
+
+*A note on that number, since this document exists because counts were carried
+instead of counted.* `grep -cE "^- .T<n>-"` across all nine now returns **229**,
+not 226. The difference is TRD-4, which greps as 21 and has **18** criteria: its
+§1a boundary section opens three bullets with `T4-12`, `T4-6` and `T4-13` as
+**cross-references to TRD-7**, not as declarations. 226 is the honest figure and
+229 is what the grep says; whoever re-runs it should get 229 and know why.
+
+**`LIBRARY_BULK_EDIT_PLAN.md` is deliberately left out.** It is unbuilt, it is
+not identity, rendering, audio or fleet, and folding 229 lines of catalogue
+management into a document about something else is the duplication this whole
+pass exists to remove. It wants **TRD-10**, with `lyrics.py`, `chat.py` and
+`mixadvice.py` — the library and the AI advice surfaces — and its own sharpest
+requirement is already written: *"blank means leave alone, not clear"*, and
+*toggle-all applies to the rows currently shown, not to every song in the
+database, or a filtered view silently edits things off-screen.*
+
 ## 5. So what is missing, in one list
 
 Ordered by how much shipped code sits behind it with nothing describing it.

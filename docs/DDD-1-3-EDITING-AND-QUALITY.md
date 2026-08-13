@@ -162,26 +162,53 @@ drops to 1 and the other two rows do not move — so the measurement responds to
 that rule and to nothing else. **Reproduced independently by session B at HEAD,
 same three rows.**
 
-**The fix is NOT one line at 664, and this document said it was.** Corrected
-after session B read the estimate and checked it: `_audio_chain(gain_db,
+**FIXED 2026-08-13 by session B, on Jon's decision, and the estimate this
+document gave was wrong twice on the way — which is the part worth keeping.**
+
+*First estimate: "one line at `mixer.py:664`."* Wrong. `_audio_chain(gain_db,
 effects_json, auto=None)` receives **one item's** automation and cannot see the
-others, so it has no way to know the master will engage. Both production call
-sites — `mixer.py:875` on the video path and `mixer.py:1034` on the audio path —
-pass one item at a time.
+others, so it cannot know the master will engage. Widening the `any(...)` at 664
+would have added a master `loudnorm` on top of the per-item ones still there,
+taking `neither curved` from 1 in series to **2** — worse than the bug, on the
+path that was correct.
 
-So the shape is: **compute the set-level decision once, pass it to both sides.**
-Three points, not one: the engagement test, the two call sites, and
-`_audio_chain`'s signature. Small, but the difference matters — *"change line
-664"* taken literally means widening the `any(...)` condition, which puts a
-master `loudnorm` on top of the per-item ones that are still there, giving
-`neither curved → 2 in series` where today it is 1. **That is worse than the
-bug**, and it is the change an implementer told "one line at 664" would make.
+*Second estimate: "three points — the engagement test, the two call sites, and
+the signature."* Right about the count, **wrong about the shape**, and a mutation
+is what proved it. B wired the flag through both call sites as agreed, then
+mutated the **video** call site to `master=False`: **every assertion stayed
+green.** The checks exercised `_audio_chain` directly, so they never touched the
+wiring. **Two correct call sites is not a property a per-function check can
+see.**
 
-Not fixed here. `mixer.py` is source, this document's session holds `docs/**`
-only, and session B declined it for the symmetric reason — it is outside the
-anchor brief, and an unowned fix landing in a 20-commit deploy nobody has
-reviewed is how this goes wrong. **The deploy decision is Jon's and this rides
-with it.**
+*What actually shipped: one point.* `master_engaged(items)` is the single
+set-level reading, and `item_chains(items)` builds every item's chain with that
+decision applied. Both render paths call `item_chains`, and `grep` shows
+**exactly one production `_audio_chain` call**, inside it. The criterion asserts
+through `item_chains`, so the wiring is on the measured path — re-running the
+same mutation now fails, naming the defect: *"one curved, one not: 2 loudnorms
+in series on one signal path. A set is levelled ONCE."*
+
+Measured independently through the real functions after the change:
+
+    both curved          per-item=[0, 0]  master=1   worst signal path = 1
+    neither curved       per-item=[1, 1]  master=0   worst signal path = 1
+    one curved, one not  per-item=[0, 0]  master=1   worst signal path = 1   <-- was 2
+
+**The generalisation, which outlives this bug.** The defect lived in the
+*disagreement between two functions that each looked correct alone* — and the
+first fix reproduced that exact shape, one decision with two places to apply it.
+**Collapsing to a single application point is what made it checkable**; a
+per-function assertion is what missed it for as long as it existed. Any design
+in this document that computes a decision in one place and applies it in two
+should be read against that.
+
+**Two honest limits, recorded rather than implied away.** A caller
+re-introducing a direct `_audio_chain` call and bypassing `item_chains` is
+prevented **structurally, not by a test** — it is a visible code change rather
+than a silent flag flip, but it is not guarded. And the selfcheck comment
+claiming *"exactly ONE loudnorm in the graph"* **was already false when it was
+written**: it counted the master line only, while a plain item still carried its
+own. A true measurement of the wrong thing, sitting in the file the whole time.
 
 ### 5.3 Automation — built; what remains is reach
 

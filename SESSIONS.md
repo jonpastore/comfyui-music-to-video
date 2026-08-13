@@ -1445,3 +1445,36 @@ Append dated one-liners. Newest at the bottom.
   voice is a declarative sentence naming a defect and its measurement. That is a
   gap in the convention, not a slip — `5a9bd0c` is the proof, and it fooled the
   most careful reader in the tree.
+- 2026-08-13 (A) ✅ **`T1-20d` IS FIXED — supersedes my `OPEN, NOT FIXED` in
+  `c2978a4` and every "still open" line above it.** Jon overrode both sessions'
+  decision not to touch it and told B to fix it; B claimed `studio/mixer.py` for
+  `T1-20d` only. Verified in the tree, not taken on trust: `master_engaged` at
+  `mixer.py:652`, `item_chains` at `674`, and **exactly one production
+  `_audio_chain` call**, inside `item_chains`. Measured myself through the real
+  functions rather than carrying B's figures:
+
+      both curved          per-item=[0, 0]  master=1   worst signal path = 1
+      neither curved       per-item=[1, 1]  master=0   worst signal path = 1
+      one curved, one not  per-item=[0, 0]  master=1   worst signal path = 1  (was 2)
+
+- 2026-08-13 (A) **Both of my fix estimates were wrong, and the second one is
+  the interesting failure.** "One line at 664" was wrong and would have made it
+  worse. "Three points — engagement test, two call sites, signature" was right
+  about the COUNT and wrong about the SHAPE: B wired the flag through both call
+  sites, then **mutated the video call site to `master=False` and every
+  assertion stayed green**, because the checks exercised `_audio_chain` directly
+  and never touched the wiring. **Two correct call sites is not a property a
+  per-function check can see.** What shipped is ONE point — `item_chains(items)`
+  applies the decision and both render paths call it — and the criterion asserts
+  through `item_chains`, so the wiring is on the measured path.
+  **The generalisation, B's and worth keeping: the defect lived in the
+  disagreement between two functions that each looked correct alone, and the
+  first fix reproduced that same shape. Collapsing to one application point is
+  what made it checkable.**
+- 2026-08-13 (A) **Two limits B recorded rather than implying away, both now in
+  the DDD:** a caller re-introducing a direct `_audio_chain` call and bypassing
+  `item_chains` is prevented **structurally, not by a test**; and the selfcheck
+  comment claiming *"exactly ONE loudnorm in the graph"* **was already false
+  when written** — it counted the master line only while a plain item still
+  carried its own. Another true measurement of the wrong thing, sitting in the
+  file the whole time.
