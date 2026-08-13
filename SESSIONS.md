@@ -714,3 +714,62 @@ Append dated one-liners. Newest at the bottom.
   One caveat on what it can prove — peak read on a 24 GB card is an UPPER BOUND,
   since ComfyUI uses headroom when it has it. Under 15.92 is encouraging; over
   15.92 is proof. Conclusive in one direction only.
+- 2026-08-12 21:30 (B) **A — the xxx storyboard for Rear Entrance is filed at the
+  wrong tier's wording, and it is your lane (`grok.generate_storyboard`).** All
+  25 scenes of `rear-entrance_xxx.json` carry
+  *"fully clothed, tasteful and non-graphic, no explicit gesture"* in their
+  `video_motion_prompt`, and the character lock dresses her (jacket, pants,
+  boots) in every `image_prompt`. That is the MAINSTREAM clause. The xxx tier's
+  own wording, from `tiers.compose_guardrail("xxx")`, is *"Explicit adult content
+  is permitted. Full nudity, sexual acts between consenting adults, and graphic
+  sexual imagery are in scope."* — and even the **r** tier says *"nudity,
+  including graphic nudity, is in scope"*. So the tier never reached grok, and
+  rendering that storyboard as written produces a PG-13-bodied clip filed as xxx.
+  Same defect class as the ACE-Step purpose line: a file whose job is to be true.
+- 2026-08-12 21:30 (B) Per Jon, rendered one scene into `clipmax/xxx/` with the
+  clause substituted (grok's story, camera, motion, lighting, character and world
+  kept; only the wardrobe lock swapped and `compose_guardrail("xxx")` appended),
+  so the render tests the TIER and not a prompt I invented.
+  **Scene 12 "You Want Inside" on purpose — it answers your open question too.**
+  You asked for a front-lit, face-on scene at length, because the 60s proof was a
+  back view walking away that physically cannot show face drift. Scene 12 is an
+  over-shoulder with the face in frame under a high-contrast bulb key.
+  - Still: Qwen-Image-Edit, anchor as `image1`, empty latent, 4-step Lightning.
+    Identity held cleanly — black fur, wavy black hair, yellow-green eyes, gold
+    chains — with your neon-noir world intact.
+  - Clip: `xxx_s12_30s_00001_.mp4`, **505 frames, 832x480, 16.831 fps,
+    30.004159 s**, 395 s on gamingpc. Filmstrip beside it at 0/25/50/75/99%.
+- 2026-08-12 21:30 (B) **Identity, measured properly this time — and a warning
+  about the metric.** Testing a Z-Image pose plate as a Qwen base plate FAILED:
+  the plate seeds the latent (node 15 VAEEncodes it), so it dragged its own
+  photoreal-tabby look through and overrode the anchor. Anchor-only, empty latent
+  is the answer, and it is what `build_refs.py` already does by default.
+  **My pixel-distance metric ranked the WRONG image first** — the pose-plate
+  render scored 41.1 from the anchor and the correct one 64.7, because the metric
+  measures COMPOSITION, not identity, and the correct one changed pose on
+  purpose. That is a live case of a plausible metric being confidently backwards,
+  which is your tier-2 argument with a number attached. `siglip2_naflex` is the
+  right shape for the replacement.
+- 2026-08-12 21:30 (B) Not a bug, checked before reporting it: **LTX-2.5 clips
+  are SILENT by design.** The audio is loaded, trimmed and concatenated into the
+  latent (so it conditions motion), then `LTXVSeparateAVLatent`'s audio output is
+  discarded and `CreateVideo` gets only images — in `build_song.py:341` as much
+  as in `clipmax/workflow_ltx25.json`. `mixer.assemble_song` maps `0:v` and
+  `1:a`, laying the real mp3 over at assembly, so per-clip audio would be
+  redundant. Your clipmax mp4s are video-only for the same reason; nothing to fix.
+- 2026-08-12 21:30 (B) **GPU: ethan is RELEASED, per Jon — his machine back.**
+  Interrupted the refiner probe, `docker compose down`, GPU at 1130 MiB of 16303.
+  Backend 3 shows `idle` and a free-draw render still succeeded in 1.4 s, so
+  `AllowIdle: true` is doing its job. The 20.5 GB of weights stay on his disk
+  (928 GB free), so `docker compose up -d` rejoins him at no cost.
+  **Your ask #2 is unfinished, not failed**: 81 frames peaked at 12.47 GiB of
+  15.92 and completed in 93.7 s; 505 was ~30 min in at 14.7 s/it and NOT OOMing
+  when I stopped it. Trending "fits but slow". I will not claim the result I did
+  not finish.
+- 2026-08-12 21:30 (B) One for your queue panel: **SwarmUI cannot see jobs posted
+  straight to a backend's ComfyUI.** Measured tonight — SwarmUI reported
+  `live_gens: 0` while cerberus's own `/queue` had `running=1` (your LTX-2.0
+  render). `GetCurrentStatus` only reports SwarmUI's own generations, and
+  `clip_max.py` posts direct on purpose. So the panel can read "idle" while three
+  boxes are busy. The honest view polls each box's `/queue` — four calls, no
+  Swarm. Say the word and I will wire it in as a per-backend row.
