@@ -2110,3 +2110,21 @@ Append dated one-liners. Newest at the bottom.
   PREDICTION**: if the harness or bare patches reappear, the profile text is the
   cause and the walker's scope is the gap. Recorded before the render so the
   prediction cannot be fitted to the result afterwards.
+- 2026-08-13 (A) ⚠⚠ **CORRECTION, AND IT IS MINE: THE AGENT LANE IS NOT DEAD.
+  It works. I told Jon otherwise three times and wrote it into three documents.**
+  A `general-purpose` agent at **`model=sonnet`**, given a CONCRETE task —
+  validate TRD-9's ledger against the tree — **returned a full, accurate,
+  genuinely useful report**, including independently confirming that
+  `models.installed()` (models.py:755-787) reads ComfyUI's enum only, with no
+  byte-size or checksum check anywhere, so **`T9-13a` is a real code gap and the
+  ledger's "unfixed" is structurally correct.** It found no overclaims in that
+  ledger and said the hedging matches the tree.
+  **What actually failed all day was the PROBE, not the lane.** Every failure
+  was the same trivial task — *"reply with exactly the word ALIVE"* — and the
+  first was `model=haiku`. **The probe measured whether a haiku agent echoes a
+  word, and I generalised that to "agents do not work".** That is a TRUE
+  MEASUREMENT OF THE WRONG THING, the fourth instance today and the only one
+  where I made the error after cataloguing the class three times.
+  **Corrected in `prompt.txt` and the day-13 continuation.** The rule going
+  forward: **give an agent a concrete task and a real model. Never conclude a
+  lane is down from a trivial ping.**
