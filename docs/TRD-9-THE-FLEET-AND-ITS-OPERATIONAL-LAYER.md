@@ -137,6 +137,24 @@ does not pay again.
   This is the `wan22_i2v_low` defect in a new place: a box reporting a capability
   it does not have. Staging is not complete when the file exists; it is complete
   when the bytes match.
+- `T9-13c` **A model is not staged until its checksum passes, and SwarmUI must
+  not be restarted before that.** Observed live 2026-08-13, mid-transfer:
+  gamingpc's `UNETLoader` enum **already listed
+  `qwen_image_edit_2511_fp8mixed.safetensors` at 26% of its bytes**, because
+  rsync writes to the real filename. Anything reading `/object_info` in that
+  window sees a model that exists and cannot load.
+
+  **The thing that prevented a job reaching it is the cache `T9-11` calls a
+  trap.** SwarmUI reads each backend's model and node list **at connect time**,
+  so it did not yet know gamingpc held the file — and a restart is exactly what
+  would have told it. So the ordering is not a preference:
+
+      transfer completes -> checksums pass -> BOTH queues idle -> restart SwarmUI -> render
+
+  **Restarting mid-transfer publishes a truncated model to the router.** The same
+  cache that refused a node a box plainly had is, in this window, the only thing
+  standing between a partial file and a pinned render. Neither behaviour is
+  designed; the sequence is what makes them safe.
 - `T9-13b` **Staging a model stages its companions in the same act.** A box
   holding the UNET and VAE but not the text encoder reports the model available
   and fails at load — the same failure as `T9-13a` by a different route.
