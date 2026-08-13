@@ -530,6 +530,25 @@ if effects:
     check("a clip's QC expectation is read per family, not from a constant",
           _expectation_is_per_family)
 
+    def _nudity_is_derived_not_listed():
+        """A view is nude because of what it IS, not because two literal sets
+        both remembered it. They were hand-kept copies -- app.py and
+        make_anchor.py -- so a nude view added to one rendered at `g` WITH the
+        album's wardrobe wording and was never skipped by anchor_plan. A tier
+        violation produced by an omission. docs/TRD-7 T7-1, T7-2."""
+        import make_anchor
+        app_src = open(os.path.join(HERE, "app.py")).read()
+        assert "NUDE_VIEWS = frozenset(" in app_src, \
+            "app.py is listing nude views again instead of deriving them"
+        assert make_anchor.is_nude_view("three_quarter_nude"), \
+            "a nude view nobody enumerated is not recognised as nude"
+        assert not make_anchor.is_nude_view("three_quarter")
+        assert set(make_anchor.NUDE_VIEWS) <= set(make_anchor.DEFAULT_VIEWS), \
+            "NUDE_VIEWS names a view the table does not have"
+
+    check("nudity is derived from the view, not listed in two places",
+          _nudity_is_derived_not_listed)
+
 video_fx = optional_import("video_fx")
 if video_fx:
     check("video_fx.parse_effects_json", lambda: sig(video_fx, "parse_effects_json", ["effects_json"]))

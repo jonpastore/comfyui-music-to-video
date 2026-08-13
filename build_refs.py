@@ -90,6 +90,19 @@ def _selfcheck():
     assert negative_applies(hot), hot
     # ...unless the caller says otherwise, which stays possible on purpose
     assert sampler_settings("fast", cfg=4.5, lora_strength=0.6)["lora_strength"] == 0.6
+
+    # A THIRD PHOTOGRAPH OF ONE CHARACTER IS NOT A SECOND CHARACTER.
+    # cast_clause names a slot so two anchors in a duet frame stay two people;
+    # pointed at one character's extra references it asserted a second one --
+    # "The character in image 3 is reference 3." went into a prompt whose
+    # COMPOSITE clause says every reference shows the SAME single character.
+    # name=None is the same-character form. docs/TRD-7 T7-10, TRD-4 T4-12.
+    same = cast_clause([(3, None, "x.png", "")])
+    assert "another photograph of the same character" in same, same
+    assert "is reference" not in same and "The character in image 3 is" not in same, same
+    # and a real cast member is still named, or telling two anchors apart breaks
+    cast = cast_clause([(3, "Nyx", "n.png", "a rival DJ")])
+    assert cast.strip() == "The character in image 3 is Nyx: a rival DJ.", cast
     assert sampler_settings("quality")["lora_strength"] == 0.0
     assert not negative_applies(sampler_settings("fast"))
     return True
@@ -203,6 +216,16 @@ def cast_clause(slots):
     """
     out = []
     for slot, name, _img, desc in slots:
+        if not name:
+            # SAME character, another photograph -- not a cast member. Naming it
+            # the way a cast member is named asserts a SECOND PERSON into a
+            # prompt whose composite clause says every reference shows the same
+            # one: make_anchor auto-named a third reference "reference 3", and
+            # this wrote "The character in image 3 is reference 3." An anchor
+            # sheet built from three photographs of one character was therefore
+            # telling the model there were two. docs/TRD-7 T7-10, TRD-4 T4-12.
+            out.append(f"Image {slot} is another photograph of the same character.")
+            continue
         who = f"The character in image {slot} is {name}"
         out.append(f"{who}: {desc}." if desc else f"{who}.")
     return (" " + " ".join(out)) if out else ""

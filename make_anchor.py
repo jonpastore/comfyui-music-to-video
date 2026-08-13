@@ -164,7 +164,21 @@ NUDE_WARDROBE = (
 # gap in the prompt, not a filter, and the gap is this field.
 DEFAULT_ANATOMY = ""
 
-NUDE_VIEWS = ("front_nude", "back_nude")
+def is_nude_view(view):
+    """Whether this view drops the wardrobe wording. DERIVED, not enumerated.
+
+    A view is nude because of what it IS. It used to be a literal tuple here
+    and a second literal set in studio/app.py -- two hand-kept copies of one
+    fact, so adding a nude view to one and not the other rendered it at `g`
+    WITH the album's wardrobe wording and never skipped it in anchor_plan: a
+    tier violation produced by an omission. docs/TRD-7 T7-1 and T7-2.
+    """
+    return str(view or "").endswith("_nude")
+
+
+# Kept as a name because callers read it, but DERIVED from the view table so it
+# cannot fall out of step with it.
+NUDE_VIEWS = tuple(v for v in DEFAULT_VIEWS if is_nude_view(v))
 
 
 # Every constant in this file that becomes part of a POSITIVE prompt. The one
@@ -336,8 +350,14 @@ def main():
         wf = workflow(scene, images[0] if images else "",
                       images[1] if len(images) > 1 else None, "empty",
                       args.width, args.height, seed, "", args.guardrail,
-                      extra_refs=[(f"reference {i + 3}", img, "")
-                                  for i, img in enumerate(images[2:])],
+                      # name=None: these are more photographs of the SAME
+                      # character, not cast members. They used to be auto-named
+                      # "reference 3", which build_refs.cast_clause turned into
+                      # "The character in image 3 is reference 3." -- a second
+                      # person asserted into a prompt whose composite clause
+                      # says all the references show one. docs/TRD-7 T7-10.
+                      extra_refs=[(None, img, "")
+                                  for img in images[2:]],
                       settings=settings, ref_method=args.ref_method)
         wf["18"] = {"class_type": "SaveImage", "inputs": {
             "images": ["17", 0],

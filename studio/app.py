@@ -17,6 +17,7 @@ from fastapi.templating import Jinja2Templates
 import db
 import tiers  # also puts the repo-root scripts on sys.path (STUDIO_SCRIPTS)
 import build_song  # clip_plan/allocate/sname -- the renderers' own definitions
+import make_anchor  # is_nude_view: nudity is DERIVED from the view, not listed twice
 # CHUNK is NOT imported here any more: clip length is per song, and a module
 # level constant in the web layer is how it would silently become global again.
 # build_song.clip_seconds() answers it, falling back to CHUNK itself for a
@@ -132,7 +133,13 @@ ANCHOR_VIEWS = {
     "front_nude": "front, nude",
     "back_nude": "back, nude",
 }
-NUDE_VIEWS = {"front_nude", "back_nude"}
+# DERIVED from make_anchor, never a second literal. This was
+# {"front_nude", "back_nude"} here and a tuple of the same two strings in
+# make_anchor.py -- two hand-kept copies of one fact, so a nude view added to
+# one and not the other rendered at `g` WITH the album's wardrobe wording and
+# was never skipped by anchor_plan. A tier violation produced by an omission.
+# docs/TRD-7 T7-1, T7-2.
+NUDE_VIEWS = frozenset(v for v in ANCHOR_VIEWS if make_anchor.is_nude_view(v))
 templates.env.filters["viewname"] = lambda v: ANCHOR_VIEWS.get(v, v or "")
 # UTC ISO-8601 with the Z. The server runs UTC and the studio is used from a
 # machine that does not, so the BROWSER converts this to local time (app.js).
