@@ -176,6 +176,12 @@ answerable for all four, which is what a one-per-section rule was approximating.
   because it needs that frame. The queue expresses "ready" separately from
   "queued"; a chain handed out in the wrong order is the race this criterion
   exists to catch.
+  **TRD-2 owns this rule, not the scheduler.** TRD-1 §11 and TRD-3 §9 both
+  disown the general wait-state queue, which would have left this criterion
+  belonging to nobody. The narrow rule — *a clip whose `depends_on` clip has no
+  landed output is not `ready`* — belongs here because TRD-2 is what creates the
+  chains. The general scheduler stays deferred, and this criterion must not wait
+  for it.
 - `T2-12` The render ceiling is a **measured constant with its measurement
   recorded**, not a guess. 505 frames / 30.004 s and 1009 frames / 59.949 s both
   rendered on a 24 GB card; the upper limit is untested above that. A ceiling
@@ -241,9 +247,14 @@ in scope"*. The tier never reached grok, so the storyboard is a PG-13 body filed
 as xxx. Same defect class as a file whose job is to be true saying something
 false.
 
-- `T2-21` A storyboard generated at two different tiers differs in its wardrobe
-  and gesture language, asserted by a differential across tiers rather than by
-  checking the tier was passed as an argument.
+- `T2-21` **At `xxx`, the mainstream clause must NOT appear in any scene.** No
+  scene's `video_motion_prompt` or `image_prompt` contains *"fully clothed,
+  tasteful and non-graphic"* or *"no explicit gesture"*, and the tier's own
+  wording does appear. This **fails today** against `rear-entrance_xxx.json`,
+  where all 25 scenes carry the mainstream clause, which is the point of writing
+  it down. *(The draft said "a storyboard generated at two tiers differs" — two
+  generations from a language model always differ, so that criterion passed with
+  the tier wired to nothing.)*
 - `T2-22` The tier's own clause appears in the generated storyboard's guardrail
   field, verbatim from `tiers.compose_guardrail(tier)`. A storyboard carrying
   another tier's wording is refused at save.
@@ -343,11 +354,13 @@ Menu order, agreed: **Library → Playlists → Anchors → Sets → Jobs → Ti
 Config.** Make-things first, then the machinery. Sets moves in from the side; it
 is the last creative step before publish and is currently orphaned.
 
-- `T2-36` Descriptive prose moves into help modals behind a `?` icon per
-  control. **The warnings that must not move stay where they are** — day 8's
-  standing rule.
-- `T2-37` Playlist rows show the album's arc when one is defined, and a trash
-  icon for delete.
+- `T2-36` Help text is **carried in the API response for each control**, so any
+  client can put it behind a `?` and none has to hardcode it. **The warnings
+  that must not move stay where they are** — day 8's standing rule — and the
+  payload marks which strings are warnings, because a client that cannot tell a
+  warning from a help note will hide the wrong one.
+- `T2-37` The playlist payload carries the album's arc when one is defined, so a
+  row can show it. Asserted on the payload, not on the rendered row.
 
 ## 8. Backend / front-end separation
 
@@ -390,10 +403,19 @@ timing — `clip_plan` is the one, and every client calls it.
    a differential or names the mutation that must break it. Two in the original
    draft were not, and are fixed above.
 2. **Then mutate the code and watch the check fail.**
-3. **When an image looks wrong, look at it.** The identity collapse, the world
+3. **A criterion that needs a language model runs against a RECORDED response.**
+   `T2-8`, `T2-19`, `T2-20`, `T2-21` and `T2-22` all involve a generation call.
+   Live calls in the default suite would make 226 tests slow, non-deterministic
+   and dependent on a paid API being reachable — and a non-deterministic test
+   gets deleted the first week it goes yellow. Fixtures are recorded from real
+   responses and checked in; **one deliberately live test exists and is kept out
+   of the default run**, because a fixture that no longer resembles what the
+   model returns is a check measuring its own history. Unspecified, whoever
+   writes the first of these picks differently from whoever writes the second.
+4. **When an image looks wrong, look at it.** The identity collapse, the world
    that never rendered and the LoRA that did nothing were all found by opening
    the pictures, and all three passed every deterministic check.
-4. Baseline before and after: `cd studio && python3 -m pytest -q .` (225 at the
+5. Baseline before and after: `cd studio && python3 -m pytest -q .` (225 at the
    time of writing), `python3 check_integration.py`, and `grep -c "^def test_"`
    — a slice-to-end-of-file replacement once deleted four tests silently, and a
    deleted test does not fail.

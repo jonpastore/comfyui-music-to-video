@@ -119,12 +119,18 @@ ways for the curve to end up describing a moment that no longer exists.
 ### 4.2 The model is the export
 
 - `T1-3` **An export produced through the JSON API alone, with no browser
-  involved, is byte-identical to one produced by pressing render in the UI for
-  the same set.** Same command, same filter graph, same file hash. This is the
-  criterion that fails if any value lives only in the DOM.
-- `T1-4` The filter graph is generated from the stored model **one way only**.
-  Nothing parses an ffmpeg string back into the model. Outside review, all four
-  models: never parse ffmpeg back into JSON.
+  involved, generates the identical ffmpeg argv to one produced by pressing
+  render in the UI for the same set**, and the two outputs agree on duration,
+  frame count and integrated loudness. This is the criterion that fails if any
+  value lives only in the DOM. *(Not byte-identity of the file: ffmpeg writes
+  container metadata such as `creation_time`, so byte-comparing would fail for a
+  reason that has nothing to do with where the model lives. Compare the command,
+  which is what the model actually determines.)*
+- `T1-4` The filter graph is **regenerated from the stored model on every
+  render** and no graph string is ever cached and reused. Asserted by mutating a
+  stored value and confirming the next render's graph changes. Nothing parses an
+  ffmpeg string back into the model — outside review, all four models — and that
+  prohibition is recorded in §12, where a rule nothing can render false belongs.
 
 ### 4.3 The clock, and what happens when audio and video disagree
 
@@ -158,8 +164,12 @@ echo tail.
 
 - `T1-7` For a set containing at least one echoing item, one `black` transition
   with a hold, one beatmatched join and one trimmed item, the value the UI shows
-  and the `ffprobe` duration of the rendered file agree to within 0.05 s. The
-  four features are named because each one has broken this prediction before.
+  and the `ffprobe` duration of the rendered file agree to within
+  **`mixer.SET_DURATION_TOLERANCE` (0.05 s)**. The four features are named
+  because each one has broken this prediction before. The tolerance is **one
+  named constant**, imported by TRD-3 `T3-11` rather than restated: the draft had
+  the literal 0.05 in two documents, and two copies of a number are free to
+  drift into a check that passes while its twin fails.
 - `T1-8` **The displayed length is the return value of `mixer.set_duration()`
   and no other arithmetic exists.** Verified by a differential rather than by
   grepping for the call: change `set_duration`'s result by a known offset in a
@@ -170,6 +180,52 @@ echo tail.
 
 Outside review, points 3 and 6: drawing at 60 Hz produces thousands of keyframes
 and a pathological filter graph, and the peaks must be decimated per zoom level.
+
+### 5.0 Three things the code already does that this section must not duplicate
+
+Found by reading `effects.py` and `mixer.py` during the consensus pass, and each
+one would have been a second implementation of something that exists.
+
+**(a) `effects.filter_sweep` IS automation, and it is already built.**
+`effects.py:77` emits a time-varying highpass/lowpass as an `asendcmd`
+staircase, capped at `SWEEP_MAX_STEPS = 200` steps of `SWEEP_STEP_S = 0.1`. A
+`lowpass_hz`/`highpass_hz` automation lane capped at 64 points would be the same
+feature with a different cap. **So: automation is the model, `asendcmd` is the
+one emitter, and `sweep` becomes a preset that writes automation points.** One
+cap, and the lanes are `gain_db`, `pan`, `lowpass_hz`, `highpass_hz` with the
+last two rendering through the mechanism `filter_sweep` already uses.
+
+**(b) Gain is in two places before this document adds a third.**
+`mixer._audio_chain:652` applies `set_items.gain_db` first and then
+`effects.parse_effects`'s own `gain_db` stage, which its docstring says is
+"inert unless a set item's JSON explicitly asks for one". The rule, stated so
+nothing silently loses: **the column is the static offset, automation is a curve
+relative to it, and `effects_json.gain_db` is an alias of the column rather than
+a second input.**
+
+**(c) THE SERIOUS ONE — `loudnorm` runs LAST and would flatten every curve
+drawn.** `effects.parse_effects` appends `loudnorm_filter()` at the end of the
+chain, `DEFAULT_EFFECTS` has `loudnorm: True` for every item, and single-pass
+`loudnorm` is a *dynamic* normaliser. Drawing a level curve and then normalising
+it away is this project's oldest defect — the editor promising what the renderer
+does not produce — designed in from the start, on the one feature whose entire
+purpose is drawing levels.
+
+**The rule: an item carrying a `gain_db` automation curve renders with per-item
+`loudnorm` OFF, and levelling moves to the master.** The alternative — applying
+automation after loudnorm — keeps per-item levelling but puts an unnormalised
+stage last, which defeats the level-matching that `SETS_MIXING_PLAN.md` calls
+the unglamorous one that matters most.
+
+- `T1-9a` An item with a gain curve renders with no `loudnorm` fragment in its
+  own chain, and the master stage carries one instead. Asserted on the generated
+  filter graph, both halves.
+- `T1-9b` **A drawn gain curve survives to the output.** Render an item with a
+  curve from -12 dB to 0 dB, measure RMS per second, and assert the measured
+  slope matches the drawn one within tolerance. With per-item loudnorm left on,
+  this fails — which is the whole reason it is written down.
+
+### 5.1 Interpolation and decimation
 
 **Interpolation is linear between points, `hold` is a step, and no other curve
 type exists.** Not because curves are undesirable but because ffmpeg's
@@ -226,10 +282,14 @@ timeline needs numbers, not a picture, because the regions have to be draggable.
 
 ### 6.2 Playback is a proxy and says so
 
-- `T1-16` The timeline's playback control is labelled as a preview, and the
-  label names what it does not include. **No second DSP engine in Web Audio**
-  (outside review): the browser plays the source files with gain and position
-  applied; it does not attempt to mirror the ffmpeg effect chain.
+- `T1-16` **The preview endpoint's own response says it is a proxy and lists
+  what it does not apply** — `{"is_proxy": true, "not_applied": [...]}` — so the
+  warning is data every client carries rather than a sentence typed into one
+  template that a mobile client will not have. Asserted by adding an effect to
+  an item and confirming it appears in `not_applied`; a static list fails that.
+  **No second DSP engine in Web Audio** (outside review): the browser plays the
+  source files with gain and position applied; it does not attempt to mirror the
+  ffmpeg effect chain.
 - `T1-17` A "render preview" action produces a real ffmpeg render of a bounded
   span (default 20 s around the playhead) through the same code path as the full
   render, and is the only preview that claims to be accurate. Asserted by
@@ -292,15 +352,20 @@ is right.
 
 ## 9. Export
 
-- `T1-24` Codec parameters are passed to ffmpeg; there is no custom encoder or
-  muxer (outside review). The export format list is a table of parameter sets,
-  and adding one is a row.
+- `T1-24` **Adding an export format is a row, not a code change.** The format
+  list is a table of ffmpeg parameter sets; asserted by adding a test-only row
+  and rendering through it with no other edit. Codec parameters are passed to
+  ffmpeg and there is no custom encoder or muxer (outside review) — that
+  prohibition lives in §12.
 - `T1-25` An export names its measured integrated loudness and true peak in the
   asset row. `effects.loudnorm_filter()` targets -16 LUFS / -1.5 dBTP; a render
   that lands outside a stated tolerance of its own target is flagged rather than
-  silently shipped. This is the same measurement TRD-3's audio tier 1 takes, and
-  **it is taken once, in one place, by both** — two implementations of loudness
-  would eventually disagree and the disagreement would be invisible.
+  silently shipped.
+  **The measurement lives in `effects.py`, beside `LOUDNORM_I` and
+  `loudnorm_filter()` that already own those numbers, and TRD-3 §4.3 calls it.**
+  Naming the owner matters: the draft had TRD-1 pointing at TRD-3 and TRD-3
+  pointing back, which is how a thing said to be measured once ends up measured
+  twice by two people who each read the other document.
 - `T1-26` Re-rendering a set writes a NEW file beside the old one and never
   replaces it, exactly as anchors and refs behave. Asserted by rendering twice
   and finding both files and both asset rows.

@@ -182,9 +182,12 @@ New — the predecessor plan has no audio tier at all, and the audio stage shipp
 2026-08-12.
 
 opens; duration against what was requested; sample rate and channel count as
-requested; integrated loudness and true peak (**the same measurement TRD-1 §9
-takes, taken once, in one place**); clipped-sample count; leading and trailing
-silence; DC offset; band energy present across low/mid/high.
+requested; integrated loudness and true peak; clipped-sample count; leading and
+trailing silence; DC offset; band energy present across low/mid/high.
+
+**The loudness measurement is `effects.py`'s and this tier calls it** — TRD-1
+`T1-25` names the same owner. The draft had each document pointing at the other,
+which is how a measurement said to be taken once ends up taken twice.
 
 - `T3-9` A silent or near-silent take is rejected. Measured band energies, not
   `aspectralstats` — that filter emits nothing without a metadata printer, and a
@@ -204,7 +207,8 @@ duration matches the source mp3 within tolerance; the clip count matches
 ### 4.5 Sets
 
 - `T3-11` **The rendered set's duration equals `mixer.set_duration()`'s
-  prediction within 0.05 s.** This is the project's oldest defect — the editor
+  prediction within `mixer.SET_DURATION_TOLERANCE`** — imported, not restated,
+  so it cannot drift away from TRD-1 `T1-7`'s copy of the same number. This is the project's oldest defect — the editor
   promising what the renderer does not produce — turned into a check that runs on
   every set. TRD-1 `T1-7` asserts it at build time; this asserts it on the
   artefact, which is the one that catches a divergence introduced later.
@@ -244,9 +248,14 @@ and the sample count the two were computed from.
 - `T3-16` If the distributions overlap, the report says so and the gate is not
   built. A tier that reports "inconclusive" is a success; one that reports a
   threshold anyway is the failure this document exists to prevent.
-- `T3-17` **An empty `character_reference` is caught here as well as in TRD-2.**
-  Measured: it renders a stranger in every clip and passes every deterministic
-  check while doing it. Tier 1 cannot see it; tier 2 is the only tier that can.
+- `T3-17` **Identity drift is scored per artefact, whatever caused it.** The
+  draft scoped this to an empty `character_reference` — but TRD-2 `T2-31` refuses
+  that at save, so no new storyboard can have one and the criterion would test an
+  unreachable state. The failure that remains reachable is the measured one: a
+  **non-empty** reference with text that does not name the species renders an
+  ordinary human by the halfway point. So this scores the artefact against the
+  anchor and does not care which cause produced the gap. Tier 1 cannot see any of
+  it; tier 2 is the only tier that can.
 
 ## 6. Tier 3 — remediation, through a human
 
