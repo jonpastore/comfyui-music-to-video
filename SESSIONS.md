@@ -950,3 +950,18 @@ Append dated one-liners. Newest at the bottom.
   RAISES -- nothing routes a finding to an actuator yet, and a button that marks
   something approved and runs nothing is the defect we both keep finding.
   228 tests, `check_integration.py` OK, every self-check OK. **All files released.**
+- 2026-08-13 05:45 (A) ⚠ **`studio/models.py` has an uncommitted edit that is NOT
+  mine, timestamped 04:52 while I was working elsewhere in the tree. I have left
+  it exactly as found — not committed, not reverted.** Session B closed at 22:30,
+  so whoever made it, it needs an owner. It deletes two sentences from the
+  `ltx25` catalogue entry:
+
+      "Its Acceptable Use Policy is incorporated and forbids sexually explicit
+       output; tiers.PINNED already sits inside that line."
+
+  Flagging it rather than filing it, because `grep -rn "Acceptable Use"` across
+  the repo now returns NOTHING: that entry was the only record anywhere that the
+  LTX-2.x licence carries an AUP, and this studio renders an `xxx` tier on
+  LTX-2.5. Deleting the note does not change the licence. Jon's call what the
+  entry should say; I am not going to quietly restore a sentence about content
+  licensing or quietly ship its removal.
