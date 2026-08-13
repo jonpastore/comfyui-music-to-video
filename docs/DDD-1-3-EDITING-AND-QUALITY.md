@@ -194,13 +194,25 @@ Measured independently through the real functions after the change:
     neither curved       per-item=[1, 1]  master=0   worst signal path = 1
     one curved, one not  per-item=[0, 0]  master=1   worst signal path = 1   <-- was 2
 
-**The generalisation, which outlives this bug.** The defect lived in the
-*disagreement between two functions that each looked correct alone* — and the
-first fix reproduced that exact shape, one decision with two places to apply it.
-**Collapsing to a single application point is what made it checkable**; a
-per-function assertion is what missed it for as long as it existed. Any design
-in this document that computes a decision in one place and applies it in two
-should be read against that.
+**The generalisation, which outlives this bug — and it is two rules, not one.**
+
+The defect lived in the *disagreement between two functions that each looked
+correct alone*, and the first fix reproduced that exact shape: one decision with
+two places to apply it. So the **design** rule is that any design computing a
+decision in one place and applying it in two should be read against this. That
+shape is already this codebase's most common defect — `NUDE_VIEWS` as two
+hand-kept copies, `CHUNK` with five readers, `DEFAULT_BODY` losing to
+`ALBUM_FIELDS["body"]`, gain arriving from a column and a JSON key.
+
+But a design smell is not what catches it, and session B's sharper version is
+the one to build on: **the rule that actually catches it is a
+test-construction rule — assert through the shared entry point, never through
+the function it wraps.** B's checks were correct and thorough and pointed one
+level too low, which is exactly why they stayed green through a deliberately
+broken call site. **A design with one decision and two applications is a smell;
+a check that bypasses the collapse point is what makes the smell
+undetectable.** The second rule would have caught this on the first attempt and
+the first would not.
 
 **Two honest limits, recorded rather than implied away.** A caller
 re-introducing a direct `_audio_chain` call and bypassing `item_chains` is
@@ -350,9 +362,17 @@ already positions both streams, where `duck`'s `sidechaincompress` needs
 
 ## 7. How this design is verified
 
-The four rules the project arrived at by being wrong, as they apply to building
-from this document:
+The rules the project arrived at by being wrong, as they apply to building from
+this document. The first was earned on 2026-08-13 and is the newest:
 
+0. **Assert through the shared entry point, never through the function it
+   wraps.** A check aimed at the wrapped function is blind to whether its
+   callers are wired correctly, so it stays green through a broken call site —
+   measured on `T1-20d`, where every assertion survived a call site deliberately
+   set to the wrong value. Wherever this design collapses a decision to one
+   application point — `item_chains`, `mixer.set_duration`,
+   `build_song.clip_plan`, `effects.measure_loudness` — the criterion goes
+   **through** the collapse point, not around it. §5.2 has the mutation.
 1. **Differential, or name the mutation.** Every criterion in the three TRDs
    already does one or the other.
 2. **Then mutate and read what the mutation actually did.** Twelve mutations

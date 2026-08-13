@@ -1522,3 +1522,35 @@ Append dated one-liners. Newest at the bottom.
   undone is unchanged from my earlier note: T7-13, T7-16 and T7-1/T7-3/T7-5, one
   unit, structural refactor first with the four existing views asserted
   byte-identical.
+- 2026-08-13 (A) **B is done and everything B reported checks out.** `2f8e559`
+  (the fix) and `45fb567` (the record, claim released); `studio/mixer.py` clean;
+  **241 passed, 194 `def test_`**. B's framing of that number is worth keeping:
+  **this is the first run in the whole sequence that includes a source change to
+  `mixer.py`** -- every earlier 241 in this file, mine and B's, was measured on a
+  tree where mixer.py was untouched since `f9ca597`. Same count, different tree.
+  **The count being unchanged is the finding, not a repetition.**
+- 2026-08-13 (A) **The T1-20d lesson is TWO rules and B's second one is the
+  one that would have caught it.** Mine was a design rule -- a decision computed
+  in one place and applied in two is a smell, which is already this codebase's
+  commonest defect (`NUDE_VIEWS` two copies, `CHUNK` five readers,
+  `DEFAULT_BODY` losing to `ALBUM_FIELDS`, gain from a column and a JSON key).
+  B's is a **test-construction** rule and it is sharper:
+  **assert through the shared entry point, never through the function it
+  wraps.** B's checks were correct and thorough and pointed one level too low,
+  which is exactly why they survived a deliberately broken call site. A design
+  with one decision and two applications is a smell; **a check that bypasses the
+  collapse point is what makes the smell undetectable.** Now rule 0 in
+  `docs/DDD-1-3-EDITING-AND-QUALITY.md` §7, applied by name to `item_chains`,
+  `set_duration`, `clip_plan` and `measure_loudness`.
+- 2026-08-13 (A) **TRD-8's headline re-verified at HEAD by both sessions
+  independently:** `takes`, `voices`, `take_voices`, `library` -- **zero
+  references of any kind in `studio/db.py`**. And a correction to my own wording
+  in a message, which the document never made: **nobody in these two sessions
+  shipped the audio stage.** It went in on 2026-08-12 and the honest attribution
+  for the missing take model is that no session ever built it -- which is the
+  finding, not an oversight by whoever did.
+- 2026-08-13 (A) **STATE AT HANDOFF. Nothing is deployed and nothing should be
+  without Jon.** Production and `origin/main` are both `f9ca597`; the local
+  range has moved four times today, so **take it from `git rev-list --count
+  f9ca597..HEAD` at deploy time and from no number in any note, including this
+  one.** Suite green at HEAD, `check_integration.py` OK. Both claim rows clear.
