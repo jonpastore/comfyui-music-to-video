@@ -262,3 +262,81 @@ The mutation that proves it is the one worth keeping: make the same-character
 form swallow the cast path and the prompt becomes *"Image 2 is another
 photograph of the same character. Image 3 is another photograph of the same
 character."* — the capability loss stated in full.
+
+---
+
+## 9. Status against the tree, 2026-08-13
+
+A ledger, not an edit to the criteria above: a criterion rewritten to describe
+what was built stops being a criterion. Commits are on `main`; `667debc` is
+deployed and live on cerberus.
+
+| criterion | state | commit | evidence |
+|---|---|---|---|
+| `T4-1`..`T4-4` no silent defaults | **built** | prior session | zero views and zero tiers are each refused, each naming its own control |
+| `T4-5`..`T4-7` tier policy on save | **built** | prior session | `tiers.check_tier_policy`: explicit wording refused at `g`/`pg13`, accepted at `r`/`xxx`. Both directions |
+| `T4-8` screen the STORED text | unverified here | — | not re-measured this session; stated rather than assumed |
+| `T4-9` tier wording gets the same | unverified here | — | as above |
+| `T4-10` `_NEGATION_ALLOWED` empty | **built** | prior session + `4032aba` | the walker now covers the studio's `ANCHOR_PROFILE_FIELDS` defaults as well as `make_anchor`'s constants — see below, that widening is what caught the live defect |
+| `T4-11` body clause names the parts | **built, and it did not reach a render until `4032aba`** | `4032aba` | see §9.1 |
+| `T4-12` references named by slot | **built** | `7836d6f` | the refusal half (a third photograph stops asserting a second person) predates this; the POSITIVE half is the commit — two cast members reach the graph as `image2`→`nyx.png`, `image3`→`ghost.png`, each named by the slot its own file is on. **Rescoped to the CAST path**: the anchor path deliberately does NOT name a slot "the wardrobe reference" — see §9.2 |
+| `T4-13` positive lighting lock | **built** in the string | prior session | `BACKDROP` carries the colour-temperature lock. The criterion asks for a channel-balance differential on a rendered image and **that has never been run** |
+| `T4-14` nude view drops wardrobe, never says "bare skin" | **built** | prior session | measured on the composed prompt: wardrobe clause present on `front`, absent on `front_nude` |
+| `T4-15` profile still overrides the five fields | **built, and now two more** | `d5526cb` | `backdrop` and `composite` joined `identity`/`wardrobe`/`body`/`nude_wardrobe`/`anatomy` as album-owned, versioned, screened text |
+| `T4-16`/`T4-17` the negative does not move | **holds** | — | nothing moved out of the negative; the fast-mode drop is still stated on the form |
+| `T4-18` compose a front-nude XXX sheet and assert six things | **partial** | `4032aba` | negation-free and the part list are asserted on the real composer; the full six-assertion composition test is not written |
+
+### 9.1 `T4-11` was true in the constant and false in every render
+
+`_NEGATION_ALLOWED` was emptied and `make_anchor.DEFAULT_BODY` rewritten as a
+positive nine-part assertion. **The constant is not what renders.**
+`album_profile()` fills every `ALBUM_FIELDS` entry from its default,
+`anchor_profile_fields` copies anything truthy into the profile, and
+`anchor_from` prefers a profile value over the constant — so for every album in
+the database the studio's own default won, and that default still read
+*"...identical head to toe, matching the face, with no lighter or
+differently-toned patches anywhere"*. The exact sentence the exception was
+deleted for.
+
+Measured on a fresh album, composing through the real composer:
+
+    before  front: NEGATION -> "...matching the face, with no lighter or differentl"
+            make_anchor.DEFAULT_BODY in the composed prompt: False
+            ALBUM_FIELDS body default in it: True
+    after   front and front_nude: negations NONE, nine-part clause present: True
+
+Verified again on the LIVE box after deploy: zero negations in the composed
+prompt, nine-part clause present.
+
+The guard that would have caught it is now in place — the negation walker covers
+the studio's defaults, and asserts `body`, `backdrop` and `composite` are the
+SAME STRING as their `make_anchor` constants. Two copies that each pass the same
+screen still drift into two different sheets.
+
+### 9.2 `T4-12` and `T7-9` disagreed about image 2, and this document moved
+
+`T4-12` and §6 said *"image 2 is the wardrobe reference"*; `docs/TRD-7` `T7-9`
+said `base` is image2 and sets the framing. The code implemented neither on the
+anchor path, so nothing shipped broken — but the resolution matters and it is
+that **slot naming belongs to the CAST path only**.
+
+Two reasons. The references are an unordered SET of photographs of one character
+— that is `make_anchor`'s documented model of its input and the reason
+`COMPOSITE` exists; naming one "the wardrobe reference" re-imposes the
+face-then-outfit ordering that was deleted for making a single photograph
+carrying both unusable. And **a nude view drops the wardrobe wording entirely**
+(`T4-14`), so the prompt would declare a role for image2 that the same prompt
+then contradicts — the bare-skin-versus-fur failure in a new place.
+
+The anchor path's wording is *"Image 2 is another photograph of the same
+character"*, which is true on clothed and nude sheets alike.
+
+### 9.3 What is still unmeasured, and it is the same thing every time
+
+`T4-13`'s channel balance and `T7-7`'s identity differential both require
+**looking at a rendered image**, and neither has been run. Every check in this
+session was on strings, graphs and schemas.
+
+Jobs 230/231/232 on the production box all finished more than four hours before
+the 11:11:38 restart, so **no sheet on that box was rendered by this code**. The
+first render after that restart is the first real evidence any of it works.

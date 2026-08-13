@@ -251,3 +251,81 @@ chatgpt, independently — `docs/reviews/TRD47-*-2026-08-13.md`).
   `{"image2": "nyx.png", "image3": "ghost.png"}` — because asserting that both
   names merely appear would pass with both wired to one image, which is the
   blend the mechanism exists to prevent.
+
+---
+
+## 9. Status against the tree, 2026-08-13
+
+Written by session B after building §2–§5, and stated as a LEDGER rather than
+folded into the criteria above — a criterion edited to describe what was built
+is no longer a criterion, it is a changelog with a `T7-` prefix.
+
+**Every "built" row below was verified by mutation**: the check was made to
+fail on purpose and the failure output read, because a check that has never
+been seen red is a claim about a check, not about the code. Commits are on
+`main`; `667debc` is deployed and live on cerberus.
+
+| criterion | state | commit | what was measured |
+|---|---|---|---|
+| `T7-1` one view table | **partial** | — | `NUDE_VIEWS` is derived via `make_anchor.is_nude_view()`, one source. `ANCHOR_VIEWS` (labels) and `DEFAULT_VIEWS` (framing) are still two places, so adding a view is still two edits |
+| `T7-2` nudity gating derived | **partial** | — | derivation exists; `prompt_for` still tests `view in NUDE_VIEWS`, which is enumerated from `DEFAULT_VIEWS`, so a profile-supplied nude view is not swapped. Live gap |
+| `T7-3` new views | **not built** | — | §9.1 |
+| `T7-4` framing is the only difference | **not built** | — | needs the view table |
+| `T7-5` `portrait` overrides head-to-toe | **not built** | — | §9.1 |
+| `T7-6` anchor usable as reference | **built** | `d315c6f` | with the reference ticked, `gen_anchor`'s images list is exactly `[the anchor's path]`. Mutations: borrowed-row guard dropped → the anchor's image deleted; cascade skipped → reference left pointing at a deleted file |
+| `T7-7` identity held across views | **NOT MEASURED** | — | the image differential this asks for has never been run. Needs `T7-3` and a GPU render. **The single largest unproven claim in this document** |
+| `T7-8` `latent_mode="image"` reachable | **built** | `d3f2f6a` | emitted graph: `empty` → node 15 `EmptySD3LatentImage`; `image` → node 15 `VAEEncode`, `pixels ["8", 0]`, denoise 0.55. Labels computed from the latent by one resolver |
+| `T7-9` no silent composition plate | **built** | `d3f2f6a` | three references → nodes 9/10 absent, three `LoadImage`, `image1/2/3` populated. `base=None`; the plate is removed, not exposed |
+| `T7-10` slot names are real | **built** | `7836d6f` | two cast members → `image2`→`nyx.png`, `image3`→`ghost.png`, each named by the slot its own file is on. The refusal half predates this; the positive half is the commit |
+| `T7-11` `lora_strength` settable | **built** | `71ad7b4` | 0.5 survives quality mode's cfg 4.5; unset resolves to 0.0. The `sampler_settings` interlock holds both ways |
+| `T7-12` width/height settable | **built** | `71ad7b4` | `size=1024x1024` → `EmptySD3LatentImage {"width": 1024, "height": 1024}`. **Every sheet before this was 896×1216, because neither flag was ever passed** |
+| `T7-13` per-view framing versioned | **not built** | — | §9.1 |
+| `T7-14` `backdrop` a versioned type | **built** | `d5526cb` | album override reaches the composed prompt and the constant does not appear beside it |
+| `T7-15` `composite` a versioned type | **built** | `d5526cb` | appears at `n_refs=2`, absent at `n_refs=1`, album wording replaces the constant |
+| `T7-16` `pose` | **not built, deliberately** | — | §9.1 — building it before the view table ships a contradiction |
+| `T7-17` composed and previewed | **built** for `T7-14`/`T7-15` | `d5526cb` | the preview runs the real composer, so both appear by construction |
+| `T7-18` screened and walked | **built** for `T7-14`/`T7-15` | `d5526cb` | both go through `screen_prompt_field`; the negation walker now covers the studio's `ANCHOR_PROFILE_FIELDS` defaults, not only `make_anchor`'s constants |
+| `T7-19` per-view prompt box | **built** | `415584d` | an edit reaches only its own view; the sibling view composes its own. Mutation: the back sheet came back holding `"FRONT VIEW character reference sheet of ..."` — the reported symptom |
+
+Suite at the last clean measurement: **241 passed, 194 `def test_`**,
+`check_integration.py` / `tiers.py` / `models.py` / `prompts.py` OK. Baseline
+before this work was 233 / 186.
+
+### 9.1 What is left, and why it is one unit
+
+`T7-3`, `T7-5`, `T7-13` and `T7-16` are **one piece of work, not four**, and it
+was left undone on purpose rather than started and abandoned.
+
+Every framing string in `DEFAULT_VIEWS` already contains a POSE — *"standing
+upright, arms relaxed at their sides, feet apart"*. A `pose` field (`T7-16`)
+appended beside it is a contradiction in the positive prompt, which is the
+bare-skin-versus-fur failure in a new place and Day 4 measured what that costs.
+`pose` has to REPLACE that clause, so the view table has to separate camera from
+pose from crop first — and `BACKDROP` needs the same surgery, since it ends
+*"She stands upright and unsupported in an empty studio ... full body head to toe
+inside the frame"*, which contradicts `seated` and contradicts `portrait`.
+
+The decomposition that falls out: **the VIEW owns camera + pose + crop, the
+BACKDROP owns studio + lighting + focus.**
+
+**Sequencing constraint, and it is not optional:** that refactor changes what
+every existing sheet renders. It must land STRUCTURALLY FIRST — the composed
+prompt for `front`, `back`, `front_nude` and `back_nude` asserted byte-identical
+before and after — and only then may views whose framing differs be added, in a
+separate commit. Doing both at once means a sheet that comes back wrong cannot
+be attributed to either half.
+
+### 9.2 The finding this document did not anticipate
+
+`T7-9`'s resolution generalised past itself. The loudnorm defect fixed the same
+day (`docs/TRD-1` `T1-20d`, commit `2f8e559`) had the identical shape: **one
+decision read in two places.** So did `NUDE_VIEWS`' two hand-kept copies, and so
+did `make_anchor.DEFAULT_BODY` losing to `app.ALBUM_FIELDS["body"]` — where the
+fixed constant was unreachable for every album in the database (`T4-11`, commit
+`4032aba`).
+
+And the test-construction rule that falls out of it, which cost a mutation to
+learn: **assert through the shared entry point, never through the function it
+wraps.** A per-function check cannot see whether two call sites are both correct
+— the first loudnorm fix threaded a flag to two call sites, one was mutated to
+the wrong value, and every assertion stayed green.
