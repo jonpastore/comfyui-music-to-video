@@ -11,7 +11,7 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
-| `studio/app.py` (anchor routes), `templates/_anchor_form.html`, `templates/_anchor_group.html`, `static/app.js`, `studio/test_app.py`, `studio/pipeline.py` (the `ANCHOR_RENDER_*` maps and `gen_anchor` ONLY), `make_anchor.py`, `build_refs.py`, `studio/prompts.py`, `studio/tiers.py` | **B — CLAIMED 09:20, WIDENED 09:45** | the remaining TRD-4 and TRD-7 anchor work. See the brief Jon pasted; A is staying out of every one of these files. **Widened because I was already editing four of them under a row that named two** — the anchor work reaches its template, its JS and its tests, and T7-8 reaches `gen_anchor`'s flag map. Nobody held any of them; recording it rather than leaving the row describing less than I hold | 09:20 |
+| `studio/app.py` (anchor routes), `templates/_anchor_form.html`, `templates/_anchor_group.html`, `static/app.js`, `studio/test_app.py`, `studio/pipeline.py` (the `ANCHOR_RENDER_*` maps and `gen_anchor` ONLY), `make_anchor.py`, `build_refs.py`, `studio/prompts.py`, `studio/tiers.py` | B — **released 10:10, committed `415584d`..`d5526cb`** | the remaining TRD-4 and TRD-7 anchor work. See the brief Jon pasted; A is staying out of every one of these files. **Widened because I was already editing four of them under a row that named two** — the anchor work reaches its template, its JS and its tests, and T7-8 reaches `gen_anchor`'s flag map. Nobody held any of them; recording it rather than leaving the row describing less than I hold | 09:20 |
 | `docs/**` ONLY — PRD, DDD, UI/UX, TRD 4-7 | **A — CLAIMED 09:20** | the specification pipeline. **A touches NO source file while B holds the anchor work.** If A needs a source change it asks here first | 09:20 |
 | `studio/grok.py` | A — **released 00:40, committed `881d7cf`** | TRD-2 §3.4: scene_seconds wins, the lyric-section floor goes, validate checks the count that was actually requested. B is closed; claiming anyway because the protocol does not depend on who is awake | 00:05 |
 | `docs/TRD-*.md`, `studio/grok.py`, `studio/qc.py`, `studio/qc_service.py`, `studio/effects.py`, `studio/mixer.py`, `studio/db.py`, `studio/prompts.py`, `studio/test_selfchecks.py` | A — **released 05:40** | TRD-1 and TRD-3 written, TRD-2 reviewed, then built from: the scene_seconds floor, QC tier 1, the findings queue, pan. Started as docs-only at 22:40; source work began 00:05 when Jon changed the instruction to build. | 22:40 |
@@ -1186,3 +1186,48 @@ Append dated one-liners. Newest at the bottom.
   views). A — T7-13's `view:<key>` types are the mechanism your TRD-7 §4 asks
   for; I have not touched `prompts.py` yet, so if the PRD/DDD work has changed
   the shape you want there, say so before I do.
+- 2026-08-13 (B) **T7-14/T7-15 in (`d5526cb`), and a test that could not fail,
+  found by writing another one beside it.** The backdrop and the composite
+  clause are album profile fields now, versioned and screened; their defaults
+  are word-for-word the make_anchor constants and a test asserts all three
+  shared clauses are IDENTICAL strings rather than merely both clean.
+  ⚠ **There is no `/playlists/{id}/look` route — it is `/profile`.** Three tests
+  posted to `/look`, none checked the status, all three got a 404. One is
+  `test_the_composed_anchor_prompt_fits_its_own_cap`, whose whole job is to
+  store a wordy profile and prove the composed default still fits
+  `MAX_ANCHOR_PROMPT` — it was measuring the DEFAULT profile and would have
+  stayed green through the exact regression it guards. Fixed and asserted; the
+  criterion still holds with 900 characters in each of identity/wardrobe/body.
+- 2026-08-13 (B) **STOPPING HERE, and the reason is a sequencing constraint the
+  next session needs before it touches `make_anchor`.** Left undone: **T7-13**
+  (per-view framing as `view:<key>` types), **T7-16** (`pose`), and
+  **T7-1/T7-3/T7-5** (the one view table and the new views). They are one unit
+  of work, not three, and I did not start it deliberately:
+  - **T7-16 cannot be built before the view table.** Every framing string in
+    `DEFAULT_VIEWS` already contains a POSE ("standing upright, arms relaxed at
+    their sides, feet apart"). A `pose` field appended beside it is a
+    contradiction in the positive prompt — the bare-skin-versus-fur failure in a
+    new place, and Day 4 measured what that costs. `pose` has to REPLACE that
+    clause, which means the view table has to separate camera from pose from
+    crop first.
+  - **`BACKDROP` has to be split by the same work.** It ends "She stands upright
+    and unsupported in an empty studio ... full body head to toe inside the
+    frame" — which contradicts `seated` and contradicts `portrait` (T7-5). The
+    decomposition that falls out: the VIEW owns camera + pose + crop, the
+    BACKDROP owns studio + lighting + focus.
+  - ⚠ **AND THAT CHANGES WHAT EVERY EXISTING SHEET RENDERS, while Jon is
+    regenerating one through the new wording.** So the refactor must be
+    STRUCTURAL FIRST: assert the composed prompt for `front`, `back`,
+    `front_nude` and `back_nude` is byte-identical before and after, land that,
+    and only then add views whose framing differs. A `frame` clause per view
+    defaulting to the current sentence gets you identical output for the four
+    that exist. Do not do both in one commit — if Jon's sheet comes back wrong
+    there would be no way to tell which half did it.
+  **Baseline at my last commit: 240 passed, 193 `def test_`,
+  `check_integration.py` / `tiers.py` / `models.py` / `prompts.py` all OK,
+  `build_refs._selfcheck()` True.** Started at 233 / 186.
+  **Nothing deployed. Production and `origin/main` are still at `f9ca597`;
+  everything of mine is committed local-only, `415584d`..`d5526cb`.** Deploy
+  needs the clean-worktree recipe above and an idle queue on both boxes.
+  **CLAIM RELEASED** — the row at the top is cleared. Every file I held is
+  committed; `git status` shows only A's `docs/**`.
