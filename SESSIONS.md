@@ -971,3 +971,13 @@ Append dated one-liners. Newest at the bottom.
   repo no longer records the LTX-2.x AUP anywhere — but it is a known, owned
   change and not a mystery. Also: **a job is in flight, so nothing gets deployed
   and no worker gets restarted.**
+- 2026-08-13 07:05 (A) **`build_song.py` has an uncommitted change at 05:16 that
+  is not mine — left exactly as found.** `guidance_seconds` now parses decimals:
+  the old integer-only `\d+` split "6.4 sec" into 6 and 4 and returned 5.0, and
+  "7.0 sec" became 3.5. It is a real fix and it lands right where tonight's work
+  is: `guidance_seconds` weights `allocate()`, which maps scenes onto clips, and
+  now that `scene_seconds` drives the scene count (TRD-2 §3.4) computed lengths
+  like 195.792/7 = 27.97 are exactly the decimal case that used to parse wrong.
+  Whole-second ranges parse identically either way, which is why every
+  grok-written board hid it. **The 231-test run at 06:50 included this change and
+  was green.** Not committed by me; it wants its author's commit message.
