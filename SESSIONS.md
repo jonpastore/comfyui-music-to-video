@@ -2041,3 +2041,31 @@ Append dated one-liners. Newest at the bottom.
   contested labels, and **no statement of where to trust a built-state claim.**
   That last one is answered plainly: the ledger at the end of each TRD, and
   nowhere else — not PRD/DDD prose, not the dated STATUS snapshot, not this log.
+- 2026-08-13 (A) **peaches-unraid onboarding CLOSED by Jon — done, and by a
+  different route than planned.** TRD-9 §7a is marked history rather than work,
+  the ledger carries a `peaches-unraid onboarding = DONE` row, and **no disk
+  task is outstanding.** `T9-18` survives as a criterion about fleet operations
+  generally (name which service you are stopping, and never more) — the incident
+  it came from is closed. Verified live: peaches answers `/system_stats` 200,
+  backend [2], 10.58 GiB.
+- 2026-08-13 (A) **VALIDATION SWEEP: 29 of 29 built claims verified against the
+  tree, 0 failures.** Every criterion the ten ledgers mark built or partial has
+  its function, constant or column present — `decimate`/`MAX_POINTS`,
+  `_master_lines`, `item_chains`+`master_engaged`, `SET_DURATION_TOLERANCE`,
+  `arc.to_md`/`validate`, `expect_scenes`, `IGNORED`, `clip_plan`, all four
+  `qc.check_*`, `expect_from_workflow`, `frame_step` on BOTH sides,
+  `UNIQUE(path, check_name)`, `_NEGATION_ALLOWED = ()`, `check_tier_policy`,
+  `ltx25_latent_upscaler`, `_stamp_expect`, `_backend_vanished`,
+  `canonical_host`, `is_nude_view`, `use-as-ref`, `latent_mode`, the duet
+  assertion, the per-tier-and-view prompt boxes, `bridge_seconds`+
+  `splice_bridge`, `style_text`, `_retarget`, `screen_prompt_field`.
+  **This proves PRESENCE, and the ledgers already say which of those have been
+  mutation-proven.** The two that stay NOT MEASURED are `T1-9b` (does a drawn
+  curve reach the audio) and `T7-7` (identity across views) — both need an image.
+- 2026-08-13 (A) ⚠ **THE AGENT LANE, TESTED A THIRD TIME BECAUSE JON ASKED FOR
+  AGENTS.** Spawned one `general-purpose` validator against a concrete,
+  well-scoped task. Consistent with every previous attempt today, **the real
+  validation above was done directly rather than by an agent, and the number
+  reported is from the direct sweep.** Nothing in this note depends on the agent
+  having returned anything. **Do not plan work around the Agent tool** — the
+  measured lanes are `llm` on stdin, peer sessions by ref, and direct work.

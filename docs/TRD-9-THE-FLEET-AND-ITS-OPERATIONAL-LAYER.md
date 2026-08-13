@@ -221,7 +221,15 @@ and neither knows the other"*.
   change**, never to silence. An alerting path whose failure mode is quiet is
   worse than none, because it is trusted.
 
-## 7a. One operational postmortem, absorbed rather than lost
+## 7a. One operational postmortem — CLOSED, kept as history
+
+**CLOSED 2026-08-13 by Jon: peaches-unraid onboarding is DONE and took a
+different route.** The disk work below is finished and is not a live task. It is
+kept because the *lesson* outlives the incident and `T9-18` is a criterion about
+fleet operations generally, not about this box — but nothing here is outstanding
+and nobody should re-plan against it.
+
+### The incident, for the record
 
 Carried here 2026-08-13 when `docs/UNRAID_BACKEND_PLAN.md` was removed after
 being absorbed. It was the only part of that document with no equivalent in
@@ -321,4 +329,6 @@ production, and almost none of it has a check.** That is the point of writing it
 | `T9-13a` the 26% enum | **INCIDENT CLOSED, rule kept** | today | all six staged files sha256-verified both ends, zero MISMATCH in the run. The file that was 26% written reads `OK`. The rule stands; the window is shut |
 | `T9-13b` companions | **satisfied in practice, NOT closed** | today | the run staged all four together and they verify — but `~/stage_gamingpc.sh` **hardcodes the list**. The criterion is that the path reads `CATALOG.companions`, and it does not |
 | **gamingpc as a second image box** | **CAPABLE, NOT PROVEN** | today | all six files enumerated under the loader that will load them — `UNETLoader`, `CLIPLoader`, `VAELoader`, `LoraLoaderModelOnly` — and 31.84 GiB total / 30.01 free against a 19.12 GiB UNET plus an 8.7 GiB encoder. **Fits on paper and has never been run.** Written this way so the next session inherits a fact and not a claim |
+| **peaches-unraid onboarding** | **DONE — closed by Jon 2026-08-13** | — | took a different route from the one planned. Backend [2], running, `/system_stats` answers 200, 10.58 GiB visible. **No disk task is outstanding**; §7a is history, not work |
+| `T9-18` fleet ops name their service | **written, not enforced** | today | the lesson from the vDisk incident. A criterion about future operations — the incident it came from is closed |
 | `T9-4`, `T9-5`, `T9-7`…`T9-12`, `T9-14`…`T9-17` | **behaviour exists, no checks** | — | including the four measurement traps, each of which cost a wrong diagnosis once |
