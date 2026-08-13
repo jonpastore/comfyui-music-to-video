@@ -1,6 +1,6 @@
 # TRD-10 · The library, lyrics, and the AI advice surfaces
 
-Status: written 2026-08-13. **Absorbs `docs/LIBRARY_BULK_EDIT_PLAN.md` (229
+Status: written 2026-08-13. **Absorbs `docs/LIBRARY_BULK_EDIT_PLAN.md` *(absorbed and removed 2026-08-13; in git history)* (229
 lines)** — the last plan document no TRD owned — and claims `studio/lyrics.py`
 (405), `studio/chat.py` (330), `studio/mixadvice.py` (247) and
 `studio/vision.py` (516): **1,498 lines of shipped code that no TRD cited.**

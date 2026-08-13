@@ -1,6 +1,6 @@
 # TRD-3 · Output QC and remediation
 
-Status: draft for review, written 2026-08-12. Supersedes `docs/OUTPUT_QC_PLAN.md`,
+Status: draft for review, written 2026-08-12. Supersedes `docs/OUTPUT_QC_PLAN.md` *(absorbed and removed 2026-08-13; in git history)*,
 which was written earlier the same day and **predates the scope**: it covers
 images and clips only, and it hardcodes expected values that the clip-length
 decision has since invalidated. Where this document contradicts that one, this

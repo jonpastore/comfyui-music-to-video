@@ -1,6 +1,6 @@
 # TRD-8 · Audio generation and the song editor
 
-Status: written 2026-08-13. **Absorbs `docs/AUDIO_BUILDOUT_PLAN.md` (785 lines),
+Status: written 2026-08-13. **Absorbs `docs/AUDIO_BUILDOUT_PLAN.md` *(absorbed and removed 2026-08-13; in git history)* (785 lines),
 which no TRD owned**, plus `make_audio.py` (180 lines) and `mixer`'s splice and
 bridge path, neither of which any TRD cited. Also takes the song-level audio
 editor that **TRD-1 §11 defers by name**.

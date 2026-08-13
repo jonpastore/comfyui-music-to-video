@@ -427,7 +427,7 @@ per-item levelling can be switched off without the set losing its level.
 
 ## 8b. The interstitial card
 
-**Folded in 2026-08-13 from `docs/ALBUM_ARC_AND_STAGING_PLAN.md` §3, which no
+**Folded in 2026-08-13 from `docs/ALBUM_ARC_AND_STAGING_PLAN.md` *(absorbed and removed 2026-08-13; in git history)* §3, which no
 TRD owned.** Its two siblings in that plan are already built — fade-to-black is
 a transition kind in `mixer.py`, and the branding overlay has its `brand_path`
 columns and its renderer — and only this one is unbuilt and unclaimed. It is a

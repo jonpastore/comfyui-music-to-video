@@ -1,7 +1,7 @@
 # TRD-9 · The fleet and its operational layer
 
-Status: written 2026-08-13. **Absorbs `docs/SWARM_PIPELINE_PLAN.md` (382 lines)
-and `docs/UNRAID_BACKEND_PLAN.md` (387 lines)**, neither owned by any TRD, plus
+Status: written 2026-08-13. **Absorbs `docs/SWARM_PIPELINE_PLAN.md` *(absorbed and removed 2026-08-13; in git history)* (382 lines)
+and `docs/UNRAID_BACKEND_PLAN.md` *(absorbed and removed 2026-08-13; in git history)* (387 lines)**, neither owned by any TRD, plus
 `studio/gpu.py`, `studio/fleet_watch.py` and `studio/creds.py` — 811 lines that
 no TRD cites.
 
@@ -220,6 +220,30 @@ and neither knows the other"*.
 - `T9-17` An alert transport that is unreachable **degrades to a recorded state
   change**, never to silence. An alerting path whose failure mode is quiet is
   worse than none, because it is trusted.
+
+## 7a. One operational postmortem, absorbed rather than lost
+
+Carried here 2026-08-13 when `docs/UNRAID_BACKEND_PLAN.md` was removed after
+being absorbed. It was the only part of that document with no equivalent in
+these criteria, and it is the kind of thing a fleet document exists to hold.
+
+**2026-08-12: growing the Docker vDisk took the Unraid box down for hours.** The
+box went unreachable — no ssh, no ping — and came back with a stopped array and
+a pending dual-parity check against 11.7 TB.
+
+The evidence, from `/boot/logs/syslog-previous`: `umount /mnt/cache` returned
+**exit status 32, "target is busy"**, Unraid retried every 5 s for ~45 s, and
+then `rc.6` forced the shutdown through with SIGTERM. That is why the array came
+back unclean and why a parity check was pending. **The lost ssh and ping were
+`rc.6` tearing down `eth0`, not a crash and not a network fault** — the shutdown
+was orderly, it was the *unmount* that would not complete.
+
+- `T9-18` **A fleet operation that requires stopping a service names which
+  service, and never more.** The lesson generalises past Unraid: the array did
+  not need stopping to resize a Docker vDisk, and stopping it is what cost the
+  hours. An operational runbook step that takes down more than the thing being
+  changed is the same class as a migration that rewrites more rows than it
+  meant to.
 
 ## 8. Explicitly not building
 
