@@ -55,6 +55,18 @@ not been shown to separate known-good from known-bad does not gate anything.
 | Audio analysis | `analyse.py` (bpm, key, energy, beat grid) |
 | Per-box capability and fit | `models.where()`, `models.fits()`, `models.resolve()` |
 | Versioned prompts with usage counts and no renumbering after delete | `prompts.py` |
+| **Tier 1 itself — every check in §4** | **`studio/qc.py`**: `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise` |
+| **The findings table, the queue, and the remedy edit** | **`studio/qc_service.py`** + `db.findings`; `/api/qc/*` and the `qc` job kind in `app.py` |
+
+**§4 and §6 below read as unbuilt work and are not.** An audit found this table
+listing seven items, none of them the QC implementation, in a section whose
+stated purpose is "do not rebuild" — the omission most likely to cost a rewrite.
+Already satisfied by `qc.py` today: `T3-2` (expectations read from the submitted
+workflow, no hardcoded duration anywhere), `T3-4`'s measured/expected/unit on
+every check that has them, `T3-7` (8n+1 with the interpolated exemption), `T3-11`
+(imports `mixer.SET_DURATION_TOLERANCE` rather than restating it), `T3-27`
+(a remedy on every finding), and `T3-3` both ways. What is NOT built is tier 2
+entirely, and every repair path — `approve()` raises.
 
 **Tier 0's two properties that QC must respect**, both from the code that writes
 it: group by `host`, never by `backend` (Swarm renumbers ids when a backend is
@@ -126,15 +138,24 @@ places for a finding to exist in different states.
     );
     CREATE INDEX IF NOT EXISTS idx_findings ON findings(status, kind, tier);
 
-- `T3-4` Every finding records `measured`, `expected` and `unit` for any check
-  that has them. A finding that says only "failed" cannot be argued with, and
+- `T3-4` Every finding records `measured`, `expected` and `unit`. **The
+  qualifier "for any check that has them" is gone**: it was self-exempting, and
+  returning `None` from every check made every check one that "does not have
+  them" while the criterion stayed green. The checks that MUST carry all three
+  are named — duration, frame_count, fps, luma, silence, loudness, true_peak,
+  resolution, duration_matches_prediction — and a `None` in any of them for
+  those checks fails. A finding that says only "failed" cannot be argued with, and
   cannot be re-checked after a repair.
 - `T3-5` Running QC twice over an unchanged artefact produces one finding per
   check, not two. Re-running is the normal case after a repair. **The fixture is
   an artefact known to FAIL at least one check**, asserted before the second run:
   with a clean fixture, or with every check deleted, "no duplicates" is 0 = 0 and
   the criterion is vacuously green.
-- `T3-6` A finding's `repair_path` is never equal to its `path`. **A repair
+- `T3-6` A finding's `repair_path` is never equal to its `path`, **asserted
+  only after a repair has actually produced one**. Today nothing writes
+  `repair_path` and `approve()` raises, so NULL never equals anything and this
+  is green with the entire subsystem absent — **PROVISIONAL**, like `T3-18`,
+  until repair routing exists. **A repair
   produces a new candidate and never overwrites** — the studio's whole design is
   candidates plus a human pick, and an overwrite destroys the evidence that
   anything was wrong along with the comparison that would show whether the
@@ -410,8 +431,9 @@ tier 1.
 3. **When an image looks wrong, look at it.** Every finding in this document that
    a deterministic check would have missed was found by opening the picture, and
    a QC stage does not replace that — it decides which pictures to open.
-4. Baseline before and after: `cd studio && python3 -m pytest -q .` (232 at the
-   time of writing), `python3 check_integration.py`, and `grep -c "^def test_"`.
+4. Baseline before and after: `cd studio && python3 -m pytest -q .` (the count is
+   deliberately NOT written down here -- it was copied into three documents and
+   all three went stale; green before and after is the requirement), `python3 check_integration.py`, and `grep -c "^def test_"`.
 
 5. **A REFUSAL or a PRESENCE is half a criterion.** Found by a second
    independent reviewer, and it is systematic rather than incidental: a

@@ -132,11 +132,22 @@ structure rather than with it, and shot description is coarser.
 Found during this review, by reading `grok.py` rather than the reconciliation's
 quotation of it. Changing the formula alone does **not** implement the decision:
 
-| # | where | what it does |
-|---|---|---|
-| 1 | `grok.py:624` | `n_scenes = max(len(sections), ceil(duration / scene_seconds))` — the formula everyone has been quoting |
-| 2 | `grok.py:525` | `validate()` adds a problem: *"only 7 scenes for 25 lyric sections (need >= 1 per section)"* |
-| 3 | `grok.py:368-371` | `_system_prompt` instructs the model *"at least {min_scenes} (one per lyric section)"* when the count is not pinned |
+**FIXED 2026-08-13; this table is what was found, not what is there now.** Line
+numbers are the ORIGINAL ones and have all moved — an audit found every citation
+here stale, which is what a document written against a moving file does.
+
+| # | where, as found | what it did | now |
+|---|---|---|---|
+| 1 | `grok.py:624` | `n_scenes = max(len(sections), ceil(duration / scene_seconds))` | gone; `grok.py:659` is `ceil(duration / scene_seconds)` |
+| 2 | `grok.py:525` | `validate()` added *"only 7 scenes for 25 lyric sections"* | `grok.py:541-547`, now conditional on `expect_scenes is None` |
+| 3 | `grok.py:368-371` | `_system_prompt` says *"at least {min_scenes} (one per lyric section)"* | `grok.py:368-373`, and only the `else` branch — it never applied when a count was pinned |
+
+**"Three places" was the headline and TWO is the honest number.** Site 3 only
+ever ran on the unpinned path, so it was never part of the defect; the
+implementation commit says "two live places" and this document said three. Both
+were written the same day and neither was reconciled with the other until an
+audit put them side by side. Two sites had to move. The third is a different
+code path that was always correct.
 
 (2) is the one that bites. `problems` feeds the **retry loop**, which sends the
 failure text back to the model as "fix every problem and resend" — so a 7-scene
@@ -154,7 +165,8 @@ answerable for all four, which is what a one-per-section rule was approximating.
 
 - `T2-8a` The three sites agree. A test generates at `scene_seconds=30` for a
   25-section song and asserts the result **validates**; leaving the rule at
-  `grok.py:525` in place fails it, which is the whole point of naming it here.
+  that rule in place (now `grok.py:541-547`) fails it, which is the whole point
+  of naming it here.
 - `T2-8b` The scenes tile the song: start times ascend, each scene's end equals
   the next scene's start, the first starts at 0 and the last ends at the song
   duration ± tolerance. An overlap or a gap fails.
@@ -187,10 +199,13 @@ answerable for all four, which is what a one-per-section rule was approximating.
   rendered on a 24 GB card; the upper limit is untested above that.
   **Checkable, not a review convention**: the ceiling is stored with the
   measurement that produced it — frames, seconds, card, date — and a test
-  asserts that record exists and parses, so raising the constant without
-  recording a new measurement fails the suite rather than failing someone's
-  attention. "Fails review" was the whole assertion until an independent pass
-  pointed out that no check can go red on it.
+  asserts the record exists, parses, **and that its frame count IS the ceiling
+  the code uses**. The match is the half that matters: a record that merely
+  exists and parses can describe a different number than the constant, and the
+  two then drift while the check stays green. "Fails review" was the whole
+  assertion until an independent pass pointed out that no check can go red on
+  it, and a second pass caught that the first fix still let the record and the
+  constant disagree.
 - `T2-12a` **A scene length is rounded to a LEGAL frame count before it is
   rendered, and TRD-2 owns the rounding.** `T3-7` enforces LTX's 8n+1 latent rule
   on the finished clip, and §3.4 now derives clip length from `scene_seconds`
@@ -200,10 +215,37 @@ answerable for all four, which is what a one-per-section rule was approximating.
   seconds to frames rounds to the nearest `8n+1` at the clip's fps and records
   the rounded length, so the storyboard's arithmetic and the renderer's agree.
   A requested length that is not 8n+1 fails here rather than at the sampler.
-- `T2-13` `CHUNK` is no longer imported as a clip-length constant by
-  `build_storyboard`, `build_refs` or `reroll_refs`. Clip count comes from the
-  storyboard. A test asserts two songs with different scene lengths produce
-  different clip counts from the same duration.
+#### The song's length is the source of truth, not the scene count
+
+**Decided 2026-08-13 by Jon**, after an audit found this document deciding
+against an invariant the code has defended since it was written and never citing
+it. `app.clip_count` derives the count from the AUDIO LENGTH and its docstring
+records what the alternative cost: *"using scene_count here hid clips 20..40 from
+the approve grid and let clip generation start with two thirds of its references
+missing"*, because `clip_plan` spreads a 20-scene storyboard across all 41 clips
+of a 3:16 track.
+
+**Both survive.** Duration is the dividend; `scene_seconds` is the divisor; the
+count is `ceil(duration / scene_seconds)` and is therefore always ours. One
+scene is one clip **because grok is asked for exactly that many and `validate()`
+refuses any other number** — never because anything counts what came back. The
+distinction is the whole reconciliation: the old bug was trusting the MODEL's
+scene count, and nothing here does.
+
+- `T2-13` **`CHUNK` has exactly one reader.** `build_song.clip_seconds()` and
+  `n_clips_for()` are it; `build_storyboard`, `build_refs`, `reroll_refs`,
+  `grok.py` **and `app.py`** each carried their own copy of
+  `ceil(duration / CHUNK)`. Five, not the three this criterion first named and
+  not the four the audit found. A test asserts no module outside `build_song`
+  computes a clip count.
+- `T2-13a` **The divisor is not honoured until the RENDERER honours it**, and
+  `clip_seconds()` returns `CHUNK` whatever it is passed until then. The
+  renderer builds every clip at `LTX25_LEN` frames, and the storyboard form
+  defaults `scene_seconds` to 4.0 — so switching the divisor first re-times
+  every storyboard to 4.0s clips while 4.8125s ones keep being rendered. That is
+  the approve grid expecting a count that never gets produced, which is the
+  original bug from the other direction, and a test caught it within a minute.
+  Unblocked by `T2-12a` (round to a legal 8n+1 frame count), not before.
 
 ## 4. Generation flows
 
@@ -247,9 +289,19 @@ Each song's storyboard gets the same treatment: a versioned, editable
 description used as the prompt, and a wand that asks AI to review and improve
 it. The arc is passed as context so the scene knows the story it belongs to.
 
-- `T2-20` A storyboard generated with an arc present differs from one generated
-  without it, for the same song and prompt. If it does not, the arc is not
-  reaching the model and the feature is decorative.
+- `T2-20` **A distinctive string from the arc appears in the generated
+  storyboard, and does NOT appear when the arc is absent.** "Differs" was the
+  whole assertion and it cannot fail: two generations from a language model
+  always differ, so passing `arc_ctx=None` unconditionally leaves this green
+  with the arc reaching nothing — the identical defect `T2-21`'s own
+  parenthetical diagnoses four criteria later, and recorded fixtures do not save
+  it because two fixtures also differ. This takes `T2-21`'s shape instead:
+  assert specific arc content is present, and absent when the arc is.
+
+  The tiers are the MPAA ladder plus an explicit **xxx** tier, and `T2-21` and
+  `T2-22` already assert tier content that way — a permission clause that must
+  appear and a mainstream clause that must not. The arc gets the same treatment
+  rather than a different one.
 
 ### 4.4 The tier reaches the model
 
@@ -400,6 +452,12 @@ data first and presentation second.
   unmodified. A template that sums scene seconds is a second implementation of
   the time meter, and it is the one that will disagree.
 - `T2-41` Scene timing has exactly one implementation, `build_song.clip_plan()`.
+  **This was FALSE when written and is true as of 2026-08-13.**
+  `app.storyboard_scenes` computed every scene's `start`, `end` and `length` as
+  `idx * CHUNK` inline — a second implementation, in the function that feeds the
+  storyboard page, and the very site `T2-24` is about. Asserted by a
+  differential, never by grepping for a call: a grep proves the code exists and
+  not that anything reaches it.
   Its own docstring says deriving it a second time is the drift it exists to
   prevent: re-rolling clip 17 would silently regenerate a different scene than
   the one that was rejected.
@@ -429,8 +487,9 @@ timing — `clip_plan` is the one, and every client calls it.
 4. **When an image looks wrong, look at it.** The identity collapse, the world
    that never rendered and the LoRA that did nothing were all found by opening
    the pictures, and all three passed every deterministic check.
-5. Baseline before and after: `cd studio && python3 -m pytest -q .` (232 at the
-   time of writing), `python3 check_integration.py`, and `grep -c "^def test_"`
+5. Baseline before and after: `cd studio && python3 -m pytest -q .` (the count is
+   deliberately NOT written down here -- it was copied into three documents and
+   all three went stale; green before and after is the requirement), `python3 check_integration.py`, and `grep -c "^def test_"`
    — a slice-to-end-of-file replacement once deleted four tests silently, and a
    deleted test does not fail.
 

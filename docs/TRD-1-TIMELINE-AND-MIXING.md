@@ -209,7 +209,7 @@ Found by reading `effects.py` and `mixer.py` during the consensus pass, and each
 one would have been a second implementation of something that exists.
 
 **(a) `effects.filter_sweep` IS automation, and it is already built.**
-`effects.py:77` emits a time-varying highpass/lowpass as an `asendcmd`
+`effects.py:79` emits a time-varying highpass/lowpass as an `asendcmd`
 staircase, capped at `SWEEP_MAX_STEPS = 200` steps of `SWEEP_STEP_S = 0.1`. A
 `lowpass_hz`/`highpass_hz` automation lane capped at 64 points would be the same
 feature with a different cap. **So: automation is the model, `asendcmd` is the
@@ -259,10 +259,11 @@ promise what the renderer will not produce.
 mouse produced; the stored curve is the decimated one, and the client re-reads
 what was stored. Rule: Ramer–Douglas–Peucker with a per-lane epsilon
 (`gain_db` 0.25 dB, `pan` 0.02, filter frequencies 2% of the value), then a hard
-cap of `AUTOMATION_MAX_POINTS = 64` points per lane per item, taking the highest-
+cap of 64 points per lane per item — **built as `automation.MAX_POINTS`**, not
+the `AUTOMATION_MAX_POINTS` this document named — taking the highest-
 error points first.
 
-- `T1-9` Posting 3000 points from a 60 Hz drag stores at most 64, and the stored
+- `T1-9c` Posting 3000 points from a 60 Hz drag stores at most 64, and the stored
   curve's value at 100 sampled times is within the lane's epsilon of the raw
   curve at the same times. Both halves are needed: the cap alone would pass with
   a curve that keeps the first 64 points and throws the shape away.
@@ -293,8 +294,11 @@ timeline needs numbers, not a picture, because the regions have to be draggable.
   or for anything claiming to show clipping. A per-channel waveform is a second
   decode and has to be asked for deliberately, not assumed to be free.
 - `T1-13` A request for zoom level *z* returns at most `PEAKS_MAX_POINTS` (2048)
-  pairs regardless of song length. A 60-minute set must not decode in the
-  browser (outside review, point 6).
+  pairs regardless of song length, **and at least one pair for a song that has
+  audio**. Bounded above only, `return []` passes — and it takes `T1-14` with
+  it, because "the decimated envelope equals the full-resolution min/max" is
+  vacuously true over zero buckets. Both halves or neither. A 60-minute set must
+  not decode in the browser (outside review, point 6).
 - `T1-14` The decimated envelope's per-bucket min/max equals the full-resolution
   min/max over the same span, exactly — decimation is a max/min reduce, not a
   resample. A waveform that under-reports a peak is a waveform that lies about
@@ -342,8 +346,10 @@ requires real automation that the other modes expose as individual controls.
   normal mode's stated purpose.
 - `T1-20` Switching audience never changes stored values. Round-trip
   easy → advanced → easy and assert every `set_items` column and every
-  automation row is unchanged. **Paired with an assertion that the audiences
-  differ at all** — that the affordance set returned for easy is not the one
+  automation row is unchanged — **after asserting the switch DID something**:
+  `mode_audience` must read back as what was set, or deleting audience switching
+  entirely leaves every column trivially unchanged and this passes.
+  **Paired with an assertion that the audiences differ at all** — that the affordance set returned for easy is not the one
   returned for advanced. Alone this criterion passes when the mode switch is a
   no-op, which is the "easy is a CSS class" outcome §7 exists to refuse.
 
@@ -424,7 +430,9 @@ it is the one that must survive a mobile client being written against the same
 API.
 
 The studio today is FastAPI + Jinja2 + htmx with logic and presentation
-interleaved. `app.py:5711`'s render route is the concrete example: it reads the
+interleaved. `app.py:5875`'s `render_set_route` is the concrete example (this said 5711,
+which is `add_set_item` — an audit caught it; the description was right and the
+line number was not): it reads the
 items, joins the songs, decides which path (audio vs video), builds every item
 dict, and enqueues — all inside the route handler, all unreachable from any
 client that is not this HTML page.
@@ -522,8 +530,9 @@ The rules this project arrived at by being wrong, applied to this document:
    caught by the wrong bound, and a `demo()` branch never reached.
 3. **Never replace a slice that runs to the end of a file**, and check
    `grep -c "^def test_"` before and after. A deleted test does not fail.
-4. Baseline before and after: `cd studio && python3 -m pytest -q .` (232 at the
-   time of writing), `python3 check_integration.py`, `python3 mixer.py`.
+4. Baseline before and after: `cd studio && python3 -m pytest -q .` (the count is
+   deliberately NOT written down here -- it was copied into three documents and
+   all three went stale; green before and after is the requirement), `python3 check_integration.py`, `python3 mixer.py`.
 
 5. **A REFUSAL or a PRESENCE is half a criterion.** Found by a second
    independent reviewer, and it is systematic rather than incidental: a
