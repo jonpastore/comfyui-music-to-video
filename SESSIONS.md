@@ -1670,3 +1670,37 @@ Append dated one-liners. Newest at the bottom.
   AND the comment above `MINOR_TERMS` is the load-bearing one that must NOT be
   softened when someone edits that file. Both want attention from whoever holds
   `guardrail.py` -- this is specification only and **no code has changed**.
+- 2026-08-13 (A) **RESEARCHED, not assumed: the legal ground under the tier
+  names, and two assumptions in them were wrong.** General information, not
+  legal advice. Written into TRD-10 §6a with citations.
+  - **The statutory floor for real performers is 18, not 21.** 18 U.S.C. § 2257
+    makes a producer verify each performer's age **by examining an ID document**
+    and keep the records; up to five years for a first offence.
+  - **§ 2257 does not reach synthetic content at all** -- it governs depictions
+    of ACTUAL HUMAN BEINGS. No performer, no ID, no records. **That is not a
+    permission; it is the removal of the mechanism that does the protecting.**
+  - **18 U.S.C. § 1466A is the statute that DOES reach this studio.** It covers
+    drawings, cartoons, animations, sculptures, paintings and **computer-
+    generated images**, and **does not require an actual minor to be involved**
+    -- added by the PROTECT Act 2003 to close the gap a 2002 Supreme Court
+    decision opened. Synthetic CSAM is criminal with no real child anywhere.
+  - **The rating names are looser than they look.** R is "Under 17 Requires
+    Accompanying Parent or Adult Guardian". **X was retired in 1990** for NC-17,
+    "No One 17 and Under Admitted" (reworded 1996, effectively an 18 floor).
+    **`xxx` was NEVER an MPAA rating** -- self-applied by the adult industry.
+    The MPA system is **voluntary with no legal standing.** Our ladder is
+    MPAA-SHAPED with a top tier that is the operator's own label.
+- 2026-08-13 (A) **So `PINNED`'s "at least 21 years" STAYS, and the reason is
+  now written down instead of being a whim.** It is NOT a legal minimum -- 18
+  would be lawful. It is a **margin against the model's output distribution**,
+  and it is the only defence available: § 2257 protects by checking an ID and
+  **a synthetic performer has no ID**, while § 1466A turns on whether a
+  depiction **APPEARS** to be a minor. The only remaining control is that the
+  output does not look like one, and a prompt asking for 18 puts the
+  distribution ON the boundary where 21+ pushes it away. Same shape as `T4-11`'s
+  body-part list: steering a distribution, not making a declaration.
+  **`T10-18c`: never below 18, and a change needs a rendered differential.**
+  Also worth knowing for the tier split: **R-rated films routinely contain child
+  characters** -- Jon's "R may mention, never sexually" maps onto how the real
+  rating actually works, and the absolute line sits at the adult tier where he
+  put it.

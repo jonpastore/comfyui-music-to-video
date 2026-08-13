@@ -183,6 +183,54 @@ elsewhere.
 **The design: a minor reference and explicit capability can never coexist, and
 they are kept apart structurally rather than by screening prose.**
 
+#### The legal ground, researched 2026-08-13 rather than assumed
+
+Recorded because the tier names imply a legal framework and two of the
+assumptions in them are wrong. **This is general information, not legal advice.**
+
+- **The statutory floor for real performers is 18, not 21.**
+  [18 U.S.C. § 2257](https://www.law.cornell.edu/uscode/text/18/2257) requires a
+  producer of sexually explicit depictions of **actual human beings** to verify
+  each performer's age by **examining an identification document** and to
+  maintain those records. First-offence violations carry up to five years.
+- **§ 2257 does not reach synthetic content**, because it governs depictions of
+  actual human beings. No performer, no ID, no records. **That is not a
+  permission**, it is the removal of the mechanism that does the protecting.
+- **[18 U.S.C. § 1466A](https://uscode.house.gov/view.xhtml?req=granuleid%3AUSC-prelim-title18-section1466A)
+  is the statute that reaches this studio.** It covers *drawings, cartoons,
+  animations, sculptures, paintings and computer-generated images*, and
+  **does not require that an actual minor be involved.** Congress added it in
+  the PROTECT Act of 2003 to close the gap a 2002 Supreme Court decision opened.
+  Synthetic CSAM is criminal with no real child anywhere in the process.
+- **The rating names are looser than they look.** R is *"Restricted — Under 17
+  Requires Accompanying Parent or Adult Guardian"*. **X was retired in 1990** and
+  replaced by NC-17, *"No One 17 and Under Admitted"* — reworded in 1996 from
+  "No Children Under 17", which effectively raised the floor to 18. **`xxx` was
+  never an MPAA rating**; it is self-applied by the adult industry. The MPA
+  system is **voluntary and has no legal standing**. So this studio's ladder is
+  MPAA-*shaped*, with a top tier that is the operator's own label.
+
+**Therefore `PINNED`'s "at least 21 years" stays, and the reason is now stated
+rather than arbitrary.** It is **not** a legal minimum — 18 would be lawful. It
+is a **margin against the model's output distribution**, and it is the only
+defence this studio has:
+
+> § 2257 protects by checking an ID, and **a synthetic performer has no ID**, so
+> that mechanism has no analogue here. § 1466A turns on whether a depiction
+> **appears** to be a minor. The only control left is that the output does not
+> look like one — and a prompt asking for 18 puts the distribution **on** the
+> boundary where one asking for 21+ pushes it away.
+
+Same reasoning as `T4-11`'s body-part list: steering a distribution, not making
+a declaration. The number is tunable **upward** with a reason; **18 is the floor
+below which it may never go**, and lowering it to 18 would trade the margin for
+nothing anyone needs.
+
+- `T10-18c` **`PINNED`'s minimum age is never below 18, and the current value and
+  its reason are recorded together.** A change to it is a change to the studio's
+  only working steering control on this axis, and must be made with a rendered
+  differential rather than a preference — `T4-11`'s shape.
+
 **Decided 2026-08-13 by Jon, per tier:**
 
 | tier | a minor may be… | and never… |
