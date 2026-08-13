@@ -61,9 +61,9 @@ COMPOSITE = (
     "in the frame, standing by herself."
 )
 DEFAULT_BODY = (
-    "Body colouring and texture are identical head to toe, matching the face: the same "
-    "shade on shoulders, arms, torso, hips, thighs and calves, with no lighter or "
-    "differently-toned patches anywhere."
+    "Her entire body from shoulders to feet carries the same colouring and texture as her "
+    "face, uniform in shade on shoulders, upper arms, forearms, hands, torso, hips, thighs, "
+    "calves and feet, every part the same single tone."
 )
 # POSITIVE ONLY, and that is the whole point of the rewrite.
 #
@@ -84,8 +84,9 @@ BACKDROP = (
     "The background is one flat sheet of neutral mid-grey, evenly lit and completely empty, "
     "with the floor the same unbroken grey as the wall behind her and a soft contact shadow "
     "under her feet. She stands upright and unsupported in an empty studio, clear of the "
-    "edges of the frame. Clean neutral studio character sheet, crisp air, sharp focus, high "
-    "detail, full body head to toe inside the frame."
+    "edges of the frame. Even neutral studio lighting, white balanced, daylight colour "
+    "temperature, the same light on both sides of her. Clean neutral studio character "
+    "sheet, crisp air, sharp focus, high detail, full body head to toe inside the frame."
 )
 DEFAULT_VIEWS = {
     "front": (
@@ -195,13 +196,18 @@ POSITIVE_CONSTANTS = ("COMPOSITE", "DEFAULT_IDENTITY", "DEFAULT_WARDROBE", "DEFA
 _NEGATION_PATTERNS = (r"\bno\s+\w", r"\bnot\s+\w", r"\bwithout\s+\w",
                      r"\bnever\s+\w", r"\bfree\s+of\b", r"\bavoid\b")
 
-# The one exception, stated rather than left as an oddity: DEFAULT_BODY and a
-# profile's body clause may say "no lighter patches" and "no human skin",
-# because there the thing being denied is a PROPERTY OF THE SUBJECT already in
-# frame rather than an object to be added to it -- "no lighter patches" cannot
-# summon a second character the way "no alley" summons an alley. It is still
-# weaker than a positive statement, which is why DEFAULT_BODY leads with one.
-_NEGATION_ALLOWED = ("DEFAULT_BODY",)
+# NO EXCEPTIONS. This was ("DEFAULT_BODY",), on the argument that a denied
+# PROPERTY of a subject already in frame cannot summon an object the way "no
+# alley" summons an alley -- so "no lighter or differently-toned patches" was
+# allowed to stand.
+#
+# The argument is defensible and the OUTPUT refuted it: lighter fur patches and
+# two-tone limbs are exactly what that clause denied, at cfg 4.5 / 28 steps
+# where the negative prompt is live. A reasoned exception losing to an
+# observation is the observation winning. DEFAULT_BODY is a pure positive
+# assertion now, and it NAMES THE PARTS -- "identical head to toe" is a summary
+# a model can satisfy by averaging, and a list is not. docs/TRD-4 T4-10, T4-11.
+_NEGATION_ALLOWED = ()
 
 
 def load_anchor(profile_path):
