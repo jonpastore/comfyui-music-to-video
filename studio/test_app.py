@@ -5329,13 +5329,33 @@ def test_no_positive_prompt_constant_tries_to_negate():
     """
     import make_anchor as m
     bad = []
-    for name in m.POSITIVE_CONSTANTS:
-        if name in m._NEGATION_ALLOWED:
-            continue
-        text = getattr(m, name)
+    texts = [(name, getattr(m, name)) for name in m.POSITIVE_CONSTANTS
+             if name not in m._NEGATION_ALLOWED]
+    # ...AND the studio's own defaults for the same clauses, which are the ones
+    # that actually render. album_profile() fills every ALBUM_FIELDS entry from
+    # its default, anchor_profile_fields copies anything truthy into the profile,
+    # and anchor_from prefers a profile value over the constant -- so for every
+    # album in the database these WIN. Walking only make_anchor's constants is
+    # how the body clause kept "with no lighter or differently-toned patches
+    # anywhere" through the commit that deleted _NEGATION_ALLOWED for saying it:
+    # the constant was fixed, the default that overrides it was not, and the
+    # composed prompt still carried the negation.
+    # The HINTS are not walked and must not be: they are UI prose telling the
+    # operator "say what is WORN, never what is absent", which is advice about
+    # negation rather than negation in a prompt.
+    texts += [(f"ALBUM_FIELDS[{k!r}] default", appmod.ALBUM_FIELDS[k][1])
+              for k in appmod.ANCHOR_PROFILE_FIELDS if k in appmod.ALBUM_FIELDS]
+    for name, text in texts:
         for pat in m._NEGATION_PATTERNS:
             for hit in re.finditer(pat, text, re.I):
                 bad.append(f"{name}: ...{text[max(0, hit.start() - 30):hit.end() + 25]}...")
+    # One fact, one wording. Equal rather than merely both-clean, because two
+    # copies that pass the same screen still drift into two different sheets --
+    # and the studio's copy is the one a render is built from.
+    assert appmod.ALBUM_FIELDS["body"][1] == m.DEFAULT_BODY, (
+        "the album's default body clause and make_anchor.DEFAULT_BODY have drifted; the "
+        "album's is what renders\n  album:  " + appmod.ALBUM_FIELDS["body"][1] +
+        "\n  module: " + m.DEFAULT_BODY)
     assert not bad, (
         "negation in a POSITIVE prompt constant -- the model will draw the thing being "
         "denied. Move it to the negative prompt (app.DEFAULT_NEGATIVE) and say what IS "

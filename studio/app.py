@@ -4759,8 +4759,19 @@ ALBUM_FIELDS = {
         "entirely, so \"no jacket\" does nothing. Name garments, cut and hardware."),
     "body": (
         "Body consistency",
-        "Body colouring and texture are identical head to toe, matching the face, with no "
-        "lighter or differently-toned patches anywhere.",
+        # WORD FOR WORD make_anchor.DEFAULT_BODY, asserted by
+        # test_no_positive_prompt_constant_tries_to_negate. This default was the
+        # negating wording ("...with no lighter or differently-toned patches
+        # anywhere") for as long as the constant was, and it OUTLIVED the fix:
+        # album_profile() fills every field from these defaults, so a truthy body
+        # value always reaches anchor_from() and always wins over the constant.
+        # T4-11's positive nine-part clause was therefore unreachable for every
+        # album in the database, and what rendered was the exact sentence
+        # _NEGATION_ALLOWED was emptied to forbid. Two copies of one fact, and
+        # the studio held the one that ships.
+        "Her entire body from shoulders to feet carries the same colouring and texture as her "
+        "face, uniform in shade on shoulders, upper arms, forearms, hands, torso, hips, thighs, "
+        "calves and feet, every part the same single tone.",
         "Re-assert colouring PER BODY PART. One mention at the top does not hold below the "
         "waist -- this is the fix for a black-furred character rendering with human-toned "
         "legs, and it has to be positive wording, not a negative."),
