@@ -890,6 +890,14 @@ ANCHOR_RENDER_FLAGS = {"mode": "--mode", "negative": "--negative",
                        "ref_method": "--ref-method", "steps": "--steps",
                        "cfg": "--cfg", "sampler_name": "--sampler",
                        "scheduler": "--scheduler", "denoise": "--denoise",
+                       # What the sampler starts from. "empty" is noise at the
+                       # requested size -- the character-sheet case, and the only
+                       # thing this path could do until now, which is why five of
+                       # the six denoise values on the form were labelled "returns
+                       # noise" and were correct. "image" encodes the first
+                       # reference, so denoise below 1.0 refines an existing sheet
+                       # instead. docs/TRD-7 T7-8.
+                       "latent": "--latent",
                        # The BASE seed. Omitted means make_anchor draws a random
                        # one, which is what makes a second click of Generate
                        # produce different sheets, and that stays the default.

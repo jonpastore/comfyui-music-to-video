@@ -2058,7 +2058,8 @@ def _anchor_ctx_from_form(form, album, character_id):
     views_sel = [v for v in form.getlist("view") if v] or ["front"]
     typed = {k[len("prompt_"):]: v for k, v in form.items() if k.startswith("prompt_")}
     return anchor_form_ctx(album, tiers_sel, views_sel, character_id, typed,
-                            negative=form.get("negative") or "")
+                            negative=form.get("negative") or "",
+                            latent=form.get("latent"))
 
 
 @app.post("/anchors/refs")
@@ -2298,14 +2299,40 @@ STEPS_CHOICES = (
 # below 1.0 leaves it partly un-denoised. The values are offered because the
 # spec asks for them and a refine-from-image pass genuinely wants them; the
 # default stays 1.0 and each lower value says what it is for.
-DENOISE_CHOICES = (
-    ("0.35", "0.35 — refine-from-image only; on an anchor this returns noise"),
-    ("0.45", "0.45 — refine-from-image only; on an anchor this returns noise"),
-    ("0.55", "0.55 — refine-from-image only; on an anchor this returns noise"),
-    ("0.65", "0.65 — the spec's default; on an anchor this returns noise"),
-    ("0.75", "0.75 — refine-from-image only; on an anchor this returns noise"),
-    ("1.0", "1.0 — full denoise, the only correct value from an empty latent"),
+#
+# ...and the labels are computed from the latent mode rather than written down,
+# because both halves used to be true at once: the values were offered AND every
+# one of them was documented as broken. What made them broken was
+# latent_mode="empty", which is now a control (LATENT_CHOICES), so the same list
+# is honest under one mode and useless under the other. One resolver, so the
+# label and the graph cannot disagree -- an editor promising what the renderer
+# does not produce is this codebase's recurring defect. docs/TRD-7 T7-8.
+LATENT_CHOICES = (
+    ("empty", "empty latent — generate a new sheet from noise, at the size below"),
+    ("image", "from the first reference — refine it, keeping its composition and size"),
 )
+DEFAULT_LATENT = "empty"
+DENOISE_VALUES = ("0.35", "0.45", "0.55", "0.65", "0.75", "1.0")
+
+
+def denoise_choices(latent=DEFAULT_LATENT):
+    """[(value, label)], worded for the latent the sampler will actually start
+    from. Below 1.0 from an EMPTY latent leaves part of the noise in the output;
+    below 1.0 from an encoded image is the point of the control."""
+    if latent == "image":
+        return tuple(
+            (v, {"0.35": "0.35 — barely touched; the reference with a new surface",
+                 "0.45": "0.45 — light refine, composition and pose held",
+                 "0.55": "0.55 — the usable middle: same sheet, re-rendered",
+                 "0.65": "0.65 — the spec's default; pose held, detail redrawn",
+                 "0.75": "0.75 — heavy; keeps little more than the layout",
+                 "1.0": "1.0 — full denoise, which discards the reference entirely"}[v])
+            for v in DENOISE_VALUES)
+    return tuple(
+        (v, f"{v} — refine-from-image only; from an empty latent this returns noise")
+        if v != "1.0" else
+        (v, "1.0 — full denoise, the only correct value from an empty latent")
+        for v in DENOISE_VALUES)
 
 # How many candidates a CFG sweep renders at each guidance value. Off is the
 # default and everything else is a deliberate multi-sheet job.
@@ -2383,6 +2410,17 @@ ANCHOR_HELP = {
         "a point, more detail; past roughly 30 on this model the returns are hard to see.",
         "4 is the Lightning LoRA's own count and is only meaningful at CFG 1.0 with the LoRA "
         "on. Four steps <em>without</em> the LoRA is an undercooked image, not a fast one."]},
+    "latent": {"label": "Sampler starts from", "body": [
+        "<strong>empty latent</strong> is pure noise at the size you asked for &mdash; a new "
+        "sheet, and the only thing this form could do until now.",
+        "<strong>from the first reference</strong> <code>VAEEncode</code>s your first base "
+        "image and denoises from there, so the output keeps its composition and its size and "
+        "the width and height controls stop applying. This is what makes Denoise below 1.0 "
+        "mean anything: with an empty latent there is nothing to preserve, which is why every "
+        "value under 1.0 was labelled as returning noise.",
+        "The pairing worth knowing: press <strong>Use as reference</strong> on a sheet you have "
+        "already picked, then refine it here at 0.55. That varies a sheet you approved instead "
+        "of re-interpreting the photographs and hoping."]},
     "denoise": {"label": "Denoise", "body": [
         "How much of the starting latent is replaced. 1.0 denoises it completely; lower values "
         "preserve some of what was already there.",
@@ -2488,6 +2526,16 @@ def anchor_render_settings(form):
             raise HTTPException(400, f"reference method must be one of "
                                       f"{', '.join(build_refs.REF_METHODS)}")
         out["ref_method"] = ref
+
+    # What the sampler starts from. Sent ALWAYS, not only when it differs from
+    # the default: it decides whether the denoise value the form is showing means
+    # anything, and a control whose effect depends on another control has to
+    # travel with it. docs/TRD-7 T7-8.
+    latent = (form.get("latent") or DEFAULT_LATENT).strip().lower()
+    if latent not in dict(LATENT_CHOICES):
+        raise HTTPException(400, f"the latent must be one of "
+                                  f"{', '.join(k for k, _ in LATENT_CHOICES)}")
+    out["latent"] = latent
 
     # The base seed. Blank means make_anchor draws a random one, which is what
     # makes a second click of Generate produce different sheets -- so blank
@@ -3087,9 +3135,15 @@ async def anchor_preflight(request: Request):
     if settings and not build_refs_negative_applies(settings) and (form.get("negative") or "").strip():
         notes.append("The negative prompt will be DROPPED: it needs CFG above 1.0, and "
                      "ComfyUI skips the negative pass entirely below that.")
-    if settings.get("denoise", 1.0) < 1.0:
-        notes.append(f"Denoise {settings['denoise']:g} on an anchor returns noise -- these "
-                     f"render from an empty latent, so there is nothing to preserve.")
+    # ...and only when the latent it is true OF is the one selected. This note
+    # was unconditional, which was correct while latent_mode was pinned to
+    # "empty" and became a false warning the moment it was not: the same
+    # sentence that warned about wasted renders would have talked the operator
+    # out of the refine pass the control now does. docs/TRD-7 T7-8.
+    if settings.get("denoise", 1.0) < 1.0 and render.get("latent", DEFAULT_LATENT) == "empty":
+        notes.append(f"Denoise {settings['denoise']:g} from an empty latent returns noise -- "
+                     f"there is nothing to preserve. Set the sampler to start from the first "
+                     f"reference and it refines that instead.")
     return JSONResponse({"sheets": sheets, "jobs": jobs_queued, "seconds": round(secs),
                          "sweep": bool(sweep), "blockers": blockers, "notes": notes,
                          "settings": settings})
@@ -3539,7 +3593,7 @@ def anchor_plan(selected_tiers, selected_views):
 
 
 def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), character_id=None,
-                    typed_prompts=None, negative=None, tones=None):
+                    typed_prompts=None, negative=None, tones=None, latent=None):
     """The generate form for one album, across any number of tiers and views.
 
     Every view is offered against every tier; see anchor_plan() for what gets
@@ -3594,6 +3648,13 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
     # of pinned to whatever number it resolved to that day.
     runs = recent_anchor_runs(album, character_id)
     last = db.jset(runs[0], "form_json") if runs else {}
+    # The latent the denoise labels are worded for: what this swap carries, else
+    # what was last generated with, else empty. Carried like the negative and the
+    # tier wordings, because a control that resets itself on every swap is a
+    # control you cannot set.
+    last_latent = latent or last.get("latent") or DEFAULT_LATENT
+    if last_latent not in dict(LATENT_CHOICES):
+        last_latent = DEFAULT_LATENT
     return {
         "tiers": all_t, "albums": albums, "form_album": album,
         "selected_tiers": selected, "views": views, "selected_views": chosen_views,
@@ -3644,7 +3705,12 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
         "max_negative": MAX_NEGATIVE,
         "negative": negative, "negative_versions": saved_negatives,
         "cfg_choices": CFG_CHOICES, "default_negative": DEFAULT_NEGATIVE,
-        "steps_choices": STEPS_CHOICES, "denoise_choices": DENOISE_CHOICES,
+        # Worded for the latent the form is currently set to, and the form
+        # re-fetches itself when that changes -- the labels are the only thing
+        # saying whether a denoise value does anything at all.
+        "steps_choices": STEPS_CHOICES,
+        "latent_choices": LATENT_CHOICES, "latent": last_latent,
+        "denoise_choices": denoise_choices(last_latent),
         # (candidates per point, total sheets) -- the cost is computed here so
         # the form states it rather than leaving it to be discovered
         "sweep_choices": [(c, c * len(CFG_CHOICES)) for c in CFG_SWEEP_CHOICES],
@@ -3710,7 +3776,8 @@ def anchor_form(request: Request, album: str = "", tier: List[str] = Query([]),
              if same_subject else {})
     return templates.TemplateResponse(request, "_anchor_form.html",
                                        anchor_form_ctx(album, tier, view or ["front"],
-                                                       character_id, typed_prompts, negative, tones))
+                                                       character_id, typed_prompts, negative, tones,
+                                                       latent=qp.get("latent")))
 
 
 def _drop_anchor(row):

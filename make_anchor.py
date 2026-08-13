@@ -316,7 +316,19 @@ def main():
     ap.add_argument("--lora-strength", dest="lora_strength", type=float, default=None,
                     help="Lightning LoRA weight. Above 0 with cfg > 1 is mush; the modes "
                          "set it for you.")
+    ap.add_argument("--latent", choices=("empty", "image"), default="empty",
+                    help="empty = generate from noise at --width x --height, the character "
+                         "sheet case. image = VAEEncode the FIRST reference and denoise from "
+                         "it, which is what makes --denoise below 1.0 mean anything: it "
+                         "refines an existing sheet instead of returning partly-undenoised "
+                         "noise. In image mode the output inherits the reference's size and "
+                         "--width/--height are ignored.")
     args = ap.parse_args()
+    if args.latent == "image" and not args.images:
+        # build_refs.workflow falls back to an empty latent when there is no
+        # image to encode, so this would silently render the other mode -- and
+        # at denoise 0.55 that is noise, an hour later, with nothing saying why.
+        ap.error("--latent image needs at least one reference image to encode")
 
     settings = build_refs.sampler_settings(
         args.mode, steps=args.steps, cfg=args.cfg, sampler_name=args.sampler_name,
@@ -350,11 +362,18 @@ def main():
         # same chokepoint every other prompt goes through. It used to be called
         # with guard="" here, so an anchor got PINNED but never its TIER's
         # wording -- which is what a nude anchor needs to be permitted at all.
-        # slot 1 is the identity lock, slot 2 the composition plate, slot 3 spare
-        # -- build_refs.workflow owns that assignment, so the list is simply
-        # handed over in order
+        #
+        # NO COMPOSITION PLATE, and base=None is the whole of it. This used to
+        # be `images[1]`, so whichever photograph happened to be picked second
+        # was silently promoted to the plate that sets composition -- a role the
+        # form never mentioned and the caller could not choose. It contradicted
+        # this file's own model of its input: the references are an unordered SET
+        # of photographs of ONE character (see COMPOSITE), not a face and a
+        # layout. With latent_mode "empty" the plate did nothing a plain
+        # reference does not, so the concept is gone rather than exposed.
+        # An anchor sheet has no composition to inherit. docs/TRD-7 T7-9.
         wf = workflow(scene, images[0] if images else "",
-                      images[1] if len(images) > 1 else None, "empty",
+                      None, args.latent,
                       args.width, args.height, seed, "", args.guardrail,
                       # name=None: these are more photographs of the SAME
                       # character, not cast members. They used to be auto-named
@@ -363,7 +382,7 @@ def main():
                       # person asserted into a prompt whose composite clause
                       # says all the references show one. docs/TRD-7 T7-10.
                       extra_refs=[(None, img, "")
-                                  for img in images[2:]],
+                                  for img in images[1:]],
                       settings=settings, ref_method=args.ref_method)
         wf["18"] = {"class_type": "SaveImage", "inputs": {
             "images": ["17", 0],
@@ -372,8 +391,13 @@ def main():
     per = 15 if settings["lora_strength"] else 60
     note = "" if build_refs.negative_applies(settings) else \
         " -- negative prompt INERT at cfg 1.0, use --mode quality for it to apply"
+    # The size is only true in "empty" mode: an encoded latent inherits the
+    # reference's dimensions and --width/--height do nothing. Printing them
+    # anyway is the same lie the denoise labels used to tell.
+    size = (f"{args.width}x{args.height}" if args.latent == "empty"
+            else "size inherited from the reference")
     print(f"{args.n} {args.view} anchor candidates -> {args.outdir} "
-          f"({args.width}x{args.height}, {args.mode} mode: {settings['steps']} steps "
+          f"({size}, {args.mode} mode: {settings['steps']} steps "
           f"cfg {settings['cfg']}, ~{args.n * per}s to render){note}")
 
 

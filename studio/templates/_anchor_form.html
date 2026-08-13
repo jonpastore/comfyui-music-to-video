@@ -216,6 +216,23 @@
        warning sits with it. A closed <details> is worse than a modal for a
        silent-failure warning: a modal takes a deliberate click to open, while a
        collapsed section tells you that reading the visible page was enough. #}
+    {# What the sampler STARTS from, beside the control whose meaning depends on
+       it. Denoise below 1.0 was documented as returning noise on every one of
+       its own options, and that was true and unfixable while the latent was
+       pinned to empty. docs/TRD-7 T7-8. Changing this re-fetches the form so the
+       denoise labels are re-worded by the server -- one resolver
+       (app.denoise_choices), so the label and the graph cannot disagree. #}
+    <div class="field-row">
+      <label>
+        <span class="label-text">Sampler starts from{{ help("latent") }}</span>
+        <select name="latent" hx-get="/anchors/form" hx-target="#anchor-form"
+                hx-swap="outerHTML" hx-include="#anchor-form">
+          {% for value, label in latent_choices %}
+          <option value="{{ value }}" {% if value == latent %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
     <div class="field-row">
       <label>
         <span class="label-text">Denoise{{ help("denoise") }}</span>
@@ -227,10 +244,18 @@
         </select>
       </label>
     </div>
+    {% if latent == "image" %}
+    <p class="hint"><span class="tag">refining the first reference</span>
+      The sheet is re-rendered from your first base image, so denoise below 1.0 is the point of
+      the control: it keeps that image's composition and size and redraws the surface. The width
+      and height below are <strong>ignored</strong> &mdash; the output inherits the reference's.
+      Pair it with <strong>Use as reference</strong> on a sheet you have already picked.</p>
+    {% else %}
     <p class="hint"><span class="tag warn-tag">returns noise below 1.0</span>
-      An anchor renders from an EMPTY latent (<code>EmptySD3LatentImage</code>), so there is no
-      base image to preserve and anything under 1.0 leaves it partly un-denoised. The lower
-      values are offered because a refine-from-image pass wants them; this is not one.</p>
+      This renders from an EMPTY latent (<code>EmptySD3LatentImage</code>), so there is no
+      base image to preserve and anything under 1.0 leaves it partly un-denoised. Switch the
+      control above to start from your first reference and the lower values refine it instead.</p>
+    {% endif %}
 
     <details>
       <summary>Sampler &mdash; only if you know why</summary>

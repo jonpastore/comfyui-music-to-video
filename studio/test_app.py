@@ -2163,6 +2163,122 @@ def _anchor_group(album, n=3, tier="r", view="front"):
     return ids
 
 
+def _emit_anchor_workflow(tmpdir, images, extra=()):
+    """Run make_anchor.py exactly as pipeline._run_script does and return the one
+    workflow it wrote. The GRAPH is the artifact that reaches ComfyUI, so that is
+    what these assertions read -- a helper's return value is not what renders."""
+    import pipeline as _pipeline
+    out = os.path.join(tmpdir, "wf")
+    r = subprocess.run([sys.executable, os.path.join(_pipeline.SCRIPTS, "make_anchor.py"),
+                        "--images", ",".join(images), "--outdir", out, "--n", "1",
+                        "--view", "front", "--seed", "4200", *extra],
+                       capture_output=True, text=True, timeout=60)
+    if r.returncode:
+        return None, r.stderr
+    wfs = [f for f in os.listdir(out) if f.endswith(".json")]
+    assert len(wfs) == 1, wfs
+    return json.load(open(os.path.join(out, wfs[0]))), r.stdout
+
+
+def test_no_reference_is_silently_promoted_to_a_composition_plate(tmp_path):
+    """`images[1]` went to build_refs.workflow as `base` -- the plate that sets
+    composition, image2, and the VAEEncode source in image mode. Whichever
+    photograph happened to be ticked second got that role, the form never
+    mentioned it, and nothing could choose it.
+
+    It also contradicted this file's own model of its input: the references are
+    an unordered SET of photographs of one character (make_anchor.COMPOSITE),
+    not a face and a layout. docs/TRD-7 T7-9."""
+    d = str(tmp_path)
+    for n in ("one.png", "two.png", "three.png"):
+        open(os.path.join(d, n), "wb").write(_png_bytes())
+    wf, _ = _emit_anchor_workflow(d, [os.path.join(d, n) for n in
+                                       ("one.png", "two.png", "three.png")])
+    assert wf, "make_anchor did not emit a workflow"
+
+    # nodes 9/10 are the base plate's LoadImage/FluxKontextImageScale pair in
+    # build_refs.workflow, and they must not exist for an anchor
+    assert "9" not in wf and "10" not in wf, \
+        f"a reference was promoted to the composition plate: {sorted(wf)}"
+    enc = wf["11"]["inputs"]
+    # all three still reach the model -- the plate is gone, not a reference
+    assert enc.get("image1") and enc.get("image2") and enc.get("image3"), enc
+    loaded = {n["inputs"]["image"] for n in wf.values()
+              if n["class_type"] == "LoadImage"}
+    assert len(loaded) == 3, f"a reference was dropped rather than re-slotted: {loaded}"
+    # ...and none of them is announced as a second character. cast_clause names a
+    # slot only for a NAMED extra; three photographs of one person get no clause.
+    assert "is reference" not in enc["prompt"], enc["prompt"]
+    assert "The character in image" not in enc["prompt"], enc["prompt"]
+
+
+def test_the_sampler_can_start_from_a_reference_instead_of_noise(tmp_path):
+    """Five of the six denoise values were labelled "returns noise" and were
+    correct: latent_mode was pinned to "empty", so there was no base latent to
+    preserve. The control that made them true is now a control.
+    docs/TRD-7 T7-8."""
+    d = str(tmp_path)
+    img = os.path.join(d, "ref.png")
+    open(img, "wb").write(_png_bytes())
+
+    empty, _ = _emit_anchor_workflow(d, [img])
+    assert empty["15"]["class_type"] == "EmptySD3LatentImage", empty["15"]
+    assert empty["15"]["inputs"]["width"] == 896
+
+    image, _ = _emit_anchor_workflow(d, [img], ["--latent", "image", "--denoise", "0.55"])
+    assert image["15"]["class_type"] == "VAEEncode", (
+        "the latent mode did not reach the graph, so denoise below 1.0 still "
+        f"returns noise: {image['15']}")
+    # it encodes the REFERENCE, through the same FluxKontextImageScale the
+    # conditioning uses -- not the raw LoadImage, whose size the model has not
+    # been given
+    assert image["15"]["inputs"]["pixels"] == ["8", 0], image["15"]["inputs"]
+    assert image["16"]["inputs"]["denoise"] == 0.55, image["16"]["inputs"]
+
+    # and it REFUSES rather than silently rendering the other mode: with no
+    # reference there is nothing to encode, build_refs falls back to an empty
+    # latent, and at denoise 0.55 that is noise an hour later with nothing
+    # saying why
+    wf, err = _emit_anchor_workflow(d, [], ["--latent", "image"])
+    assert wf is None and "at least one reference" in err, err
+
+
+def test_the_denoise_labels_are_worded_for_the_latent_they_apply_to():
+    """Both halves used to be true at once: the values were offered AND every one
+    of them was documented as broken. One resolver decides the label and the
+    graph, so an editor promising what the renderer does not produce is not
+    reachable by editing one of them. docs/TRD-7 T7-8."""
+    empty = dict(appmod.denoise_choices("empty"))
+    image = dict(appmod.denoise_choices("image"))
+    assert set(empty) == set(image) == set(appmod.DENOISE_VALUES)
+    # the warning is on every sub-1.0 value under empty, and on none under image
+    assert all("returns noise" in empty[v] for v in appmod.DENOISE_VALUES if v != "1.0"), empty
+    assert not any("returns noise" in lbl for lbl in image.values()), image
+    # ...and 1.0 flips meaning rather than being copied: it is the only correct
+    # value from noise and the one that DISCARDS the reference in image mode
+    assert "only correct value" in empty["1.0"] and "discards the reference" in image["1.0"]
+
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Latent Album"})
+        base = {"album": "Latent Album", "tier": "r", "view": "front"}
+        page = client.get("/anchors/form", params=base).text
+        assert "returns noise below 1.0" in page, "the empty-latent warning left the page"
+        refine = client.get("/anchors/form", params={**base, "latent": "image"}).text
+        assert "returns noise below 1.0" not in refine, \
+            "the form still warns about noise while set to refine an image"
+        assert "refining the first reference" in refine
+
+        # the preflight note follows the same switch, from the same field
+        img = [("images", ("p.png", _png_bytes(), "image/png"))]
+        plan = client.post("/anchors/plan",
+                           data={**base, "n": "1", "denoise": "0.55"}, files=img).json()
+        assert any("returns noise" in n for n in plan["notes"]), plan["notes"]
+        plan = client.post("/anchors/plan",
+                           data={**base, "n": "1", "denoise": "0.55", "latent": "image"},
+                           files=img).json()
+        assert not any("returns noise" in n for n in plan["notes"]), plan["notes"]
+
+
 def test_a_rendered_anchor_can_condition_the_next_sheet(patch_stub):
     """Clips stay on-model because gen_refs hands the chosen anchor to the model
     as image1. The anchors form could only read `assets` of kind `anchor_ref`,
