@@ -331,7 +331,13 @@ be split there when that document is next opened.*
 
 ### Phase F — TRD-6, and it is the biggest
 
-24 criteria describing machinery that does not exist. TRD-6 §8 says the thing
+**DECIDED 2026-08-13 by Jon: the queue is rewritten in full.** Asked whether to
+take only `T6-13a` and leave a queue that currently works alone, he chose the
+whole pull model. So this phase is in scope rather than deferred, the §6 risk
+about it costing more than it returns is accepted knowingly, and the ordering
+below stands with `T6-13a` still first because the clip-length chain waits on it.
+
+25 criteria describing machinery that does not exist. TRD-6 §8 says the thing
 that must shape how it is built: **every criterion here specifies a test that
 fails today**, so each one must be written as a red test first or the document
 will be satisfied at scale by the absence of what it describes — the defect

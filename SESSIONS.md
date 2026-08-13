@@ -1231,3 +1231,44 @@ Append dated one-liners. Newest at the bottom.
   needs the clean-worktree recipe above and an idle queue on both boxes.
   **CLAIM RELEASED** — the row at the top is cleared. Every file I held is
   committed; `git status` shows only A's `docs/**`.
+- 2026-08-13 (A) **TRD 4-7 have now had their FIRST external review, and all
+  seven TRDs finally carry a positive-half table.** grok + chatgpt in parallel
+  via `llm`, prompt on STDIN. Zero fabrications. Record:
+  `docs/reviews/TRD47-RECOMMENDATIONS-2026-08-13.md`. Verified first that the
+  four earlier reviews cover TRD-1/2/3 ONLY -- grepping them for any
+  `T4-`/`T5-`/`T6-`/`T7-` id returns nothing.
+  45 one-sided criteria paired across the four; **no criteria added**.
+- 2026-08-13 (A) ⚠ **B -- two findings that touch code you have already
+  shipped or are about to.**
+  1. **`image 2` has two roles and no rule says which wins.** TRD-4 `T4-12` and
+     §6 say "image 2 is the wardrobe reference"; TRD-7 `T7-9` says `base` is
+     image2 and sets the framing; `T7-10` hedges "wardrobe OR plate". A nude
+     view DROPS the wardrobe wording, so what image2 carries there is undefined
+     -- and you have just shipped `base=None` in `d3f2f6a`. Your change is the
+     "make_anchor stops assigning one" branch of `T7-9`, which is the smaller
+     and I think right answer, but the wardrobe-slot question is still open and
+     it is now the only thing image2 could be for.
+  2. **Nothing asserts a DUET can still name two people.** `T7-10` refuses "the
+     character in image 3 is reference 3" and you have shipped that. `T4-12`
+     records that the cast-clause mechanism exists to tell two anchors apart in
+     a duet frame. There is no criterion and no test that the intended
+     two-character case still works, so the single-character fix has no guard
+     against having removed it. Worth one test while the change is fresh.
+- 2026-08-13 (A) **Reconciliation of code against spec:
+  `docs/RECONCILIATION-CODE-VS-SPEC-2026-08-13.md`.** Three answers Jon asked for:
+  - **Nothing was lost to the /clear. TRD-8 and TRD-9 never existed.** All 19
+    session transcripts searched: TRD-1..7 have 165-1004 mentions each, TRD-8 and
+    TRD-9 have 12 each and **every one is from this session**. The set was seven
+    from the start.
+  - **3,147 lines of shipped code that no TRD cites**: `vision.py` 516,
+    `lyrics.py` 405, `publish.py` 399, `chat.py` 330, `creds.py` 309,
+    `beatmatch.py` 259 (capability IS covered by TRD-1 §2, only the name is
+    uncited), `gpu.py` 252, `fleet_watch.py` 250, `mixadvice.py` 247,
+    `make_audio.py` 180.
+  - **1,992 lines of plan documents no TRD absorbed.** Biggest by far:
+    `AUDIO_BUILDOUT_PLAN.md` at 785 lines, whose core idea -- a TAKE is a
+    candidate and is never written over `songs.mp3_path` -- is `T6-A5` stated
+    independently before `T6-A5` existed. **The audio stage shipped WITHOUT it:
+    there is no `takes` table.** Proposed TRD-8 = audio generation and the song
+    editor; TRD-9 = the fleet's operational layer (`gpu.py` + `fleet_watch.py` +
+    `creds.py` + the two backend plans).

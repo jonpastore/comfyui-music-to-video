@@ -179,3 +179,48 @@ refusal or a presence is half a criterion and needs its positive case; and
 **when an image looks wrong, look at it** — the identity collapse, the world
 that never rendered and the LoRA that did nothing all passed every deterministic
 check this project had.
+
+### The positive half of each one-sided criterion
+
+Added 2026-08-13. TRD-1, TRD-2 and TRD-3 each carry one of these and TRD-4
+through TRD-7 did not, because the audit that produced those three was never run
+over these four. Built from the first external review of this document (grok and
+chatgpt, independently — `docs/reviews/TRD47-*-2026-08-13.md`), every id checked
+against the criteria above.
+
+| criterion | why it is one-sided | its positive half |
+|---|---|---|
+| `T4-1` zero views refused | a path that refuses everything passes | at least one selected view **produces a job for that view** |
+| `T4-3` no fallback anywhere | a deleted anchor path has no fallback | a non-empty tier+view selection is **accepted and drives jobs using exactly those values** (pairs with `T4-2`) |
+| `T4-4` the refusal names the control | a path that always refuses can still emit both messages | with both controls populated, submission **succeeds and emits neither** |
+| `T4-6` explicit refused at `g`/`pg13` | a save path that refuses everything passes | **`T4-7` is its half** — the pairing was prose and is now mandatory in both directions |
+| `T4-7` the same text succeeds at `r`/`xxx` | passes if the save path accepts everything | **`T4-6` is its half.** Both, always, or each certifies the other's absence |
+| `T4-9` tier wording, same treatment | passes if `/anchors/tier-wording` is removed or always refuses | explicit wording **refused at `g`/`pg13` AND accepted at `r`/`xxx`** on that route specifically |
+| `T4-10` `_NEGATION_ALLOWED` is empty | an empty allowlist is still empty when the composer is deleted | the composed prompt for a real sheet **carries `T4-11`'s assertion at render time**. Confirmed necessary the same day: `4032aba` found `_NEGATION_ALLOWED = ()` true while `app.ALBUM_FIELDS["body"]`'s default still carried the negation and was the one that actually rendered |
+| `T4-11` body colouring names the parts | a string present in a constant | **a render differential**: patchy or two-tone fur measurably decreases against the previous negating wording. An image metric, not a string check |
+| `T4-12` reference slots are named | a payload carrying names | realised by `T7-10`/`T7-7`: a multi-reference sheet **does not split identity**, measured on the image |
+| `T4-14` nude drops wardrobe, never says "bare skin" | both halves are absences; deleting nude views satisfies both | a nude view at `r`/`xxx` **still composes and renders**, fur and anatomy positives present, body not human skin |
+| `T4-16` the negative list is unchanged | deleting the negative prompt entirely satisfies "nothing moved out of it" | quality mode **still applies the negative list**, asserted on the submitted graph |
+| `T4-17` the negative is dropped in fast mode | deleting it in all modes satisfies "dropped in fast" | **both modes exist and differ**: fast renders without the negative pass, quality with it |
+
+**Not one-sided**, listed so the table is not read as covering everything:
+`T4-2`, `T4-5`, `T4-8`, `T4-13`, `T4-15` and `T4-18` already carry a differential
+or a named mutation. One caveat worth keeping, raised as UNSURE: `T4-5`'s *"runs
+the same guardrail the render runs"* would pass if save and render both
+disappeared, so it needs **a save of permitted text succeeding and being
+stored**.
+
+### Two defects in this document that the same review found
+
+- **`image 2` has two roles and nothing says which wins.** `T4-12` and §6 both
+  say *"image 2 is the wardrobe reference"*. TRD-7 `T7-9` says *"`base` is
+  image2 and sets the framing"*, and `T7-10` hedges *"the wardrobe **or** plate
+  reference"*. One slot, two jobs — and the conflict is sharpest exactly where it
+  matters, because **a nude view drops the wardrobe wording**, so what image2
+  carries there is undefined. Decide before `T7-9` is implemented, not after.
+- **No duet criterion.** `T4-12` notes the cast-clause mechanism exists to tell
+  two anchors apart in a duet frame, and `T7-10` refuses *"the character in image
+  3 is reference 3"* because it asserts a second person. **Nothing asserts that a
+  duet can still name two people when that is intended**, so the fix for the
+  single-character case has no guard against breaking the case the mechanism was
+  built for.

@@ -105,6 +105,28 @@ Each TRD disowns what it does not cover; none of them orders the work. This is
 that order. Every edge below is a real dependency taken from the documents, not
 a preference.
 
+### 6.0 What Jon decided, 2026-08-13
+
+Asked which capability he wanted next, in his own terms rather than by criterion
+id, and the answer re-orders everything below:
+
+1. **Anchors that stay on-model** — identity and variations. Session B's work,
+   already in flight.
+2. **Know when a render is wrong** — QC's repair path. The measuring half is
+   built; nothing repairs anything, because `approve()` raises.
+3. **Clips at the length you asked for** — `scene_seconds` finally meaning
+   something.
+
+**The set timeline goes last.** It is the biggest gap between what exists and
+what a person would expect, and it is not what is wanted next. §6's P1 below was
+written with the timeline first and is superseded by this list.
+
+**The queue is rewritten in full**, not reduced to its one blocking column. Asked
+whether to take just `T6-13a` and leave working machinery alone, Jon chose the
+full pull-based queue. So TRD-6 §1-§6 is in scope, `T6-13a` still goes first
+inside it because the clip-length chain waits on it, and the plan's Phase F is no
+longer the phase to defer — `docs/PLAN-TRD-4-7.md` §4 is updated to match.
+
 ### Already built and deployed (do not rebuild)
 
 `studio/qc.py` (TRD-3 tier 1 in full), `studio/qc_service.py` + `db.findings` +

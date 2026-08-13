@@ -199,3 +199,41 @@ refusal *and* the `xxx` success); and where a criterion is about what an image
 looks like — `T7-7`, and `T7-5`'s framing contradiction — **look at the image**.
 The identity collapse, the world that never rendered and the LoRA that did
 nothing all passed every deterministic check this project had.
+
+### The positive half of each one-sided criterion
+
+Added 2026-08-13 from the first external review of this document (grok and
+chatgpt, independently — `docs/reviews/TRD47-*-2026-08-13.md`).
+
+| criterion | why it is one-sided | its positive half |
+|---|---|---|
+| `T7-2` a nude view is refused at `g` by derivation | if no nude view can be added, or every view is refused, this stays green | the same view **succeeds at `xxx`** with the wardrobe swap applied. §6 already said this in prose; **it is a criterion now, not a verification note** |
+| `T7-3` new views ship with framing text | a string existing in a table | each new view **composes and renders**, its framing clause appearing exactly once (`T7-4`) |
+| `T7-5` `portrait` overrides head-to-toe | the absence of a conflicting string | the `portrait` render **is a head-and-shoulders crop**, measured on the image, not full-body with a losing clause |
+| `T7-6` an anchor can be the identity reference | the presence of a feature | **`T7-7` is its half** — bind them, because "the button exists" is not "identity held" |
+| `T7-8` `latent_mode="image"` is reachable | the "not selected" branch passes while image mode is never implemented | with it selected, **denoise 0.55 changes the surface and holds the composition** (image differential), and the labels match the graph |
+| `T7-9` the plate is named | "nothing is silently promoted" is satisfied by removing multi-reference support | either a plate slot **drives image2**, or `make_anchor` assigns no base **and a sheet still renders in that declared shape** |
+| `T7-10` slot names are real | refusing one bad string | a three-photograph one-character sheet **keeps one identity** (`T7-7`), and — see below — a duet can still name two people |
+| `T7-11` `lora_strength` is settable | the presence of a parameter | an explicit value **reaches the graph**, and cfg > 1.0 still forces 0 when it was not passed. Both directions |
+| `T7-12` width and height are settable | the presence of parameters | a non-default size **appears in the workflow and in the output's dimensions** |
+| `T7-13`…`T7-16` four new prompt types | types existing and being versioned | each is **editable per album, composed into the real prompt, visible in the preview** (`T7-17`) and screened (`T7-18`) |
+| `T7-18` new types are screened and walked | nothing unscreened exists while the types do not | the types **exist and are composed**, and the walker covers them — **red-before-green per type**, because the walker is green today precisely because they are absent |
+| `T7-19` the prompt box is per tier and view | either shape satisfies "either/or" | editing one view's override **does not change another view's composed prompt** (differential) |
+
+**Not one-sided:** `T7-1` (the cross-copy mutation), `T7-4` (a compose diff),
+`T7-7` (an image differential).
+
+### Two things this review found that are not in any criterion
+
+- **`image 2` is claimed twice across two documents.** `T7-9` says `base` is
+  image2 and sets the framing; `T7-10` says *"image 2 the wardrobe **or** plate
+  reference"*; TRD-4 `T4-12` and §6 say flatly *"image 2 is the wardrobe
+  reference"*. One slot, two roles, no rule for which wins — and **a nude view
+  drops the wardrobe wording**, which is exactly when the question has to be
+  answered. This blocks `T7-9`.
+- **A duet must still be possible.** `T7-10` refuses *"the character in image 3
+  is reference 3"* because it asserts a second person into a single-character
+  sheet. The cast-clause mechanism exists to tell two anchors apart in a duet
+  frame, and **nothing asserts that it still can**. The fix for the
+  single-character case has no guard against removing the capability it was
+  built for.

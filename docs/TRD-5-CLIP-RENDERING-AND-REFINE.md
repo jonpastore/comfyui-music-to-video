@@ -157,3 +157,41 @@ output, then mutate the code and watch it fail, and read what the mutation
 actually did. A refusal or a presence is half a criterion. And the baselines
 before and after: the suite, `check_integration.py`, `mixer.py`, and
 `grep -c "^def test_"` — a deleted test does not fail.
+
+### The positive half of each one-sided criterion
+
+Added 2026-08-13 from the first external review of this document (grok and
+chatgpt, independently — `docs/reviews/TRD47-*-2026-08-13.md`).
+
+| criterion | why it is one-sided | its positive half |
+|---|---|---|
+| `T5-1` refine adds a pass **or raises** | *always* raising satisfies the whole criterion, forever, on the catalogue default | a supported refine path **succeeds and produces a non-identical output** (`T5-2`). The raise branch is the fallback, not the deliverable — see the note below |
+| `T5-3` refine runs at denoise < 1.0 | a parameter constraint on a pass that may not exist | the pass **executes** and its output differs (`T5-2`) |
+| `T5-4` still a new file, never an overwrite | green if refine never writes anything | the refined artefact **lands at a new path with both reachable** — and this criterion should **cite `T6-A5`, not restate it**, which is the one place this document breaks TRD-6 §0's rule |
+| `T5-6` if B does not fit, record it and ship A | B never existing satisfies "recorded as not fitting" | **A exists, is invoked by `--refine`, and changes the output** |
+| `T5-8` availability reads `True`/`False`, never `None` | green while the upscaler is never used | end to end: file present → B can load it; file absent → `False` blocks with a named reason, as a `T6-A6` consumer |
+| `T5-9` a ceiling states measured or chosen | a documentation property, checkable by reading | the ceiling is **enforced**: an over-long request is refused or split, not merely annotated |
+| `T5-10` frames ≡ 1 (mod 8) serves both | a statement about two nodes' declared steps | an illegal length is **refused** and a legal one **renders**, on both LTX and s2v |
+
+**Not one-sided:** `T5-2`, `T5-5`, `T5-7`.
+
+**The `T5-1` note, because it is a product decision hiding in a criterion.**
+As written, "adds a second pass **or** raises naming the reason" is satisfiable
+forever by raising — on `ltx25`, which is the catalogue default. That is better
+than today's silent no-op and it is not the outcome the document wants. Whether
+the shipped behaviour on the default model is *raise*, *variant A*, or *hide the
+flag* is unstated, and `T5-6` only covers the case where B does not fit.
+
+### One ownership gap this document creates by accident
+
+§6 says **"No frame handoff from scratch"** — meaning *do not reinvent it*,
+because `LTXVAddGuide`, `LTXVAddGuideMulti` and `LTXVAddGuidesFromBatch` are
+installed and TRD-2 `T2-10` needs exactly that. TRD-2 W1-7 says the same thing
+from the other side.
+
+**A reviewer read that sentence as a refusal to build it**, because it sits in a
+section headed *"Explicitly not building"* — and an implementer will read it the
+same way. Meanwhile **no document says who wires those nodes into
+`build_song`**: TRD-2 owns the criterion that clip N+1 starts on clip N's last
+frame, TRD-5 owns the graph, and neither claims the implementation. That is the
+shape of the hole TRD-6 was written to fill. The sentence belongs in §2, not §6.

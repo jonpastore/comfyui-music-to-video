@@ -186,3 +186,32 @@ describes machinery that does not exist yet**, so each must be read as
 specifying a test that fails today. A criterion satisfied by the absence of the
 thing it describes is the defect TRD-3 `T3-6` and `T3-18` are marked provisional
 for, and this document must not repeat it at scale.
+
+### The positive half of each one-sided criterion
+
+Added 2026-08-13 from the first external review of this document (grok and
+chatgpt, independently — `docs/reviews/TRD47-*-2026-08-13.md`). This document is
+the one most exposed to the rule, because **all 25 criteria describe machinery
+that does not exist**, so every one of them can go green at once by never
+building it.
+
+| criterion | why it is one-sided | its positive half |
+|---|---|---|
+| `T6-A1` every operation reachable over JSON | vacuously true for an empty API surface | each document's **named loop actually completes** end to end over curl: a set from empty to rendered, the storyboard loop, the review queue. **TRD-4 and TRD-7 never name their loop** — that is a gap, not an exemption |
+| `T6-A5` a new candidate, never an overwrite | "never overwrote" is true when nothing was produced | for each of set re-render, refine, repair, anchor re-roll: **predecessor and successor both listed and selectable** |
+| `T6-2` "ready" is separate from "queued" | refusing every early enqueue satisfies it | once the predecessor has **landed**, the successor becomes `ready` and is pulled |
+| `T6-4` vanished requeues, refused does not | nothing running satisfies both halves | a vanished backend's item **runs elsewhere**; a refused workflow **stays failed with its REASON** and does not requeue forever |
+| `T6-5` every transition recorded with its time | green when there are no transitions | one happy-path job produces the **ordered chain with non-null times** |
+| `T6-6` a re-render is a new candidate | duplicates `T6-A5` in this same document | one test, and this criterion should **cite `T6-A5`** rather than restate it — the rule §0 exists to enforce, broken inside §0's own document |
+| `T6-9` a disappeared file is detected | green if QC never runs on anything | a **present** file runs QC for real and can pass; deleted-after-row produces a finding, not a skip |
+| `T6-10` deleting a song does not orphan | refusing all deletion satisfies it | the delete policy is **stated and exercised** — an intended delete removes its automation rows, and no orphan survives |
+| `T6-11` the request is persisted at submit | a payload that is stored and never read | QC's comparison **uses `expect_json` and fails when the artefact disagrees with it** |
+| `T6-12` a repair links to its expectation | a column that is set and never consulted | the re-check after a repair **judges against the same expectation and can change the outcome** |
+| `T6-13` absent expectation means skip | "skip" is the absence half | with an expectation present the comparisons **run**; with it absent they skip **and no baseline is inferred from the file** |
+| `T6-13a` `songs.duration` is the authority | naming an authority with no consumers | TRD-1, TRD-2 and TRD-3's length derivations **all read it and nothing re-probes**, asserted to the third decimal across those paths |
+| `T6-16` no write transaction across a subprocess | an absence | a concurrent web read **succeeds during a long render** |
+| `T6-18` nothing is deleted by this document | always green, by construction | lifecycle artefacts **remain reachable after a re-render**, and GC being out of scope is named — so "nothing was deleted" cannot be read as "storage works" |
+
+**Not one-sided:** `T6-A2`, `T6-A3`, `T6-A4`, `T6-A6`, `T6-1`, `T6-3`, `T6-7`,
+`T6-8`, `T6-14`, `T6-15`, `T6-17` — each already carries a kill, a differential
+or an idempotency check that can fail.
