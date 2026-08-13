@@ -47,6 +47,25 @@ explained six months later."*
   separate act with its own record. `T6-A5` owns the rule; this is its audio
   realisation, and the positive half is that **both the picked and the unpicked
   take remain listed and playable**.
+- `T8-2a` **`songs.style_text` is the ask that produced the audio, and it is
+  owned here.** Found 2026-08-13 by sweeping every user request across all 19
+  session transcripts against the document set: it was **asked for explicitly**
+  — *"we should add a style field for the songs in addition to lyrics. I
+  generate the style with chatgpt. I want to save them"* — it is **built**
+  (`ALTER TABLE songs ADD COLUMN style_text`, and `app.py:944` calls it *"the
+  prompt the AUDIO was generated from — drums, BPM"*), and **no TRD, PRD or DDD
+  named it.** It appears only in three of the orphaned plan documents, so the
+  fold that gave those plans owners missed the one field they had in common.
+
+  It is TRD-8's because it is `T8-1` for songs that predate takes: **the record
+  of what was asked for, kept beside the artefact.** The criterion is that it
+  survives the take model rather than being superseded by it — a take generated
+  from a song carries the song's `style_text` forward into its own `tags`, so
+  the provenance is not lost when the song row moves on.
+
+  *(`playlists.style_text` is a different thing under the same name — the
+  album's overarching look, consumed by the anchor path. It is TRD-4's and is
+  not this criterion.)*
 - `T8-3` A take records **which path produced it** — generated, resynthesised or
   bridged. Already true of the shipped stage and asserted here as a regression
   test, because `models.py` is explicit that what ACE-Step returns is new audio

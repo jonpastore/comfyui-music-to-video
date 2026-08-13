@@ -1984,3 +1984,24 @@ Append dated one-liners. Newest at the bottom.
   4-step). 31.84 GiB total / 30.01 free against a 19.12 GiB UNET plus an 8.7 GiB
   encoder. **Fits on paper, never run.** Stated that way so the next session
   inherits a fact rather than a claim.
+- 2026-08-13 (A) **Swept the session history properly, and it found one real
+  gap.** Earlier I had only searched the transcripts for "TRD-8/TRD-9"; Jon
+  asked whether I had reviewed them for **missing requirements**, which is a
+  different question and I had not. Method: parsed all 19 `*.jsonl`, extracted
+  **320 user turns**, filtered to **59 requirement-shaped asks**, and checked
+  each subject against the whole document set.
+  **Result: one unowned requirement.** `songs.style_text` — asked for
+  explicitly (*"we should add a style field for the songs in addition to
+  lyrics. I generate the style with chatgpt. I want to save them"*), **built**
+  (`ALTER TABLE songs ADD COLUMN style_text`; `app.py:944` calls it "the prompt
+  the AUDIO was generated from"), and named in **three of the orphaned plan
+  documents and no TRD/PRD/DDD**. So the fold that gave those plans owners
+  missed the one field they had in common. Now `T8-2a`, because it is `T8-1` for
+  songs that predate takes: the record of what was asked for, kept beside the
+  artefact. (`playlists.style_text` is a different thing under the same name —
+  the album's look, TRD-4's.)
+  **Checked and NOT gaps**, recorded so the sweep is not re-run: subtitles /
+  captions, cost or budget tracking, and backup / restore are absent from the
+  documents **and were never requested** — absence there is correct, not an
+  omission. Backend SLA alerting, requeue-on-vanish, transition blend maths and
+  replacing the reference across scenes are all covered.
