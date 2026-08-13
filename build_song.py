@@ -164,6 +164,47 @@ def allocate(scenes, nclips):
     return counts
 
 
+def expect_from_workflow(wf):
+    """What this workflow ASKED FOR: {frames, fps, width, height}.
+
+    Read off the built graph, never from the module constants. The constants
+    differ per video family (LEN 77 at FPS 16.0 for WAN s2v, LTX25_LEN 81 at
+    16.8312 for LTX-2.5) and a QC expectation taken from a constant would check
+    every clip against whichever family happened to be imported -- which is the
+    predecessor QC plan's mistake exactly, tabulating "4.8125s" and "81 frames"
+    as though they were universal.
+
+    Written beside each workflow as clip_NNN.expect.json so studio/qc.py can
+    compare a rendered clip against the request that produced it. Without this
+    the sharpest checks -- duration, frame count, fps, resolution -- have nothing
+    to compare to and sit idle, which is where they sat until 2026-08-13.
+
+    Asks the GRAPH for its own nodes by class, the same way the SaveVideo
+    attachment does: a per-family id table was already the cause of every ltx25
+    workflow being refused with a GUIDER/VIDEO type mismatch, and it would have
+    re-earned that bug here.
+    """
+    out = {}
+    for node in wf.values():
+        ins = node.get("inputs") or {}
+        if node.get("class_type") == "CreateVideo":
+            fps = ins.get("fps", ins.get("frame_rate"))
+            if isinstance(fps, (int, float)):
+                out["fps"] = round(float(fps), 4)
+        # the latent that fixes the clip's length and size. Several classes do
+        # this across the families (EmptyLTXVLatentVideo, WanImageToVideo,
+        # LTXVImgToVideoInplace), so it is matched on the SHAPE of the inputs
+        # rather than on a list of names that a new family would fall off.
+        if all(k in ins for k in ("length", "width", "height")):
+            if isinstance(ins["length"], int):
+                out.setdefault("frames", ins["length"])
+                out.setdefault("width", ins["width"])
+                out.setdefault("height", ins["height"])
+    if "frames" in out and "fps" in out and out["fps"]:
+        out["duration"] = round(out["frames"] / out["fps"], 4)
+    return out
+
+
 def clip_plan(scenes, audio_path=None, nclips=None):
     """[(clip_index, scene, shot_directive)] for every clip in the song.
 
@@ -595,6 +636,8 @@ def main():
             "format": "auto", "codec": "auto"}}
         with open(f"{args.outdir}/clip_{i:03d}.json", "w") as f:
             json.dump(wf, f)
+        with open(f"{args.outdir}/clip_{i:03d}.expect.json", "w") as f:
+            json.dump(expect_from_workflow(wf), f)
         n_so_far, _ = per_scene.get(scene["scene_number"], (0, ref))
         per_scene[scene["scene_number"]] = (n_so_far + 1, ref)
     plan = [(num, sname(next(s for _, s, _ in plan_clips if s["scene_number"] == num)), n, ref)

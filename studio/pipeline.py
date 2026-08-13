@@ -1094,7 +1094,49 @@ def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None, l
             if progress:
                 progress(f"limited to first {len(keep)} clips")
         paths = _submit_and_collect(wf_dir, f"{bs}", "*.mp4", progress)
-    return [{"clip_idx": int(m.group(1)), "path": p} for p, m in _clip_records(paths)]
+        # Read the expectation sidecars BEFORE the TemporaryDirectory goes away.
+        # build_song writes clip_NNN.expect.json beside each workflow: the frame
+        # count, fps and size that workflow actually asked for.
+        expects = {}
+        for f in sorted(os.listdir(wf_dir)):
+            m = re.match(r"clip_(\d+)\.expect\.json$", f)
+            if m:
+                try:
+                    with open(os.path.join(wf_dir, f)) as fh:
+                        expects[int(m.group(1))] = json.load(fh)
+                except Exception as e:      # noqa: BLE001 -- bookkeeping, see _stamp
+                    _say(progress, f"could not read {f}: {e}")
+    records = [{"clip_idx": int(m.group(1)), "path": p} for p, m in _clip_records(paths)]
+    _stamp_expect(records, expects, progress)
+    return records
+
+
+def _stamp_expect(records, expects, progress=None):
+    """Record what each clip's workflow ASKED FOR, against the file it produced.
+
+    Without this, studio/qc.py has nothing to compare a clip to, and its
+    sharpest checks -- duration, frame count, fps, resolution -- do not run at
+    all. They sat idle until this existed.
+
+    It cannot be derived later from the clip itself: reading 81 frames off the
+    file and then checking the file has 81 frames is a check comparing a number
+    against itself, which is exactly how three checks here measured nothing on
+    2026-08-12. The only honest source is the graph that was submitted.
+
+    Never fails a render, same rule as _stamp: the GPU work is already paid for.
+    """
+    now = time.time()
+    for r in records:
+        want = expects.get(r["clip_idx"])
+        if not want:
+            continue
+        try:
+            db.run("""INSERT INTO artefacts (path, expect_json, created) VALUES (?,?,?)
+                      ON CONFLICT(path) DO UPDATE SET expect_json=excluded.expect_json""",
+                   r["path"], json.dumps(want), now)
+        except Exception as e:              # noqa: BLE001
+            _say(progress, f"could not record what clip {r['clip_idx']} asked for: {e}")
+            return
 
 
 def fix_ref(slug, tier, clip_idx, mode, image_path, seed, progress=None,

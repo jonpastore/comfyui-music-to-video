@@ -309,6 +309,12 @@ MIGRATIONS = [
     # mark on every transition is a slideshow, the same objection the plan
     # makes to a fade to black between every song.
     "ALTER TABLE set_items ADD COLUMN branded INTEGER DEFAULT 0",
+
+    # What the workflow that produced this artefact ASKED FOR (frames, fps,
+    # width, height, duration). studio/qc.py compares the rendered file against
+    # it; without it the duration and frame-count checks have nothing to compare
+    # to and do not run. Derived from the submitted graph, never from the file.
+    "ALTER TABLE artefacts ADD COLUMN expect_json TEXT",
     # The render settings this candidate was actually produced with, as the
     # JSON that pipeline.gen_anchor turned into command-line flags. A CFG sweep
     # puts a dozen sheets in one group that differ only by guidance, and

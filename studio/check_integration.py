@@ -498,6 +498,38 @@ if effects:
             "and since the gain_db column now passes through effects.gain() a "
             "value the form accepts must be one the filter builder will emit"))))
 
+    def _expectation_is_per_family():
+        """QC's sharpest checks compare a clip against what its workflow ASKED
+        FOR, and the ask differs per video family: LTX-2.5 wants 81 frames at
+        16.8312, WAN s2v wants 77 at 16.0, and both come to 4.8125s. A single
+        constant would check every clip against whichever family was imported --
+        the predecessor QC plan's mistake, tabulating 4.8125s and 81 frames as
+        though they were universal.
+
+        The differential is the point: two families, same scene, and the
+        expectation must DIFFER. Reading it off the graph is what makes that
+        true, so an expectation taken from a module constant fails here.
+        """
+        import build_song
+        scene = {"scene_number": 1, "name": "x", "cue": "c",
+                 "duration_guidance": "5-8 sec", "story": "s", "camera": "wide",
+                 "motion": "walk", "lighting": "neon", "image_prompt": "p",
+                 "video_motion_prompt": "m", "negative_prompt": "n"}
+        got = {}
+        for fam in ("ltx25", "s2v"):
+            wf = build_song.workflow(0, scene, "ref.png", "a.mp3", "char", "world",
+                                     "guard", video_model=fam)
+            got[fam] = build_song.expect_from_workflow(wf)
+            for k in ("frames", "fps", "width", "height", "duration"):
+                assert k in got[fam], f"{fam} expectation is missing {k}: {got[fam]}"
+        assert got["ltx25"]["frames"] != got["s2v"]["frames"], \
+            f"both families reported the same frame count: {got}"
+        assert got["ltx25"]["fps"] != got["s2v"]["fps"], \
+            f"both families reported the same fps: {got}"
+
+    check("a clip's QC expectation is read per family, not from a constant",
+          _expectation_is_per_family)
+
 video_fx = optional_import("video_fx")
 if video_fx:
     check("video_fx.parse_effects_json", lambda: sig(video_fx, "parse_effects_json", ["effects_json"]))

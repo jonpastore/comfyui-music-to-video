@@ -1689,6 +1689,23 @@ def song_page(request: Request, id: int):
 # produces the style guide has not run. Building a page now would pre-empt it.
 
 
+def _clip_expect(path):
+    """What the workflow that produced this clip asked for, or {}.
+
+    Written by pipeline._stamp_expect at collect time from the submitted graph.
+    Absent for every clip rendered before 2026-08-13, and absent is not zero:
+    an empty dict makes qc skip the comparisons rather than compare against a
+    guess, which is the whole difference between a check and a fabrication.
+    """
+    row = db.one("SELECT expect_json FROM artefacts WHERE path=?", path)
+    if not row or not row["expect_json"]:
+        return {}
+    try:
+        return json.loads(row["expect_json"])
+    except ValueError:
+        return {}
+
+
 @jobs.handler("qc")
 def h_qc(args, progress):
     """Tier 1 over one song's artefacts at one tier.
@@ -1723,7 +1740,7 @@ def h_qc(args, progress):
     for c in db.q("""SELECT * FROM clips WHERE song_id=? AND tier=? AND path IS NOT NULL
                      ORDER BY clip_idx""", song["id"], tier):
         progress(f"qc: clip {c['clip_idx']}")
-        found += qc_service.run_artefact(c["path"], "clip", {})
+        found += qc_service.run_artefact(c["path"], "clip", _clip_expect(c["path"]))
         seen += 1
 
     for f in db.q("SELECT * FROM refs WHERE song_id=? AND tier=? ORDER BY clip_idx",
