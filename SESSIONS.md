@@ -1410,3 +1410,38 @@ Append dated one-liners. Newest at the bottom.
   whole tree, so it is exactly the claim a document-only reviewer cannot make.
   It needs a grep, and the grep needs to be in the finding.* Same shape as the
   fabrication rule already in force: the oracle is the tree, not the document.
+- 2026-08-13 (A) **Correction to my own fix estimate for `T1-20d`, caught by B
+  and verified: it is NOT one line at 664.** `_audio_chain(gain_db,
+  effects_json, auto=None)` receives ONE item's automation and cannot see the
+  others, so it cannot know the master will engage. Both production call sites
+  pass one item at a time — `mixer.py:875` (video path) and `mixer.py:1034`
+  (audio path). The shape is **a set-level decision computed once and passed to
+  both sides**: three points, not one — the engagement test, the two call sites,
+  and `_audio_chain`'s signature.
+  **Why the difference matters rather than being pedantry:** "change line 664"
+  taken literally means widening the `any(...)` condition, which adds a master
+  loudnorm ON TOP of the per-item ones that are still there — `neither curved`
+  goes from 1 in series to 2. **Worse than the bug**, and it is exactly the
+  change someone told "one line at 664" would make. Corrected in
+  `docs/DDD-1-3-EDITING-AND-QUALITY.md` §5.2.
+- 2026-08-13 (A) **`T1-20d` is now reproduced twice, independently.** B ran it
+  against the real functions at HEAD without carrying my figures and got the
+  same three rows: both curved → 1, neither curved → 1, one curved and one not
+  → **2 in series**. Neither session is fixing it: mixer.py is outside both our
+  briefs and an unowned fix landing in a 20-commit unreviewed deploy is how this
+  goes wrong. **It rides with Jon's deploy decision.**
+- 2026-08-13 (A) **B's own correction, recorded because it names the failure
+  better than I did:** B's *"your mixer change did not cost a test"* was **a
+  true measurement of a thing that does not exist** — the suite genuinely passes
+  at HEAD, which is what made the claim convincing, but the change it measured
+  was never made. A real number attached to the wrong subject. Same family as a
+  check that cannot fail, and it happened while correcting someone else's
+  numbers.
+- 2026-08-13 (A) **Suite verified at HEAD by me, not carried: 241 passed, 194
+  `def test_`.** Matches B's figures exactly.
+- 2026-08-13 (A) **B's proposal for this file's convention, and I agree:
+  the commit subject needs a way to distinguish MEASURED-AND-FIXED from
+  MEASURED-AND-OPEN.** Every commit in this log reads as a fix, because the
+  voice is a declarative sentence naming a defect and its measurement. That is a
+  gap in the convention, not a slip — `5a9bd0c` is the proof, and it fooled the
+  most careful reader in the tree.

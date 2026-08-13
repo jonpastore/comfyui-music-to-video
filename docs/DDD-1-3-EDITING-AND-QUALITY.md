@@ -156,14 +156,32 @@ that has one keeps its own `loudnorm` **and** passes through the master. Countin
     one curved, one not  per-item=[0, 1]  master=1   worst path = 2   <-- two in series
 
 Two normalisers in series is the second working against the first, which is
-exactly the sentence `T1-20d` was added to enforce. **The fix is one line at
-mixer.py:664's condition reaching mixer.py:725's**: engaging the master strips
-per-item `loudnorm` from every item, not only curved ones. Mutated in memory to
-do that, the mixed case drops to 1 and the other two rows do not move — so the
-measurement responds to that rule and to nothing else.
+exactly the sentence `T1-20d` was added to enforce. Mutated in memory so that
+engaging the master strips per-item `loudnorm` from every item, the mixed case
+drops to 1 and the other two rows do not move — so the measurement responds to
+that rule and to nothing else. **Reproduced independently by session B at HEAD,
+same three rows.**
 
-Not fixed here: `mixer.py` is source, this document's session holds `docs/**`
-only, and implementation is stage 4. Logged in `SESSIONS.md`.
+**The fix is NOT one line at 664, and this document said it was.** Corrected
+after session B read the estimate and checked it: `_audio_chain(gain_db,
+effects_json, auto=None)` receives **one item's** automation and cannot see the
+others, so it has no way to know the master will engage. Both production call
+sites — `mixer.py:875` on the video path and `mixer.py:1034` on the audio path —
+pass one item at a time.
+
+So the shape is: **compute the set-level decision once, pass it to both sides.**
+Three points, not one: the engagement test, the two call sites, and
+`_audio_chain`'s signature. Small, but the difference matters — *"change line
+664"* taken literally means widening the `any(...)` condition, which puts a
+master `loudnorm` on top of the per-item ones that are still there, giving
+`neither curved → 2 in series` where today it is 1. **That is worse than the
+bug**, and it is the change an implementer told "one line at 664" would make.
+
+Not fixed here. `mixer.py` is source, this document's session holds `docs/**`
+only, and session B declined it for the symmetric reason — it is outside the
+anchor brief, and an unowned fix landing in a 20-commit deploy nobody has
+reviewed is how this goes wrong. **The deploy decision is Jon's and this rides
+with it.**
 
 ### 5.3 Automation — built; what remains is reach
 
