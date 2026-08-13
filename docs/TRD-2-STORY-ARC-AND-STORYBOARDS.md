@@ -114,9 +114,13 @@ therefore resolved to 7.83s**, which is not what the decision meant.
 
     n_scenes = math.ceil(song["duration"] / scene_seconds)
 
-One scene is one clip. A scene longer than the measured render ceiling splits,
-and the split is stitched by using **the last frame of clip N as the first frame
-of clip N+1**.
+**A scene is planned as one clip where it fits, and splits into a chain where it
+does not.** "One scene is one clip" was the shorthand and it is not the rule:
+`T2-10` and `T2-48` both require a long scene to become several clips, so the
+shorthand contradicted two of this document's own criteria. The surviving
+statement is *scene-driven planning may yield more than one clip per scene, and
+never more than one scene per clip.* A split is stitched by using **the last
+frame of clip N as the first frame of clip N+1**.
 
 The rejected alternative, recorded so it is not re-argued: keep 25 coverage
 scenes and merge each clip's several scenes into one motion prompt. A 30s clip is
@@ -163,7 +167,9 @@ exactly one scene, scenes are contiguous and non-overlapping, and each scene
 names the lyric sections it spans — so a scene covering four sections is
 answerable for all four, which is what a one-per-section rule was approximating.
 
-- `T2-8a` The three sites agree. A test generates at `scene_seconds=30` for a
+- `T2-8a` **Both live sites agree** — the formula and `validate()`. (This said
+  "three sites"; §3.4 retracts that, and a criterion asserting a false inventory
+  is one nobody can check.) A test generates at `scene_seconds=30` for a
   25-section song and asserts the result **validates**; leaving the rule at
   that rule in place (now `grok.py:541-547`) fails it, which is the whole point
   of naming it here.
@@ -341,6 +347,13 @@ hazard, and mixed fps is a new instance of it.
 
 - `T2-13d` Every clip of one song is normalised to one output fps, asserted on
   the **fps of the assembled file**, not of the plan.
+- `T2-13f` **A clip's QC expectation is its NATIVE fps, not the song's.** The two
+  differ the moment a song mixes models — s2v renders 16.0 and LTX 16.8312 — and
+  normalisation happens at assembly, after the clip exists. TRD-3 `T3-2` compares
+  a clip against the workflow that produced it, so the expectation is what that
+  workflow asked for; comparing against the song's output fps would flag every
+  correctly-rendered clip of the other model. Asserted on a mixed-model song:
+  each clip passes its own fps check and the assembled file carries one fps.
 
 **W1-6 Assembly's stated assumption stops being true.** `mixer.assemble_song`
 says *"clips are quantised to 4.8125s so the video always overruns"*. The
@@ -400,9 +413,13 @@ Returns two things: the proposed arc, and **a per-song summary of what that
 song's storyboard should be**. The second is the point — it is what makes the
 storyboards scenes of one story instead of twelve stories.
 
-- `T2-14` The wand refuses to run with an empty theme prompt.
+- `T2-14` The wand refuses to run with an empty theme prompt — **and runs with a
+  non-empty one**, producing an arc. Refusal alone is satisfied by deleting the
+  wand.
 - `T2-15` The proposal is not saved until accepted. Rejecting leaves the previous
-  arc untouched, verified by re-reading from disk.
+  arc untouched, verified by re-reading from disk — **and accepting DOES save
+  it**. Leaving proposals ephemeral with no reject path satisfies the first
+  half.
 - `T2-16` **The wand never writes to more than one song at a time without
   confirmation.** Outside review: "do not auto-apply an LLM rewrite across every
   song in an album."
@@ -414,7 +431,9 @@ template is neither visible nor editable, and the limits that apply to it are
 not shown.
 
 - `T2-17` The generation prompt is returned by the API, defaulted from the tier,
-  and editable before generating.
+  and editable before generating. The half that matters — that an edit REACHES
+  the model — is `T2-19`, and the two are read together: `T2-17` alone is
+  satisfied by an API returning a string nothing consumes.
 - `T2-18` The limits and guardrails that apply are **part of the same API
   response** as the prompt: the tier's pinned clause, the character/word bounds,
   and the fact that `tiers.PINNED` is added at use time and cannot be edited out.
@@ -668,4 +687,5 @@ timing — `clip_plan` is the one, and every client calls it.
 | `T2-33` picker reads `renderable()` | add a model to the catalogue and assert it APPEARS without a UI change; a picker that calls the function and discards it passes otherwise |
 | `T2-34` unavailable shown as unavailable | paired positive: an AVAILABLE model is offered. Marking everything unavailable satisfies the negative half alone |
 | `T2-36` help text carried | assert a control with no help text is absent from the payload rather than present-and-empty, and that warnings are marked distinctly from notes |
+| `T2-16` multi-song apply | with confirmation it writes to exactly the songs confirmed, asserted by count |
 | `T2-37` arc in the playlist payload | assert a playlist WITHOUT an arc omits the field, so "always present" cannot pass for it |

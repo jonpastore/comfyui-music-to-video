@@ -83,13 +83,24 @@ Measured, not asserted: hard right leaves the right channel within 0.5 dB of
 source and the left more than 40 dB below it, the mirror holds for hard left,
 and centre is within 0.1 dB of source on both channels.
 
+**A review challenged both halves of this and both challenges are wrong**,
+recorded here so the argument is not had a third time. It said the filter
+"discards cross-channel terms" and is therefore not a balance: cross-channel
+terms are what ROTATES a stereo image, and balance by definition attenuates one
+side without mixing — which is the stated intent and what the measurement shows.
+It also said the -3 dB claim was "oversimplified to the point of being wrong".
+Measured 2026-08-13 on a 440 Hz stereo tone: source -21.1 dB mean, balance at
+centre -21.1 dB, equal-power at centre **-24.1 dB**. Exactly the 3 dB, on the
+file, which is what the sentence claims.
+
 Dual mono and mid/side are **not** built. The upgrade path is a `channel_mode`
 column added later with `pan` as its default, so nothing stored today has to
 move. Recorded so the next person does not re-derive the question.
 
 **3.2 Clip length is per song, from the storyboard, scenes driving clips.**
 Decided 2026-08-12 by Jon; the formula change belongs to TRD-2 (`T2-8`
-through `T2-9`, and the three sites §3.4 names). TRD-1
+through `T2-9`, and the **two** live sites §3.4 names — this said three, which
+§3.4 itself retracts). TRD-1
 depends on it only through §4.3's clock: a set item is a *rendered song*, and
 what clip length changes for this document is that **an item's video no longer
 has a known constant fps**. 16.8312 is derived (`LTX_FPS = LTX_LEN / CHUNK`) and
@@ -341,7 +352,10 @@ requires real automation that the other modes expose as individual controls.
   with easy off and its per-item defaults cleared does not. A criterion that
   cannot separate the two modes would confirm easy is a stylesheet.
 - `T1-19` One-button master is a named, versioned chain, not a hidden set of
-  values: what it applied is recorded on the render and is readable afterwards.
+  values: what it applied is recorded on the render and is readable afterwards —
+  **and the recorded chain is the one that ran**, asserted by changing a
+  parameter and measuring the output move. Recording metadata while performing no
+  mastering satisfies "readable afterwards".
   A user who cannot see what the button did cannot learn from it, which is
   normal mode's stated purpose.
 - `T1-20` Switching audience never changes stored values. Round-trip
@@ -400,7 +414,16 @@ per-item levelling can be switched off without the set losing its level.
   loudnorm, so today's behaviour is unchanged for every set that does not draw a
   curve. The master appears because something asked for it, not by default.
 - `T1-20c` Easy mode's one-button master is this same chain with recorded
-  parameters (`T1-19`), not a second implementation of it.
+  parameters (`T1-19`), not a second implementation of it. **Asserted by a
+  differential**: render one set through easy and one through the master directly
+  and compare measured loudness and true peak. Identity claimed in prose is
+  satisfied by a parallel implementation, or by recording metadata over a no-op.
+- `T1-20d` **EXACTLY ONE `loudnorm` in the graph, always.** Easy mode engages the
+  master while per-item `loudnorm` is stripped only for an item carrying a gain
+  curve — so easy-on with no curves puts one on every item AND one at the master.
+  Two normalisers in series is not twice the levelling, it is the second working
+  against the first. Engaging the master strips per-item `loudnorm` from every
+  item, not only curved ones. *Found by review; the text permitted the double.*
 
 ## 9. Export
 
@@ -412,7 +435,9 @@ per-item levelling can be switched off without the set losing its level.
 - `T1-25` An export names its measured integrated loudness and true peak in the
   asset row. `effects.loudnorm_filter()` targets -16 LUFS / -1.5 dBTP; a render
   that lands outside a stated tolerance of its own target is flagged rather than
-  silently shipped.
+  silently shipped. **Both halves are asserted**: an in-tolerance render records
+  its numbers and is NOT flagged, and a deliberately out-of-tolerance one IS.
+  Writing numbers and never flagging satisfies the first half alone.
   **The measurement lives in `effects.py`, beside `LOUDNORM_I` and
   `loudnorm_filter()` that already own those numbers, and TRD-3 §4.3 calls it.**
   Naming the owner matters: the draft had TRD-1 pointing at TRD-3 and TRD-3
@@ -420,7 +445,9 @@ per-item levelling can be switched off without the set losing its level.
   twice by two people who each read the other document.
 - `T1-26` Re-rendering a set writes a NEW file beside the old one and never
   replaces it, exactly as anchors and refs behave. Asserted by rendering twice
-  and finding both files and both asset rows.
+  and finding both files and both asset rows — **and by both being REACHABLE**:
+  the older render is listed and selectable, or "keeps history" means files
+  accumulating on disk that nothing can reach.
 
 ## 10. Backend / front-end separation
 

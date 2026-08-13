@@ -85,6 +85,13 @@ and until 2026-08-13 nothing stored it — the sharpest checks sat idle on clips
   check reading 81 frames off a file and then asserting the file has 81 frames
   is a check comparing a number against itself.
 
+- `T6-13a` **One authority for a song's duration.** TRD-1 §3.2, TRD-2 §3.4 and
+  TRD-3 §4.4 all derive from "the song's length" and none says where it comes
+  from — ffprobe, file metadata, decode length, or a prior `songs.duration`
+  measurement. They disagree in the third decimal, which is enough to move a clip
+  count at the boundary. `songs.duration` is the authority, written once from
+  ffprobe on upload; everything else reads it and nothing re-probes.
+
 ## 5. Concurrency on one SQLite database
 
 The studio is single-user but multi-process: a web layer and a serialized job

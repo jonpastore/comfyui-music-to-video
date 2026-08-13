@@ -253,6 +253,19 @@ def expect_from_workflow(wf):
                 out.setdefault("frames", ins["length"])
                 out.setdefault("width", ins["width"])
                 out.setdefault("height", ins["height"])
+    # The LEGAL FRAME STEP is the model's, not a universal. EmptyLTXVLatentVideo
+    # declares step 8 (so 8n+1) and WanSoundImageToVideo declares step 4 (4n+1),
+    # and WAN's own LEN is 77 -- which is 4*19+1 and is NOT 8n+1. A QC check
+    # applying LTX's rule to every clip flags every correct s2v render, which is
+    # exactly what it did until 2026-08-13. Read the family off the graph.
+    for node in wf.values():
+        cls = node.get("class_type") or ""
+        if "LTX" in cls and "Latent" in cls or cls == "LTXVImgToVideoInplace":
+            out.setdefault("frame_step", 8)
+        elif cls.startswith("Wan"):
+            out.setdefault("frame_step", 4)
+    out.setdefault("frame_step", 8)
+
     if "frames" in out and "fps" in out and out["fps"]:
         out["duration"] = round(out["frames"] / out["fps"], 4)
     return out

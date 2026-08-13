@@ -229,15 +229,22 @@ def check_video(path, expect, kind="clip"):
                                PASS if frames == want else REJECT,
                                f"{frames} frames against {want} requested",
                                frames, want, "frames", remedy="re-render"))
-        # LTX's latent length must be 8n+1 -- the node declares min 9, step 8.
-        # The only hard limit the 30s/60s ladder found. An interpolated clip is
-        # exempt: RIFE returns (n-1)*m+1, which is legitimately not 8n+1.
+        # The latent length rule is THE MODEL'S, not a universal.
+        # EmptyLTXVLatentVideo declares step 8, so LTX wants 8n+1;
+        # WanSoundImageToVideo declares step 4, and WAN's own LEN is 77 --
+        # 4*19+1, legal for WAN and NOT 8n+1. Applying LTX's rule to every clip
+        # flagged every correct s2v render, which is what this did until an
+        # independent review caught it. `frame_step` comes from the submitted
+        # graph; 8 when unknown, which is the default renderer's rule.
+        #
+        # An interpolated clip is exempt either way: RIFE returns (n-1)*m+1.
+        step = int(expect.get("frame_step") or 8)
         if expect.get("latent_rule", True) and not expect.get("interpolated"):
-            legal = (frames - 1) % 8 == 0
-            near = 8 * round((frames - 1) / 8) + 1
+            legal = (frames - 1) % step == 0
+            near = step * round((frames - 1) / step) + 1
             out.append(finding(path, kind, "latent_8n1",
                                PASS if legal else FLAG,
-                               f"{frames} frames"
+                               f"{frames} frames, step {step}"
                                + ("" if legal else f"; nearest legal is {near}"),
                                frames, near, "frames", remedy="re-render"))
 
@@ -549,6 +556,18 @@ def demo():
         latent = [x for x in g if x["check"] == "latent_8n1"]
         assert latent and latent[0]["verdict"] == FLAG, g
         assert latent[0]["expected"] == 81, latent[0]
+        # THE RULE IS THE MODEL'S. 77 frames is what WAN s2v renders and is
+        # 4*19+1 -- legal for WAN, and NOT 8n+1. Applying LTX's step to every
+        # clip flagged every correct s2v render. Same file, one variable, both
+        # directions.
+        wan = _mk(["-f", "lavfi", "-i", "testsrc2=size=320x240:rate=16",
+                   "-frames:v", "77", "-pix_fmt", "yuv420p"], p("wan.mp4"))
+        ok = [x for x in run(wan, "clip", {"frame_step": 4}) if x["check"] == "latent_8n1"]
+        assert ok and ok[0]["verdict"] == PASS, ok
+        bad = [x for x in run(wan, "clip", {"frame_step": 8}) if x["check"] == "latent_8n1"]
+        assert bad and bad[0]["verdict"] == FLAG, bad
+        assert bad[0]["expected"] == 81, bad[0]
+
         # and an interpolated clip is exempt -- RIFE returns (n-1)*m+1, so 153
         # frames from 77 doubled is correct and must not be flagged
         assert not [x for x in run(illegal, "clip", {"interpolated": True})

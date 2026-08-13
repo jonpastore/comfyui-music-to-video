@@ -189,8 +189,20 @@ alpha not fully transparent.
 | consecutive-frame difference | above a floor | a frozen segment |
 | channel saturation | in range | NaN / green garbage frames |
 
-- `T3-7` The frame-count check enforces **8n+1** and reports the nearest legal
-  value when it fails. This is the only hard limit found in the 30s/60s ladder.
+- `T3-7` The frame-count check enforces **the MODEL'S OWN latent step** and
+  reports the nearest legal value when it fails. **Not a universal 8n+1**, and
+  this criterion said 8n+1 until a review caught what that meant:
+  `EmptyLTXVLatentVideo` declares `step: 8` so LTX wants 8n+1, but
+  `WanSoundImageToVideo` declares `step: 4` and WAN's own `LEN = 77` is
+  4×19+1 — **not** 8n+1. The check flagged every correctly-rendered s2v clip.
+  The step comes from the submitted graph (`build_song.expect_from_workflow`
+  records `frame_step`), defaulting to 8, which is the default renderer's rule.
+  FIXED in code 2026-08-13; asserted both ways on one 77-frame file.
+  *TRD-2 F-2's shared `≡ 1 (mod 8)` rule is about what to ASK FOR when planning
+  a new length — every 8n+1 is also 4n+1, so one request satisfies both — and it
+  is not a claim about what already-rendered clips must be. 77 is equidistant
+  from 73 and 81, so a planner rounding to it must state its tie-break; the code
+  rounds half-to-even and lands on 81.*
 - `T3-8` **An interpolated clip is one frame short and must not be flagged for
   it.** RIFE returns `(n-1)*m+1` frames, not `n*m`, so 77 doubled is 153; at the
   obvious 32 fps that is 4.781 s where the source was 4.8125 s. Measured
@@ -317,8 +329,11 @@ The actuators exist; what has never been measured is whether they help.
   that can run the repair model, and names the filename **that** box uses via
   `models.resolve()`. A repair pinned to a box under a name it does not have is
   refused before it is submitted, not after.
-- `T3-24` **The refiner is a 20.5 GB dependency and the arithmetic must use that
-  number.** `wan22_i2v_low` is 13.31 GiB of UNET plus a 6.3 GB `umt5` text
+- `T3-24` **The refiner costs ~19.6 GiB resident and the arithmetic must use
+  that, not the UNET's 13.31.** (The figure has been written 20.5 GB in several
+  places by adding GiB to GB: 13.31 GiB + 6.3 GiB + 0.24 GiB ≈ 19.6 GiB ≈ 21.0
+  GB. The units were mixed, the conclusion was not — it does not fit a 15.92 GiB
+  card either way, and `models.resident_gib` now carries one number.) `wan22_i2v_low` is 13.31 GiB of UNET plus a 6.3 GB `umt5` text
   encoder that the catalogue did not know about until 2026-08-12. It does not fit
   on peaches (10.58 GiB) and the pair does not fit resident on cerberus either.
   So "clean up peaches output" means *peaches renders, cerberus refines*, and the
@@ -328,7 +343,10 @@ The actuators exist; what has never been measured is whether they help.
   the plan's blocker was about moving an output and what shipped stages an input.
   **The precondition is a callable check, not a sentence**: something answers
   "can an output be moved from this host", the refusal quotes it, and when it
-  starts answering yes the refusal stops. A criterion that only ever refuses is
+  starts answering yes the refusal stops. **The flip is the criterion's positive
+  half and must be exercised**: with the check forced true, a remote repair is
+  SUBMITTED. Leaving it permanently false keeps the refusal green forever, which
+  is the same shape as `T3-6` and `T3-18`. A criterion that only ever refuses is
   green forever and never notices the day the blocker lifts.
 - `T3-26` **Whether the refiner helps is tier 3's first measurement, not its
   assumption.** It is catalogued `proven: opportunistic` precisely because
@@ -349,7 +367,7 @@ decision from one whose remedy is "re-run the upscale".
 | soft or low-detail clip | upscale pass (`make_postproc`) | it will not add identity |
 | identity drift **within** a chained clip | re-render the chain from the last good frame | a per-frame fix; the drift is generative |
 | identity wrong from the first frame | edit the **text**, then re-render | swapping the reference image will not fix it — measured |
-| audio loudness off target | re-run loudnorm **at the master** | it must NOT re-run per-item loudnorm on an item carrying a `gain_db` automation curve — that is the flattening `T1-9a` exists to prevent, and this row said plain "re-run loudnorm" until a review caught it |
+| audio loudness off target | re-run loudnorm — **at the master when the set has one, per item otherwise** | it must NOT re-run per-item loudnorm on an item carrying a `gain_db` automation curve — that is the flattening `T1-9a` exists to prevent, and this row said plain "re-run loudnorm" until a review caught it |
 | set duration ≠ prediction | a bug in the model→graph path | never "fixed" by re-rendering |
 
 - `T3-27` Every check names its remedy class, and a check with no remedy says so
