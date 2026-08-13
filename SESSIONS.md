@@ -2069,3 +2069,44 @@ Append dated one-liners. Newest at the bottom.
   reported is from the direct sweep.** Nothing in this note depends on the agent
   having returned anything. **Do not plan work around the Agent tool** — the
   measured lanes are `llm` on stdin, peer sessions by ref, and direct work.
+- 2026-08-13 (A) ⚠⚠ **THE FIRST RENDER LANDED, AND LOOKING AT IT FOUND TWO
+  THINGS NO CHECK WOULD HAVE.** Job 234, Catatonic `xxx/back_nude`, 9 minutes.
+  **The sheet is an ordinary human woman, bare skin head to toe, human hair. No
+  fur anywhere.** The identity collapse, reproduced exactly.
+  **And it is CORRECT BEHAVIOUR, which is the finding.** `make_anchor`'s
+  defaults are deliberately **species-neutral**: IDENTITY is *"her head, face
+  and hair are those of the character in the reference images"* and BODY is
+  *"her entire body ... carries the same colouring and texture as HER FACE,
+  uniform in shade on shoulders, upper arms, forearms, hands, torso, hips,
+  thighs, calves and feet"*. **The body clause is RELATIVE — "same as her face"
+  — and never says fur or jet-black.** It defers to the face, which defers to
+  the reference image, and **nothing in that chain says cat.**
+  **Catatonic's album profile is entirely EMPTY.** Street Cats' is not: it
+  carries *"sleek black feline face, yellow-green almond eyes"* and *"entire
+  body covered in the same sleek jet-black fur"*. **So I rendered the wrong
+  album** — I chose Catatonic for its comparison history when the profile is
+  what decides the character.
+  **`T4-11` actually PASSED**: the body IS uniform in tone head to toe with no
+  patches. The sheet is still wrong. **That is `T2-31`/`T2-32`/`T3-28`'s thesis
+  demonstrated on a real image: identity comes from the TEXT, an empty profile
+  is no text, and the result passes every deterministic check while being a
+  stranger.**
+- 2026-08-13 (A) ⚠ **AND A LIVE DEFECT FOUND BEFORE RENDERING IT: Street Cats'
+  STORED `nude_wardrobe` contains FIVE NEGATIONS**, and it is the exact phrasing
+  this project measured as harmful:
+
+      "no garments, no underwear, no straps, no accessories and no jewellery ...
+       nothing is shaved, bare-skinned or human-toned ... none of their clothing"
+
+  `SESSIONS.md` records the cost: ***"no garments, no underwear, no straps" put
+  a leather harness on a nude sheet.*** **The negation walker
+  (`test_no_positive_prompt_constant_tries_to_negate`) walks
+  `POSITIVE_CONSTANTS` and, since `4032aba`, `ALBUM_FIELDS` DEFAULTS — but NOT
+  stored album-profile text.** So `T4-10` and `T7-18` are green while the text
+  that actually renders negates five times. **This is the same shape as
+  `4032aba` itself: the guarded constant is not the string that reaches the
+  model.**
+  **Jobs 236/237 are Street Cats `xxx` back_nude + front_nude — queued as a
+  PREDICTION**: if the harness or bare patches reappear, the profile text is the
+  cause and the walker's scope is the gap. Recorded before the render so the
+  prediction cannot be fitted to the result afterwards.
