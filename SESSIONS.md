@@ -2005,3 +2005,39 @@ Append dated one-liners. Newest at the bottom.
   documents **and were never requested** — absence there is correct, not an
   omission. Backend SLA alerting, requeue-on-vanish, transition blend maths and
   replacing the reference across scenes are all covered.
+- 2026-08-13 (A) **THE FIRST RENDER THROUGH THE NEW PROMPT IS RUNNING.** Jobs
+  **234 (`back_nude`) and 235 (`front_nude`)**, album **Catatonic**, tier
+  **xxx**, n=2, both uploaded references picked, fired through the real HTTP
+  route (`POST /anchors`) rather than a script so the deployed path is what is
+  exercised. Queue was verified idle first.
+  **Catatonic is the cleanest possible test and that is why it was chosen: its
+  album profile is entirely EMPTY**, so every field falls back to
+  `make_anchor`'s constants — which is exactly what `4032aba` made reachable
+  when it stopped `app.ALBUM_FIELDS["body"]`'s default beating `DEFAULT_BODY`.
+  So this measures the rewritten nine-part body clause and the BACKDROP colour
+  lock directly, with no profile text in the way. It also has four `g/front`
+  candidates from the OLD code for comparison.
+- 2026-08-13 (A) **Acceptance criteria audited rather than asserted: 21
+  "built" claims checked for evidence in the tree, 0 failed.** Every criterion
+  the ledgers mark built has its function or column present — `decimate`,
+  `_master_lines`, `item_chains`, `set_duration`, `arc.generate`, `clip_plan`,
+  `check_video`, `frame_step`, `UNIQUE(path, check_name)`,
+  `ltx25_latent_upscaler`, `_stamp_expect`, `_backend_vanished`,
+  `canonical_host`, `is_nude_view`, `use-as-ref`, `latent_mode`,
+  `bridge_seconds`, `style_text`, `_retarget`, `screen_prompt_field`.
+  **This checks presence, not that a check can go red** — the ledgers already
+  say which of those have been mutation-proven and which have not, and
+  `T1-9b`/`T7-7` remain NOT MEASURED because they need an image.
+- 2026-08-13 (A) **Six absorbed plan documents removed** (`d119ec0`), each
+  surviving citation annotated with where it went. **One piece was not absorbed
+  and would have been lost**: the Unraid vDisk postmortem, now TRD-9 §7a with
+  `T9-18` — a fleet operation that requires stopping a service names WHICH
+  service and never more. The array never needed stopping to resize a Docker
+  vDisk, and stopping it is what cost the hours.
+- 2026-08-13 (A) **`docs/README.md` is new: the map across the eleven
+  documents**, and it exists because the first external review of the PRD/DDD
+  layer found four separate "missing" items that were all one absent document —
+  no ownership matrix, no studio-wide dependency graph, no glossary for the
+  contested labels, and **no statement of where to trust a built-state claim.**
+  That last one is answered plainly: the ledger at the end of each TRD, and
+  nowhere else — not PRD/DDD prose, not the dated STATUS snapshot, not this log.
