@@ -237,9 +237,7 @@ CATALOG = {
             "20.03 GiB of weights. int8 DOES fit the 24 GB laptop card, but at 95.8% peak "
             "with no headroom; the nvfp4 build (17.4 GiB) is downloaded alongside it as the "
             "fallback if anything else needs VRAM -- see build_song.LTX25_MODEL_NVFP4.",
-            "Licence: LTX-2.x Community Licence, free commercial use under $10M revenue. "
-            "Its Acceptable Use Policy is incorporated and forbids sexually explicit output; "
-            "tiers.PINNED already sits inside that line.",
+            "Licence: LTX-2.x Community Licence, free commercial use under $10M revenue.",
             "THE REFERENCE IMAGE DOES NOT HOLD IDENTITY BY ITSELF. The character has to be "
             "described in the TEXT or the model reverts to its prior, which is an ordinary "
             "human. Measured 2026-08-12 with a one-variable differential -- same reference "
