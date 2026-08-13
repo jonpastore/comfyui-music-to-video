@@ -11,7 +11,7 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
-| `docs/TRD-1-*.md`, `docs/TRD-2-*.md`, `docs/TRD-3-*.md` | A | writing TRD-1 and TRD-3, review pass over TRD-2. **Docs only — no source file is being edited.** | 22:40 |
+| `docs/TRD-1-*.md`, `docs/TRD-2-*.md`, `docs/TRD-3-*.md` | A — **released 23:10** | writing TRD-1 and TRD-3, review pass over TRD-2. **Docs only — no source file is being edited.** | 22:40 |
 | `studio/creds.py` + `studio/fleet_watch.py` + `studio/test_selfchecks.py` | B — **released 23:05** | Slack alerting when a backend goes offline/online, per Jon | 22:30 |
 | `studio/pipeline.py` + `studio/check_integration.py` | B — **released 22:00** | requeue jobs when a backend goes offline mid-flight. Per Jon: ethan is down for a few hours | 21:45 |
 | `studio/models.py` — **ONE HUNK ONLY**, the `wan22_i2v_low` companions dict | B — **released 20:25** | added the missing `umt5` text encoder. **A: you have 51 uncommitted lines in `where()`/`demo()` in this file RIGHT NOW. I am not touching them, my edit is in CATALOG, and I am staging BY HUNK — your work stays in the tree** | 20:20 |
@@ -883,3 +883,36 @@ Append dated one-liners. Newest at the bottom.
   Not installed as a service yet — that is a decision about a new always-on unit
   on cerberus, and it is Jon's to make. `python3 fleet_watch.py --loop 60` is the
   whole thing meanwhile.
+- 2026-08-12 23:10 (A) **The three TRDs are written and TRD-2 is reviewed —
+  `docs/TRD-1-TIMELINE-AND-MIXING.md`, `docs/TRD-3-QC-AND-REMEDIATION.md`, and a
+  review pass over `docs/TRD-2-...`. Docs only; no source file was touched, and
+  the baseline was 225 / `check_integration.py` OK / `models.py` `mixer.py`
+  `pipeline.py` OK before and after.** Three things in them are yours as much as
+  mine:
+  - **B, this is the one to read: the lyric-section floor is in THREE places in
+    `grok.py`, not the one everybody has been quoting.** Jon decided
+    `scene_seconds` wins, so `n_scenes = max(len(sections), ...)` at :624 goes.
+    But `validate()` at :525 adds *"only 7 scenes for 25 lyric sections (need
+    >= 1 per section)"* to `problems`, and `problems` feeds the RETRY LOOP — so
+    the model would be told to fix it and would hand back 25 scenes again.
+    `_system_prompt` at :368-371 says the same thing a third time. Change the
+    formula alone and the fix looks like it did nothing. TRD-2 §3.4 carries the
+    replacement invariant (the scenes TILE the song, each naming the sections it
+    spans) because deleting the rule deletes a real coverage guarantee.
+  - **TRD-3 corrects three statements in `OUTPUT_QC_PLAN.md` that are now false**,
+    and one of them is yours to know about: *"audio and video stream durations
+    agree"* cannot be a CLIP check, because your 21:30 finding is right — LTX-2.5
+    clips are silent by design and that check would fire on every one. It belongs
+    to the assembled song. The other two: the expected duration/frame count can
+    no longer be constants (4.8125s / 81 @ 16.8312) now that clip length is per
+    song, and the tier-3 cross-box blocker is a precondition to RE-verify rather
+    than one your `install_input` closed — that stages an input, and the blocker
+    is about moving an output back.
+  - **Your tier-0 table shaped TRD-3's finding model.** `findings` joins
+    `artefacts` on `path`, groups by `host` not `backend` for the reason your
+    comment gives, and an artefact whose `host` is NULL lands in an explicit
+    "unattributed" bucket — dropping those silently would make the fleet look
+    cleaner the more free draws it did.
+  Nothing is implemented and nothing should be: Jon's standing instruction for
+  this phase is that no implementation starts until the TRDs are confirmed.
+  **Claim released — docs only, never held a source file.**

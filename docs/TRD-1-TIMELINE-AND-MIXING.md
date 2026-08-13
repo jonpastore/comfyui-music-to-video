@@ -1,0 +1,393 @@
+# TRD-1 · Timeline and mixing (the DAW)
+
+Status: draft for review, written 2026-08-12. Inputs: `docs/SETS_MIXING_PLAN.md`
+(what is built), `docs/RECONCILIATION_2026-08-12.md` (the day's measurements and
+the decisions), `docs/EXTERNAL_REVIEW_2026-08-12.md` (outside opinion, verified).
+
+Acceptance criteria are numbered `T1-n` and are written so that each one **can
+fail**. A criterion that cannot fail is not a criterion. Where a number appears
+it was measured on this fleet, and the source is named.
+
+Blocked on nothing. The two things that blocked it — clip length and frame rate
+— were measured 2026-08-12, and the two decisions this document needed are taken
+in §3.
+
+---
+
+## 1. The problem
+
+A set is a stack of forms. `templates/set_edit.html` renders one `<form>` per
+item with in/out/gain/transition/secs/hold/beatmatch/effects_json, and the only
+picture of the result is a number. There is no time axis, no waveform, no
+automation, and nothing that shows an item's length against its neighbours.
+
+What is wanted is a timeline: see the set, drag the joins, draw a level curve,
+hear it, then render the same thing you were looking at.
+
+Two constraints from outside review that shape everything below, both of which
+this project has already paid for in other forms:
+
+- **The timeline model lives on the server, not in the DOM.** The browser is a
+  view. Export must be deterministic from the stored model with no dependency on
+  a pixel position.
+- **Preview is not the deliverable, and the user will trust the wrong one.**
+  Browser playback is a proxy; ffmpeg is the truth. This is *the editor promising
+  what the renderer does not produce* — day 4's Traps section, found and fixed
+  six times — arriving somewhere new.
+
+## 2. Not in scope, because it already exists
+
+Do not rebuild any of this. It is built, tested, and its arithmetic is the part
+that has been debugged.
+
+| already built | where |
+|---|---|
+| `sets` / `set_items` rows with in/out trim, gain, transition, secs, hold, beatmatch, brand, `effects_json` | `db.py:124-141` plus the `ALTER TABLE`s |
+| Predicted set length, walked exactly as the renderer walks it, through the same fit guard | `mixer.set_duration()` |
+| The audio and video filter graphs, geometry/fps normalisation, crossfade overlap arithmetic | `mixer.mix_audio()`, `mixer.render_set()`, `_build_render_set_filter()` |
+| Beat grid, downbeat offset, snap on both sides, tempo ramp, Camelot ordering | `analyse.py`, `mixer.snap_transition/plan_tempo_ramp/apply_tempo_ramp/suggest_running_order` |
+| Effect validation with hard ranges, and the length an effect chain ADDS | `effects.py`, `effects.duration_delta()` |
+| Per-item video look (grade, glitch) and beat-aligned cut offsets | `video_fx.py` |
+| Waveform PNG | `mixer.waveform_png()` |
+| Drag-to-reorder | `static/app.js`, generic over rows |
+
+**The overlap arithmetic is shared between the audio-only and video paths on
+purpose. Keep it that way** — `SETS_MIXING_PLAN.md` says so and it is the reason
+`set_duration` can price both.
+
+## 3. Decisions taken here
+
+**3.1 The channel model is stereo pan, per item.** Decided 2026-08-12 by Jon.
+"L/R split" is three different features and outside review was right that one has
+to be picked before any UI is drawn. It is one number, one ffmpeg filter, one
+automation lane:
+
+    set_items.pan REAL DEFAULT 0        -- -1 hard left .. +1 hard right
+    pan=stereo|c0=<l>*c0|c1=<r>*c1
+
+Dual mono and mid/side are **not** built. The upgrade path is a `channel_mode`
+column added later with `pan` as its default, so nothing stored today has to
+move. Recorded so the next person does not re-derive the question.
+
+**3.2 Clip length is per song, from the storyboard, scenes driving clips.**
+Decided 2026-08-12 by Jon; the formula change belongs to TRD-2 (`T2-8`
+through `T2-9`, and the three sites §3.4 names). TRD-1
+depends on it only through §4.3's clock: a set item is a *rendered song*, and
+what clip length changes for this document is that **an item's video no longer
+has a known constant fps**. 16.8312 is derived (`LTX_FPS = LTX_LEN / CHUNK`) and
+LTX-2.5's own nodes default to 25. So the set has one output fps and every item
+is normalised to it, which `_build_render_set_filter` already does.
+
+**3.3 The set's stored timebase is seconds, floating point, and it is
+canonical.** Media timebase is derived at render, never stored. See §4.3 for the
+rounding rule and the case where audio and video disagree.
+
+## 4. The timeline model
+
+### 4.1 What is added to the schema
+
+Three deltas, and nothing that duplicates a value already stored:
+
+    ALTER TABLE set_items ADD COLUMN pan REAL DEFAULT 0
+    ALTER TABLE sets      ADD COLUMN out_fps REAL           -- NULL = derive from items
+    ALTER TABLE sets      ADD COLUMN mode_audience TEXT DEFAULT 'normal'   -- easy|normal|advanced
+
+    -- One row per automation POINT. Not a blob: the decimator (§5) has to be
+    -- able to delete points, and a JSON column would make that a read-modify-write
+    -- of the whole curve on every mouse-up.
+    CREATE TABLE IF NOT EXISTS automation (
+      id INTEGER PRIMARY KEY,
+      set_item_id INTEGER NOT NULL,
+      lane TEXT NOT NULL,          -- 'gain_db' | 'pan' | 'lowpass_hz' | 'highpass_hz'
+      t REAL NOT NULL,             -- seconds from the START OF THE ITEM, not of the set
+      value REAL NOT NULL,
+      curve TEXT DEFAULT 'linear'  -- linear | hold ; §5 allows no others
+    );
+    CREATE INDEX IF NOT EXISTS idx_automation ON automation(set_item_id, lane, t);
+
+`t` is item-relative and that is deliberate: a set-relative time would be
+invalidated by every reorder, trim and transition-length change, which is four
+ways for the curve to end up describing a moment that no longer exists.
+
+- `T1-1` Reordering a set, or changing any item's `in_secs`/`out_secs`/`secs`,
+  leaves every automation row's `(lane, t, value)` unchanged. Asserted by
+  reading the rows before and after, not by inspecting the reorder handler.
+- `T1-2` Deleting a set item deletes its automation rows. An orphan row that a
+  later `set_item_id` reuse could pick up is a curve appearing on an item nobody
+  drew one on.
+
+### 4.2 The model is the export
+
+- `T1-3` **An export produced through the JSON API alone, with no browser
+  involved, is byte-identical to one produced by pressing render in the UI for
+  the same set.** Same command, same filter graph, same file hash. This is the
+  criterion that fails if any value lives only in the DOM.
+- `T1-4` The filter graph is generated from the stored model **one way only**.
+  Nothing parses an ffmpeg string back into the model. Outside review, all four
+  models: never parse ffmpeg back into JSON.
+
+### 4.3 The clock, and what happens when audio and video disagree
+
+Audio is sample-accurate at 48 kHz; video is frame-accurate at the set's output
+fps. They do not land on the same instants and something has to give.
+
+**The rule: seconds are canonical; audio is rendered at the exact stored second;
+video rounds to the nearest whole frame at the set's output fps; the rounding is
+reported, not hidden.** Nearest, not truncation, because truncation loses up to
+a whole frame every time and the losses all have the same sign: at 16.8312 fps
+that is 0.0594 s per join, accumulating in one direction, where nearest rounding
+is bounded by 0.0297 s per join and the errors cancel. This is the same shape as
+the RIFE one-frame bug that cost 2.5 s across eighty clips and failed in the
+direction nobody looks (SESSIONS 16:45, session B).
+
+- `T1-5` A transition placed at a time that is not a frame boundary renders with
+  the video cut on the nearest frame and the audio crossfade at the exact
+  second, and the API reports the rounding delta for that join. A delta of zero
+  on a deliberately off-grid time is a failure, not a pass.
+- `T1-6` The sum of |rounding delta| over a set is reported and is bounded by
+  half a frame per join. A test builds a set whose joins are all off-grid and
+  asserts the bound; removing the "nearest" rounding in favour of truncation
+  fails it.
+
+### 4.4 The predicted length is the rendered length
+
+This project's oldest defect, made falsifiable. `mixer.set_duration()` already
+walks the items exactly as the renderer walks them, through the same
+`_check_transition_fits` guard, and already prices `effects.duration_delta()`'s
+echo tail.
+
+- `T1-7` For a set containing at least one echoing item, one `black` transition
+  with a hold, one beatmatched join and one trimmed item, the value the UI shows
+  and the `ffprobe` duration of the rendered file agree to within 0.05 s. The
+  four features are named because each one has broken this prediction before.
+- `T1-8` **The displayed length is the return value of `mixer.set_duration()`
+  and no other arithmetic exists.** Verified by a differential rather than by
+  grepping for the call: change `set_duration`'s result by a known offset in a
+  stub and confirm the UI number moves by exactly that offset. A test that greps
+  source proves the code exists, not that anything reaches it (day 4).
+
+## 5. Automation curves
+
+Outside review, points 3 and 6: drawing at 60 Hz produces thousands of keyframes
+and a pathological filter graph, and the peaks must be decimated per zoom level.
+
+**Interpolation is linear between points, `hold` is a step, and no other curve
+type exists.** Not because curves are undesirable but because ffmpeg's
+`volume`/`pan` expressions have to be able to express what is drawn, and every
+shape that is drawable but not expressible is another way for the editor to
+promise what the renderer will not produce.
+
+**Decimation happens on the server, on write.** The client may post whatever the
+mouse produced; the stored curve is the decimated one, and the client re-reads
+what was stored. Rule: Ramer–Douglas–Peucker with a per-lane epsilon
+(`gain_db` 0.25 dB, `pan` 0.02, filter frequencies 2% of the value), then a hard
+cap of `AUTOMATION_MAX_POINTS = 64` points per lane per item, taking the highest-
+error points first.
+
+- `T1-9` Posting 3000 points from a 60 Hz drag stores at most 64, and the stored
+  curve's value at 100 sampled times is within the lane's epsilon of the raw
+  curve at the same times. Both halves are needed: the cap alone would pass with
+  a curve that keeps the first 64 points and throws the shape away.
+- `T1-10` The generated filter expression for a fully-populated lane is under
+  8 KB and renders. A cap that produces a string ffmpeg refuses is not a cap.
+- `T1-11` A curve with two points at the same `t` is refused at the API, naming
+  the time. Two values at one instant have no defined render.
+- `T1-12` **An automation lane that is drawn but does not change the render is a
+  failure.** Per lane, a differential: render the item with the curve and with
+  it flat, and assert the measured output differs — `gain_db` by RMS per second,
+  `pan` by the L/R energy ratio, the filter lanes by band energy. This is the
+  criterion that catches a lane wired into the UI and not into the graph, which
+  is exactly how `_apply_beatmatch` was unreachable for a whole session.
+
+## 6. Waveform, peaks and playback
+
+### 6.1 Peaks are precomputed and decimated, and they are not the render
+
+`mixer.waveform_png()` renders a PNG and that stays for the static case. The
+timeline needs numbers, not a picture, because the regions have to be draggable.
+
+- Peaks are computed once per song, on the existing `analyse` job (`analyse.py`
+  already decodes the file — do not decode it twice), stored beside the song as
+  a binary min/max array at a base resolution, and served decimated.
+- **That decode is mono at 22050 Hz** (`librosa.load(mp3_path, mono=True)`,
+  default sr, chosen because it matched the measured tempo and halved load
+  time). Adequate for an envelope; it is **not** adequate for a stereo waveform
+  or for anything claiming to show clipping. A per-channel waveform is a second
+  decode and has to be asked for deliberately, not assumed to be free.
+- `T1-13` A request for zoom level *z* returns at most `PEAKS_MAX_POINTS` (2048)
+  pairs regardless of song length. A 60-minute set must not decode in the
+  browser (outside review, point 6).
+- `T1-14` The decimated envelope's per-bucket min/max equals the full-resolution
+  min/max over the same span, exactly — decimation is a max/min reduce, not a
+  resample. A waveform that under-reports a peak is a waveform that lies about
+  where the loud part is.
+- `T1-15` Peaks for a song with no audio return an explicit empty result with a
+  reason, not a flat line. A flat line is indistinguishable from silence.
+
+### 6.2 Playback is a proxy and says so
+
+- `T1-16` The timeline's playback control is labelled as a preview, and the
+  label names what it does not include. **No second DSP engine in Web Audio**
+  (outside review): the browser plays the source files with gain and position
+  applied; it does not attempt to mirror the ffmpeg effect chain.
+- `T1-17` A "render preview" action produces a real ffmpeg render of a bounded
+  span (default 20 s around the playhead) through the same code path as the full
+  render, and is the only preview that claims to be accurate. Asserted by
+  rendering the same span twice — once via preview, once by rendering the whole
+  set and cutting that span — and comparing measured loudness and duration.
+
+## 7. Three audiences, one data model
+
+Decided 2026-08-12 by Jon, against two of four external models: easy / normal /
+advanced are **audiences, not densities**. One data model, one editor, three
+affordance sets. **Easy is a feature set, not a CSS class** — "solve it for me"
+requires real automation that the other modes expose as individual controls.
+
+| audience | what it is |
+|---|---|
+| easy | auto-level, auto-fade, one-button master. No lanes drawn by hand. |
+| normal | every control the model has, with context, defaults visible |
+| advanced | the same plus the mastering chain, and the numbers unrounded |
+
+- `T1-18` **Easy mode changes the output, measurably.** Same set, same items,
+  easy on and off, nothing else touched: the rendered integrated loudness under
+  easy lands within 1.0 LU of `effects.LOUDNORM_I` (-16 LUFS), and the same set
+  with easy off and its per-item defaults cleared does not. A criterion that
+  cannot separate the two modes would confirm easy is a stylesheet.
+- `T1-19` One-button master is a named, versioned chain, not a hidden set of
+  values: what it applied is recorded on the render and is readable afterwards.
+  A user who cannot see what the button did cannot learn from it, which is
+  normal mode's stated purpose.
+- `T1-20` Switching audience never changes stored values. Round-trip
+  easy → advanced → easy and assert every `set_items` column and every
+  automation row is unchanged.
+
+## 8. The join graph: `duck` and `layer`
+
+The two known gaps, and `SETS_MIXING_PLAN.md` is explicit about why neither is
+another filter fragment: both are per-TRANSITION effects that were filed as
+per-ITEM ones.
+
+- `duck` — `sidechaincompress` needs a second input. At the join both streams
+  exist, but `running_a` is the ACCUMULATED chain and is not time-aligned with
+  `nxt_a` before the `acrossfade`. Needs `adelay` + `asplit`.
+- `layer` — `xfade` has no blend modes, so a screen/overlay/difference blend
+  across the overlap means trimming the overlap from both streams, blending, and
+  splicing back.
+
+**Build `layer` first**: video has no time-alignment problem because `xfade`
+already positions both streams. That ordering is `SETS_MIXING_PLAN.md`'s and it
+is right.
+
+- `T1-21` A `duck` join renders with the outgoing item's level reduced by at
+  least the requested amount during the overlap and restored after it, measured
+  as RMS per second across the join. Requesting a duck and getting no level
+  change is today's behaviour dressed up.
+- `T1-22` A `layer` join renders with both items' frames present during the
+  overlap, asserted by a pixel-difference against each source separately — the
+  blend must differ from both, not just from one.
+- `T1-23` Both remain refused with a message naming the reason at **every**
+  entry point until they render, as they are today. An effect accepted and
+  silently ignored is the defect this whole document is about.
+
+## 9. Export
+
+- `T1-24` Codec parameters are passed to ffmpeg; there is no custom encoder or
+  muxer (outside review). The export format list is a table of parameter sets,
+  and adding one is a row.
+- `T1-25` An export names its measured integrated loudness and true peak in the
+  asset row. `effects.loudnorm_filter()` targets -16 LUFS / -1.5 dBTP; a render
+  that lands outside a stated tolerance of its own target is flagged rather than
+  silently shipped. This is the same measurement TRD-3's audio tier 1 takes, and
+  **it is taken once, in one place, by both** — two implementations of loudness
+  would eventually disagree and the disagreement would be invisible.
+- `T1-26` Re-rendering a set writes a NEW file beside the old one and never
+  replaces it, exactly as anchors and refs behave. Asserted by rendering twice
+  and finding both files and both asset rows.
+
+## 10. Backend / front-end separation
+
+**This is a requirement, not a nicety**, and TRD-1 is the document most exposed
+to it: the timeline is the most presentation-shaped feature in the studio, and
+it is the one that must survive a mobile client being written against the same
+API.
+
+The studio today is FastAPI + Jinja2 + htmx with logic and presentation
+interleaved. `app.py:5711`'s render route is the concrete example: it reads the
+items, joins the songs, decides which path (audio vs video), builds every item
+dict, and enqueues — all inside the route handler, all unreachable from any
+client that is not this HTML page.
+
+**The rule for everything specified here:**
+
+1. All business logic lives in a service module (`sets_service.py` or the
+   equivalent), which takes and returns plain data and imports nothing from
+   FastAPI.
+2. Every operation is a JSON endpoint over that service. The HTML view is **one
+   client of the same service call**, not a second path.
+3. A route handler contains no arithmetic, no filter-graph decisions, and no
+   defaulting. If a route handler decides something, a mobile client cannot.
+
+- `T1-27` **Every set operation is reachable over JSON with no HTML involved**:
+  create, add/remove/reorder items, edit an item, draw automation, fetch peaks,
+  price the length, render, list renders. A curl script drives a set from empty
+  to rendered.
+- `T1-28` The HTML page and the JSON endpoint report the **same numbers for the
+  same set**, asserted by comparing them in one test. Two answers means two
+  implementations.
+- `T1-29` The service module has no FastAPI import, and its functions are called
+  by the tests directly. If a test can only reach the logic through a request,
+  the logic is in the wrong place.
+- `T1-30` **No template computes anything.** Asserted by a differential, not a
+  grep: stub the service to return known values and assert the page shows those
+  values unmodified. A template that rounds, sums or reformats a number is a
+  second implementation of that number.
+
+## 11. What TRD-1 does not own
+
+Named explicitly so the cross-TRD review has boundaries to check rather than
+guess at:
+
+- **The render queue and the wait-state scheduler.** Decided 2026-08-12: when a
+  resource frees it takes the next queued item that matches it; no timing match,
+  no forecast fan-out; "ready" is expressed separately from "queued" so a chained
+  clip is not handed out before the frame it needs exists. That model is
+  cross-cutting — clips, refs, audio, and TRD-3's repairs all enqueue — and it
+  needs its own specification. TRD-1 enqueues one `render_set` job and depends on
+  nothing else in it.
+- **The song-level audio editor and the media menu.** Deferred; they share this
+  timeline model, which is why they come after this document and not with it.
+- **Clip length, storyboards, scenes.** TRD-2.
+- **Any check on the rendered output.** TRD-3. TRD-1 renders; TRD-3 measures.
+  The one place they touch is §9's loudness, and it is measured once.
+
+## 12. Explicitly not building
+
+From outside review, where two or more agreed independently, plus this project's
+own history:
+
+- No second DSP engine in Web Audio mirroring ffmpeg effects for preview.
+- Never parse ffmpeg back into JSON — one way only, model → graph.
+- No custom encoders or muxers.
+- No `ffmpeg-python`: 11k stars, **last push 2024-08-04**, and it solves a
+  problem `mixer.py` already solved. Read it, do not adopt it.
+- No collaborative or multiplayer timeline.
+- No `gl-transitions` — it needs a custom ffmpeg build and `xfade` already ships
+  more than 50.
+- No second place that computes set length. `mixer.set_duration()` is the one.
+
+## 13. How every criterion above is to be verified
+
+The rules this project arrived at by being wrong, applied to this document:
+
+1. **A measurement that cannot fail is not evidence.** Every criterion above is
+   a differential — one variable changed, an expected direction — or it names
+   the mutation that must break it.
+2. **Then mutate the code and watch the check fail.** Three of one session's own
+   checks measured nothing on 2026-08-12 and only mutation found them: an
+   `aspectralstats` reading that returned 0.0 behind an `if`, a 999-second span
+   caught by the wrong bound, and a `demo()` branch never reached.
+3. **Never replace a slice that runs to the end of a file**, and check
+   `grep -c "^def test_"` before and after. A deleted test does not fail.
+4. Baseline before and after: `cd studio && python3 -m pytest -q .` (225 at the
+   time of writing), `python3 check_integration.py`, `python3 mixer.py`.
