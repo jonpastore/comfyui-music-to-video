@@ -132,8 +132,16 @@ def audio_duration(path):
 
 
 def guidance_seconds(s):
-    """Midpoint of a '5-8 sec' style guidance string."""
-    nums = [int(x) for x in re.findall(r"\d+", s.get("duration_guidance", ""))]
+    """Midpoint of a '5-8 sec' style guidance string.
+
+    Decimals are read as decimals. An integer-only \\d+ split "6.4 sec" into 6
+    and 4 and returned their midpoint, 5.0 -- so a storyboard whose scene
+    lengths are computed rather than hand-written got weights that were wrong,
+    silently, in whichever direction the fraction fell ("7.0 sec" -> 3.5). Every
+    board written by grok uses whole-second ranges, which is why this never
+    showed: those parse identically either way.
+    """
+    nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", s.get("duration_guidance", ""))]
     return sum(nums) / len(nums) if nums else 6.0
 
 
