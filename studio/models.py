@@ -76,6 +76,10 @@ LOADER_FIELD = {
     # pipeline._retarget -- which is the thing that rewrites a filename to the
     # spelling a box uses. An encoder that cannot be enumerated cannot be
     # routed, cannot be reported missing, and reads as "not installed anywhere".
+    # LTX's latent spatial upscaler, for the two-stage refine. Enumerable since
+    # the COMBO shape is parsed -- it publishes its options in the dict form,
+    # which is exactly the case that used to read as "not enumerable".
+    "LatentUpscaleModelLoader": "model_name",
     "CLIPVisionLoader": "clip_name",
 }
 
@@ -469,6 +473,34 @@ CATALOG = {
             "qwen_2.5_vl_7b_fp8_scaled.safetensors": "CLIPLoader",
             "qwen_image_vae.safetensors": "VAELoader"},
     },
+    "ltx25_latent_upscaler": {
+        "role": "refine",
+        "label": "LTX-2.5 latent spatial upscaler x2",
+        "file": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+        "loader": "LatentUpscaleModelLoader",
+        "cli": "ltx_upscale",
+        "companions": {},
+        "weights_gib": 0.3,
+        "proven": "opportunistic",
+        "purpose": (
+            "Doubles an LTX latent spatially so a second sampler pass can add detail "
+            "rather than redistribute it -- LTX's own documented two-stage refine. "
+            "Takes (samples, upscale_model, vae) and returns a LATENT, so it goes "
+            "between the sampler and VAEDecode, AFTER LTXVSeparateAVLatent: a joint "
+            "audio-video latent into a spatial upsampler is not a thing."),
+        "notes": [
+            "UNMEASURED HERE, and the number that decides it is already recorded: "
+            "the ltx25 base render peaks at 23.4 GB of 23.9 on cerberus, 95.8% of "
+            "the card, at 832x480. An x2 latent refine may simply not fit. Measure "
+            "before wiring it, and if it does not fit, record that as the finding "
+            "rather than quietly shipping the same-resolution pass as a two-stage.",
+            "The WAN refiner (wan22_i2v_low) is NOT an alternative for LTX output: "
+            "it is valid only because s2v and i2v-low share wan_2.1_vae. LTX uses "
+            "its own video VAE, so handing an LTX latent to WAN is meaningless.",
+            "ltx-2-spatial-upscaler-x2-1.0.safetensors sits beside it on cerberus "
+            "and is the LTX-2 (19B) counterpart, not this one.",
+        ],
+    },
     "siglip2_naflex": {
         "role": "encoder",
         # Installed and loading on peaches, and it changes NOTHING it is wired
@@ -672,6 +704,19 @@ def resolve(name, pool):
     return None
 
 
+def _enum_options(spec):
+    """The filenames a required-input spec offers, or None if it is not a list
+    of them. Handles both of ComfyUI's combo shapes -- see installed()."""
+    if not spec or not isinstance(spec, list):
+        return None
+    if isinstance(spec[0], list):                       # ["a.safetensors", ...]
+        return set(spec[0])
+    if (spec[0] == "COMBO" and len(spec) > 1 and isinstance(spec[1], dict)
+            and isinstance(spec[1].get("options"), list)):
+        return set(spec[1]["options"])
+    return None
+
+
 def installed(object_info=None, url=None):
     """{loader_class: {filenames} | None} as ComfyUI itself reports them, or None.
 
@@ -682,12 +727,22 @@ def installed(object_info=None, url=None):
 
       None (the whole dict)  ComfyUI could not be asked.
       None (one loader)      that loader does not publish an enumerable list.
-                             AudioEncoderLoader reports the literal "COMBO"
-                             rather than filenames, and treating that as an
-                             empty set reported wav2vec2 -- which IS installed --
-                             as missing. A false "missing" sends you hunting for
-                             a file that is already there.
+                             A false "missing" sends you hunting for a file that
+                             is already there, which is why this is not set().
       set()                  asked, enumerable, and genuinely nothing installed.
+
+    TWO ENUM SHAPES, and the second one arrived under us. ComfyUI used to put
+    the options in spec[0] as a plain list. It now also emits
+    ``["COMBO", {"options": [...], ...}]`` -- 433 fields on cerberus use that
+    shape as of 2026-08-13, INCLUDING AudioEncoderLoader, which this docstring
+    used as its example of a loader that "reports the literal COMBO rather than
+    filenames". That was true when it was written and is no longer: the files
+    are right there in the dict.
+
+    Reading only spec[0] therefore answered "cannot be enumerated" for loaders
+    whose contents were perfectly readable -- models.installed() saw 7 files on
+    a box where a shape-aware diff sees 36. Both shapes are read now, and None
+    still means what it says: genuinely not enumerable.
     """
     info = object_info if object_info is not None else _object_info(url)
     if info is None:
@@ -696,9 +751,7 @@ def installed(object_info=None, url=None):
     for loader, field in LOADER_FIELD.items():
         node = info.get(loader) or {}
         spec = (node.get("input", {}).get("required", {}) or {}).get(field)
-        # spec[0] is the enum list for a normal combo; anything else (the string
-        # "COMBO", a missing node) means it cannot be enumerated from here
-        out[loader] = set(spec[0]) if spec and isinstance(spec[0], list) else None
+        out[loader] = _enum_options(spec)
     return out
 
 
