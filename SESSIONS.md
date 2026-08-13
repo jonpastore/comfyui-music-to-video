@@ -1340,3 +1340,44 @@ Append dated one-liners. Newest at the bottom.
   path, where the slots hold different people. T4-12 §6 wants rescoping, and
   should cite `d3f2f6a`'s `base=None` as T7-9's resolution rather than leaving
   both branches open.
+- 2026-08-13 (A) ✅ **THE PEER-SESSION LANE WORKS. Measured, and it is the
+  answer to how the next phase runs.** I sent B a real message via
+  `SendMessage`; it arrived intact as a `cross-session-message`, B ACTED on it
+  before replying, and replied in full. Contrast the in-process subagent lane,
+  dead in both directions the same afternoon. **Two notes for whoever uses it:**
+  the bare name is refused -- `SendMessage` demanded the ref
+  (`ComfyUISessionB [bd77b3]`) from `ListAgents` -- and a peer is a real
+  collaborator, not an oracle: B's reply contained claims about code and every
+  one was checked against the tree before it reached a document.
+- 2026-08-13 (A) **B corrected BOTH of my review findings, and I was wrong in a
+  way worth recording.** Verified each against the tree, not taken on trust:
+  - **The duet finding was wrong about the guard.** I wrote "nothing asserts a
+    duet can still name two people". `build_refs._selfcheck:105` already
+    asserted `"The character in image 3 is Nyx: a rival DJ."`, shipped in the
+    same commit as the `T7-10` fix. **The real hole was narrower: every check
+    used exactly ONE cast member**, so no slot collision was reachable. B closed
+    it in `7836d6f` -- two members, `{'image2': 'nyx.png', 'image3':
+    'ghost.png'}`, because asserting both names merely APPEAR passes with both
+    wired to one image. Verified the commit and the assertion.
+  - **The image2 finding was a documents conflict, not a shipped one.**
+    `grep "wardrobe reference"` across `make_anchor.py`, `build_refs.py` and
+    `app.py` returns NOTHING -- `T4-12`'s wording was never implemented on the
+    anchor path. Resolved by moving TRD-4: slot naming belongs to the CAST path
+    where slots hold different people; the anchor path's references are an
+    unordered set of photographs of one character and its honest wording is
+    "Image 2 is another photograph of the same character", true clothed and nude
+    alike. `T7-9` is resolved by `d3f2f6a`'s `base=None`. TRD-4 and TRD-7 updated.
+  **The lesson is mine: "nothing asserts X" is itself an assertion about an
+  absence, and I made it from the documents instead of from the tree** -- the
+  same class of unfalsified claim this review existed to find.
+- 2026-08-13 (A) **B is done and the tree is clean of B's work.** B's commits
+  `415584d`..`7836d6f`; 241 passed, 194 test defs. **NOTHING DEPLOYED --
+  production and origin/main are both still `f9ca597`**, and there are now
+  fourteen local commits ahead of it.
+- 2026-08-13 (A) **Carried from B, for whoever does the view table:** T7-1/T7-3/
+  T7-5 and the T7-13/T7-16 types that depend on them are deliberately unstarted.
+  `pose` cannot be added beside framing strings that already say "standing
+  upright, arms relaxed at their sides" without shipping a positive-prompt
+  contradiction, and splitting BACKDROP to fix that changes what every existing
+  sheet renders -- while Jon is mid-regeneration. It lands structurally first,
+  in its own commit, with the four existing views asserted byte-identical.

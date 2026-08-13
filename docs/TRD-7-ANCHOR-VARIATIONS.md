@@ -223,17 +223,31 @@ chatgpt, independently — `docs/reviews/TRD47-*-2026-08-13.md`).
 **Not one-sided:** `T7-1` (the cross-copy mutation), `T7-4` (a compose diff),
 `T7-7` (an image differential).
 
-### Two things this review found that are not in any criterion
+### Two things this review found — both resolved the same day
 
-- **`image 2` is claimed twice across two documents.** `T7-9` says `base` is
-  image2 and sets the framing; `T7-10` says *"image 2 the wardrobe **or** plate
-  reference"*; TRD-4 `T4-12` and §6 say flatly *"image 2 is the wardrobe
-  reference"*. One slot, two roles, no rule for which wins — and **a nude view
-  drops the wardrobe wording**, which is exactly when the question has to be
-  answered. This blocks `T7-9`.
-- **A duet must still be possible.** `T7-10` refuses *"the character in image 3
-  is reference 3"* because it asserts a second person into a single-character
-  sheet. The cast-clause mechanism exists to tell two anchors apart in a duet
-  frame, and **nothing asserts that it still can**. The fix for the
-  single-character case has no guard against removing the capability it was
-  built for.
+- **`image 2`'s two roles were a documents conflict, not a shipped one, and
+  TRD-4 is the document that moves.** `T7-9` says `base` is image2 and sets the
+  framing; `T7-10` hedged *"the wardrobe **or** plate reference"*; TRD-4 `T4-12`
+  says flatly *"image 2 is the wardrobe reference"*. Measured on the shipped
+  composer: **the anchor path never says "wardrobe reference" anywhere**, so
+  `T4-12`'s wording was never implemented here and nothing contradicted itself
+  in a render.
+
+  Resolved in favour of what the code already does. On the anchor path the
+  references are an unordered **set of photographs of one character**, and the
+  honest wording — true on clothed and nude sheets alike — is *"Image 2 is
+  another photograph of the same character."* Naming it "the wardrobe reference"
+  would re-impose the face-then-outfit ordering that was deliberately removed,
+  and would declare a role that a nude sheet's own dropped wardrobe wording then
+  contradicts. **Slot naming belongs to the cast path, where the slots really do
+  hold different people.** `T7-10` drops the "or plate" hedge; `T7-9` is resolved
+  by `d3f2f6a`'s `base=None`.
+
+- **The duet case was already guarded, and the guard was thinner than it
+  looked.** `build_refs._selfcheck` asserted a named cast member composing to
+  *"The character in image 3 is Nyx: a rival DJ."* before this review ran. The
+  real hole: **every check used exactly ONE cast member**, so no slot collision
+  and no name/file swap was reachable. Closed by `7836d6f` with two, asserted as
+  `{"image2": "nyx.png", "image3": "ghost.png"}` — because asserting that both
+  names merely appear would pass with both wired to one image, which is the
+  blend the mechanism exists to prevent.

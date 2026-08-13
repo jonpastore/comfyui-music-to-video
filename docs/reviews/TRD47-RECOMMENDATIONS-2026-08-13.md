@@ -60,16 +60,49 @@ into `build_song`.** TRD-2 owns the criterion, TRD-5 owns the graph, neither
 claims the implementation. That is the shape of the hole TRD-6 was written to
 fill. Recorded in TRD-5 with the note that the sentence belongs in §2.
 
-### 3. No duet criterion — FOLDED into TRD-4 and TRD-7
+### 3. The duet case — FOLDED, then CORRECTED, and the correction is the lesson
 
-`T7-10` refuses *"the character in image 3 is reference 3"* because it asserts a
-second person into a single-character sheet — and session B has already shipped
-that fix. `T4-12` notes the cast-clause mechanism exists to tell two anchors
-apart **in a duet frame**. Nothing asserts a duet can still name two people.
+**As first written here, this finding was wrong about the guard and right about
+the hole**, and it is left in with its correction rather than quietly fixed.
 
-**The fix for the single-character case has no guard against removing the
-capability the mechanism was built for.** This one is worth acting on soon
-because the code has already moved.
+The claim was: *"nothing asserts a duet can still name two people"* now that
+`T7-10` refuses *"the character in image 3 is reference 3"*. Session B checked
+it against the code and answered within the hour. **A guard already existed** —
+`build_refs._selfcheck`, shipped in the same commit as the `T7-10` fix and run by
+`check_integration.py`, asserted that a named cast member composes to *"The
+character in image 3 is Nyx: a rival DJ."*, and a test already took one cast
+member end to end through `workflow()`.
+
+**The real defect was narrower and did need closing: every existing check used
+exactly ONE cast member.** With one name and one file there is no slot collision
+and no name/file swap available to get wrong. `7836d6f` adds two, each named by
+the slot its own file is wired to, asserted as
+`{"image2": "nyx.png", "image3": "ghost.png"}` — asserting only that both names
+appear would pass with both wired to one image, which is precisely the blend the
+mechanism exists to prevent.
+
+**Why the correction matters more than the finding.** "Nothing asserts X" is
+itself a claim that can only be made by looking, and this one was made from the
+documents rather than from the tree. It is the same class as the criteria this
+review exists to find: an assertion about an absence, unfalsified. The reviewers
+were reading documents and could not have caught it; the session holding the
+files could, and did.
+
+### 3a. `image 2`'s two roles — CORRECTED: a documents conflict, not a shipped one
+
+Also verified against the tree rather than the documents. `grep "wardrobe
+reference"` across `make_anchor.py`, `build_refs.py` and `app.py` returns
+**nothing** — `T4-12`'s prescribed wording was never implemented on the anchor
+path, so the contradiction with `T7-9` never reached a render.
+
+**Resolved by moving TRD-4, not the code.** On the anchor path the references
+are an unordered set of photographs of one character; the honest wording is
+*"Image 2 is another photograph of the same character"*, which is true on
+clothed and nude sheets alike. Naming it "the wardrobe reference" would
+re-impose the face-then-outfit ordering that was deliberately removed, and would
+declare a role that a nude sheet's own dropped wardrobe wording then
+contradicts. Slot naming belongs to the cast path. `T7-9` is resolved by
+`d3f2f6a`'s `base=None`.
 
 ### 4. `T5-1` lets the default model raise forever — FOLDED into TRD-5
 

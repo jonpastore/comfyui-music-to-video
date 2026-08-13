@@ -210,17 +210,55 @@ the same guardrail the render runs"* would pass if save and render both
 disappeared, so it needs **a save of permitted text succeeding and being
 stored**.
 
-### Two defects in this document that the same review found
+### Two things the review found, both since resolved — and both were overstated
 
-- **`image 2` has two roles and nothing says which wins.** `T4-12` and §6 both
-  say *"image 2 is the wardrobe reference"*. TRD-7 `T7-9` says *"`base` is
-  image2 and sets the framing"*, and `T7-10` hedges *"the wardrobe **or** plate
-  reference"*. One slot, two jobs — and the conflict is sharpest exactly where it
-  matters, because **a nude view drops the wardrobe wording**, so what image2
-  carries there is undefined. Decide before `T7-9` is implemented, not after.
-- **No duet criterion.** `T4-12` notes the cast-clause mechanism exists to tell
-  two anchors apart in a duet frame, and `T7-10` refuses *"the character in image
-  3 is reference 3"* because it asserts a second person. **Nothing asserts that a
-  duet can still name two people when that is intended**, so the fix for the
-  single-character case has no guard against breaking the case the mechanism was
-  built for.
+Recorded with their corrections, because the corrections are the useful part.
+
+**1. `T4-12`'s slot naming should be scoped to the CAST path, and this document
+is the one that moves.**
+
+The review reported a contradiction: `T4-12` and §6 say *"image 2 is the wardrobe
+reference"* while TRD-7 `T7-9` says *"`base` is image2 and sets the framing"*.
+**It is a conflict between two documents and not in the code** — measured on the
+shipped composer, `grep "wardrobe reference"` across `make_anchor.py`,
+`build_refs.py` and `app.py` returns **nothing**. `T4-12`'s prescribed wording
+was never implemented on the anchor path, so the contradiction never shipped.
+
+**It should not be implemented, and the reasoning is stronger than the criterion
+it replaces.** (a) The anchor path's references are an unordered **set of
+photographs of one character** — that is `make_anchor`'s documented model of its
+input and the entire reason the COMPOSITE clause exists. Naming one of them "the
+wardrobe reference" re-imposes the face-then-outfit ordering that was removed
+because it made a single photograph carrying both unusable. (b) **A nude view
+drops the wardrobe wording**, so the prompt would declare a role for image2 that
+the same prompt then contradicts — the bare-skin-versus-fur failure in a new
+place, and day 4 measured what that costs.
+
+What the anchor path says instead, and what is true on clothed and nude sheets
+alike: *"Image 2 is another photograph of the same character."*
+
+**So slot naming belongs where the slots genuinely hold different people — the
+cast path.** `T4-12` and §6 want rewording to that scope, and `T7-9` is resolved
+by `d3f2f6a`'s `base=None` rather than by leaving both branches open.
+
+**2. The duet case was guarded, and the guard was thinner than it looked.**
+
+The review reported that nothing asserts a duet can still name two people now
+that `T7-10` refuses *"the character in image 3 is reference 3"*. **That was
+wrong about the guard and right about the hole.** `build_refs._selfcheck`
+already asserted that a named cast member composes to *"The character in image 3
+is Nyx: a rival DJ."*, and a test already took one cast member end to end
+through `workflow()`.
+
+The real defect was narrower: **every existing check used exactly ONE cast
+member**, and with one name and one file there is no slot collision and no
+name/file swap available to get wrong. Closed by `7836d6f` with two — each named
+by the slot its own file is wired to, asserted as
+`{"image2": "nyx.png", "image3": "ghost.png"}`, because asserting only that both
+names appear would pass with both wired to one image, which is the blend the
+mechanism exists to prevent.
+
+The mutation that proves it is the one worth keeping: make the same-character
+form swallow the cast path and the prompt becomes *"Image 2 is another
+photograph of the same character. Image 3 is another photograph of the same
+character."* — the capability loss stated in full.
