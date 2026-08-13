@@ -103,11 +103,29 @@ does not pay again.
   reads as *"No images were generated (all refused, or failed)"*, and on the
   comfy path as a job that succeeded with an empty result. **Any A/B of the two
   paths uses different seeds** or it measures the cache.
-- `T9-11` **SwarmUI caches each backend's node list at connect time.** A backend
-  that connected while its ComfyUI was still booting refused a render with *"the
-  custom workflow contains an unsupported node type 'EmptyImage'"* — a node it
-  plainly had. Asserted as: a node-missing refusal must be distinguishable from
-  a stale node list.
+- `T9-11` **SwarmUI caches each backend's node and model list at connect time —
+  AND THE SCOPE IS HALF THE CRITERION.** A backend that connected while its
+  ComfyUI was still booting refused a render with *"the custom workflow contains
+  an unsupported node type 'EmptyImage'"* — a node it plainly had. A node-missing
+  refusal must be distinguishable from a stale list.
+
+  **RESCOPED 2026-08-13, and the rescoping is worth more than the original.**
+  This hazard is **inert on the studio's own path**. `pipeline.py:487-489`
+  submits `{"images": 1, "comfyworkflowraw": wf_text}` with `exactbackendid`, so
+  the graph goes to the target box and **ComfyUI validates the filenames
+  itself**; Swarm's cached per-backend list is never consulted. It is real for
+  **Swarm's own model-based routing** and for anything that trusts Swarm's view
+  of what a box holds.
+
+  **This was already measured on 2026-08-12** — *"harmless for our raw+pinned
+  path, since ComfyUI validates filenames itself, but Swarm's own model-based
+  routing would be stale until a re-init"* — and recorded **without its scope
+  attached to this criterion**. The cost of that omission, paid the next day:
+  two sessions independently concluded a production SwarmUI restart was required
+  after staging models to a box, and neither could justify it, because a finding
+  recorded without its scope reads as universal. **A criterion that names a
+  hazard must name where it does NOT apply**, or it is a warning that spends
+  other people's caution.
 - `T9-12` **ComfyUI's `/history` does not record jobs that arrived through
   SwarmUI**, because Swarm advertises `comfy_saveimage_ws` and streams outputs
   back. `/history` staying at 0 is not evidence a box did not run. The authority
@@ -166,7 +184,18 @@ does not pay again.
   cache that refused a node a box plainly had is, in this window, the only thing
   standing between a partial file and a pinned render. Neither behaviour is
   designed; the sequence is what makes them safe.
-- `T9-13b` **Staging a model stages its companions in the same act.** A box
+- `T9-13b` **Staging a model stages its companions in the same act, and the
+  criterion is that the STAGING PATH reads `CATALOG.companions` — not that one
+  script happened to get the list right.** A box holding the UNET and VAE but
+  not the text encoder reports the model available and fails at load, the same
+  failure as `T9-13a` by a different route.
+
+  **Satisfied in practice 2026-08-13 and NOT closed.** The gamingpc run staged
+  UNET, text encoder, VAE and LoRA together and all four verified — but
+  `~/stage_gamingpc.sh` **hardcodes its file list**. The next model staged by
+  the next person gets whatever they remember. The gap is the path, not the
+  outcome, and an outcome that happened to be right is exactly the evidence that
+  hides it. A box
   holding the UNET and VAE but not the text encoder reports the model available
   and fails at load — the same failure as `T9-13a` by a different route.
   `models.CATALOG`'s `companions` already names them; the criterion is that the
@@ -264,4 +293,8 @@ production, and almost none of it has a check.** That is the point of writing it
 | `T9-6` vanished requeues, refused does not | **built** | earlier | `pipeline._backend_vanished` |
 | **`T9-13a` a file is not a model** | **OBSERVED LIVE, unfixed** | today | gamingpc's `UNETLoader` enum listed the Qwen UNET **at 26% of its bytes**. Three files sat truncated at real filenames at 19%, 46% and 76%. `models.installed()` reads the enum, never the bytes |
 | `T9-13c` staging sequence | **written today, untested** | today | transfer → checksums → queues idle → restart → render. **The safety rests on the idle queue, not on Swarm's cache**, which cannot be read back |
+| `T9-11` scope | **rescoped today** | today | inert on `comfyworkflowraw`+`exactbackendid`; real for Swarm's own routing. Retires a hazard two sessions were ready to spend a production restart on |
+| `T9-13a` the 26% enum | **INCIDENT CLOSED, rule kept** | today | all six staged files sha256-verified both ends, zero MISMATCH in the run. The file that was 26% written reads `OK`. The rule stands; the window is shut |
+| `T9-13b` companions | **satisfied in practice, NOT closed** | today | the run staged all four together and they verify — but `~/stage_gamingpc.sh` **hardcodes the list**. The criterion is that the path reads `CATALOG.companions`, and it does not |
+| **gamingpc as a second image box** | **CAPABLE, NOT PROVEN** | today | all six files enumerated under the loader that will load them — `UNETLoader`, `CLIPLoader`, `VAELoader`, `LoraLoaderModelOnly` — and 31.84 GiB total / 30.01 free against a 19.12 GiB UNET plus an 8.7 GiB encoder. **Fits on paper and has never been run.** Written this way so the next session inherits a fact and not a claim |
 | `T9-4`, `T9-5`, `T9-7`…`T9-12`, `T9-14`…`T9-17` | **behaviour exists, no checks** | — | including the four measurement traps, each of which cost a wrong diagnosis once |

@@ -1959,3 +1959,28 @@ Append dated one-liners. Newest at the bottom.
   two open things at once** — whether gamingpc can serve anchors, and what the
   new prompt actually produces. `prompt.txt` updated; its most prominent item
   had gone stale.
+- 2026-08-13 (A) **`T9-11` RESCOPED, and B's framing of why is better than my
+  "the restart is not needed": A FINDING RECORDED WITHOUT ITS SCOPE READS AS
+  UNIVERSAL.** The Swarm connect-time cache is a real hazard for **Swarm's own
+  model-based routing** and **inert on our path**, because
+  `pipeline.py:487-489` submits `comfyworkflowraw` + `exactbackendid` and
+  ComfyUI validates the filenames itself. **We measured exactly this on
+  2026-08-12 and wrote it in a session note without attaching the scope to the
+  criterion.** The cost, paid the next day: two sessions independently concluded
+  a production restart was required and neither could justify it. **A criterion
+  naming a hazard must name where it does NOT apply**, or it spends other
+  people's caution. Now in `T9-11` itself.
+- 2026-08-13 (A) **`T9-13a` incident closed, rule kept** — all six staged files
+  sha256-verified both ends, zero MISMATCH; the file that was 26% written now
+  reads OK. **`T9-13b` satisfied in practice and NOT closed** — the run staged
+  UNET, encoder, VAE and LoRA together and all four verify, but
+  `~/stage_gamingpc.sh` **hardcodes its file list**, so the criterion (the
+  staging PATH reads `CATALOG.companions`) is unmet. **An outcome that happened
+  to be right is exactly the evidence that hides the gap.**
+- 2026-08-13 (A) **gamingpc is written up as CAPABLE, NOT PROVEN.** All six files
+  enumerated under the loader that will load them — verified per loader, not in
+  aggregate: `UNETLoader` (Qwen UNET + Z-Image), `CLIPLoader` (qwen_2.5_vl_7b +
+  qwen_3_4b), `VAELoader` (qwen_image_vae), `LoraLoaderModelOnly` (Lightning
+  4-step). 31.84 GiB total / 30.01 free against a 19.12 GiB UNET plus an 8.7 GiB
+  encoder. **Fits on paper, never run.** Stated that way so the next session
+  inherits a fact rather than a claim.
