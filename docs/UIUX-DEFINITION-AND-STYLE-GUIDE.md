@@ -559,6 +559,78 @@ peaches and ethan render the same sheet at very different speeds, and `T6-4`'s
 distinction between a box that went away and a workflow a box *refused* is the
 one the operator has to see, because only the first is worth waiting for.
 
+## 7b. The surfaces TRD 8-10 adds
+
+Added 2026-08-13. Same system as §4 and §5; only what these three ask of it.
+
+### 7b.1 A take is a candidate, and the studio already has that component
+
+TRD-8's take is *"one generated candidate for a song, exactly as a `refs` row is
+one candidate frame"* — so it is **`media-tile` with an audio body**, not a new
+pattern. Same states, same "use this one" act, same rule that the unpicked one
+stays reachable (`T6-A5`).
+
+What differs is that **you cannot judge audio from a thumbnail.** A tile that
+shows a waveform and a duration is showing metadata; the operator has to press
+play. So the take tile's primary action is **playback**, and comparison is the
+layout's job: takes for one song sit in a row that can be played in turn without
+leaving the page, because *"picked by ear"* is the actual workflow and a
+navigation between two takes destroys the comparison.
+
+### 7b.2 The consent field is a gate, and gates look different from fields
+
+`T8-10` refuses a voice with no recorded source and consent. **A refusal that
+looks like a validation error teaches the operator to route around it.** This one
+is a precondition, not a typo: the form states what is required before the
+control accepts anything, in the `plan-panel` shape (§4) — *what this will do,
+before you press it* — rather than as red text after a failed submit.
+
+### 7b.3 The fleet page is the one screen where "unknown" must not read as "no"
+
+TRD-9's whole subject is four heterogeneous boxes, and §7a.2's three-valued chip
+was written for exactly this page: `available` / `unavailable` / **`unknown`**.
+`T6-A6` makes it a correctness requirement rather than a nicety — `False` is a
+refusal and `None` is a candidate — and the fleet page is where the operator
+reads it.
+
+Two additions specific to TRD-9:
+
+- **A backend row says when it was last asked**, because `by_backend()` reads one
+  box at a time and a sleeping gaming PC answers slowly or not at all. A stale
+  reading presented as current is the same defect as a progress bar that does not
+  move.
+- **An empty registered backend is marked as a hazard, not as healthy** (`T9-9`).
+  It is "running" by every measure Swarm reports and it will refuse real work.
+  Green here would be the interface agreeing with the wrong signal.
+
+### 7b.4 Bulk edit is the highest-risk form in the studio
+
+`T10-3` and `T10-4` are data-destruction rules, and both are *interface*
+failures before they are code failures:
+
+- **Blank must not read as "clear".** An empty select adjacent to a Save button
+  is a control that looks like it will write. The affordance has to say *leave
+  alone*, and clearing needs its own explicit control that says so.
+- **Toggle-all must show its scope.** *"Select all 12 shown"* rather than
+  *"Select all"*, because the header sort and filters are live and the operator
+  cannot see what is off-screen.
+- **The pre-write count is part of the control, not a toast.** `T10-7` requires
+  it to be the count that actually changes; a confirmation that overstates once
+  is a confirmation nobody reads again.
+
+### 7b.5 Model-authored text has to be visually distinct, everywhere
+
+`T10-11` marks it in the payload; this is what the payload is for. **One
+treatment, used for every model-authored string** — the arc proposal, the mix
+advice, the contact-sheet description, the QC remedy — and never the same
+treatment as a measurement.
+
+This is the interface half of `T10-14`. If advice and measurement look alike, the
+operator will eventually treat a confident sentence as a reading, which is how
+`41.1 vs 64.7` would have become a gate. The style-guide rule: **model text
+carries the `--muted` role and an explicit marker; measurements carry
+`--text` and a unit.** A number without a unit is a claim, not a measurement.
+
 ## 8. How this document is verified
 
 A style guide is falsifiable or it is decoration.

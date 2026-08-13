@@ -161,8 +161,19 @@ and neither knows the other"*.
 
 ### The positive half of each one-sided criterion
 
+**Extended 2026-08-13 after external review** — grok and chatgpt independently
+found eight more, six overlapping. `docs/reviews/TRD8910-*`.
+
 | criterion | why it is one-sided | its positive half |
 |---|---|---|
+| `T9-5` slow boxes sort to the back, not out | passes if such a box is never considered at all | a plan containing **both** a fitting and a non-fitting box **still includes the slow one, later in the order** — an ordering assertion, not "not excluded in code" |
+| `T9-7` a refusal can bench the next attempt | states a hazard with no visible failure if the walk is deleted | after a refusal, **a subsequent attempt is still made and the sequence is observable** |
+| `T9-10` a cache hit is not a refusal | passes if the A/B is never run | with **different seeds** the same path produces a real output where the byte-identical resubmission does not |
+| `T9-11` a stale node list is distinguishable | passes if neither case ever occurs | **one real unsupported-node case and one stale-list case produce distinguishable records** |
+| `T9-12` `/history` is not the authority | passes if nobody checks | a Swarm-routed job leaves `/history` unchanged **while the container log shows it executed** |
+| `T9-13` files discriminate, not nodes | passes if capability checks stop running | **two boxes with identical nodes and different weights are told apart** by file presence |
+| `T9-15` VRAM measured before the render | passes with preflight logging and no successful render | a **render result carries** its pre-render reading |
+| `T9-16` no credential in the repo | absence — passes with no credential feature at all | a credential **loaded from the store is usable by the alert path**, and its provenance is recorded |
 | `T9-1` retargeting rewrites names | passes if it rewrites everything, including into failure | **as-written refuses AND retargeted renders**, same workflow, one test |
 | `T9-2` per-loader resolution | an absence — no cross-loader substitution | a name that **does** exist in the right loader **is** substituted |
 | `T9-3` the free draw is untouched | passes trivially when nothing is submitted | a pinned attempt **is** modified, same fixture |

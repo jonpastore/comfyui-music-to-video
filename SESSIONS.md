@@ -1554,3 +1554,52 @@ Append dated one-liners. Newest at the bottom.
   range has moved four times today, so **take it from `git rev-list --count
   f9ca597..HEAD` at deploy time and from no number in any note, including this
   one.** Suite green at HEAD, `check_integration.py` OK. Both claim rows clear.
+- 2026-08-13 (A) **DEPLOYED, on Jon's authorisation. Production is `c01c977`.**
+  Clean detached worktree at HEAD, **both queues verified idle first**, suite
+  green in that worktree (241 / 194 / check_integration OK) before shipping.
+  Six pages 200, ComfyUI 200, xai key present. **Verified on the box, not
+  assumed:** `md5sum` of deployed `app/mixer.py` and `app/app.py` match the
+  worktree exactly, and `item_chains` + `master_engaged` are both present — so
+  **B's `T1-20d` fix is live in production.** Production had been at `f9ca597`
+  with 27 commits unshipped.
+- 2026-08-13 (A) ⚠ **`git push` IS FAILING and is the one thing not done.**
+  `origin/main` is still `f9ca597`. Diagnosed rather than guessed: `ssh -T
+  git@github.com` **authenticates** (publickey, id_ed25519 via the agent), ports
+  22 and 443 both reach GitHub, GitHub status is all-green, and the FIRST push
+  got a genuine remote **"Internal Server Error"**. Every attempt since gets
+  *Permission denied (publickey)* from git's own ssh, which offers **no key at
+  all** while a direct ssh offers three. **Not the sandbox** — it fails with
+  sandboxing disabled too. Needs an interactive keyring; `! git push` from Jon's
+  own prompt is the likely fix.
+- 2026-08-13 (A) **CONFIRMED for Jon: swarm is up, the pipeline work is done,
+  unraid is done.** `RENDER_BACKEND=swarm` on the box; four backends from the
+  studio's own `/models/fleet` — [0] cerberus 23.42 GiB running, [1] gamingpc
+  31.84 GiB running, **[2] peaches-unraid 10.58 GiB running**, [3] ethan idle.
+  All eight `SWARM_PIPELINE_PLAN` phase 0-4 functions present. **What was NOT
+  done: neither plan had a single acceptance criterion. That is TRD-9.**
+- 2026-08-13 (A) **TRD-10 written; the document set is complete at ten TRDs,
+  three PRDs, three DDDs and one style guide — 244 criteria, and all ten TRDs
+  now carry a positive-half table** (seven did not this morning). TRD-8/9/10
+  reviewed by grok AND chatgpt, zero fabrications, **seven findings overlapping
+  exactly** between the two. Record:
+  `docs/reviews/TRD8910-RECOMMENDATIONS-2026-08-13.md`. 25 positive halves added.
+- 2026-08-13 (A) ⚠ **NEW CRITERION `T10-18`, and it is a real safety gap that
+  both halves being correct is exactly why nothing caught it.** A lyric
+  mentioning a child **is accepted** on the audio path (`T8-4`/`T10-16`,
+  deliberate and measured — Jon makes songs for his nieces). Lyrics **feed
+  TRD-2's scene generation** (`T10-10`). So text the audio path rightly permits
+  can reach the **image path**, which rightly refuses it, **by a route neither
+  document watches.** `T10-18` screens the derived scene text as image-path text
+  and names the lyric line it came from. Both halves: the song still generates
+  AND the scene derivation refuses. **Nothing about it weakens `T8-4`.**
+- 2026-08-13 (A) **Also folded from review: TRD-8 contradicted itself** (the
+  preamble says every criterion can fail; `T8-12` is green by construction) —
+  now marked PROVISIONAL in the shape TRD-3 uses for `T3-6`/`T3-18`. And **two
+  absorbed tables plus a deferred menu had no owner**: `take_voices` is in scope
+  with its criterion deferred behind consent, `library` is explicitly OUT of
+  scope rather than silently absorbed, and **the media menu has no owner** —
+  TRD-1 §11 defers "the song-level audio editor AND the media menu" and TRD-8
+  covered only the editor.
+- 2026-08-13 (A) **Full status for whoever picks this up:
+  `docs/STATUS-2026-08-13.md`** — deployed state, fleet, built-vs-specified per
+  document, and the six open items in priority order.

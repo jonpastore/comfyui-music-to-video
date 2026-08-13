@@ -157,11 +157,54 @@ energy can still be unusable.
 
 ### The positive half of each one-sided criterion
 
+**Extended 2026-08-13 after external review** — grok and chatgpt independently
+found eight more one-sided criteria than the first table carried, with seven
+overlapping. `docs/reviews/TRD8910-*`.
+
 | criterion | why it is one-sided | its positive half |
 |---|---|---|
 | `T8-2` a take is never overwritten | true when nothing generates | **both takes listed and playable** after a second generation |
+| `T8-3` a take records which path produced it | passes if only one path is reachable, or if no take is recorded for some | **generated, resynthesised and bridged each produce a take listed with its path** — all three, or the criterion covers one |
 | `T8-4` the audio path accepts a child mention | passes if nothing is screened anywhere | the **image path still refuses it**, same test |
+| `T8-5` the path bounds what it accepts and names the bound | passes if it refuses everything with any label | values **just under** each of `MAX_TAGS`, `MAX_LYRICS`, `MAX_AUDIO_SECS` are **accepted**; just over are refused **naming that bound** |
+| `T8-6` an edge span does not delete or lengthen | one edge tested is not "either edge" | **both the start edge and the end edge** splice and preserve length |
 | `T8-7` an out-of-range span is refused | passes with the whole splice path deleted | an **in-range span splices and returns the expected length** |
 | `T8-8` both operations at once refused | passes if neither can be requested | **each alone succeeds** |
+| `T8-9` `bridge_seconds` is the only arithmetic | pure absence — true when the feature is deleted | a valid replace-span **succeeds through the route**, and a change to `bridge_seconds` **moves the outcome** |
 | `T8-10` no voice without consent recorded | passes if voices cannot be stored at all | a voice **with** source and consent **is** stored and usable |
-| `T8-12` no cloning path without `T8-10` | green forever while no cloning path exists | **provisional**, and says so, until one exists |
+| `T8-11` a take records which voice | the "records that too" half passes if voices are never accepted | **one take with a voice and one without**, both generated, both recording the distinction |
+| `T8-13` the editor uses the shared automation model | passes if the editor is absent or read-only | an edit **written in the song editor is consumed by the shared path**, same limits and modes |
+| `T8-14` predicted length is rendered length | vacuous if nothing renders or nothing is predicted | a real render **emits a prediction first** and lands within `SET_DURATION_TOLERANCE` |
+| `T8-15` preview declares itself a proxy | passes if preview is removed | the endpoint returns proxy data **and a non-empty `not_applied` list** |
+
+**`T8-12` is PROVISIONAL and the preamble's "each can fail" does not hold for
+it.** Both reviewers caught the document contradicting itself: it says every
+`T8-n` can fail, and `T8-12` — *no cloning path ships without `T8-10`* — is
+green by construction while no cloning path exists. **Marked provisional rather
+than deleted**, in the shape TRD-3 uses for `T3-6` and `T3-18`: it cannot today
+distinguish "refuses to clone without consent" from "cannot clone", and it says
+so. It becomes failable the day a cloning path is proposed, which is the day it
+matters.
+
+## 9. Two tables the absorbed plan specified and this document did not claim
+
+Found by review, and named rather than quietly dropped.
+`AUDIO_BUILDOUT_PLAN.md` §4 defines four tables; §1 greps all four as absent and
+§2 designs two of them.
+
+- **`take_voices`** — the junction carrying per-region voice parameters, so a
+  voice applies to a span rather than a whole track. `T8-11` only requires a take
+  to record *which* voice, which the junction is not. **In scope, and its
+  criterion is deferred until `T8-10` holds**, because a per-region voice
+  assignment is meaningless before consent is enforced.
+- **`library`** — **explicitly out of scope here.** The plan's `library` table
+  and TRD-10's subject are different things: TRD-10 owns the song catalogue and
+  its bulk editing, which is the library the operator uses. Whether the plan's
+  table adds anything beyond `songs` is unestablished, and absorbing a table
+  nobody has justified would be inventing a requirement. **If it is wanted it is
+  TRD-10's**, and this line exists so it is not lost a second time.
+
+**The media menu is also disowned.** TRD-1 §11 defers *"the song-level audio
+editor **and the media menu**"*, this document claims that deferral, and §6's
+criteria cover only the editor. The media menu has **no owner** — recorded here
+rather than silently absorbed.
