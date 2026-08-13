@@ -1603,3 +1603,33 @@ Append dated one-liners. Newest at the bottom.
 - 2026-08-13 (A) **Full status for whoever picks this up:
   `docs/STATUS-2026-08-13.md`** — deployed state, fleet, built-vs-specified per
   document, and the six open items in priority order.
+- 2026-08-13 (A) ⚠ **`T10-18` REWRITTEN — Jon rejected it and he was right; the
+  guardrail's own justification is falsified.** `guardrail.check_text` refuses
+  ANY minor reference and its docstring justifies that with *"there is no
+  legitimate reason ... and costs nothing anyone actually needs."* **Jon intends
+  to write a song for his seven-year-old niece and make a video for it**, so the
+  clause the rule rests on is false. My first `T10-18` inherited the premise
+  instead of testing it, and would have accepted the song and then refused her
+  video at the next stage.
+  **The replacement separates the depiction from the mention.** What must be
+  impossible is sexual or nude content involving a minor -- absolute, no tier
+  setting, no override. Refusing the word "niece" does not prevent that, and the
+  guardrail's OWN comment admits the real gap: a childlike figure described with
+  no blocked term *"needs a classifier"* and is not caught today. So the blunt
+  rule pays a real cost and does not buy the protection it is named for.
+  New shape, `T10-18`..`T10-22`: a minor may be referenced **only** where
+  explicit content is structurally impossible (tier `g`/`pg13`, `allow_nudity`
+  false, no nude view reachable, no explicit album wording); **the lock cannot be
+  lifted while the reference exists** (`T10-19` -- escalation is the harm path,
+  not the mention); **no override reaches it** -- not `tier_overrides`, not the
+  album profile, not tier wording, not an operator confirmation (`T10-20`);
+  **removing the reference does not silently unlock** and prior renders keep
+  their attribution, so a work cannot be laundered child-safe -> explicit
+  (`T10-21`); and **the explicit path's refusal is unchanged** (`T10-22`).
+  **Stated plainly because it should not be buried: this makes the studio MORE
+  capable and the surface LARGER.** What makes it safe is that the surface is a
+  dead end -- three walls, no route out. The previous rule had a smaller surface
+  and a real gap. **The escalation interlock is the safety property; the keyword
+  screen never was.**
+  `guardrail.check_text`'s docstring needs the same correction when someone
+  holds that file -- it currently records a justification that is no longer true.

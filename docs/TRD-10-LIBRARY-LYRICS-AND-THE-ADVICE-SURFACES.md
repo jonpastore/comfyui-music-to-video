@@ -130,23 +130,73 @@ everywhere:
   `MAX_PROMPT_FIELD` replaced `MAX_CHARACTER_FIELD` for exactly this reason: two
   bounds for one idea sat 39 characters from refusing real saved content.
 
-- `T10-18` **The lyric-to-storyboard cascade is screened at the boundary it
-  crosses.** Found by review, and it is the sharpest thing either reviewer
-  returned because both halves are correct on their own: a lyric mentioning a
-  child **is accepted** (`T8-4`, `T10-16` — Jon makes songs for his nieces), and
-  lyrics **feed TRD-2's section structure and scene generation** (`T10-10`). So
-  text that the audio path rightly permits can arrive at the **image path**,
-  which rightly refuses it, by a route neither document watches.
+### 6a. Minors: separate the depiction from the mention
 
-  The criterion: when lyrics are used to derive a storyboard, the derived
-  **scene and image text is screened as image-path text**, and a refusal names
-  the lyric line it came from rather than failing anonymously. **Both halves:**
-  the song still generates, and the scene derivation refuses — accepting the
-  lyric and refusing the scene is the correct outcome, not a contradiction.
+**The rule this studio has today is over-broad, and its own justification says
+why that was thought acceptable.** `guardrail.check_text` refuses **any** minor
+reference, and its docstring argues: *"this is a character generator for
+adult-themed music videos, so there is no legitimate reason for a tier
+definition, style note or generated scene to reference children… and costs
+nothing anyone actually needs."*
 
-  *Nothing here weakens `T8-4`.* The audio path's acceptance is unchanged; this
-  is about what happens two stages later, on a different path, with a different
-  policy that was always going to apply.
+**That last clause is false and was falsified by the operator, 2026-08-13:** he
+intends to write a song for a seven-year-old niece and make a video for it. A
+rule justified by costing nothing now costs a thing somebody wants, so the
+justification has to be rebuilt rather than reasserted.
+
+**What must be impossible is a depiction, not a word.** The thing this project
+must never produce is sexual or nude content involving a minor — CSAM or
+anything approaching it. That is absolute, it is not a tier setting, and no
+override reaches it. **Refusing the word "niece" does not prevent it**, and the
+guardrail's own comment admits the real gap: a childlike figure described
+without any blocked term *"needs a classifier"* and is not caught today. So the
+blunt rule pays a real cost and does not buy the protection it is named for.
+
+**The design: a minor reference and explicit capability can never coexist, and
+they are kept apart structurally rather than by screening prose.**
+
+- `T10-18` **A minor may be referenced where explicit content is structurally
+  impossible, and nowhere else.** Lyrics, title, and scene text on a song or
+  album locked to a non-explicit tier are permitted. The lock is: tier `g` or
+  `pg13`, `allow_nudity` false, no nude view reachable, and no explicit wording
+  in the album profile. **A song for a child is a first-class thing this studio
+  can make.**
+- `T10-19` **The lock cannot be lifted while the reference exists.** Escalating
+  such a song or album to `r`/`xxx`, enabling nudity on it, or adding a nude view
+  is **refused, naming the reference that blocks it**. This is the criterion that
+  actually prevents the harm: not the mention, but the **escalation path** from a
+  child-referencing work to an explicit one.
+- `T10-20` **No override mechanism reaches `T10-19`.** Not `tier_overrides`, not
+  the album profile, not tier wording, not a per-view prompt override, not an
+  operator confirmation. A refusal that a determined operator can click through
+  is a refusal that will be clicked through. **There is no supported path to an
+  explicit render of a work that references a minor, and no code path that
+  produces one.**
+- `T10-21` **Removing the reference does not silently unlock.** Unlocking is an
+  explicit act on an empty result, and **prior renders keep their attribution** —
+  so a work cannot be laundered from child-safe to explicit by an edit.
+- `T10-22` **The explicit path's refusal stays absolute and unchanged.** On any
+  album, song or scene that is not locked non-explicit, a minor reference is
+  refused exactly as today. Both halves in one test: **the locked path accepts,
+  the explicit path refuses** — and the second is what `T8-4` and `T10-16`
+  already assert.
+
+**What this changes about risk, stated plainly rather than buried.** It makes the
+studio *more* capable — a child may now be referenced somewhere, where before
+nothing could — and that is a larger surface, not a smaller one. What makes it
+safe is that the surface is a **dead end**: the locked context has no route to
+nudity, to an explicit tier, or to an override, and `T10-19`/`T10-20`/`T10-21`
+are the three walls. The previous rule had a smaller surface and a real gap
+(the unworded childlike depiction it cannot catch); this one has a larger
+surface and no route out of it. **The escalation interlock is the safety
+property; the keyword screen never was.**
+
+*This supersedes the cascade criterion first written here.* The original said
+lyrics feeding scene generation must be re-screened as image-path text — correct
+in mechanism, wrong in policy, because it would have refused the niece's video
+at the second stage having accepted her song at the first. The cascade is still
+real and is handled by the lock: a song written under `T10-18` derives scenes
+that are locked with it.
 
 ## 7. Explicitly not building
 
@@ -178,6 +228,11 @@ places.
 | `T10-7` the pre-write count is the real count | passes if the count is always zero or writes are disabled | a batch with a **non-zero** predicted count writes **exactly that many** — the 12-vs-9 case by name |
 | `T10-14` "does this match?" is refused as a prompt shape | classic one-sided refusal | **"describe what differs" is accepted** and returns non-verdict text on the same surface |
 | `T10-17` one shared guard, no per-module copy | absence of copies is true when modules stop screening | disallowed text through **each of the four modules** is refused **via `screen_prompt_field`**, and an in-bound string passes |
+| `T10-18` a minor may be referenced in a locked context | passes if nothing can ever be locked, i.e. the feature is absent | **a song referencing a child generates, and its G-tier video renders** — the niece case, end to end |
+| `T10-19` the lock cannot be lifted | passes if escalation is impossible for every work | a work **with no reference escalates normally** to `r`/`xxx` |
+| `T10-20` no override reaches it | absence of a bypass is true when there are no overrides at all | overrides **still work** for everything else — asserted on a non-locked album |
+| `T10-21` removing a reference does not silently unlock | passes if unlocking never happens | an **explicit** unlock on a cleaned work **does** succeed, and prior renders keep their attribution |
+| `T10-22` the explicit path still refuses | this is the half that already exists | paired with `T10-18`: **locked accepts, explicit refuses**, one test |
 | `T10-3` blank leaves alone | passes if bulk edit writes nothing at all | a **non-blank** field **does** write, same request |
 | `T10-4` toggle-all is scoped to shown rows | passes if toggle-all selects nothing | with no filter, toggle-all selects **every** row |
 | `T10-5` invalid refuses the batch | passes if every batch is refused | a **valid** batch writes all of it |
