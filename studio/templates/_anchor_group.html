@@ -43,6 +43,15 @@
            only anchor could never be removed. The confirm states the cost
            instead, and reference generation already refuses a tier with no
            chosen anchor with its own clear message. #}
+        {# Condition the NEXT sheet on this one. Clips stay on-model because the
+           chosen anchor is handed to the model as image1; the anchors form could
+           only ever read uploads, so every sheet re-interpreted the source
+           photographs instead of varying the sheet you approved.
+           docs/TRD-7 T7-6. #}
+        <form method="post" action="/anchors/{{ c.id }}/use-as-ref" class="use-as-ref">
+          <button type="submit" title="Add this sheet to the base images, so the next
+                                       render conditions on it">Use as reference</button>
+        </form>
         <form method="post" action="/anchors/{{ c.id }}/delete" class="delete-anchor"
               {% if c.chosen %}data-chosen="1"{% endif %}>
           <button type="submit" class="thumb-btn-danger">Delete</button>

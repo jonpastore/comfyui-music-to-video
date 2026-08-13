@@ -2163,6 +2163,90 @@ def _anchor_group(album, n=3, tier="r", view="front"):
     return ids
 
 
+def test_a_rendered_anchor_can_condition_the_next_sheet(patch_stub):
+    """Clips stay on-model because gen_refs hands the chosen anchor to the model
+    as image1. The anchors form could only read `assets` of kind `anchor_ref`,
+    which are UPLOADS, so sheet 2 was a fresh interpretation of the source
+    photographs rather than a variation of the sheet you approved -- the largest
+    consistency lever in the pipeline, unwired. docs/TRD-7 T7-6.
+
+    Measured by what reaches the RENDERER, not by the row: a row the generate
+    path does not read would satisfy every assertion about the database and
+    change no image."""
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="", render=None: (
+        seen.append(list(images)) or []))
+    with TestClient(appmod.app) as client:
+        album = "Feedback Album"
+        client.post("/playlists", data={"name": album})
+        ids = _anchor_group(album)
+        sheet = db.one("SELECT path FROM anchors WHERE id=?", ids[0])["path"]
+
+        # before: the album has no base images at all, so a render is refused --
+        # the positive case below is otherwise indistinguishable from a form that
+        # always renders
+        assert appmod.anchor_refs(album) == []
+        r = client.post("/anchors", data={"album": album, "tier": "r", "view": "front",
+                                           "n": "1"})
+        assert r.status_code == 400 and "reference" in r.text
+
+        r = client.post(f"/anchors/{ids[0]}/use-as-ref", headers={"Accept": "application/json"})
+        assert r.status_code == 200, r.text
+        ref_id = r.json()["id"]
+        refs = appmod.anchor_refs(album)
+        assert len(refs) == 1 and refs[0]["path"] == sheet, refs
+        # the SAME file, not a copy of it: install_input does the copying at
+        # render time, and a second set of bytes here is a second thing to keep
+        # in step with the anchor it was taken from
+        assert r.json()["path"] == sheet
+
+        # pressing it twice is one reference, not two -- otherwise the gallery
+        # fills with one picture and it counts twice against MAX_ANCHOR_REFS
+        again = client.post(f"/anchors/{ids[0]}/use-as-ref", headers={"Accept": "application/json"})
+        assert again.json()["id"] == ref_id and again.json()["already"] is True
+        assert len(appmod.anchor_refs(album)) == 1
+
+        # ...and it REACHES the model. This is the criterion; everything above
+        # is bookkeeping.
+        seen.clear()
+        client.post("/anchors", data={"album": album, "tier": "r", "view": "front",
+                                       "n": "1", "ref_id": str(ref_id)})
+        for j in db.q("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC LIMIT 1"):
+            wait_job(j["id"])
+        assert seen and seen[-1] == [sheet], (
+            f"the anchor did not reach gen_anchor as a reference: {seen}")
+
+        # deleting the REFERENCE keeps the anchor's file -- the row is borrowed,
+        # the image is the anchor's own. Removing it here would delete the chosen
+        # sheet out from under the gallery and every clip that renders from it.
+        client.post(f"/anchors/refs/{ref_id}/delete", headers={"Accept": "application/json"})
+        assert appmod.anchor_refs(album) == []
+        assert os.path.isfile(sheet), "deleting the borrowed reference deleted the anchor's image"
+        assert db.one("SELECT id FROM anchors WHERE id=?", ids[0]) is not None
+
+        # deleting the ANCHOR takes its borrowed references with it: a reference
+        # to a file that no longer exists queues a render that fails at load, one
+        # GPU minute after the cause.
+        client.post(f"/anchors/{ids[0]}/use-as-ref", headers={"Accept": "application/json"})
+        assert len(appmod.anchor_refs(album)) == 1
+        client.post(f"/anchors/{ids[0]}/delete", headers={"Accept": "application/json"})
+        assert not os.path.isfile(sheet)
+        assert appmod.anchor_refs(album) == [], \
+            "a reference was left pointing at a deleted anchor's file"
+
+        # an UPLOADED reference still loses its file, or this whole path becomes
+        # a way to leak every photograph ever uploaded
+        up = client.post("/anchors/refs", data={"album": album},
+                         files=[("images", ("u.png", _png_bytes(), "image/png"))])
+        assert up.status_code in (200, 303)
+        uploaded = appmod.anchor_refs(album)[0]
+        client.post(f"/anchors/refs/{uploaded['id']}/delete",
+                    headers={"Accept": "application/json"})
+        assert not os.path.isfile(uploaded["path"]), \
+            "an uploaded reference's file survived its own delete"
+
+
 def test_anchor_actions_answer_json_and_still_redirect_a_form_post():
     """Every button on the Anchors page goes through app.js's api(). The same
     routes keep their redirect for a plain form post."""

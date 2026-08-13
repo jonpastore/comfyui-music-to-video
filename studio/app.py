@@ -2099,18 +2099,30 @@ async def delete_anchor_ref(request: Request, asset_id: int):
     a = db.one("SELECT * FROM assets WHERE id=? AND kind='anchor_ref'", asset_id)
     if not a:
         raise HTTPException(404, "no such reference image")
-    album = db.jset(a).get("scope_value", "")
-    if _within_data(a["path"]) and os.path.isfile(a["path"]):
-        try:
-            os.remove(a["path"])
-        except OSError:
-            pass
+    meta = db.jset(a)
+    album = meta.get("scope_value", "")
+    # A BORROWED reference is a row pointing at a sheet this studio rendered,
+    # not an upload of its own (see use_anchor_as_ref). The row goes; the file
+    # stays, because it is the anchor's -- removing it here would delete the
+    # chosen sheet out from under the anchors gallery and every clip that
+    # renders from it.
+    if not meta.get("anchor_id"):
+        if _within_data(a["path"]) and os.path.isfile(a["path"]):
+            try:
+                os.remove(a["path"])
+            except OSError:
+                pass
     db.run("DELETE FROM assets WHERE id=?", asset_id)
     # the anchor lightbox's Delete button hits this same route via api(), which
     # asks for JSON same as every other button in that modal -- htmx's own
     # Delete button below the thumbnail still gets the swapped form back
     if wants_json(request):
         return JSONResponse({"deleted": [asset_id]})
+    return await _anchor_form_or_redirect(request, album)
+
+
+async def _anchor_form_or_redirect(request, album):
+    """The htmx-or-navigate tail every /anchors/refs route ends with."""
     if request.headers.get("HX-Request"):
         form = await request.form()
         # the character too: deleting one of a CHARACTER's base images used to
@@ -2121,6 +2133,56 @@ async def delete_anchor_ref(request: Request, asset_id: int):
         return templates.TemplateResponse(request, "_anchor_form.html",
                                            _anchor_ctx_from_form(form, album, cid))
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
+
+
+@app.post("/anchors/{id}/use-as-ref")
+async def use_anchor_as_ref(request: Request, id: int):
+    """Condition the NEXT sheet on a sheet this studio already rendered.
+
+    The single largest consistency lever this pipeline has, and it was unwired.
+    Clips stay on-model because gen_refs hands the chosen anchor to the model as
+    image1 -- the identity lock -- for every scene. The anchors form could only
+    read `assets` of kind `anchor_ref`, which are UPLOADS, so every sheet was a
+    fresh interpretation of the source photographs and sheet 2 was never a
+    variation of the sheet you approved. docs/TRD-7 T7-6.
+
+    The row points at the anchor's OWN file. No copy: pipeline.gen_anchor puts
+    every picked path through install_input at render time, exactly as gen_refs
+    does, so duplicating the bytes here would only create a second thing to keep
+    in step. That is also why deleting this reference deletes the row and not
+    the file (see delete_anchor_ref), and why deleting the ANCHOR takes its
+    borrowed references with it (_drop_anchor) -- a reference to a file that no
+    longer exists renders a job that fails at load.
+
+    Scope comes from the anchor ROW, never the form: an anchor already carries
+    the album and character it belongs to, and reading them from a submitted
+    field is how one character's face ends up conditioning another's sheet.
+    """
+    row = db.one("SELECT * FROM anchors WHERE id=?", id)
+    if not row:
+        raise HTTPException(404, "no such anchor candidate")
+    if row["scope_kind"] != "album":
+        raise HTTPException(400, "only an album's anchors can be used as references")
+    album, cid = row["scope_value"], row["character_id"]
+    existing = db.one("""SELECT * FROM assets WHERE kind='anchor_ref' AND path=?
+                         ORDER BY id DESC""", row["path"])
+    if existing:
+        # Idempotent. Pressing it twice used to be the only way to find out it
+        # had worked, and two rows for one file would fill the gallery with the
+        # same picture and count twice against MAX_ANCHOR_REFS.
+        asset = existing
+    else:
+        aid = db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) "
+                     "VALUES (?,?,?,?,?)", None, "anchor_ref", row["path"],
+                     json.dumps({"scope_value": album, "character_id": cid,
+                                 # what makes it borrowed rather than uploaded
+                                 "anchor_id": row["id"], "tier": row["tier"],
+                                 "view": row["view"]}), time.time())
+        asset = db.one("SELECT * FROM assets WHERE id=?", aid)
+    if wants_json(request):
+        return JSONResponse({"id": asset["id"], "path": asset["path"],
+                             "already": bool(existing)})
+    return await _anchor_form_or_redirect(request, album)
 
 
 def _build_refs():
@@ -3664,6 +3726,14 @@ def _drop_anchor(row):
             os.remove(row["path"])
         except OSError:
             pass
+    # Borrowed references point at THIS file (use_anchor_as_ref) and the file is
+    # going. Left behind, the gallery would offer a thumbnail with no image and
+    # a ticked reference would queue a render that fails at load -- the failure
+    # arriving one GPU minute after the cause, which is the shape of it that
+    # costs the most to diagnose.
+    for a in db.q("SELECT * FROM assets WHERE kind='anchor_ref' AND path=?", row["path"]):
+        if db.jset(a).get("anchor_id"):
+            db.run("DELETE FROM assets WHERE id=?", a["id"])
     db.run("DELETE FROM anchors WHERE id=?", row["id"])
 
 
