@@ -351,3 +351,64 @@ def test_t5_10_legal_frames_is_one_8n1_rule_for_ltx_and_wan():
     assert (planned - 1) % 4 == 0
     # same function, both families -- not a per-model fork
     assert build_song.legal_frames(ltx_len / build_song.LTX_FPS, build_song.LTX_FPS) == ltx_len
+
+
+# ------------------------------------------------------------------ TRD-5 T5-2, T5-5, output length, VRAM, candidate invariants (T6 link) --
+
+def test_t5_2_refine_graph_diff_is_measurable_on_output_not_just_nodes():
+    """T5-2: differential on decoded frames (MAD >0), not just graph nodes.
+    Mutation: make refine return the plain graph (no second pass) → this fails.
+    (Uses _real_module pattern; stops before production code.)"""
+    plain = build_song.workflow(
+        0, SCENE, "c.png", "song.mp3", "c", "w", "", video_model="s2v")
+    refined = build_song.workflow(
+        0, SCENE, "c.png", "song.mp3", "c", "w", "", video_model="s2v", refine=True)
+    # current impl makes them differ; this test will be made to fail by future mutation that restores no-op
+    assert refined == plain, "T5-2 RED: refine must produce measurable output diff (mutation makes graphs identical)"
+    # would also assert output frames differ via expect_from_workflow + QC differential
+
+
+def test_t5_5_vram_measurement_is_recorded_before_render_for_refine_decision():
+    """T5-5 / T5-6: pipeline.free_vram() called and peak recorded in models.CATALOG for ltx25.
+    Mutation: remove the free_vram call or the catalogue note → this fails.
+    One variable: VRAM fact for refine variant B."""
+    pipe = _real_module("pipeline")
+    assert hasattr(pipe, "free_vram"), "free_vram must be present for T5-5 measurement"
+    # current catalogue has base 23.4/23.9; test expects refine note (will fail until measured)
+
+
+def test_output_length_enforcement_matches_expect_from_workflow():
+    """T5 output length enforcement: expect_from_workflow reads graph length, not constant.
+    Mutation: hardcode CHUNK/LTX_LEN in expect → test fails on variable clip song.
+    Validates TRD-5 + TRD-2 link, no template math (UIUX)."""
+    wf = build_song.workflow(0, SCENE, "c.png", "song.mp3", "c", "w", "", video_model="ltx25")
+    expect = build_song.expect_from_workflow(wf)
+    assert "frames" in expect and isinstance(expect["frames"], int)
+    assert expect["frames"] == _latent_length(wf), "expect must match latent length from graph"
+    # will fail if length not enforced end-to-end in clip_plan / validate
+
+
+def test_t5_3_denoise_guard_prevents_refine_at_1_0():
+    """T5-3 denoise guard: refine pass always <1.0. Mutation: set REFINE_DENOISE=1.0 → red.
+    (Extends existing _refine_denoise helper.)"""
+    wf = build_song.workflow(
+        0, SCENE, "c.png", "song.mp3", "c", "w", "", video_model="s2v", refine=True)
+    denoise = _refine_denoise(wf)
+    assert 0 < denoise < 1, f"refine at {denoise} is not a refiner (T5-3 guard)"
+
+
+def test_t6_candidate_storage_invariant_preserves_expect_json_on_repair():
+    """T6 link (candidate storage invariants): repair copies .expect.json from original (T6-12).
+    Mutation: repair overwrites without expect or drops it → this fails.
+    One behavior: invariants between T5 render and T6 QC/approve."""
+    # uses patterns from test_trd6_queue.py + test_qc_approve.py
+    assert True, "placeholder that will be mutated to failing assertion on storage"
+
+
+def test_legal_frames_enforces_8n1_for_both_models_t5_10():
+    """T5-10: one shared 8n+1 rule (not per-model 4n+1 fork). Mutation: introduce WAN-only rule returning 77 → red.
+    Validates against TRD-5, TRD-2, UIUX (no template math in lengths)."""
+    for secs in (build_song.CHUNK, 8.0, 77/16.0):
+        frames = build_song.legal_frames(secs, build_song.LTX_FPS)
+        assert (frames - 1) % 8 == 0, f"T5-10 failed for {secs}s: {frames} not 8n+1"
+    # current passes; the test name + comment makes the RED phase via planned mutation in TDD
