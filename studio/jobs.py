@@ -14,6 +14,9 @@ import db
 LOGS = os.path.join(db.DATA, "logs")
 _handlers = {}
 _wake = threading.Event()
+# Tests replace this. Production jobs without args.requires skip the check.
+# A job with requires and no matcher is a candidate (could not ask ≠ refusal).
+_capability_where = None
 
 # A ComfyUI restart takes a few seconds; a batch should survive one.
 MAX_ATTEMPTS = 3
@@ -38,18 +41,50 @@ def handler(kind):
     return deco
 
 
-def enqueue(kind, args=None, song_id=None):
+def enqueue(kind, args=None, song_id=None, depends_on=None):
     if kind not in _handlers:
         raise ValueError(f"no handler registered for job kind {kind!r}")
+    payload = dict(args or {})
+    if depends_on is not None:
+        payload["_depends_on"] = depends_on
+    now = time.time()
     jid = db.run(
         "INSERT INTO jobs (kind, args_json, song_id, status, created) VALUES (?,?,?, 'queued', ?)",
-        kind, json.dumps(args or {}), song_id, time.time())
+        kind, json.dumps(payload), song_id, now)
+    _record_transition(jid, "queued", now)
     _wake.set()
     return jid
 
 
 def get(jid):
     return db.one("SELECT * FROM jobs WHERE id=?", jid)
+
+
+def transitions(jid):
+    """T6-5: every status change, in order, with its time."""
+    return db.q(
+        "SELECT status, at FROM job_transitions WHERE job_id=? ORDER BY id", jid)
+
+
+def land(path):
+    """T6-7: a landed artefacts row requires the file on disk."""
+    if not path or not os.path.isfile(path):
+        raise ValueError(f"cannot land missing artefact: {path!r}")
+    now = time.time()
+    db.run("""INSERT INTO artefacts (path, created, status) VALUES (?,?, 'landed')
+              ON CONFLICT(path) DO UPDATE SET status='landed'""", path, now)
+    return path
+
+
+def _record_transition(jid, status, at=None, c=None):
+    at = time.time() if at is None else at
+    if c is None:
+        db.run("INSERT INTO job_transitions (job_id, status, at) VALUES (?,?,?)",
+               jid, status, at)
+    else:
+        c.execute(
+            "INSERT INTO job_transitions (job_id, status, at) VALUES (?,?,?)",
+            (jid, status, at))
 
 
 def recent(limit=50):
@@ -116,10 +151,13 @@ def cancel(jid):
     if row is None:
         raise ValueError(f"no such job: {jid}")
     if row["status"] == "queued":
+        now = time.time()
         db.run("UPDATE jobs SET status='cancelled', finished=? WHERE id=? AND status='queued'",
-               time.time(), jid)
+               now, jid)
+        _record_transition(jid, "cancelled", now)
     elif row["status"] == "running":
         db.run("UPDATE jobs SET status='cancelling' WHERE id=? AND status='running'", jid)
+        _record_transition(jid, "cancelling")
     else:
         raise ValueError(f"job {jid} is already {row['status']}")
     return get(jid)["status"]
@@ -130,27 +168,80 @@ def cancel_requested(jid):
     return bool(row) and row["status"] == "cancelling"
 
 
-def _claim():
-    """Take the oldest queued job, atomically.
+def _predecessor_landed(c, row):
+    """T6-2: a chained job is not ready until its predecessor has landed.
 
-    SELECT-then-UPDATE lost a concurrent cancel: click Cancel in the gap between
-    the two statements and cancel() matched (status was still 'queued'), wrote
-    'cancelled', and the worker then overwrote it with 'running' and ran the job
-    anyway -- the UI said cancelled while the GPU worked. BEGIN IMMEDIATE takes
-    the write lock up front so a cancel on another connection waits, and the
-    guard on status makes the update a no-op if it already landed.
+    Read from the same connection as _claim so the decision and the UPDATE
+    see one snapshot. Missing predecessor stays unready — a dangling
+    depends_on must not run.
+    """
+    try:
+        args = json.loads(row["args_json"] or "{}")
+    except ValueError:
+        args = {}
+    dep = args.get("_depends_on")
+    if dep is None:
+        return True
+    pred = c.execute("SELECT status FROM jobs WHERE id=?", (dep,)).fetchone()
+    return pred is not None and pred["status"] == "done"
+
+
+def _capability_ready(row):
+    """T6-3: match on capability. False is a refusal; None is a candidate.
+
+    args.requires names the model. An empty where() list means every box
+    refused or the model is unknown — leave the job queued. A listed row,
+    even unconfirmed, is a candidate. Could-not-ask is also a candidate.
+    """
+    try:
+        args = json.loads(row["args_json"] or "{}")
+    except ValueError:
+        args = {}
+    key = args.get("requires")
+    if not key:
+        return True
+    fn = _capability_where
+    if fn is None:
+        try:
+            import models
+            fn = models.where
+        except Exception:
+            return True
+    try:
+        matches = fn(key, None)
+    except Exception:
+        return True
+    return bool(matches)
+
+
+def _claim():
+    """Take the oldest ready queued job, atomically.
+
+    Ready is not queued: a job whose predecessor has not landed is left
+    sitting. SELECT-then-UPDATE lost a concurrent cancel: click Cancel in
+    the gap between the two statements and cancel() matched (status was
+    still 'queued'), wrote 'cancelled', and the worker then overwrote it
+    with 'running' and ran the job anyway -- the UI said cancelled while
+    the GPU worked. BEGIN IMMEDIATE takes the write lock up front so a
+    cancel on another connection waits, and the guard on status makes the
+    update a no-op if it already landed.
     """
     c = db.conn()
     try:
         c.execute("BEGIN IMMEDIATE")
-        row = c.execute(
-            "SELECT * FROM jobs WHERE status='queued' ORDER BY id LIMIT 1").fetchone()
+        rows = c.execute(
+            "SELECT * FROM jobs WHERE status='queued' ORDER BY id").fetchall()
+        row = next((r for r in rows
+                    if _predecessor_landed(c, r) and _capability_ready(r)), None)
         if row is None:
             c.execute("COMMIT")
             return None
+        now = time.time()
         cur = c.execute(
             "UPDATE jobs SET status='running', started=? WHERE id=? AND status='queued'",
-            (time.time(), row["id"]))
+            (now, row["id"]))
+        if cur.rowcount == 1:
+            _record_transition(row["id"], "running", now, c=c)
         c.execute("COMMIT")
         return row if cur.rowcount == 1 else None
     except Exception:
@@ -185,14 +276,20 @@ def _run_one(row, attempt=1):
 
     try:
         args = json.loads(row["args_json"] or "{}")
+        args.pop("_depends_on", None)
+        args.pop("requires", None)
         progress(f"start {row['kind']}")
         result = _handlers[row["kind"]](args, progress)
+        now = time.time()
         db.run("UPDATE jobs SET status='done', finished=?, progress=? WHERE id=?",
-               time.time(), json.dumps(result)[:500] if result else "done", jid)
+               now, json.dumps(result)[:500] if result else "done", jid)
+        _record_transition(jid, "done", now)
         progress("done")
     except Cancelled:
+        now = time.time()
         db.run("UPDATE jobs SET status='cancelled', finished=?, progress=? WHERE id=?",
-               time.time(), "cancelled by user", jid)
+               now, "cancelled by user", jid)
+        _record_transition(jid, "cancelled", now)
         log.write("cancelled by user\n")
     except Exception as e:
         # A TRANSIENT failure is retried in place. ComfyUI is restarted often
@@ -215,8 +312,10 @@ def _run_one(row, attempt=1):
             log.close()
             time.sleep(wait)
             return _run_one(row, attempt=attempt + 1)
+        now = time.time()
         db.run("UPDATE jobs SET status='failed', finished=?, error=? WHERE id=?",
-               time.time(), msg[:2000], jid)
+               now, msg[:2000], jid)
+        _record_transition(jid, "failed", now)
         log.write(traceback.format_exc())
     finally:
         log.close()

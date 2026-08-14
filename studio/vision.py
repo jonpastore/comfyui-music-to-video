@@ -105,6 +105,94 @@ def _ask_local(model, image_path, system, user_text):
     return r.json()["choices"][0]["message"]["content"] or ""
 
 
+def _image_parts(paths):
+    parts = []
+    for p in paths:
+        if p and os.path.isfile(p):
+            parts.append({"type": "image_url",
+                          "image_url": {"url": _data_url(p), "detail": "high"}})
+    return parts
+
+
+def ask_images(paths, system, user_text, progress=None, prefer_local=True):
+    """Several images + one question -> raw reply. First path is the subject."""
+    parts = [{"type": "text", "text": user_text}] + _image_parts(paths)
+    messages = ([{"role": "system", "content": system}] if system else []) + \
+               [{"role": "user", "content": parts}]
+    if prefer_local:
+        model = local_model()
+        base, key = _env()
+        if model and base and key:
+            try:
+                if progress:
+                    progress(f"vision: {model} (local)")
+                r = httpx.post(f"{base}/chat/completions",
+                               headers={"Authorization": f"Bearer {key}"},
+                               json={"model": model, "messages": messages,
+                                     "response_format": {"type": "json_object"}},
+                               timeout=TIMEOUT)
+                if r.status_code >= 400:
+                    raise RuntimeError(f"local vision model {model} failed "
+                                       f"({r.status_code}): {r.text[:200]}")
+                return r.json()["choices"][0]["message"]["content"] or ""
+            except Exception as e:
+                if progress:
+                    progress(f"vision: local model failed ({e}); falling back to xAI")
+    if progress:
+        progress("vision: xAI (billed)")
+    return grok._chat(grok._resolve_model(grok.VISION_MODEL), messages, progress)
+
+
+SCORE_SYSTEM = (
+    "You compare one generated character sheet (first image) to the operator's "
+    "base photographs (the remaining images) and to the prompt that was asked. "
+    "Judge identity (same individual: face, hair, species, body colour) and "
+    "whether the sheet follows the prompt (view, pose, wardrobe or nudity, "
+    "backdrop). Do not invent a PASS/FAIL. Answer JSON only: "
+    '{"confidence": <0-100>, "identity": <0-100>, "prompt": <0-100>, '
+    '"notes": "<one short sentence>"}.'
+)
+
+
+def parse_score(obj):
+    """Clamp a model dict to the stored shape. Bad numbers become unknown."""
+    def _n(key):
+        try:
+            v = int(round(float(obj.get(key))))
+        except (TypeError, ValueError):
+            return None
+        return max(0, min(100, v))
+    return {"confidence": _n("confidence"), "identity": _n("identity"),
+            "prompt": _n("prompt"),
+            "notes": " ".join(str(obj.get("notes") or "").split())[:200]}
+
+
+def score_candidate(path, bases, prompt="", progress=None):
+    """Advisory match of one candidate to the base photographs and the prompt.
+
+    Never a gate. A vision failure is confidence=None, not a reject.
+    """
+    where, detail = available()
+    bases = [b for b in (bases or []) if b and os.path.isfile(b)]
+    if not path or not os.path.isfile(path):
+        return {"confidence": None, "identity": None, "prompt": None,
+                "notes": "", "error": "candidate file missing", "backend": where}
+    user = ("First image: the generated candidate. Remaining images: the "
+            "operator's base photographs. Prompt that was asked:\n"
+            + (prompt or "(album default composition)"))
+    try:
+        raw = ask_images([path] + bases[:3], SCORE_SYSTEM, user, progress)
+        obj = json_or_raise(raw, "anchor score")
+    except Exception as e:
+        if progress:
+            progress(f"vision score failed: {e}")
+        return {"confidence": None, "identity": None, "prompt": None,
+                "notes": "", "error": str(e)[:200], "backend": where}
+    got = parse_score(obj)
+    got["backend"] = where
+    return got
+
+
 def ask(image_path, system, user_text, progress=None, prefer_local=True):
     """One image + one question -> the model's raw reply text.
 

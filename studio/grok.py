@@ -22,7 +22,7 @@ _REPO_ROOT = os.environ.get("STUDIO_SCRIPTS") or os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _REPO_ROOT)
 from build_storyboard import parse_sections, to_md, energy  # noqa: E402
-from build_song import SHOT_RULES, CHUNK  # noqa: E402
+from build_song import SHOT_RULES, CHUNK, LTX_FPS, legal_frames, guidance_seconds  # noqa: E402
 
 import tiers  # noqa: E402  (ContentRefused must be catchable by type)
 
@@ -468,6 +468,13 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
         # prompt is built -- the one chokepoint every storyboard reaches, however
         # it was produced. Baking it in here duplicated a 40-word clause across
         # 20-50 scenes and protected nothing our own composer had not generated.
+        # T2-12a: stamp the legal 8n+1 length so storyboard arithmetic and the
+        # renderer share one number. Clip COUNT still comes from song duration
+        # (n_scenes = ceil(duration / scene_seconds)), never from this field.
+        planned = scene_seconds if scene_seconds else guidance_seconds(s)
+        frames = legal_frames(planned, LTX_FPS)
+        s["frames"] = frames
+        s["length_seconds"] = round(frames / LTX_FPS, 4)
         out.append(s)
 
     return {
@@ -516,6 +523,19 @@ def validate(sb, exemplar=None, expect_scenes=None):
             problems.append(f"scene {s.get('scene_number', '?')} missing keys: {missing}")
         if not (s.get("image_prompt") or "").strip():
             problems.append(f"scene {s.get('scene_number', '?')} has empty image_prompt")
+        # T2-12a: an illegal requested length fails here, not at the sampler.
+        # Absent frames is a pre-T2-12a storyboard and is left alone.
+        frames = s.get("frames")
+        if frames is not None:
+            try:
+                n = int(frames)
+            except (TypeError, ValueError):
+                n = None
+            if n is None or n < 9 or (n - 1) % 8 != 0:
+                near = legal_frames(max(float(n or 0), 9) / LTX_FPS, LTX_FPS)
+                problems.append(
+                    f"scene {s.get('scene_number', '?')} length {frames} frames is not 8n+1 "
+                    f"(nearest {near})")
 
     nums = [s.get("scene_number") for s in scenes]
     if nums != list(range(1, len(scenes) + 1)):
@@ -949,6 +969,20 @@ def demo():
         # chose the count against five lyric sections.
         two_of_five = _compose(SONG, "pg13", GUARD, "w", MANY, good, 2, 8.0)
         validate(two_of_five, expect_scenes=2)
+        # T2-12a: generate_storyboard recorded a legal 8n+1 length, and an
+        # illegal requested count is refused here rather than at the sampler.
+        want_frames = legal_frames(8.0, LTX_FPS)
+        assert all(s["frames"] == want_frames and (s["frames"] - 1) % 8 == 0
+                   for s in sb_2["scenes"]), sb_2["scenes"]
+        assert sb_2["scenes"][0]["length_seconds"] == round(want_frames / LTX_FPS, 4)
+        illegal = dict(two_of_five)
+        illegal["scenes"] = [dict(s) for s in two_of_five["scenes"]]
+        illegal["scenes"][0]["frames"] = 77
+        try:
+            validate(illegal, expect_scenes=2)
+            raise AssertionError("validate accepted a non-8n+1 length")
+        except ValueError as e:
+            assert "8n+1" in str(e), e
         try:
             validate(two_of_five)
         except ValueError as e:

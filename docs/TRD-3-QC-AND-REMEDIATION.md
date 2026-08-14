@@ -176,6 +176,14 @@ writes a row naming the check and **keeps the file**.
 opens; resolution as requested; not uniform; not blank; not a single flat colour;
 alpha not fully transparent.
 
+- `T3-31` **Each generated anchor candidate is scored by a vision model against
+  the operator's base images and the prompt that produced it.** The score is
+  stored on the candidate row (`anchors.qc_json`) and shown on the tile. It is
+  **advisory**: it never picks, deletes, or rejects. A vision failure stores
+  `confidence: null` and says so — unknown, not a fail. §7 still forbids a
+  VLM PASS/FAIL as a gate. Mutation: deleting the scorer leaves candidates
+  with no `qc_json` and the tile has nothing to show.
+
 ### 4.2 Clips
 
 | check | expected from | catches |

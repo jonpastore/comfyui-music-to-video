@@ -51,6 +51,10 @@ PROMPT_TYPES = {
     # people are in the frame are not functions of the rating.
     "backdrop":      {"tiered": False, "label": "Backdrop and framing"},
     "composite":     {"tiered": False, "label": "Multiple references"},
+    # Optional, per-sheet: what the character is DOING. Untiered — an action is
+    # not a function of the rating. Replaces the view's stance clause rather
+    # than sitting beside it. docs/TRD-7 T7-16.
+    "pose":          {"tiered": False, "label": "Pose"},
     "negative":      {"tiered": False, "label": "Negative prompt"},
     # The one that genuinely varies by rating: what R permits and XXX permits
     # are different sentences by definition.
@@ -125,7 +129,7 @@ def save(album, prompt_type, text, label, tier="", character_id=None):
     text, label = check(text, label)
     if prompt_type.startswith("view:") or prompt_type in (
             "identity", "wardrobe", "body", "nude_wardrobe", "anatomy",
-            "backdrop", "composite", "positive", "tier_wording"):
+            "backdrop", "composite", "pose", "positive", "tier_wording"):
         import tiers
         tiers.check_text(text, prompt_type)
         tiers.check_override(text)

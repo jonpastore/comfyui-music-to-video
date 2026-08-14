@@ -34,6 +34,8 @@
          which is left blank rather than filled in with a guess. #}
       {% set tag = (c | runsettings) | rendertag %}
       {% if tag %}<p class="muted render-tag"{% if c.run_id %} title="run #{{ c.run_id }}"{% endif %}>{{ tag }}</p>{% endif %}
+      {% set q = c | qctag %}
+      {% if q %}<p class="muted render-tag" title="advisory vision score vs base photographs and the prompt">{{ q }}</p>{% endif %}
       <div class="candidate-actions">
         <form method="post" action="/anchors/{{ c.id }}/pick" class="pick-anchor-form">
           <button type="submit" {% if c.chosen %}disabled{% endif %}>{{ "Chosen" if c.chosen else "Pick" }}</button>

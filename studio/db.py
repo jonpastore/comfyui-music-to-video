@@ -150,7 +150,15 @@ CREATE TABLE IF NOT EXISTS set_items (
 -- that. Either may be NULL: SwarmUI does not report which backend served an
 -- unpinned render, and a guess that cannot be checked is worse than a blank.
 CREATE TABLE IF NOT EXISTS artefacts (
-  path TEXT PRIMARY KEY, backend TEXT, host TEXT, via TEXT, created REAL);
+  path TEXT PRIMARY KEY, backend TEXT, host TEXT, via TEXT, created REAL,
+  status TEXT);
+
+-- T6-5: every job status change, with its time. jobs.created/started/finished
+-- are the endpoints; this is the chain that answers "why did this take four hours".
+CREATE TABLE IF NOT EXISTS job_transitions (
+  id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL, status TEXT NOT NULL, at REAL NOT NULL);
+
+CREATE INDEX IF NOT EXISTS idx_job_transitions ON job_transitions(job_id, id);
 
 -- One automation POINT. docs/TRD-1 4.1 and 5.
 --
@@ -315,6 +323,9 @@ MIGRATIONS = [
     # it; without it the duration and frame-count checks have nothing to compare
     # to and do not run. Derived from the submitted graph, never from the file.
     "ALTER TABLE artefacts ADD COLUMN expect_json TEXT",
+    # T6-7: landed is a status, not implied by the row existing. NULL on every
+    # row that predates this — those were written when the file was collected.
+    "ALTER TABLE artefacts ADD COLUMN status TEXT",
 
     # What scene_seconds this storyboard was GENERATED with. The divisor for
     # every clip-length answer about this song (build_song.clip_seconds). NULL
@@ -340,6 +351,9 @@ MIGRATIONS = [
     # the fallback rather than being dropped -- 33 sheets from the first CFG
     # sweep carry their settings there and nowhere else.
     "ALTER TABLE anchors ADD COLUMN run_id INTEGER",
+    # Advisory vision score of this candidate vs the base photographs and
+    # the prompt (T3-31). NULL on every row that predates scoring.
+    "ALTER TABLE anchors ADD COLUMN qc_json TEXT",
     # The nude swap and the anatomy clause, per album. make_anchor's default
     # nude wording says "bare skin over the whole body", which contradicts a
     # furred or scaled body clause in the same prompt; and nothing ever asked
@@ -495,6 +509,51 @@ CREATE TABLE IF NOT EXISTS credentials (
   ciphertext BLOB NOT NULL, created REAL, updated REAL);
 """
 
+TAKES_SCHEMA = """
+-- A TAKE is one generated candidate for a song, exactly as a refs row is one
+-- candidate frame. Generation is cheap and the good one is picked by ear, so a
+-- take is never written over songs.mp3_path -- picking one is a separate act,
+-- and the take that was not picked survives to be compared against it.
+--
+-- tags/lyrics/seed/duration/params are copied ONTO the take rather than read
+-- back off the song: the song row moves on, and a take that cannot say what it
+-- was asked for can be neither regenerated nor explained six months later.
+-- songs.style_text is that ask for songs that predate takes, so insert_take
+-- copies it into tags when no tags are supplied (T8-2a).
+CREATE TABLE IF NOT EXISTS takes (
+  id INTEGER PRIMARY KEY, song_id INTEGER NOT NULL,
+  path TEXT NOT NULL, seed INTEGER,
+  tags TEXT, lyrics TEXT,
+  bpm REAL, keyscale TEXT, timesig TEXT, language TEXT,
+  duration REAL, params_json TEXT,
+  parent_id INTEGER,
+  origin TEXT NOT NULL,              -- generated | resynthesised | bridged
+  picked INTEGER DEFAULT 0,
+  created REAL);
+
+CREATE INDEX IF NOT EXISTS idx_takes_song ON takes(song_id, id);
+
+-- A VOICE is a timbre reference. source and consent are why the row exists:
+-- a nullable consent column that nothing enforces is a record filled with
+-- silence. kind decides which of path/reference_id is meaningful.
+CREATE TABLE IF NOT EXISTS voices (
+  id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL,
+  kind TEXT NOT NULL,                -- 'local' (a clip) | 'fish' (a hosted id)
+  path TEXT, reference_id TEXT,
+  source TEXT NOT NULL, consent TEXT NOT NULL,
+  note TEXT, created REAL);
+
+-- WHICH voice sings WHERE. Not a column on takes: a track can have several
+-- singers per region. start/end are seconds on the take; 0/duration is the
+-- whole track (NULL/NULL is not used -- it overlaps every bounded region).
+CREATE TABLE IF NOT EXISTS take_voices (
+  id INTEGER PRIMARY KEY, take_id INTEGER NOT NULL, voice_id INTEGER NOT NULL,
+  start_secs REAL NOT NULL DEFAULT 0, end_secs REAL,
+  params_json TEXT);
+
+CREATE INDEX IF NOT EXISTS idx_take_voices ON take_voices(take_id);
+"""
+
 
 def _migrate(c):
     for stmt in MIGRATIONS:
@@ -530,6 +589,7 @@ def conn():
         c.executescript(PROMPT_VERSIONS_SCHEMA)
         c.executescript(ARCS_SCHEMA)
         c.executescript(CREDENTIALS_SCHEMA)
+        c.executescript(TAKES_SCHEMA)
         _migrate(c)
         _local.c = c
     return c
@@ -567,3 +627,114 @@ def jset(row, key="meta_json"):
     """Decode a JSON column, tolerating NULL."""
     v = row[key] if row and key in row.keys() else None
     return json.loads(v) if v else {}
+
+
+# generated / resynthesised / bridged -- the three paths the audio job already
+# names in assets.meta_json["mode"]. A free-text origin would make T8-3 pass
+# for a take that recorded something else.
+TAKE_ORIGINS = ("generated", "resynthesised", "bridged")
+
+
+def insert_take(song_id, path, origin, *, tags=None, lyrics=None, seed=None,
+                duration=None, params=None, parent_id=None, bpm=None,
+                keyscale=None, timesig=None, language=None):
+    """Record a candidate. Never writes songs.mp3_path.
+
+    If tags is omitted the song's style_text is copied on, so a take generated
+    from a song keeps the ask after the song row moves (T8-2a).
+    """
+    if origin not in TAKE_ORIGINS:
+        raise ValueError(f"unknown take origin: {origin!r}")
+    song = one("SELECT * FROM songs WHERE id=?", song_id)
+    if song is None:
+        raise ValueError(f"no song {song_id}")
+    if tags is None:
+        tags = song["style_text"]
+    params_json = json.dumps(params) if params is not None else None
+    return run(
+        """INSERT INTO takes (song_id, path, seed, tags, lyrics, bpm, keyscale,
+           timesig, language, duration, params_json, parent_id, origin, picked, created)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)""",
+        song_id, path, seed, tags, lyrics, bpm, keyscale, timesig, language,
+        duration, params_json, parent_id, origin, time.time())
+
+
+def get_take(take_id):
+    return one("SELECT * FROM takes WHERE id=?", take_id)
+
+
+def list_takes(song_id):
+    """Every take for a song, picked and unpicked, oldest first."""
+    return q("SELECT * FROM takes WHERE song_id=? ORDER BY id", song_id)
+
+
+def pick_take(take_id):
+    """Mark this take as the picked one. Does not delete the others and does
+    not write the take over songs.mp3_path -- that is the Use route's act."""
+    take = get_take(take_id)
+    if take is None:
+        raise ValueError(f"no take {take_id}")
+    c = conn()
+    c.execute("UPDATE takes SET picked=0 WHERE song_id=?", (take["song_id"],))
+    c.execute("UPDATE takes SET picked=1 WHERE id=?", (take_id,))
+    c.commit()
+    return take_id
+
+
+def insert_voice(name, kind, source, consent, *, path=None, reference_id=None,
+                 note=None):
+    return run(
+        """INSERT INTO voices (name, kind, path, reference_id, source, consent,
+           note, created) VALUES (?,?,?,?,?,?,?,?)""",
+        name, kind, path, reference_id, source, consent, note, time.time())
+
+
+def assign_take_voice(take_id, voice_id, start_secs=0, end_secs=None, params=None):
+    return run(
+        """INSERT INTO take_voices (take_id, voice_id, start_secs, end_secs, params_json)
+           VALUES (?,?,?,?,?)""",
+        take_id, voice_id, start_secs, end_secs,
+        json.dumps(params) if params is not None else None)
+
+
+def list_take_voices(take_id):
+    return q("SELECT * FROM take_voices WHERE take_id=? ORDER BY id", take_id)
+
+
+# T6-10: cascade policy stated per table, not inherited from sqlite defaults.
+# Findings join on path, not song_id, so they are not in SONG_CASCADE.
+SONG_CASCADE = (
+    "storyboards", "refs", "clips", "renders", "assets",
+    "playlist_items", "set_items", "jobs", "takes",
+)
+
+
+def delete_set_item(item_id):
+    """T1-2 / T6-10: deleting a set item deletes its automation rows."""
+    run("DELETE FROM automation WHERE set_item_id=?", item_id)
+    run("DELETE FROM set_items WHERE id=?", item_id)
+
+
+def delete_song_rows(song_id):
+    """T6-10: an intended song delete does not silently orphan children.
+
+    Files stay the caller's problem (containment rules live at the route).
+    Automation is keyed by set_item_id; findings and artefacts by path.
+    """
+    items = q("SELECT id FROM set_items WHERE song_id=?", song_id)
+    for r in items:
+        run("DELETE FROM automation WHERE set_item_id=?", r["id"])
+    paths = []
+    for table in ("clips", "refs", "renders", "assets", "takes"):
+        paths.extend(
+            r["path"] for r in q(f"SELECT path FROM {table} WHERE song_id=?", song_id)
+            if r["path"])
+    song = one("SELECT mp3_path, style_path, anchor_path FROM songs WHERE id=?", song_id)
+    if song:
+        paths.extend(p for p in (song["mp3_path"], song["style_path"], song["anchor_path"]) if p)
+    for p in paths:
+        run("DELETE FROM findings WHERE path=?", p)
+        run("DELETE FROM artefacts WHERE path=?", p)
+    for table in SONG_CASCADE:
+        run(f"DELETE FROM {table} WHERE song_id=?", song_id)
+    run("DELETE FROM songs WHERE id=?", song_id)

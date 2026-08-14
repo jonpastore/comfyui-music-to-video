@@ -332,10 +332,122 @@ if pipeline:
             "a workflow every box REFUSED is queued for retry; it will fail identically"
         assert pipeline._backend_vanished(str(gone))
         assert not pipeline._backend_vanished(str(refused))
+        # T9-6: the four strings SwarmUI actually produced. Both families share
+        # the "No backends match" headline; the reason line is the discriminator.
+        vanished = (
+            "No backends match the settings of the request given! Backends refused "
+            "for the following reason(s):\n- Specific backend ID# requested in "
+            "advanced parameters did not match",
+            "did not finish within 1800s")
+        refused_live = (
+            "No backends match the settings of the request given! Backends "
+            "refused for the following reason(s):\n- The custom workflow "
+            "contains an unsupported node type 'EmptyImage'.",
+            "Model in folder 'vae' with filename "
+            "'qwen_image_vae.safetensors' not found.")
+        for m in vanished:
+            assert pipeline._backend_vanished(m), m[:60]
+        for m in refused_live:
+            assert not pipeline._backend_vanished(m), m[:60]
 
     check("an offline box requeues, a refused workflow does not",
           _an_offline_box_requeues_but_a_refusal_does_not)
     check("pipeline._retarget", lambda: sig(pipeline, "_retarget", ["text", "pin"]))
+
+    def _t9_retarget_and_free_draw():
+        """T9-1 / T9-2 / T9-3: retarget rewrites per loader; free draw is identity.
+
+        Offline. The live 9.7s half of T9-1 stays in pipeline.demo(). Pools are
+        the 2026-08-12 /object_info fixtures models.demo() already uses.
+        """
+        import json as _json
+        cerberus = {
+            "CheckpointLoaderSimple": {"ace_step_v1_3.5b.safetensors"},
+            "VAELoader": {"ae.safetensors", "qwen_image_vae.safetensors"},
+            "UNETLoader": {"qwen_image_edit_2511_fp8mixed.safetensors",
+                           "z_image_turbo_fp8mix.safetensors"},
+        }
+        peaches = {
+            "CheckpointLoaderSimple": {"ace_step_v1_3.5b_fp16.safetensors"},
+            "VAELoader": {"z_image_ae.safetensors", "flux2-vae.safetensors"},
+            "UNETLoader": {"z_image_turbo_fp8mix.safetensors",
+                           "flux-2-klein-4b-fp8.safetensors"},
+        }
+        boxes = [{"id": "0", "address": "http://cerberus", "status": "running"},
+                 {"id": "2", "address": "http://peaches", "status": "running"}]
+        pools = {"http://cerberus": cerberus, "http://peaches": peaches}
+        was_sb, was_inst, was_call = (
+            pipeline.swarm_backends, pipeline.models.installed, pipeline._swarm_call)
+        asked = []
+        try:
+            pipeline.swarm_backends = lambda: boxes
+            pipeline.models.installed = lambda object_info=None, url=None: pools.get(url)
+            pipeline._swarm_call = lambda path, payload, timeout=30: (
+                asked.append(path) or {})
+            fp16 = "ace_step_v1_3.5b_fp16.safetensors"
+            bf16 = "ace_step_v1_3.5b.safetensors"
+            ckpt = lambda name: _json.dumps({
+                "1": {"class_type": "CheckpointLoaderSimple",
+                      "inputs": {"ckpt_name": name}}})
+            # T9-1 both directions: as-written is absent from the pin; rewrite is present
+            assert fp16 not in cerberus["CheckpointLoaderSimple"]
+            assert _json.loads(pipeline._retarget(ckpt(fp16), "0")
+                               )["1"]["inputs"]["ckpt_name"] == bf16
+            assert bf16 not in peaches["CheckpointLoaderSimple"]
+            assert _json.loads(pipeline._retarget(ckpt(bf16), "2")
+                               )["1"]["inputs"]["ckpt_name"] == fp16
+            # T9-2 per loader: VAE substitutes; the same name on UNET does not
+            mixed = _json.dumps({
+                "1": {"class_type": "VAELoader",
+                      "inputs": {"vae_name": "ae.safetensors"}},
+                "2": {"class_type": "UNETLoader",
+                      "inputs": {"unet_name": "ae.safetensors"}}})
+            got = _json.loads(pipeline._retarget(mixed, "2"))
+            assert got["1"]["inputs"]["vae_name"] == "z_image_ae.safetensors"
+            assert got["2"]["inputs"]["unet_name"] == "ae.safetensors"
+            # T9-3 free draw: object identity, and it does not ask the fleet
+            asked.clear()
+            pipeline.swarm_backends = lambda: asked.append("swarm_backends") or boxes
+            plain = "PLAIN TEXT, NOT EVEN JSON"
+            assert pipeline._retarget(plain, None) is plain
+            assert not asked, asked
+        finally:
+            (pipeline.swarm_backends, pipeline.models.installed,
+             pipeline._swarm_call) = was_sb, was_inst, was_call
+
+    check("T9-1/T9-2/T9-3 retarget both ways, per loader, free draw is identity",
+          _t9_retarget_and_free_draw)
+
+    def _render_backend_is_one_branch_and_both_paths_run():
+        """RENDER_BACKEND has one comparison, and both sides of it are taken."""
+        src = open(os.path.join(HERE, "pipeline.py")).read()
+        assert src.count('RENDER_BACKEND == "swarm"') == 1, \
+            "the seam is no longer one comparison"
+        taken = []
+        was = (pipeline.RENDER_BACKEND, pipeline.submit_dir, pipeline.submit_swarm,
+               pipeline.gpu.preflight, pipeline.gpu.ollama_holding,
+               pipeline.submitted_prefixes, pipeline.collect, pipeline._stamp)
+        try:
+            pipeline.gpu.preflight = lambda progress=None: taken.append("preflight")
+            pipeline.gpu.ollama_holding = lambda: False
+            pipeline.submitted_prefixes = lambda d: set()
+            pipeline.collect = lambda *a, **k: []
+            pipeline._stamp = lambda *a, **k: None
+            pipeline.submit_dir = lambda *a, **k: taken.append("comfy")
+            pipeline.submit_swarm = lambda *a, **k: taken.append("swarm") or []
+            with tempfile.TemporaryDirectory() as d:
+                pipeline.RENDER_BACKEND = "comfy"
+                pipeline._submit_and_collect(d, "x", "*.png", lambda m: None)
+                pipeline.RENDER_BACKEND = "swarm"
+                pipeline._submit_and_collect(d, "x", "*.png", lambda m: None)
+            assert taken == ["preflight", "comfy", "swarm"], taken
+        finally:
+            (pipeline.RENDER_BACKEND, pipeline.submit_dir, pipeline.submit_swarm,
+             pipeline.gpu.preflight, pipeline.gpu.ollama_holding,
+             pipeline.submitted_prefixes, pipeline.collect, pipeline._stamp) = was
+
+    check("RENDER_BACKEND is one branch and both paths run",
+          _render_backend_is_one_branch_and_both_paths_run)
 
 grok = optional_import("grok")
 if grok:

@@ -34,6 +34,13 @@ ControlNet.
 | `studio/tiers.py` | `compose_guardrail`, `check_text`, `check_override`, `check_tier_policy` |
 | `build_song.py` | TRD-5's territory: `workflow()`, the LTX branches, `clip_plan`, `expect_from_workflow` |
 | `studio/jobs.py`, `pipeline.py`, `db.py` | TRD-6's territory |
+| `studio/vision.py` | `score_candidate(path, bases, prompt)` — advisory identity+prompt match; `h_anchor` writes `anchors.qc_json`; the tile reads it (`T3-31`, `T4-19`) |
+
+**The pipeline, and it is not a loop of adding bases:** operator base
+photographs (`assets` kind `anchor_ref`) → generate *candidates*
+(`anchors` rows) → pick `chosen=1` → that sheet feeds storyboard
+*reference frames* → clips. A pose plate is not a base image unless the
+operator put it there.
 
 ## 2. The view table — one table, two projections
 

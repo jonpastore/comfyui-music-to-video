@@ -198,6 +198,25 @@ templates.env.filters["rendertag"] = render_tag
 templates.env.filters["runsettings"] = lambda row: candidate_settings(row)
 
 
+def qc_tag(row):
+    """One-line advisory vision score, or "" if this row was never scored."""
+    if not row:
+        return ""
+    raw = row["qc_json"] if hasattr(row, "keys") and "qc_json" in row.keys() else (
+        row.get("qc_json") if isinstance(row, dict) else None)
+    try:
+        s = json.loads(raw) if raw else {}
+    except ValueError:
+        return ""
+    n = s.get("confidence")
+    if n is None:
+        return "vision unknown" if s.get("error") else ""
+    return f"{int(n)}% match"
+
+
+templates.env.filters["qctag"] = qc_tag
+
+
 def opposite_view(view):
     """The other side of the same sheet: front <-> back, keeping clothed/nude.
 
@@ -852,12 +871,19 @@ def h_anchor(args, progress):
     run_id = args.get("run_id")
     settings = None if run_id else json.dumps(resolved_settings(render))
     now = time.time()
+    asked = args.get("prompt") or ""
     for p in paths:
+        qc = None
+        try:
+            qc = json.dumps(vision.score_candidate(
+                p, args.get("images") or [], asked, progress))
+        except Exception as e:
+            progress(f"vision score skipped: {e}")
         db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen, created,
-                                        character_id, render_json, run_id)
-                  VALUES (?,?,?,?,?,0,?,?,?,?)""",
+                                        character_id, render_json, run_id, qc_json)
+                  VALUES (?,?,?,?,?,0,?,?,?,?,?)""",
                args["scope_kind"], args["scope_value"], args["tier"], view, p, now, cid,
-               settings, run_id)
+               settings, run_id, qc)
     # Refs refuse a tier with no chosen sheet. Every live row sat at chosen=0
     # because generate never picked. If this group still has none, the first
     # new candidate is it. Pick still overrides. Mutation: delete this block
@@ -1868,13 +1894,17 @@ def api_qc_dismiss(fid: int, why: str = Form("")):
 
 @app.post("/api/qc/findings/{fid}/approve")
 def api_qc_approve(fid: int):
-    """501, and it is the honest answer. Nothing routes a finding to an
-    actuator yet, so a 200 here would be a button that reports success and runs
-    nothing -- the defect this studio keeps producing."""
+    """Human sign-off. qc_service.approve enqueues the repair; this route
+    only forwards. A ValueError is a bad finding (dismissed, no remedy)."""
     try:
-        qc_service.approve(fid)
+        row = qc_service.approve(fid)
     except NotImplementedError as e:
         raise HTTPException(501, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except KeyError:
+        raise HTTPException(404, f"no finding {fid}")
+    return {"ok": True, "id": row["id"], "status": row["status"]}
 
 
 @app.post("/songs/{id}/analyse")
@@ -2073,7 +2103,8 @@ def _anchor_ctx_from_form(form, album, character_id):
     typed = {k[len("prompt_"):]: v for k, v in form.items() if k.startswith("prompt_")}
     return anchor_form_ctx(album, tiers_sel, views_sel, character_id, typed,
                             negative=form.get("negative") or "",
-                            latent=form.get("latent"))
+                            latent=form.get("latent"),
+                            pose=form.get("pose") or "")
 
 
 @app.post("/anchors/refs")
@@ -2922,6 +2953,8 @@ async def save_tier_wording(request: Request):
     if text == tiers.tier_text(tier).strip():
         text = ""
     try:
+        if text:
+            tiers.check_tier_policy(text, tier, "tier wording")
         stored = tiers.set_override(album, tier, text)
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -3247,6 +3280,7 @@ async def anchor_preview(request: Request):
     views_sel = sorted({v for v in form.getlist("view") if v})
     chosen = anchor_render_settings(form)
     settings = resolved_settings(chosen)
+    form_pose = (form.get("pose") or "").strip()
     out = []
     for p in anchor_plan(tiers_sel, views_sel):
         for v in p["views"]:
@@ -3254,8 +3288,12 @@ async def anchor_preview(request: Request):
             # it -- this panel exists to agree with the renderer, so it reads the
             # same field and makes the same comparison. docs/TRD-7 T7-19.
             typed = (form.get(anchor_prompt_field(p["tier"], v)) or "").strip()
-            if typed and typed == (default_anchor_prompt(album, v, cid) or "").strip():
+            composed = (default_anchor_prompt(album, v, cid, pose=form_pose or None)
+                        or "").strip()
+            if typed and typed == composed:
                 typed = ""      # untouched: this view composes its own, as at render
+            if not typed and form_pose:
+                typed = composed
             out.append(anchor_prompt_preview(album, p["tier"], v, cid, typed,
                                               form.get("negative") or "", settings))
     return JSONResponse({"sheets": out, "settings": settings,
@@ -3328,6 +3366,16 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     # default, which is what made an edit apply to every view of its tier --
     # overriding the framing sentence and the nude wardrobe swap on every sheet
     # but the one the operator was looking at. docs/TRD-7 T7-19.
+    form_pose = (form.get("pose") or "").strip()
+    if form_pose:
+        if len(form_pose) > MAX_PROMPT_FIELD:
+            raise HTTPException(400, f"pose is {len(form_pose)} characters; keep it under "
+                                      f"{MAX_PROMPT_FIELD}")
+        try:
+            tiers.check_text(form_pose, "pose")
+            tiers.check_override(form_pose)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
     view_prompts = {}
     for t, v in combos:
         text = (form.get(anchor_prompt_field(t, v)) or "").strip()
@@ -3340,9 +3388,15 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
             tiers.check_override(text)
         except ValueError as e:
             raise HTTPException(400, str(e))
-        if text and text == (default_anchor_prompt(album, v, character_id) or "").strip():
+        composed = (default_anchor_prompt(album, v, character_id, pose=form_pose or None)
+                    or "").strip()
+        if text and text == composed:
             # untouched: send it as EMPTY so make_anchor composes this view's own
             text = ""
+        # a typed pose is not in the profile the job will load, so an empty
+        # prompt would drop it. Ship this view's own composition instead.
+        if not text and form_pose:
+            text = composed
         view_prompts[(t, v)] = text
 
     # TIER WORDING, arriving as tone_<tier> for the same reason the prompts do.
@@ -3638,7 +3692,7 @@ def delete_character(cid: int):
 MAX_ANCHOR_PROMPT = 4000
 
 
-def default_anchor_prompt(scope_value, view, character_id=None):
+def default_anchor_prompt(scope_value, view, character_id=None, pose=None):
     """The prompt make_anchor would compose, shown so it can be edited.
 
     Built by the REAL composer (make_anchor.prompt_for) from the album's own
@@ -3650,8 +3704,10 @@ def default_anchor_prompt(scope_value, view, character_id=None):
     # function -- including the per-view sentences, the nude swap and the
     # anatomy clause. Composing the preview from a narrower set is how a preview
     # comes to describe a render nobody will get.
-    return make_anchor.prompt_for(
-        view, make_anchor.anchor_from(anchor_profile_fields(scope_value or "", character_id)))
+    fields = anchor_profile_fields(scope_value or "", character_id)
+    if pose:
+        fields["pose"] = pose.strip()
+    return make_anchor.prompt_for(view, make_anchor.anchor_from(fields))
 
 
 def anchor_plan(selected_tiers, selected_views):
@@ -3675,7 +3731,7 @@ def anchor_plan(selected_tiers, selected_views):
 
 
 def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), character_id=None,
-                    typed_prompts=None, negative=None, tones=None, latent=None):
+                    typed_prompts=None, negative=None, tones=None, latent=None, pose=None):
     """The generate form for one album, across any number of tiers and views.
 
     Every view is offered against every tier; see anchor_plan() for what gets
@@ -3775,7 +3831,8 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
                                     # discard edits or carry stale text.
                                     "composed": composed}
                                    for v, composed in
-                                   ((v, default_anchor_prompt(album, v, character_id))
+                                   ((v, default_anchor_prompt(album, v, character_id,
+                                                              pose=pose or None))
                                     for v in chosen_views)],
                          "versions": anchor_prompt_versions(album, t, character_id)}
                         for t in selected],
@@ -3816,6 +3873,7 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
         "character_id": character_id,
         "characters": (album_cast(album) if album
                        else db.q("SELECT * FROM characters ORDER BY scope_value, name")),
+        "pose": pose or "",
     }
 
 
@@ -3862,10 +3920,11 @@ def anchor_form(request: Request, album: str = "", tier: List[str] = Query([]),
     negative = qp.get("negative") if same_subject else None
     tones = ({k[len("tone_"):]: v for k, v in qp.items() if k.startswith("tone_")}
              if same_subject else {})
+    pose = qp.get("pose") if same_subject else None
     return templates.TemplateResponse(request, "_anchor_form.html",
                                        anchor_form_ctx(album, tier, view or ["front"],
                                                        character_id, typed_prompts, negative, tones,
-                                                       latent=qp.get("latent")))
+                                                       latent=qp.get("latent"), pose=pose))
 
 
 def _drop_anchor(row):
@@ -4949,9 +5008,7 @@ def delete_song(request: Request, id: int, confirm: str = Form("")):
                 except OSError:
                     pass          # not empty: leave it, deleting more is not our call
 
-    for table in ("storyboards", "refs", "clips", "renders", "assets", "playlist_items", "set_items"):
-        db.run(f"DELETE FROM {table} WHERE song_id=?", id)
-    db.run("DELETE FROM songs WHERE id=?", id)
+    db.delete_song_rows(id)
     if wants_json(request):
         return JSONResponse({"deleted": id})
     return RedirectResponse("/", status_code=303)
@@ -5069,7 +5126,7 @@ DESCRIBABLE = ("identity", "wardrobe", "body")
 # records them and gen_anchor ships them as one profile dict -- so a field
 # missing from this tuple is a field whose edit reaches nothing.
 ANCHOR_PROFILE_FIELDS = ("identity", "wardrobe", "body", "nude_wardrobe", "anatomy",
-                         "backdrop", "composite", "views")
+                         "backdrop", "composite", "pose", "views")
 
 
 # NOTHING is taken from the global profile FILE any more, and that is a
@@ -5141,6 +5198,15 @@ def anchor_profile_fields(album, character_id=None):
             overlays[vkey] = row["text"]
     if overlays:
         out["views"] = overlays
+    # T7-16: latest pose version, album then this character. No playlists.pose
+    # column — the type is versioned like view:<key>, not a profile field.
+    pose_row = prompts.latest(album, "pose", character_id=None)
+    if character_id:
+        own_pose = prompts.latest(album, "pose", character_id=character_id)
+        if own_pose and own_pose["text"]:
+            pose_row = own_pose
+    if pose_row and pose_row["text"]:
+        out["pose"] = pose_row["text"]
     return {k: v for k, v in out.items() if v}
 
 
@@ -6217,7 +6283,9 @@ def clear_brand_image(id: int):
 @app.post("/sets/{id}/items/{item_id}/delete")
 def delete_set_item(id: int, item_id: int):
     get_set_or_404(id)
-    db.run("DELETE FROM set_items WHERE id=? AND set_id=?", item_id, id)
+    row = db.one("SELECT id FROM set_items WHERE id=? AND set_id=?", item_id, id)
+    if row:
+        db.delete_set_item(item_id)
     db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
     return RedirectResponse(f"/sets/{id}", status_code=303)
 

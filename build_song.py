@@ -207,6 +207,26 @@ def clip_seconds(scene_seconds=None):
     return CHUNK
 
 
+def legal_frames(seconds, fps):
+    """Nearest legal 8n+1 frame count for this duration at fps.
+
+    docs/TRD-2 T2-12a. EmptyLTXVLatentVideo is step 8 (min 9) and every 8n+1
+    is also 4n+1, so one rule serves LTX and WAN (T5-10). Tie-break is
+    half-to-even: 77 frames is equidistant from 73 and 81 and this returns 81.
+
+    Record `frames / fps` beside the count so storyboard arithmetic and the
+    renderer share one number. A requested count that is not 8n+1 is refused
+    by grok.validate, not by the sampler.
+    """
+    if not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
+        raise ValueError(f"seconds must be a finite number > 0, got {seconds!r}")
+    if not isinstance(fps, (int, float)) or not math.isfinite(fps) or fps <= 0:
+        raise ValueError(f"fps must be a finite number > 0, got {fps!r}")
+    n = round((seconds * fps - 1) / 8.0)
+    frames = int(8 * n + 1)
+    return 9 if frames < 9 else frames
+
+
 def n_clips_for(duration, scene_seconds=None):
     """Clips in a song of this length. The ONE implementation.
 
@@ -537,6 +557,47 @@ def ltx_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard, 
     return wf
 
 
+def _refine_ltx(wf, i):
+    """Variant A: same-resolution second pass on the sampled VIDEO latent.
+
+    Inserted before VAEDecode. Takes the split video half (never a joint AV
+    latent), truncates sigmas at REFINE_DENOISE, and re-samples with a fresh
+    seed. docs/TRD-5 T5-1. Raises naming the reason if the graph cannot host it.
+    """
+    decode_id = next((k for k, n in wf.items() if n["class_type"] == "VAEDecode"), None)
+    if decode_id is None:
+        raise ValueError("ltx --refine: no VAEDecode to attach a second pass to")
+    sampled = wf[decode_id]["inputs"]["samples"]
+    src = wf.get(sampled[0], {})
+    if src.get("class_type") == "LTXVConcatAVLatent":
+        raise ValueError("ltx --refine: refuse a joint AV latent; split the video half first")
+    sigmas_id = next((k for k, n in wf.items()
+                      if n["class_type"] in ("ManualSigmas", "LTXVScheduler")), None)
+    if sigmas_id is None:
+        raise ValueError("ltx --refine: no sigmas node to truncate")
+    wf["30"] = {"class_type": "SplitSigmasDenoise", "inputs": {
+        "sigmas": [sigmas_id, 0], "denoise": REFINE_DENOISE}}
+    wf["31"] = {"class_type": "RandomNoise", "inputs": {"noise_seed": 2000 + i}}
+    guider_id = next((k for k, n in wf.items() if n["class_type"] == "LTXVDualCFGGuider"), None)
+    sampler_sel = next((k for k, n in wf.items() if n["class_type"] == "KSamplerSelect"), None)
+    if guider_id and sampler_sel:
+        wf["32"] = {"class_type": "SamplerCustomAdvanced", "inputs": {
+            "noise": ["31", 0], "guider": [guider_id, 0], "sampler": [sampler_sel, 0],
+            "sigmas": ["30", 1], "latent_image": sampled}}
+    else:
+        first = next((k for k, n in wf.items() if n["class_type"] == "SamplerCustom"), None)
+        if first is None:
+            raise ValueError("ltx --refine: no LTX sampler to mirror for a second pass")
+        ins = wf[first]["inputs"]
+        wf["32"] = {"class_type": "SamplerCustom", "inputs": {
+            "model": ins["model"], "add_noise": True, "noise_seed": 2000 + i,
+            "cfg": ins.get("cfg", 1.0), "positive": ins["positive"],
+            "negative": ins["negative"], "sampler": ins["sampler"],
+            "sigmas": ["30", 1], "latent_image": sampled}}
+    wf[decode_id]["inputs"]["samples"] = ["32", 0]
+    return wf
+
+
 def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
              video_model="s2v", ref_motion=None, control_video=None, refine=False):
     """Same rule as build_refs.workflow: the pinned clause is attached HERE, at
@@ -565,7 +626,13 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
         # 2.5 shares little enough of 2.3's that folding them together would put
         # branches everywhere -- which is how all three end up subtly wrong.
         build = ltx25_workflow if video_model == "ltx25" else ltx_workflow
-        return build(i, scene, ref_image, audio_file, char_lock, world_lock, guard)
+        wf = build(i, scene, ref_image, audio_file, char_lock, world_lock, guard)
+        if refine:
+            # T5-1: --refine must not be a silent no-op on the LTX families.
+            # Variant A, same-resolution re-denoise. Do NOT hand the LTX latent
+            # to the WAN refiner -- they do not share a VAE.
+            wf = _refine_ltx(wf, i)
+        return wf
 
     wf = {
         "4":  {"class_type": "CLIPLoader", "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan", "device": "default"}},
@@ -770,6 +837,25 @@ def demo():
     assert rw["16"]["inputs"]["samples"] == ["32", 0], "the refined latent was not the one decoded"
     # ...and it still carries the audio-driven motion it is refining
     assert rw["14"]["inputs"]["audio_encoder_output"] == ["11", 0]
+
+    # T2-12a: 77 frames is a tie; half-to-even lands on 81. An already-legal
+    # CHUNK at LTX fps is unchanged.
+    assert legal_frames(77 / 16.0, 16.0) == 81
+    assert legal_frames(CHUNK, LTX_FPS) == 81
+    assert (legal_frames(195.792 / 7, LTX_FPS) - 1) % 8 == 0
+
+    # T5-1: --refine on ltx25 adds a second pass. Restoring the early return
+    # that skipped refine leaves these two graphs identical and this fails.
+    plain_ltx = workflow(0, scene, "c.png", "song.mp3", "c", "w", "", video_model="ltx25")
+    ref_ltx = workflow(0, scene, "c.png", "song.mp3", "c", "w", "", video_model="ltx25",
+                       refine=True)
+    assert ref_ltx != plain_ltx and set(ref_ltx) - set(plain_ltx)
+    assert ref_ltx["30"]["class_type"] == "SplitSigmasDenoise"
+    assert 0 < ref_ltx["30"]["inputs"]["denoise"] < 1
+    assert ref_ltx["32"]["inputs"]["guider"] == ["17", 0]
+    assert ref_ltx["32"]["inputs"]["latent_image"] == ["22", 0]
+    assert ref_ltx["23"]["inputs"]["samples"] == ["32", 0]
+    assert I2V_LOW not in str(ref_ltx), "do not hand an LTX latent to WAN"
 
     # --- allocation: every clip belongs to exactly one scene, none lost ---
     scenes = [dict(scene, scene_number=n, duration_guidance=f"{n*4}-{n*4+2} sec")

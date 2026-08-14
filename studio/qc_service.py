@@ -19,6 +19,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import db      # noqa: E402
+import jobs    # noqa: E402
 import qc      # noqa: E402
 import prompts  # noqa: E402
 
@@ -171,27 +172,52 @@ def reopen(fid):
     return get(fid)
 
 
+def _repair_dest(path):
+    """A new candidate beside the original. Never the input path (T3-6)."""
+    root, ext = os.path.splitext(path)
+    dest = f"{root}.repair{ext}"
+    return dest if dest != path else path + ".repair"
+
+
+@jobs.handler("repair")
+def h_repair(args, progress):
+    """Queued by approve(). No GPU work yet: the job carries the finding and
+    the edited remedy so a later actuator can run them. A dest equal to the
+    source is refused so a future writer cannot overwrite the evidence."""
+    src, dest = args.get("path"), args.get("repair_path")
+    if not dest or dest == src:
+        raise ValueError("a repair must write a new candidate, not overwrite")
+    progress(f"repair finding {args.get('finding_id')}")
+    return {"finding_id": args.get("finding_id"), "repair_path": dest,
+            "remedy": args.get("remedy")}
+
+
 def approve(fid):
-    """NOT WIRED, and it refuses rather than pretending.
+    """Human sign-off: enqueue one repair job for this finding.
 
-    Approving is supposed to enqueue the remedy and land a NEW candidate beside
-    the original. The actuators exist (fix_ref.py for images, make_postproc for
-    clips, the refine role for a re-pass) but nothing routes a finding to one
-    yet, and docs/TRD-3 T3-23/T3-24 say that routing has to ask models.where()
-    and models.fits() for a box that can hold the model -- the refiner is 20.5 GB
-    once its umt5 text encoder is counted and does not fit on the box whose
-    output prompted the plan.
-
-    So this raises. A button that marks a finding "approved" and runs nothing is
-    precisely the defect this project keeps paying for -- the editor promising
-    what the renderer does not produce -- and an accepted-and-ignored approval
-    is worse here than elsewhere, because the whole point of the queue is that
-    approving it is the human sign-off that something WILL happen.
+    QC never auto-heals (T3-18). This is the only call that enqueues a repair,
+    and it is the function the /api/qc/findings/{id}/approve route calls
+    (T6-A10). The job names a dest that is not the original path (T3-6) and
+    carries the edited remedy (T3-19). repair_path on the finding stays empty
+    until a later actuator actually writes that new file.
     """
-    raise NotImplementedError(
-        "approving a remedy is not wired yet: nothing routes a finding to an "
-        "actuator. The finding, its measurement and its editable remedy are "
-        "stored; dismiss() records a decision. See docs/TRD-3 6.1.")
+    row = get(fid)
+    if row["status"] == DISMISSED:
+        raise ValueError("a dismissed finding cannot be approved -- reopen it first")
+    remedy = (row["remedy"] or "").strip()
+    if not remedy:
+        raise ValueError("approving a finding needs a remedy -- edit one first")
+    dest = _repair_dest(row["path"])
+    jobs.enqueue("repair", {
+        "finding_id": int(fid),
+        "path": row["path"],
+        "repair_path": dest,
+        "remedy": remedy,
+        "check_name": row["check_name"],
+        "kind": row["kind"],
+    })
+    db.run("UPDATE findings SET status=? WHERE id=?", APPROVED, int(fid))
+    return get(fid)
 
 
 def demo():
@@ -257,7 +283,8 @@ def demo():
         assert again["verdict"] == qc.REJECT, "the re-measurement itself was not stored"
         reopen(dur["id"])
 
-        # --- T3-18: running QC enqueues nothing. Ever.
+        # --- T3-18: running QC enqueues nothing. Ever. Approving one finding
+        # is the sign-off that enqueues exactly one repair.
         assert not db.q("SELECT id FROM jobs"), "QC enqueued a job on its own"
 
         # --- T3-19: the edited remedy is what is stored, and it comes back
@@ -292,14 +319,24 @@ def demo():
         assert get(fid)["dismissed_why"]
         assert reopen(fid)["status"] == OPEN
 
-        # --- approving refuses rather than marking it done and running nothing
-        try:
-            approve(fid)
-        except NotImplementedError as e:
-            assert "not wired" in str(e), e
-        else:
-            raise AssertionError("approve() claimed to have run a repair")
-        assert get(fid)["status"] == OPEN, "a refused approval still changed the row"
+        # --- T3-18 / T3-6 / T3-19: approve enqueues one job, dest != src,
+        # and a second wording is a second job.
+        src = get(fid)["path"]
+        approve(fid)
+        assert get(fid)["status"] == APPROVED, get(fid)["status"]
+        queued = db.q("SELECT * FROM jobs")
+        assert len(queued) == 1, queued
+        first = json.loads(queued[0]["args_json"])
+        assert first["finding_id"] == fid and first["remedy"]
+        assert first["repair_path"] and first["repair_path"] != src
+        landed = get(fid)["repair_path"]
+        assert landed in (None, "") or landed != src
+        set_remedy(fid, "second wording of the same repair")
+        approve(fid)
+        queued = db.q("SELECT * FROM jobs ORDER BY id")
+        assert len(queued) == 2, queued
+        second = json.loads(queued[1]["args_json"])
+        assert first["remedy"] != second["remedy"], (first["remedy"], second["remedy"])
 
     print("qc_service.py OK")
 

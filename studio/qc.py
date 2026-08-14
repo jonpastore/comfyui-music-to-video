@@ -73,6 +73,10 @@ LUMA_FLOOR = 24.0
 # silence at -91.0 dB, so -60 sits a long way from both.
 SILENCE_FLOOR_DB = -60.0
 
+# docs/TRD-7 T7-7: the sheet must be HER, not the pose-plate person. The look
+# itself is human-judged; this is the finding kind for the offline hook.
+IDENTITY_LOOK = "identity_look"
+
 
 def finding(path, kind, check, verdict, detail, measured=None, expected=None,
             unit=None, remedy=None):
@@ -395,6 +399,38 @@ def check_audio(path, expect):
 
 # ------------------------------------------------------------------ image --
 
+def _norm_ref(value):
+    text = str(value or "").strip()
+    return os.path.normpath(text) if text else ""
+
+
+def check_identity_look(path, expect, kind="image"):
+    """T7-7 hook. No pixels, no model: name the identity ref, and it must not
+    be the pose plate. Missing identity_path flags. A distinct named path
+    passes the prerequisite; the picture stays a human look.
+    """
+    expect = expect or {}
+    identity = _norm_ref(expect.get("identity_path"))
+    plate = _norm_ref(expect.get("plate_path"))
+    remedy = ("condition the sheet on the chosen identity ref "
+              "(UI pair / meowp_ui_front.png), not the pose plate")
+    if not identity:
+        return [finding(path, kind, IDENTITY_LOOK, FLAG,
+                        "T7-7 identity look needs a named identity reference; none was given",
+                        None, "identity_path", None, remedy)]
+    if plate and identity == plate:
+        return [finding(path, kind, IDENTITY_LOOK, FLAG,
+                        "identity_path is the pose plate; T7-7 requires the chosen identity ref",
+                        identity, "identity_path != plate_path", None, remedy)]
+    return [finding(path, kind, IDENTITY_LOOK, PASS,
+                    f"identity ref {os.path.basename(identity)}; T7-7 look remains human-judged",
+                    identity, identity, None)]
+
+
+def _wants_identity_look(expect):
+    return bool(expect.get("identity_look")) or "identity_path" in expect or "plate_path" in expect
+
+
 def check_image(path, expect):
     out = []
     if not os.path.isfile(path):
@@ -440,6 +476,8 @@ def check_image(path, expect):
                        f"mean level {mean:.1f}",
                        round(mean, 1), LUMA_FLOOR, "levels",
                        remedy="re-render with a different seed"))
+    if _wants_identity_look(expect):
+        out.extend(check_identity_look(path, expect, kind="image"))
     return out
 
 

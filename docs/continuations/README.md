@@ -3,7 +3,7 @@
 Session hand-off docs, oldest first. The **latest three live at the repo root**;
 everything older is moved here when a fourth is written.
 
-Most recent: **[CONTINUATION-2026-08-13-meowp-studio-day14.md](../../CONTINUATION-2026-08-13-meowp-studio-day14.md)**
+Most recent: **[CONTINUATION-2026-08-13-meowp-studio-day15.md](../../CONTINUATION-2026-08-13-meowp-studio-day15.md)**
 (at the repo root, along with the two before it).
 
 These docs are in `.gitignore` -- only this index is tracked. `git mv` fails on
@@ -20,7 +20,8 @@ them; use `mv` when rotating one in.
 | [CONTINUATION-2026-08-12-meowp-studio-day5.md](CONTINUATION-2026-08-12-meowp-studio-day5.md) | The prompt/seed/VRAM chain behind missing and wrong anchors; nude anchors settled |
 | [CONTINUATION-2026-08-12-meowp-studio-day6.md](CONTINUATION-2026-08-12-meowp-studio-day6.md) | The anchor set completed and unpicked, async generate with a live queue indicator, `gpu.py` taking the card back from ollama, the bind that was set and ignored |
 | [CONTINUATION-2026-08-12-meowp-studio-day7.md](CONTINUATION-2026-08-12-meowp-studio-day7.md) | The anchor form spec, the CFG sweep that measured its defaults, prompt versioning, and the review that found a set which predicted a length it could not render |
-| [CONTINUATION-2026-08-12-meowp-studio-day8.md](CONTINUATION-2026-08-12-meowp-studio-day8.md) | Cast members owning their own nude wording and anatomy, the uniform copy, and the review findings behind them. **Its "a diffusion model has no NOT" still governs prompts.** |
+| [CONTINUATION-2026-08-12-meowp-studio-day8.md](CONTINUATION-2026-08-12-meowp-studio-day8.md) | Cast members owning their own nude wording and anatomy, the uniform copy, and the review findings behind them. **Its "a diffusion model has no NOT" still governs prompts — but see day 15: on the anatomy clause neither the negation nor its positive replacement acted at all.** |
+| [CONTINUATION-2026-08-13-meowp-studio-day12.md](CONTINUATION-2026-08-13-meowp-studio-day12.md) | **Deployed.** Five live anchor defects fixed, QC's 8n+1 bug, the TRD set consolidated to 7 documents with TRD-6 §0 holding what they all inherit. |
 
 At the root right now:
 
@@ -30,9 +31,7 @@ At the root right now:
 | `CONTINUATION-2026-08-12-meowp-studio-day10.md` | **Measurement, then specification.** 30s and 60s clips render; identity comes from the TEXT and not the reference image; swarm on in production; production video was dead at argparse; TRD-2 drafted. **Holds the standing instruction for the TRD -> PRD -> DDD -> style guide -> critique pipeline.** |
 | `CONTINUATION-2026-08-13-meowp-studio-day11.md` | **The TRDs finished, then built from.** All three TRDs written with 106 failable criteria; the loudnorm finding that would have flattened every level curve the DAW draws; scene_seconds winning over a floor that sat in two places; QC tier 1 with every threshold measured rather than picked. **Nothing deployed.** |
 
-| `CONTINUATION-2026-08-13-meowp-studio-day12.md` | **Deployed.** Five live anchor defects fixed, QC's 8n+1 bug, the TRD set consolidated to 7 documents with TRD-6 s0 holding what they all inherit. |
-
-The next continuation archives `CONTINUATION-2026-08-13-meowp-studio-day12.md`.
+The next continuation archives `CONTINUATION-2026-08-13-meowp-studio-day13.md`.
 
 ## Standalone hand-offs
 
@@ -44,5 +43,7 @@ not take part in the rotation above.
 | [`ETHAN-CONTINUE.md`](../../ETHAN-CONTINUE.md) | Bringing `ethan-wsl` up as a second ComfyUI backend: what is staged there, how to resume after the reboot that interrupted it, and why a 16 GB card does not help with the video renders |
 
 | `CONTINUATION-2026-08-13-meowp-studio-day13.md` | **The specification set completed, and one policy rewritten twice.** Ten TRDs, three PRDs, three DDDs and a style guide, every TRD externally reviewed and every one carrying a positive-half table and a built-state ledger. TRD-8/9/10 written to absorb five orphaned plans and ~4,600 lines of uncited code. The minor policy went from a blanket keyword refusal to a per-tier rule, then to an artefact lock after adversarial review found the hole the loosening opened. `T1-20d` fixed; canonical host shipped. **The PRDs, DDDs and the style guide have never been externally reviewed — that is the next session's job.** |
+
+| `CONTINUATION-2026-08-13-meowp-studio-day15.md` | **The pose was the blocking variable, and forty renders never varied it.** Explicit anatomy renders when a POSE PLATE is attached as a second reference and never from clothed standing ones — at any CFG, step count, negative length or wording. Found by Jon pointing at `hybrid_*.png`, whose embedded workflows carry the recipe. CFG 2.0 beats the form's 4.5; six negative terms beat sixty; seed 4748 clothed the back sheet 6/6 while four other seeds were nude 4/4. **Five conclusions asserted and withdrawn in one session, and two automated scorers withdrawn with them — §4 is the reusable half.** |
 
 | `CONTINUATION-2026-08-13-meowp-studio-day14.md` | **The first images, and what they said.** An xxx nude sheet rendered through the new prompt and came back a plain human woman -- correct behaviour for an empty album profile, and the identity-comes-from-text thesis demonstrated on a real render. The composed prompt logged and validated by grok: 15 negations, 9 skin words, species in the last quarter. The agent-lane finding retracted -- it works, and the probe that said otherwise measured a haiku agent echoing a word. |

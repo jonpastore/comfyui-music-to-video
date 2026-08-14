@@ -198,6 +198,9 @@ _stub("vision",
           describe_calls.append((image_path, field))
           or f"drafted {field} from the anchor"),
       available=lambda: ("local", "stub"),
+      score_candidate=lambda path, bases, prompt="", progress=None: {
+          "confidence": None, "identity": None, "prompt": None,
+          "notes": "", "error": "stub", "backend": "stub"},
       read_edit_instruction=lambda prompt, duration, progress=None: (
           edit_prompt_calls.append((prompt, duration))
           or ({"trim_start": 4.0, "trim_end": None, "gain_db": 0.0,

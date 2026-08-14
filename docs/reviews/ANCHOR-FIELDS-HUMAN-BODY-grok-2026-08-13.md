@@ -1151,6 +1151,63 @@ Four renders, seed 129080599, CFG 2.0, 50 steps, both references, an eight-term
 negative that adds `tail between legs` and `merged thighs`. All four pass
 `make_anchor._NEGATION_PATTERNS` with zero hits. **Not yet returned.**
 
+## 10c. The contrast hypothesis is REFUTED, and the toenails are how
+
+Six renders tested it. Held fixed: seed 129080599, CFG 2.0, 50 steps, both
+references, the eight-term negative. The ladder moved one thing per render off the
+sentence that produced `01b_BEST_BACK`.
+
+**First, a regression that had to be untangled.** `T1` and `T3` used grok's rewritten
+pose sentences ("hip cocked", "classical contrapposto", "glance over shoulder") and
+both came back as **clothed side views** — belt, chains, harness, heels, a leather
+bodysuit. Three things had moved at once again (pose, tail, tone). `U1` kept the
+working back-view sentence and changed only the tail: **nude, correct back view,
+correct identity.** So the elaborate pose language was the regression, and it is not
+a coincidence that it reads as clothed-pin-up phrasing.
+
+**The tail instruction never worked.** *"Raised high in the air and curved off to one
+side, well clear of her hips and glutes"* produced a tail that hangs down and sweeps
+behind, in `U1`, `U2` and `U3` alike. Tail POSITION resists the positive the same way
+tail COUNT did before the negative was shortened.
+
+**And the anatomy tone, measured rather than eyeballed.** Mean luminance of the
+region between the thighs against the glutes on the same figure:
+
+| render | anatomy clause | crotch | glute | delta | colour spread |
+|---|---|---|---|---|---|
+| `U1` | **none** | 17.92 | 17.49 | **+0.43** | 1.05 |
+| `U2` | "twenty percent lighter" | 17.44 | 17.42 | **+0.02** | 1.23 |
+| `U3` | "lighter dusty-rose" | 15.52 | 16.26 | **−0.73** | 1.09 |
+
+**Adding an anatomy clause made the region no lighter than adding nothing.** `U2` is
+flatter than the render with no clause at all, and `U3` is darker.
+
+Two separate reasons, and the second is the finding:
+
+1. **`U2` — "twenty percent lighter" did nothing because it is arithmetic.** A
+   diffusion model has no operation for "20% lighter than the adjacent surface".
+   The same lesson as "a diffusion model has no NOT", in a new place: **it has no
+   relative quantity either.** Name a colour, do not compute one.
+2. **`U3` — the named colour DID reach the model, and it went somewhere else.** The
+   figure's **toenails rendered pink.** Nowhere else in the image carries that hue,
+   and no earlier render in this project has pink toenails. The rose token was
+   consumed and **displaced onto the nearest surface the model would accept it on.**
+
+So the contrast hypothesis is refuted. The region is not "drawn but invisible for
+want of tonal separation" — **it is not being drawn, and a colour instruction aimed
+at it gets relocated.**
+
+That is consistent with everything else here: nine blank sheets across every CFG,
+step count, negative length and wording; nipples rendering freely while the vulva
+never does; and both close-crop probes collapsing into incoherent smears rather than
+complying. The model is not failing to understand the request. It is declining it,
+and the prompt keeps sliding off.
+
+**This closes the prompt-engineering route.** Nothing left in wording, sampler or
+framing has a plausible mechanism. What remains is outside it: an inpaint pass over a
+masked region on an otherwise-correct sheet, a different checkpoint, or a LoRA.
+**None of the three has been tried and none should be recorded as likely to work.**
+
 ## 11. What is not established, and what was left undone
 
 **Open questions**

@@ -162,6 +162,13 @@ in a document is stale the moment the constants move.
   body part list present, both reference slots named, no wardrobe clause, no
   "bare skin", and `tiers.PINNED` last. Six assertions, each able to fail on its
   own.
+- `T4-19` **Base images are the operator's photographs.** Generate produces
+  *candidates*. A pick marks the candidate that later reference generation
+  uses. The Anchors UI must not grow new base images unless the operator
+  uploaded them or clicked "Use as reference" on a sheet they already
+  accepted. Each candidate tile shows the `T3-31` vision confidence against
+  those bases and the prompt. Mutation: a generate that writes extra
+  `anchor_ref` rows fails this.
 
 ## 7. Explicitly not building
 

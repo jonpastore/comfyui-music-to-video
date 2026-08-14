@@ -432,19 +432,79 @@
       to go back to the tier's own wording.
       {% if p.overridden %}<br><span class="muted">The tier's own wording:
         {{ p.tier_default or "(none)" }}</span>{% endif %}</p>
-    {# Saved versions. The prompt used to live nowhere: it was recomposed from the
-       album profile on every load and only travelled with the job, so an edit was
-       gone the moment you navigated away. A new row per save, because a prompt is
-       tuned by comparing renders and the one you want back is usually the last
-       but one. #}
-    {# ONE BOX PER VIEW. A single box per tier went verbatim to every view of it,
-       so an edit made while looking at the front sheet also governed the back
-       and the nude ones -- overriding the per-view framing sentence and the nude
-       wardrobe swap, which is the only thing that makes a nude sheet nude. The
-       hint below used to document that trap rather than remove it.
-       docs/TRD-7 T7-19. #}
+  </div>
+  {% endfor %}
+
+  {# Pose is per-sheet, not per cell: it replaces the stance clause inside
+     every ticked view's framing. Empty keeps the view's own stance.
+     docs/TRD-7 T7-16. #}
+  <label>Pose &mdash; what the character is doing this sheet
+    <input type="text" name="pose" value="{{ pose or '' }}" maxlength="400"
+           placeholder="leave blank for the view's own stance"
+           hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
+           hx-trigger="change delay:400ms" hx-include="#anchor-form">
+  </label>
+  <p class="hint">Replaces the view's stance (standing, sitting, &hellip;) rather than
+    sitting beside it. Two contradictory positives do not average.</p>
+
+  {# UIUX §7a.1: the request is a MATRIX, not 12×4 stacked textareas. Each cell
+     is a radio that opens that combo's prompt, plus a checkbox showing whether
+     that cell has an override. The textareas stay in the form (one per ticked
+     combo) so an edit to one view cannot reach another. docs/TRD-7 T7-19. #}
+  <style>
+    .prompt-matrix { width: 100%; margin: 0.75rem 0; }
+    .prompt-matrix th, .prompt-matrix td { padding: 0.35rem 0.5rem; }
+    .prompt-matrix .matrix-cell {
+      display: flex; align-items: center; gap: 0.35rem; cursor: pointer;
+    }
+    .view-prompt { display: none; }
+    {% for p in tier_panels %}
     {% for vb in p.views %}
-    <div class="view-prompt" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
+    .prompt-matrix:has(input[name="matrix_cell"][value="{{ p.name }}__{{ vb.key }}"]:checked)
+      ~ .view-prompt[data-tier="{{ p.name }}"][data-view="{{ vb.key }}"] { display: block; }
+    {% endfor %}
+    {% endfor %}
+  </style>
+  <table class="list prompt-matrix">
+    <thead>
+      <tr>
+        <th>View</th>
+        {% for p in tier_panels %}
+        <th>{{ p.name | tiername }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for vkey in selected_views %}
+      <tr>
+        <th>{{ view_labels.get(vkey, vkey) }}</th>
+        {% for p in tier_panels %}
+        {% for vb in p.views if vb.key == vkey %}
+        <td>
+          <label class="matrix-cell">
+            <input type="radio" name="matrix_cell" value="{{ p.name }}__{{ vb.key }}"
+                   {% if vkey == selected_views[0] and p.name == tier_panels[0].name %}checked{% endif %}>
+            <input type="checkbox" disabled
+                   {% if vb.prompt != vb.composed %}checked{% endif %}
+                   title="{% if vb.prompt != vb.composed %}this cell has a prompt override{% else %}composed default{% endif %}"
+                   aria-label="prompt override">
+          </label>
+        </td>
+        {% endfor %}
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# ONE BOX PER VIEW. A single box per tier went verbatim to every view of it,
+     so an edit made while looking at the front sheet also governed the back
+     and the nude ones -- overriding the per-view framing sentence and the nude
+     wardrobe swap. The matrix opens one cell; every cell still has its own
+     field. docs/TRD-7 T7-19. #}
+  {% for p in tier_panels %}
+  {% for vb in p.views %}
+  <div class="view-prompt" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
     <div class="field-row prompt-versions" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
       <label>
         <span class="label-text">Saved prompts{{ help("prompt_versions") }}</span>
@@ -465,20 +525,11 @@
       <button type="button" class="version-delete danger btn-sm" data-tier="{{ p.name }}"
               data-view="{{ vb.key }}"
               disabled title="Select a saved version to delete it">Delete version</button>
-      {# Which saved version this sheet is actually being rendered from, so
-         usage_count counts RENDERS and not the times a wording was looked at
-         and rejected. Set by the picker, cleared when the box is edited away
-         from it. #}
       <input type="hidden" name="used_version" class="used-version"
              data-tier="{{ p.name }}" data-view="{{ vb.key }}" value="">
       <span class="prompt-save-note muted row-note" data-tier="{{ p.name }}"
             data-view="{{ vb.key }}"></span>
     </div>
-    {# What this box was COMPOSED as. hx-include sends the whole form on every
-       swap, so ticking a view sent the old text back and /anchors/form seeded
-       the new panel from it -- the box then held the default for the view you
-       just left. Carrying this lets the swap tell "untouched" from a real edit
-       instead of having to guess. #}
     <input type="hidden" name="prompt_default_{{ p.name }}__{{ vb.key }}"
            value="{{ vb.composed }}">
     <label>Prompt &mdash; the {{ p.name | tiername }}
@@ -489,9 +540,8 @@
                 maxlength="{{ max_anchor_prompt }}">{{ vb.prompt }}</textarea>
       <span class="char-count muted" data-for="{{ vb.field }}"></span>
     </label>
-    </div>
-    {% endfor %}
   </div>
+  {% endfor %}
   {% endfor %}
   <p class="hint">Each box is composed from this album's identity, wardrobe and body wording
     plus <em>its own</em> view.

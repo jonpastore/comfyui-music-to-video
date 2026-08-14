@@ -105,8 +105,10 @@ BACKDROP_PARTS = (
 BACKDROP = "".join(p for _, p in BACKDROP_PARTS)
 
 # ONE table. Adding a view is one entry: label (UI), framing (camera+pose+crop),
-# backdrop_omit (which BACKDROP_PARTS to drop). app.ANCHOR_VIEWS is derived.
-# docs/TRD-7 T7-1.
+# pose (the replaceable stance clause inside framing), backdrop_omit (which
+# BACKDROP_PARTS to drop). `pose` on the profile REPLACES that clause — it must
+# not sit beside "standing upright, arms relaxed at their sides". docs/TRD-7
+# T7-1, T7-16.
 VIEWS = {
     "front": {
         "label": "front, clothed",
@@ -114,6 +116,9 @@ VIEWS = {
             "FRONT VIEW character reference sheet of a single adult character, standing upright "
             "facing the camera straight on, arms relaxed at their sides, feet apart, head to toe "
             "fully in frame. "),
+        "pose": "standing upright facing the camera straight on, arms relaxed at their sides, "
+                "feet apart, ",
+        "camera": "FRONT VIEW character reference sheet of a single adult character, ",
     },
     "back": {
         "label": "back, clothed",
@@ -121,6 +126,9 @@ VIEWS = {
             "BACK VIEW character reference sheet of a single adult character, seen from directly "
             "behind, back to the camera, standing upright, arms relaxed at their sides, feet apart, "
             "head to toe fully in frame. Rear view, seen from behind, face not visible. "),
+        "pose": "standing upright, arms relaxed at their sides, feet apart, ",
+        "camera": "BACK VIEW character reference sheet of a single adult character, seen from "
+                  "directly behind, back to the camera, ",
     },
     "front_nude": {
         "label": "front, nude",
@@ -128,6 +136,9 @@ VIEWS = {
             "FRONT VIEW nude character reference sheet of a single adult character, standing "
             "upright facing the camera straight on, arms relaxed at their sides, feet apart, head "
             "to toe fully in frame. "),
+        "pose": "standing upright facing the camera straight on, arms relaxed at their sides, "
+                "feet apart, ",
+        "camera": "FRONT VIEW nude character reference sheet of a single adult character, ",
     },
     "back_nude": {
         "label": "back, nude",
@@ -136,6 +147,9 @@ VIEWS = {
             "directly behind, back to the camera, standing upright, arms relaxed at their sides, "
             "feet apart, head to toe fully in frame. Rear view, seen from behind, face not "
             "visible. "),
+        "pose": "standing upright, arms relaxed at their sides, feet apart, ",
+        "camera": "BACK VIEW nude character reference sheet of a single adult character, seen from "
+                  "directly behind, back to the camera, ",
     },
     "three_quarter": {
         "label": "three-quarter, clothed",
@@ -143,6 +157,9 @@ VIEWS = {
             "THREE-QUARTER VIEW character reference sheet of a single adult character, "
             "body turned forty-five degrees, face toward the camera, standing, head to toe "
             "fully in frame. "),
+        "pose": "standing, ",
+        "camera": "THREE-QUARTER VIEW character reference sheet of a single adult character, "
+                  "body turned forty-five degrees, face toward the camera, ",
     },
     "three_quarter_nude": {
         "label": "three-quarter, nude",
@@ -150,24 +167,35 @@ VIEWS = {
             "THREE-QUARTER VIEW nude character reference sheet of a single adult character, "
             "body turned forty-five degrees, face toward the camera, standing, head to toe "
             "fully in frame. "),
+        "pose": "standing, ",
+        "camera": "THREE-QUARTER VIEW nude character reference sheet of a single adult character, "
+                  "body turned forty-five degrees, face toward the camera, ",
     },
     "profile": {
         "label": "profile, clothed",
         "framing": (
             "PROFILE VIEW character reference sheet of a single adult character, "
             "full side view, standing, head to toe fully in frame. "),
+        "pose": "standing, ",
+        "camera": "PROFILE VIEW character reference sheet of a single adult character, "
+                  "full side view, ",
     },
     "profile_nude": {
         "label": "profile, nude",
         "framing": (
             "PROFILE VIEW nude character reference sheet of a single adult character, "
             "full side view, standing, head to toe fully in frame. "),
+        "pose": "standing, ",
+        "camera": "PROFILE VIEW nude character reference sheet of a single adult character, "
+                  "full side view, ",
     },
     "seated": {
         "label": "seated, clothed",
         "framing": (
             "SEATED VIEW character reference sheet of a single adult character, "
             "sitting facing the camera, head to toe fully in frame. "),
+        "pose": "sitting facing the camera, ",
+        "camera": "SEATED VIEW character reference sheet of a single adult character, ",
         "backdrop_omit": ("stance",),
     },
     "seated_nude": {
@@ -175,6 +203,8 @@ VIEWS = {
         "framing": (
             "SEATED VIEW nude character reference sheet of a single adult character, "
             "sitting facing the camera, head to toe fully in frame. "),
+        "pose": "sitting facing the camera, ",
+        "camera": "SEATED VIEW nude character reference sheet of a single adult character, ",
         "backdrop_omit": ("stance",),
     },
     "portrait": {
@@ -182,6 +212,8 @@ VIEWS = {
         "framing": (
             "PORTRAIT VIEW character reference sheet of a single adult character, "
             "head and shoulders, face toward the camera. "),
+        "pose": "",
+        "camera": "PORTRAIT VIEW character reference sheet of a single adult character, ",
         "backdrop_omit": ("stance", "crop", "floor"),
     },
     "portrait_nude": {
@@ -189,6 +221,8 @@ VIEWS = {
         "framing": (
             "PORTRAIT VIEW nude character reference sheet of a single adult character, "
             "head and shoulders, face toward the camera. "),
+        "pose": "",
+        "camera": "PORTRAIT VIEW nude character reference sheet of a single adult character, ",
         "backdrop_omit": ("stance", "crop", "floor"),
     },
 }
@@ -199,6 +233,47 @@ DEFAULT_VIEWS = {k: v["framing"] for k, v in VIEWS.items()}
 
 def _omit(view):
     return (VIEWS.get(view) or {}).get("backdrop_omit") or ()
+
+
+def _pose_clause(text):
+    text = " ".join((text or "").split())
+    if not text:
+        return ""
+    text = text.rstrip(".,; ")
+    return (text + ", ") if text else ""
+
+
+def apply_pose(view, framing, pose):
+    """Replace the view's pose clause. Never append beside it.
+
+    Two contradictory positives do not average (Day 4). docs/TRD-7 T7-16.
+    """
+    clause = _pose_clause(pose)
+    if not clause or not framing:
+        return framing
+    spec = VIEWS.get(view) or {}
+    default = spec.get("pose") or ""
+    if default and default in framing:
+        return framing.replace(default, clause, 1)
+    # overlays may reword the camera but still carry a shipped stance
+    for token in (
+        "standing upright facing the camera straight on, arms relaxed at their sides, "
+        "feet apart, ",
+        "standing upright, arms relaxed at their sides, feet apart, ",
+        "sitting facing the camera, ",
+        "standing, ",
+    ):
+        if token in framing:
+            return framing.replace(token, clause, 1)
+    camera = spec.get("camera") or ""
+    if camera and framing.startswith(camera):
+        return camera + clause + framing[len(camera):]
+    needle = "character, "
+    idx = framing.find(needle)
+    if idx != -1:
+        at = idx + len(needle)
+        return framing[:at] + clause + framing[at:]
+    return framing
 
 
 def backdrop_for(view, text=None):
@@ -361,6 +436,8 @@ def anchor_from(data):
         # "the same character" means. docs/TRD-7 T7-14, T7-15.
         "backdrop": data.get("backdrop") or BACKDROP,
         "composite": data.get("composite") or COMPOSITE,
+        # Optional, per-sheet. Empty is the view's own stance. docs/TRD-7 T7-16.
+        "pose": (data.get("pose") or "").strip(),
         "views": views,
     }
 
@@ -374,6 +451,7 @@ def prompt_for(view, anchor=None, n_refs=1):
     nude = is_nude_view(view)
     wardrobe = a.get("nude_wardrobe", NUDE_WARDROBE) if nude else a["wardrobe"]
     framing = (a.get("views") or {}).get(view) or (VIEWS.get(view) or {}).get("framing") or ""
+    framing = apply_pose(view, framing, a.get("pose"))
     parts = [framing, wardrobe, a["body"], a["identity"]]
     # The anatomy clause applies to nude views only, and goes AFTER the body
     # clause so it reads as detail on the surface the body clause just

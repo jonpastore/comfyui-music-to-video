@@ -48,6 +48,8 @@ What they need from these four, in their own terms:
 3. *"Don't let me save something the tier forbids, or ask for something that
    cannot render."*
 4. *"Tell me what is running, where, and whether it is actually alive."*
+5. *"Show me, on each candidate, how well it matches the base photographs
+   and the prompt I asked for — then I pick."* (`T3-31`, `T4-19`)
 
 ## 3. The product rules
 

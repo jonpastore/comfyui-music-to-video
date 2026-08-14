@@ -1,0 +1,226 @@
+"""T9-1, T9-2, T9-3, T9-6, and the RENDER_BACKEND seam.
+
+The fleet machinery is live; these criteria were not independently asserted
+outside pipeline.demo() (slow, and skipped by default). Offline only: the
+live-fleet half of T9-1 (as-written refuses AND retargeted renders on a real
+box) stays in demo(). Deleting the helper these call must go red.
+
+conftest stubs pipeline for app tests. This file loads the real module under a
+private name so it cannot hit SwarmUI and cannot inspect the stub.
+"""
+import inspect
+import json
+import tempfile
+
+import jobs
+from conftest import _real_module
+
+pipeline = _real_module("pipeline")
+assert pipeline is not None, "real pipeline.py failed to import"
+
+# Real enums, trimmed: models.demo() read these from /object_info on 2026-08-12.
+# A VAE name lives in VAELoader on both boxes and never in UNETLoader -- that
+# is T9-2's fixture, not an invention.
+CERBERUS = {
+    "CheckpointLoaderSimple": {"ace_step_v1_3.5b.safetensors"},
+    "VAELoader": {"ae.safetensors", "qwen_image_vae.safetensors"},
+    "UNETLoader": {"qwen_image_edit_2511_fp8mixed.safetensors",
+                   "z_image_turbo_fp8mix.safetensors"},
+}
+PEACHES = {
+    "CheckpointLoaderSimple": {"ace_step_v1_3.5b_fp16.safetensors"},
+    "VAELoader": {"z_image_ae.safetensors", "flux2-vae.safetensors"},
+    "UNETLoader": {"z_image_turbo_fp8mix.safetensors",
+                   "flux-2-klein-4b-fp8.safetensors"},
+}
+BOXES = [
+    {"id": "0", "address": "http://cerberus", "status": "running"},
+    {"id": "2", "address": "http://peaches", "status": "running"},
+]
+POOLS = {"http://cerberus": CERBERUS, "http://peaches": PEACHES}
+
+# Measured on this fleet 2026-08-12. Both families share the "No backends
+# match" headline; the reason line is the discriminator (T9-6 / T6-4).
+VANISHED = (
+    "No backends match the settings of the request given! Backends refused "
+    "for the following reason(s):\n- Specific backend ID# requested in "
+    "advanced parameters did not match",
+    "did not finish within 1800s",
+)
+REFUSED = (
+    "No backends match the settings of the request given! Backends "
+    "refused for the following reason(s):\n- The custom workflow "
+    "contains an unsupported node type 'EmptyImage'.",
+    "Model in folder 'vae' with filename "
+    "'qwen_image_vae.safetensors' not found.",
+)
+
+
+def _ckpt(name):
+    return json.dumps({
+        "1": {"class_type": "CheckpointLoaderSimple",
+              "inputs": {"ckpt_name": name}},
+        "99": {"inputs": {"filename_prefix": "audio/demo"}},
+    })
+
+
+def _retarget_on_fleet():
+    """Pin _retarget to the fixture boxes; restore even if a test raises."""
+    was_sb, was_inst = pipeline.swarm_backends, pipeline.models.installed
+    pipeline.swarm_backends = lambda: BOXES
+    pipeline.models.installed = lambda object_info=None, url=None: POOLS.get(url)
+    return was_sb, was_inst
+
+
+def _restore_fleet(was_sb, was_inst):
+    pipeline.swarm_backends, pipeline.models.installed = was_sb, was_inst
+
+
+def test_t9_1_retarget_rewrites_both_directions_and_as_written_is_absent():
+    """T9-1: as-written spelling is not on the pin; retargeted spelling is.
+
+    Both directions in one test or a retargeter that always rewrites into one
+    box's name certifies itself. Offline stand-in for the live 9.7s render:
+    the target pool is the refusal/success oracle, not SwarmUI.
+    """
+    was = _retarget_on_fleet()
+    try:
+        fp16 = "ace_step_v1_3.5b_fp16.safetensors"
+        bf16 = "ace_step_v1_3.5b.safetensors"
+        # peaches spelling, pinned to cerberus
+        assert fp16 not in CERBERUS["CheckpointLoaderSimple"]
+        to_cerberus = json.loads(pipeline._retarget(_ckpt(fp16), "0"))
+        sent = to_cerberus["1"]["inputs"]["ckpt_name"]
+        assert sent == bf16, f"cerberus was handed a filename it does not hold: {sent}"
+        assert sent in CERBERUS["CheckpointLoaderSimple"]
+        # cerberus spelling, pinned to peaches
+        assert bf16 not in PEACHES["CheckpointLoaderSimple"]
+        to_peaches = json.loads(pipeline._retarget(_ckpt(bf16), "2"))
+        sent = to_peaches["1"]["inputs"]["ckpt_name"]
+        assert sent == fp16, f"peaches was handed a filename it does not hold: {sent}"
+        assert sent in PEACHES["CheckpointLoaderSimple"]
+    finally:
+        _restore_fleet(*was)
+
+
+def test_t9_2_retarget_is_per_loader_not_a_global_rename():
+    """T9-2: a VAE name is never resolved out of the UNET enum.
+
+    Positive half: the same name on the VAE loader IS substituted. A global
+    string-replace would rewrite the UNET input too and stay green on the
+    VAE assertion alone.
+    """
+    was = _retarget_on_fleet()
+    try:
+        wf = json.dumps({
+            "1": {"class_type": "VAELoader",
+                  "inputs": {"vae_name": "ae.safetensors"}},
+            "2": {"class_type": "UNETLoader",
+                  "inputs": {"unet_name": "ae.safetensors"}},
+        })
+        # ae.safetensors exists as a VAE alias and is absent from peaches UNET.
+        assert "ae.safetensors" not in PEACHES["UNETLoader"]
+        assert "z_image_ae.safetensors" not in PEACHES["UNETLoader"]
+        got = json.loads(pipeline._retarget(wf, "2"))
+        assert got["1"]["inputs"]["vae_name"] == "z_image_ae.safetensors", \
+            "a name that exists in the right loader was not substituted"
+        assert got["2"]["inputs"]["unet_name"] == "ae.safetensors", \
+            "a VAE name was resolved out of a different loader's list"
+    finally:
+        _restore_fleet(*was)
+
+
+def test_t9_3_free_draw_is_object_identity_and_asks_nothing():
+    """T9-3: the free draw goes out byte-identical, by identity not equality.
+
+    A rebuild of the same JSON reads as untouched while busting ComfyUI's
+    execution cache. The guard is worth the ASKING -- one ListBackends per
+    workflow -- so a pin=None that still consults the fleet is a failure.
+    Positive half: the same fixture IS rewritten when pinned.
+    """
+    asked = []
+    was_call, was_sb = pipeline._swarm_call, pipeline.swarm_backends
+    was_fleet = _retarget_on_fleet()
+    try:
+        pipeline._swarm_call = lambda path, payload, timeout=30: (
+            asked.append(path) or {})
+        pipeline.swarm_backends = lambda: asked.append("swarm_backends") or BOXES
+        plain = "PLAIN TEXT, NOT EVEN JSON"
+        assert pipeline._retarget(plain, None) is plain, \
+            "the free draw came back re-serialised, so the cache key changed"
+        assert not asked, \
+            f"the free draw asked SwarmUI what each box holds: {asked}"
+
+        # same fixture, pinned: must not be the original object, and must change
+        fp16 = "ace_step_v1_3.5b_fp16.safetensors"
+        src = _ckpt(fp16)
+        pinned = pipeline._retarget(src, "0")
+        assert pinned is not src, "a pinned attempt returned the original object"
+        assert json.loads(pinned)["1"]["inputs"]["ckpt_name"] != fp16
+    finally:
+        pipeline._swarm_call, pipeline.swarm_backends = was_call, was_sb
+        _restore_fleet(*was_fleet)
+
+
+def test_t9_6_vanished_requeues_refused_does_not():
+    """T9-6: the reason line, not the shared headline, is the discriminator.
+
+    A vanished box requeues (jobs._TRANSIENT agrees with pipeline's exhausted
+    walk). A refused workflow does not. Four strings SwarmUI actually produced.
+    """
+    for msg in VANISHED:
+        assert pipeline._backend_vanished(msg), \
+            f"a vanished box read as a refusal: {msg[:60]}"
+    for msg in REFUSED:
+        assert not pipeline._backend_vanished(msg), \
+            f"a REFUSED workflow read as a vanished box: {msg[:60]}"
+
+    gone = RuntimeError(
+        "cannot reach SwarmUI backends for wf.json: every box that could run it "
+        "is offline or went away mid-render (No backends match ...)")
+    refused = RuntimeError(REFUSED[0])
+    assert jobs._is_transient(gone), \
+        "pipeline's offline-backend wording no longer matches jobs._TRANSIENT"
+    assert not jobs._is_transient(refused), \
+        "a workflow every box REFUSED is queued for retry"
+
+
+def test_render_backend_seam_is_one_branch_and_both_paths_are_taken():
+    """RENDER_BACKEND is one comparison, and both sides of it run.
+
+    DDD-8-10 §3.1: _submit_and_collect is the only place that branches, which
+    is why the swarm path could be added without touching the seven gen_*
+    wrappers. A source check plus a behavioural one: deleting the comparison
+    or hard-coding one side leaves a path un-taken.
+    """
+    src = inspect.getsource(pipeline)
+    assert src.count('RENDER_BACKEND == "swarm"') == 1, \
+        "the seam is no longer one comparison"
+    for name in ("gen_anchor", "gen_refs", "gen_clips", "gen_audio",
+                 "gen_postproc", "gen_artwork"):
+        body = inspect.getsource(getattr(pipeline, name))
+        assert "RENDER_BACKEND" not in body, \
+            f"{name} now branches on the backend"
+
+    taken = []
+    was = (pipeline.RENDER_BACKEND, pipeline.submit_dir, pipeline.submit_swarm,
+           pipeline.gpu.preflight, pipeline.gpu.ollama_holding,
+           pipeline.submitted_prefixes, pipeline.collect, pipeline._stamp)
+    try:
+        pipeline.gpu.preflight = lambda progress=None: taken.append("preflight")
+        pipeline.gpu.ollama_holding = lambda: False
+        pipeline.submitted_prefixes = lambda d: set()
+        pipeline.collect = lambda *a, **k: []
+        pipeline._stamp = lambda *a, **k: None
+        pipeline.submit_dir = lambda *a, **k: taken.append("comfy")
+        pipeline.submit_swarm = lambda *a, **k: taken.append("swarm") or []
+        with tempfile.TemporaryDirectory() as d:
+            pipeline.RENDER_BACKEND = "comfy"
+            pipeline._submit_and_collect(d, "x", "*.png", lambda m: None)
+            pipeline.RENDER_BACKEND = "swarm"
+            pipeline._submit_and_collect(d, "x", "*.png", lambda m: None)
+        assert taken == ["preflight", "comfy", "swarm"], taken
+    finally:
+        (pipeline.RENDER_BACKEND, pipeline.submit_dir, pipeline.submit_swarm,
+         pipeline.gpu.preflight, pipeline.gpu.ollama_holding,
+         pipeline.submitted_prefixes, pipeline.collect, pipeline._stamp) = was
