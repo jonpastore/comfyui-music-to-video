@@ -10,8 +10,10 @@ private name so it cannot hit SwarmUI and cannot inspect the stub.
 """
 import inspect
 import json
+import os
 import tempfile
 
+import db
 import jobs
 import models
 from conftest import _real_module
@@ -256,13 +258,27 @@ T9_4_FLEET = [
     {"id": "9", "title": "ghost", "status": "running",
      "address": "http://10.0.0.99:8188"},
 ]
+# Answered, but UNETLoader publishes no enum. catalog() must leave available
+# as None — not False. The existing ghost is unreachable (have is None);
+# mutating `None if pool is None else bool(found)` to bool(found) stayed
+# green on that fixture alone.
+PARTIAL_INFO = {
+    "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [
+        ["ace_step_v1_3.5b.safetensors"]]}}},
+}
+T9_4_PARTIAL = {
+    "id": "4", "title": "partial", "status": "running",
+    "address": "http://10.0.0.4:8188",
+}
 T9_4_INFO = {
     "http://127.0.0.1:8188": CERBERUS_INFO,
     "http://100.95.184.29:8188": PEACHES_INFO,
+    "http://10.0.0.4:8188": PARTIAL_INFO,
 }
 T9_4_STATS = {
     "http://127.0.0.1:8188": {"vram_gib": 23.42, "gpu": "RTX 5090 Laptop"},
     "http://100.95.184.29:8188": {"vram_gib": 10.58, "gpu": "RTX 2080 Ti"},
+    "http://10.0.0.4:8188": {"vram_gib": 23.42, "gpu": "RTX 5090"},
 }
 
 
@@ -308,6 +324,10 @@ def test_t9_4_where_is_three_valued_and_none_is_offered():
             "a box that answered and lacks the model was offered")
         assert "9" in qwen_ids, (
             "a None box was not offered — three-valued collapsed to False")
+        assert qwen_ids[0] == "0", (
+            "unconfirmed sorted before confirmed — None is a candidate, "
+            "not the first pick")
+        assert qwen_ids[-1] == "9"
         assert next(r for r in qwen if r["id"] == "0")["confirmed"] is True
         assert next(r for r in qwen if r["id"] == "9")["confirmed"] is False
         assert next(r for r in qwen if r["id"] == "9")["reachable"] is False
@@ -317,6 +337,10 @@ def test_t9_4_where_is_three_valued_and_none_is_offered():
             f"an unreachable box was reported as unable: {ghost_only}")
         assert ghost_only[0]["confirmed"] is False
         assert ghost_only[0]["id"] == "9"
+
+        false_only = models.where("qwen_image_edit_2511", [T9_4_FLEET[1]])
+        assert false_only == [], (
+            f"a False-only fleet was offered as a candidate: {false_only}")
 
         ace = models.where("ace_step_v1", T9_4_FLEET)
         ace_ids = {r["id"] for r in ace}
@@ -329,3 +353,115 @@ def test_t9_4_where_is_three_valued_and_none_is_offered():
         assert models.where("qwen_image_edit_2511", []) == []
     finally:
         _t9_4_restore_fleet(*was)
+
+
+def test_t9_4_answered_box_with_no_loader_enum_is_none_not_false():
+    """T9-4: reachable + no enumerable loader is None, still a candidate.
+
+    installed() answers None for that loader, not set(). catalog() must
+    keep available is None. `bool(found)` after resolve(pool=None) is
+    False and is the mutation that must go red — the unreachable ghost
+    takes a different branch (have is None) and cannot see it.
+
+    T9-5 is fits, not available: this box has VRAM enough for qwen so a
+    collapse of unknown-enum into False is not a slow-box sort.
+    """
+    was = _t9_4_stub_fleet()
+    try:
+        fleet = [T9_4_PARTIAL]
+        row = models.by_backend(fleet)[0]
+        assert row["reachable"] is True, "an answering box was marked unreachable"
+        avail = next(e["available"] for e in row["models"]
+                     if e["key"] == "qwen_image_edit_2511")
+        assert avail is None, (
+            f"a missing UNET enum read as {avail!r}, not None — unknown "
+            "collapsed to missing")
+        ace_avail = next(e["available"] for e in row["models"]
+                         if e["key"] == "ace_step_v1")
+        assert ace_avail is True, (
+            "the loader that DID enumerate was not confirmed")
+
+        offered = models.where("qwen_image_edit_2511", fleet)
+        assert len(offered) == 1, (
+            f"an answered box with no UNET enum was refused: {offered}")
+        assert offered[0]["id"] == "4"
+        assert offered[0]["confirmed"] is False
+        assert offered[0]["reachable"] is True
+
+        mixed = models.where("qwen_image_edit_2511",
+                             T9_4_FLEET + [T9_4_PARTIAL])
+        mixed_ids = [r["id"] for r in mixed]
+        assert mixed_ids == ["0", "4", "9"], mixed_ids
+        assert "2" not in mixed_ids, "peaches False was offered beside the Nones"
+    finally:
+        _t9_4_restore_fleet(*was)
+
+
+def _t9_4_isolate_jobs():
+    was = (db.DATA, db.DB_PATH, jobs.LOGS, jobs._capability_where)
+    data = tempfile.mkdtemp(prefix="t94_")
+    db.DATA = data
+    db.DB_PATH = os.path.join(data, "t.db")
+    db._local.__dict__.clear()
+    jobs.LOGS = os.path.join(data, "logs")
+    if "t94" not in jobs._handlers:
+        @jobs.handler("t94")
+        def _t94(args, progress):
+            return args
+    return was
+
+
+def _t9_4_restore_jobs(was):
+    db.DATA, db.DB_PATH, jobs.LOGS, jobs._capability_where = was
+    db._local.__dict__.clear()
+
+
+def test_t9_4_claim_consumer_treats_none_as_candidate_and_false_as_refusal():
+    """T9-4: a where() consumer must respect all three values.
+
+    T6-3 stubs where(), so collapsing None inside where() stayed green
+    there. This wires the real function onto the T9-4 fleet: a False-only
+    match leaves the job queued; a None-only match is pulled. T6-A10:
+    asserted through _claim, not a helper that wraps it.
+
+    Does not change the production matcher (T6-1 / no second scheduler).
+    """
+    was_fleet = _t9_4_stub_fleet()
+    try:
+        was_jobs = _t9_4_isolate_jobs()
+        try:
+            jobs._capability_where = (
+                lambda key, backends: models.where(key, [T9_4_FLEET[1]]))
+            refused = jobs.enqueue("t94", {"requires": "qwen_image_edit_2511"})
+            later = jobs.enqueue("t94", {"who": "later"})
+            pulled = jobs._claim()
+            assert pulled is not None and pulled["id"] == later, (
+                f"_claim took {pulled['id'] if pulled else None}; a False-only "
+                "where() result must refuse the requires job")
+            assert jobs.get(refused)["status"] == "queued"
+        finally:
+            _t9_4_restore_jobs(was_jobs)
+
+        was_jobs = _t9_4_isolate_jobs()
+        try:
+            jobs._capability_where = (
+                lambda key, backends: models.where(key, [T9_4_FLEET[2]]))
+            ghost = jobs.enqueue("t94", {"requires": "qwen_image_edit_2511"})
+            pulled = jobs._claim()
+            assert pulled is not None and pulled["id"] == ghost, (
+                "an unconfirmed None candidate was treated as a refusal")
+        finally:
+            _t9_4_restore_jobs(was_jobs)
+
+        was_jobs = _t9_4_isolate_jobs()
+        try:
+            jobs._capability_where = (
+                lambda key, backends: models.where(key, [T9_4_PARTIAL]))
+            partial = jobs.enqueue("t94", {"requires": "qwen_image_edit_2511"})
+            pulled = jobs._claim()
+            assert pulled is not None and pulled["id"] == partial, (
+                "a reachable box with no loader enum was treated as a refusal")
+        finally:
+            _t9_4_restore_jobs(was_jobs)
+    finally:
+        _t9_4_restore_fleet(*was_fleet)
