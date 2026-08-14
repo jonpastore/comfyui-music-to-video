@@ -183,11 +183,13 @@ adds is a **time axis** (today the strip is proportional but has no ruler),
 draggable joins, automation lanes and a playhead.
 
 The waveform is the part that must change rather than grow: today it is
-`mixer.waveform_png()` set as a `background-image` on the block. `T1-13`…`T1-15`
-need **peaks as data** — the regions have to be draggable, and a picture cannot
-be. Same component, different source; the CSS comment about text-shadow over
-the waveform (dimming it would hide the quiet passages, which are exactly what
-you look at it to find) stays true either way.
+`mixer.waveform_png()` set as a `background-image` on the block. `mixer.peaks`
+now returns the decimated min/max pairs (`T1-13`/`T1-14`); the UI still draws
+the picture. `T1-15` and the swap onto those numbers remain — the regions have
+to be draggable, and a picture cannot be. Same component, different source; the
+CSS comment about text-shadow over the waveform (dimming it would hide the
+quiet passages, which are exactly what you look at it to find) stays true
+either way.
 
 **Genuinely not built** — `meter` (scene time against song length, `T2-23`;
 loudness against target, `T1-25`), `finding-row` (measured / expected / unit /

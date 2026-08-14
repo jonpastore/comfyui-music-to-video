@@ -241,7 +241,8 @@ Peaks: computed on the **existing** `analyse` job, which already decodes the fil
 — do not decode it twice. Stored beside the song, served decimated at
 `PEAKS_MAX_POINTS = 2048` per request. Decimation is a **min/max reduce, not a
 resample** (`T1-14`): a waveform that under-reports a peak lies about where the
-loud part is.
+loud part is. The reduce is `mixer.peaks(samples, z)` (`T1-13`/`T1-14`);
+analyse storage and `/api/sets/{id}/peaks?z=` are not wired yet.
 
 The limit is stated in the design because it will otherwise be discovered by a
 feature request: `analyse.py` loads mono at 22050 Hz, chosen because it matched

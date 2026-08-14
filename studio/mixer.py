@@ -119,6 +119,39 @@ def waveform_png(audio_path, out_path, progress=None, size=WAVEFORM_SIZE):
     return out_path
 
 
+# Timeline peaks. waveform_png stays for the static picture; the editor needs
+# numbers so regions can be dragged (docs/TRD-1 T1-13 / T1-14). Cap is a hard
+# bound on every zoom: a 60-minute set must not decode in the browser.
+PEAKS_MAX_POINTS = 2048
+
+
+def peaks(samples, z=0):
+    """Decimated min/max envelope for zoom level *z*.
+
+    At most PEAKS_MAX_POINTS [min, max] pairs, regardless of song length or
+    z, and at least one pair when samples is non-empty. Empty input is []
+    (T1-15 owns the explicit reason). Decimation is a min/max reduce over
+    contiguous spans, not a resample: a bucket's pair is exactly the
+    full-resolution min and max over that span.
+
+    z is the zoom the request asked for. The cap holds at every z. A
+    windowed zoom is a later slice; this one covers the whole signal.
+    """
+    if samples is None:
+        return []
+    n = len(samples)
+    if n == 0:
+        return []
+    n_buckets = min(PEAKS_MAX_POINTS, n)
+    out = []
+    for i in range(n_buckets):
+        start = i * n // n_buckets
+        end = (i + 1) * n // n_buckets
+        span = samples[start:end]
+        out.append([float(min(span)), float(max(span))])
+    return out
+
+
 def _write_concat_list(paths):
     fd, list_path = tempfile.mkstemp(suffix=".txt")
     with os.fdopen(fd, "w") as f:
@@ -1317,6 +1350,14 @@ def suggest_running_order(songs):
 
 
 def demo():
+    # T1-13 / T1-14 are pure arithmetic and must not wait on ffmpeg.
+    _tone = [0.0] * 4096
+    _tone[7] = 0.91
+    _tone[9] = -0.73
+    _env = peaks(_tone, z=0)
+    assert 1 <= len(_env) <= PEAKS_MAX_POINTS, len(_env)
+    assert max(p[1] for p in _env) == 0.91 and min(p[0] for p in _env) == -0.73
+    assert peaks([], z=0) == []
     tmpdir = tempfile.mkdtemp(prefix="mixer_demo_")
     try:
         clip_a = os.path.join(tmpdir, "clip a.mp4")   # space in path, deliberately

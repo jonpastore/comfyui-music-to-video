@@ -382,6 +382,11 @@ _stub("mixer",
       waveform_png=lambda audio_path, out_path, progress=None, size=None: (
           os.makedirs(os.path.dirname(out_path), exist_ok=True)
           or open(out_path, "wb").write(b"\x89PNG\r\n\x1a\n") and out_path),
+      # peaks is pure min/max reduce -- no ffmpeg -- so the stub runs the real
+      # one. A fake that always returned [] would pass T1-13's upper bound
+      # and take T1-14 with it (docs/TRD-1 §6.1).
+      peaks=(_real_module("mixer").peaks if _real_module("mixer") is not None
+             else (lambda samples, z=0: [])),
       render_set=_render_set,
       mix_audio=_mix_audio,
       set_duration=_set_duration,

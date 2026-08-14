@@ -617,7 +617,8 @@ current.
 | `T1-7` predicted length = rendered (echo+black+beatmatch+trim) | **built** | this tree | `studio/test_t1_7_set_duration.py`: mix_audio gap 0.032 s, render_set gap 0.027 s, both ≤ `mixer.SET_DURATION_TOLERANCE` (0.05). Each named feature moves the prediction. Arithmetic and the constant were not changed. |
 | `T1-8` displayed length is `set_duration()` | **not measured** | — | UI offset-stub differential has not been run |
 | `T1-27`/`T1-28` interstitial card | **not built** | — | folded in today from `ALBUM_ARC_AND_STAGING_PLAN` §3; nothing implements it |
-| `T1-13`…`T1-17` peaks, preview | **not built** | — | only `mixer.waveform_png()` exists, a picture and not data |
+| `T1-13`/`T1-14` peaks as data | **built** | this slice | `mixer.peaks(samples, z)` returns ≤2048 min/max pairs, ≥1 when audio exists; per-bucket min/max equals the full-resolution span. `studio/test_timeline.py` |
+| `T1-15`…`T1-17` empty reason, preview | **not built** | — | `mixer.waveform_png()` is still the picture; no explicit empty-reason, no proxy preview |
 | `T1-18`…`T1-20` audiences | **not built** | — | no `sets.mode_audience` column |
-| `T1-21`…`T1-23` `duck`/`layer` | **refused, honestly** | — | still refused at every entry point, which is `T1-23` and is the correct state |
+| `T1-21`…`T1-23` `duck`/`layer` | **built (ledger was stale)** | mixer joins | `_duck_join` / `_layer_join` render. `T1-23` "refused" is no longer the tree |
 | the timeline itself | **not built** | — | `set_edit.html` is a stack of forms; `.timeline`/`.tl-block` is a proportional strip with no time axis |
