@@ -1,7 +1,11 @@
 """T8-1, T8-2, T8-3, T8-2a: a take records the ask, not a pointer at a moving song.
 
-Query functions only -- generation, the Use route and the audio job live elsewhere.
+insert_take / pick live here. The audio job's land path is asserted in
+test_t8_1_gen_audio_lands_as_take_and_keeps_the_ask -- a take that only
+exists as an assets row cannot say what it was asked for after the song
+moves.
 """
+import os
 import time
 
 import pytest
@@ -106,3 +110,51 @@ def test_voice_and_take_voice_rows_can_be_stored():
     assert rows[0]["voice_id"] == vid
     assert rows[0]["start_secs"] == 0
     assert rows[0]["end_secs"] == 20.0
+
+
+def test_t8_1_gen_audio_lands_as_take_and_keeps_the_ask():
+    """T8-1: the audio job writes takes, not a pointer at a song that moves.
+
+    Changing the song after generate must leave the take's tags/lyrics/seed/
+    duration/params as they were sent. Landing must not write songs.mp3_path
+    (T8-2 / T6-A5).
+    """
+    import app as appmod
+
+    sid = _song(style_text="drums, 128 bpm warehouse", lyrics="[verse]\nmeow",
+                mp3_path="/keep/me.mp3")
+    appmod.h_audio({
+        "song_id": sid,
+        "tags": "drums, 128 bpm warehouse",
+        "lyrics": "[verse]\nmeow",
+        "seconds": 12.0,
+        "n": 1,
+        "seed": 42,
+        "denoise": 0.7,
+    }, lambda _m: None)
+
+    listed = db.list_takes(sid)
+    assert len(listed) == 1, "gen_audio landed no takes row"
+    take = listed[0]
+    assert take["tags"] == "drums, 128 bpm warehouse"
+    assert take["lyrics"] == "[verse]\nmeow"
+    assert take["seed"] == 42
+    assert take["duration"] == 12.0
+    assert take["origin"] == "generated"
+    assert db.jset(take, "params_json")["denoise"] == 0.7
+    assert take["path"] and os.path.isfile(take["path"])
+    assert os.path.realpath(take["path"]).startswith(os.path.realpath(db.DATA))
+    assert db.one("SELECT mp3_path FROM songs WHERE id=?", sid)["mp3_path"] == "/keep/me.mp3"
+
+    slug = db.one("SELECT slug FROM songs WHERE id=?", sid)["slug"]
+    db.upsert_song(slug, style_text="CHANGED tags", lyrics="CHANGED lyrics")
+    take = db.get_take(take["id"])
+    assert take["tags"] == "drums, 128 bpm warehouse"
+    assert take["lyrics"] == "[verse]\nmeow"
+    assert take["seed"] == 42
+    assert take["duration"] == 12.0
+    assert db.jset(take, "params_json")["denoise"] == 0.7
+    song = db.one("SELECT style_text, lyrics, mp3_path FROM songs WHERE id=?", sid)
+    assert song["style_text"] == "CHANGED tags"
+    assert song["lyrics"] == "CHANGED lyrics"
+    assert song["mp3_path"] == "/keep/me.mp3"

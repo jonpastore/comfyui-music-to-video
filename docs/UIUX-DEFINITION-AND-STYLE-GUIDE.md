@@ -599,7 +599,8 @@ Added 2026-08-13. Same system as §4 and §5; only what these three ask of it.
 TRD-8's take is *"one generated candidate for a song, exactly as a `refs` row is
 one candidate frame"* — so it is **`media-tile` with an audio body**, not a new
 pattern. Same states, same "use this one" act, same rule that the unpicked one
-stays reachable (`T6-A5`).
+stays reachable (`T6-A5`). The tile reads the `takes` row (`T8-1`: tags, lyrics,
+seed, duration, params as sent), not the live song row.
 
 What differs is that **you cannot judge audio from a thumbnail.** A tile that
 shows a waveform and a duration is showing metadata; the operator has to press

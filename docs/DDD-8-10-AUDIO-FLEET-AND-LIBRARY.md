@@ -27,10 +27,11 @@ others — **all four have zero references of any kind**:
 
     takes  0      voices  0      take_voices  0      library  0
 
-What ships today writes each generated candidate as an `assets` row under
-`db.DATA/audio/<slug>/`. **Nothing is overwritten**, so `T6-A5` is not violated —
-the gap is the *second* half of the plan's reasoning: a take cannot say what it
-was asked for.
+What shipped at `c01c977` wrote each generated candidate as an `assets` row under
+`db.DATA/audio/<slug>/`. **Nothing is overwritten**, so `T6-A5` is not violated.
+`h_audio` now also writes a `takes` row via `insert_take` (`T8-1`): tags, lyrics,
+seed, duration and the parameters as sent sit on the take, so a later song edit
+cannot rewrite the ask. `songs.mp3_path` is not a write target.
 
 ### 2.2 The design, and the one rule it turns on
 
@@ -182,7 +183,7 @@ each caller, or a caller that stops calling it stays green.
 ## 5. Build order
 
     TRD-9 tests (no new behaviour)  ->  a routing change becomes provable
-    takes/voices schema  ->  gen_audio writes takes  ->  T8-1 differential
+    takes/voices schema  ->  h_audio writes takes (T8-1, built)
                          ->  the picked/unpicked distinction (T8-2)
     bulk edit (self-contained)      ->  T10-3..T10-7
     advice labelling  ->  T10-11..T10-15 over the four live modules

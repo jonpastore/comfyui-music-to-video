@@ -247,6 +247,7 @@ current.
 | the audio stage itself | **built, before this document** | 2026-08-12 | `make_audio.py`, the `audio` job kind, a route, a form; takes copied into the data dir |
 | `T8-6`…`T8-9` the splice repair path | **built** | `871d820` | the edge-span defect: a 20 s track spliced at 0.1 s came back 20.193 s with audio missing. After: 20.036 s against 20.036 s. `mixer.bridge_seconds` owns the arithmetic |
 | `T8-4` the audio path accepts a child mention | **built** | `1cac5bb` | the image guardrail is off the audio path, measured — "nursery rhyme for children" had been refused |
-| **`T8-1`…`T8-3` the take model** | **NOT BUILT, and it is the headline** | — | `takes`, `voices`, `take_voices`, `library` — **all four have zero references in `db.py`**, verified independently by both sessions. Takes are `assets` rows, so **a take cannot say what it was asked for** |
+| **`T8-1`** a take records the ask | **built** | `test_takes.py` | `h_audio` copies tags/lyrics/seed/duration/params onto `takes` via `insert_take`. Changing the song after generate leaves the take's ask. Does not write `songs.mp3_path` |
+| **`T8-2`…`T8-3` pick and origin** | **partial** | `test_takes.py` | insert/pick and origin CHECK exist. `h_audio` now writes origin on land. Pick is still a separate act; Use still goes through `assets` |
 | `T8-10`…`T8-12` voices and consent | **not built** | — | `T8-12` is **provisional**: green by construction while no cloning path exists |
 | `T8-13`…`T8-15` the song editor | **not built** | — | deferred by TRD-1 §11 and claimed here |

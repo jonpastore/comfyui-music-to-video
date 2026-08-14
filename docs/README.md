@@ -64,7 +64,7 @@ one label is wrong on screen today.
 | **Anchor** | a character reference *sheet*, per album/tier/view | `anchors` table; `chosen=1` is the one clips use |
 | **Ref** | a per-clip reference *frame* | `refs` table, keyed by `clip_idx`. **Not** an anchor |
 | **Candidate** | any generated option awaiting a human pick | anchors, refs and repairs are all candidates (`T6-A5`) |
-| **Take** | one generated candidate *for a song's audio* | TRD-8. **The table does not exist yet** |
+| **Take** | one generated candidate *for a song's audio* | TRD-8. `h_audio` lands each candidate as a `takes` row via `insert_take` (`T8-1`); never over `songs.mp3_path` |
 | **View** | the camera relationship of a sheet — front, back, nude parallels | TRD-7 |
 | **Tier** | the content rating: `g`, `pg13`, `r`, `xxx` | `xxx` is the operator's own label, never an MPAA rating |
 | **Backend** | one GPU box registered with SwarmUI | ids **renumber**; group by `host`, and one box has one canonical host (`models.canonical_host`) |

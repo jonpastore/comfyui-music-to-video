@@ -1288,7 +1288,8 @@ def h_audio(args, progress):
     from the studio. ComfyUI's output is also where every anchor candidate and
     clip lands, so a generated track there is a file nobody will ever identify
     again. Each take is copied into the studio's own data dir and given an
-    assets row, exactly as an audio EDIT is.
+    assets row plus a takes row (T8-1): tags/lyrics/seed/duration/params
+    are stored on the take so a later song edit cannot rewrite the ask.
 
     Never writes over song["mp3_path"]. A take becomes the song's audio only
     when someone presses Use, which is the same route an edit goes through.
@@ -1328,17 +1329,28 @@ def h_audio(args, progress):
         # an existing track has to say so or it will be mistaken for an edit of
         # it. denoise below 1.0 re-synthesises the WHOLE clip -- there is no
         # region node on any backend -- so "resynthesised" means all of it.
+        origin = ("bridged" if span else
+                  "resynthesised" if args.get("source_path") else "generated")
+        meta = {
+            "mode": origin,
+            "tags": args["tags"], "lyrics": args.get("lyrics", ""),
+            "seconds": args["seconds"], "seed": args.get("seed"),
+            "denoise": args.get("denoise", 1.0),
+            "source_path": args.get("source_path") or "",
+            "bridge_start": (span or {}).get("start"),
+            "bridge_end": (span or {}).get("end"),
+            "model": models.default_for("audio")}
         db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
-               sid, "audio_gen", out, json.dumps({
-                   "mode": ("bridged" if span else
-                            "resynthesised" if args.get("source_path") else "generated"),
-                   "tags": args["tags"], "lyrics": args.get("lyrics", ""),
-                   "seconds": args["seconds"], "seed": args.get("seed"),
-                   "denoise": args.get("denoise", 1.0),
-                   "source_path": args.get("source_path") or "",
-                   "bridge_start": (span or {}).get("start"),
-                   "bridge_end": (span or {}).get("end"),
-                   "model": models.default_for("audio")}), time.time())
+               sid, "audio_gen", out, json.dumps(meta), time.time())
+        # T8-1: the ask is copied onto the take. insert_take never writes
+        # songs.mp3_path -- picking is a separate act (T8-2).
+        if sid:
+            db.insert_take(
+                sid, out, origin,
+                tags=args["tags"], lyrics=args.get("lyrics", ""),
+                seed=args.get("seed"), duration=args["seconds"],
+                params={k: meta[k] for k in (
+                    "denoise", "source_path", "bridge_start", "bridge_end", "model")})
         kept.append(out)
     progress(f"{len(kept)} take(s) kept in {outdir}")
     return {"path": kept[0], "takes": len(kept)}

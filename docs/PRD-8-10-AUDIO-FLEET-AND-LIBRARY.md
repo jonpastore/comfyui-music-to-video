@@ -73,9 +73,9 @@ named person does not ship before `T8-10` holds.
    cheapest of the three — the behaviour is there and correct; what is missing is
    the ability to prove a change did not break it. Everything else in the
    project renders through it.
-2. **TRD-8's take model**, because the audio stage is shipping candidates today
-   that cannot say what they were asked for, and every day of use makes that
-   history less recoverable.
+2. **TRD-8's take model.** New generations land as `takes` rows (`T8-1`); pick
+   (`T8-2`) and the three-path origin on every route (`T8-3`) are the remaining
+   half. Takes generated before `T8-1` still cannot say what they were asked for.
 3. **TRD-10's bulk edit**, which is unbuilt and self-contained.
 4. **TRD-10's advice rules**, which are mostly labelling and refusals over
    surfaces that already exist.
