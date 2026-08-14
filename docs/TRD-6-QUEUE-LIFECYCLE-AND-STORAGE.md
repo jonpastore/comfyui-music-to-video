@@ -282,4 +282,6 @@ current.
 | `T6-8` canonical identity | **partial** | `e20346f` | the HOST half is done — `models.canonical_host()`, one box one identity, 15 production rows repaired. The PATH half is untouched |
 | `T6-13` absent expectation means skip | **built** | this change | `qc.run` with `{}` emits no duration/frame_count; `_stamp_expect` with no sidecar writes no `expect_json`. Present expect still compares. `studio/test_trd6_queue.py` |
 | **`T6-13a` one duration authority** | **built** | this change | `app.clip_count`, `grok.generate_storyboard` and `h_qc` all read `songs.duration`; a re-ffprobe on those paths fails `test_t6_13a_songs_duration_is_the_authority_and_nothing_reprobes`. Asserted at 195.792 |
-| `T6-1`…`T6-7`, `T6-9`, `T6-10`, `T6-12`, `T6-14`, `T6-16` | **not built** | — | the pull queue, the lifecycle and cascade policy. **Jon decided 2026-08-13 to build this in full** rather than take `T6-13a` alone |
+| `T6-2`/`T6-3`/`T6-5`/`T6-7`/`T6-9`/`T6-10`/`T6-12` | **built** | `test_trd6_queue.py` | claim/land/transitions/cascade/repair copies `expect_json`. **T6-1** is still one studio thread plus Swarm assign — do not add a second pull queue |
+| `T6-6`/`T6-14` | **partial** | — | repair dest is a new path; handler writes are not one transaction |
+| `T6-16` no write lock across a long handler | **built** | this change | `test_t6_16_web_query_succeeds_during_long_handler`: concurrent `jobs.recent`/`queue_ctx` and BEGIN IMMEDIATE succeed while a fake handler is blocked |

@@ -8,7 +8,9 @@ import inspect
 import json
 import math
 import os
+import sqlite3
 import tempfile
+import threading
 import time
 
 from PIL import Image
@@ -491,3 +493,67 @@ def test_t6_13a_songs_duration_is_the_authority_and_nothing_reprobes():
     assert 'song["duration"]' in inspect.getsource(grok.generate_storyboard)
     assert 'song["duration"]' in inspect.getsource(appmod.clip_count)
     assert 'song["duration"]' in inspect.getsource(appmod.h_qc)
+
+
+# ----------------------------------------------------------------- T6-16 --
+
+def test_t6_16_web_query_succeeds_during_long_handler():
+    """T6-16: nothing holds a write transaction across a long handler.
+    A concurrent web read (the queue the pages poll) succeeds while a
+    fake render is in flight. A write lock held across that window
+    would make BEGIN IMMEDIATE on another connection time out."""
+    import app as appmod
+
+    _isolate()
+    inside = threading.Event()
+    release = threading.Event()
+
+    @jobs.handler("t6_long")
+    def _long(args, progress):
+        inside.set()
+        if not release.wait(5):
+            raise AssertionError("release never came")
+        return {"ok": True}
+
+    jid = jobs.enqueue("t6_long", {"who": "render"})
+    row = jobs._claim()
+    assert row["id"] == jid
+
+    err = []
+
+    def _work():
+        try:
+            jobs._run_one(row)
+        except Exception as e:
+            err.append(e)
+
+    worker = threading.Thread(target=_work, daemon=True)
+    worker.start()
+    assert inside.wait(2), "handler never started"
+
+    t0 = time.monotonic()
+    listed = jobs.recent()
+    active = jobs.active()
+    ctx = appmod.queue_ctx()
+    elapsed = time.monotonic() - t0
+    assert elapsed < 0.5, (
+        f"web-visible query blocked {elapsed:.2f}s during a long handler")
+    assert any(r["id"] == jid for r in listed), listed
+    assert active is not None and active["id"] == jid
+    assert any(e["job"]["id"] == jid for e in ctx["queue_active"]), ctx
+
+    other = sqlite3.connect(db.DB_PATH, timeout=0.3)
+    try:
+        other.execute("BEGIN IMMEDIATE")
+        other.execute("COMMIT")
+    except sqlite3.OperationalError as e:
+        raise AssertionError(
+            f"write lock held across the long handler: {e}") from e
+    finally:
+        other.close()
+
+    release.set()
+    worker.join(5)
+    assert not worker.is_alive()
+    assert not err, err
+    assert jobs.get(jid)["status"] == "done"
