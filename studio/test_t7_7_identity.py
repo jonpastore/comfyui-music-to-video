@@ -5,10 +5,30 @@ ref / UI pair), not the pose-plate person. No threshold, no vision model, no
 GPU. The hook fails when the identity path is missing or is the plate; a
 named, distinct identity path satisfies the prerequisite. The picture itself
 stays a human look.
+
+docs/TRD-4 T4-14: a nude compose that asserts a human body ("human form" in
+nude_wardrobe — the measured live-studio collapse) is the same defect as
+losing her. The hook flags that compose without rendering.
 """
 import os
+import sys
 
 import qc
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+import make_anchor
+
+
+# Measured live-studio nude_wardrobe from
+# docs/reviews/ANCHOR-FIELDS-HUMAN-BODY-grok-2026-08-13.md. That wording
+# composed a feline-headed woman with a human body.
+HUMAN_FORM_NUDE = (
+    "Completely naked adult body, fully bare and exposed, "
+    "jet-black skin uncovered over her whole human form."
+)
 
 
 UI_IDENTITY = "/refs/meowp_ui_front.png"
@@ -81,3 +101,50 @@ def test_t7_7_unasked_image_qc_does_not_emit_the_hook(tmp_path):
     Image.new("RGB", (32, 32), (80, 80, 80)).save(sheet)
     found = qc.check_image(str(sheet), {})
     assert _by_check(found, qc.IDENTITY_LOOK) == []
+
+
+def _compose_nude(nude_wardrobe, body=None):
+    """Real composer, not a string check on the field alone."""
+    anchor = make_anchor.anchor_from({
+        "identity": "Adult anthropomorphic black feline woman.",
+        "body": body or "Her entire body is covered in sleek jet-black fur.",
+        "nude_wardrobe": nude_wardrobe,
+    })
+    return make_anchor.prompt_for("front_nude", anchor)
+
+
+def test_t7_7_human_body_compose_flags():
+    """T4-14 / T7-7: nude_wardrobe 'human form' is the measured identity collapse.
+
+    A valid identity_path does not save it. The compose itself is the defect.
+    No GPU, no pixels.
+    """
+    composed = _compose_nude(HUMAN_FORM_NUDE)
+    assert "human form" in composed.lower(), composed
+    found = qc.check_identity_look(SHEET, {
+        "identity_path": UI_IDENTITY,
+        "plate_path": POSE_PLATE,
+        "composed": composed,
+        "nude_wardrobe": HUMAN_FORM_NUDE,
+    })
+    hit = _by_check(found, qc.IDENTITY_LOOK)
+    assert hit and hit[0]["verdict"] == qc.FLAG, found
+    detail = (hit[0]["detail"] or "").lower()
+    assert "human" in detail, hit[0]
+    measured = str(hit[0].get("measured") or "").lower()
+    assert "human form" in measured or "human form" in detail, hit[0]
+
+
+def test_t7_7_furred_nude_compose_is_not_a_human_body():
+    """T4-14 positive half: default nude compose still writes, without human form."""
+    composed = _compose_nude(make_anchor.NUDE_WARDROBE)
+    assert "human form" not in composed.lower(), composed
+    assert "bare skin" not in composed.lower(), composed
+    found = qc.check_identity_look(SHEET, {
+        "identity_path": UI_IDENTITY,
+        "plate_path": POSE_PLATE,
+        "composed": composed,
+        "nude_wardrobe": make_anchor.NUDE_WARDROBE,
+    })
+    hit = _by_check(found, qc.IDENTITY_LOOK)
+    assert hit and hit[0]["verdict"] == qc.PASS, found

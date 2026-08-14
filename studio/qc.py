@@ -77,6 +77,10 @@ SILENCE_FLOOR_DB = -60.0
 # itself is human-judged; this is the finding kind for the offline hook.
 IDENTITY_LOOK = "identity_look"
 
+# docs/TRD-4 T4-14: a nude compose that asserts a human body is the measured
+# identity collapse (cat head on a human form). Offline, no pixels.
+HUMAN_BODY_PHRASES = ("human form", "human body", "human skin", "bare skin")
+
 
 def finding(path, kind, check, verdict, detail, measured=None, expected=None,
             unit=None, remedy=None):
@@ -404,10 +408,22 @@ def _norm_ref(value):
     return os.path.normpath(text) if text else ""
 
 
+def _compose_text(expect):
+    return " ".join(str(expect.get(k) or "") for k in ("composed", "nude_wardrobe"))
+
+
+def _human_body_hits(text):
+    low = (text or "").lower()
+    return [p for p in HUMAN_BODY_PHRASES if p in low]
+
+
 def check_identity_look(path, expect, kind="image"):
     """T7-7 hook. No pixels, no model: name the identity ref, and it must not
     be the pose plate. Missing identity_path flags. A distinct named path
     passes the prerequisite; the picture stays a human look.
+
+    A compose that asserts a human body (T4-14: nude_wardrobe "human form")
+    flags even when the identity path is the chosen ref.
     """
     expect = expect or {}
     identity = _norm_ref(expect.get("identity_path"))
@@ -422,6 +438,14 @@ def check_identity_look(path, expect, kind="image"):
         return [finding(path, kind, IDENTITY_LOOK, FLAG,
                         "identity_path is the pose plate; T7-7 requires the chosen identity ref",
                         identity, "identity_path != plate_path", None, remedy)]
+    hits = _human_body_hits(_compose_text(expect))
+    if hits:
+        return [finding(path, kind, IDENTITY_LOOK, FLAG,
+                        f"composed prompt asserts {hits[0]}; "
+                        "T4-14 / T7-7 refuse a human-body sheet",
+                        hits[0], "not a human-body compose", None,
+                        "drop human-body wording from nude_wardrobe; "
+                        "surface comes from the body clause")]
     return [finding(path, kind, IDENTITY_LOOK, PASS,
                     f"identity ref {os.path.basename(identity)}; T7-7 look remains human-judged",
                     identity, identity, None)]
