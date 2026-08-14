@@ -187,24 +187,14 @@ def clip_seconds(scene_seconds=None):
     count, so one scene really is one clip, but the count never depends on
     grok having complied.
 
-    IT RETURNS CHUNK TODAY WHATEVER IT IS PASSED, deliberately and temporarily.
-    The renderer still builds every clip at LTX25_LEN frames, which IS CHUNK
-    seconds -- nothing in build_song takes a length yet. Honouring scene_seconds
-    here before the RENDERER honours it would make the approve grid, the time
-    meter and the reference count all expect a number of clips that never gets
-    rendered: the same mismatch app.clip_count's docstring records, arriving
-    from the other direction. A test caught exactly that within a minute of it
-    being written, because the storyboard form defaults scene_seconds to 4.0 and
-    every storyboard would have silently re-timed to 4.0s clips.
-
-    The argument is threaded through every caller and the value is recorded on
-    the storyboards row, so the day the renderer takes a length this is a
-    one-line change with its call sites already right. What it needs first is
-    docs/TRD-2 `T2-12a`: seconds rounded to a LEGAL 8n+1 frame count at the
-    clip's fps. Until then this is one honest constant instead of six scattered
-    ones.
+    A recorded scene_seconds is rounded to the nearest legal 8n+1 frame count
+    at LTX_FPS (docs/TRD-2 T2-12a, TRD-5 T5-10) so storyboard arithmetic and
+    the renderer share one number. None stays CHUNK so a storyboard written
+    before the column existed does not change length.
     """
-    return CHUNK
+    if scene_seconds is None:
+        return CHUNK
+    return legal_frames(scene_seconds, LTX_FPS) / LTX_FPS
 
 
 def legal_frames(seconds, fps):
@@ -862,6 +852,10 @@ def demo():
     assert legal_frames(77 / 16.0, 16.0) == 81
     assert legal_frames(CHUNK, LTX_FPS) == 81
     assert (legal_frames(195.792 / 7, LTX_FPS) - 1) % 8 == 0
+    # clip_seconds honours that length; old storyboards (None) stay on CHUNK
+    assert clip_seconds(None) == CHUNK
+    assert clip_seconds(30.0) == legal_frames(30.0, LTX_FPS) / LTX_FPS
+    assert n_clips_for(195.792, 30.0) == 7
 
     # T5-1: --refine on ltx25 adds a second pass. Restoring the early return
     # that skipped refine leaves these two graphs identical and this fails.

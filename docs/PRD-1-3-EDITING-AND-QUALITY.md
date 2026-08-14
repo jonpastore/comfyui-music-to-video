@@ -138,12 +138,12 @@ unbuilt work and are not" — the ledger with line counts is DDD §1.
 
 ### P0 — unblock, then separate
 
-1. **`T2-12a` — round a scene length to a legal frame count.** Everything about
-   variable clip length is stuck behind this one item. `T2-13a` records why:
-   `build_song.clip_seconds()` returns `CHUNK` whatever it is passed, because the
-   renderer still builds every clip at `LTX25_LEN` frames, and honouring the
-   stored `scene_seconds` first would re-time every storyboard while 4.8125 s
-   clips keep rendering. **Nothing in P5 can start until this lands.**
+1. **`T2-12a` — round a scene length to a legal frame count.** Landed for the
+   divisor: `clip_seconds(scene_seconds)` is `legal_frames / LTX_FPS`, and
+   `n_clips_for` is `ceil(duration / that)`, so song length owns clip count.
+   `None` stays `CHUNK` — a storyboard written before the column does not
+   re-time. The renderer still builds every clip at `LTX25_LEN`; `T2-13a` is
+   the remaining unblock for P5.
 2. **The service split**, TRD-1 and TRD-2 (`T6-A3`). `qc_service.py` already
    demonstrates it and is the pattern to copy. Doing this after the features
    means writing them twice.

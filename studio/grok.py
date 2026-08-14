@@ -22,7 +22,8 @@ _REPO_ROOT = os.environ.get("STUDIO_SCRIPTS") or os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _REPO_ROOT)
 from build_storyboard import parse_sections, to_md, energy  # noqa: E402
-from build_song import SHOT_RULES, CHUNK, LTX_FPS, legal_frames, guidance_seconds  # noqa: E402
+from build_song import (  # noqa: E402
+    SHOT_RULES, CHUNK, LTX_FPS, legal_frames, guidance_seconds, n_clips_for)
 
 import tiers  # noqa: E402  (ContentRefused must be catchable by type)
 
@@ -470,7 +471,7 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
         # 20-50 scenes and protected nothing our own composer had not generated.
         # T2-12a: stamp the legal 8n+1 length so storyboard arithmetic and the
         # renderer share one number. Clip COUNT still comes from song duration
-        # (n_scenes = ceil(duration / scene_seconds)), never from this field.
+        # (n_scenes = n_clips_for(duration, scene_seconds)), never from this field.
         planned = scene_seconds if scene_seconds else guidance_seconds(s)
         frames = legal_frames(planned, LTX_FPS)
         s["frames"] = frames
@@ -676,7 +677,8 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
     # sections is still read: it is the min_scenes floor for the UNPINNED path
     # (scene_seconds=None), where the model chooses the count and one scene per
     # section is the right guidance.
-    n_scenes = math.ceil(song["duration"] / scene_seconds) if scene_seconds else None
+    # One implementation: duration / legal scene_seconds (T2-12a / T2-13).
+    n_scenes = n_clips_for(song["duration"], scene_seconds) if scene_seconds else None
 
     exemplar, exemplar_md, from_file = _exemplar()
     if progress and not from_file:

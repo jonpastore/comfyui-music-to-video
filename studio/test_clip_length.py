@@ -144,13 +144,94 @@ def test_validate_rejects_a_non_8n1_requested_length():
         grok.validate(sb, expect_scenes=2)
 
 
+def test_clip_seconds_none_stays_chunk_for_old_storyboards():
+    """NULL scene_seconds is a pre-T2-12a row. Do not re-time it."""
+    assert build_song.clip_seconds() == build_song.CHUNK
+    assert build_song.clip_seconds(None) == build_song.CHUNK
+
+
+def test_clip_seconds_honours_legal_frames_not_chunk():
+    """T2-12a / T5-10: the divisor is the legal 8n+1 length at LTX fps.
+
+    Mutation: `return CHUNK` → this fails.
+    Mutation: `return float(scene_seconds)` without rounding → 30.0 is not 505/LTX_FPS.
+    """
+    frames = build_song.legal_frames(30.0, build_song.LTX_FPS)
+    want = frames / build_song.LTX_FPS
+    got = build_song.clip_seconds(30.0)
+    assert (frames - 1) % 8 == 0
+    assert frames == 505
+    assert got == want
+    assert got != build_song.CHUNK
+    assert got != 30.0
+    # already-legal CHUNK request does not move old timing
+    assert build_song.clip_seconds(build_song.CHUNK) == build_song.CHUNK
+
+
 def test_clip_count_follows_song_length_not_scene_count():
     """Do not reverse the invariant: duration is the dividend (T2-13 / §3.4)."""
     assert build_song.n_clips_for(195.792) == math.ceil(195.792 / build_song.CHUNK)
     assert build_song.n_clips_for(195.792, scene_seconds=30.0) == math.ceil(
         195.792 / build_song.clip_seconds(30.0))
-    # renderer still builds CHUNK clips -- honouring 30s here is T2-13a, not this
-    assert build_song.clip_seconds(30.0) == build_song.CHUNK
+    # 195.792 / CHUNK is 41; song length / legal ~30s is 7
+    assert build_song.n_clips_for(195.792, scene_seconds=30.0) == 7
+    assert build_song.n_clips_for(195.792, scene_seconds=30.0) != math.ceil(
+        195.792 / build_song.CHUNK)
+
+
+def test_generate_storyboard_asks_for_n_clips_for_not_raw_seconds():
+    """Clip COUNT is n_clips_for, not ceil(duration / raw scene_seconds).
+
+    11.6 / 4.0 is 3; legal 4.0s at LTX fps is ~3.86s, so 11.6 / legal is 4.
+    Mutation: generate_storyboard keeps math.ceil(duration / scene_seconds) → red.
+    """
+    grok = _grok()
+    duration = 11.6
+    scene_seconds = 4.0
+    want = build_song.n_clips_for(duration, scene_seconds)
+    assert want != math.ceil(duration / scene_seconds)
+    lyrics = "[A]\na\n[B]\nb\n[C]\nc\n[D]\nd\n"
+    song = {"title": "T", "album": "A", "slug": "t", "duration": duration, "genre": "pop"}
+    cameras = ("wide", "close", "low", "over-shoulder")
+    scenes = [
+        {"scene_number": i, "name": f"S{i}", "cue": "Verse",
+         "duration_guidance": "4 sec", "story": f"s{i}", "camera": cameras[(i - 1) % 4],
+         "motion": "walk", "lighting": "neon", "location": "alley",
+         "image_prompt": f"p{i}", "video_motion_prompt": f"m{i}",
+         "negative_prompt": "blurry"}
+        for i in range(1, want + 1)
+    ]
+    orig = httpx.stream
+    orig_key = grok._api_key
+    orig_ex = grok._exemplar
+
+    class _Resp:
+        status_code = 200
+
+        def iter_lines(self):
+            body = json.dumps({"scenes": scenes})
+            yield "data: " + json.dumps({"choices": [{"delta": {"content": body}}]})
+            yield "data: [DONE]"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    grok._api_key = lambda: "test-key"
+    grok._exemplar = lambda: ({"scenes": []}, "", False)
+    httpx.stream = lambda *a, **k: _Resp()
+    try:
+        sb = grok.generate_storyboard(
+            lyrics, "pg13", "TEST GUARD", "neon lock", song,
+            model="grok-test", scene_seconds=scene_seconds)
+    finally:
+        httpx.stream = orig
+        grok._api_key = orig_key
+        grok._exemplar = orig_ex
+
+    assert len(sb["scenes"]) == want
 
 
 # ------------------------------------------------------------------ T5-1 --

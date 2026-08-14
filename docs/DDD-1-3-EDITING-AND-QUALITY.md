@@ -26,7 +26,7 @@ is named.
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2: JSON-canonical arc, `to_md`, `validate`, `for_song`, screened both directions | built |
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning, reused by `T3-20` | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
-| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow` | the one timing owner; `clip_seconds` is pinned, §5.5 |
+| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow` | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5 |
 | `studio/db.py` | 559 | schema | `automation`, `findings`, `artefacts` landed; two `sets` columns did not, §4 |
 | `studio/vision.py` | 516 | VLM calls, local-first | **not** tier 2, §5.6 |
 
@@ -258,22 +258,19 @@ render, bounded to a span, and is the only preview that claims accuracy.
 
 ### 5.5 Clip length: one blocked chain, and the order it unblocks in
 
-`build_song.clip_seconds()` **returns `CHUNK` whatever it is passed**, and its
-docstring says why: the renderer still builds every clip at `LTX25_LEN` frames,
-so honouring the stored `scene_seconds` first would re-time every storyboard to
-4.0 s (the form's default) while 4.8125 s clips keep rendering — the approve-grid
-bug from the other direction, and a test caught it within a minute.
-
-The argument is already threaded through every caller and the value is already
-recorded on the `storyboards` row. So the order is fixed and short:
+`build_song.clip_seconds(scene_seconds)` **returns the legal 8n+1 length** at
+`LTX_FPS`. `None` is a storyboard written before the column existed and still
+returns `CHUNK`, so nothing already on disk changes length. `n_clips_for` is
+`ceil(duration / clip_seconds(...))` — duration is the dividend, the legal
+length is the divisor, the count is ours.
 
 1. `T2-12a`: seconds → nearest **legal** frame count at the clip's fps. F-2's
    rule is that `frames ≡ 1 (mod 8)` serves both models, since every `8n+1` is
    also `4(2n)+1`; the tie-break is half-to-even (77 is equidistant from 73 and
-   81, and the code lands on 81).
-2. The renderer takes a length.
-3. `clip_seconds` returns it — **one line**, call sites already correct.
-4. Only then `T2-13a`, `T2-13c` (the approve grid must still show every clip),
+   81, and the code lands on 81). **Built.** `clip_seconds` honours it.
+2. The renderer takes a length. **Not this slice** — graphs still emit
+   `LTX25_LEN`.
+3. Only then `T2-13a`, `T2-13c` (the approve grid must still show every clip),
    `T2-8`/`T2-9`.
 
 `W1-4` sits alongside and is a **prompt**, not code: `grok._user_prompt` still
@@ -344,10 +341,10 @@ scored, so "did the repair help" is answerable rather than asserted.
 The PRD's §6 in dependency form. An arrow is a hard edge taken from the
 documents, not a preference.
 
-    T6-13a (songs.duration)  ->  T2-12a (legal frame count)  ->  renderer takes a length
-                                                                                    ->  clip_seconds honours it
-                                                                                    ->  T2-13a, T2-13c, T2-8, T2-9
-                                                                                    ->  W2 per-scene models (T2-48)
+    T6-13a (songs.duration)  ->  T2-12a (legal frame count + clip_seconds honours it)
+                                 ->  renderer takes a length
+                                 ->  T2-13a, T2-13c, T2-8, T2-9
+                                 ->  W2 per-scene models (T2-48)
 
     qc_service pattern  ->  sets_service     ->  clock/rounding, peaks, preview
                                              ->  master fix (5.2)  ->  audiences (T1-18..T1-20)

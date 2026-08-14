@@ -213,7 +213,7 @@ current.
 | criterion | state | commit | what was measured |
 |---|---|---|---|
 | `T5-8` upscaler availability is `True`/`False`, never `None` | **built** | earlier | `ltx25_latent_upscaler` catalogued, and `models.installed()` taught ComfyUI's newer enum shape — it had been seeing **7 files on a box with 37** |
-| `T5-1`…`T5-4` refine on LTX | **not built** | — | **`--refine` is still a silent no-op on `ltx25`, the catalogue default.** `build_song.workflow()` returns for the LTX families before the refine block |
+| `T5-1`…`T5-4` refine on LTX | **built (graph)** | `test_clip_length.py` | `_refine_ltx` attaches a second pass; silent no-op is gone. T5-2 MAD on a real clip is **NOT MEASURED** |
 | `T5-5`/`T5-6` the VRAM measurement | **not measured** | — | the base render already peaks at 23.4 of 23.9 GB on cerberus; whether variant B fits is unknown and is the thing to measure first |
 | `T5-7` geometry at assembly | **not built** | — | |
-| `T5-9`/`T5-10` ceilings and the legal-length rule | **documented, not enforced** | today | TRD-2 now cites this document for both rather than carrying its own copy; nothing yet refuses an illegal length |
+| `T5-9`/`T5-10` ceilings and the legal-length rule | **partial** | `legal_frames` + `clip_seconds` | planner rounds to 8n+1; `clip_seconds` honours it so song length owns clip count. `None` stays `CHUNK`. Renderer still emits `LTX25_LEN`. `T5-9` ceiling enforcement is not this slice |

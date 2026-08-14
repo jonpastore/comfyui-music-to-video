@@ -707,7 +707,7 @@ current.
 | `T2-8a` the section floor is gone | **built** | `881d7cf` | both live sites moved together; the `validate()` site was the one that would have regenerated 25 scenes and made the formula fix look inert |
 | `T2-35` every enumerated file catalogued | **built** | earlier | measured live: cerberus enumerates 36 files across seven loaders, 14 were unaccounted, now zero |
 | `T2-41` scene timing has one implementation | **built** | earlier | `app.storyboard_scenes` no longer computes `idx * CHUNK` inline |
-| **`T2-12a` legal frame count** | **NOT BUILT — and it blocks the most** | — | the whole variable-clip-length chain waits here. `build_song.clip_seconds()` still returns `CHUNK` whatever it is passed, deliberately, because the renderer builds every clip at `LTX25_LEN` |
+| **`T2-12a` legal frame count** | **built (divisor)** | `clip_seconds` | `legal_frames` rounds to 8n+1; `clip_seconds(scene_seconds)` returns that length so `n_clips_for` is `ceil(duration / legal)`. `None` stays `CHUNK` — old storyboards do not re-time. Renderer still emits `LTX25_LEN` until `T2-13a` |
 | `T2-13a`/`T2-13c` approve grid | **blocked** | — | on `T2-12a` |
 | `T2-14a`…`T2-14c` grok's prompt quantum | **not built** | — | `_user_prompt` still tells the model clips are fixed at 4.8125 s |
 | §4 wands, §5 meter, §5.3 casting | **not built** | — | |

@@ -857,14 +857,17 @@ def test_clips_form_offers_only_tiers_with_full_approved_refs():
         r = client.get(f"/songs/{sid}")
         assert "no tier has fully approved refs yet" in r.text
 
-        # 3 clips, from the 12.3 s stub duration -- NOT the storyboard's 2
-        # scenes. Approving only the first two must leave the tier unoffered.
-        for i in range(2):
+        # clip COUNT is duration / legal scene_seconds, not the storyboard's
+        # 2 stub scenes. Approving all but the last must leave the tier unoffered.
+        n = appmod.clip_count(song, appmod.scene_seconds_for(sid, "pg13"))
+        assert n >= 2, n
+        for i in range(n - 1):
             db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created)
                       VALUES (?,'pg13',?,?,?,1,?)""", sid, i, f"r{i}.png", i, time.time())
         assert "no tier has fully approved refs yet" in client.get(f"/songs/{sid}").text
         db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created)
-                  VALUES (?,'pg13',2,'r2.png',2,1,?)""", sid, time.time())
+                  VALUES (?,'pg13',?,'r_last.png',?,1,?)""",
+               sid, n - 1, n - 1, time.time())
 
         r2 = client.get(f"/songs/{sid}")
         assert "no tier has fully approved refs yet" not in r2.text
@@ -1812,7 +1815,7 @@ def test_clip_render_defaults_to_the_catalogue_and_carries_the_video_model_throu
         client.post(f"/songs/{sid}/storyboard", data={"tier": "r"})
         wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC",
                         sid)["id"])
-        for i in range(appmod.clip_count(song)):
+        for i in range(appmod.clip_count(song, appmod.scene_seconds_for(sid, "r"))):
             _a_ref(sid, "r", i, seed=7000 + i, approved=1)
 
         # default: whatever the CATALOGUE says, not a value copied into the web
@@ -1848,7 +1851,7 @@ def test_driving_clips_are_refused_for_i2v_which_has_no_such_input():
         client.post(f"/songs/{sid}/storyboard", data={"tier": "r"})
         wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC",
                         sid)["id"])
-        for i in range(appmod.clip_count(song)):
+        for i in range(appmod.clip_count(song, appmod.scene_seconds_for(sid, "r"))):
             _a_ref(sid, "r", i, seed=8000 + i, approved=1)
 
         r = client.post(f"/songs/{sid}/clips",

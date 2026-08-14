@@ -235,7 +235,10 @@ Line height: 1.5 body, 1.25 headings. One family (the existing system-ui stack)
 plus `ui-monospace` for one job only — **numbers that are compared down a
 column**: durations, frame counts, measured-vs-expected in a finding, file sizes.
 Tabular figures there (`font-variant-numeric: tabular-nums`), because a column of
-durations that does not align is a column nobody scans.
+durations that does not align is a column nobody scans. Storyboard and
+approve-grid clip duration is `build_song.clip_seconds(scene_seconds)` — the
+legal 8n+1 length at the clip fps, not a page-local 4.8125. A row whose
+`scene_seconds` is NULL (generated before the column) still reads as `CHUNK`.
 
 ### 5.3 Space and radius
 
