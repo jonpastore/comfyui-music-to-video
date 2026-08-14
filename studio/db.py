@@ -142,7 +142,8 @@ CREATE TABLE IF NOT EXISTS set_items (
 -- because pipeline knows the backend at the moment it has the file and those
 -- four tables are written later, in four different places, by app.py. One
 -- write where the render lands cannot be forgotten by the next gen_* wrapper;
--- four columns can. Join on path when you want it per artefact.
+-- four columns can. Join on path when you want it per artefact. path is one
+-- resolved absolute form (jobs.canonical_path); two spellings, one row (T6-8).
 --
 -- `backend` is Swarm's numeric id and is NOT stable -- adding a backend
 -- renumbers them (studio/models.py BACKEND_STABILITY says the same thing and

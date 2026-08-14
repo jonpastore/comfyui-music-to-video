@@ -230,12 +230,17 @@ def _png(path, size=(64, 64), split=True):
 
 
 def _spellings(data, name="sheet.png"):
-    """Two strings for one file: `..` vs `.` so a raw INSERT makes two rows."""
-    os.makedirs(os.path.join(data, "sub"), exist_ok=True)
-    path = os.path.join(data, name)
-    a = os.path.join(data, "sub", "..", name)
-    b = os.path.join(data, ".", name)
+    """Two strings for one file: symlink vs dotted path. abspath keeps both."""
+    real_dir = os.path.join(data, "real")
+    os.makedirs(real_dir, exist_ok=True)
+    path = os.path.join(real_dir, name)
+    link_dir = os.path.join(data, "via")
+    if not os.path.lexists(link_dir):
+        os.symlink(real_dir, link_dir)
+    a = os.path.join(link_dir, name)
+    b = os.path.join(real_dir, ".", name)
     assert a != b
+    assert os.path.abspath(a) != os.path.abspath(b)
     return path, a, b
 
 

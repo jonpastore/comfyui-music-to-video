@@ -213,7 +213,9 @@ written at submit time by `pipeline._stamp_expect` from
 distinguishing a box that went away from a workflow a box refused, which arrive
 under the same "No backends match" headline (`T6-4`); WAL on, and the
 `MIGRATIONS` convention that every added column works NULL on existing rows
-(`T6-17`); the `findings` upsert idempotent under re-run (`T6-15`).
+(`T6-17`); the `findings` upsert idempotent under re-run (`T6-15`);
+`jobs.canonical_path` at write time so `findings.path` joins `artefacts.path`
+and two spellings of one file are one row (`T6-8`).
 
 **The shape of what is not:**
 
@@ -223,9 +225,9 @@ under the same "No backends match" headline (`T6-4`); WAL on, and the
   all read that column; a re-ffprobe on those paths fails
   `test_t6_13a_songs_duration_is_the_authority_and_nothing_reprobes`.
   `DDD-1-3` §6's chain now starts at `T6-13a`.
-- **Identity before lifecycle before queue.** `T6-8`'s canonical path is what
-  `findings` and `artefacts` join on, and every later row keys off it. Cascade
-  policy is stated **per table**, not inherited from whatever sqlite does.
+- **Identity before lifecycle before queue.** `T6-8`'s path is the join key
+  later rows attach to. Cascade policy is stated **per table**, not inherited
+  from whatever sqlite does.
 - **`T6-2` is the criterion that makes chains safe**: "ready" expressed
   separately from "queued", because a chained clip needs its predecessor's last
   frame to exist (TRD-2 `T2-11`).

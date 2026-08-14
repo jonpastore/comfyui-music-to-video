@@ -93,8 +93,8 @@ separation was four documents and twelve criteria for four facts before
   call sites is not a property a per-function check can see.** Wherever a design
   collapses a decision to one application point — `mixer.item_chains`,
   `mixer.set_duration`, `build_song.clip_plan`, `effects.measure_loudness`,
-  `models.canonical_host`, `screen_prompt_field` — the criterion goes *through*
-  it, not around it.
+  `models.canonical_host`, `jobs.canonical_path`, `screen_prompt_field` — the
+  criterion goes *through* it, not around it.
 
 Two rules stay with their documents because they are genuinely local: TRD-2
 §10.3's recorded-fixture rule for criteria that need a language model, and
@@ -279,7 +279,7 @@ current.
 | `T6-15` the findings upsert is idempotent | **built** | earlier | |
 | `T6-17` migrations keep old rows working | **convention, held** | earlier | every column added this week works NULL |
 | `T6-A7`…`T6-A10` verification rules | **new today** | today | consolidated here from all ten documents, which had already drifted. `T6-A10` is session B's: assert through the shared entry point |
-| `T6-8` canonical identity | **partial** | `e20346f` | the HOST half is done — `models.canonical_host()`, one box one identity, 15 production rows repaired. The PATH half is untouched |
+| `T6-8` canonical identity | **built** | this change | HOST: `models.canonical_host()`. PATH: `jobs.canonical_path()` at write time (`jobs.land`, `qc_service.record` / `run_artefact`). Symlink vs dotted path lands as one artefacts row; findings join that path. `studio/test_trd6_queue.py` |
 | `T6-13` absent expectation means skip | **built** | this change | `qc.run` with `{}` emits no duration/frame_count; `_stamp_expect` with no sidecar writes no `expect_json`. Present expect still compares. `studio/test_trd6_queue.py` |
 | **`T6-13a` one duration authority** | **built** | this change | `app.clip_count`, `grok.generate_storyboard` and `h_qc` all read `songs.duration`; a re-ffprobe on those paths fails `test_t6_13a_songs_duration_is_the_authority_and_nothing_reprobes`. Asserted at 195.792 |
 | `T6-2`/`T6-3`/`T6-5`/`T6-7`/`T6-9`/`T6-10`/`T6-12` | **built** | `test_trd6_queue.py` | claim/land/transitions/cascade/repair copies `expect_json`. **T6-1** is still one studio thread plus Swarm assign — do not add a second pull queue |
