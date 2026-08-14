@@ -1730,7 +1730,7 @@ def song_peaks(id: int, z: int = 0):
         z = max(0, int(z))
     except (TypeError, ValueError):
         z = 0
-    pairs = mixer.peaks_from_path(song.get("mp3_path"), z=z)
+    pairs = mixer.peaks_from_path(song["mp3_path"], z=z)
     return {"song_id": id, "z": z, "n": len(pairs), "pairs": pairs}
 
 
