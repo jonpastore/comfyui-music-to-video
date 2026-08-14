@@ -2095,7 +2095,8 @@ def demo():
         out_bm_video = os.path.join(tmpdir, "set_beatmatch.mp4")
         render_set(bm_video_items, out_bm_video)
         pred_bm_video = set_duration(bm_video_items)
-        assert abs(probe(out_bm_video)["duration"] - pred_bm_video) <= 0.3
+        actual = probe(out_bm_video)["duration"]
+        assert abs(actual - pred_bm_video) <= 0.1, f"beatmatch video duration drift: pred={pred_bm_video:.3f} actual={actual:.3f}"
 
         bm_audio_items = [{"audio": beat_clip, "transition": "fade", "secs": 2.5,
                            "beatmatch": True, "beat_grid": grid4, "downbeat_offset": 0},
@@ -2103,7 +2104,8 @@ def demo():
         out_bm_audio = os.path.join(tmpdir, "mix_beatmatch.mp3")
         mix_audio(bm_audio_items, out_bm_audio)
         pred_bm_audio = set_duration(bm_audio_items, key="audio")
-        assert abs(probe(out_bm_audio)["duration"] - pred_bm_audio) <= 0.3
+        actual_audio = probe(out_bm_audio)["duration"]
+        assert abs(actual_audio - pred_bm_audio) <= 0.1, f"beatmatch audio duration drift: pred={pred_bm_audio:.3f} actual={actual_audio:.3f}"
 
         # ---- splice_bridge: the cut-from-the-middle ACE-Step cannot do.
         # A DIFFERENTIAL on the audio itself, not just on the duration: the

@@ -229,7 +229,9 @@ def demo():
 
     os.environ.pop("XAI_API_KEY", None)
     real_file = PROVIDERS["xai"]["file"]
+    real_openai_file = PROVIDERS["openai"]["file"]
     PROVIDERS["xai"]["file"] = ""          # ignore this box's real key file
+    PROVIDERS["openai"]["file"] = ""       # ignore real openai.env so test .env is consulted
     try:
         assert get("xai") == "", "a secret appeared from nowhere"
         assert get("no-such-provider") == ""
@@ -277,12 +279,16 @@ def demo():
         #    files -- that is how the model name travels beside the key
         global ENV_FILE
         real_env_file = ENV_FILE
-        ENV_FILE = os.path.join(tempfile.mkdtemp(), ".env")
-        with open(ENV_FILE, "w") as f:
+        test_env_file = os.path.join(tempfile.mkdtemp(), ".env")
+        with open(test_env_file, "w") as f:
             f.write("OPENAI_API_KEY=sk-from-dotenv\nSTUDIO_OPENAI_MODEL=gpt-test-9\n")
         try:
             os.environ.pop("OPENAI_API_KEY", None)
-            assert get("openai") == "sk-from-dotenv", "the .env fallback was not consulted"
+            # setting() and get() both consult ENV_FILE for openai key (no provider-specific file in test)
+            # temporarily override the module global
+            original_env_file = ENV_FILE
+            ENV_FILE = test_env_file
+            assert get("openai") == "sk-from-dotenv", f"the .env fallback was not consulted (got {get('openai')!r})"
             assert setting("STUDIO_OPENAI_MODEL", "openai") == "gpt-test-9"
             assert setting("STUDIO_NOTHING_SET") == ""
             # the environment still wins, for settings as well as secrets
@@ -292,7 +298,7 @@ def demo():
             src = {s["name"]: s for s in status()}["openai"]["source"]
             assert ".env" in src, f"status did not name the file the key came from: {src}"
         finally:
-            ENV_FILE = real_env_file
+            ENV_FILE = original_env_file
 
         # 7. an unreadable key file is not a crash -- the caller is told there
         #    is no secret, which is true
@@ -302,6 +308,7 @@ def demo():
         assert get("xai") == "", "a corrupt key file was not handled"
     finally:
         PROVIDERS["xai"]["file"] = real_file
+        PROVIDERS["openai"]["file"] = real_openai_file
     print("creds.py demo OK")
 
 

@@ -402,8 +402,8 @@ def test_t6_candidate_storage_invariant_preserves_expect_json_on_repair():
     """T6 link (candidate storage invariants): repair copies .expect.json from original (T6-12).
     Mutation: repair overwrites without expect or drops it → this fails.
     One behavior: invariants between T5 render and T6 QC/approve."""
-    # uses patterns from test_trd6_queue.py + test_qc_approve.py
-    assert True, "placeholder that will be mutated to failing assertion on storage"
+    from test_trd6_queue import test_t6_12_repair_links_original_expect
+    test_t6_12_repair_links_original_expect()  # full TRD-6 approve/repair/JSON/no-overwrite/invariants exercised
 
 
 def test_legal_frames_enforces_8n1_for_both_models_t5_10():
