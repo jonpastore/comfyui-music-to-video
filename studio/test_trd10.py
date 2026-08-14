@@ -1,9 +1,12 @@
 """T10-6: a library bulk edit is one transaction (T6-14 on this surface).
 
 POST /songs/genres is the shared entry point the Library page already calls.
+Genre fields only — not a second lyrics system.
+
 The positive half writes every target row; an induced mid-batch failure
 writes none. Measured on stored rows so an endpoint that always refuses
-cannot stay green.
+cannot stay green. A BEFORE UPDATE trigger is the crash: per-row db.run
+would already have committed the first six.
 """
 import time
 
@@ -61,54 +64,25 @@ def test_t10_6_successful_multi_row_bulk_writes_all_target_rows():
     assert _fields(other) == BEFORE
 
 
-class _ConnProxy:
-    def __init__(self, conn, execute):
-        object.__setattr__(self, "_conn", conn)
-        object.__setattr__(self, "execute", execute)
-
-    def __getattr__(self, name):
-        return getattr(self._conn, name)
-
-
-def _fail_on_nth_songs_update(n):
-    """Raise before the nth UPDATE of songs, via db.conn().execute / db.run.
-
-    A single `UPDATE songs SET … WHERE id IN (…)` is already one statement
-    and counts as one — that shape is atomic, so the first (only) write
-    is the one that fails and stored rows stay put.
-    """
-    state = {"n": 0, "on": True}
-    real_conn = db.conn
-
-    def wrapped_conn():
-        c = real_conn()
-
-        def execute(sql, *args, **kwargs):
-            if state["on"]:
-                text = sql if isinstance(sql, str) else ""
-                head = text.strip().upper().split()
-                if head[:2] == ["UPDATE", "SONGS"]:
-                    state["n"] += 1
-                    if state["n"] >= n:
-                        raise RuntimeError("induced mid-batch failure")
-            return c.execute(sql, *args, **kwargs)
-
-        return _ConnProxy(c, execute)
-
-    db.conn = wrapped_conn
-
-    def restore():
-        state["on"] = False
-        db.conn = real_conn
-
-    return restore
-
-
 def test_t10_6_induced_mid_batch_failure_writes_none():
-    """Twelve songs edited and a crash halfway leaves twelve unedited, not six."""
+    """Twelve songs edited and a crash halfway leaves twelve unedited, not six.
+
+    A BEFORE UPDATE trigger raises on the seventh target. Per-row db.run would
+    already have committed six; one transaction writes none. A single
+    UPDATE … WHERE id IN (…) fires the trigger per row and is still one
+    statement, so it stays atomic too.
+    """
     ids = _twelve("t10-6-boom")
     other = _control("t10-6-boom")
-    restore = _fail_on_nth_songs_update(7)
+    boom = int(ids[6])
+    db.run("DROP TRIGGER IF EXISTS t10_6_boom")
+    db.run(
+        f"""CREATE TRIGGER t10_6_boom
+            BEFORE UPDATE ON songs
+            WHEN NEW.id = {boom}
+            BEGIN
+              SELECT RAISE(ROLLBACK, 'induced mid-batch failure');
+            END""")
     try:
         with TestClient(appmod.app, raise_server_exceptions=False) as client:
             r = client.post("/songs/genres", json={"song_ids": ids, **AFTER})
@@ -118,4 +92,4 @@ def test_t10_6_induced_mid_batch_failure_writes_none():
             f"stored={[ _fields(sid) for sid in ids ]}")
         assert _fields(other) == BEFORE
     finally:
-        restore()
+        db.run("DROP TRIGGER IF EXISTS t10_6_boom")
