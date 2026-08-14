@@ -1700,11 +1700,19 @@ async def bulk_set_genres(request: Request):
     if not fields:
         raise HTTPException(400, "pick a genre to apply")
     sets = ", ".join(f"{k}=?" for k in fields)
+    existing = [sid for sid in ids if db.one("SELECT id FROM songs WHERE id=?", sid)]
+    # One transaction (T10-6 / T6-14): a crash mid-loop rolls back every row.
+    c = db.conn()
+    c.execute("BEGIN")
+    try:
+        for sid in existing:
+            c.execute(f"UPDATE songs SET {sets} WHERE id=?", (*fields.values(), sid))
+        c.commit()
+    except Exception:
+        c.rollback()
+        raise
     updated = []
-    for sid in ids:
-        if not db.one("SELECT id FROM songs WHERE id=?", sid):
-            continue
-        db.run(f"UPDATE songs SET {sets} WHERE id=?", *fields.values(), sid)
+    for sid in existing:
         row = db.one("SELECT id, genre, subgenre, genre2, subgenre2 FROM songs WHERE id=?", sid)
         updated.append({"song_id": row["id"], "genre": row["genre"] or "",
                         "subgenre": row["subgenre"] or "", "genre2": row["genre2"] or "",
