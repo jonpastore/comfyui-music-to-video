@@ -409,7 +409,8 @@ def _norm_ref(value):
 
 
 def _compose_text(expect):
-    return " ".join(str(expect.get(k) or "") for k in ("composed", "nude_wardrobe"))
+    return " ".join(str(expect.get(k) or "") for k in
+                    ("composed", "prompt", "nude_wardrobe"))
 
 
 def _human_body_hits(text):
@@ -422,8 +423,8 @@ def check_identity_look(path, expect, kind="image"):
     be the pose plate. Missing identity_path flags. A distinct named path
     passes the prerequisite; the picture stays a human look.
 
-    A compose that asserts a human body (T4-14: nude_wardrobe "human form")
-    flags even when the identity path is the chosen ref.
+    A compose that asserts a human body (T4-14: nude_wardrobe "human form"
+    in composed/prompt) flags even when the identity path is the chosen ref.
     """
     expect = expect or {}
     identity = _norm_ref(expect.get("identity_path"))

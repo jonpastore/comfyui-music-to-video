@@ -103,29 +103,42 @@ def test_t7_7_unasked_image_qc_does_not_emit_the_hook(tmp_path):
     assert _by_check(found, qc.IDENTITY_LOOK) == []
 
 
-def _compose_nude(nude_wardrobe, body=None):
+HARNESS = "A black leather harness and platform boots."
+
+
+def _sheet(tmp_path):
+    """Real image so the hook is asserted through check_image, not its wrap."""
+    from PIL import Image
+    path = tmp_path / "sheet.png"
+    Image.new("RGB", (32, 32), (80, 80, 80)).save(path)
+    return str(path)
+
+
+def _compose_nude(nude_wardrobe, body=None, wardrobe=None):
     """Real composer, not a string check on the field alone."""
     anchor = make_anchor.anchor_from({
         "identity": "Adult anthropomorphic black feline woman.",
         "body": body or "Her entire body is covered in sleek jet-black fur.",
+        "wardrobe": wardrobe or HARNESS,
         "nude_wardrobe": nude_wardrobe,
     })
     return make_anchor.prompt_for("front_nude", anchor)
 
 
-def test_t7_7_human_body_compose_flags():
+def test_t7_7_human_body_compose_flags(tmp_path):
     """T4-14 / T7-7: nude_wardrobe 'human form' is the measured identity collapse.
 
-    A valid identity_path does not save it. The compose itself is the defect.
-    No GPU, no pixels.
+    Shared entry (check_image), composer output only — a field-only hook that
+    never reads the composed prompt must go red. A valid identity_path does
+    not save it. No GPU, no pixels.
     """
     composed = _compose_nude(HUMAN_FORM_NUDE)
     assert "human form" in composed.lower(), composed
-    found = qc.check_identity_look(SHEET, {
+    assert "leather harness" not in composed.lower(), composed
+    found = qc.check_image(_sheet(tmp_path), {
         "identity_path": UI_IDENTITY,
         "plate_path": POSE_PLATE,
         "composed": composed,
-        "nude_wardrobe": HUMAN_FORM_NUDE,
     })
     hit = _by_check(found, qc.IDENTITY_LOOK)
     assert hit and hit[0]["verdict"] == qc.FLAG, found
@@ -135,16 +148,31 @@ def test_t7_7_human_body_compose_flags():
     assert "human form" in measured or "human form" in detail, hit[0]
 
 
-def test_t7_7_furred_nude_compose_is_not_a_human_body():
+def test_t7_7_human_body_prompt_key_flags(tmp_path):
+    """The studio's sent text is `prompt`. Same collapse, same FLAG."""
+    composed = _compose_nude(HUMAN_FORM_NUDE)
+    assert "human form" in composed.lower(), composed
+    found = qc.check_image(_sheet(tmp_path), {
+        "identity_path": UI_IDENTITY,
+        "plate_path": POSE_PLATE,
+        "prompt": composed,
+    })
+    hit = _by_check(found, qc.IDENTITY_LOOK)
+    assert hit and hit[0]["verdict"] == qc.FLAG, found
+    blob = f"{hit[0].get('detail')} {hit[0].get('measured')}".lower()
+    assert "human form" in blob, hit[0]
+
+
+def test_t7_7_furred_nude_compose_is_not_a_human_body(tmp_path):
     """T4-14 positive half: default nude compose still writes, without human form."""
     composed = _compose_nude(make_anchor.NUDE_WARDROBE)
     assert "human form" not in composed.lower(), composed
     assert "bare skin" not in composed.lower(), composed
-    found = qc.check_identity_look(SHEET, {
+    assert "leather harness" not in composed.lower(), composed
+    found = qc.check_image(_sheet(tmp_path), {
         "identity_path": UI_IDENTITY,
         "plate_path": POSE_PLATE,
         "composed": composed,
-        "nude_wardrobe": make_anchor.NUDE_WARDROBE,
     })
     hit = _by_check(found, qc.IDENTITY_LOOK)
     assert hit and hit[0]["verdict"] == qc.PASS, found
