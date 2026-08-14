@@ -6031,6 +6031,98 @@ def test_editing_one_view_does_not_change_another_views_compose(patch_stub):
         assert "FRONT VIEW" not in back_default.group(1)
 
 
+def test_on_all_fours_is_a_selectable_matrix_row(patch_stub):
+    """On-all-fours is a camera position, not a free-text pose. Both clothed
+    and nude cells are offered in the view matrix."""
+    import make_anchor
+    assert "on_all_fours" in make_anchor.VIEWS
+    assert "on_all_fours_nude" in make_anchor.VIEWS
+    assert make_anchor.is_nude_view("on_all_fours_nude")
+    assert not make_anchor.is_nude_view("on_all_fours")
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Fours Album"})
+        form = client.get("/anchors/form", params={"album": "Fours Album"}).text
+        assert 'value="on_all_fours"' in form
+        assert 'value="on_all_fours_nude"' in form
+        assert "on all fours" in form.lower()
+        assert "storyboard" not in form.lower()
+
+
+def test_prompt_ui_tabs_tier_then_family_then_position_rows(patch_stub):
+    """Each selected view is its own prompt, nested: tier tab → clothed/nude
+    sub-tab → one row per position. A draft wand per box and one for the family."""
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Tab Album"})
+        form = client.get("/anchors/form", params={
+            "album": "Tab Album", "tier": ["xxx"],
+            "view": ["front", "back", "front_nude", "on_all_fours_nude"],
+        }).text
+        assert 'name="prompt_xxx__front"' in form
+        assert 'name="prompt_xxx__back"' in form
+        assert 'name="prompt_xxx__front_nude"' in form
+        assert 'name="prompt_xxx__on_all_fours_nude"' in form
+        assert form.count("family-tab") >= 2
+        assert 'data-family="clothed"' in form and 'data-family="nude"' in form
+        assert "position-prompt" in form
+        assert "prompt-draft" in form
+        assert "prompt-draft-related" in form
+        assert form.count("prompt-draft") >= 4
+        assert "storyboard" not in form.lower()
+
+
+def test_draft_one_view_prompt_does_not_touch_siblings(patch_stub):
+    """The per-box wand returns text for that view only. Nothing is saved."""
+    from conftest import draft_calls
+    draft_calls.clear()
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Draft Album"})
+        r = client.post("/anchors/draft", data={
+            "album": "Draft Album", "tier": "xxx", "view": "front_nude",
+            "current": "FRONT VIEW nude sheet",
+        })
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert "front_nude" in body["text"]
+        assert body.get("view") == "front_nude"
+        assert draft_calls and draft_calls[-1]["view"] == "front_nude"
+        assert prompts.latest("Draft Album", "positive", "xxx") is None
+
+
+def test_draft_related_prompts_covers_the_family(patch_stub):
+    """Draft-all fills every selected view in the same clothed/nude family."""
+    from conftest import draft_calls
+    draft_calls.clear()
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Related Album"})
+        r = client.post("/anchors/draft-related", data={
+            "album": "Related Album", "tier": "xxx", "family": "nude",
+            "view": ["front_nude", "on_all_fours_nude"],
+        })
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert set(body["prompts"]) == {"front_nude", "on_all_fours_nude"}
+        assert "front_nude" in body["prompts"]["front_nude"]
+        assert "on_all_fours_nude" in body["prompts"]["on_all_fours_nude"]
+        assert {c["view"] for c in draft_calls} == {"front_nude", "on_all_fours_nude"}
+
+
+def test_gallery_tabs_tier_family_and_position_rows(patch_stub):
+    """Rendered sheets are tabbed by tier, then clothed/nude, then position."""
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Gallery Album"})
+        _chosen_anchor("Gallery Album", "xxx", path="g-front.png", view="front")
+        db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen, created)
+                  VALUES ('album',?,'xxx','on_all_fours_nude','g-fours.png',0,?)""",
+               "Gallery Album", time.time())
+        page = client.get("/anchors", params={"scope_kind": "album",
+                                              "scope_value": "Gallery Album"}).text
+        assert 'data-album="anchor-gallery' in page
+        assert 'data-family="clothed"' in page
+        assert 'data-family="nude"' in page
+        assert "on all fours" in page.lower()
+        assert "storyboard" not in page.lower()
+
+
 def test_one_albums_character_cannot_reach_another_albums_sheets(patch_stub, tmp_path):
     """STUDIO_PROFILE is ONE file for the whole studio, and street_cats.json's
     `views` read "a single adult anthropomorphic black feline woman". `views` has

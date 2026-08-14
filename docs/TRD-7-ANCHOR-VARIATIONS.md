@@ -85,7 +85,8 @@ here is seed-dominated — but it cannot be *asked for*: there is no way to say
 - `T7-3` The new views ship with framing text and **each is a single positive
   sentence naming the camera relationship**, in the shape `DEFAULT_VIEWS`
   already uses. At minimum: `three_quarter` (body turned 45°, face to camera),
-  `profile` (full side view), `seated`, `portrait` (head and shoulders), each
+  `profile` (full side view), `seated`, `portrait` (head and shoulders),
+  `on_all_fours` (hands and knees, hips to camera, tail lifted aside), each
   with its nude parallel. No negation, per `T4-10`.
 - `T7-4` A view's framing sentence is the **only** thing that differs between two
   sheets of one tier. Asserted by composing two views and diffing: identical but

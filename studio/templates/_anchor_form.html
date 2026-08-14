@@ -254,75 +254,97 @@
       to go back to the tier's own wording.
       {% if p.overridden %}<br><span class="muted">The tier's own wording:
         {{ p.tier_default or "(none)" }}</span>{% endif %}</p>
+
+    <div class="family-tabs" role="tablist" aria-label="{{ p.name | tiername }} prompt families">
+      <button type="button" class="family-tab active" data-family="clothed"
+              aria-selected="true">Clothed
+        <span class="muted">({{ p.clothed_views | length }})</span></button>
+      <button type="button" class="family-tab" data-family="nude"
+              aria-selected="false">Nude
+        <span class="muted">({{ p.nude_views | length }})</span></button>
+    </div>
+
+    {% for fam_key, fam_views, fam_label in [
+         ("clothed", p.clothed_views, "clothed"),
+         ("nude", p.nude_views, "nude")] %}
+    <div class="family-panel {% if fam_key != 'clothed' %}hidden{% endif %}"
+         data-family="{{ fam_key }}">
+      <div class="prompt-toolbar">
+        <button type="button" class="prompt-draft-related"
+                data-tier="{{ p.name }}" data-family="{{ fam_key }}"
+                {% if not fam_views %}disabled{% endif %}>
+          Draft all {{ fam_label }} prompts</button>
+        <span class="prompt-draft-related-note muted row-note"
+              data-tier="{{ p.name }}" data-family="{{ fam_key }}"></span>
+      </div>
+      {% if not fam_views %}
+      <p class="empty">No {{ fam_label }} positions selected in the matrix.</p>
+      {% endif %}
+      {% for vb in fam_views %}
+      <div class="view-prompt position-prompt" data-tier="{{ p.name }}" data-view="{{ vb.key }}"
+           data-family="{{ fam_key }}">
+        <h4 class="anchor-row-head">{{ vb.position }}
+          {% if vb.prompt != vb.composed %}<span class="tag">edited</span>{% endif %}</h4>
+        <div class="field-row prompt-versions" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
+          <label>
+            <span class="label-text">Saved prompts{{ help("prompt_versions") }}</span>
+            <select class="prompt-version-pick" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
+              <option value="">composed from the album look (the default)</option>
+              {% for v in p.versions %}
+              <option value="{{ v.id }}" data-text="{{ v.text }}">
+                {{ v.label or "unnamed" }} &middot; {{ v.created | isotime }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Name this version
+            <input type="text" class="prompt-version-label" data-tier="{{ p.name }}"
+                   data-view="{{ vb.key }}"
+                   maxlength="80" placeholder="e.g. tighter fur wording"></label>
+          <button type="button" class="prompt-save" data-tier="{{ p.name }}"
+                  data-view="{{ vb.key }}">Save prompt</button>
+          <button type="button" class="version-delete danger btn-sm" data-tier="{{ p.name }}"
+                  data-view="{{ vb.key }}"
+                  disabled title="Select a saved version to delete it">Delete version</button>
+          <input type="hidden" name="used_version" class="used-version"
+                 data-tier="{{ p.name }}" data-view="{{ vb.key }}" value="">
+          <span class="prompt-save-note muted row-note" data-tier="{{ p.name }}"
+                data-view="{{ vb.key }}"></span>
+        </div>
+        <input type="hidden" name="prompt_default_{{ p.name }}__{{ vb.key }}"
+               value="{{ vb.composed }}">
+        <label>Prompt &mdash; {{ p.name | tiername }}
+          <strong>{{ vb.label }}</strong>{% if vb.nude %} (wardrobe wording is dropped){% endif %}
+          <textarea name="{{ vb.field }}" rows="8" class="counted"
+                    data-max="{{ max_anchor_prompt }}"
+                    maxlength="{{ max_anchor_prompt }}">{{ vb.prompt }}</textarea>
+          <span class="char-count muted" data-for="{{ vb.field }}"></span>
+        </label>
+        <div class="prompt-toolbar">
+          <button type="button" class="prompt-draft" data-tier="{{ p.name }}"
+                  data-view="{{ vb.key }}">Draft this prompt</button>
+          <span class="prompt-draft-note muted row-note" data-tier="{{ p.name }}"
+                data-view="{{ vb.key }}"></span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
   </div>
   {% endfor %}
-
-  {# Pose is per-sheet, not per cell: it replaces the stance clause inside
-     every ticked view's framing. Empty keeps the view's own stance.
-     docs/TRD-7 T7-16. #}
-  <label>Pose &mdash; what the character is doing this sheet
+  <label>Pose override &mdash; optional, replaces the selected position's stance
     <input type="text" name="pose" value="{{ pose or '' }}" maxlength="400"
            placeholder="leave blank for the view's own stance"
            hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
            hx-trigger="change delay:400ms" hx-include="#anchor-form">
   </label>
-  <p class="hint">Replaces the view's stance (standing, sitting, &hellip;) rather than
-    sitting beside it. Two contradictory positives do not average.</p>
-
-  {# Views are the checkboxes at the top. Each ticked view gets its own prompt
-     box so an edit on front cannot land on back (T7-19). No radio+disabled
-     checkbox: that was a status light pretending to be a control. #}
-  {% for p in tier_panels %}
-  {% for vb in p.views %}
-  <details class="view-prompt" data-tier="{{ p.name }}" data-view="{{ vb.key }}"
-           {% if p.name == tier_panels[0].name and loop.first %}open{% endif %}>
-    <summary>{{ p.name | tiername }} · {{ vb.label }}{% if vb.prompt != vb.composed %} · edited{% endif %}</summary>
-    <div class="field-row prompt-versions" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
-      <label>
-        <span class="label-text">Saved prompts{{ help("prompt_versions") }}</span>
-        <select class="prompt-version-pick" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
-          <option value="">composed from the album profile (the default)</option>
-          {% for v in p.versions %}
-          <option value="{{ v.id }}" data-text="{{ v.text }}">
-            {{ v.label or "unnamed" }} &middot; {{ v.created | isotime }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <label>Name this version
-        <input type="text" class="prompt-version-label" data-tier="{{ p.name }}"
-               data-view="{{ vb.key }}"
-               maxlength="80" placeholder="e.g. tighter fur wording"></label>
-      <button type="button" class="prompt-save" data-tier="{{ p.name }}"
-              data-view="{{ vb.key }}">Save prompt</button>
-      <button type="button" class="version-delete danger btn-sm" data-tier="{{ p.name }}"
-              data-view="{{ vb.key }}"
-              disabled title="Select a saved version to delete it">Delete version</button>
-      <input type="hidden" name="used_version" class="used-version"
-             data-tier="{{ p.name }}" data-view="{{ vb.key }}" value="">
-      <span class="prompt-save-note muted row-note" data-tier="{{ p.name }}"
-            data-view="{{ vb.key }}"></span>
-    </div>
-    <input type="hidden" name="prompt_default_{{ p.name }}__{{ vb.key }}"
-           value="{{ vb.composed }}">
-    <label>Prompt &mdash; the {{ p.name | tiername }}
-      <strong>{{ vb.label }}</strong> sheet{% if vb.nude %} (the album's wardrobe wording is
-      dropped on this one){% endif %}
-      <textarea name="{{ vb.field }}" rows="8" class="counted"
-                data-max="{{ max_anchor_prompt }}"
-                maxlength="{{ max_anchor_prompt }}">{{ vb.prompt }}</textarea>
-      <span class="char-count muted" data-for="{{ vb.field }}"></span>
-    </label>
-  </details>
-  {% endfor %}
-  {% endfor %}
-  <p class="hint">Each box is composed from this album's identity, wardrobe and body wording
-    plus <em>its own</em> view.
-    <strong>Leave one untouched and that view composes its own</strong> &mdash; a back view
-    gets a BACK VIEW sentence, and a nude view drops the album's wardrobe wording entirely,
-    which is the only way a nude sheet comes out nude.
-    <strong>Edit one and that text is used verbatim for that sheet only</strong>; the other
-    views of the same tier are unaffected, so an edit governs the sheet you are looking at
-    and nothing else.</p>
+  <p class="hint">Use the matrix for the camera position (front, on all fours, &hellip;).
+    This box only replaces that stance wording. Two contradictory positives do not average.</p>
+  <p class="hint">Each position is its own prompt. Leave a box untouched and that view
+    composes from this album's look plus <em>its</em> camera. Edit one and that text is
+    used verbatim for that sheet only.
+    <strong>Draft this prompt</strong> recommends one view;
+    <strong>Draft all &hellip; prompts</strong> fills every selected position in that
+    clothed or nude set. Nothing is saved until you Save or Generate.</p>
   {% else %}
   <p class="hint">Tick at least one tier and one view. Nothing is pre-selected.</p>
   {% endif %}

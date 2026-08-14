@@ -2,11 +2,8 @@
    Its OWN partial so a finished sheet can be dropped into the page without a
    reload, and without JavaScript rebuilding this markup -- a second copy in JS
    is a second copy that drifts from the pick and delete forms defined here. #}
-<section class="card">
-  {# scope_kind is not shown: an album IS a playlist, so "album:" on every
-     heading was a distinction with nothing on the other side of it #}
-  <h3>{{ g.scope_value }} &middot; {{ g.character_name or "protagonist" }}
-      &middot; {{ g.tier | tiername }} &middot; {{ g.view | viewname }}</h3>
+<section class="anchor-group">
+  <p class="muted">{{ g.view | viewname }}</p>
   {# One bar per GROUP, not one for the page: a candidate only ever competes
      with its own scope+tier+view+character, and a selection spanning groups
      would delete across sheets that have nothing to do with each other. #}

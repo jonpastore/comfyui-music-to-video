@@ -133,6 +133,22 @@ templates.env.filters["tiername"] = lambda t: (t or "").upper()
 ANCHOR_VIEWS = {k: v["label"] for k, v in make_anchor.VIEWS.items()}
 NUDE_VIEWS = frozenset(v for v in ANCHOR_VIEWS if make_anchor.is_nude_view(v))
 templates.env.filters["viewname"] = lambda v: ANCHOR_VIEWS.get(v, v or "")
+
+
+def view_base(view):
+    """Camera/position key with the nude suffix stripped."""
+    key = str(view or "")
+    return key[:-5] if key.endswith("_nude") else key
+
+
+def view_family(view):
+    return "nude" if _make_anchor().is_nude_view(view) else "clothed"
+
+
+def view_position_label(view):
+    """Row label for a camera: 'front', 'on all fours'."""
+    label = ANCHOR_VIEWS.get(view) or view or ""
+    return label.split(",")[0].strip() or view_base(view).replace("_", " ")
 # UTC ISO-8601 with the Z. The server runs UTC and the studio is used from a
 # machine that does not, so the BROWSER converts this to local time (app.js).
 # Formatting it server-side would show whichever timezone cerberus happens to
@@ -1967,6 +1983,47 @@ async def upload_style(id: int, image: UploadFile = File(...), note: str = Form(
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
+def nest_anchor_groups(group_list):
+    """Tier tabs → clothed/nude sub-tabs → one row per camera position.
+
+    Flat groups stay available for tests that walk candidates; the page
+    renders this nest so a dozen sheets do not dump as one long column.
+    """
+    sections = []
+    index = {}
+    for g in group_list:
+        key = (g["scope_kind"], g["scope_value"], g["character_id"], g["character_name"])
+        if key not in index:
+            index[key] = {"scope_kind": key[0], "album": key[1],
+                          "character_id": key[2],
+                          "character_name": key[3] or "protagonist",
+                          "tier_map": {}}
+            sections.append(index[key])
+        sec = index[key]
+        tier = g["tier"] or ""
+        if tier not in sec["tier_map"]:
+            sec["tier_map"][tier] = {"clothed": {}, "nude": {}}
+        family = view_family(g["view"])
+        pos = view_position_label(g["view"])
+        sec["tier_map"][tier][family].setdefault(pos, []).append(g)
+    out = []
+    for sec in sections:
+        tiers = []
+        for name, fams in sec["tier_map"].items():
+            families = []
+            for fam_key in ("clothed", "nude"):
+                rows = [{"position": pos, "groups": gs}
+                        for pos, gs in fams[fam_key].items()]
+                families.append({"key": fam_key, "rows": rows})
+            tiers.append({"name": name, "families": families})
+        out.append({"scope_kind": sec["scope_kind"], "album": sec["album"],
+                    "character_id": sec["character_id"],
+                    "character_name": sec["character_name"],
+                    "tab_id": f"anchor-gallery-{len(out)}",
+                    "tiers": tiers})
+    return out
+
+
 @app.get("/anchors", response_class=HTMLResponse)
 def anchors_page(request: Request, scope_kind: str = "", scope_value: str = ""):
     # This route has always ACCEPTED scope_kind/scope_value and never applied
@@ -2021,7 +2078,8 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = ""):
                                AND status IN ('queued','running') ORDER BY id""")]
     return templates.TemplateResponse(request, "anchors.html", dict(
         anchor_form_ctx(scope_value),
-        groups=group_list, known_albums=albums, playlists=playlists,
+        groups=group_list, gallery=nest_anchor_groups(group_list),
+        known_albums=albums, playlists=playlists,
         failed_jobs=fresh, active_jobs=active))
 
 
@@ -2870,6 +2928,68 @@ def negative_versions(album):
     return prompts.versions(album, "negative")
 
 
+def _draft_ref_image(album, character_id=None):
+    """A photograph to look at while drafting. Saved base first, then a sheet."""
+    refs = anchor_refs(album, character_id)
+    if refs:
+        return refs[0]["path"]
+    row = db.one("""SELECT path FROM anchors WHERE scope_kind='album' AND scope_value=?
+                    AND (? IS NULL OR character_id IS ? OR character_id=?)
+                    ORDER BY chosen DESC, (view='front') DESC, id DESC""",
+                 album, character_id, character_id, character_id)
+    return row["path"] if row else None
+
+
+def _draft_one(album, view, current="", character_id=None):
+    if view not in ANCHOR_VIEWS:
+        raise HTTPException(400, f"view must be one of {', '.join(ANCHOR_VIEWS)}")
+    fields = anchor_profile_fields(album or "", character_id)
+    image = _draft_ref_image(album, character_id)
+    try:
+        text = vision.draft_view_prompt(image, view, current or "", fields)
+    except Exception as e:
+        raise HTTPException(502, f"could not draft the {view} prompt: {e}") from None
+    if not text:
+        raise HTTPException(502, "the draft came back empty")
+    return screen_prompt_field(text, "prompt", f"{view} draft")
+
+
+@app.post("/anchors/draft")
+async def draft_anchor_prompt(request: Request):
+    """Recommend one view's prompt. Lands in the box; nothing is saved."""
+    form = await request.form()
+    album = (form.get("album") or "").strip()
+    view = (form.get("view") or "").strip()
+    tier = (form.get("tier") or "").strip()
+    cid = form.get("character_id")
+    character_id = int(cid) if cid else None
+    current = (form.get("current") or "").strip()
+    text = _draft_one(album, view, current, character_id)
+    return {"text": text, "view": view, "tier": tier}
+
+
+@app.post("/anchors/draft-related")
+async def draft_related_anchor_prompts(request: Request):
+    """Recommend every selected view in one clothed or nude family."""
+    form = await request.form()
+    album = (form.get("album") or "").strip()
+    family = (form.get("family") or "").strip()
+    if family not in ("clothed", "nude"):
+        raise HTTPException(400, "family must be clothed or nude")
+    cid = form.get("character_id")
+    character_id = int(cid) if cid else None
+    views = [v for v in form.getlist("view") if v in ANCHOR_VIEWS
+             and view_family(v) == family]
+    if not views:
+        raise HTTPException(400, "no views in that family are selected")
+    prompts_out = {}
+    for v in views:
+        current = (form.get(anchor_prompt_field(form.get("tier") or "", v))
+                   or form.get(f"current_{v}") or "")
+        prompts_out[v] = _draft_one(album, v, current, character_id)
+    return {"family": family, "prompts": prompts_out}
+
+
 @app.post("/anchors/prompt")
 async def save_anchor_prompt(request: Request):
     """Save the prompt currently in the box as a new VERSION.
@@ -3686,6 +3806,35 @@ def delete_character(cid: int):
 MAX_ANCHOR_PROMPT = 4000
 
 
+def _tier_prompt_panel(tier, album, chosen_views, typed_prompts, character_id,
+                       pose, tones):
+    """One tab: this tier's wording plus one prompt row per selected view."""
+    views = []
+    for v in chosen_views:
+        composed = default_anchor_prompt(album, v, character_id, pose=pose or None)
+        views.append({
+            "key": v, "label": ANCHOR_VIEWS.get(v, v),
+            "position": view_position_label(v),
+            "field": anchor_prompt_field(tier, v),
+            "nude": _make_anchor().is_nude_view(v),
+            "family": view_family(v),
+            "prompt": typed_prompts.get(f"{tier}__{v}", composed),
+            "composed": composed,
+        })
+    clothed = [vb for vb in views if not vb["nude"]]
+    nude = [vb for vb in views if vb["nude"]]
+    return {
+        "name": tier,
+        "text": (tones or {}).get(tier, tier_tone(tier, album)),
+        "tier_default": tiers.tier_text(tier).strip(),
+        "overridden": bool(tiers.override_text(album, tier)),
+        "views": views,
+        "clothed_views": clothed,
+        "nude_views": nude,
+        "versions": anchor_prompt_versions(album, tier, character_id),
+    }
+
+
 def default_anchor_prompt(scope_value, view, character_id=None, pose=None):
     """The prompt make_anchor would compose, shown so it can be edited.
 
@@ -3784,16 +3933,17 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=(), character_id
     clothed = [v for v in views if not v["nude"]]
     nude = [v for v in views if v["nude"]]
     picked = set(chosen_views)
-    nude_by_short = {v["short"]: v for v in nude}
-    used_shorts = set()
+    nude_by_base = {view_base(v["key"]): v for v in nude}
+    used_bases = set()
     view_pairs = []
     for v in clothed:
-        view_pairs.append({"short": v["short"], "clothed": v,
-                           "nude": nude_by_short.get(v["short"])})
-        used_shorts.add(v["short"])
+        view_pairs.append({"short": view_position_label(v["key"]), "clothed": v,
+                           "nude": nude_by_base.get(view_base(v["key"]))})
+        used_bases.add(view_base(v["key"]))
     for v in nude:
-        if v["short"] not in used_shorts:
-            view_pairs.append({"short": v["short"], "clothed": None, "nude": v})
+        if view_base(v["key"]) not in used_bases:
+            view_pairs.append({"short": view_position_label(v["key"]),
+                               "clothed": None, "nude": v})
     return {
         "tiers": all_t, "albums": albums, "form_album": album,
         "selected_tiers": selected, "views": views, "selected_views": chosen_views,
@@ -3809,32 +3959,8 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=(), character_id
         # the box shows and `tier_default` is what "use the tier's wording"
         # would put back -- both are needed, because a panel that showed only
         # the effective text could not tell you it was an override.
-        "tier_panels": [{"name": t, "text": (tones or {}).get(t, tier_tone(t, album)),
-                         "tier_default": tiers.tier_text(t).strip(),
-                         "overridden": bool(tiers.override_text(album, t)),
-                         # ONE BOX PER VIEW, not one per tier. A single box per
-                         # tier was sent verbatim to every view of it, so an edit
-                         # made while looking at the front sheet also governed the
-                         # back and the nude ones -- overriding both the per-view
-                         # framing sentence and the nude wardrobe swap, which is
-                         # the only thing that makes a nude sheet nude. The form's
-                         # own hint documented the trap rather than removing it.
-                         # docs/TRD-7 T7-19.
-                         "views": [{"key": v, "label": ANCHOR_VIEWS.get(v, v),
-                                    "field": anchor_prompt_field(t, v),
-                                    "nude": _make_anchor().is_nude_view(v),
-                                    "prompt": typed_prompts.get(f"{t}__{v}", composed),
-                                    # What this box WOULD have composed, shipped as a
-                                    # hidden field so the next swap can tell an
-                                    # untouched box from a real edit. Without it the
-                                    # form cannot distinguish them and has to either
-                                    # discard edits or carry stale text.
-                                    "composed": composed}
-                                   for v, composed in
-                                   ((v, default_anchor_prompt(album, v, character_id,
-                                                              pose=pose or None))
-                                    for v in chosen_views)],
-                         "versions": anchor_prompt_versions(album, t, character_id)}
+        "tier_panels": [_tier_prompt_panel(t, album, chosen_views, typed_prompts,
+                                           character_id, pose, tones)
                         for t in selected],
         # the album+character's saved base images, so a sheet can be generated
         # from photographs already here instead of finding them again

@@ -299,6 +299,19 @@ document.addEventListener("click", function (e) {
     return;
   }
 
+  var ftab = e.target.closest(".family-tab");
+  if (ftab) {
+    var root = ftab.closest(".tier-panel") || ftab.closest(".gallery-section") || document;
+    root.querySelectorAll(".family-tab").forEach(function (t) {
+      t.classList.toggle("active", t === ftab);
+      t.setAttribute("aria-selected", t === ftab ? "true" : "false");
+    });
+    root.querySelectorAll(".family-panel").forEach(function (p) {
+      p.classList.toggle("hidden", p.dataset.family !== ftab.dataset.family);
+    });
+    return;
+  }
+
   // a sheet opens beside its opposite view -- a character sheet is read as a
   // pair, front checked against back
   var img = e.target.closest(".anchor-open");
@@ -840,6 +853,70 @@ function initAnchorPrompts() {
     }).catch(function (err) {
       say2(note, "not saved: " + err.message, true);
     }).then(function () { save.disabled = false; });
+  });
+
+  document.addEventListener("click", function (e) {
+    var one = e.target.closest && e.target.closest(".prompt-draft");
+    if (!one) return;
+    var form = anchorForm();
+    if (!form) return;
+    var blk = promptBlock(one);
+    var box = blk && blk.querySelector("textarea");
+    var note = form.querySelector('.prompt-draft-note[data-tier="' + one.dataset.tier +
+                                  '"][data-view="' + one.dataset.view + '"]');
+    if (!box) return;
+    var body = new FormData();
+    body.append("album", (form.querySelector("[name=album]") || {}).value || "");
+    body.append("tier", one.dataset.tier || "");
+    body.append("view", one.dataset.view || "");
+    body.append("current", box.value || "");
+    var cid = (form.querySelector("[name=character_id]") || {}).value;
+    if (cid) body.append("character_id", cid);
+    one.disabled = true;
+    say2(note, "drafting...");
+    api("/anchors/draft", body).then(function (d) {
+      box.value = d.text || "";
+      box.dispatchEvent(new Event("input", {bubbles: true}));
+      say2(note, "draft ready — edit it before you save");
+    }).catch(function (err) {
+      say2(note, "not drafted: " + err.message, true);
+    }).then(function () { one.disabled = false; });
+  });
+
+  document.addEventListener("click", function (e) {
+    var all = e.target.closest && e.target.closest(".prompt-draft-related");
+    if (!all) return;
+    var form = anchorForm();
+    if (!form) return;
+    var family = all.dataset.family;
+    var tier = all.dataset.tier;
+    var note = form.querySelector('.prompt-draft-related-note[data-tier="' + tier +
+                                  '"][data-family="' + family + '"]');
+    var body = new FormData();
+    body.append("album", (form.querySelector("[name=album]") || {}).value || "");
+    body.append("tier", tier || "");
+    body.append("family", family || "");
+    var cid = (form.querySelector("[name=character_id]") || {}).value;
+    if (cid) body.append("character_id", cid);
+    form.querySelectorAll('.position-prompt[data-tier="' + tier +
+                          '"][data-family="' + family + '"] textarea').forEach(function (box) {
+      var row = box.closest(".position-prompt");
+      if (row && row.dataset.view) body.append("view", row.dataset.view);
+    });
+    all.disabled = true;
+    say2(note, "drafting...");
+    api("/anchors/draft-related", body).then(function (d) {
+      var prompts = d.prompts || {};
+      Object.keys(prompts).forEach(function (view) {
+        var box = form.querySelector('[name="prompt_' + tier + '__' + view + '"]');
+        if (!box) return;
+        box.value = prompts[view] || "";
+        box.dispatchEvent(new Event("input", {bubbles: true}));
+      });
+      say2(note, "drafts ready — edit them before you save");
+    }).catch(function (err) {
+      say2(note, "not drafted: " + err.message, true);
+    }).then(function () { all.disabled = false; });
   });
 }
 

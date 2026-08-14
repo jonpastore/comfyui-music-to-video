@@ -69,11 +69,47 @@
   {% endif %}
 </section>
 
-{% if not groups %}
+{% if not gallery %}
 <p class="empty">No anchors generated yet.</p>
 {% else %}
-{% for g in groups %}
-{% include "_anchor_group.html" %}
+{% for section in gallery %}
+<section class="card gallery-section">
+  <h2>{{ section.album }} &middot; {{ section.character_name }}</h2>
+  <div class="tier-tabs" data-album="{{ section.tab_id }}">
+    {% for t in section.tiers %}
+    <button type="button" class="tier-tab {% if loop.first %}active{% endif %}"
+            data-tier="{{ t.name }}">{{ t.name | tiername }}</button>
+    {% endfor %}
+  </div>
+  {% for t in section.tiers %}
+  <div class="tier-panel {% if not loop.first %}hidden{% endif %}"
+       data-album="{{ section.tab_id }}" data-tier="{{ t.name }}">
+    <div class="family-tabs" role="tablist" aria-label="{{ t.name | tiername }} sheets">
+      {% for fam in t.families %}
+      <button type="button" class="family-tab {% if loop.first %}active{% endif %}"
+              data-family="{{ fam.key }}" aria-selected="{{ loop.first | lower }}">
+        {{ fam.key | capitalize }}
+        <span class="muted">({{ fam.rows | length }})</span>
+      </button>
+      {% endfor %}
+    </div>
+    {% for fam in t.families %}
+    <div class="family-panel {% if not loop.first %}hidden{% endif %}"
+         data-family="{{ fam.key }}">
+      {% if not fam.rows %}
+      <p class="empty">No {{ fam.key }} sheets in this tier.</p>
+      {% endif %}
+      {% for row in fam.rows %}
+      <h3 class="anchor-row-head">{{ row.position }}</h3>
+      {% for g in row.groups %}
+      {% include "_anchor_group.html" %}
+      {% endfor %}
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</section>
 {% endfor %}
 {% endif %}
 

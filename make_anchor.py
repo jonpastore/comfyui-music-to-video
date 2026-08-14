@@ -225,6 +225,28 @@ VIEWS = {
         "camera": "PORTRAIT VIEW nude character reference sheet of a single adult character, ",
         "backdrop_omit": ("stance", "crop", "floor"),
     },
+    "on_all_fours": {
+        "label": "on all fours, clothed",
+        "framing": (
+            "ON ALL FOURS character reference sheet of a single adult character, "
+            "on hands and knees, hips toward the camera, back arched, tail lifted aside, "
+            "head turned to look back, knees apart, head to toe fully in frame. "),
+        "pose": "on hands and knees, hips toward the camera, back arched, tail lifted aside, "
+                "head turned to look back, knees apart, ",
+        "camera": "ON ALL FOURS character reference sheet of a single adult character, ",
+        "backdrop_omit": ("stance",),
+    },
+    "on_all_fours_nude": {
+        "label": "on all fours, nude",
+        "framing": (
+            "ON ALL FOURS nude character reference sheet of a single adult character, "
+            "on hands and knees, hips toward the camera, back arched, tail lifted aside, "
+            "head turned to look back, knees apart, head to toe fully in frame. "),
+        "pose": "on hands and knees, hips toward the camera, back arched, tail lifted aside, "
+                "head turned to look back, knees apart, ",
+        "camera": "ON ALL FOURS nude character reference sheet of a single adult character, ",
+        "backdrop_omit": ("stance",),
+    },
 }
 
 # Compat: callers and tests still read a key→framing map.
@@ -261,6 +283,8 @@ def apply_pose(view, framing, pose):
         "feet apart, ",
         "standing upright, arms relaxed at their sides, feet apart, ",
         "sitting facing the camera, ",
+        "on hands and knees, hips toward the camera, back arched, tail lifted aside, "
+        "head turned to look back, knees apart, ",
         "standing, ",
     ):
         if token in framing:
@@ -352,6 +376,7 @@ NUDE_WARDROBE = (
 # sheet came back anatomically featureless. That is the model's prior filling a
 # gap in the prompt, not a filter, and the gap is this field.
 DEFAULT_ANATOMY = ""
+
 
 def is_nude_view(view):
     """Whether this view drops the wardrobe wording. DERIVED, not enumerated.

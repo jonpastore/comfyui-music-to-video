@@ -25,8 +25,10 @@ Meow P is the black anthropomorphic cat-woman from the UI pair. Oracle files
 - back: `meowp_ui_back.png` = `back_s4748`
 
 Anchors and refs stay that person. Anatomy is a later layer on her, not a
-stranger pose-plate body. Nude sheets: skin ~20% lighter than the clothed
-black, labia and sphincter exposed, tail up or aside.
+stranger pose-plate body. Nude sheets: whole-body fur ~20% lighter than the
+face reference; vulva and anus exposed, lighter than the surrounding fur,
+feline and matching the base photographs' drawn style (not photoreal, not
+human flesh). Tail up or aside.
 
 ## Render facts (measured, do not re-argue)
 

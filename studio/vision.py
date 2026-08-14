@@ -386,6 +386,44 @@ def describe_cover(image_path, field, progress=None):
     return " ".join(str(text).split()).strip()
 
 
+def draft_view_prompt(image_path=None, view="front", current="", fields=None,
+                      progress=None):
+    """Recommend one character-sheet prompt for a single camera/pose.
+
+    The text lands in the view's box for the operator to edit. It is not a
+    storyboard beat and must not mention scenes, clips or a shot list.
+    """
+    import make_anchor
+    fields = fields or {}
+    spec = make_anchor.VIEWS.get(view) or {}
+    framing = spec.get("framing") or view
+    nude = make_anchor.is_nude_view(view)
+    bits = [
+        f"Write ONE character-sheet image prompt for this exact view: {view}.",
+        f"Framing to keep: {framing.strip()}",
+        "Nude sheet." if nude else "Clothed sheet.",
+        "Positive statements only. Adult fictional character.",
+        "Do not mention a storyboard, scene, clip, shot list or music-video beat.",
+        "Match the drawing style of the reference photograph if one is attached.",
+    ]
+    for key in ("identity", "body", "wardrobe", "anatomy"):
+        if fields.get(key):
+            bits.append(f"{key}: {fields[key]}")
+    if current:
+        bits.append(f"Current wording the operator can replace: {current}")
+    user = " ".join(bits) + ' Reply as JSON: {"text": "<the full prompt>"}'
+    system = (
+        "You draft character-sheet prompts for still identity locks. "
+        "One paragraph. Present tense. No markdown. No storyboard language."
+    )
+    if image_path and os.path.isfile(image_path):
+        raw = ask(image_path, system, user, progress)
+    else:
+        raw, _used = ask_text(system, user, progress)
+    text = json_or_raise(raw, f"draft {view}").get("text", "")
+    return " ".join(str(text).split()).strip()
+
+
 CAST_SYSTEM = (
     "You are looking at an ALBUM COVER for an adult fictional music project and proposing "
     "ONE named supporting character for its music videos -- not the lead, who already "

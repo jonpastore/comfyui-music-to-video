@@ -71,8 +71,9 @@ third field, because a field is a thing somebody can forget to set and a
 derivation is not — that is exactly the argument `is_nude_view`'s own docstring
 makes and it should not be walked back for the label.
 
-`T7-3`'s new views — `three_quarter`, `profile`, `seated`, `portrait`, each with
-a nude parallel — are then entries, and `T7-5`'s problem is local to one of them:
+`T7-3`'s new views — `three_quarter`, `profile`, `seated`, `portrait`,
+`on_all_fours`, each with a nude parallel — are then entries, and `T7-5`'s
+problem is local to one of them:
 `BACKDROP` ends *"full body head to toe inside the frame"*, which argues with a
 head-and-shoulders `portrait`. **A view must be able to override a backdrop
 clause, not only add to it** — which is why `T7-5` and `T7-14` (backdrop becomes

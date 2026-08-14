@@ -474,19 +474,25 @@ in §4 and §5 applies unchanged. This is only what these four documents ask of 
 
 ### 7a.1 The anchor form is the hardest screen in the studio and is about to get harder
 
-`_anchor_form.html` is the second-largest template. TRD-7 `T7-3` shipped twelve
-views (six cameras × clothed/nude) and `T7-19` made the prompt box **per tier
-AND view**. That is 4 × 12 boxes if every cell is ticked.
+`_anchor_form.html` is the second-largest template. TRD-7 `T7-3` shipped the
+view table (cameras × clothed/nude, including on-all-fours) and `T7-19` made
+the prompt box **per tier AND view**.
 
 **Views are a matrix, not two lists.** One row per camera (front, back,
-three-quarter, profile, seated, portrait), two columns (clothed | nude), a
-check-all on each column and one for all views. A radio plus a disabled
-“override” checkbox was a status light pretending to be a control (2026-08-14).
-Nothing is pre-ticked: G used to be the opening rating because it is first
-alphabetically, and front used to stand in for an empty view list (`T4-3`).
-Each ticked cell has its own prompt `<details>` so an edit on front cannot
-land on back (`T7-19`). Clipboard paste and drop add base photographs; they
-do not invent bases.
+three-quarter, profile, seated, portrait, on all fours), two columns
+(clothed | nude), a check-all on each column and one for all views. A radio
+plus a disabled “override” checkbox was a status light pretending to be a
+control (2026-08-14). Nothing is pre-ticked: G used to be the opening rating
+because it is first alphabetically, and front used to stand in for an empty
+view list (`T4-3`). Each ticked cell has its own prompt row so an edit on
+front cannot land on back (`T7-19`). Clipboard paste and drop add base
+photographs; they do not invent bases.
+
+**Rendered sheets and the prompt editor share one shape.** Tier tabs, then a
+clothed / nude sub-tab, then one row per camera position. A wand on each
+prompt drafts that view; a second wand drafts every selected view in that
+clothed or nude family. Drafts land in the boxes and are not saved until
+the operator keeps them. Neither surface mentions a storyboard.
 
 **The form reads in the order the work happens.** Who → rating → matrix →
 base photographs → the wording that will be sent → negative → plan + Generate
