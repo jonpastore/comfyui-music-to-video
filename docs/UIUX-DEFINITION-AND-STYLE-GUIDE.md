@@ -383,7 +383,10 @@ What need not: drawing an automation curve.
 
 Disabled without a reason is banned. "Approve" greyed out with no explanation is
 the same defect as a button that does nothing — the operator cannot tell refusal
-from breakage, which is exactly the distinction `T3-18` is provisional over.
+from breakage. `T3-18` now distinguishes those: QC enqueues nothing, approve
+enqueues one repair. The remaining silence is `T3-23` — dest not appearing
+because the GPU actuator is not wired, which must say so rather than look like
+a successful copy.
 
 ### 5.8 Motion
 

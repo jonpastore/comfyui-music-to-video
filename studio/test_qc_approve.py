@@ -108,12 +108,23 @@ def _finding_with_file(tag, payload=b"broken-clip-bytes"):
     return fid, src, args
 
 
-def test_t3_6_h_repair_writes_a_new_candidate():
+def _write_candidate(src, dest, args, progress):
+    """Stand-in for the GPU actuator: a new file, not a silent copy."""
+    with open(src, "rb") as f:
+        payload = f.read()
+    with open(dest, "wb") as f:
+        f.write(payload + b"-repaired")
+    return dest
+
+
+def test_t3_6_h_repair_writes_a_new_candidate(monkeypatch):
     """T3-6 positive half: after h_repair runs, dest exists, dest != src,
     the original is still there, and finding.repair_path is the dest.
 
-    Naming a dest on the job is not producing one. The stub returned
-    metadata and wrote nothing."""
+    Naming a dest on the job is not producing one. The actuator seam is
+    what writes dest; this test supplies one so the contract is exercised
+    without claiming GPU work landed."""
+    monkeypatch.setattr(qc_service, "dispatch_repair", _write_candidate)
     fid, src, args = _finding_with_file("repair_src")
     dest = args["repair_path"]
     assert dest and dest != src
@@ -169,3 +180,55 @@ def test_t3_h_repair_fails_when_no_file_written(monkeypatch):
     row = qc_service.get(fid)
     assert row["repair_path"] in (None, "")
     assert row["status"] != qc_service.REPAIRED
+
+
+def test_t3_h_repair_refuses_a_silent_copy(monkeypatch):
+    """Putting shutil.copy2 back in the seam must not mark the finding
+    repaired. dest same-bytes-as-src is the broken artefact under a new name."""
+    import shutil
+    monkeypatch.setattr(qc_service, "dispatch_repair",
+                        lambda src, dest, args, progress: shutil.copy2(src, dest))
+    fid, src, args = _finding_with_file("silent_copy")
+    dest = args["repair_path"]
+    try:
+        qc_service.h_repair(args, lambda m: None)
+    except RuntimeError as e:
+        assert "gpu" in str(e).lower() or "no new file" in str(e).lower(), e
+    else:
+        raise AssertionError("h_repair accepted a byte-copy of the source")
+    assert os.path.isfile(src)
+    assert not os.path.isfile(dest), "silent copy left a dest that looks repaired"
+    row = qc_service.get(fid)
+    assert row["repair_path"] in (None, "")
+    assert row["status"] != qc_service.REPAIRED
+
+
+def test_t3_h_repair_gpu_work_is_still_missing():
+    """A shutil.copy2 of the broken artefact is not a repair (T3-6 / T3-23).
+
+    Two honest outcomes: dest exists and dest bytes != src (an actuator
+    produced a candidate), or h_repair raises and dest is absent (GPU
+    work is still missing). A silent clone that marks the finding
+    repaired stays green with make_postproc / fix_ref deleted.
+    """
+    fid, src, args = _finding_with_file("gpu_gap")
+    dest = args["repair_path"]
+    try:
+        qc_service.h_repair(args, lambda m: None)
+    except RuntimeError as e:
+        assert "gpu" in str(e).lower() or "no new file" in str(e).lower(), e
+        assert not os.path.isfile(dest)
+        row = qc_service.get(fid)
+        assert row["repair_path"] in (None, "")
+        assert row["status"] != qc_service.REPAIRED
+        return
+    assert os.path.isfile(src), "repair deleted or overwrote the original"
+    assert os.path.isfile(dest), (
+        "h_repair wrote no new file -- GPU work is still missing")
+    with open(src, "rb") as f:
+        original = f.read()
+    with open(dest, "rb") as f:
+        written = f.read()
+    assert written != original, (
+        "h_repair cloned the broken artefact -- GPU work is still missing")
+    assert qc_service.get(fid)["repair_path"] == dest

@@ -113,7 +113,9 @@ id, and the answer re-orders everything below:
 1. **Anchors that stay on-model** — identity and variations. Session B's work,
    already in flight.
 2. **Know when a render is wrong** — QC's repair path. The measuring half is
-   built; nothing repairs anything, because `approve()` raises.
+   built; `approve()` enqueues a dest ≠ source. GPU actuators
+   (`make_postproc` / `fix_ref`) are not wired — `h_repair` refuses a silent
+   copy rather than marking the finding repaired.
 3. **Clips at the length you asked for** — `scene_seconds` finally meaning
    something.
 
@@ -179,8 +181,9 @@ order and take the dependencies from here.
    `zimage_sweep/`, report both distributions, and build no threshold and no UI
    until that report exists (`T3-13`, `T3-14`, `T3-16`). If they overlap, the
    gate is not built and that is a successful outcome.
-9. Repair routing, which is what stops `approve()` raising and is the only thing
-   that turns `T3-6` and `T3-18` from provisional into real.
+9. Repair routing (`T3-23`): `approve()` already enqueues dest ≠ source.
+   What remains is dispatching that job to `make_postproc` / `fix_ref` via
+   `models.where()` / `models.fits()`, so dest is the actuator's file.
 
 ### Deferred to another document, on purpose
 

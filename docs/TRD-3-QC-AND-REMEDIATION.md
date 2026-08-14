@@ -66,7 +66,9 @@ workflow, no hardcoded duration anywhere), `T3-4`'s measured/expected/unit on
 every check that has them, `T3-7` (8n+1 with the interpolated exemption), `T3-11`
 (imports `mixer.SET_DURATION_TOLERANCE` rather than restating it), `T3-27`
 (a remedy on every finding), and `T3-3` both ways. What is NOT built is tier 2
-entirely, and every repair path — `approve()` raises.
+entirely, and GPU actuator dispatch (`T3-23` / `make_postproc` / `fix_ref`).
+`approve()` enqueues a dest ≠ source; `h_repair` writes that dest only when
+`dispatch_repair` produces it, and refuses a silent copy of the broken file.
 
 **Tier 0's two properties that QC must respect**, both from the code that writes
 it: group by `host`, never by `backend` (Swarm renumbers ids when a backend is
@@ -152,10 +154,11 @@ places for a finding to exist in different states.
   with a clean fixture, or with every check deleted, "no duplicates" is 0 = 0 and
   the criterion is vacuously green.
 - `T3-6` A finding's `repair_path` is never equal to its `path`, **asserted
-  only after a repair has actually produced one**. Today nothing writes
-  `repair_path` and `approve()` raises, so NULL never equals anything and this
-  is green with the entire subsystem absent — **PROVISIONAL**, like `T3-18`,
-  until repair routing exists. **A repair
+  only after a repair has actually produced one**. `approve()` now names a dest
+  ≠ source and `h_repair` writes that dest when `dispatch_repair` produces it —
+  a silent `shutil.copy2` of the broken artefact is refused, because a copy
+  marks the finding repaired while dest is still the same bytes. GPU actuator
+  dispatch (`T3-23`) is what still has to land. **A repair
   produces a new candidate and never overwrites** — the studio's whole design is
   candidates plus a human pick, and an overwrite destroys the evidence that
   anything was wrong along with the comparison that would show whether the
@@ -315,10 +318,9 @@ PASS/FAIL because the finding arrives actionable.
 - `T3-18` Nothing runs a repair without an explicit approval. Asserted by
   running QC over a set of deliberately broken artefacts and confirming zero
   jobs were enqueued — **and by the same fixture, once approved, enqueuing
-  exactly one**. Without the second half, "zero jobs" is equally satisfied by
-  having no repair capability at all, which is today's state: `approve()` raises
-  and this criterion is therefore **provisional** until repair routing exists.
-  It currently cannot tell "refuses to auto-heal" from "cannot heal".
+  exactly one**. That second half exists: `approve()` enqueues one `repair` job
+  and does not write dest itself. The remaining gap is `T3-23` — the handler
+  must dispatch to an actuator, not copy the broken file and call it repaired.
 - `T3-19` The remedy prompt is **editable before approval**, and the edited text
   is what runs. A differential: approve the same finding twice with two different
   remedy texts and confirm two different jobs were submitted — not by checking
@@ -474,13 +476,13 @@ tier 1.
    marked **provisional** and says what it cannot yet distinguish.
 
    One-sided in this document today, listed so nobody has to re-derive it:
-   `T3-1`, `T3-4` (fields present but never checked for sense), `T3-6`, `T3-14`, `T3-20`, `T3-22`, `T3-23`, `T3-24` and `T3-27`. `T3-18` is already marked provisional for exactly this reason and the same treatment applies to the rest of the repair criteria: while `approve()` raises, every one of them is satisfied by the absence of the feature they describe.
+   `T3-1`, `T3-4` (fields present but never checked for sense), `T3-14`, `T3-20`, `T3-22`, `T3-23`, `T3-24` and `T3-27`. `T3-6` and `T3-18` have their enqueue + dest≠source halves; what they cannot yet distinguish is "actuator wrote dest" from "GPU work is still missing".
 
 ### The positive half of each one-sided criterion
 
-`T3-6` and `T3-18` stay **provisional** and are not in this table: both are
-satisfied today by the absence of the repair subsystem, and no wording fixes
-that — only `approve()` doing something does.
+`T3-6` and `T3-18` have the enqueue + dest≠source halves. The remaining
+provisional surface is `T3-23`: a correctly-named model on a box that holds
+it is SUBMITTED, and dest is that actuator's file, not a copy of the input.
 
 | criterion | its positive half |
 |---|---|
@@ -516,4 +518,4 @@ current.
 | `T3-5` re-running does not duplicate | **built** | earlier | `UNIQUE(path, check_name)`; the mutation audit found the upsert alone was not the guard |
 | `T3-1` group by host | **partial** | `e20346f` | the host column is now canonical — one box, one identity — but the grouped report itself is not built |
 | **tier 2, §5 entire** | **not built** | — | no calibration, no embedding metric. `T3-13`…`T3-16` are the order and none has run |
-| **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). **`h_repair` writes a new candidate** (`produce_repair` + `jobs.land`, dest ≠ src, original kept). GPU actuator dispatch (`T3-23` / `make_postproc` / `fix_ref`) is still not wired |
+| **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). **`h_repair` writes dest only via `dispatch_repair`** (injected writer proves dest ≠ src; default raises "GPU work is still missing"; a byte-copy of src is refused). GPU actuator dispatch (`T3-23` / `make_postproc` / `fix_ref`) is still not wired |

@@ -14,7 +14,6 @@ directory of old output; this module is what persists an answer.
 """
 import json
 import os
-import shutil
 import sys
 import time
 
@@ -202,13 +201,37 @@ def _repair_dest(path):
     return dest if dest != path else path + ".repair"
 
 
+def _same_bytes(a, b, chunk=1024 * 1024):
+    """True when both paths exist and hold the same bytes."""
+    if not a or not b or not os.path.isfile(a) or not os.path.isfile(b):
+        return False
+    if os.path.samefile(a, b):
+        return True
+    if os.path.getsize(a) != os.path.getsize(b):
+        return False
+    with open(a, "rb") as fa, open(b, "rb") as fb:
+        while True:
+            ca, cb = fa.read(chunk), fb.read(chunk)
+            if ca != cb:
+                return False
+            if not ca:
+                return True
+
+
+def dispatch_repair(src, dest, args, progress):
+    """GPU actuator seam (T3-23 / make_postproc / fix_ref).
+
+    A byte-copy of the broken artefact is not a repair. Tests replace this
+    to write dest. Production raises until those actuators land here."""
+    raise RuntimeError("repair wrote no new file — GPU work is still missing")
+
+
 def produce_repair(src, dest, args, progress):
     """Write dest as a new candidate beside src. Never the input path.
 
-    GPU dispatch (T3-23 / make_postproc / fix_ref) is a later slice. This
-    seam is what those actuators replace; the contract is a new file at dest.
-    Tests replace this to prove a silent no-write cannot mark the finding
-    repaired."""
+    The contract is a new file at dest, produced by dispatch_repair. Tests
+    replace that seam to prove a silent no-write cannot mark the finding
+    repaired. The default is not a copy."""
     if not dest or dest == src:
         raise ValueError("a repair must write a new candidate, not overwrite")
     if not src or not os.path.isfile(src):
@@ -216,7 +239,7 @@ def produce_repair(src, dest, args, progress):
     parent = os.path.dirname(dest)
     if parent:
         os.makedirs(parent, exist_ok=True)
-    shutil.copy2(src, dest)
+    dispatch_repair(src, dest, args, progress)
     return dest
 
 
@@ -225,8 +248,9 @@ def h_repair(args, progress):
     """Queued by approve(). Writes a new candidate at repair_path (T3-6).
 
     A dest equal to the source is refused so a writer cannot overwrite the
-    evidence. Success requires dest on disk; a writer that produces nothing
-    fails rather than flipping status."""
+    evidence. Success requires dest on disk from dispatch_repair; a writer
+    that produces nothing — including a silent copy of src — fails rather
+    than flipping status."""
     src = jobs.canonical_path(args.get("path")) if args.get("path") else args.get("path")
     dest = (jobs.canonical_path(args.get("repair_path"))
             if args.get("repair_path") else args.get("repair_path"))
@@ -238,6 +262,9 @@ def h_repair(args, progress):
         raise RuntimeError("repair wrote no new file — GPU work is still missing")
     if src and os.path.isfile(src) and os.path.samefile(src, dest):
         raise ValueError("a repair must write a new candidate, not overwrite")
+    if src and os.path.isfile(src) and _same_bytes(src, dest):
+        os.remove(dest)
+        raise RuntimeError("repair wrote no new file — GPU work is still missing")
     expect = _expect_from_artefacts(src) or None
     jobs.land(dest, expect=expect)
     fid = args.get("finding_id")
@@ -397,8 +424,20 @@ def demo():
         landed = get(fid)["repair_path"]
         assert landed in (None, "") or landed != src
         # T3-6 positive: the handler writes dest; naming it on the job is not
-        # producing it. dest != src and the original stays.
-        h_repair(first, lambda m: None)
+        # producing it. dest != src and the original stays. The default
+        # actuator is unwired, so this self-check injects a writer.
+        def _demo_write(src, dest, args, progress):
+            with open(src, "rb") as f:
+                payload = f.read()
+            with open(dest, "wb") as f:
+                f.write(payload + b"-repaired")
+            return dest
+        orig_dispatch = dispatch_repair
+        try:
+            globals()["dispatch_repair"] = _demo_write
+            h_repair(first, lambda m: None)
+        finally:
+            globals()["dispatch_repair"] = orig_dispatch
         assert os.path.isfile(src), "repair overwrote the original"
         assert os.path.isfile(first["repair_path"]), "h_repair wrote no new file"
         assert get(fid)["repair_path"] == first["repair_path"]
