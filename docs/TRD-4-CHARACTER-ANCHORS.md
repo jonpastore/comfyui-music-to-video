@@ -292,7 +292,7 @@ deployed and live on cerberus.
 | `T4-14` nude view drops wardrobe, never says "bare skin" | **built** | prior session | measured on the composed prompt: wardrobe clause present on `front`, absent on `front_nude` |
 | `T4-15` profile still overrides the five fields | **built, and now two more** | `d5526cb` | `backdrop` and `composite` joined `identity`/`wardrobe`/`body`/`nude_wardrobe`/`anatomy` as album-owned, versioned, screened text |
 | `T4-16`/`T4-17` the negative does not move | **holds** | — | nothing moved out of the negative; the fast-mode drop is still stated on the form |
-| `T4-18` compose a front-nude XXX sheet and assert six things | **partial** | `4032aba` | negation-free and the part list are asserted on the real composer; the full six-assertion composition test is not written |
+| `T4-18` compose a front-nude XXX sheet and assert six things | **built** | `e30d3f7` | six independent tests on the real composer (`test_t4_18_*` in `studio/test_trd4_unverified.py`): no negation, body parts, both slots named, no wardrobe, no "bare skin", `tiers.PINNED` last. Deleting PINNED or adding a negation each fails only its own test |
 
 ### 9.1 `T4-11` was true in the constant and false in every render
 

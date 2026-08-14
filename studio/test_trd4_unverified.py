@@ -115,16 +115,14 @@ def test_t4_9_tier_wording_route_gets_the_same_tier_policy():
         assert tiers.check_tier_policy(stored, "g", "tier wording") == stored
 
 
-def test_t4_18_xxx_front_nude_sheet_has_six_properties():
-    """docs/TRD-4 T4-18 / §6. Compose a real xxx front_nude sheet and assert
-    six things, each able to fail alone.
+def _t4_18_xxx_front_nude(album):
+    """Compose a real xxx front_nude sheet through the studio profile + workflow.
 
     Slot naming is the rescoped wording (§9.2): image 2 is another photograph
     of the same character, not "the wardrobe reference". PINNED enumerates
     "no minors" by design, so the negation walk is the character sheet — the
     same walk T4-10 uses — not the welded guardrail.
     """
-    album = "T4-18 Sheet Album"
     wardrobe = "A black leather harness and platform boots."
     with TestClient(appmod.app) as client:
         client.post("/playlists", data={"name": album, "kind": "playlist"})
@@ -140,6 +138,9 @@ def test_t4_18_xxx_front_nude_sheet_has_six_properties():
     assert fields["wardrobe"] == wardrobe
     character = make_anchor.prompt_for(
         "front_nude", make_anchor.anchor_from(fields), n_refs=2)
+    # Harness: delete-the-composer must not go green on the absence checks.
+    assert character and "FRONT VIEW" in character and "nude" in character.lower(), (
+        f"front_nude composer produced no sheet: {character!r}")
 
     wf = build_refs.workflow(
         {"image_prompt": character, "negative_prompt": ""},
@@ -148,29 +149,52 @@ def test_t4_18_xxx_front_nude_sheet_has_six_properties():
         extra_refs=[(None, "other.png", "")],
     )
     composed = wf["11"]["inputs"]["prompt"]
+    assert composed, "workflow produced an empty composed prompt"
+    return character, composed, wf, wardrobe
 
-    # 1. no negation in the character sheet
+
+def test_t4_18_no_negation():
+    """docs/TRD-4 T4-18 / §6. No negation in the character sheet."""
+    character, _, _, _ = _t4_18_xxx_front_nude("T4-18 Negation Album")
     hits = []
     for pat in make_anchor._NEGATION_PATTERNS:
         for m in re.finditer(pat, character, re.I):
             hits.append(character[max(0, m.start() - 24):m.end() + 24])
     assert not hits, f"negation in the front_nude character sheet: {hits}"
 
-    # 2. body part list present
+
+def test_t4_18_body_part_list_present():
+    """docs/TRD-4 T4-18 / §6. The nine-part body list is in the composed prompt."""
+    _, composed, _, _ = _t4_18_xxx_front_nude("T4-18 Body Album")
     missing = [p for p in BODY_PARTS if p not in composed]
     assert not missing, f"body part list incomplete, missing {missing}"
 
-    # 3. both reference slots named (graph + prompt; T4-12 as rescoped)
+
+def test_t4_18_both_reference_slots_named():
+    """docs/TRD-4 T4-18 / §6. Both reference slots named (graph + prompt)."""
+    _, composed, wf, _ = _t4_18_xxx_front_nude("T4-18 Slots Album")
     enc = wf["11"]["inputs"]
     assert "image1" in enc and "image2" in enc, enc
     assert "Image 2 is another photograph of the same character." in composed, composed
 
-    # 4. no wardrobe clause
+
+def test_t4_18_no_wardrobe_clause():
+    """docs/TRD-4 T4-18 / §6. Nude sheet drops the clothed wardrobe clause."""
+    _, composed, _, wardrobe = _t4_18_xxx_front_nude("T4-18 Wardrobe Album")
     assert wardrobe not in composed, "the clothed wardrobe leaked onto a nude sheet"
 
-    # 5. no "bare skin"
+
+def test_t4_18_no_bare_skin():
+    """docs/TRD-4 T4-18 / §6. Composed nude sheet never says 'bare skin'."""
+    _, composed, _, _ = _t4_18_xxx_front_nude("T4-18 BareSkin Album")
     assert "bare skin" not in composed.lower(), composed
 
-    # 6. PINNED last
-    assert composed.rstrip().endswith(tiers.PINNED.strip()), (
+
+def test_t4_18_pinned_last():
+    """docs/TRD-4 T4-18 / §6. tiers.PINNED is non-empty and welded last."""
+    _, composed, _, _ = _t4_18_xxx_front_nude("T4-18 Pinned Album")
+    pinned = tiers.PINNED.strip()
+    assert pinned, "PINNED was deleted; the weld has nothing to put last"
+    assert pinned in composed, "PINNED is missing from the composed prompt"
+    assert composed.rstrip().endswith(pinned), (
         f"PINNED is not last: ...{composed[-160:]!r}")
