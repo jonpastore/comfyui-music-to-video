@@ -1,9 +1,10 @@
-"""T8-1, T8-2, T8-3, T8-2a: a take records the ask, not a pointer at a moving song.
+"""T8-1, T8-2, T8-3, T8-2a, T8-10: a take records the ask; a voice records consent.
 
 insert_take / pick live here. The audio job's land path is asserted in
 test_t8_1_gen_audio_lands_as_take_and_keeps_the_ask -- a take that only
 exists as an assets row cannot say what it was asked for after the song
-moves.
+moves. T8-10 is insert_voice: no row without a recorded source and a
+recorded consent state, and the refusal names which is missing.
 """
 import os
 import time
@@ -110,6 +111,44 @@ def test_voice_and_take_voice_rows_can_be_stored():
     assert rows[0]["voice_id"] == vid
     assert rows[0]["start_secs"] == 0
     assert rows[0]["end_secs"] == 20.0
+
+
+def test_t8_10_insert_without_source_fails_naming_source():
+    with pytest.raises(ValueError, match="source"):
+        db.insert_voice(f"v-{time.time_ns()}", "local", source="", consent="own")
+    with pytest.raises(ValueError, match="source"):
+        db.insert_voice(f"v-{time.time_ns()}", "local", source=None, consent="own")
+    with pytest.raises(ValueError, match="source"):
+        db.insert_voice(f"v-{time.time_ns()}", "local", source="   ", consent="own")
+
+
+def test_t8_10_insert_without_consent_fails_naming_consent():
+    with pytest.raises(ValueError, match="consent"):
+        db.insert_voice(f"v-{time.time_ns()}", "local",
+                        source="own recording", consent="")
+    with pytest.raises(ValueError, match="consent"):
+        db.insert_voice(f"v-{time.time_ns()}", "local",
+                        source="own recording", consent=None)
+    with pytest.raises(ValueError, match="consent"):
+        db.insert_voice(f"v-{time.time_ns()}", "local",
+                        source="own recording", consent="   ")
+
+
+def test_t8_10_voice_with_source_and_consent_is_stored_and_usable():
+    name = f"v-{time.time_ns()}"
+    vid = db.insert_voice(name, "local", source="own recording", consent="own")
+    voice = db.get_voice(vid)
+    assert voice["name"] == name
+    assert voice["kind"] == "local"
+    assert voice["source"] == "own recording"
+    assert voice["consent"] == "own"
+    sid = _song()
+    tid = db.insert_take(sid, "/t8-10.mp3", "generated", duration=10.0)
+    db.assign_take_voice(tid, vid, start_secs=0, end_secs=10.0)
+    rows = db.list_take_voices(tid)
+    assert len(rows) == 1
+    assert rows[0]["voice_id"] == vid
+    assert db.get_voice(vid)["consent"] == "own"
 
 
 def test_t8_1_gen_audio_lands_as_take_and_keeps_the_ask():

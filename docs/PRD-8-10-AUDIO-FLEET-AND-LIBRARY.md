@@ -63,9 +63,11 @@ specific and already recorded: a plausible metric ranked the wrong image first,
 41.1 against 64.7, and *a VLM asked the same question would have agreed with
 it*.
 
-**P4 is a requirement, not a feature.** `AUDIO_BUILDOUT_PLAN.md` specified a
-`consent` column and the column is the point. A voice-cloning path for a real
-named person does not ship before `T8-10` holds.
+**P4 is a requirement, not a feature.** `insert_voice` is the store gate:
+a voice cannot be written without a recorded source and a recorded consent
+state, and the refusal names which is missing (`T8-10`). A voice that has
+both is stored and usable. A voice-cloning path for a real named person is
+still not shipped (`T8-12`, provisional by absence).
 
 ## 4. Priorities
 
@@ -76,6 +78,8 @@ named person does not ship before `T8-10` holds.
 2. **TRD-8's take model.** New generations land as `takes` rows (`T8-1`); pick
    (`T8-2`) and the three-path origin on every route (`T8-3`) are the remaining
    half. Takes generated before `T8-1` still cannot say what they were asked for.
+   `T8-10` is the voice-store gate (built); `T8-11` (a take records which voice
+   at generate time) is not.
 3. **TRD-10's bulk edit**, which is unbuilt and self-contained.
 4. **TRD-10's advice rules**, which are mostly labelling and refusals over
    surfaces that already exist.

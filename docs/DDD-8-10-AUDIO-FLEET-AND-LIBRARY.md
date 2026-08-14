@@ -13,7 +13,7 @@ same day. Where a claim is a measurement, the command that produced it is named.
 
 | | what building it means |
 |---|---|
-| **TRD-8** | a schema that does not exist, wired under a stage that does |
+| **TRD-8** | a take/voice schema wired under a stage that already generates |
 | **TRD-9** | tests for behaviour that is correct and unspecified — almost no new code |
 | **TRD-10** | one unbuilt feature (bulk edit) plus labelling rules over four live modules |
 
@@ -21,11 +21,9 @@ same day. Where a claim is a measurement, the command that produced it is named.
 
 ### 2.1 What is missing, exactly
 
-`AUDIO_BUILDOUT_PLAN.md` §4 specifies four tables. Verified at `c01c977` by both
-sessions independently — `grep -c "\btakes\b" studio/db.py` and the same for the
-others — **all four have zero references of any kind**:
-
-    takes  0      voices  0      take_voices  0      library  0
+`AUDIO_BUILDOUT_PLAN.md` §4 specifies four tables. At `c01c977` all four were
+absent. `takes`, `voices` and `take_voices` now exist in `db.py`; **`library`
+does not** (TRD-8 §9 left it to TRD-10, and TRD-10 did not take it).
 
 What shipped at `c01c977` wrote each generated candidate as an `assets` row under
 `db.DATA/audio/<slug>/`. **Nothing is overwritten**, so `T6-A5` is not violated.
@@ -70,14 +68,16 @@ application point, and the criterion asserts through the owner.
 
     voices(id, name, kind, path, reference_id, source, consent, note, created)
 
-`kind` is `local` (a clip) or a hosted id. **`source` and `consent` are NOT
-NULL-able in effect** — `T8-10` requires the refusal, and a nullable column that
-nothing enforces is a field that gets filled with silence. `take_voices` carries
-per-region parameters so a voice can apply to a span rather than a whole track.
+`kind` is `local` (a clip) or `fish` (a hosted id). **`source` and `consent` are
+NOT NULL in the schema, and `insert_voice` is the gate** — empty or whitespace
+is not a recorded state, and the `ValueError` names which of `source` /
+`consent` is missing (`T8-10`). A row that stores both is readable via
+`get_voice` and assignable on `take_voices`. `take_voices` carries per-region
+parameters so a voice can apply to a span rather than a whole track; generation
+does not yet record a voice on the take (`T8-11`, not built).
 
-Nothing here ships a cloning path for a real named person before `T8-10` holds.
-That is `T8-12`, and it is marked **provisional** in the document's own table
-because it is green today by absence.
+Nothing here ships a cloning path for a real named person. That is `T8-12`,
+still **provisional** — green today by absence, even though `T8-10` now holds.
 
 ### 2.5 The song editor inherits TRD-1's model
 
@@ -184,6 +184,7 @@ each caller, or a caller that stops calling it stays green.
 
     TRD-9 tests (no new behaviour)  ->  a routing change becomes provable
     takes/voices schema  ->  h_audio writes takes (T8-1, built)
+                         ->  insert_voice refuses missing source/consent (T8-10, built)
                          ->  the picked/unpicked distinction (T8-2)
     bulk edit (self-contained)      ->  T10-3..T10-7
     advice labelling  ->  T10-11..T10-15 over the four live modules

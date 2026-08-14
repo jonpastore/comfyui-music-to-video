@@ -681,12 +681,27 @@ def pick_take(take_id):
     return take_id
 
 
+def _recorded(value):
+    """T8-10: empty or whitespace is not a recorded source/consent state."""
+    return isinstance(value, str) and bool(value.strip())
+
+
 def insert_voice(name, kind, source, consent, *, path=None, reference_id=None,
                  note=None):
+    """Store a timbre reference. Refuses when source or consent is missing,
+    and the refusal names which (T8-10). Does not clone anyone."""
+    missing = [field for field, value in (("source", source), ("consent", consent))
+               if not _recorded(value)]
+    if missing:
+        raise ValueError("voice missing recorded " + " and ".join(missing))
     return run(
         """INSERT INTO voices (name, kind, path, reference_id, source, consent,
            note, created) VALUES (?,?,?,?,?,?,?,?)""",
         name, kind, path, reference_id, source, consent, note, time.time())
+
+
+def get_voice(voice_id):
+    return one("SELECT * FROM voices WHERE id=?", voice_id)
 
 
 def assign_take_voice(take_id, voice_id, start_secs=0, end_secs=None, params=None):

@@ -620,7 +620,9 @@ navigation between two takes destroys the comparison.
 looks like a validation error teaches the operator to route around it.** This one
 is a precondition, not a typo: the form states what is required before the
 control accepts anything, in the `plan-panel` shape (§4) — *what this will do,
-before you press it* — rather than as red text after a failed submit.
+before you press it* — rather than as red text after a failed submit. The
+server still refuses if the form is bypassed: `insert_voice` names `source`
+or `consent` in the error. There is no voice-cloning control on any page.
 
 ### 7b.3 The fleet page is the one screen where "unknown" must not read as "no"
 

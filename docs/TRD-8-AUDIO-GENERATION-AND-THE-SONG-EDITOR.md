@@ -213,9 +213,9 @@ Found by review, and named rather than quietly dropped.
 
 - **`take_voices`** — the junction carrying per-region voice parameters, so a
   voice applies to a span rather than a whole track. `T8-11` only requires a take
-  to record *which* voice, which the junction is not. **In scope, and its
-  criterion is deferred until `T8-10` holds**, because a per-region voice
-  assignment is meaningless before consent is enforced.
+  to record *which* voice, which the junction is not. The table exists and can
+  store an assignment; **generation still does not record a voice on the take**,
+  so `T8-11` remains unbuilt. `T8-10` now holds.
 - **`library`** — **explicitly out of scope here.** The plan's `library` table
   and TRD-10's subject are different things: TRD-10 owns the song catalogue and
   its bulk editing, which is the library the operator uses. Whether the plan's
@@ -249,5 +249,7 @@ current.
 | `T8-4` the audio path accepts a child mention | **built** | `1cac5bb` | the image guardrail is off the audio path, measured — "nursery rhyme for children" had been refused |
 | **`T8-1`** a take records the ask | **built** | `test_takes.py` | `h_audio` copies tags/lyrics/seed/duration/params onto `takes` via `insert_take`. Changing the song after generate leaves the take's ask. Does not write `songs.mp3_path` |
 | **`T8-2`…`T8-3` pick and origin** | **partial** | `test_takes.py` | insert/pick and origin CHECK exist. `h_audio` now writes origin on land. Pick is still a separate act; Use still goes through `assets` |
-| `T8-10`…`T8-12` voices and consent | **not built** | — | `T8-12` is **provisional**: green by construction while no cloning path exists |
+| **`T8-10`** no voice without source+consent | **built** | `test_takes.py` | `insert_voice` refuses missing/blank source or consent and names which. A voice with both is stored, readable via `get_voice`, and assignable on `take_voices`. Empty string is not a recorded state. |
+| `T8-11` a take records which voice | **not built** | — | `take_voices` can store an assignment; generation does not yet record a voice on the take |
+| `T8-12` no cloning path without T8-10 | **provisional** | — | still green by construction: no cloning path exists. `T8-10` is now failable; this one is not |
 | `T8-13`…`T8-15` the song editor | **not built** | — | deferred by TRD-1 §11 and claimed here |
