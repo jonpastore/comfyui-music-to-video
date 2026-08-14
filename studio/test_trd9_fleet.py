@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-6, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-6, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -13,6 +13,7 @@ import json
 import tempfile
 
 import jobs
+import models
 from conftest import _real_module
 
 pipeline = _real_module("pipeline")
@@ -224,3 +225,107 @@ def test_render_backend_seam_is_one_branch_and_both_paths_are_taken():
         (pipeline.RENDER_BACKEND, pipeline.submit_dir, pipeline.submit_swarm,
          pipeline.gpu.preflight, pipeline.gpu.ollama_holding,
          pipeline.submitted_prefixes, pipeline.collect, pipeline._stamp) = was
+
+
+# T9-4 / T6-A6. Same measured enums as models.demo() (2026-08-12), plus a
+# box that never answers. object_info shape, not the installed() sets above:
+# catalog() is the producer of available True/False/None.
+CERBERUS_INFO = {
+    "UNETLoader": {"input": {"required": {"unet_name": [
+        ["qwen_image_edit_2511_fp8mixed.safetensors",
+         "z_image_turbo_fp8mix.safetensors"]]}}},
+    "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [
+        ["ace_step_v1_3.5b.safetensors"]]}}},
+    "VAELoader": {"input": {"required": {"vae_name": [
+        ["ae.safetensors", "qwen_image_vae.safetensors"]]}}},
+}
+PEACHES_INFO = {
+    "UNETLoader": {"input": {"required": {"unet_name": [
+        ["z_image_turbo_fp8mix.safetensors",
+         "flux-2-klein-4b-fp8.safetensors"]]}}},
+    "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [
+        ["ace_step_v1_3.5b_fp16.safetensors"]]}}},
+    "VAELoader": {"input": {"required": {"vae_name": [
+        ["z_image_ae.safetensors", "flux2-vae.safetensors"]]}}},
+}
+T9_4_FLEET = [
+    {"id": "0", "title": "cerberus", "status": "running",
+     "address": "http://127.0.0.1:8188"},
+    {"id": "2", "title": "peaches", "status": "running",
+     "address": "http://100.95.184.29:8188"},
+    {"id": "9", "title": "ghost", "status": "running",
+     "address": "http://10.0.0.99:8188"},
+]
+T9_4_INFO = {
+    "http://127.0.0.1:8188": CERBERUS_INFO,
+    "http://100.95.184.29:8188": PEACHES_INFO,
+}
+T9_4_STATS = {
+    "http://127.0.0.1:8188": {"vram_gib": 23.42, "gpu": "RTX 5090 Laptop"},
+    "http://100.95.184.29:8188": {"vram_gib": 10.58, "gpu": "RTX 2080 Ti"},
+}
+
+
+def _t9_4_stub_fleet():
+    """Pin catalog/where to the fixture boxes. Restore even if a test raises."""
+    was_info, was_stats = models._object_info, models._system_stats
+    models._object_info = lambda url=None: T9_4_INFO.get(url)
+    models._system_stats = lambda url=None: T9_4_STATS.get(url)
+    return was_info, was_stats
+
+
+def _t9_4_restore_fleet(was_info, was_stats):
+    models._object_info, models._system_stats = was_info, was_stats
+
+
+def _available(backend_id, key):
+    row = next(b for b in models.by_backend(T9_4_FLEET) if b["id"] == backend_id)
+    return next(e["available"] for e in row["models"] if e["key"] == key)
+
+
+def test_t9_4_where_is_three_valued_and_none_is_offered():
+    """T9-4: available is True, False or None; False is dropped, None is not.
+
+    One-sided trap (TRD-9 §9): a filter that treats every box as False stays
+    green on "peaches lacks qwen". The paired positive is a None box still
+    listed as a candidate. `if not entry["available"]` is the mutation that
+    must go red — that is the T6-A6 bug.
+
+    Same fleet, two keys, or a hard-coded "always drop peaches" certifies
+    itself: peaches is False for qwen and True for ace_step_v1.
+    """
+    was = _t9_4_stub_fleet()
+    try:
+        assert _available("0", "qwen_image_edit_2511") is True
+        assert _available("2", "qwen_image_edit_2511") is False
+        assert _available("9", "qwen_image_edit_2511") is None
+        assert _available("2", "ace_step_v1") is True
+
+        qwen = models.where("qwen_image_edit_2511", T9_4_FLEET)
+        qwen_ids = [r["id"] for r in qwen]
+        assert "0" in qwen_ids, "a confirmed box was not offered"
+        assert "2" not in qwen_ids, (
+            "a box that answered and lacks the model was offered")
+        assert "9" in qwen_ids, (
+            "a None box was not offered — three-valued collapsed to False")
+        assert next(r for r in qwen if r["id"] == "0")["confirmed"] is True
+        assert next(r for r in qwen if r["id"] == "9")["confirmed"] is False
+        assert next(r for r in qwen if r["id"] == "9")["reachable"] is False
+
+        ghost_only = models.where("qwen_image_edit_2511", [T9_4_FLEET[2]])
+        assert len(ghost_only) == 1, (
+            f"an unreachable box was reported as unable: {ghost_only}")
+        assert ghost_only[0]["confirmed"] is False
+        assert ghost_only[0]["id"] == "9"
+
+        ace = models.where("ace_step_v1", T9_4_FLEET)
+        ace_ids = {r["id"] for r in ace}
+        assert ace_ids == {"0", "2", "9"}, (
+            f"peaches holds ace_step_v1 and must stay a candidate: {ace}")
+        assert all(r["confirmed"] is True for r in ace if r["id"] in ("0", "2"))
+        assert next(r for r in ace if r["id"] == "9")["confirmed"] is False
+
+        assert models.where("qwen_image_edit_2511", None) == []
+        assert models.where("qwen_image_edit_2511", []) == []
+    finally:
+        _t9_4_restore_fleet(*was)
