@@ -86,6 +86,7 @@ def test_generate_storyboard_records_the_rounded_length():
     ]
     orig = httpx.stream
     orig_key = grok._api_key
+    orig_ex = grok._exemplar
 
     class _Resp:
         status_code = 200
@@ -102,6 +103,7 @@ def test_generate_storyboard_records_the_rounded_length():
             return False
 
     grok._api_key = lambda: "test-key"
+    grok._exemplar = lambda: ({"scenes": []}, "", False)
     httpx.stream = lambda *a, **k: _Resp()
     try:
         sb = grok.generate_storyboard(
@@ -110,6 +112,7 @@ def test_generate_storyboard_records_the_rounded_length():
     finally:
         httpx.stream = orig
         grok._api_key = orig_key
+        grok._exemplar = orig_ex
 
     # song LENGTH is the clip-count source: 16s / 8s = 2, not 5 lyric sections
     assert len(sb["scenes"]) == 2
@@ -138,10 +141,10 @@ def test_validate_rejects_a_non_8n1_requested_length():
          "negative_prompt": "x"},
     ]
     sb = grok._compose(song, "pg13", "g", "note", lyrics, scenes, 2, 8.0)
-    grok.validate(sb, expect_scenes=2)
+    grok.validate(sb, exemplar={}, expect_scenes=2)
     sb["scenes"][0]["frames"] = 77
     with pytest.raises(ValueError):
-        grok.validate(sb, expect_scenes=2)
+        grok.validate(sb, exemplar={}, expect_scenes=2)
 
 
 def test_clip_seconds_none_stays_chunk_for_old_storyboards():
