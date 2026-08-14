@@ -167,7 +167,8 @@ in a document is stale the moment the constants move.
   uses. The Anchors UI must not grow new base images unless the operator
   uploaded them or clicked "Use as reference" on a sheet they already
   accepted. Each candidate tile shows the `T3-31` vision confidence against
-  those bases and the prompt. Mutation: a generate that writes extra
+  those bases and the prompt, or the named xAI/local scoring failure —
+  not "vision unknown". Mutation: a generate that writes extra
   `anchor_ref` rows fails this.
 
 ## 7. Explicitly not building

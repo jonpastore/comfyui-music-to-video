@@ -226,7 +226,15 @@ def qc_tag(row):
         return ""
     n = s.get("confidence")
     if n is None:
-        return "vision unknown" if s.get("error") else ""
+        err = (s.get("error") or "").strip()
+        if not err:
+            return ""
+        # "vision unknown" hid the two live causes: no local VL, xAI 400.
+        short = err.split(":")[0].strip()
+        backend = (s.get("backend") or "").strip()
+        if backend and backend.lower() not in short.lower():
+            short = f"{backend} {short}".strip()
+        return f"vision: {short[:48]}"
     return f"{int(n)}% match"
 
 

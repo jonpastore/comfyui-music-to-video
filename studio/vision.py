@@ -167,6 +167,20 @@ def parse_score(obj):
             "notes": " ".join(str(obj.get("notes") or "").split())[:200]}
 
 
+def _backend_from_error(err, where):
+    """Prefer the backend named by the exception over available().
+
+    available() is what we hoped to use. After a local-then-xAI fallback the
+    exception is from xAI while available() still says local.
+    """
+    e = (err or "").lower()
+    if "xai" in e:
+        return "xai"
+    if "local" in e:
+        return "local"
+    return where
+
+
 def score_candidate(path, bases, prompt="", progress=None):
     """Advisory match of one candidate to the base photographs and the prompt.
 
@@ -186,8 +200,9 @@ def score_candidate(path, bases, prompt="", progress=None):
     except Exception as e:
         if progress:
             progress(f"vision score failed: {e}")
+        err = str(e)[:200]
         return {"confidence": None, "identity": None, "prompt": None,
-                "notes": "", "error": str(e)[:200], "backend": where}
+                "notes": "", "error": err, "backend": _backend_from_error(err, where)}
     got = parse_score(obj)
     got["backend"] = where
     return got

@@ -89,3 +89,80 @@ def test_candidate_tile_shows_confidence():
     )
     assert "81%" in html
     assert "vision" in html.lower() or "match" in html.lower()
+
+
+def test_qc_tag_does_not_hide_xai_or_local_failure_as_unknown():
+    xai = appmod.qc_tag({"qc_json": json.dumps({
+        "confidence": None, "identity": None, "prompt": None,
+        "error": "xAI chat request failed (400): Incorrect API key",
+        "backend": "xai",
+    })})
+    assert xai
+    assert "unknown" not in xai.lower()
+    assert "xai" in xai.lower()
+
+    local = appmod.qc_tag({"qc_json": json.dumps({
+        "confidence": None, "identity": None, "prompt": None,
+        "error": "local vision model qwen3-vl failed (503): boom",
+        "backend": "local",
+    })})
+    assert local
+    assert "unknown" not in local.lower()
+    assert "local" in local.lower()
+
+    assert appmod.qc_tag({"qc_json": None}) == ""
+    assert appmod.qc_tag({"qc_json": json.dumps({"confidence": None})}) == ""
+    assert appmod.qc_tag({"qc_json": json.dumps({"confidence": 64})}) == "64% match"
+
+
+def test_score_candidate_does_not_hide_xai_or_local_failure(monkeypatch, tmp_path):
+    real = _real_module("vision")
+    cand = tmp_path / "cand.png"
+    cand.write_bytes(b"x")
+
+    monkeypatch.setattr(real, "available", lambda: ("xai", "no local vision model"))
+    monkeypatch.setattr(real, "ask_images", lambda *a, **k: (_ for _ in ()).throw(
+        RuntimeError("xAI chat request failed (400): Incorrect API key")))
+    xai = real.score_candidate(str(cand), [], "FRONT VIEW")
+    assert xai["confidence"] is None
+    assert "xai" in (xai.get("error") or "").lower()
+    assert "unknown" not in (xai.get("error") or "").lower()
+    assert xai["backend"] == "xai"
+
+    # available() said local; the exception is from the xAI fallback. The
+    # stored backend must follow the exception, not the hope.
+    monkeypatch.setattr(real, "available", lambda: ("local", "qwen3-vl via gateway"))
+    xai_after_local = real.score_candidate(str(cand), [], "FRONT VIEW")
+    assert xai_after_local["confidence"] is None
+    assert "xai" in (xai_after_local.get("error") or "").lower()
+    assert xai_after_local["backend"] == "xai"
+
+    monkeypatch.setattr(real, "ask_images", lambda *a, **k: (_ for _ in ()).throw(
+        RuntimeError("local vision model qwen3-vl failed (503): boom")))
+    local = real.score_candidate(str(cand), [], "FRONT VIEW")
+    assert local["confidence"] is None
+    assert "local" in (local.get("error") or "").lower()
+    assert "unknown" not in (local.get("error") or "").lower()
+    assert local["backend"] == "local"
+
+
+def test_candidate_tile_shows_named_vision_failure():
+    html = appmod.templates.get_template("_anchor_group.html").render(
+        request=None,
+        g={"scope_kind": "album", "scope_value": "Street Cats",
+           "character_name": None, "character_id": None,
+           "tier": "xxx", "view": "back_nude", "unpicked": 0,
+           "candidates": [{
+               "id": 2, "path": "/tmp/c.png", "chosen": 0, "run_id": None,
+               "render_json": None,
+               "qc_json": json.dumps({
+                   "confidence": None,
+                   "error": "xAI chat request failed (400): Incorrect API key",
+                   "backend": "xai",
+               }),
+           }]},
+        media_url=lambda p: "/media?p=" + p,
+    )
+    low = html.lower()
+    assert "unknown" not in low
+    assert "xai" in low

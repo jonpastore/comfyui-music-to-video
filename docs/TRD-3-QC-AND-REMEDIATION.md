@@ -180,8 +180,11 @@ alpha not fully transparent.
   the operator's base images and the prompt that produced it.** The score is
   stored on the candidate row (`anchors.qc_json`) and shown on the tile. It is
   **advisory**: it never picks, deletes, or rejects. A vision failure stores
-  `confidence: null` and says so — unknown, not a fail. §7 still forbids a
-  VLM PASS/FAIL as a gate. Mutation: deleting the scorer leaves candidates
+  `confidence: null` plus the xAI or local error that caused it. The tile
+  names that backend failure (`qc_tag`); it must not collapse it to
+  "vision unknown". Still not a fail — the candidate stays pickable. §7
+  still forbids a VLM PASS/FAIL as a gate. Mutation: deleting the scorer
+  leaves candidates
   with no `qc_json` and the tile has nothing to show.
 
 ### 4.2 Clips

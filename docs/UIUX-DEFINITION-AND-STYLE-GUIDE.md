@@ -576,7 +576,9 @@ earn a screen.
 
 `T3-31` / `T4-19`. Each candidate in `_anchor_group.html` shows the
 stored `qc_json.confidence` (0–100) against the **base photographs and
-the prompt**, or "vision unknown" when scoring failed. It is a badge on
+the prompt**, or the named xAI/local failure when scoring failed
+(`vision: xAI …` / `vision: local …`). Never "vision unknown" — that hid
+the two live causes (no local VL, xAI 400). It is a badge on
 the existing tile — not a new page, not a gate. The operator still
 picks. Old rows with no `qc_json` stay blank, same as a missing render
 tag.
