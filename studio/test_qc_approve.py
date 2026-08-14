@@ -88,3 +88,84 @@ def test_t3_19_two_remedy_texts_are_two_jobs():
         "re-render clip at 505 frames",
         "upscale the existing clip instead",
     ], remedies
+
+
+def _finding_with_file(tag, payload=b"broken-clip-bytes"):
+    """A real artefact on disk plus one reject, so h_repair has something
+    to write beside. approve() only names the dest; this is the half that
+    has to produce it."""
+    src = _new_path(tag)
+    with open(src, "wb") as f:
+        f.write(payload)
+    qc_service.record([{
+        "path": src, "kind": "clip", "tier": 1, "check": "duration",
+        "verdict": "reject", "measured": "4.8", "expected": "30.0",
+        "unit": "s", "detail": "short render", "remedy": "re-render",
+    }])
+    fid = db.one("SELECT id FROM findings WHERE path=?", src)["id"]
+    qc_service.approve(fid)
+    _, args = _jobs_for(fid)[-1]
+    return fid, src, args
+
+
+def test_t3_6_h_repair_writes_a_new_candidate():
+    """T3-6 positive half: after h_repair runs, dest exists, dest != src,
+    the original is still there, and finding.repair_path is the dest.
+
+    Naming a dest on the job is not producing one. The stub returned
+    metadata and wrote nothing."""
+    fid, src, args = _finding_with_file("repair_src")
+    dest = args["repair_path"]
+    assert dest and dest != src
+    assert not os.path.isfile(dest)
+
+    qc_service.h_repair(args, lambda m: None)
+
+    assert os.path.isfile(src), "repair deleted or overwrote the original"
+    assert os.path.isfile(dest), (
+        "h_repair wrote no new file -- GPU work is still missing")
+    assert not os.path.samefile(src, dest)
+    with open(src, "rb") as f:
+        original = f.read()
+    assert original == b"broken-clip-bytes", "repair mutated the source"
+    row = qc_service.get(fid)
+    assert row["repair_path"] == dest
+    assert row["repair_path"] != src
+    assert row["status"] == qc_service.REPAIRED
+    landed = db.one("SELECT * FROM artefacts WHERE path=?", dest)
+    assert landed and landed["status"] == "landed", landed
+
+
+def test_t3_6_h_repair_refuses_overwrite():
+    """T3-6: dest equal to src is refused before anything is written."""
+    fid, src, args = _finding_with_file("overwrite_src")
+    args = dict(args)
+    args["repair_path"] = src
+    try:
+        qc_service.h_repair(args, lambda m: None)
+    except ValueError as e:
+        assert "overwrite" in str(e).lower() or "new candidate" in str(e).lower(), e
+    else:
+        raise AssertionError("h_repair accepted dest == src")
+    assert os.path.isfile(src)
+    assert qc_service.get(fid)["repair_path"] in (None, "")
+
+
+def test_t3_h_repair_fails_when_no_file_written(monkeypatch):
+    """A writer that produces nothing must not flip the finding to repaired.
+    The old stub returned metadata and claimed success."""
+    fid, src, args = _finding_with_file("no_write")
+    dest = args["repair_path"]
+    monkeypatch.setattr(qc_service, "produce_repair",
+                        lambda *a, **k: dest)
+    try:
+        qc_service.h_repair(args, lambda m: None)
+    except RuntimeError as e:
+        assert "no new file" in str(e).lower() or "gpu" in str(e).lower(), e
+    else:
+        raise AssertionError("h_repair succeeded without writing dest")
+    assert not os.path.isfile(dest)
+    assert os.path.isfile(src)
+    row = qc_service.get(fid)
+    assert row["repair_path"] in (None, "")
+    assert row["status"] != qc_service.REPAIRED

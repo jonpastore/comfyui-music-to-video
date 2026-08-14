@@ -513,4 +513,4 @@ current.
 | `T3-5` re-running does not duplicate | **built** | earlier | `UNIQUE(path, check_name)`; the mutation audit found the upsert alone was not the guard |
 | `T3-1` group by host | **partial** | `e20346f` | the host column is now canonical — one box, one identity — but the grouped report itself is not built |
 | **tier 2, §5 entire** | **not built** | — | no calibration, no embedding metric. `T3-13`…`T3-16` are the order and none has run |
-| **tier 3, §6 entire** | **not built** | — | **`approve()` raises.** `T3-6` and `T3-18` are therefore **provisional** and cannot tell "refuses to auto-heal" from "cannot heal" |
+| **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). **`h_repair` writes a new candidate** (`produce_repair` + `jobs.land`, dest ≠ src, original kept). GPU actuator dispatch (`T3-23` / `make_postproc` / `fix_ref`) is still not wired |

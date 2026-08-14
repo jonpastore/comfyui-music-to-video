@@ -14,6 +14,7 @@ directory of old output; this module is what persists an answer.
 """
 import json
 import os
+import shutil
 import sys
 import time
 
@@ -201,16 +202,49 @@ def _repair_dest(path):
     return dest if dest != path else path + ".repair"
 
 
+def produce_repair(src, dest, args, progress):
+    """Write dest as a new candidate beside src. Never the input path.
+
+    GPU dispatch (T3-23 / make_postproc / fix_ref) is a later slice. This
+    seam is what those actuators replace; the contract is a new file at dest.
+    Tests replace this to prove a silent no-write cannot mark the finding
+    repaired."""
+    if not dest or dest == src:
+        raise ValueError("a repair must write a new candidate, not overwrite")
+    if not src or not os.path.isfile(src):
+        raise ValueError(f"cannot repair missing artefact: {src!r}")
+    parent = os.path.dirname(dest)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    shutil.copy2(src, dest)
+    return dest
+
+
 @jobs.handler("repair")
 def h_repair(args, progress):
-    """Queued by approve(). No GPU work yet: the job carries the finding and
-    the edited remedy so a later actuator can run them. A dest equal to the
-    source is refused so a future writer cannot overwrite the evidence."""
-    src, dest = args.get("path"), args.get("repair_path")
+    """Queued by approve(). Writes a new candidate at repair_path (T3-6).
+
+    A dest equal to the source is refused so a writer cannot overwrite the
+    evidence. Success requires dest on disk; a writer that produces nothing
+    fails rather than flipping status."""
+    src = jobs.canonical_path(args.get("path")) if args.get("path") else args.get("path")
+    dest = (jobs.canonical_path(args.get("repair_path"))
+            if args.get("repair_path") else args.get("repair_path"))
     if not dest or dest == src:
         raise ValueError("a repair must write a new candidate, not overwrite")
     progress(f"repair finding {args.get('finding_id')}")
-    return {"finding_id": args.get("finding_id"), "repair_path": dest,
+    produce_repair(src, dest, args, progress)
+    if not os.path.isfile(dest) or dest == src:
+        raise RuntimeError("repair wrote no new file — GPU work is still missing")
+    if src and os.path.isfile(src) and os.path.samefile(src, dest):
+        raise ValueError("a repair must write a new candidate, not overwrite")
+    expect = _expect_from_artefacts(src) or None
+    jobs.land(dest, expect=expect)
+    fid = args.get("finding_id")
+    if fid:
+        db.run("UPDATE findings SET status=?, repair_path=?, resolved=? WHERE id=?",
+               REPAIRED, dest, time.time(), int(fid))
+    return {"finding_id": fid, "repair_path": dest,
             "remedy": args.get("remedy")}
 
 
@@ -221,7 +255,7 @@ def approve(fid):
     and it is the function the /api/qc/findings/{id}/approve route calls
     (T6-A10). The job names a dest that is not the original path (T3-6) and
     carries the edited remedy (T3-19). repair_path on the finding stays empty
-    until a later actuator actually writes that new file.
+    until h_repair writes that new file.
     """
     row = get(fid)
     if row["status"] == DISMISSED:
@@ -362,6 +396,13 @@ def demo():
         assert first["repair_path"] and first["repair_path"] != src
         landed = get(fid)["repair_path"]
         assert landed in (None, "") or landed != src
+        # T3-6 positive: the handler writes dest; naming it on the job is not
+        # producing it. dest != src and the original stays.
+        h_repair(first, lambda m: None)
+        assert os.path.isfile(src), "repair overwrote the original"
+        assert os.path.isfile(first["repair_path"]), "h_repair wrote no new file"
+        assert get(fid)["repair_path"] == first["repair_path"]
+        assert get(fid)["status"] == REPAIRED
         set_remedy(fid, "second wording of the same repair")
         approve(fid)
         queued = db.q("SELECT * FROM jobs ORDER BY id")
