@@ -299,6 +299,9 @@ def _run_one(row, attempt=1):
         args.pop("_depends_on", None)
         args.pop("requires", None)
         progress(f"start {row['kind']}")
+        # T6-16: a render is minutes long. Drop any write this thread
+        # opened so the web layer is not blocked on the handler.
+        db.conn().commit()
         result = _handlers[row["kind"]](args, progress)
         now = time.time()
         db.run("UPDATE jobs SET status='done', finished=?, progress=? WHERE id=?",
