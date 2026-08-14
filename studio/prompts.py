@@ -22,9 +22,15 @@ the type is album-wide (the negative prompt is: its terms are this release's
 failure modes and they do not vary by rating). character_id NULL is the
 protagonist, exactly as it is for anchors.
 """
+import os
+import sys
 import time
 
 import db
+
+sys.path.insert(0, os.environ.get("STUDIO_SCRIPTS") or
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import make_anchor  # noqa: E402
 
 # Every kind of prompt text that gets versioned, and whether it is scoped to a
 # tier. The composer fields are the ones make_anchor.prompt_for assembles; the
@@ -56,6 +62,12 @@ PROMPT_TYPES = {
     # Untiered: what is wrong with a render is not a function of its rating.
     "qc_remedy":     {"tiered": False, "label": "QC remedy"},
 }
+# T7-13: one type per view, generated from the view table so T7-1 still holds.
+# Untiered — camera placement is not a function of the rating.
+PROMPT_TYPES.update({
+    f"view:{key}": {"tiered": False, "label": f"View framing ({spec['label']})"}
+    for key, spec in make_anchor.VIEWS.items()
+})
 
 MAX_LABEL = 80
 MAX_TEXT = 4000
@@ -111,6 +123,12 @@ def save(album, prompt_type, text, label, tier="", character_id=None):
         raise ValueError("an album is needed to save a prompt")
     tier, character_id = _norm(prompt_type, tier, character_id)
     text, label = check(text, label)
+    if prompt_type.startswith("view:") or prompt_type in (
+            "identity", "wardrobe", "body", "nude_wardrobe", "anatomy",
+            "backdrop", "composite", "positive", "tier_wording"):
+        import tiers
+        tiers.check_text(text, prompt_type)
+        tiers.check_override(text)
     row = db.one("""SELECT MAX(version_number) AS n FROM prompt_versions
                     WHERE scope_value=? AND prompt_type=? AND tier=? AND character_id IS ?""",
                  album, prompt_type, tier, character_id)

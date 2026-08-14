@@ -176,7 +176,7 @@
            drift in the 2026-08-12 sweep, and quality mode is what pulls that
            lever. fast is still here and still fifteen seconds a sheet. #}
         <select name="mode" id="anchor-mode">
-          <option value="quality" {% if last.get("mode", "quality") == "quality" %}selected{% endif %}>quality &mdash; ~28 steps, ~1 min a sheet</option>
+          <option value="quality" {% if last.get("mode", "quality") == "quality" %}selected{% endif %}>quality &mdash; LoRA off, negative applies</option>
           <option value="fast" {% if last.get("mode") == "fast" %}selected{% endif %}>fast &mdash; 4 steps, ~15s a sheet</option>
         </select>
       </label>

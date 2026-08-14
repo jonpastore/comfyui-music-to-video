@@ -127,18 +127,10 @@ templates.env.filters["hms"] = hms
 templates.env.filters["tiername"] = lambda t: (t or "").upper()
 # Anchor views are stored as keys (front / back / front_nude / back_nude) and
 # read as prose.
-ANCHOR_VIEWS = {
-    "front": "front, clothed",
-    "back": "back, clothed",
-    "front_nude": "front, nude",
-    "back_nude": "back, nude",
-}
-# DERIVED from make_anchor, never a second literal. This was
-# {"front_nude", "back_nude"} here and a tuple of the same two strings in
-# make_anchor.py -- two hand-kept copies of one fact, so a nude view added to
-# one and not the other rendered at `g` WITH the album's wardrobe wording and
-# was never skipped by anchor_plan. A tier violation produced by an omission.
-# docs/TRD-7 T7-1, T7-2.
+# Derived from make_anchor.VIEWS — the only table. A label edited here used
+# to drift from the framing in DEFAULT_VIEWS; adding a view meant two files.
+# docs/TRD-7 T7-1.
+ANCHOR_VIEWS = {k: v["label"] for k, v in make_anchor.VIEWS.items()}
 NUDE_VIEWS = frozenset(v for v in ANCHOR_VIEWS if make_anchor.is_nude_view(v))
 templates.env.filters["viewname"] = lambda v: ANCHOR_VIEWS.get(v, v or "")
 # UTC ISO-8601 with the Z. The server runs UTC and the studio is used from a
@@ -212,8 +204,14 @@ def opposite_view(view):
     A character sheet is read as a PAIR -- you check the back against the front
     -- so the viewer opens both at once.
     """
-    return {"front": "back", "back": "front",
-            "front_nude": "back_nude", "back_nude": "front_nude"}.get(view)
+    pairs = {"front": "back", "back": "front",
+             "front_nude": "back_nude", "back_nude": "front_nude"}
+    # clothed <-> nude of the same camera for the new views
+    for key in make_anchor.VIEWS:
+        if key.endswith("_nude"):
+            pairs.setdefault(key, key[:-5])
+            pairs.setdefault(key[:-5], key)
+    return pairs.get(view)
 
 
 def album_anchor_tiers(album):
@@ -860,6 +858,22 @@ def h_anchor(args, progress):
                   VALUES (?,?,?,?,?,0,?,?,?,?)""",
                args["scope_kind"], args["scope_value"], args["tier"], view, p, now, cid,
                settings, run_id)
+    # Refs refuse a tier with no chosen sheet. Every live row sat at chosen=0
+    # because generate never picked. If this group still has none, the first
+    # new candidate is it. Pick still overrides. Mutation: delete this block
+    # → a generate leaves chosen=0 and start_refs 400s.
+    if paths:
+        picked = db.one("""SELECT id FROM anchors WHERE scope_kind=? AND scope_value=?
+                            AND tier=? AND view=? AND character_id IS ? AND chosen=1""",
+                        args["scope_kind"], args["scope_value"], args["tier"], view, cid)
+        if not picked:
+            first = db.one("""SELECT id FROM anchors WHERE path=? AND scope_kind=?
+                               AND scope_value=? AND tier=? AND view=? AND character_id IS ?
+                               ORDER BY id""",
+                           paths[0], args["scope_kind"], args["scope_value"],
+                           args["tier"], view, cid)
+            if first:
+                db.run("UPDATE anchors SET chosen=1 WHERE id=?", first["id"])
     return {"n": len(paths), "run_id": run_id}
 
 
@@ -3716,6 +3730,11 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
     # of pinned to whatever number it resolved to that day.
     runs = recent_anchor_runs(album, character_id)
     last = db.jset(runs[0], "form_json") if runs else {}
+    # First visit only. A saved run that left CFG/steps on "follow the mode"
+    # must reopen that way (form_json, not the resolved numbers). Measured
+    # stack for a first visit: CFG 2.0 / 50, not quality's 4.5 / 28.
+    if not runs:
+        last = {**last, "cfg": 2.0, "steps": 50}
     # The latent the denoise labels are worded for: what this swap carries, else
     # what was last generated with, else empty. Carried like the negative and the
     # tier wordings, because a control that resets itself on every swap is a
@@ -5108,6 +5127,20 @@ def anchor_profile_fields(album, character_id=None):
                     continue
                 if key in char.keys() and char[key]:
                     out[key] = char[key]
+    # T7-13: latest view:<key> version overlays the table framing. playlists.views
+    # stays ignored — that column welded one album's species into every other.
+    overlays = {}
+    for vkey in make_anchor.VIEWS:
+        # album first, then this character — same fallback as identity/wardrobe
+        row = prompts.latest(album, f"view:{vkey}", character_id=None)
+        if character_id:
+            own = prompts.latest(album, f"view:{vkey}", character_id=character_id)
+            if own and own["text"]:
+                row = own
+        if row and row["text"]:
+            overlays[vkey] = row["text"]
+    if overlays:
+        out["views"] = overlays
     return {k: v for k, v in out.items() if v}
 
 

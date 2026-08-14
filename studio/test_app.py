@@ -441,7 +441,9 @@ def test_anchor_generation_independent_tier_groups_and_picking(patch_stub):
         assert [x["id"] for x in r_chosen] == [r_rows[0]["id"]]
         pg_chosen = db.q("""SELECT id FROM anchors WHERE scope_kind='album' AND scope_value='Street Cats'
                              AND tier='pg13' AND chosen=1""")
-        assert pg_chosen == []  # other group untouched
+        # generate auto-picks the first of a group that has none. Picking in
+        # r must not clear pg13's own pick.
+        assert [x["id"] for x in pg_chosen] == [pg_rows[0]["id"]]
 
         # picking a different candidate in the same group: still exactly one chosen
         client.post(f"/anchors/{r_rows[1]['id']}/pick")
@@ -5729,6 +5731,130 @@ def test_no_positive_prompt_constant_tries_to_negate():
     for key, text in m.DEFAULT_VIEWS.items():
         for pat in (r"\bno\s+\w", r"\bwithout\s+\w"):
             assert not re.search(pat, text, re.I), f"negation in the {key} view sentence: {text}"
+
+    # TRD-7 T7-1: one table. Labels in the studio are derived, not a second map.
+    assert set(appmod.ANCHOR_VIEWS) == set(m.VIEWS)
+    assert appmod.ANCHOR_VIEWS == {k: v["label"] for k, v in m.VIEWS.items()}
+    # BACKDROP_PARTS join to the shipped sentence, or every existing sheet's
+    # compose drifts the moment a part is reordered.
+    assert "".join(p for _, p in m.BACKDROP_PARTS) == m.BACKDROP
+    assert m.backdrop_for("front") == m.BACKDROP
+    # ...and the absences really did land in the negative, where they work
+    assert "smoke" in appmod.DEFAULT_NEGATIVE and "wet ground" in appmod.DEFAULT_NEGATIVE, \
+        "the backdrop's absences were deleted rather than moved to the negative"
+    import build_refs
+    assert build_refs.negative_applies(appmod.resolved_settings({})), \
+        "the absences moved to a negative prompt the default mode never applies"
+
+
+def test_the_four_shipped_views_compose_byte_identical_to_the_pre_table_strings():
+    """TRD-7 §9.1: the view-table refactor lands structurally FIRST. Frozen
+    sha256 of prompt_for at HEAD 9470045 (n_refs=1). Rebuilding expect from
+    the live DEFAULT_VIEWS+BACKDROP is circular — dropping a BACKDROP part
+    would change both sides. Mutation: drop 'stance' from BACKDROP_PARTS → red."""
+    import hashlib
+    import make_anchor as m
+    a = m.anchor_from({})
+    frozen = {
+        "front": "8b0305d6c56c43eca93722c1abe42f43ad1529bd84fc6db703e2c37047777fff",
+        "back": "32bd0dee9f560e77613f0836a7912e6a7c98e3991fd1ecedc1d01eedfbfcd40d",
+        "front_nude": "a9a659c0ec60fe4e47170237ebf481a1da9deb60d880d422faf12b9bd51c0261",
+        "back_nude": "4f2f556622038721a2d0fa68884e26e8b69f4b22d71c539bf5bfb6c47827b269",
+    }
+    for v, digest in frozen.items():
+        got = hashlib.sha256(m.prompt_for(v, a).encode()).hexdigest()
+        assert got == digest, f"{v} compose drifted"
+
+
+def test_a_profile_supplied_nude_view_still_swaps_wardrobe():
+    """T7-2 live gap: prompt_for used `view in NUDE_VIEWS`, so a key that was
+    not in DEFAULT_VIEWS stayed clothed. Derivation is the name."""
+    import make_anchor as m
+    a = m.anchor_from({"wardrobe": "a red dress",
+                       "nude_wardrobe": "she is completely nude",
+                       "views": {"kneeling_nude": "KNEELING NUDE VIEW. "}})
+    assert "kneeling_nude" not in m.VIEWS
+    p = m.prompt_for("kneeling_nude", a)
+    assert "completely nude" in p and "red dress" not in p
+
+
+def test_generate_picks_the_first_candidate_when_the_group_has_none(patch_stub):
+    """chosen=0 on every live row. Refs 400. Generate must leave a pick."""
+    paths = []
+    def _gen(images, view="front", n=4, progress=None, prefix=None, profile=None,
+             guard="", prompt="", render=None):
+        d = os.path.join(db.DATA, "autopick")
+        os.makedirs(d, exist_ok=True)
+        out = []
+        for i in range(2):
+            p = os.path.join(d, f"{view}_{i}.png")
+            open(p, "wb").write(_png_bytes())
+            out.append(p)
+        paths.extend(out)
+        return out
+    patch_stub("pipeline", gen_anchor=_gen)
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Autopick Album"})
+        client.post("/anchors", data={"album": "Autopick Album", "tier": "r",
+                                      "view": "front", "n": "2", "mode": "quality"},
+                    files=[("images", ("a.png", _png_bytes(), "image/png"))])
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        rows = db.q("""SELECT path, chosen FROM anchors WHERE scope_value='Autopick Album'
+                        AND view='front' ORDER BY id""")
+        assert len(rows) == 2
+        assert rows[0]["chosen"] == 1 and rows[1]["chosen"] == 0
+        # a second generate in the same group must not steal the pick
+        client.post("/anchors", data={"album": "Autopick Album", "tier": "r",
+                                      "view": "front", "n": "2", "mode": "quality"},
+                    files=[("images", ("b.png", _png_bytes(), "image/png"))])
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        still = db.one("SELECT chosen FROM anchors WHERE path=?", rows[0]["path"])
+        assert still["chosen"] == 1
+        assert db.one("""SELECT COUNT(*) n FROM anchors WHERE scope_value='Autopick Album'
+                          AND chosen=1""")["n"] == 1
+
+
+def test_portrait_and_seated_drop_the_standing_fullbody_backdrop():
+    """T7-5: portrait must not sit beside head-to-toe. seated must not sit
+    beside 'stands upright'. The four shipped views still get the full BACKDROP."""
+    import make_anchor as m
+    a = m.anchor_from({})
+    port = m.prompt_for("portrait", a)
+    seat = m.prompt_for("seated", a)
+    front = m.prompt_for("front", a)
+    assert "full body head to toe inside the frame" not in port
+    assert "stands upright and unsupported" not in port
+    assert "head and shoulders" in port
+    assert "stands upright and unsupported" not in seat
+    assert "sitting facing the camera" in seat
+    assert "full body head to toe inside the frame" in seat
+    assert "stands upright and unsupported" in front
+    assert "full body head to toe inside the frame" in front
+    assert "under her feet" not in port
+    assert "standing by herself" not in m.prompt_for("seated", a, n_refs=2)
+    assert "standing by herself" not in m.prompt_for("portrait", a, n_refs=2)
+    assert "standing by herself" in m.prompt_for("front", a, n_refs=2)
+    for key, spec in m.VIEWS.items():
+        for pat in (r"\bno\s+\w", r"\bwithout\s+\w"):
+            assert not re.search(pat, spec["framing"], re.I), key
+
+
+def test_view_framing_type_reaches_the_composer(patch_stub):
+    """T7-13: a saved view:front version is what prompt_for emits."""
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "ViewType Album"})
+        prompts.save("ViewType Album", "view:front",
+                     "FRONT VIEW from the saved version. ", "v1")
+        p = appmod.default_anchor_prompt("ViewType Album", "front")
+        assert "from the saved version" in p
+        assert "view:front" in prompts.PROMPT_TYPES
+        # album-level view: still reaches a cast member (album first, then own)
+        client.post(f"/playlists/{db.one('SELECT id FROM playlists WHERE name=?', 'ViewType Album')['id']}/characters",
+                    data={"name": "Nyx", "role": "rival"})
+        cid = db.one("SELECT id FROM characters WHERE name='Nyx' AND scope_value=?",
+                     "ViewType Album")["id"]
+        p_cast = appmod.default_anchor_prompt("ViewType Album", "front", character_id=cid)
+        assert "from the saved version" in p_cast
 
     # ...and the absences really did land in the negative, where they work
     assert "smoke" in appmod.DEFAULT_NEGATIVE and "wet ground" in appmod.DEFAULT_NEGATIVE, \

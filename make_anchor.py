@@ -55,11 +55,13 @@ DEFAULT_WARDROBE = (
 # Prepended when more than one reference is attached, so the model is told they
 # describe ONE character rather than several to place side by side -- the
 # failure mode of an unlabelled multi-image reference is a group shot.
-COMPOSITE = (
+COMPOSITE_HEAD = (
     "All of the reference images show the SAME single character from different angles or in "
     "different outfits. Combine them into one coherent character: exactly one figure, alone "
-    "in the frame, standing by herself."
+    "in the frame, "
 )
+COMPOSITE_STANCE = "standing by herself."
+COMPOSITE = COMPOSITE_HEAD + COMPOSITE_STANCE
 DEFAULT_BODY = (
     "Her entire body from shoulders to feet carries the same colouring and texture as her "
     "face, uniform in shade on shoulders, upper arms, forearms, hands, torso, hips, thighs, "
@@ -80,37 +82,148 @@ DEFAULT_BODY = (
 # That works only above cfg 1.0, which is a further reason quality mode is the
 # default: in fast mode ComfyUI skips the negative pass and there is nowhere for
 # an absence to live at all.
-BACKDROP = (
-    "The background is one flat sheet of neutral mid-grey, evenly lit and completely empty, "
-    "with the floor the same unbroken grey as the wall behind her and a soft contact shadow "
-    "under her feet. She stands upright and unsupported in an empty studio, clear of the "
-    "edges of the frame. Even neutral studio lighting, white balanced, daylight colour "
-    "temperature, the same light on both sides of her. Clean neutral studio character "
-    "sheet, crisp air, sharp focus, high detail, full body head to toe inside the frame."
+# BACKDROP is studio + lighting + focus. Stance and crop live on the VIEW so a
+# seated or portrait sheet does not argue with "stands upright" / "head to toe".
+# Split into named parts that concatenate to the shipped sentence, so the four
+# existing views omit nothing and compose byte-identical. docs/TRD-7 §9.1.
+BACKDROP_PARTS = (
+    ("studio",
+     "The background is one flat sheet of neutral mid-grey, evenly lit and completely empty, "),
+    ("floor",
+     "with the floor the same unbroken grey as the wall behind her and a soft contact shadow "
+     "under her feet. "),
+    ("stance",
+     "She stands upright and unsupported in an empty studio, clear of the "
+     "edges of the frame. "),
+    ("light",
+     "Even neutral studio lighting, white balanced, daylight colour "
+     "temperature, the same light on both sides of her. Clean neutral studio character "
+     "sheet, crisp air, sharp focus, high detail, "),
+    ("crop",
+     "full body head to toe inside the frame."),
 )
-DEFAULT_VIEWS = {
-    "front": (
-        "FRONT VIEW character reference sheet of a single adult character, standing upright "
-        "facing the camera straight on, arms relaxed at their sides, feet apart, head to toe "
-        "fully in frame. "),
-    "back": (
-        "BACK VIEW character reference sheet of a single adult character, seen from directly "
-        "behind, back to the camera, standing upright, arms relaxed at their sides, feet apart, "
-        "head to toe fully in frame. Rear view, seen from behind, face not visible. "),
-    # Nude variants. A tier that permits nudity still needs the character's body
-    # to stay the SAME body -- without a nude reference the image model invents
-    # one below the neckline, which is the pale-limbs failure in a new place.
-    # Only generated for a tier whose allow_nudity is set; the studio gates it.
-    "front_nude": (
-        "FRONT VIEW nude character reference sheet of a single adult character, standing "
-        "upright facing the camera straight on, arms relaxed at their sides, feet apart, head "
-        "to toe fully in frame. "),
-    "back_nude": (
-        "BACK VIEW nude character reference sheet of a single adult character, seen from "
-        "directly behind, back to the camera, standing upright, arms relaxed at their sides, "
-        "feet apart, head to toe fully in frame. Rear view, seen from behind, face not "
-        "visible. "),
+BACKDROP = "".join(p for _, p in BACKDROP_PARTS)
+
+# ONE table. Adding a view is one entry: label (UI), framing (camera+pose+crop),
+# backdrop_omit (which BACKDROP_PARTS to drop). app.ANCHOR_VIEWS is derived.
+# docs/TRD-7 T7-1.
+VIEWS = {
+    "front": {
+        "label": "front, clothed",
+        "framing": (
+            "FRONT VIEW character reference sheet of a single adult character, standing upright "
+            "facing the camera straight on, arms relaxed at their sides, feet apart, head to toe "
+            "fully in frame. "),
+    },
+    "back": {
+        "label": "back, clothed",
+        "framing": (
+            "BACK VIEW character reference sheet of a single adult character, seen from directly "
+            "behind, back to the camera, standing upright, arms relaxed at their sides, feet apart, "
+            "head to toe fully in frame. Rear view, seen from behind, face not visible. "),
+    },
+    "front_nude": {
+        "label": "front, nude",
+        "framing": (
+            "FRONT VIEW nude character reference sheet of a single adult character, standing "
+            "upright facing the camera straight on, arms relaxed at their sides, feet apart, head "
+            "to toe fully in frame. "),
+    },
+    "back_nude": {
+        "label": "back, nude",
+        "framing": (
+            "BACK VIEW nude character reference sheet of a single adult character, seen from "
+            "directly behind, back to the camera, standing upright, arms relaxed at their sides, "
+            "feet apart, head to toe fully in frame. Rear view, seen from behind, face not "
+            "visible. "),
+    },
+    "three_quarter": {
+        "label": "three-quarter, clothed",
+        "framing": (
+            "THREE-QUARTER VIEW character reference sheet of a single adult character, "
+            "body turned forty-five degrees, face toward the camera, standing, head to toe "
+            "fully in frame. "),
+    },
+    "three_quarter_nude": {
+        "label": "three-quarter, nude",
+        "framing": (
+            "THREE-QUARTER VIEW nude character reference sheet of a single adult character, "
+            "body turned forty-five degrees, face toward the camera, standing, head to toe "
+            "fully in frame. "),
+    },
+    "profile": {
+        "label": "profile, clothed",
+        "framing": (
+            "PROFILE VIEW character reference sheet of a single adult character, "
+            "full side view, standing, head to toe fully in frame. "),
+    },
+    "profile_nude": {
+        "label": "profile, nude",
+        "framing": (
+            "PROFILE VIEW nude character reference sheet of a single adult character, "
+            "full side view, standing, head to toe fully in frame. "),
+    },
+    "seated": {
+        "label": "seated, clothed",
+        "framing": (
+            "SEATED VIEW character reference sheet of a single adult character, "
+            "sitting facing the camera, head to toe fully in frame. "),
+        "backdrop_omit": ("stance",),
+    },
+    "seated_nude": {
+        "label": "seated, nude",
+        "framing": (
+            "SEATED VIEW nude character reference sheet of a single adult character, "
+            "sitting facing the camera, head to toe fully in frame. "),
+        "backdrop_omit": ("stance",),
+    },
+    "portrait": {
+        "label": "portrait, clothed",
+        "framing": (
+            "PORTRAIT VIEW character reference sheet of a single adult character, "
+            "head and shoulders, face toward the camera. "),
+        "backdrop_omit": ("stance", "crop", "floor"),
+    },
+    "portrait_nude": {
+        "label": "portrait, nude",
+        "framing": (
+            "PORTRAIT VIEW nude character reference sheet of a single adult character, "
+            "head and shoulders, face toward the camera. "),
+        "backdrop_omit": ("stance", "crop", "floor"),
+    },
 }
+
+# Compat: callers and tests still read a key→framing map.
+DEFAULT_VIEWS = {k: v["framing"] for k, v in VIEWS.items()}
+
+
+def _omit(view):
+    return (VIEWS.get(view) or {}).get("backdrop_omit") or ()
+
+
+def backdrop_for(view, text=None):
+    """BACKDROP with this view's omitted parts removed.
+
+    An album override (text is not the constant) is used as written — stripping
+    clauses the operator typed would be a second composer. docs/TRD-7 T7-5.
+    """
+    if text is not None and text != BACKDROP:
+        return text
+    omit = _omit(view)
+    return "".join(p for k, p in BACKDROP_PARTS if k not in omit)
+
+
+def composite_for(view, text=None):
+    """COMPOSITE without 'standing' when the view omitted stance.
+
+    Two references is the normal generate. Leaving 'standing by herself' in
+    COMPOSITE put seated/portrait beside a standing clause. T7-5.
+    """
+    if text is not None and text != COMPOSITE:
+        return text
+    if "stance" in _omit(view):
+        return COMPOSITE_HEAD + "by herself."
+    return COMPOSITE
 
 # The nude swap, and the one clause in this file that has to be overridable per
 # character.
@@ -258,9 +371,10 @@ def prompt_for(view, anchor=None, n_refs=1):
     # be used -- it describes the outfit, and including it produces a clothed
     # sheet however the view is worded. The BODY clause stays: colouring per
     # body part is exactly as load-bearing here as anywhere else.
-    nude = view in NUDE_VIEWS
+    nude = is_nude_view(view)
     wardrobe = a.get("nude_wardrobe", NUDE_WARDROBE) if nude else a["wardrobe"]
-    parts = [a["views"][view], wardrobe, a["body"], a["identity"]]
+    framing = (a.get("views") or {}).get(view) or (VIEWS.get(view) or {}).get("framing") or ""
+    parts = [framing, wardrobe, a["body"], a["identity"]]
     # The anatomy clause applies to nude views only, and goes AFTER the body
     # clause so it reads as detail on the surface the body clause just
     # established rather than as a competing description of it.
@@ -269,8 +383,8 @@ def prompt_for(view, anchor=None, n_refs=1):
     if n_refs > 1:
         # several unlabelled references are read as several PEOPLE unless the
         # prompt says otherwise
-        parts.insert(1, a.get("composite") or COMPOSITE)
-    parts.append(a.get("backdrop") or BACKDROP)
+        parts.insert(1, composite_for(view, a.get("composite") or COMPOSITE))
+    parts.append(backdrop_for(view, a.get("backdrop") or BACKDROP))
     return " ".join(p.strip() for p in parts if p and p.strip())
 
 
@@ -289,7 +403,7 @@ def main():
     ap.add_argument("--n", type=int, default=6)
     ap.add_argument("--width", type=int, default=896)
     ap.add_argument("--height", type=int, default=1216)
-    ap.add_argument("--view", choices=list(DEFAULT_VIEWS), default="front")
+    ap.add_argument("--view", choices=list(VIEWS), default="front")
     ap.add_argument("--prefix", default="anchor_v2")
     ap.add_argument("--seed", type=int, default=None,
                     help="base seed. Omitted means a RANDOM base, which is what makes "
