@@ -69,6 +69,19 @@ def test_empty_state_pages_200():
             assert r.status_code == 200, (path, r.text)
 
 
+def test_t1_13_song_peaks_json_is_bounded():
+    """T1-13: the timeline reads numbers from the server, not a PNG."""
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Peaks Song")
+        r = client.get(f"/api/songs/{song['id']}/peaks", params={"z": 0})
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["song_id"] == song["id"]
+        assert 1 <= data["n"] <= 2048
+        assert data["n"] == len(data["pairs"])
+        assert all(len(p) == 2 for p in data["pairs"])
+
+
 def test_upload_mp3_creates_song_and_enqueues_transcribe():
     with TestClient(appmod.app) as client:
         song = _upload_song(client, "Test Song", album="A", genre="Rock")

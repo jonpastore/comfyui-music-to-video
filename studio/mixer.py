@@ -152,6 +152,22 @@ def peaks(samples, z=0):
     return out
 
 
+def peaks_from_path(audio_path, z=0):
+    """Decode one file to samples, then peaks(). Missing path is []."""
+    if not audio_path or not os.path.isfile(audio_path):
+        return []
+    raw = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", audio_path, "-ac", "1", "-ar", "8000",
+         "-f", "f32le", "-"],
+        capture_output=True, check=False)
+    if raw.returncode != 0 or not raw.stdout:
+        return []
+    import struct
+    n = len(raw.stdout) // 4
+    samples = list(struct.unpack("<" + "f" * n, raw.stdout[:n * 4]))
+    return peaks(samples, z=z)
+
+
 def _write_concat_list(paths):
     fd, list_path = tempfile.mkstemp(suffix=".txt")
     with os.fdopen(fd, "w") as f:

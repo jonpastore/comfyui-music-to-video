@@ -62,6 +62,10 @@ def test_t1_14_global_extrema_survive_decimation():
     assert min(p[0] for p in pairs) == -0.73
 
 
+def test_t1_13_missing_path_is_empty():
+    assert _mixer().peaks_from_path("/no/such/file.mp3") == []
+
+
 def test_t1_14_per_bucket_equals_full_resolution_minmax():
     mx = _mixer()
     samples = [((i * 37) % 200 - 100) / 100.0 for i in range(5000)]

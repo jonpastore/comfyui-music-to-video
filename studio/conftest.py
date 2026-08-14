@@ -387,6 +387,9 @@ _stub("mixer",
       # and take T1-14 with it (docs/TRD-1 §6.1).
       peaks=(_real_module("mixer").peaks if _real_module("mixer") is not None
              else (lambda samples, z=0: [])),
+      peaks_from_path=lambda audio_path, z=0: (
+          [[-0.5, 0.5]] if audio_path else []),
+      PEAKS_MAX_POINTS=2048,
       render_set=_render_set,
       mix_audio=_mix_audio,
       set_duration=_set_duration,
