@@ -344,9 +344,10 @@ scored, so "did the repair help" is answerable rather than asserted.
 The PRD's §6 in dependency form. An arrow is a hard edge taken from the
 documents, not a preference.
 
-    T2-12a (legal frame count)  ->  renderer takes a length  ->  clip_seconds honours it
-                                                              ->  T2-13a, T2-13c, T2-8, T2-9
-                                                              ->  W2 per-scene models (T2-48)
+    T6-13a (songs.duration)  ->  T2-12a (legal frame count)  ->  renderer takes a length
+                                                                                    ->  clip_seconds honours it
+                                                                                    ->  T2-13a, T2-13c, T2-8, T2-9
+                                                                                    ->  W2 per-scene models (T2-48)
 
     qc_service pattern  ->  sets_service     ->  clock/rounding, peaks, preview
                                              ->  master fix (5.2)  ->  audiences (T1-18..T1-20)

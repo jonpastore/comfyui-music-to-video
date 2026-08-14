@@ -66,13 +66,33 @@ def transitions(jid):
         "SELECT status, at FROM job_transitions WHERE job_id=? ORDER BY id", jid)
 
 
-def land(path):
-    """T6-7: a landed artefacts row requires the file on disk."""
+def canonical_path(path):
+    """T6-8: one absolute resolved form. Same file, one artefacts row."""
+    if not path:
+        return path
+    return os.path.realpath(os.path.abspath(os.path.expanduser(str(path))))
+
+
+def land(path, expect=None, backend=None, host=None, via=None):
+    """T6-7: a landed artefacts row requires the file on disk.
+    T6-8: the stored path is the canonical spelling."""
+    path = canonical_path(path)
     if not path or not os.path.isfile(path):
         raise ValueError(f"cannot land missing artefact: {path!r}")
     now = time.time()
-    db.run("""INSERT INTO artefacts (path, created, status) VALUES (?,?, 'landed')
-              ON CONFLICT(path) DO UPDATE SET status='landed'""", path, now)
+    expect_json = None
+    if expect is not None:
+        expect_json = expect if isinstance(expect, str) else json.dumps(expect)
+    db.run("""INSERT INTO artefacts
+                (path, created, status, expect_json, backend, host, via)
+              VALUES (?,?, 'landed', ?,?,?,?)
+              ON CONFLICT(path) DO UPDATE SET
+                status='landed',
+                expect_json=COALESCE(excluded.expect_json, artefacts.expect_json),
+                backend=COALESCE(excluded.backend, artefacts.backend),
+                host=COALESCE(excluded.host, artefacts.host),
+                via=COALESCE(excluded.via, artefacts.via)""",
+           path, now, expect_json, backend, host, via)
     return path
 
 

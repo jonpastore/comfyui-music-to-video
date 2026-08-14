@@ -1797,7 +1797,8 @@ def _clip_expect(path):
     an empty dict makes qc skip the comparisons rather than compare against a
     guess, which is the whole difference between a check and a fabrication.
     """
-    row = db.one("SELECT expect_json FROM artefacts WHERE path=?", path)
+    row = db.one("SELECT expect_json FROM artefacts WHERE path=?",
+                 jobs.canonical_path(path))
     if not row or not row["expect_json"]:
         return {}
     try:
@@ -1810,17 +1811,10 @@ def _clip_expect(path):
 def h_qc(args, progress):
     """Tier 1 over one song's artefacts at one tier.
 
-    EXPECTATIONS ARE ONLY PASSED WHERE THE STUDIO ACTUALLY KNOWS THEM, which is
-    less often than it should be. The assembled render is checked against the
-    song's own mp3 duration and must carry audio; clips and reference images get
-    the checks that need no expectation (opens, size, black, frozen, 8n+1).
-
-    Nothing stores what the clip workflow ASKED FOR -- frame count and fps are
-    build_song constants at submit time and no table records them per clip -- so
-    the duration and frame-count checks, which are the sharpest ones here, sit
-    idle on clips. That is a gap in the artefact model, not in the checks, and
-    inventing an expectation from the file itself would be a check comparing a
-    number against itself.
+    Assembled render is checked against songs.duration (T6-13a) and must carry
+    audio. Clips get artefacts.expect_json via _clip_expect; absent stays
+    absent (T6-13) so duration/frame comparisons skip rather than invent a
+    baseline from the file.
     """
     song = db.one("SELECT * FROM songs WHERE id=?", args["song_id"])
     if not song:

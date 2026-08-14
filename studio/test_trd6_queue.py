@@ -4,12 +4,20 @@ T6-2: ready is not queued. A chain handed out in enqueue order is the
 race this exists to catch. Asserted through jobs._claim — the one place
 that decides what runs — not through a helper that wraps it (T6-A10).
 """
+import inspect
+import json
+import math
 import os
 import tempfile
 import time
 
+from PIL import Image
+
 import db
 import jobs
+import qc
+import qc_service
+from conftest import _real_module
 
 
 def _isolate():
@@ -206,3 +214,280 @@ def test_t6_10_delete_song_does_not_orphan_clips_refs_findings():
     assert db.q("SELECT * FROM findings WHERE path=?", clip) == []
     assert db.q("SELECT * FROM set_items WHERE song_id=?", sid) == []
     assert db.q("SELECT * FROM automation WHERE set_item_id=?", item) == []
+
+
+def _png(path, size=(64, 64), split=True):
+    """A sheet that image QC can pass: not blank, not uniform."""
+    im = Image.new("RGB", size, (180, 40, 40))
+    if split:
+        for x in range(size[0] // 2):
+            for y in range(size[1]):
+                im.putpixel((x, y), (40, 180, 40))
+    im.save(path)
+    return path
+
+
+def _spellings(data, name="sheet.png"):
+    """Two strings for one file: `..` vs `.` so a raw INSERT makes two rows."""
+    os.makedirs(os.path.join(data, "sub"), exist_ok=True)
+    path = os.path.join(data, name)
+    a = os.path.join(data, "sub", "..", name)
+    b = os.path.join(data, ".", name)
+    assert a != b
+    return path, a, b
+
+
+def test_t6_8_two_spellings_one_artefact_row():
+    """T6-8: inserting the same file by two spellings yields one artefacts
+    row, stored as one absolute resolved path."""
+    data = _isolate()
+    path, a, b = _spellings(data)
+    with open(path, "wb") as f:
+        f.write(b"png")
+    jobs.land(a)
+    jobs.land(b)
+    rows = db.q("SELECT path FROM artefacts")
+    assert len(rows) == 1, rows
+    stored = rows[0]["path"]
+    assert stored == os.path.realpath(path)
+    assert os.path.isabs(stored)
+    assert stored != a and stored != b
+
+
+def test_t6_8_findings_path_joins_artefacts_path():
+    """T6-8: findings.path joins artefacts.path after QC via the other
+    spelling. Two keys for one file is the defect this exists to catch."""
+    data = _isolate()
+    path, a, b = _spellings(data)
+    _png(path)
+    jobs.land(a)
+    found = qc_service.run_artefact(b, "image")
+    assert found
+    canon = os.path.realpath(path)
+    assert all(f["path"] == canon for f in found), found
+    joined = db.q(
+        "SELECT f.id FROM findings f JOIN artefacts a ON a.path = f.path")
+    assert joined, "findings.path did not join artefacts.path"
+    assert db.one("SELECT COUNT(*) AS n FROM artefacts")["n"] == 1
+
+
+def test_t6_9_present_file_qc_can_pass():
+    """T6-9 positive half: a present file runs QC for real and can pass.
+    Green if QC never runs otherwise."""
+    data = _isolate()
+    path = os.path.join(data, "ok.png")
+    _png(path)
+    jobs.land(path)
+    found = qc_service.run_artefact(path, "image")
+    assert found, "QC produced no findings for a present file"
+    assert all(f["verdict"] == qc.PASS for f in found), found
+
+
+def test_t6_9_deleted_after_row_is_a_finding():
+    """T6-9: a file that disappears after its artefacts row exists is a
+    finding, not a skip or a pass. QC via the other spelling still joins."""
+    data = _isolate()
+    path, a, b = _spellings(data, "gone.png")
+    _png(path)
+    jobs.land(a)
+    assert db.one("SELECT * FROM artefacts") is not None
+    os.remove(path)
+    found = qc_service.run_artefact(b, "image")
+    assert found, "QC skipped a missing artefact"
+    assert any(f["verdict"] != qc.PASS for f in found), found
+    joined = db.q("""SELECT f.id FROM findings f
+                     JOIN artefacts a ON a.path = f.path
+                     WHERE f.verdict != 'pass'""")
+    assert joined, "the missing-artefact finding did not join its artefacts row"
+
+
+def test_t6_12_repair_links_original_expect():
+    """T6-12: approve() copies the original artefacts.expect_json onto the
+    repaired candidate, and a re-check without an explicit expect judges
+    that same question and can change the outcome."""
+    data = _isolate()
+    path = os.path.join(data, "orig.png")
+    _png(path, size=(10, 10))
+    want = {"width": 100, "height": 100}
+    landed = jobs.land(path, expect=want)
+    found = qc_service.run_artefact(landed, "image")
+    row = next(f for f in found if f["check"] == "resolution")
+    assert row["verdict"] != qc.PASS, row
+    fid = db.one(
+        "SELECT id FROM findings WHERE path=? AND check_name='resolution'",
+        landed)["id"]
+    qc_service.approve(fid)
+
+    repairs = db.q("SELECT * FROM artefacts WHERE path != ?", landed)
+    assert len(repairs) == 1, repairs
+    dest = repairs[0]["path"]
+    assert dest != landed
+    assert json.loads(repairs[0]["expect_json"]) == want
+
+    _png(dest, size=(100, 100))
+    again = qc_service.run_artefact(dest, "image")
+    res = [f for f in again if f["check"] == "resolution"]
+    assert res, "re-check did not consult the linked expectation"
+    assert res[0]["verdict"] == qc.PASS, res[0]
+    assert str(res[0]["expected"]) == "100x100"
+
+
+def test_t6_7_stamp_lands_only_when_the_file_exists(tmp_path):
+    """pipeline._stamp goes through jobs.land: missing file is not a row."""
+    _isolate()
+    pipe = _real_module("pipeline")
+    missing = str(tmp_path / "gone.mp4")
+    there = str(tmp_path / "here.mp4")
+    open(there, "wb").write(b"x")
+    db.run("INSERT INTO artefacts (path, expect_json, created) VALUES (?,?,?)",
+           jobs.canonical_path(there), '{"frames": 81}', time.time())
+    pipe._stamp([missing, there], "0", "cerberus", "swarm")
+    assert db.one("SELECT * FROM artefacts WHERE path=?",
+                  jobs.canonical_path(missing)) is None, (
+        "_stamp wrote a landed row for a file that is not on disk")
+    row = db.one("SELECT * FROM artefacts WHERE path=?", jobs.canonical_path(there))
+    assert row["status"] == "landed"
+    assert row["host"] == "cerberus"
+    assert row["expect_json"] == '{"frames": 81}', (
+        "re-stamp wiped expect_json")
+
+_T6_13_INFO = {
+    "duration": 4.8125, "width": 832, "height": 480, "fps": 16.8312,
+    "has_audio": False, "has_video": True,
+}
+
+
+def _silence_qc_pixels(monkeypatch):
+    """Keep T6-13 on duration/frames. luma/frozen would shell out."""
+    monkeypatch.setattr(qc.mixer, "probe", lambda p: dict(_T6_13_INFO))
+    monkeypatch.setattr(qc, "_ffprobe_frames", lambda p: 81)
+    monkeypatch.setattr(qc, "_readings", lambda *a, **k: [40.0] * 8)
+    monkeypatch.setattr(qc, "_stderr_events", lambda *a, **k: [])
+
+
+def test_t6_13_absent_expect_skips_duration_and_frame_count(monkeypatch):
+    """No recorded expectation: duration/frame comparisons do not run,
+    and expected is never filled from the file itself."""
+    data = _isolate()
+    path = os.path.join(data, "orphan.mp4")
+    with open(path, "wb") as f:
+        f.write(b"\x00" * 3000)
+    _silence_qc_pixels(monkeypatch)
+
+    found = qc.run(path, "clip", {})
+    compared = [x for x in found if x["check"] in ("duration", "frame_count")]
+    assert compared == [], compared
+    for x in compared:
+        assert x.get("expected") != x.get("measured"), x
+
+
+def test_t6_13_present_expect_runs_duration_and_frame_count(monkeypatch):
+    """Positive half: with an expectation the comparisons run and can fail."""
+    data = _isolate()
+    path = os.path.join(data, "asked.mp4")
+    with open(path, "wb") as f:
+        f.write(b"\x00" * 3000)
+    _silence_qc_pixels(monkeypatch)
+
+    found = qc.run(path, "clip", {"duration": 30.0, "frames": 505})
+    by_check = {x["check"]: x for x in found}
+    assert "duration" in by_check and "frame_count" in by_check, by_check
+    assert by_check["duration"]["verdict"] == qc.REJECT
+    assert by_check["frame_count"]["verdict"] == qc.REJECT
+    assert by_check["frame_count"]["measured"] == 81
+    assert by_check["frame_count"]["expected"] == 505
+    assert by_check["duration"]["expected"] == 30.0
+
+    match = qc.run(path, "clip", {"duration": 4.8125, "frames": 81})
+    ok = {x["check"]: x for x in match}
+    assert ok["duration"]["verdict"] == qc.PASS
+    assert ok["frame_count"]["verdict"] == qc.PASS
+
+
+def test_t6_13_stamp_expect_does_not_invent_a_baseline_from_the_file():
+    """Absent sidecar stays absent. Reading the clip to fill expect_json
+    would be the self-comparison T6-13 exists to stop."""
+    data = _isolate()
+    path = os.path.join(data, "unstamped.mp4")
+    with open(path, "wb") as f:
+        f.write(b"\x00" * 3000)
+    stamp = _real_module("pipeline")._stamp_expect
+    stamp([{"clip_idx": 0, "path": path}], {})
+    row = db.one("SELECT * FROM artefacts WHERE path=?", path)
+    assert row is None or not row["expect_json"], row
+
+    stamp(
+        [{"clip_idx": 0, "path": path}],
+        {0: {"frames": 81, "duration": 4.8125}})
+    stamped = db.one("SELECT expect_json FROM artefacts WHERE path=?", path)
+    assert stamped and stamped["expect_json"]
+    assert json.loads(stamped["expect_json"])["frames"] == 81
+
+
+# ----------------------------------------------------------------- T6-13a --
+
+# The hole §3.4 opened: third-decimal drift moves a clip count at the boundary.
+_T6_13A_DURATION = 195.792
+
+
+def _assert_no_reprobe(src, name):
+    lowered = src.lower()
+    for needle in ("ffprobe", "estimate_duration", "mixer.probe", "probe("):
+        assert needle not in lowered, (
+            f"{name} re-probes the song ({needle!r}); songs.duration is the "
+            f"authority once the column is set:\n{src}")
+
+
+def test_t6_13a_songs_duration_is_the_authority_and_nothing_reprobes():
+    """TRD-1 §3.2, TRD-2 §3.4 and TRD-3 §4.4 all read songs.duration.
+    A later ffprobe on those paths fails this test."""
+    import app as appmod
+    import build_song
+    import qc_service
+
+    data = _isolate()
+    mp3 = os.path.join(data, "track.mp3")
+    render = os.path.join(data, "assembled.mp4")
+    with open(mp3, "wb") as f:
+        f.write(b"ID3")
+    with open(render, "wb") as f:
+        f.write(b"\x00" * 3000)
+    sid = db.upsert_song("t6-13a", title="Authority",
+                         duration=_T6_13A_DURATION, mp3_path=mp3)
+    db.run("INSERT INTO renders (song_id, tier, path, created) VALUES (?,?,?,?)",
+           sid, "r", render, time.time())
+    song = db.one("SELECT * FROM songs WHERE id=?", sid)
+
+    # TRD-1 §3.2 / TRD-2 §3.4: clip count dividend is the column.
+    n = appmod.clip_count(song)
+    assert n == build_song.n_clips_for(_T6_13A_DURATION)
+    assert n == math.ceil(round(_T6_13A_DURATION, 3) / build_song.CHUNK)
+
+    captured = []
+
+    def _capture(path, kind, expect=None, items=None, record_pass=True):
+        captured.append((kind, dict(expect or {})))
+        return []
+
+    orig = qc_service.run_artefact
+    qc_service.run_artefact = _capture
+    try:
+        appmod.h_qc({"song_id": sid, "tier": "r"}, lambda m: None)
+    finally:
+        qc_service.run_artefact = orig
+
+    song_expects = [e for kind, e in captured if kind == "song"]
+    assert song_expects, captured
+    assert song_expects[0]["duration"] == _T6_13A_DURATION
+    assert round(song_expects[0]["duration"], 3) == 195.792
+
+    grok = _real_module("grok")
+    _assert_no_reprobe(inspect.getsource(appmod.clip_count), "app.clip_count")
+    _assert_no_reprobe(inspect.getsource(appmod.h_qc), "app.h_qc")
+    _assert_no_reprobe(inspect.getsource(build_song.n_clips_for),
+                       "build_song.n_clips_for")
+    _assert_no_reprobe(inspect.getsource(grok.generate_storyboard),
+                       "grok.generate_storyboard")
+    assert 'song["duration"]' in inspect.getsource(grok.generate_storyboard)
+    assert 'song["duration"]' in inspect.getsource(appmod.clip_count)
+    assert 'song["duration"]' in inspect.getsource(appmod.h_qc)

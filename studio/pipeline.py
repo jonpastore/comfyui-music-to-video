@@ -669,11 +669,14 @@ def _stamp(paths, backend, host, via, progress=None):
     runs, and a bookkeeping row is not worth losing a rendered clip over; a
     write that fails says so once and the artefact still comes back.
     """
+    import jobs
     now = time.time()
     for p in paths:
         try:
-            db.run("INSERT OR REPLACE INTO artefacts (path, backend, host, via, created)"
-                   " VALUES (?,?,?,?,?)", p, backend, host, via, now)
+            # T6-7: landed requires the file. T6-8: one canonical spelling.
+            jobs.land(p, backend=backend, host=host, via=via)
+        except ValueError as e:
+            _say(progress, f"not landing {os.path.basename(p) if p else p}: {e}")
         except Exception as e:      # noqa: BLE001 -- see docstring
             _say(progress, f"could not record which box rendered {os.path.basename(p)}: {e}")
             return
@@ -1158,9 +1161,16 @@ def _stamp_expect(records, expects, progress=None):
         if not want:
             continue
         try:
-            db.run("""INSERT INTO artefacts (path, expect_json, created) VALUES (?,?,?)
-                      ON CONFLICT(path) DO UPDATE SET expect_json=excluded.expect_json""",
-                   r["path"], json.dumps(want), now)
+            import jobs
+            p = jobs.canonical_path(r["path"])
+            if os.path.isfile(p):
+                jobs.land(p, expect=want)
+            else:
+                db.run("""INSERT INTO artefacts (path, expect_json, created)
+                          VALUES (?,?,?)
+                          ON CONFLICT(path) DO UPDATE SET
+                            expect_json=excluded.expect_json""",
+                       p, json.dumps(want), now)
         except Exception as e:              # noqa: BLE001
             _say(progress, f"could not record what clip {r['clip_idx']} asked for: {e}")
             return

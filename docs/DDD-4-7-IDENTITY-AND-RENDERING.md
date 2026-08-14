@@ -209,11 +209,11 @@ under the same "No backends match" headline (`T6-4`); WAL on, and the
 **The shape of what is not:**
 
 - **`T6-13a` first, and it does not wait for the rest.** `songs.duration`, written
-  once from ffprobe on upload, is the authority; TRD-1 §3.2, TRD-2 §3.4 and
-  TRD-3 §4.4 all read "the song's length" and none says from where. They disagree
-  in the third decimal, which moves a clip count at a boundary. **The consumer
-  side is unowned** — `DDD-1-3` §5.5's chain starts at `T2-12a` and assumes a
-  duration it does not name — so whoever takes `T2-12a` takes this with it.
+  once from ffprobe on upload, is the authority. TRD-1 §3.2 (`app.clip_count`),
+  TRD-2 §3.4 (`grok.generate_storyboard`) and TRD-3 §4.4 (`h_qc` assembled expect)
+  all read that column; a re-ffprobe on those paths fails
+  `test_t6_13a_songs_duration_is_the_authority_and_nothing_reprobes`.
+  `DDD-1-3` §6's chain now starts at `T6-13a`.
 - **Identity before lifecycle before queue.** `T6-8`'s canonical path is what
   `findings` and `artefacts` join on, and every later row keys off it. Cascade
   policy is stated **per table**, not inherited from whatever sqlite does.

@@ -280,5 +280,6 @@ current.
 | `T6-17` migrations keep old rows working | **convention, held** | earlier | every column added this week works NULL |
 | `T6-A7`…`T6-A10` verification rules | **new today** | today | consolidated here from all ten documents, which had already drifted. `T6-A10` is session B's: assert through the shared entry point |
 | `T6-8` canonical identity | **partial** | `e20346f` | the HOST half is done — `models.canonical_host()`, one box one identity, 15 production rows repaired. The PATH half is untouched |
-| **`T6-13a` one duration authority** | **not built — and it is the small one that unblocks the most** | — | TRD-1 §3.2, TRD-2 §3.4 and TRD-3 §4.4 all read "the song's length" and none says from where. One column, and `T2-12a` waits behind it |
+| `T6-13` absent expectation means skip | **built** | this change | `qc.run` with `{}` emits no duration/frame_count; `_stamp_expect` with no sidecar writes no `expect_json`. Present expect still compares. `studio/test_trd6_queue.py` |
+| **`T6-13a` one duration authority** | **built** | this change | `app.clip_count`, `grok.generate_storyboard` and `h_qc` all read `songs.duration`; a re-ffprobe on those paths fails `test_t6_13a_songs_duration_is_the_authority_and_nothing_reprobes`. Asserted at 195.792 |
 | `T6-1`…`T6-7`, `T6-9`, `T6-10`, `T6-12`, `T6-14`, `T6-16` | **not built** | — | the pull queue, the lifecycle and cascade policy. **Jon decided 2026-08-13 to build this in full** rather than take `T6-13a` alone |

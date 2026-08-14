@@ -560,9 +560,10 @@ def ltx_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard, 
 def _refine_ltx(wf, i):
     """Variant A: same-resolution second pass on the sampled VIDEO latent.
 
-    Inserted before VAEDecode. Takes the split video half (never a joint AV
-    latent), truncates sigmas at REFINE_DENOISE, and re-samples with a fresh
-    seed. docs/TRD-5 T5-1. Raises naming the reason if the graph cannot host it.
+    Takes the split video half (never a joint AV latent), truncates sigmas at
+    REFINE_DENOISE, re-samples with a fresh seed, and decodes through a NEW
+    VAEDecode (T5-4). docs/TRD-5 T5-1. Raises naming the reason if the graph
+    cannot host it.
     """
     decode_id = next((k for k, n in wf.items() if n["class_type"] == "VAEDecode"), None)
     if decode_id is None:
@@ -594,7 +595,12 @@ def _refine_ltx(wf, i):
             "cfg": ins.get("cfg", 1.0), "positive": ins["positive"],
             "negative": ins["negative"], "sampler": ins["sampler"],
             "sigmas": ["30", 1], "latent_image": sampled}}
-    wf[decode_id]["inputs"]["samples"] = ["32", 0]
+    # T5-4 / T6-A5: a new decode, never a rewire of the unrefined one.
+    wf["33"] = {"class_type": "VAEDecode", "inputs": {
+        "samples": ["32", 0], "vae": wf[decode_id]["inputs"]["vae"]}}
+    for n in wf.values():
+        if n["class_type"] == "CreateVideo" and n["inputs"].get("images") == [decode_id, 0]:
+            n["inputs"]["images"] = ["33", 0]
     return wf
 
 
@@ -696,6 +702,7 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
         wf["15"] = {"class_type": "KSampler", "inputs": {"model": ["3", 0], "seed": 1000 + i, "steps": 4, "cfg": 1.0, "sampler_name": "uni_pc", "scheduler": "simple", "positive": ["14", 0], "negative": ["14", 1], "latent_image": ["14", 2], "denoise": 1.0}}
         sampled = ["15", 0]
 
+    unrefined = sampled
     if refine:
         # low-denoise second pass with the i2v LOW-noise expert. It re-samples
         # the latent s2v produced, so the audio-driven motion is preserved and
@@ -710,10 +717,16 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
             "denoise": REFINE_DENOISE}}
         sampled = ["32", 0]
 
-    wf["16"] = {"class_type": "VAEDecode", "inputs": {"samples": sampled, "vae": ["7", 0]}}
+    # T5-4 / T6-A5: keep the unrefined decode when refining; the refined
+    # latent gets its own VAEDecode so the original output path is untouched.
+    wf["16"] = {"class_type": "VAEDecode", "inputs": {"samples": unrefined, "vae": ["7", 0]}}
+    decode_id = "16"
+    if refine:
+        wf["33"] = {"class_type": "VAEDecode", "inputs": {"samples": sampled, "vae": ["7", 0]}}
+        decode_id = "33"
     # silent: the master mp3 is laid over the assembled timeline once, so
     # per-clip audio cannot drift.
-    wf["17"] = {"class_type": "CreateVideo", "inputs": {"images": ["16", 0], "fps": FPS}}
+    wf["17"] = {"class_type": "CreateVideo", "inputs": {"images": [decode_id, 0], "fps": FPS}}
     return wf
 
 
@@ -763,9 +776,13 @@ def main():
         # -- a whole render's worth of JSONs, refused one at a time. Every new
         # family would have re-earned that bug; asking the graph does not.
         video_node = next(k for k, n in wf.items() if n["class_type"] == "CreateVideo")
+        # T5-4 / T6-A5: refine writes beside the unrefined clip, never over it.
+        prefix = f"{args.slug}/clip_{i:03d}"
+        if args.refine:
+            prefix += "_refined"
         wf["99"] = {"class_type": "SaveVideo", "inputs": {
             "video": [video_node, 0],
-            "filename_prefix": f"{args.slug}/clip_{i:03d}",
+            "filename_prefix": prefix,
             "format": "auto", "codec": "auto"}}
         with open(f"{args.outdir}/clip_{i:03d}.json", "w") as f:
             json.dump(wf, f)
@@ -834,7 +851,9 @@ def demo():
     assert rw["32"]["inputs"]["denoise"] == REFINE_DENOISE
     assert 0 < REFINE_DENOISE < 1, "a refiner at denoise 1.0 is not a refiner"
     assert rw["30"]["inputs"]["unet_name"] == I2V_LOW
-    assert rw["16"]["inputs"]["samples"] == ["32", 0], "the refined latent was not the one decoded"
+    assert rw["16"]["inputs"]["samples"] == ["15", 0], "refine overwrote the unrefined decode"
+    assert rw["33"]["inputs"]["samples"] == ["32", 0], "the refined latent was not the one decoded"
+    assert rw["17"]["inputs"]["images"] == ["33", 0]
     # ...and it still carries the audio-driven motion it is refining
     assert rw["14"]["inputs"]["audio_encoder_output"] == ["11", 0]
 
@@ -854,7 +873,9 @@ def demo():
     assert 0 < ref_ltx["30"]["inputs"]["denoise"] < 1
     assert ref_ltx["32"]["inputs"]["guider"] == ["17", 0]
     assert ref_ltx["32"]["inputs"]["latent_image"] == ["22", 0]
-    assert ref_ltx["23"]["inputs"]["samples"] == ["32", 0]
+    assert ref_ltx["23"]["inputs"]["samples"] == ["22", 0], "refine overwrote the unrefined decode"
+    assert ref_ltx["33"]["inputs"]["samples"] == ["32", 0]
+    assert ref_ltx["24"]["inputs"]["images"] == ["33", 0]
     assert I2V_LOW not in str(ref_ltx), "do not hand an LTX latent to WAN"
 
     # --- allocation: every clip belongs to exactly one scene, none lost ---

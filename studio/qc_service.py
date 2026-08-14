@@ -36,6 +36,17 @@ def _txt(v):
     return None if v is None else str(v)
 
 
+def _expect_from_artefacts(path):
+    """T6-11 / T6-12: the question stored against this path, or {}."""
+    row = db.one("SELECT expect_json FROM artefacts WHERE path=?", path)
+    if not row or not row["expect_json"]:
+        return {}
+    try:
+        return json.loads(row["expect_json"])
+    except ValueError:
+        return {}
+
+
 def record(findings):
     """Persist findings. Returns the number of rows written.
 
@@ -54,6 +65,7 @@ def record(findings):
     now = time.time()
     n = 0
     for f in findings:
+        path = jobs.canonical_path(f["path"])
         db.run("""INSERT INTO findings
                     (path, kind, tier, check_name, verdict, measured, expected,
                      unit, detail, remedy, status, created)
@@ -62,7 +74,7 @@ def record(findings):
                      verdict=excluded.verdict, measured=excluded.measured,
                      expected=excluded.expected, unit=excluded.unit,
                      detail=excluded.detail, created=excluded.created""",
-               f["path"], f["kind"], f["tier"], f["check"], f["verdict"],
+               path, f["kind"], f["tier"], f["check"], f["verdict"],
                _txt(f.get("measured")), _txt(f.get("expected")), f.get("unit"),
                f.get("detail"), f.get("remedy"), OPEN, now)
         n += 1
@@ -75,8 +87,18 @@ def run_artefact(path, kind, expect=None, items=None, record_pass=True):
     NOTHING IS REPAIRED HERE and nothing is enqueued. docs/TRD-3 T3-18: QC never
     auto-heals, so running it over a directory of broken output must leave the
     job queue exactly as it was.
+
+    T6-8: the path is canonical so findings join artefacts. T6-9: a missing
+    file is a finding (qc.run's opens check), not a skip. T6-12: when expect
+    is omitted the artefacts row supplies the same question a repair was
+    judged against.
     """
+    path = jobs.canonical_path(path)
+    if expect is None:
+        expect = _expect_from_artefacts(path)
     found = qc.run(path, kind, expect=expect, items=items)
+    for f in found:
+        f["path"] = path
     record(found if record_pass else [f for f in found if f["verdict"] != qc.PASS])
     return found
 
@@ -117,7 +139,7 @@ def summary(path=None):
     args = []
     if path:
         sql += " WHERE path=?"
-        args.append(path)
+        args.append(jobs.canonical_path(path))
     sql += " GROUP BY verdict"
     counts = {r["verdict"]: r["n"] for r in db.q(sql, *args)}
     return {v: counts.get(v, 0) for v in (qc.PASS, qc.FLAG, qc.REJECT)}
@@ -207,10 +229,19 @@ def approve(fid):
     remedy = (row["remedy"] or "").strip()
     if not remedy:
         raise ValueError("approving a finding needs a remedy -- edit one first")
-    dest = _repair_dest(row["path"])
+    src = jobs.canonical_path(row["path"])
+    dest = jobs.canonical_path(_repair_dest(src))
+    orig = db.one("SELECT expect_json FROM artefacts WHERE path=?", src)
+    if orig and orig["expect_json"]:
+        # T6-12: the repaired candidate is judged against the same question.
+        # The dest file does not exist yet, so this is not land() (T6-7).
+        db.run("""INSERT INTO artefacts (path, expect_json, created) VALUES (?,?,?)
+                  ON CONFLICT(path) DO UPDATE SET
+                    expect_json=excluded.expect_json""",
+               dest, orig["expect_json"], time.time())
     jobs.enqueue("repair", {
         "finding_id": int(fid),
-        "path": row["path"],
+        "path": src,
         "repair_path": dest,
         "remedy": remedy,
         "check_name": row["check_name"],
