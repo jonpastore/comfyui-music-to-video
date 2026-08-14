@@ -1096,10 +1096,56 @@ pre.prompt-body {
 }
 textarea.inert { opacity: 0.55; }
 
-/* Tiers and Views read as one choice -- which rating, and which sheets of it --
-   so they sit together rather than stacked with the plan text between them. */
+/* Tiers stay a compact row. Views take the full form width so clothed | nude
+   sit as two equal columns, not a tall stack squeezed beside an empty Tiers box. */
 .side-by-side { display: flex; gap: 1rem; flex-wrap: wrap; }
 .side-by-side > fieldset { flex: 1 1 22rem; min-width: 18rem; }
+.views-fieldset { min-width: 0; }
+.view-toolbar { margin: 0 0 0.45rem; }
+.view-matrix {
+  width: 100%;
+  max-width: 28rem;
+  border-collapse: collapse;
+}
+.view-matrix th, .view-matrix td {
+  padding: 0.3rem 0.55rem;
+  vertical-align: middle;
+}
+.view-matrix thead th {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border-strong);
+}
+.view-matrix thead th:not(:first-child),
+.view-matrix td { text-align: center; }
+.view-matrix tbody th {
+  font-weight: 500;
+  text-align: left;
+  padding-left: 0;
+  white-space: nowrap;
+}
+.view-matrix tbody tr:hover th,
+.view-matrix tbody tr:hover td { background: var(--panel-raised); }
+.view-matrix .check { justify-content: center; margin: 0; min-height: 1.6rem; }
+.view-matrix thead .check { font-weight: 600; color: var(--text); }
+.view-matrix input[type="checkbox"] { width: 1.05rem; height: 1.05rem; }
+.anchor-commit {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.75rem -1.25rem 0;
+  padding: 0.75rem 1.25rem;
+  background: var(--panel);
+  border-top: 1px solid var(--border-strong);
+  box-shadow: 0 -8px 16px rgba(0, 0, 0, 0.25);
+}
+.anchor-commit .plan-panel { flex: 1 1 auto; margin: 0; }
+.anchor-commit #anchor-generate { flex: none; }
 /* The saved-version rows (positive AND negative) get EXPLICIT tracks. They used
    to inherit .field-row's `repeat(auto-fit, minmax(9rem, 1fr))` while the picker
    carried `min-width: 16rem` -- and a grid item wider than its track overflows

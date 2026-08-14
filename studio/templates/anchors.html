@@ -1,10 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Anchors</h1>
-<p class="hint">An anchor is the character reference sheet for an ALBUM or PLAYLIST at a given
-  TIER, CHARACTER and view &mdash; every track on that album renders against the chosen one.
-  Reference generation cannot run without a chosen anchor for the tier. An album and a
-  playlist are the same record, so there is no separate scope to pick.</p>
+<p class="hint">An anchor is the identity sheet a later clip is built from. Pick a rating
+  and a view, lock it with the base photographs, then generate candidates and choose one.
+  Scene refs and clips inherit whoever you pick here.</p>
 
 {% if failed_jobs %}
 {# a failed batch used to be invisible from here: the button appeared to do

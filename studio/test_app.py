@@ -1943,7 +1943,8 @@ def test_nude_anchor_refused_for_a_tier_that_does_not_permit_nudity():
         # named a tier you could no longer see ticked.
         pg = client.get("/anchors/form", params={"album": "Nude Gate Album",
                                                   "tier": "pg13"}).text
-        assert "front, nude" in pg, "the nude view is not even listed"
+        assert 'value="front_nude"' in pg, "the nude view is not even listed"
+        assert 'class="view-matrix"' in pg, "nude views are not in the view matrix"
         assert not re.search(r'value="front_nude"[^>]*disabled', pg, re.S), \
             "a view is disabled again; it should be skipped per tier, not withdrawn"
         assert "greyed out because" not in pg
@@ -1984,29 +1985,46 @@ def test_one_post_generates_every_tier_and_view_combination(patch_stub):
                    for a in args)
 
 
-def test_anchor_form_opens_on_the_tier_the_album_already_works_in():
-    """Adding G made it the first tier alphabetically, so the form landed on the
-    most restrictive rating in the studio and opened with a nudity refusal --
-    for an album whose every anchor is R."""
+def test_anchor_form_does_not_preselect_a_tier_or_view():
+    """docs/TRD-4 T4-3: no silent default. The form used to pre-tick G (first
+    alphabetically) or the album's last-used tier, and front when no view was
+    ticked -- so a restrictive rating nobody chose became the opening state."""
     with TestClient(appmod.app) as client:
         client.post("/playlists", data={"name": "Default Tier Album"})
 
-        # a brand-new album has nothing to go on, so the first tier stands
         fresh = client.get("/anchors/form", params={"album": "Default Tier Album"}).text
-        assert 'value="g"\n               checked' in fresh or 'value="g"' in fresh
+        assert not re.search(r'name="tier"[^>]*checked', fresh), "a tier was pre-ticked"
+        assert not re.search(r'name="view"[^>]*checked', fresh), "a view was pre-ticked"
+        assert "Nothing is pre-selected" in fresh
+        assert 'value="front_nude"' in fresh, "nude views must still be listed"
+        assert 'data-scope="clothed"' in fresh and 'data-scope="nude"' in fresh
+        assert 'data-scope="all"' in fresh
+        assert 'class="view-matrix"' in fresh
+        assert fresh.index('id="anchor-generate"') < fresh.index("Render &mdash; reference")
 
-        # An album with BOTH pg13 and r anchors must open on ONE of them -- the
-        # most recent. Opening on both withdrew the nude views, because a
-        # combination that would be refused is not offered.
+        # last-used is not a default either
         _chosen_anchor("Default Tier Album", "pg13", path="/tmp/dta_pg.png")
         time.sleep(0.01)
         _chosen_anchor("Default Tier Album", "r", path="/tmp/dta.png")
         page = client.get("/anchors/form", params={"album": "Default Tier Album"}).text
-        import re
-        assert re.search(r'name="tier" value="r"\s+checked', page), "did not open on R"
-        assert not re.search(r'name="tier" value="g"\s+checked', page), "still opened on G"
+        assert not re.search(r'name="tier"[^>]*checked', page), "last-used tier was pre-ticked"
+        assert not re.search(r'name="view"[^>]*checked', page), "a view was pre-ticked"
         assert 'value="front_nude"' in page, "R permits nudity but no nude view was offered"
         assert "No nude view is offered because" not in page
+
+        clothed = [k for k in appmod.ANCHOR_VIEWS if k not in appmod.NUDE_VIEWS]
+        nude = [k for k in appmod.ANCHOR_VIEWS if k in appmod.NUDE_VIEWS]
+        cols = client.get("/anchors/form", params={"album": "Default Tier Album",
+                                                    "tier": "r", "view": clothed}).text
+        assert re.search(r'data-scope="clothed"[^>]*checked', cols), "all-clothed not ticked"
+        assert not re.search(r'data-scope="nude"[^>]*checked', cols), "all-nude ticked with none"
+        assert not re.search(r'data-scope="all"[^>]*checked', cols), "all-views ticked on one column"
+        both = client.get("/anchors/form", params={"album": "Default Tier Album",
+                                                    "tier": "r",
+                                                    "view": clothed + nude}).text
+        assert re.search(r'data-scope="all"[^>]*checked', both), "all-views not ticked"
+        assert re.search(r'data-scope="clothed"[^>]*checked', both)
+        assert re.search(r'data-scope="nude"[^>]*checked', both)
 
 
 def test_anchor_form_needs_a_real_album_and_at_least_one_image():
@@ -2031,10 +2049,12 @@ def test_anchor_prompt_is_editable_shows_its_guardrails_and_is_screened(patch_st
     with TestClient(appmod.app) as client:
         client.post("/playlists", data={"name": "Prompt Album"})
         page = client.get("/anchors").text
-        # the composed prompt is visible and editable, with its rules above it
-        assert "What applies to every sheet" in page
-        assert "No minors" in page, "the pinned clause is not shown"
-        assert "character reference sheet" in page, "the composed prompt is not prefilled"
+        assert "Nothing is pre-selected" in page
+        filled = client.get("/anchors/form", params={"album": "Prompt Album",
+                                                     "tier": "r", "view": "front"}).text
+        assert "What applies to every sheet" in filled
+        assert "No minors" in filled, "the pinned clause is not shown"
+        assert "character reference sheet" in filled, "the composed prompt is not prefilled"
 
         files = [("images", ("f.png", _png_bytes(), "image/png"))]
         base = {"album": "Prompt Album", "tier": "r", "n": "1"}
@@ -2092,7 +2112,8 @@ def test_each_tier_has_its_own_tab_and_its_own_prompt(patch_stub):
     with TestClient(appmod.app) as client:
         client.post("/playlists", data={"name": "Tab Album"})
         form = client.get("/anchors/form", params={"album": "Tab Album",
-                                                    "tier": ["pg13", "r"]}).text
+                                                    "tier": ["pg13", "r"],
+                                                    "view": "front"}).text
         assert 'name="prompt_pg13__front"' in form and 'name="prompt_r__front"' in form
         assert form.count('class="tier-tab ') == 2, "one tab per ticked tier"
 
@@ -2102,6 +2123,7 @@ def test_each_tier_has_its_own_tab_and_its_own_prompt(patch_stub):
         # composed_for -- it is what tells the route this is still the same
         # album and character rather than a switch to a different subject.
         kept = client.get("/anchors/form", params={"album": "Tab Album", "tier": ["pg13", "r"],
+                                                    "view": "front",
                                                     "composed_for": "Tab Album|",
                                                     "prompt_r__front": "the R tier gets this wording"}).text
         assert "the R tier gets this wording" in kept
@@ -2110,6 +2132,7 @@ def test_each_tier_has_its_own_tab_and_its_own_prompt(patch_stub):
         # one character on one album, so carrying it onto another renders the
         # wrong person's identity and wardrobe, stored under the new one.
         switched = client.get("/anchors/form", params={"album": "Tab Album", "tier": ["r"],
+                                                        "view": "front",
                                                         "composed_for": "Some Other Album|",
                                                         "prompt_r__front": "wording for the old subject"}).text
         assert "wording for the old subject" not in switched
@@ -5973,11 +5996,15 @@ def test_editing_one_view_does_not_change_another_views_compose(patch_stub):
         client.post("/playlists", data={"name": "Matrix Album"})
         form = client.get("/anchors/form", params={"album": "Matrix Album", "tier": ["r", "xxx"],
                                                     "view": ["front", "back"]}).text
-        assert "prompt-matrix" in form, "the request is still stacked textareas, not a matrix"
+        assert 'name="matrix_cell"' not in form
+        assert 'type="radio"' not in form or 'name="view"' in form
+        assert form.count('name="view"') >= 2
+        assert 'type="checkbox" name="view"' in form
         assert form.count('name="prompt_r__') == 2
         assert form.count('name="prompt_xxx__') == 2
         assert 'name="prompt_r__front"' in form and 'name="prompt_r__back"' in form
         assert 'name="pose"' in form, "the pose field is not on the form"
+        assert "Paste a screenshot" in form
 
         front = appmod.default_anchor_prompt("Matrix Album", "front")
         back = appmod.default_anchor_prompt("Matrix Album", "back")

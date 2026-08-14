@@ -2093,7 +2093,7 @@ def _anchor_ctx_from_form(form, album, character_id):
     hx-include sends the whole form with both requests, so all of it is here.
     """
     tiers_sel = [t for t in form.getlist("tier") if t]
-    views_sel = [v for v in form.getlist("view") if v] or ["front"]
+    views_sel = [v for v in form.getlist("view") if v]
     typed = {k[len("prompt_"):]: v for k, v in form.items() if k.startswith("prompt_")}
     return anchor_form_ctx(album, tiers_sel, views_sel, character_id, typed,
                             negative=form.get("negative") or "",
@@ -3724,7 +3724,7 @@ def anchor_plan(selected_tiers, selected_views):
     return plan
 
 
-def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), character_id=None,
+def anchor_form_ctx(album="", selected_tiers=(), selected_views=(), character_id=None,
                     typed_prompts=None, negative=None, tones=None, latent=None, pose=None):
     """The generate form for one album, across any number of tiers and views.
 
@@ -3734,6 +3734,11 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
     rules read as though it applied only to that tier, and it was in fact the
     only prompt sent for all of them.
 
+    No silent default: an empty tier or view selection stays empty (docs/TRD-4
+    T4-3). The form used to pre-tick G (first alphabetically) or the album's
+    last-used tier, and front when no view was ticked -- which is how a
+    restrictive rating nobody chose became the opening state.
+
     typed_prompts: {tier: text} to redisplay after a rejected submit, so an edit is
     not thrown away by the error.
     """
@@ -3742,28 +3747,12 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
               db.q("SELECT name FROM playlists WHERE kind='playlist' ORDER BY name")]
     album = album if album in albums else (albums[0] if albums else "")
     selected = [t for t in selected_tiers if any(x["name"] == t for x in all_t)]
-    if not selected:
-        # Open on the tiers this ALBUM already works in, not on the first tier
-        # alphabetically. Adding G made that first tier G, so the form landed on
-        # the most restrictive rating in the studio and greeted you with a
-        # nudity refusal for an album whose every anchor is R.
-        # The tier of the MOST RECENT anchor -- where you left off. Not every
-        # tier the album has ever used: Street Cats has both pg13 and r, and
-        # opening on both withdrew the nude views, because a combination that
-        # would be refused is not offered. One tier is also the honest default
-        # for a form whose whole job is picking which rating to render at.
-        last = db.one("""SELECT tier FROM anchors WHERE scope_kind='album' AND scope_value=?
-                         ORDER BY created DESC, id DESC LIMIT 1""", album)
-        selected = [last["tier"]] if last and any(
-            x["name"] == last["tier"] for x in all_t) else []
-    if not selected and all_t:
-        selected = [all_t[0]["name"]]
     # Every view is always offered, against every tier. Nothing here is disabled
     # or hidden: a view a tier cannot use is simply not rendered for that tier,
     # and the plan below says so in words.
-    views = [{"key": k, "label": v, "nude": k in NUDE_VIEWS}
+    views = [{"key": k, "label": v, "short": v.split(",")[0], "nude": k in NUDE_VIEWS}
              for k, v in ANCHOR_VIEWS.items()]
-    chosen_views = [v["key"] for v in views if v["key"] in set(selected_views)] or ["front"]
+    chosen_views = [v["key"] for v in views if v["key"] in set(selected_views)]
     plan = anchor_plan(selected, chosen_views)
     typed_prompts = typed_prompts or {}
     # The negative is the ALBUM's, and DEFAULT_NEGATIVE is only where an album
@@ -3792,9 +3781,26 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=("front",), char
     last_latent = latent or last.get("latent") or DEFAULT_LATENT
     if last_latent not in dict(LATENT_CHOICES):
         last_latent = DEFAULT_LATENT
+    clothed = [v for v in views if not v["nude"]]
+    nude = [v for v in views if v["nude"]]
+    picked = set(chosen_views)
+    nude_by_short = {v["short"]: v for v in nude}
+    used_shorts = set()
+    view_pairs = []
+    for v in clothed:
+        view_pairs.append({"short": v["short"], "clothed": v,
+                           "nude": nude_by_short.get(v["short"])})
+        used_shorts.add(v["short"])
+    for v in nude:
+        if v["short"] not in used_shorts:
+            view_pairs.append({"short": v["short"], "clothed": None, "nude": v})
     return {
         "tiers": all_t, "albums": albums, "form_album": album,
         "selected_tiers": selected, "views": views, "selected_views": chosen_views,
+        "clothed_views": clothed, "nude_views": nude, "view_pairs": view_pairs,
+        "all_clothed": bool(clothed) and all(v["key"] in picked for v in clothed),
+        "all_nude": bool(nude) and all(v["key"] in picked for v in nude),
+        "all_views": bool(views) and all(v["key"] in picked for v in views),
         "plan": plan, "sheet_count": sum(len(p["views"]) for p in plan),
         "view_labels": ANCHOR_VIEWS,
         "pinned": tiers.PINNED.strip(),
@@ -3916,7 +3922,7 @@ def anchor_form(request: Request, album: str = "", tier: List[str] = Query([]),
              if same_subject else {})
     pose = qp.get("pose") if same_subject else None
     return templates.TemplateResponse(request, "_anchor_form.html",
-                                       anchor_form_ctx(album, tier, view or ["front"],
+                                       anchor_form_ctx(album, tier, view,
                                                        character_id, typed_prompts, negative, tones,
                                                        latent=qp.get("latent"), pose=pose))
 

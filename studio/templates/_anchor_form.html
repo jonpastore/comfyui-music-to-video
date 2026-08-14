@@ -48,7 +48,6 @@
     </label>
   </div>
 
-  <div class="side-by-side">
   <fieldset>
     <legend>Tiers &mdash; one tab, and one set of sheets, per tier</legend>
     <div class="check-row">
@@ -65,19 +64,70 @@
     </div>
   </fieldset>
 
-  <fieldset>
-    <legend>Views &mdash; one sheet per view, per tier</legend>
-    <div class="check-row">
-      {% for v in views %}
+  <fieldset class="views-fieldset">
+    <legend>Views &mdash; one sheet per ticked cell, per tier</legend>
+    <div class="view-toolbar">
       <label class="check">
-        <input type="checkbox" name="view" value="{{ v.key }}"
-               {% if v.key in selected_views %}checked{% endif %}
-               hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
-               hx-trigger="change" hx-include="#anchor-form">
-        {{ v.label }}
+        <input type="checkbox" class="view-check-all" data-scope="all"
+               {% if all_views %}checked{% endif %}
+               aria-label="select all views">
+        All views
       </label>
-      {% endfor %}
     </div>
+    <table class="view-matrix">
+      <thead>
+        <tr>
+          <th scope="col"></th>
+          <th scope="col">
+            <label class="check">
+              <input type="checkbox" class="view-check-all" data-scope="clothed"
+                     {% if all_clothed %}checked{% endif %}
+                     aria-label="select all clothed views">
+              Clothed
+            </label>
+          </th>
+          <th scope="col">
+            <label class="check">
+              <input type="checkbox" class="view-check-all" data-scope="nude"
+                     {% if all_nude %}checked{% endif %}
+                     aria-label="select all nude views">
+              Nude
+            </label>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in view_pairs %}
+        <tr>
+          <th scope="row">{{ row.short }}</th>
+          <td>
+            {% if row.clothed %}
+            <label class="check">
+              <input type="checkbox" name="view" value="{{ row.clothed.key }}"
+                     data-nude="0" title="{{ row.clothed.label }}"
+                     aria-label="{{ row.clothed.label }}"
+                     {% if row.clothed.key in selected_views %}checked{% endif %}
+                     hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
+                     hx-trigger="change" hx-include="#anchor-form">
+            </label>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.nude %}
+            <label class="check">
+              <input type="checkbox" name="view" value="{{ row.nude.key }}"
+                     data-nude="1" title="{{ row.nude.label }}"
+                     aria-label="{{ row.nude.label }}"
+                     {% if row.nude.key in selected_views %}checked{% endif %}
+                     hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
+                     hx-trigger="change" hx-include="#anchor-form">
+            </label>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
     {# what will actually be rendered, per tier, in words -- a tier that cannot
        use a ticked view says so here instead of removing the checkbox #}
     <ul class="hint plan-list">
@@ -94,7 +144,6 @@
     <p class="hint"><strong>{{ sheet_count }}</strong> sheet{{ "" if sheet_count == 1 else "s" }}
       to render, each with its own candidates.</p>
   </fieldset>
-  </div>
 
   {# ---- base images: kept, not re-uploaded every time ---- #}
   {% if saved_refs %}
@@ -141,12 +190,204 @@
            accept="image/*" multiple>
   </label>
   <div class="form-actions">
-    <p class="hint">Up to {{ max_uploads }} at a time, and kept for next time.</p>
+    <p class="hint">Up to {{ max_uploads }} at a time, and kept for next time.
+      Paste a screenshot (Ctrl+V / Cmd+V) anywhere on this page except a text
+      box, or drop an image on this form.</p>
     {# Save keeps the images without generating anything, so a set of references
        can be built up and come back to. Same form, different action. #}
     <button type="submit" formnovalidate formaction="/anchors/refs"
             hx-post="/anchors/refs" hx-target="#anchor-form" hx-swap="outerHTML"
             hx-encoding="multipart/form-data" hx-include="#anchor-form">Upload</button>
+  </div>
+
+  {% if tier_panels %}
+  {# ---- the rules that apply, above the box they govern ---- #}
+  <div class="guardrail-panel">
+    <h3>What applies to every sheet</h3>
+    <p class="rule pinned"><strong>Always, and not editable here.</strong>
+      Attached to each prompt below by <code>guardrail.build_prompt()</code>, and it screens
+      the text first:</p>
+    <blockquote>{{ pinned }}</blockquote>
+    <p class="rule"><strong>Limits.</strong> Up to {{ max_anchor_prompt }} characters per tier,
+      refused if it references minors or tries to instruct the model about its own rules.</p>
+  </div>
+  {# data-album is the tab GROUP key; playlists use their integer id there, so a
+     string can never collide with one. Same handler in app.js, no new JS. #}
+  <div class="tier-tabs" data-album="anchor-form">
+    {% for p in tier_panels %}
+    <button type="button" class="tier-tab {% if loop.first %}active{% endif %}"
+            data-tier="{{ p.name }}">{{ p.name | tiername }}</button>
+    {% endfor %}
+  </div>
+  {% for p in tier_panels %}
+  <div class="tier-panel {% if not loop.first %}hidden{% endif %}"
+       data-album="anchor-form" data-tier="{{ p.name }}">
+    {# EDITABLE, and scoped to this album. The box writes tier_overrides, not
+       the tiers table: a control that silently re-worded every album's XXX
+       sheets from a form headed by one album's name is worse than no control.
+       Saved when you generate, so what this box shows is what
+       compose_guardrail() then hands the renderer -- the two cannot disagree.
+       The pinned adult-safety clause above is welded on regardless and is not
+       reachable from here. #}
+    <label class="rule"><span class="label-text"><strong>The
+      <code>{{ p.name | tiername }}</code> wording used for
+      {{ form_album or "this album" }}</strong>{{ help("tone") }}</span>
+      <textarea name="tone_{{ p.name }}" rows="4" class="counted"
+                data-max="{{ max_tier_guardrail }}" maxlength="{{ max_tier_guardrail }}"
+                >{{ p.text }}</textarea>
+      <span class="char-count muted" data-for="tone_{{ p.name }}"></span>
+    </label>
+    <div class="field-row prompt-versions">
+      <button type="button" class="tone-save" data-tier="{{ p.name }}">Save wording</button>
+      <span class="tone-save-note muted row-note" data-tier="{{ p.name }}"></span>
+    </div>
+    <p class="hint">
+      <span class="tag tone-scope" data-tier="{{ p.name }}">{% if p.overridden %}this album's own wording{% else %}the tier's wording{% endif %}</span>
+      {% if p.overridden %}
+      {{ form_album }} has its own <code>{{ p.name | tiername }}</code> wording; every other
+      album still uses the tier's.
+      {% else %}
+      Unchanged from the <code>{{ p.name | tiername }}</code> tier itself.
+      {% endif %}
+      <strong>Save wording</strong> keeps an edit without spending a render; pressing Generate
+      saves it too, so what the box shows is always what the sheet is built from. Clear the box
+      to go back to the tier's own wording.
+      {% if p.overridden %}<br><span class="muted">The tier's own wording:
+        {{ p.tier_default or "(none)" }}</span>{% endif %}</p>
+  </div>
+  {% endfor %}
+
+  {# Pose is per-sheet, not per cell: it replaces the stance clause inside
+     every ticked view's framing. Empty keeps the view's own stance.
+     docs/TRD-7 T7-16. #}
+  <label>Pose &mdash; what the character is doing this sheet
+    <input type="text" name="pose" value="{{ pose or '' }}" maxlength="400"
+           placeholder="leave blank for the view's own stance"
+           hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
+           hx-trigger="change delay:400ms" hx-include="#anchor-form">
+  </label>
+  <p class="hint">Replaces the view's stance (standing, sitting, &hellip;) rather than
+    sitting beside it. Two contradictory positives do not average.</p>
+
+  {# Views are the checkboxes at the top. Each ticked view gets its own prompt
+     box so an edit on front cannot land on back (T7-19). No radio+disabled
+     checkbox: that was a status light pretending to be a control. #}
+  {% for p in tier_panels %}
+  {% for vb in p.views %}
+  <details class="view-prompt" data-tier="{{ p.name }}" data-view="{{ vb.key }}"
+           {% if p.name == tier_panels[0].name and loop.first %}open{% endif %}>
+    <summary>{{ p.name | tiername }} · {{ vb.label }}{% if vb.prompt != vb.composed %} · edited{% endif %}</summary>
+    <div class="field-row prompt-versions" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
+      <label>
+        <span class="label-text">Saved prompts{{ help("prompt_versions") }}</span>
+        <select class="prompt-version-pick" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
+          <option value="">composed from the album profile (the default)</option>
+          {% for v in p.versions %}
+          <option value="{{ v.id }}" data-text="{{ v.text }}">
+            {{ v.label or "unnamed" }} &middot; {{ v.created | isotime }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Name this version
+        <input type="text" class="prompt-version-label" data-tier="{{ p.name }}"
+               data-view="{{ vb.key }}"
+               maxlength="80" placeholder="e.g. tighter fur wording"></label>
+      <button type="button" class="prompt-save" data-tier="{{ p.name }}"
+              data-view="{{ vb.key }}">Save prompt</button>
+      <button type="button" class="version-delete danger btn-sm" data-tier="{{ p.name }}"
+              data-view="{{ vb.key }}"
+              disabled title="Select a saved version to delete it">Delete version</button>
+      <input type="hidden" name="used_version" class="used-version"
+             data-tier="{{ p.name }}" data-view="{{ vb.key }}" value="">
+      <span class="prompt-save-note muted row-note" data-tier="{{ p.name }}"
+            data-view="{{ vb.key }}"></span>
+    </div>
+    <input type="hidden" name="prompt_default_{{ p.name }}__{{ vb.key }}"
+           value="{{ vb.composed }}">
+    <label>Prompt &mdash; the {{ p.name | tiername }}
+      <strong>{{ vb.label }}</strong> sheet{% if vb.nude %} (the album's wardrobe wording is
+      dropped on this one){% endif %}
+      <textarea name="{{ vb.field }}" rows="8" class="counted"
+                data-max="{{ max_anchor_prompt }}"
+                maxlength="{{ max_anchor_prompt }}">{{ vb.prompt }}</textarea>
+      <span class="char-count muted" data-for="{{ vb.field }}"></span>
+    </label>
+  </details>
+  {% endfor %}
+  {% endfor %}
+  <p class="hint">Each box is composed from this album's identity, wardrobe and body wording
+    plus <em>its own</em> view.
+    <strong>Leave one untouched and that view composes its own</strong> &mdash; a back view
+    gets a BACK VIEW sentence, and a nude view drops the album's wardrobe wording entirely,
+    which is the only way a nude sheet comes out nude.
+    <strong>Edit one and that text is used verbatim for that sheet only</strong>; the other
+    views of the same tier are unaffected, so an edit governs the sheet you are looking at
+    and nothing else.</p>
+  {% else %}
+  <p class="hint">Tick at least one tier and one view. Nothing is pre-selected.</p>
+  {% endif %}
+
+  {# What this form will DO, and what would stop it, before you press it. Every
+     refusal used to be a 400 discovered after submitting -- a poor way to learn
+     that a sweep needs a single view. Computed by the server from the same
+     functions the submit runs, so the two cannot disagree. #}
+  <fieldset>
+    <legend>Negative prompt{{ help("negative") }}</legend>
+    {# The one control on this page that can silently do nothing, so it says so.
+       At cfg 1.0 ComfyUI skips the negative pass entirely; build_refs drops the
+       text rather than sending something that has no effect. #}
+    <p class="hint" id="negative-inert">
+      <span class="tag warn-tag">not applied in fast mode</span>
+      A negative prompt needs CFG above 1, and fast mode is CFG 1.0 &mdash; ComfyUI skips
+      the negative pass entirely there, so this text is <strong>dropped, not sent</strong>.
+      Switch Mode to <strong>quality</strong> for it to take effect.</p>
+    {# Saved per ALBUM, and versioned exactly as the positive prompts are. The
+       terms are this release's failure modes -- its fur colours, its tail, skin
+       where fur belongs -- and other music with other artwork wants a different
+       list, so one global constant could only ever be a starting point. #}
+    <div class="field-row prompt-versions" data-negative>
+      <label>
+        <span class="label-text">Saved negatives{{ help("prompt_versions") }}</span>
+        <select class="negative-version-pick">
+          <option value="">{% if negative_versions %}the album's latest saved negative{% else %}the generic starting point{% endif %}</option>
+          {% for v in negative_versions %}
+          <option value="{{ v.id }}" data-text="{{ v.text }}">
+            {{ v.label or "unnamed" }} &middot; {{ v.created | isotime }}</option>
+          {% endfor %}
+          <option value="default" data-text="{{ default_negative }}">the generic starting point</option>
+        </select>
+      </label>
+      <label>Name this version
+        <input type="text" class="negative-version-label" maxlength="80"
+               placeholder="e.g. after the white-tail run"></label>
+      <button type="button" class="negative-save">Save negative</button>
+      {# Inert until a real saved version is picked: the first option is the
+         album's latest and the last is the generic starting point, and neither
+         is a row that can be deleted. #}
+      <button type="button" class="version-delete danger btn-sm" disabled
+              title="Select a saved version to delete it">Delete version</button>
+      <input type="hidden" name="used_version" class="used-version" value="">
+      <span class="negative-save-note muted row-note"></span>
+    </div>
+    <textarea name="negative" rows="3" class="counted" data-max="{{ max_negative }}"
+              maxlength="{{ max_negative }}"
+              placeholder="white fur, cream fur, lighter patches, white tail, human skin, extra limbs, deformed tail, text, watermark, blurry">{{ negative or "" }}</textarea>
+  </fieldset>
+
+  {# ---- exactly what gets sent ---- #}
+  <details class="prompt-preview">
+    <summary>Show the final prompts &mdash; what ComfyUI actually receives</summary>
+    <p class="hint">Composed by the same functions the renderer uses, for every tier and view
+      ticked above. The always-on adult-content safety clause is attached to all of them and
+      is <em>not</em> shown here: it is identical on every prompt in the studio and burying
+      the wording that steers a render under it helps nobody.</p>
+    <button type="button" id="anchor-preview-btn">Assemble the prompts</button>
+    <div id="anchor-preview-out"></div>
+  </details>
+
+  <div class="anchor-commit">
+    <div id="anchor-plan" class="plan-panel" aria-live="polite"></div>
+    <button type="submit" id="anchor-generate">Generate anchors</button>
   </div>
 
   {# ---- render settings: the knobs that actually exist for this model ---- #}
@@ -322,245 +563,6 @@
         (seed, +137, +274&hellip;), and a CFG sweep reuses it at every guidance value.</p>
     </details>
   </fieldset>
-
-  <fieldset>
-    <legend>Negative prompt{{ help("negative") }}</legend>
-    {# The one control on this page that can silently do nothing, so it says so.
-       At cfg 1.0 ComfyUI skips the negative pass entirely; build_refs drops the
-       text rather than sending something that has no effect. #}
-    <p class="hint" id="negative-inert">
-      <span class="tag warn-tag">not applied in fast mode</span>
-      A negative prompt needs CFG above 1, and fast mode is CFG 1.0 &mdash; ComfyUI skips
-      the negative pass entirely there, so this text is <strong>dropped, not sent</strong>.
-      Switch Mode to <strong>quality</strong> for it to take effect.</p>
-    {# Saved per ALBUM, and versioned exactly as the positive prompts are. The
-       terms are this release's failure modes -- its fur colours, its tail, skin
-       where fur belongs -- and other music with other artwork wants a different
-       list, so one global constant could only ever be a starting point. #}
-    <div class="field-row prompt-versions" data-negative>
-      <label>
-        <span class="label-text">Saved negatives{{ help("prompt_versions") }}</span>
-        <select class="negative-version-pick">
-          <option value="">{% if negative_versions %}the album's latest saved negative{% else %}the generic starting point{% endif %}</option>
-          {% for v in negative_versions %}
-          <option value="{{ v.id }}" data-text="{{ v.text }}">
-            {{ v.label or "unnamed" }} &middot; {{ v.created | isotime }}</option>
-          {% endfor %}
-          <option value="default" data-text="{{ default_negative }}">the generic starting point</option>
-        </select>
-      </label>
-      <label>Name this version
-        <input type="text" class="negative-version-label" maxlength="80"
-               placeholder="e.g. after the white-tail run"></label>
-      <button type="button" class="negative-save">Save negative</button>
-      {# Inert until a real saved version is picked: the first option is the
-         album's latest and the last is the generic starting point, and neither
-         is a row that can be deleted. #}
-      <button type="button" class="version-delete danger btn-sm" disabled
-              title="Select a saved version to delete it">Delete version</button>
-      <input type="hidden" name="used_version" class="used-version" value="">
-      <span class="negative-save-note muted row-note"></span>
-    </div>
-    <textarea name="negative" rows="3" class="counted" data-max="{{ max_negative }}"
-              maxlength="{{ max_negative }}"
-              placeholder="white fur, cream fur, lighter patches, white tail, human skin, extra limbs, deformed tail, text, watermark, blurry">{{ negative or "" }}</textarea>
-  </fieldset>
-
-  {# ---- exactly what gets sent ---- #}
-  <details class="prompt-preview">
-    <summary>Show the final prompts &mdash; what ComfyUI actually receives</summary>
-    <p class="hint">Composed by the same functions the renderer uses, for every tier and view
-      ticked above. The always-on adult-content safety clause is attached to all of them and
-      is <em>not</em> shown here: it is identical on every prompt in the studio and burying
-      the wording that steers a render under it helps nobody.</p>
-    <button type="button" id="anchor-preview-btn">Assemble the prompts</button>
-    <div id="anchor-preview-out"></div>
-  </details>
-
-  {# ---- the rules that apply, above the box they govern ---- #}
-  <div class="guardrail-panel">
-    <h3>What applies to every sheet</h3>
-    <p class="rule pinned"><strong>Always, and not editable here.</strong>
-      Attached to each prompt below by <code>guardrail.build_prompt()</code>, and it screens
-      the text first:</p>
-    <blockquote>{{ pinned }}</blockquote>
-    <p class="rule"><strong>Limits.</strong> Up to {{ max_anchor_prompt }} characters per tier,
-      refused if it references minors or tries to instruct the model about its own rules.</p>
-  </div>
-
-  {% if tier_panels %}
-  {# data-album is the tab GROUP key; playlists use their integer id there, so a
-     string can never collide with one. Same handler in app.js, no new JS. #}
-  <div class="tier-tabs" data-album="anchor-form">
-    {% for p in tier_panels %}
-    <button type="button" class="tier-tab {% if loop.first %}active{% endif %}"
-            data-tier="{{ p.name }}">{{ p.name | tiername }}</button>
-    {% endfor %}
-  </div>
-  {% for p in tier_panels %}
-  <div class="tier-panel {% if not loop.first %}hidden{% endif %}"
-       data-album="anchor-form" data-tier="{{ p.name }}">
-    {# EDITABLE, and scoped to this album. The box writes tier_overrides, not
-       the tiers table: a control that silently re-worded every album's XXX
-       sheets from a form headed by one album's name is worse than no control.
-       Saved when you generate, so what this box shows is what
-       compose_guardrail() then hands the renderer -- the two cannot disagree.
-       The pinned adult-safety clause above is welded on regardless and is not
-       reachable from here. #}
-    <label class="rule"><span class="label-text"><strong>The
-      <code>{{ p.name | tiername }}</code> wording used for
-      {{ form_album or "this album" }}</strong>{{ help("tone") }}</span>
-      <textarea name="tone_{{ p.name }}" rows="4" class="counted"
-                data-max="{{ max_tier_guardrail }}" maxlength="{{ max_tier_guardrail }}"
-                >{{ p.text }}</textarea>
-      <span class="char-count muted" data-for="tone_{{ p.name }}"></span>
-    </label>
-    <div class="field-row prompt-versions">
-      <button type="button" class="tone-save" data-tier="{{ p.name }}">Save wording</button>
-      <span class="tone-save-note muted row-note" data-tier="{{ p.name }}"></span>
-    </div>
-    <p class="hint">
-      <span class="tag tone-scope" data-tier="{{ p.name }}">{% if p.overridden %}this album's own wording{% else %}the tier's wording{% endif %}</span>
-      {% if p.overridden %}
-      {{ form_album }} has its own <code>{{ p.name | tiername }}</code> wording; every other
-      album still uses the tier's.
-      {% else %}
-      Unchanged from the <code>{{ p.name | tiername }}</code> tier itself.
-      {% endif %}
-      <strong>Save wording</strong> keeps an edit without spending a render; pressing Generate
-      saves it too, so what the box shows is always what the sheet is built from. Clear the box
-      to go back to the tier's own wording.
-      {% if p.overridden %}<br><span class="muted">The tier's own wording:
-        {{ p.tier_default or "(none)" }}</span>{% endif %}</p>
-  </div>
-  {% endfor %}
-
-  {# Pose is per-sheet, not per cell: it replaces the stance clause inside
-     every ticked view's framing. Empty keeps the view's own stance.
-     docs/TRD-7 T7-16. #}
-  <label>Pose &mdash; what the character is doing this sheet
-    <input type="text" name="pose" value="{{ pose or '' }}" maxlength="400"
-           placeholder="leave blank for the view's own stance"
-           hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
-           hx-trigger="change delay:400ms" hx-include="#anchor-form">
-  </label>
-  <p class="hint">Replaces the view's stance (standing, sitting, &hellip;) rather than
-    sitting beside it. Two contradictory positives do not average.</p>
-
-  {# UIUX §7a.1: the request is a MATRIX, not 12×4 stacked textareas. Each cell
-     is a radio that opens that combo's prompt, plus a checkbox showing whether
-     that cell has an override. The textareas stay in the form (one per ticked
-     combo) so an edit to one view cannot reach another. docs/TRD-7 T7-19. #}
-  <style>
-    .prompt-matrix { width: 100%; margin: 0.75rem 0; }
-    .prompt-matrix th, .prompt-matrix td { padding: 0.35rem 0.5rem; }
-    .prompt-matrix .matrix-cell {
-      display: flex; align-items: center; gap: 0.35rem; cursor: pointer;
-    }
-    .view-prompt { display: none; }
-    {% for p in tier_panels %}
-    {% for vb in p.views %}
-    .prompt-matrix:has(input[name="matrix_cell"][value="{{ p.name }}__{{ vb.key }}"]:checked)
-      ~ .view-prompt[data-tier="{{ p.name }}"][data-view="{{ vb.key }}"] { display: block; }
-    {% endfor %}
-    {% endfor %}
-  </style>
-  <table class="list prompt-matrix">
-    <thead>
-      <tr>
-        <th>View</th>
-        {% for p in tier_panels %}
-        <th>{{ p.name | tiername }}</th>
-        {% endfor %}
-      </tr>
-    </thead>
-    <tbody>
-      {% for vkey in selected_views %}
-      <tr>
-        <th>{{ view_labels.get(vkey, vkey) }}</th>
-        {% for p in tier_panels %}
-        {% for vb in p.views if vb.key == vkey %}
-        <td>
-          <label class="matrix-cell">
-            <input type="radio" name="matrix_cell" value="{{ p.name }}__{{ vb.key }}"
-                   {% if vkey == selected_views[0] and p.name == tier_panels[0].name %}checked{% endif %}>
-            <input type="checkbox" disabled
-                   {% if vb.prompt != vb.composed %}checked{% endif %}
-                   title="{% if vb.prompt != vb.composed %}this cell has a prompt override{% else %}composed default{% endif %}"
-                   aria-label="prompt override">
-          </label>
-        </td>
-        {% endfor %}
-        {% endfor %}
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  {# ONE BOX PER VIEW. A single box per tier went verbatim to every view of it,
-     so an edit made while looking at the front sheet also governed the back
-     and the nude ones -- overriding the per-view framing sentence and the nude
-     wardrobe swap. The matrix opens one cell; every cell still has its own
-     field. docs/TRD-7 T7-19. #}
-  {% for p in tier_panels %}
-  {% for vb in p.views %}
-  <div class="view-prompt" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
-    <div class="field-row prompt-versions" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
-      <label>
-        <span class="label-text">Saved prompts{{ help("prompt_versions") }}</span>
-        <select class="prompt-version-pick" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
-          <option value="">composed from the album profile (the default)</option>
-          {% for v in p.versions %}
-          <option value="{{ v.id }}" data-text="{{ v.text }}">
-            {{ v.label or "unnamed" }} &middot; {{ v.created | isotime }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <label>Name this version
-        <input type="text" class="prompt-version-label" data-tier="{{ p.name }}"
-               data-view="{{ vb.key }}"
-               maxlength="80" placeholder="e.g. tighter fur wording"></label>
-      <button type="button" class="prompt-save" data-tier="{{ p.name }}"
-              data-view="{{ vb.key }}">Save prompt</button>
-      <button type="button" class="version-delete danger btn-sm" data-tier="{{ p.name }}"
-              data-view="{{ vb.key }}"
-              disabled title="Select a saved version to delete it">Delete version</button>
-      <input type="hidden" name="used_version" class="used-version"
-             data-tier="{{ p.name }}" data-view="{{ vb.key }}" value="">
-      <span class="prompt-save-note muted row-note" data-tier="{{ p.name }}"
-            data-view="{{ vb.key }}"></span>
-    </div>
-    <input type="hidden" name="prompt_default_{{ p.name }}__{{ vb.key }}"
-           value="{{ vb.composed }}">
-    <label>Prompt &mdash; the {{ p.name | tiername }}
-      <strong>{{ vb.label }}</strong> sheet{% if vb.nude %} (the album's wardrobe wording is
-      dropped on this one){% endif %}
-      <textarea name="{{ vb.field }}" rows="8" class="counted"
-                data-max="{{ max_anchor_prompt }}"
-                maxlength="{{ max_anchor_prompt }}">{{ vb.prompt }}</textarea>
-      <span class="char-count muted" data-for="{{ vb.field }}"></span>
-    </label>
-  </div>
-  {% endfor %}
-  {% endfor %}
-  <p class="hint">Each box is composed from this album's identity, wardrobe and body wording
-    plus <em>its own</em> view.
-    <strong>Leave one untouched and that view composes its own</strong> &mdash; a back view
-    gets a BACK VIEW sentence, and a nude view drops the album's wardrobe wording entirely,
-    which is the only way a nude sheet comes out nude.
-    <strong>Edit one and that text is used verbatim for that sheet only</strong>; the other
-    views of the same tier are unaffected, so an edit governs the sheet you are looking at
-    and nothing else.</p>
-  {% else %}
-  <p class="hint">Tick at least one tier.</p>
-  {% endif %}
-
-  {# What this form will DO, and what would stop it, before you press it. Every
-     refusal used to be a 400 discovered after submitting -- a poor way to learn
-     that a sweep needs a single view. Computed by the server from the same
-     functions the submit runs, so the two cannot disagree. #}
-  <div id="anchor-plan" class="plan-panel" aria-live="polite"></div>
-  <button type="submit" id="anchor-generate">Generate anchors</button>
 
   {# Every help panel, once. A trigger may repeat -- the per-tier panels are a
      loop -- but an id may not. #}

@@ -426,10 +426,113 @@ document.addEventListener("DOMContentLoaded", function () {
   initAnchors();
   initAnchorBatch();
   initAnchorPrompts();
+  initAnchorPaste();
+  initViewCheckAll();
   initJobForms();       // every page, not just the ones with an anchor grid
   initRunHistory();
   initAnchorPlan();
 });
+
+// Paste / drop images onto the anchors form as base photographs.
+// Delegated on document so it survives the form being swapped by htmx.
+function initAnchorPaste() {
+  function imageFilesFrom(dt) {
+    if (!dt) return [];
+    var out = [];
+    if (dt.files && dt.files.length) {
+      for (var i = 0; i < dt.files.length; i++) {
+        if ((dt.files[i].type || "").indexOf("image/") === 0) out.push(dt.files[i]);
+      }
+    }
+    if (!out.length && dt.items) {
+      for (var j = 0; j < dt.items.length; j++) {
+        if (dt.items[j].type.indexOf("image/") === 0) {
+          var f = dt.items[j].getAsFile && dt.items[j].getAsFile();
+          if (f) out.push(f);
+        }
+      }
+    }
+    return out;
+  }
+
+  function upload(files) {
+    var form = document.getElementById("anchor-form");
+    var input = document.getElementById("anchor-images");
+    if (!form || !input || !files.length) return;
+    var dt = new DataTransfer();
+    var i;
+    if (input.files) {
+      for (i = 0; i < input.files.length; i++) dt.items.add(input.files[i]);
+    }
+    files.forEach(function (f, n) {
+      var name = (f.name && f.name !== "image.png")
+        ? f.name : ("paste-" + Date.now() + "-" + n + ".png");
+      dt.items.add(new File([f], name, {type: f.type || "image/png"}));
+    });
+    input.files = dt.files;
+    var btn = form.querySelector('button[formaction="/anchors/refs"]');
+    if (btn) btn.click();
+  }
+
+  document.addEventListener("paste", function (e) {
+    if (!document.getElementById("anchor-form")) return;
+    var t = e.target;
+    if (t && (t.tagName === "TEXTAREA" ||
+              (t.tagName === "INPUT" && t.type !== "file" && t.type !== "checkbox"))) {
+      return;
+    }
+    var files = imageFilesFrom(e.clipboardData);
+    if (!files.length) return;
+    e.preventDefault();
+    upload(files);
+  });
+
+  document.addEventListener("dragover", function (e) {
+    if (!document.getElementById("anchor-form")) return;
+    if (!imageFilesFrom(e.dataTransfer).length) return;
+    e.preventDefault();
+  });
+  document.addEventListener("drop", function (e) {
+    if (!document.getElementById("anchor-form")) return;
+    var files = imageFilesFrom(e.dataTransfer);
+    if (!files.length) return;
+    e.preventDefault();
+    upload(files);
+  });
+}
+
+// Check-all for the clothed column, the nude column, and every view.
+// Delegated so it survives the form being swapped. The masters are NOT named
+// "view" (they must not POST as a view) and they do not carry hx-get -- setting
+// the real boxes and then letting each fire change would send one request per
+// box. One ajax after the boxes are set is the whole swap.
+function initViewCheckAll() {
+  document.addEventListener("change", function (e) {
+    var master = e.target;
+    if (!master.classList || !master.classList.contains("view-check-all")) return;
+    var form = document.getElementById("anchor-form");
+    if (!form) return;
+    var scope = master.getAttribute("data-scope");
+    form.querySelectorAll('input[name="view"]').forEach(function (cb) {
+      var nude = cb.getAttribute("data-nude") === "1";
+      if (scope === "all" || (scope === "nude" && nude) || (scope === "clothed" && !nude)) {
+        cb.checked = master.checked;
+      }
+    });
+    if (typeof htmx === "undefined") return;
+    var vals = {};
+    new FormData(form).forEach(function (v, k) {
+      if (vals[k] === undefined) vals[k] = v;
+      else if (Array.isArray(vals[k])) vals[k].push(v);
+      else vals[k] = [vals[k], v];
+    });
+    htmx.ajax("GET", "/anchors/form", {
+      target: "#anchor-form",
+      swap: "outerHTML",
+      values: vals
+    });
+  });
+}
 
 // ---- Anchors: show exactly what will be sent -------------------------------
 // The panel is filled from the SERVER, which composes it with the same

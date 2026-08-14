@@ -18,8 +18,8 @@ spent producing nothing.
 
 | reported | actual |
 |---|---|
-| "Selecting nothing for **Tiers** silently falls back to G" | **FALSE.** `app.py:3056` already raises 400 *"select at least one tier"*, and `save_anchor_prompt` refuses with *"an album and a tier are needed"*. There is no G fallback on either path. |
-| "Selecting nothing for **Views** silently falls back to front-clothed" | **TRUE.** `app.py:3054` is `sorted(...) or ["front"]`, and `anchor_form_ctx`'s signature defaults `selected_views=("front",)`. |
+| "Selecting nothing for **Tiers** silently falls back to G" | **FALSE.** POST raises 400 *"select at least one tier"*. The form used to pre-tick G (or last-used); it no longer does (`T4-3`). |
+| "Selecting nothing for **Views** silently falls back to front-clothed" | **FALSE.** POST raises 400 *"select at least one view"*. The form no longer pre-ticks front. |
 | "Saving a prompt does not verify the text matches the tier's policy" | **TRUE.** `save_anchor_prompt` runs `tiers.check_text` (the minor screen) and `tiers.check_override` (the anti-jailbreak screen) and **nothing compares the text against the selected tier's own policy**. Explicit wording saves cleanly under G. |
 | "Positive prompts still contain negation" | **TRUE, and it is a documented exception rather than an oversight.** `make_anchor._NEGATION_ALLOWED = ("DEFAULT_BODY",)` permits it, and `DEFAULT_BODY` ends *"with no lighter or differently-toned patches anywhere"*. |
 
