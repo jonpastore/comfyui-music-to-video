@@ -207,6 +207,24 @@ def to_sections(result, gap=3.0):
     return "\n".join(out) + "\n"
 
 
+def interface_payload(result):
+    """Mark transcribed text as model-authored; duration is measured."""
+    import advice
+    last = 0.0
+    for seg in (result or {}).get("segments") or []:
+        try:
+            last = max(last, float(seg.get("end") or 0))
+        except (TypeError, ValueError):
+            pass
+    return {
+        "text": advice.mark((result or {}).get("text") or "", advice.MODEL),
+        "duration": advice.mark(last, advice.MEASUREMENT, unit="s"),
+        "language": (result or {}).get("language"),
+        "model": (result or {}).get("model"),
+        "device": (result or {}).get("device"),
+    }
+
+
 def estimate_duration(mp3_path):
     """Seconds, via ffprobe."""
     out = subprocess.run(

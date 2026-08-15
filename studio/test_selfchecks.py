@@ -26,7 +26,7 @@ import pytest
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Fast, pure ones: string and arithmetic checks, no ffmpeg, no network.
-PURE = ["effects", "video_fx", "beatmatch", "mixadvice", "tiers", "prompts",
+PURE = ["effects", "video_fx", "beatmatch", "mixadvice", "advice", "tiers", "prompts",
         "publish", "models", "jobs", "gpu", "chat", "creds", "arc", "analyse"]
 
 # Same idea, but their bare invocation DOES something -- fleet_watch scans the

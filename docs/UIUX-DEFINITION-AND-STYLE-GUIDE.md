@@ -705,6 +705,10 @@ treatment, used for every model-authored string** — the arc proposal, the mix
 advice, the contact-sheet description, the QC remedy — and never the same
 treatment as a measurement.
 
+The client reads `authored`. `model` is advice; `measurement` is a reading and
+must carry `unit`; `operator` is typed text. The set editor's mix `why` is
+`--muted` plus a `model` tag; a measurement is never given that tag.
+
 This is the interface half of `T10-14`. If advice and measurement look alike, the
 operator will eventually treat a confident sentence as a reading, which is how
 `41.1 vs 64.7` would have become a gate. The style-guide rule: **model text

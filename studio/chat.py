@@ -153,6 +153,25 @@ def chat_json(system, user, backend=None, model=None, progress=None):
     return data, f"{backend}/{model}"
 
 
+def interface_payload(data, used):
+    """Mark every model string. `data` stays intact for existing callers."""
+    import advice
+    strings = []
+
+    def collect(obj):
+        if isinstance(obj, str) and obj.strip():
+            strings.append(advice.mark(obj, advice.MODEL))
+        elif isinstance(obj, dict):
+            for v in obj.values():
+                collect(v)
+        elif isinstance(obj, list):
+            for v in obj:
+                collect(v)
+
+    collect(data)
+    return {"used": used, "strings": strings, "data": data}
+
+
 def _openai_chat(model, system, user, progress=None):
     import httpx
     key = creds.get("openai")

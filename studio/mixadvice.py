@@ -16,6 +16,7 @@ committed edit: the routes populate the editor and the human presses Save.
 """
 import json
 
+import advice
 import effects as fx
 import video_fx
 import mixer
@@ -183,6 +184,34 @@ def suggest(items, direction="", only_id=None, model=None, progress=None):
     return clean(raw, {it["id"] for it in items}, only_id)
 
 
+def interface_payload(suggestions, items, direction=""):
+    """Mark model why, operator direction, and measured bpm/energy.
+
+    clean() stays a dict of form values. This is the payload a client
+    reads: authored sits on each string so advice cannot be shown as a
+    reading (T10-11).
+    """
+    by_id = {int(it["id"]): it for it in items}
+    out = []
+    for iid, s in (suggestions or {}).items():
+        rec = {"id": int(iid)}
+        if s.get("why"):
+            rec["why"] = advice.mark(s["why"], advice.MODEL)
+        it = by_id.get(int(iid), {})
+        if it.get("bpm") is not None:
+            rec["bpm"] = advice.mark(it["bpm"], advice.MEASUREMENT, unit="bpm")
+        if it.get("energy") is not None:
+            rec["energy"] = advice.mark(it["energy"], advice.MEASUREMENT, unit="energy")
+        for k in ("transition", "secs", "beatmatch", "effects_json"):
+            if k in s:
+                rec[k] = s[k]
+        out.append(rec)
+    payload = {"items": out}
+    if direction:
+        payload["direction"] = advice.mark(direction, advice.OPERATOR)
+    return payload
+
+
 def demo():
     items = [{"id": 1, "title": "A", "bpm": 123.0, "key": "10A", "energy": 0.16},
              {"id": 2, "title": "B", "bpm": 126.0, "key": "11A", "energy": 0.22},
@@ -200,6 +229,10 @@ def demo():
     assert got[1]["transition"] == "fade" and got[1]["secs"] == 4.0
     assert got[1]["beatmatch"] is True and "eq_kill" in got[1]["effects_json"]
     assert got[1]["why"] == "close tempo"
+    marked = interface_payload(got, items, direction="keep it moving")
+    assert marked["items"][0]["why"]["authored"] == advice.MODEL
+    assert marked["items"][0]["bpm"]["unit"] == "bpm"
+    assert marked["direction"]["authored"] == advice.OPERATOR
 
     # every kind of invention is dropped, and dropping one field keeps the rest
     assert clean({"items": [{"id": 1, "transition": "teleport"}]}, ids) == {}

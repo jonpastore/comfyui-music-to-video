@@ -6440,6 +6440,10 @@ def _suggest_ctx(request, id, suggested, note="", form=None, item_id=None):
     been typed to DRIVE the suggestion, which then vanished from the box that
     produced it, and the whole-set direction, which came back blank every time.
     """
+    if wants_json(request):
+        direction = (form.get("mix_direction") if form else "") or ""
+        return JSONResponse(mixadvice.interface_payload(
+            suggested, _suggest_items(id), direction=direction))
     row = get_set_or_404(id)
     ctx = {**set_detail(row), "songs": db.q("SELECT id, title FROM songs ORDER BY title"),
            "all_tiers": tiers.all_tiers(), "transitions": SET_TRANSITIONS,
@@ -6466,6 +6470,7 @@ def _suggest_ctx(request, id, suggested, note="", form=None, item_id=None):
         s = suggested.get(d["id"]) or {}
         d["suggested"] = sorted(k for k in s if k != "why")
         d["suggest_why"] = s.get("why", "")
+        d["suggest_authored"] = "model" if s.get("why") else ""
         for k in ("transition", "secs", "effects_json"):
             if k in s:
                 d[k] = s[k]

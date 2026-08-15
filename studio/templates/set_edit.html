@@ -277,8 +277,8 @@
   </div>
   {% endif %}
   {% if it.suggest_why %}
-  <p class="hint"><strong>Why:</strong> {{ it.suggest_why }}
-    <span class="muted">&mdash; not saved until you press Save</span></p>
+  <p class="hint muted">{% if it.suggest_authored == "model" %}<span class="tag">model</span> {% endif %}<strong>Why:</strong> {{ it.suggest_why }}
+    <span>&mdash; not saved until you press Save</span></p>
   {% endif %}
   {% if "defaults_visible" in affordances %}
   <p class="hint">Loudness matching is always on. Optional keys: sweep, eq_kill, echo_out, phaser,

@@ -363,6 +363,21 @@ def classify_sheet(sheet_path, note="", model=None, progress=None):
             "backend": where}
 
 
+def interface_payload(verdict, *, cells=None):
+    """Mark model reasons. `cells` is a count we measured, not the model's."""
+    import advice
+    flagged = []
+    for f in (verdict or {}).get("flagged") or []:
+        rec = {"clip": f.get("clip"), "issue": f.get("issue")}
+        if f.get("reason"):
+            rec["reason"] = advice.mark(f["reason"], advice.MODEL)
+        flagged.append(rec)
+    payload = {"flagged": flagged, "backend": (verdict or {}).get("backend")}
+    if cells is not None:
+        payload["cells"] = advice.mark(cells, advice.MEASUREMENT, unit="cells")
+    return payload
+
+
 def describe_anchor(image_path, field, model=None, progress=None):
     """Draft one album-profile field by looking at the anchor. See grok._DESCRIBE."""
     if field not in grok._DESCRIBE:

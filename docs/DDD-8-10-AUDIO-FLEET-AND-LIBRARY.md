@@ -168,6 +168,15 @@ confirmation that overstates teaches the operator to stop reading it.
 measurement will show the wrong one, and `DDD-4-7` §7a.2 already needs a
 three-valued chip for the same reason.
 
+The record is `{text, authored}` with `authored` one of `model` / `measurement`
+/ `operator`. A measurement also carries `unit`; `advice.mark` refuses a
+measurement without one. `advice.separate` is the client entry point. Each of
+the four modules exposes `interface_payload`: mixadvice marks `why` against
+measured `bpm`/`energy` and the operator's direction; vision marks `reason`
+against a counted `cells`; lyrics marks transcribed `text` against segment
+duration; chat marks every returned string and leaves `data` intact.
+`POST /sets/{id}/suggest` with `Accept: application/json` is the live route.
+
 `T10-14` is the sharpest and the least obvious: **a model is never asked a
 question whose answer it cannot be visibly wrong about.** "Does this match?" is
 refused as a *prompt shape*; "describe what differs" is not. The recorded
