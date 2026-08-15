@@ -993,6 +993,96 @@ def test_t6_a1_review_queue_over_json():
         assert res[0].get("verdict") == "pass", res[0]
 
 
+def test_t6_a1_anchor_loop_over_json(monkeypatch):
+    """T6-A1 / TRD-4+TRD-7: save bases, generate a named view, pick, use-as-ref.
+
+    TRD-4 and TRD-7 had no named curl loop. An empty /api/anchors 200 would
+    stay green. The loop has to land a candidate file and make the pick
+    the next identity lock.
+    """
+    import app as appmod
+    import pipeline
+    import tiers
+    from fastapi.testclient import TestClient
+
+    tiers.ensure_builtins()
+    stamp = f"t6a1-anchor-{time.time_ns()}"
+    album = f"T6-A1 Anchors {stamp}"
+    db.run("INSERT INTO playlists (name, kind, created) VALUES (?,?,?)",
+           album, "playlist", time.time())
+    work = tempfile.mkdtemp(prefix="t6a1_anchor_")
+    base = os.path.join(work, "base.png")
+    _png(base)
+
+    count = {"i": 0}
+
+    def _gen(images, view="front", n=4, progress=None, **kw):
+        out = []
+        for _ in range(int(n or 1)):
+            p = os.path.join(work, f"cand_{view}_{count['i']}.png")
+            count["i"] += 1
+            _png(p)
+            out.append(p)
+        return out
+
+    monkeypatch.setattr(pipeline, "gen_anchor", _gen)
+    monkeypatch.setattr(appmod, "refine_generated_still",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("skip")))
+
+    with TestClient(appmod.app) as client:
+        saved = _json(client, "post", "/api/anchors/refs",
+                      json={"album": album, "path": base})
+        ref_id = saved.get("id") or (saved.get("ref") or {}).get("id")
+        assert ref_id, saved
+        assert saved.get("path") == base or (saved.get("ref") or {}).get("path") == base
+
+        refs = _json(client, "get", f"/api/anchors/refs?album={album}")
+        rows = refs.get("refs") or refs.get("images") or []
+        assert any(r.get("id") == ref_id for r in rows), refs
+
+        started = _json(client, "post", "/api/anchors", json={
+            "album": album, "tier": ["r"], "view": ["front"], "n": 2,
+            "ref_id": [ref_id],
+        })
+        jobs_out = started.get("jobs") or []
+        assert started.get("queued") == 1 or len(jobs_out) == 1, started
+        assert started.get("views") == ["front"] or started.get("view") == "front", started
+        jid = jobs_out[0].get("id") or jobs_out[0].get("job_id") or started.get("job_id")
+        assert jid, started
+        row = _wait_job(jid)
+        assert row["status"] == "done", row
+
+        listed = _json(client, "get", f"/api/anchors?album={album}")
+        cands = []
+        for g in listed.get("groups") or []:
+            cands.extend(g.get("candidates") or [])
+        if not cands:
+            cands = listed.get("candidates") or listed.get("anchors") or []
+        assert len(cands) >= 2, listed
+        for c in cands:
+            path = c.get("path")
+            assert path and os.path.isfile(path), c
+        pick_id = cands[-1]["id"]
+        assert pick_id, cands[-1]
+
+        picked = _json(client, "post", f"/api/anchors/{pick_id}/pick")
+        assert picked.get("chosen") == pick_id, picked
+        group = picked.get("group") or []
+        if group:
+            assert sum(1 for p in group if p.get("chosen")) == 1, picked
+
+        borrowed = _json(client, "post", f"/api/anchors/{pick_id}/use-as-ref")
+        lock_path = borrowed.get("path") or (borrowed.get("ref") or {}).get("path")
+        assert lock_path and os.path.isfile(lock_path), borrowed
+        picked_path = cands[-1]["path"]
+        assert os.path.samefile(lock_path, picked_path), (lock_path, picked_path)
+
+        again = _json(client, "get", f"/api/anchors/refs?album={album}")
+        again_rows = again.get("refs") or again.get("images") or []
+        assert any(os.path.samefile(r["path"], picked_path)
+                   for r in again_rows if r.get("path")), again
+
+
 # ----------------------------------------------------------------- T6-A5 --
 
 def _t6_a5_assert_pair(kind, group, pred, succ):

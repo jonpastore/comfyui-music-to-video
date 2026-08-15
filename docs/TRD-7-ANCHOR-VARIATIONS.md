@@ -201,6 +201,11 @@ looks like — `T7-7`, and `T7-5`'s framing contradiction — **look at the imag
 The identity collapse, the world that never rendered and the LoRA that did
 nothing all passed every deterministic check this project had.
 
+**INHERITED from TRD-6 §0.1** (`T6-A1`…`T6-A4`). Not restated.
+`T6-A1`'s named loop here, shared with TRD-4: save bases, generate a named view,
+pick, use-as-ref so the next sheet is a variation of the approved one.
+`test_t6_a1_anchor_loop_over_json`.
+
 ### The positive half of each one-sided criterion
 
 Added 2026-08-13 from the first external review of this document (grok and

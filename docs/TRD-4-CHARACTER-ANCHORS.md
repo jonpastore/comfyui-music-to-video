@@ -191,6 +191,11 @@ refusal or a presence is half a criterion and needs its positive case; and
 that never rendered and the LoRA that did nothing all passed every deterministic
 check this project had.
 
+**INHERITED from TRD-6 §0.1** (`T6-A1`…`T6-A4`). Not restated.
+`T6-A1`'s named loop here, shared with TRD-7: save operator base photographs,
+generate candidates for a named tier+view, pick one, use that sheet as the next
+identity lock — over JSON, no HTML. `test_t6_a1_anchor_loop_over_json`.
+
 ### The positive half of each one-sided criterion
 
 Added 2026-08-13. TRD-1, TRD-2 and TRD-3 each carry one of these and TRD-4

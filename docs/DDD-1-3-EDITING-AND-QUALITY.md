@@ -17,7 +17,7 @@ is named.
 
 | module | lines | owns | state against its TRD |
 |---|---|---|---|
-| `studio/app.py` | 7589 | 138 routes, 25 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}/arc`, `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`; song page `video_model` select is `models.renderable("video")` (`T2-33`); `sets_service.py` / `storyboard_service.py` are still T6-A3 |
+| `studio/app.py` | 7589 | 156 routes, 36 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}/arc`, `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`, `/api/anchors`; song page `video_model` select is `models.renderable("video")` (`T2-33`); `sets_service.py` / `storyboard_service.py` are still T6-A3 |
 | `studio/mixer.py` | 2116 | set duration, `transition_times` (`T3-12` model), both filter graphs, overlap arithmetic, beatmatch, ramps, splice, `spliced_duration` / `SPLICE_DURATION_TOLERANCE` (`T3-10`), song-assembly geometry (`T5-7`) and fps (`T2-13d`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox. Mixed clip fps honours the highest and is asserted on the assembled file |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `export_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` and the loudness half of §4.3. `T3-9` silence is **not** here |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `FILTER_EXPR_MAX_BYTES = 8192` (`T1-10`), `fragment`, `item_audio`, `wants_master_loudnorm` | built |
@@ -49,8 +49,8 @@ absent.
 ## 2. The structural problem, and the pattern that already solves it
 
 `app.py` is 7589 lines and 138 routes, of which **25 are `/api/*` JSON**.
-`T6-A1`'s three named loops complete over those paths (set empty→rendered,
-storyboard, review queue). `/queue` still answers JSON from the same
+`T6-A1`'s four named loops complete over those paths (set empty→rendered,
+storyboard, review queue, anchors). `/queue` still answers JSON from the same
 `queue_ctx()` as the fragment (`T6-A2`). The HTML handlers still decide;
 `sets_service.py` and `storyboard_service.py` are still the T6-A3 move.
 `render_set_route` is TRD-1 §10's named example: `_set_render_items` plus
@@ -82,8 +82,8 @@ Migration is per-loop, not per-file. Move one journey (PRD §4) at a time, and
 endpoint report the same numbers, asserted by comparing them in one test.
 The first object is the queue panel: `GET /queue` HTML and
 `Accept: application/json` share `queue_ctx()`
-(`test_t6_a2_html_and_json_report_the_same_queue_numbers`). Set, storyboard
-and review loops now complete over JSON (`test_t6_a1_*`); their T6-A2
+(`test_t6_a2_html_and_json_report_the_same_queue_numbers`). Set, storyboard,
+review and anchor loops now complete over JSON (`test_t6_a1_*`); their T6-A2
 number-agreement tests still sit with those surfaces.
 
 ## 3. API surface
@@ -151,6 +151,13 @@ it dismissed; rewriting the file reopens that `(path, check)` row
 the GPU worker. `/api/qc/lineage` lists predecessor and successor for a
 re-render / refine / repair / anchor re-roll; `/api/qc/lineage/select`
 picks either (`T6-A5`).
+
+**D · anchors** — `GET/POST /api/anchors`, `/api/anchors/refs`,
+`POST /api/anchors/{id}/pick`, `POST /api/anchors/{id}/use-as-ref`.
+`T6-A1` / TRD-4+TRD-7: save base photographs, generate a named view, pick,
+use the pick as the next identity lock (`test_t6_a1_anchor_loop_over_json`).
+HTML `POST /anchors` and `POST /anchors/{id}/pick` share `_enqueue_anchor_jobs`
+/ `_pick_anchor`.
 
 **Q · queue** — `GET /queue` answers HTML or JSON from the same `queue_ctx()`
 (`T6-A2`). The JSON body carries `running`, `waiting`, `recent`,

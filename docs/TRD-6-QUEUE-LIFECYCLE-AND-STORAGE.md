@@ -26,7 +26,8 @@ front end including mobile can be built later against the same API.
 - `T6-A1` **Every operation is reachable over JSON with no HTML involved.** A
   curl script drives the feature end to end. Each document names its own loop:
   TRD-1 a set from empty to rendered, TRD-2 the storyboard loop, TRD-3 the review
-  queue.
+  queue, TRD-4/TRD-7 the anchor loop (save bases → generate a named view → pick
+  → use-as-ref).
 - `T6-A2` **The HTML page and the JSON endpoint report the same numbers** for the
   same object, asserted by comparing them in one test. Two answers means two
   implementations.
@@ -239,7 +240,7 @@ building it.
 
 | criterion | why it is one-sided | its positive half |
 |---|---|---|
-| `T6-A1` every operation reachable over JSON | vacuously true for an empty API surface | each document's **named loop actually completes** end to end over curl: a set from empty to rendered, the storyboard loop, the review queue. **TRD-4 and TRD-7 never name their loop** — that is a gap, not an exemption |
+| `T6-A1` every operation reachable over JSON | vacuously true for an empty API surface | each document's **named loop actually completes** end to end over curl: a set from empty to rendered, the storyboard loop, the review queue, and the TRD-4/TRD-7 anchor loop (save bases → generate a named view → pick → use-as-ref) |
 | `T6-A5` a new candidate, never an overwrite | "never overwrote" is true when nothing was produced | for each of set re-render, refine, repair, anchor re-roll: **predecessor and successor both listed and selectable** |
 | `T6-2` "ready" is separate from "queued" | refusing every early enqueue satisfies it | once the predecessor has **landed**, the successor becomes `ready` and is pulled |
 | `T6-4` vanished requeues, refused does not | nothing running satisfies both halves | a vanished backend's item **runs elsewhere**; a refused workflow **stays failed with its REASON** and does not requeue forever |
@@ -286,6 +287,6 @@ current.
 | `T6-14` handler writes are one transaction | **built** | this change | `test_t6_14_kill_mid_handler_leaves_no_half_write`: kill after `land` leaves dest unlanded and the finding unstamped. Success writes both. `jobs.writes()` / `db.transaction()`; `_run_one` still commits before the handler (`T6-16`). |
 | `T6-16` no write lock across a long handler | **built** | this change | `test_t6_16_web_query_succeeds_during_long_handler`: concurrent `jobs.recent`/`queue_ctx` and BEGIN IMMEDIATE succeed while a fake handler is blocked. `_run_one` commits before the handler. |
 | `T6-A2` HTML and JSON report the same numbers | **built** | this change | `test_t6_a2_html_and_json_report_the_same_queue_numbers`: `/queue` HTML and `Accept: application/json` report the same 1 running / 2 waiting / 58s / 15s / 5s for one fixture. Same `queue_ctx()`. Distinctive numbers so two empty answers cannot pass. Set / storyboard / review still write their own T6-A2 as those loops move. |
-| `T6-A1` named JSON loops complete | **built** | this change | Empty `/api/*` is not enough. `test_t6_a1_set_empty_to_rendered_over_json`, `test_t6_a1_storyboard_loop_over_json`, `test_t6_a1_review_queue_over_json` drive the three named loops over JSON with no HTML: create set → add item → render → list a file; propose arc (unsaved) → accept → generate storyboard → edit scene → meter → unanchored; QC run → list → remedy → approve → recheck that can pass. TRD-4/TRD-7 still have not named their loop. |
+| `T6-A1` named JSON loops complete | **built** | this change | Empty `/api/*` is not enough. `test_t6_a1_set_empty_to_rendered_over_json`, `test_t6_a1_storyboard_loop_over_json`, `test_t6_a1_review_queue_over_json`, `test_t6_a1_anchor_loop_over_json` drive the four named loops over JSON with no HTML: create set → add item → render → list a file; propose arc (unsaved) → accept → generate storyboard → edit scene → meter → unanchored; QC run → list → remedy → approve → recheck that can pass; save `anchor_ref` → generate a named tier+view → pick → use-as-ref. TRD-4 and TRD-7 now name that last loop. |
 | `T6-A4` no template computes | **built** | this change | `test_t6_a4_queue_page_shows_stubbed_values_unmodified`: stub `queue_ctx` with elapsed `12.7s` and counts 3/7 (not the list lengths); `/queue` shows those strings unmodified. `_queue.html` interpolates `queue_n_running`, `queue_n_waiting`, `queue_rows`, `e.elapsed`. `_jobs_panel.html` still formats elapsed. |
 | `T6-A5` predecessor and successor listed and selectable | **built** | this change | `qc_service.listed` / `select` are the shared entry point (T6-A10). Set re-render (`h_render_set`), refine (`refine_generated_still`), repair (`h_repair`) and anchor re-roll (`h_anchor`) each write a sibling and call `record_pair`. `test_t6_a5_*` picks the predecessor, then the successor; both files stay. `GET/POST /api/qc/lineage`, `GET /api/sets/{id}/renders` + `/pick`. T6-6 cites this criterion. |

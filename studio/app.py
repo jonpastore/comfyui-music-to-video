@@ -2715,31 +2715,11 @@ async def use_anchor_as_ref(request: Request, id: int):
     the album and character it belongs to, and reading them from a submitted
     field is how one character's face ends up conditioning another's sheet.
     """
-    row = db.one("SELECT * FROM anchors WHERE id=?", id)
-    if not row:
-        raise HTTPException(404, "no such anchor candidate")
-    if row["scope_kind"] != "album":
-        raise HTTPException(400, "only an album's anchors can be used as references")
-    album, cid = row["scope_value"], row["character_id"]
-    existing = db.one("""SELECT * FROM assets WHERE kind='anchor_ref' AND path=?
-                         ORDER BY id DESC""", row["path"])
-    if existing:
-        # Idempotent. Pressing it twice used to be the only way to find out it
-        # had worked, and two rows for one file would fill the gallery with the
-        # same picture and count twice against MAX_ANCHOR_REFS.
-        asset = existing
-    else:
-        aid = db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) "
-                     "VALUES (?,?,?,?,?)", None, "anchor_ref", row["path"],
-                     json.dumps({"scope_value": album, "character_id": cid,
-                                 # what makes it borrowed rather than uploaded
-                                 "anchor_id": row["id"], "tier": row["tier"],
-                                 "view": row["view"]}), time.time())
-        asset = db.one("SELECT * FROM assets WHERE id=?", aid)
+    payload = _use_anchor_as_ref(id)
     if wants_json(request):
-        return JSONResponse({"id": asset["id"], "path": asset["path"],
-                             "already": bool(existing)})
-    return await _anchor_form_or_redirect(request, album)
+        return JSONResponse(payload)
+    row = db.one("SELECT * FROM anchors WHERE id=?", id)
+    return await _anchor_form_or_redirect(request, row["scope_value"] if row else "")
 
 
 def _build_refs():
@@ -3873,44 +3853,57 @@ async def anchor_preview(request: Request):
                          "negative_applies": build_refs_negative_applies(settings)})
 
 
-@app.post("/anchors")
-async def start_anchor(request: Request, album: str = Form(...), tier: List[str] = Form([]),
-                        view: List[str] = Form([]),
-                        n: int = Form(4), character_id: CharacterId = Form(None)):
-    """Generate anchor candidates for one album, across any number of tiers and
-    views, from an unordered set of reference images.
+def _as_str_list(value):
+    if value is None or value == "":
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(v) for v in value if v not in (None, "")]
+    return [str(value)]
 
-    An ALBUM IS A PLAYLIST -- the same record, matched by the name songs already
-    carry -- so there is no scope to choose. There was a scope_kind select and a
-    free-text scope_value here, and typing an album name that did not match one
-    produced anchors nothing could ever find.
 
-    Tiers and views are both multi-select because the same references usually
-    want rendering several ways at once: front and back, clothed and nude, at
-    every tier the album ships. One job per combination, so each is separately
-    cancellable and a failure in one does not lose the rest.
+def _optional_int(value):
+    if value in (None, ""):
+        return None
+    return int(value)
 
-    Each tier carries its OWN prompt, arriving as prompt_<tier> -- the field
-    names are not known until the tiers are, so they are read off the raw form
-    rather than declared. A nude view asked of a tier that forbids nudity is
-    skipped for that tier and rendered for the ones that permit it; refusing the
-    whole request meant a single restrictive tier in the selection blocked work
-    that was perfectly legal for the others.
-    """
+
+class _JsonForm:
+    """form.get / getlist over a JSON object so enqueue is one path."""
+
+    def __init__(self, data):
+        self._d = data or {}
+
+    def get(self, key, default=None):
+        v = self._d.get(key, default)
+        if isinstance(v, list):
+            return v[0] if v else default
+        return v
+
+    def getlist(self, key):
+        v = self._d.get(key)
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return list(v)
+        return [v]
+
+    def items(self):
+        return self._d.items()
+
+    def __contains__(self, key):
+        return key in self._d
+
+
+def _validate_anchor_request(album, tiers_sel, views_sel):
+    """Shared by the HTML form and the T6-A1 JSON loop."""
     album = (album or "").strip()
     if not album:
         raise HTTPException(400, "choose an album")
     if not db.one("SELECT id FROM playlists WHERE name=? AND kind='playlist'", album):
         raise HTTPException(400, f"no album called {album!r} -- create it on /playlists first")
-
-    selected_tiers = sorted(set(t for t in tier if t))
-    # NO SILENT DEFAULT. This was `or ["front"]`, so submitting with every view
-    # unticked rendered a front clothed sheet nobody asked for -- and the two
-    # controls then behaved differently, since an empty TIER has always been
-    # refused. docs/TRD-4 T4-1, T4-3, T4-4: each control names itself, because a
-    # form with two empty multi-selects and one generic error is a form you fix
-    # twice.
-    selected_views = sorted(set(v for v in view if v))
+    selected_tiers = sorted(set(t for t in tiers_sel if t))
+    # NO SILENT DEFAULT. This was `or ["front"]`. docs/TRD-4 T4-1, T4-3, T4-4.
+    selected_views = sorted(set(v for v in views_sel if v))
     if not selected_tiers:
         raise HTTPException(400, "select at least one tier")
     if not selected_views:
@@ -3920,25 +3913,47 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     for v in selected_views:
         if v not in ANCHOR_VIEWS:
             raise HTTPException(400, f"view must be one of {', '.join(ANCHOR_VIEWS)}")
-
-    # Same plan the form displayed, from the same function -- what it said would
-    # render is what renders.
     plan = anchor_plan(selected_tiers, selected_views)
     combos = [(p["tier"], v) for p in plan for v in p["views"]]
     if not combos:
         raise HTTPException(400, "every view you picked is a nude one and no tier you picked "
                                   "permits nudity, so there is nothing to render. Tick a clothed "
                                   "view, or turn nudity on for a tier under Tiers.")
+    return album, selected_tiers, selected_views, combos
 
-    # One prompt per tier AND VIEW, named prompt_<tier>__<view>. Every one is
-    # screened: a box on this form is a free-text field like any other.
-    form = await request.form()
-    # Each box is compared against the default composed FOR ITS OWN VIEW, so an
-    # untouched box can be told apart from a deliberate edit. There used to be
-    # one box per tier and one comparison against the first selected view's
-    # default, which is what made an edit apply to every view of its tier --
-    # overriding the framing sentence and the nude wardrobe swap on every sheet
-    # but the one the operator was looking at. docs/TRD-7 T7-19.
+
+def _collect_anchor_ref_paths(album, character_id, ref_ids, extra_paths=None):
+    picked = []
+    for rid in ref_ids:
+        row = db.one("SELECT * FROM assets WHERE id=? AND kind='anchor_ref'", int(rid))
+        if not row:
+            raise HTTPException(400, "a reference image you picked no longer exists")
+        meta = db.jset(row)
+        if meta.get("scope_value") != album or (meta.get("character_id") or None) != (character_id or None):
+            raise HTTPException(400, "a reference image you picked belongs to another album "
+                                      "or character")
+        picked.append(row["path"])
+    for p in extra_paths or []:
+        path = os.path.abspath(str(p))
+        if not os.path.isfile(path):
+            raise HTTPException(400, "a reference path does not exist")
+        picked.append(path)
+    if not picked:
+        raise HTTPException(400, "pick at least one saved reference image, or upload one")
+    if len(picked) > pipeline.MAX_ANCHOR_REFS:
+        raise HTTPException(400, f"{len(picked)} reference images selected; the model conditions "
+                                  f"on {pipeline.MAX_ANCHOR_REFS}. Untick some.")
+    return picked
+
+
+def _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
+                         character_id, form, paths):
+    """Queue one job per planned sheet. Shared by HTML POST /anchors and /api/anchors."""
+    if character_id is not None:
+        char = get_character_or_404(character_id)
+        if char["scope_value"] != album:
+            raise HTTPException(400, f"character {char['name']!r} belongs to album "
+                                      f"{char['scope_value']!r}, not to {album!r}")
     form_pose = (form.get("pose") or "").strip()
     if form_pose:
         if len(form_pose) > MAX_PROMPT_FIELD:
@@ -3964,26 +3979,13 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
         composed = (default_anchor_prompt(album, v, character_id, pose=form_pose or None)
                     or "").strip()
         if text and text == composed:
-            # untouched: send it as EMPTY so make_anchor composes this view's own
             text = ""
-        # a typed pose is not in the profile the job will load, so an empty
-        # prompt would drop it. Ship this view's own composition instead.
         if not text and form_pose:
             text = composed
         view_prompts[(t, v)] = text
-
-    # TIER WORDING, arriving as tone_<tier> for the same reason the prompts do.
-    # Stored BEFORE anything is queued, so the wording the box showed is the
-    # wording compose_guardrail() then hands the renderer -- an edit that
-    # rendered but did not persist would put the form and the next render into
-    # disagreement, which is this codebase's recurring defect.
-    #
-    # Scoped to this ALBUM. Typing in this box cannot re-word another release's
-    # sheets, and typing the tier's own wording back removes the override
-    # rather than storing a duplicate of it.
     for t in selected_tiers:
         if f"tone_{t}" not in form:
-            continue                        # no box on the page: leave the wording alone
+            continue
         typed_tone = " ".join((form.get(f"tone_{t}") or "").split())
         if typed_tone == tiers.tier_text(t).strip():
             typed_tone = ""
@@ -3992,68 +3994,9 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
                 tiers.set_override(album, t, typed_tone)
             except ValueError as e:
                 raise HTTPException(400, str(e))
-
-    if character_id is not None:
-        # a character belongs to the album it was defined on; anchoring one
-        # elsewhere would silently make an unreachable anchor
-        char = get_character_or_404(character_id)
-        if char["scope_value"] != album:
-            raise HTTPException(400, f"character {char['name']!r} belongs to album "
-                                      f"{char['scope_value']!r}, not to {album!r}")
-
-    # References now come from two places: images already saved for this album
-    # and character (ticked in the gallery) and anything uploaded in this same
-    # submit, which is saved too rather than used once and forgotten.
-    uploads = form_files(form, "images")
-    if len(uploads) > MAX_ANCHOR_UPLOADS:
-        raise HTTPException(400, f"that is {len(uploads)} reference images; {MAX_ANCHOR_UPLOADS} "
-                                  f"is the most this form accepts")
-    picked = []
-    for rid in form.getlist("ref_id"):
-        row = db.one("SELECT * FROM assets WHERE id=? AND kind='anchor_ref'", int(rid))
-        if not row:
-            raise HTTPException(400, "a reference image you picked no longer exists")
-        meta = db.jset(row)
-        if meta.get("scope_value") != album or (meta.get("character_id") or None) != (character_id or None):
-            raise HTTPException(400, "a reference image you picked belongs to another album "
-                                      "or character")
-        picked.append(row["path"])
-    picked += [a["path"] for a in await _save_anchor_refs(album, character_id, uploads)]
-
-    if not picked:
-        raise HTTPException(400, "pick at least one saved reference image, or upload one")
-    # The model conditions on MAX_ANCHOR_REFS and pipeline.gen_anchor silently
-    # drops the rest. That was tolerable when the form was "upload some, the
-    # first three win" and invisible; with a saved gallery it would mean an
-    # arbitrary three of eight, chosen by row id. Refuse instead of guessing.
-    if len(picked) > pipeline.MAX_ANCHOR_REFS:
-        raise HTTPException(400, f"{len(picked)} reference images selected; the model conditions "
-                                  f"on {pipeline.MAX_ANCHOR_REFS}. Untick some.")
-    paths = picked
-
     render = anchor_render_settings(form)
-    n = max(1, min(int(n), 8))
+    n = max(1, min(int(n or 4), 8))
     sweep = cfg_sweep_points(form, render, combos)
-    # An UNEDITED prompt is sent as empty so make_anchor composes it PER VIEW.
-    # That comparison happened above, per box, against its own view's default.
-    #
-    # make_anchor's `--prompt` is `args.prompt.strip() or prompt_for(view, ...)`,
-    # so an explicit prompt REPLACES the per-view composition entirely -- and the
-    # form always prefills the box, so a prompt was always sent. The consequences
-    # were exactly what a user reported after rendering twelve sheets: every
-    # "back" sheet carried the FRONT VIEW sentence and looked like the front, and
-    # no nude sheet was nude, because prompt_for's NUDE_WARDROBE swap ("the
-    # album's wardrobe wording is the one thing that must NOT be used") never
-    # ran. Twelve tier/view combinations received one identical prompt.
-    #
-    # An EDITED prompt is still honoured verbatim, and now reaches ONLY the view
-    # whose box it was typed into: every box is composed for its own view, so the
-    # sheet an edit governs is the sheet the operator was looking at.
-    #
-    # A CFG SWEEP replaces the per-combination loop with a per-GUIDANCE one: the
-    # single tier and view, rendered once at every cfg value, n candidates each.
-    # Everything else is held fixed, including the base SEED -- see
-    # cfg_sweep_points for why that is the whole point of it.
     queued = []
     plan_points = ([(t, v, None) for t, v in combos] if not sweep else
                    [(combos[0][0], combos[0][1], c) for c in sweep["cfgs"]])
@@ -4061,10 +4004,8 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
         text = view_prompts[(t, v)]
         this_render = render if cfg is None else dict(render, cfg=cfg, seed=sweep["seed"])
         this_n = n if cfg is None else sweep["n"]
-        # The run row goes in FIRST, so what was sent survives a job that fails.
         run_id = create_anchor_run(album, t, v, character_id, this_n, text, this_render,
                                     paths, tiers.compose_guardrail(t, album),
-                                    # what the FORM chose, not the sweep's point
                                     chosen=render)
         jid = jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": album, "tier": t,
                                        "view": v, "images": paths, "n": this_n,
@@ -4072,29 +4013,157 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
                                        "render": this_render, "run_id": run_id})
         queued.append({"id": jid, "tier": t, "view": v, "prompt": text, "cfg": cfg,
                        "run_id": run_id})
-
-    # Count the saved versions this render was actually built from. Sent by the
-    # form as hidden fields the pickers set, and cleared the moment the box is
-    # edited away from the loaded text -- so usage_count counts RENDERS from a
-    # version, not the times one was loaded and then changed or rejected.
     prompts.mark_used(form.getlist("used_version"))
+    return {"queued": len(queued), "jobs": queued, "album": album,
+            "tiers": selected_tiers, "views": selected_views,
+            "n": sweep["n"] if sweep else n,
+            "refs": len(paths), "render": render,
+            "sweep": ({"cfgs": sweep["cfgs"], "seed": sweep["seed"],
+                       "sheets": sweep["sheets"]} if sweep else None)}
 
-    # The async caller paints from THIS, never from what it typed -- and this is
-    # the whole answer to "I clicked generate and I don't think it generated any
-    # anchors": it names every sheet that was accepted, with the job to watch.
-    # It echoes the tiers, the views and each sheet's prompt because those are
-    # exactly the fields an async handler has historically dropped; a response
-    # that carries them can be asserted on.
+
+def _record_anchor_ref(album, path, character_id=None):
+    """Persist one existing image as an operator base photograph."""
+    album = (album or "").strip()
+    if not album:
+        raise HTTPException(400, "choose an album")
+    if not db.one("SELECT id FROM playlists WHERE name=? AND kind='playlist'", album):
+        raise HTTPException(400, f"no album called {album!r}")
+    if character_id is not None:
+        char = get_character_or_404(character_id)
+        if char["scope_value"] != album:
+            raise HTTPException(400, f"character {char['name']!r} belongs to {char['scope_value']!r}")
+    path = os.path.abspath(path or "")
+    if not path or not os.path.isfile(path):
+        raise HTTPException(400, "path must be an existing image file")
+    existing = db.one("""SELECT * FROM assets WHERE kind='anchor_ref' AND path=?
+                         ORDER BY id DESC""", path)
+    if existing:
+        meta = db.jset(existing)
+        if (meta.get("scope_value") == album
+                and (meta.get("character_id") or None) == (character_id or None)):
+            return existing
+    db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+           None, "anchor_ref", path,
+           json.dumps({"scope_value": album, "character_id": character_id}), time.time())
+    return db.one("SELECT * FROM assets WHERE path=? AND kind='anchor_ref' ORDER BY id DESC", path)
+
+
+def _ref_payload(row):
+    return {"id": row["id"], "path": row["path"]}
+
+
+def _refs_payload(album, character_id=None):
+    return [_ref_payload(a) for a in anchor_refs(album, character_id)]
+
+
+def _anchor_groups(scope_kind="", scope_value=""):
+    clauses, params = [], []
+    if scope_kind:
+        clauses.append("a.scope_kind=?")
+        params.append(scope_kind)
+    if scope_value:
+        clauses.append("a.scope_value=?")
+        params.append(scope_value)
+    where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+    rows = db.q(f"""SELECT a.*, c.name AS character_name
+                    FROM anchors a LEFT JOIN characters c ON c.id = a.character_id{where}
+                    ORDER BY a.scope_kind, a.scope_value, c.name, a.tier, a.view, a.id DESC""",
+                *params)
+    groups = {}
+    for r in rows:
+        key = (r["scope_kind"], r["scope_value"], r["character_id"], r["character_name"],
+               r["tier"], r["view"])
+        groups.setdefault(key, []).append(r)
+    return [{"scope_kind": k[0], "scope_value": k[1], "character_id": k[2],
+             "character_name": k[3], "tier": k[4], "view": k[5],
+             "candidates": [{"id": c["id"], "path": c["path"], "chosen": bool(c["chosen"]),
+                             "tier": c["tier"], "view": c["view"],
+                             "character_id": c["character_id"]} for c in v],
+             "unpicked": sum(1 for c in v if not c["chosen"])}
+            for k, v in groups.items()]
+
+
+def _pick_anchor(id):
+    row = db.one("SELECT * FROM anchors WHERE id=?", id)
+    if not row:
+        raise HTTPException(404, "no such anchor candidate")
+    db.run("""UPDATE anchors SET chosen=0 WHERE scope_kind=? AND scope_value=? AND tier=?
+              AND view=? AND character_id IS ?""",
+           row["scope_kind"], row["scope_value"], row["tier"], row["view"], row["character_id"])
+    db.run("UPDATE anchors SET chosen=1 WHERE id=?", id)
+    peers = db.q("""SELECT id, chosen FROM anchors WHERE scope_kind=? AND scope_value=?
+                    AND tier=? AND view=? AND character_id IS ?""",
+                 row["scope_kind"], row["scope_value"], row["tier"], row["view"],
+                 row["character_id"])
+    return {"chosen": id,
+            "group": [{"id": p["id"], "chosen": bool(p["chosen"])} for p in peers]}
+
+
+def _use_anchor_as_ref(id):
+    row = db.one("SELECT * FROM anchors WHERE id=?", id)
+    if not row:
+        raise HTTPException(404, "no such anchor candidate")
+    if row["scope_kind"] != "album":
+        raise HTTPException(400, "only an album's anchors can be used as references")
+    album, cid = row["scope_value"], row["character_id"]
+    existing = db.one("""SELECT * FROM assets WHERE kind='anchor_ref' AND path=?
+                         ORDER BY id DESC""", row["path"])
+    if existing:
+        asset = existing
+    else:
+        aid = db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) "
+                     "VALUES (?,?,?,?,?)", None, "anchor_ref", row["path"],
+                     json.dumps({"scope_value": album, "character_id": cid,
+                                 "anchor_id": row["id"], "tier": row["tier"],
+                                 "view": row["view"]}), time.time())
+        asset = db.one("SELECT * FROM assets WHERE id=?", aid)
+    return {"id": asset["id"], "path": asset["path"], "already": bool(existing)}
+
+
+@app.post("/anchors")
+async def start_anchor(request: Request, album: str = Form(...), tier: List[str] = Form([]),
+                        view: List[str] = Form([]),
+                        n: int = Form(4), character_id: CharacterId = Form(None)):
+    """Generate anchor candidates for one album, across any number of tiers and
+    views, from an unordered set of reference images.
+
+    An ALBUM IS A PLAYLIST -- the same record, matched by the name songs already
+    carry -- so there is no scope to choose. There was a scope_kind select and a
+    free-text scope_value here, and typing an album name that did not match one
+    produced anchors nothing could ever find.
+
+    Tiers and views are both multi-select because the same references usually
+    want rendering several ways at once: front and back, clothed and nude, at
+    every tier the album ships. One job per combination, so each is separately
+    cancellable and a failure in one does not lose the rest.
+
+    Each tier carries its OWN prompt, arriving as prompt_<tier> -- the field
+    names are not known until the tiers are, so they are read off the raw form
+    rather than declared. A nude view asked of a tier that forbids nudity is
+    skipped for that tier and rendered for the ones that permit it; refusing the
+    whole request meant a single restrictive tier in the selection blocked work
+    that was perfectly legal for the others.
+    """
+    album, selected_tiers, selected_views, combos = _validate_anchor_request(
+        album, tier, view)
+    if character_id is not None:
+        char = get_character_or_404(character_id)
+        if char["scope_value"] != album:
+            raise HTTPException(400, f"character {char['name']!r} belongs to album "
+                                      f"{char['scope_value']!r}, not to {album!r}")
+    form = await request.form()
+    uploads = form_files(form, "images")
+    if len(uploads) > MAX_ANCHOR_UPLOADS:
+        raise HTTPException(400, f"that is {len(uploads)} reference images; {MAX_ANCHOR_UPLOADS} "
+                                  f"is the most this form accepts")
+    extra = [a["path"] for a in await _save_anchor_refs(album, character_id, uploads)]
+    paths = _collect_anchor_ref_paths(album, character_id, form.getlist("ref_id"),
+                                      extra_paths=extra)
+    payload = _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
+                                   character_id, form, paths)
     if wants_json(request):
-        return JSONResponse({"queued": len(queued), "jobs": queued, "album": album,
-                             "tiers": selected_tiers, "views": selected_views,
-                             "n": sweep["n"] if sweep else n,
-                             "refs": len(paths), "render": render,
-                             # the sweep's own numbers, so a caller can assert
-                             # that every point got the SAME seed rather than
-                             # take it on trust
-                             "sweep": ({"cfgs": sweep["cfgs"], "seed": sweep["seed"],
-                                        "sheets": sweep["sheets"]} if sweep else None)})
+        return JSONResponse(payload)
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 
@@ -4689,9 +4758,6 @@ async def start_fix_anchor(id: int, mode: str = Form(...), instruction: str = Fo
 
 @app.post("/anchors/{id}/pick")
 def pick_anchor(request: Request, id: int):
-    row = db.one("SELECT * FROM anchors WHERE id=?", id)
-    if not row:
-        raise HTTPException(404, "no such anchor candidate")
     # exactly one chosen per (scope_kind, scope_value, tier, view, CHARACTER)
     # group. Without the character in the key, picking a supporting character's
     # anchor would unpick the protagonist's for that tier -- and the next refs
@@ -4700,19 +4766,10 @@ def pick_anchor(request: Request, id: int):
     # is never true in SQL. sqlite's IS is null-safe equality and works on every
     # version; IS NOT DISTINCT FROM needs 3.39 and cerberus runs 3.37.2, so it
     # would have passed here and been a syntax error on the deployed box.
-    db.run("""UPDATE anchors SET chosen=0 WHERE scope_kind=? AND scope_value=? AND tier=?
-              AND view=? AND character_id IS ?""",
-           row["scope_kind"], row["scope_value"], row["tier"], row["view"], row["character_id"])
-    db.run("UPDATE anchors SET chosen=1 WHERE id=?", id)
+    payload = _pick_anchor(id)
     if wants_json(request):
-        # which one is now chosen AND which lost it: the page has to move the
-        # highlight off the old one, and only the server knows which that was
-        peers = db.q("""SELECT id, chosen FROM anchors WHERE scope_kind=? AND scope_value=?
-                        AND tier=? AND view=? AND character_id IS ?""",
-                     row["scope_kind"], row["scope_value"], row["tier"], row["view"],
-                     row["character_id"])
-        return JSONResponse({"chosen": id,
-                             "group": [{"id": p["id"], "chosen": bool(p["chosen"])} for p in peers]})
+        return JSONResponse(payload)
+    row = db.one("SELECT * FROM anchors WHERE id=?", id)
     return RedirectResponse(
         f"/anchors?scope_kind={row['scope_kind']}&scope_value={quote(row['scope_value'])}",
         status_code=303)
@@ -7840,6 +7897,64 @@ async def api_set_render_pick(id: int, request: Request, path: str = Form("")):
         return JSONResponse({"renders": qc_service.select("set_rerender", group, path)})
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+@app.get("/api/anchors")
+def api_anchors_list(album: str = "", scope_kind: str = "", scope_value: str = ""):
+    """T6-A1 / TRD-4+TRD-7: list candidates for the named JSON loop."""
+    scope_value = (scope_value or album or "").strip()
+    scope_kind = (scope_kind or ("album" if scope_value else "")).strip()
+    return JSONResponse({
+        "album": scope_value,
+        "groups": _anchor_groups(scope_kind, scope_value),
+        "refs": _refs_payload(scope_value) if scope_value else [],
+    })
+
+
+@app.post("/api/anchors")
+async def api_anchors_generate(request: Request):
+    """T6-A1: generate through the same enqueue the HTML form uses."""
+    body = await _api_body(request)
+    album, selected_tiers, selected_views, combos = _validate_anchor_request(
+        body.get("album"),
+        _as_str_list(body.get("tier") if "tier" in body else body.get("tiers")),
+        _as_str_list(body.get("view") if "view" in body else body.get("views")))
+    character_id = _optional_int(body.get("character_id"))
+    form = _JsonForm(body)
+    extra = _as_str_list(body.get("paths") or body.get("images") or body.get("path"))
+    paths = _collect_anchor_ref_paths(
+        album, character_id,
+        _as_str_list(body.get("ref_id") if "ref_id" in body else body.get("ref_ids")),
+        extra_paths=extra)
+    return JSONResponse(_enqueue_anchor_jobs(
+        album, selected_tiers, selected_views, combos,
+        body.get("n") or 4, character_id, form, paths))
+
+
+@app.get("/api/anchors/refs")
+def api_anchor_refs_list(album: str = "", character_id: CharacterId = None):
+    album = (album or "").strip()
+    if not album:
+        raise HTTPException(400, "choose an album")
+    return JSONResponse({"album": album, "refs": _refs_payload(album, character_id)})
+
+
+@app.post("/api/anchors/refs")
+async def api_anchor_refs_add(request: Request):
+    body = await _api_body(request)
+    row = _record_anchor_ref(body.get("album"), body.get("path"),
+                             _optional_int(body.get("character_id")))
+    return JSONResponse(_ref_payload(row))
+
+
+@app.post("/api/anchors/{id}/pick")
+def api_anchor_pick(id: int):
+    return JSONResponse(_pick_anchor(id))
+
+
+@app.post("/api/anchors/{id}/use-as-ref")
+def api_anchor_use_as_ref(id: int):
+    return JSONResponse(_use_anchor_as_ref(id))
 
 
 # ------------------------------------------------------------------ models --

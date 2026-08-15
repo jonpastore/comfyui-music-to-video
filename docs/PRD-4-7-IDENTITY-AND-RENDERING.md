@@ -21,6 +21,10 @@ that has to be trustworthy for those decisions to mean anything:
 - **TRD-4 — who the character is.** The prompt that defines identity.
 - **TRD-7 — how many ways you can ask to see them, and whether it is still
   them.** Variations on the same sheet-builder.
+
+`T6-A1`'s named loop for these two, over JSON: save operator base photographs,
+generate candidates for a named view, pick one, use that sheet as the next
+identity lock (`test_t6_a1_anchor_loop_over_json`).
 - **TRD-5 — the graph that turns a request into a clip**, and the refine pass
   that currently does nothing.
 - **TRD-6 — the queue, the lifecycle, and what joins to what.** The plumbing

@@ -43,7 +43,7 @@ Three facts about the domain decide almost every rule below:
 | `static/style.css` | 1247 lines |
 | `static/app.js` | 1589 lines, hand-written, 55 `addEventListener` |
 | `templates/` | 29 files, 3481 lines |
-| routes | 138, of which **25** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue. `/queue` answers JSON with the same numbers the fragment prints (`T6-A2`) |
+| routes | 156, of which **36** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue` answers JSON with the same numbers the fragment prints (`T6-A2`) |
 
 ### 2.2 The root finding: tokens exist for colour, and for nothing else
 

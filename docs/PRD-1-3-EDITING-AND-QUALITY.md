@@ -13,7 +13,8 @@ is the reason this document exists.
 
 Rules inherited from `TRD-6 §0` (`T6-A1`…`T6-A6`) apply throughout and are cited,
 never repeated. Prohibitions live in TRD-1 §12, TRD-2 §9 and TRD-3 §10.
-`T6-A1`'s three named loops complete over JSON (`test_t6_a1_*`).
+`T6-A1`'s four named loops complete over JSON (`test_t6_a1_*`), including
+the TRD-4/TRD-7 anchor loop (`test_t6_a1_anchor_loop_over_json`).
 `T6-A2` compares the HTML queue panel and JSON `/queue` in one test
 (`test_t6_a2_html_and_json_report_the_same_queue_numbers`); set, storyboard
 and review still write their own T6-A2 as those loops move.

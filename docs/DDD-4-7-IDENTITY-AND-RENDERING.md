@@ -40,7 +40,9 @@ ControlNet.
 photographs (`assets` kind `anchor_ref`) → generate *candidates*
 (`anchors` rows) → pick `chosen=1` → that sheet feeds storyboard
 *reference frames* → clips. A pose plate is not a base image unless the
-operator put it there.
+operator put it there. That is also `T6-A1`'s named JSON loop for TRD-4/TRD-7:
+`GET/POST /api/anchors`, `/api/anchors/refs`, `/api/anchors/{id}/pick`,
+`/api/anchors/{id}/use-as-ref` (`test_t6_a1_anchor_loop_over_json`).
 
 ## 2. The view table — one table, two projections
 
