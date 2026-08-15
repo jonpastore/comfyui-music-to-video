@@ -304,6 +304,9 @@ next start, first is 0, last is duration ± 0.05 s; a gap or overlap is
 refused at `validate`.
 A generated storyboard carries a distinctive string from the album arc
 when one exists, and does not when the arc is absent (`T2-20`).
+At `xxx`, no scene `image_prompt` or `video_motion_prompt` carries the
+mainstream lock (*fully clothed / no explicit gesture*); the tier's
+own permission wording is in the scene text (`T2-21`).
 The board's declared `guardrail` is this tier's `compose_guardrail`
 clause; saving a board that carries another tier's wording is refused
 (`T2-22`).

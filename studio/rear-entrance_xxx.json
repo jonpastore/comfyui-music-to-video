@@ -1,0 +1,35 @@
+{
+  "title": "Rear Entrance",
+  "album": "Street Cats",
+  "version": "xxx",
+  "scenes": [
+    {
+      "scene_number": 1,
+      "name": "Stair Mouth Descent",
+      "cue": "32-Bar DJ Intro - NO VOCALS",
+      "duration_guidance": "7-10 sec",
+      "story": "The silhouette takes the next step down the dark stair mouth.",
+      "camera": "low",
+      "motion": "slow downward step into deeper shadow",
+      "lighting": "blue-black stairwell with faint red spill from below",
+      "location": "dark warehouse stair mouth at alley end",
+      "image_prompt": "adult anthropomorphic black feline woman DJ descending wet concrete steps, fully clothed, tasteful and non-graphic, no explicit gesture",
+      "video_motion_prompt": "slow low-angle descent; sensual confident after-hours nightlife body language, fully clothed, tasteful and non-graphic, no explicit gesture",
+      "negative_prompt": "blurry"
+    },
+    {
+      "scene_number": 2,
+      "name": "Landing Bulb Reveal",
+      "cue": "32-Bar DJ Intro - NO VOCALS",
+      "duration_guidance": "6-9 sec",
+      "story": "At the stair landing a narrow metal door resolves under a single weak bulb.",
+      "camera": "follow",
+      "motion": "approach along wet treads toward the landing",
+      "lighting": "single weak tungsten bulb, cool concrete shadow",
+      "location": "warehouse stair landing",
+      "image_prompt": "narrow unmarked metal door under a weak bulb, fully clothed, tasteful and non-graphic, no explicit gesture",
+      "video_motion_prompt": "following drift down to the landing; fully clothed, tasteful and non-graphic, no explicit gesture; stable character identity",
+      "negative_prompt": "blurry"
+    }
+  ]
+}

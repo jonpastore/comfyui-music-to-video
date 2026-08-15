@@ -406,6 +406,14 @@ continuity onto the generated board; no arc leaves the field off. Same
 recorded model response both arms — two fixtures differing is not the
 check. Mutation: drop `arc_ctx` from `_compose` → red.
 
+`T2-21` is **built**. `_compose` at `xxx` strips *"fully clothed,
+tasteful and non-graphic"* and *"no explicit gesture"* from each
+scene's `image_prompt` and `video_motion_prompt` and stamps
+*"Explicit adult content is permitted"* in their place. Same recorded
+`rear-entrance_xxx.json` response; the existing direction test only
+checked the guardrail sent to grok. Mutation: leave scene text
+untouched → red. Mutation: strip and do not stamp → red.
+
 `T2-22` is **built**. `_compose` stamps `guardrail` from
 `tiers.compose_guardrail(tier)`, not the `guardrail` argument — a
 passed-in dummy is discarded. `app.foreign_tier_in_storyboard` matches
