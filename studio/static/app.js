@@ -1707,13 +1707,29 @@ function initLibraryBulk() {
   function picked() {
     return shown().filter(function (r) { return r.querySelector(".pick-song").checked; });
   }
+  var post = api;
   function refresh() {
     var n = picked().length;
-    count.textContent = n ? n + " song" + (n === 1 ? "" : "s") + " selected"
-                          : "no songs selected";
     var vis = shown();
     all.checked = vis.length > 0 && n === vis.length;
     all.indeterminate = n > 0 && n < vis.length;
+    all.title = "Select all " + vis.length + " shown";
+    if (!n) {
+      count.textContent = "no songs selected";
+      return;
+    }
+    var genre = val("bulk-genre-select"), genre2 = val("bulk-genre2-select");
+    if (!genre && !genre2) {
+      count.textContent = n + " song" + (n === 1 ? "" : "s") + " selected";
+      return;
+    }
+    post("/songs/genres", {preview: true, song_ids: ids(),
+                            genre: genre, subgenre: val("bulk-subgenre-select"),
+                            genre2: genre2, subgenre2: val("bulk-subgenre2-select")})
+      .then(function (d) {
+        count.textContent = d.would_change + " will change";
+      })
+      .catch(function (err) { count.textContent = err.message; });
   }
   function ids() { return picked().map(function (r) { return Number(r.dataset.song); }); }
 
@@ -1724,6 +1740,11 @@ function initLibraryBulk() {
   document.addEventListener("change", function (e) {
     if (e.target.classList && e.target.classList.contains("pick-song")) refresh();
   });
+  ["bulk-genre-select", "bulk-subgenre-select",
+   "bulk-genre2-select", "bulk-subgenre2-select"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener("change", refresh);
+  });
 
   function paintGenre(row, g) {
     var cell = row.querySelector(".cell-genre");
@@ -1733,7 +1754,6 @@ function initLibraryBulk() {
     cell.textContent = first;
     if (second) { cell.appendChild(document.createElement("br")); cell.append(second); }
   }
-  var post = api;
   function busy(on, msg) { note.textContent = msg || ""; bar.classList.toggle("busy", !!on); }
 
   // Upload: same route, same validation, but the Library stays where it is and
@@ -1791,7 +1811,9 @@ function initLibraryBulk() {
           var row = document.querySelector('tr[data-song="' + u.song_id + '"]');
           if (row) paintGenre(row, u);
         });
-        busy(false, "Saved to " + d.updated.length + " song" + (d.updated.length === 1 ? "" : "s") + ".");
+        var n = d.changed != null ? d.changed : d.updated.length;
+        busy(false, "Saved to " + n + " song" + (n === 1 ? "" : "s") + ".");
+        refresh();
       })
       .catch(function (err) { busy(false, "Not saved: " + err.message); });
   });

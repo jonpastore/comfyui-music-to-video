@@ -154,16 +154,18 @@ quiet is worse than none**, because it is trusted.
 ### 4.1 Bulk edit
 
 Server-side, one route, one transaction (`T10-6`, built: twelve-row success
-writes all, a BEFORE UPDATE trigger on the seventh writes none), every value
-checked against `genres.json` before any write (`T10-5`). The two rules that
-destroy data if inverted:
+writes all, a BEFORE UPDATE trigger on the seventh writes none). Every value
+is checked against `genres.json` before any write (`T10-5`, built: valid genre
+plus invalid `genre2` writes none). The two rules that destroy data if inverted:
 
-- **Blank means leave alone** (`T10-3`). Clearing needs its own control.
-- **Toggle-all is scoped to the rows currently shown** (`T10-4`), because the
-  header sort and filters are live and off-screen edits are invisible.
+- **Blank means leave alone** (`T10-3`, built: twelve songs, blank `genre`, set
+  `genre2`; stored primary unchanged). Clearing needs its own control.
+- **Toggle-all is scoped to the rows currently shown** (`T10-4`, built:
+  `shown()` is `offsetParent`; twelve shown change, three hidden do not).
 
-`T10-7`'s pre-write count must be the count that actually changes — a
-confirmation that overstates teaches the operator to stop reading it.
+`T10-7` is built: `preview=true` on the same POST returns `would_change`, the
+write's `changed` matches it, and `#bulk-count` is that number — the 12-vs-9
+case. A confirmation that overstates teaches the operator to stop reading it.
 
 ### 4.2 The advice rules are a payload contract, not UI copy
 
@@ -212,6 +214,9 @@ each caller, or a caller that stops calling it stays green.
                          ->  pick is its own record, not Use / mp3_path (T8-2, built)
     bulk edit (T10-6 built)         ->  T10-3, T10-4, T10-5, T10-7
     advice labelling  ->  T10-11..T10-15 over the four live modules
+                         ->  the picked/unpicked distinction (T8-2)
+    bulk edit (T10-3…T10-7 built)
+    advice labelling (T10-11 built) ->  T10-12..T10-15 over the four live modules
 
 Nothing here blocks TRD 1-7. TRD-9 is first because it is cheapest and because
 everything else in the project renders through the machinery it pins down.

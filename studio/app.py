@@ -1957,20 +1957,8 @@ async def suggest_genres(request: Request):
     return JSONResponse({"suggestions": suggestions, "dropped": dropped, "model": model})
 
 
-@app.post("/songs/genres")
-async def bulk_set_genres(request: Request):
-    """Apply one genre decision to many songs at once.
-
-    A BLANK genre means LEAVE IT ALONE, never "clear it": someone setting only
-    the secondary genre on twelve songs must not silently lose the primary on all
-    twelve. Clearing is a different intention and deliberately has no control
-    here. A genre carries its own subgenre, so picking a genre and leaving the
-    subgenre blank does clear that subgenre -- they are one choice, not two.
-    """
-    body = await request.json()
-    ids = [int(i) for i in (body.get("song_ids") or [])]
-    if not ids:
-        raise HTTPException(400, "no songs selected")
+def _bulk_genre_fields(body):
+    """Validated genre columns to write. Blank means leave alone (T10-3)."""
     genre, subgenre = valid_genre_or_400(body.get("genre"), body.get("subgenre"), "genre")
     genre2, subgenre2 = valid_genre_or_400(body.get("genre2"), body.get("subgenre2"), "genre2")
     fields = {}
@@ -1980,27 +1968,63 @@ async def bulk_set_genres(request: Request):
         fields["genre2"], fields["subgenre2"] = genre2, subgenre2
     if not fields:
         raise HTTPException(400, "pick a genre to apply")
+    return fields
+
+
+def _bulk_genre_changing(ids, fields):
+    """Song ids whose stored values would actually differ. Missing ids skipped."""
+    changing = []
+    for sid in ids:
+        row = db.one(
+            "SELECT id, genre, subgenre, genre2, subgenre2 FROM songs WHERE id=?", sid)
+        if not row:
+            continue
+        if any((row[k] or "") != fields[k] for k in fields):
+            changing.append(int(row["id"]))
+    return changing
+
+
+@app.post("/songs/genres")
+async def bulk_set_genres(request: Request):
+    """Apply one genre decision to many songs at once.
+
+    A BLANK genre means LEAVE IT ALONE, never "clear it": someone setting only
+    the secondary genre on twelve songs must not silently lose the primary on all
+    twelve. Clearing is a different intention and deliberately has no control
+    here. A genre carries its own subgenre, so picking a genre and leaving the
+    subgenre blank does clear that subgenre -- they are one choice, not two.
+
+    preview=true returns the count that would change and writes nothing (T10-7).
+    Values are checked against genres.json before any write (T10-5).
+    """
+    body = await request.json()
+    ids = [int(i) for i in (body.get("song_ids") or [])]
+    if not ids:
+        raise HTTPException(400, "no songs selected")
+    fields = _bulk_genre_fields(body)
+    changing = _bulk_genre_changing(ids, fields)
+    if body.get("preview"):
+        return JSONResponse({"would_change": len(changing), "song_ids": changing})
     sets = ", ".join(f"{k}=?" for k in fields)
-    existing = [sid for sid in ids if db.one("SELECT id FROM songs WHERE id=?", sid)]
     # One transaction (T10-6 / T6-14): a crash mid-loop rolls back every row.
     c = db.conn()
     c.execute("BEGIN")
     try:
-        for sid in existing:
+        for sid in changing:
             c.execute(f"UPDATE songs SET {sets} WHERE id=?", (*fields.values(), sid))
         c.commit()
     except Exception:
         c.rollback()
         raise
     updated = []
-    for sid in existing:
+    for sid in changing:
         row = db.one("SELECT id, genre, subgenre, genre2, subgenre2 FROM songs WHERE id=?", sid)
         updated.append({"song_id": row["id"], "genre": row["genre"] or "",
                         "subgenre": row["subgenre"] or "", "genre2": row["genre2"] or "",
                         "subgenre2": row["subgenre2"] or ""})
     # the STORED values, so the page paints what was saved rather than what was
     # typed -- otherwise a value dropped by validation stays visible and looks fine
-    return JSONResponse({"updated": updated})
+    return JSONResponse({"updated": updated, "changed": len(updated)})
 
 
 @app.get("/api/songs/{id}/peaks")

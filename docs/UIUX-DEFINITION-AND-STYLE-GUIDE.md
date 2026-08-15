@@ -838,19 +838,18 @@ Two additions specific to TRD-9:
 
 ### 7b.4 Bulk edit is the highest-risk form in the studio
 
-`T10-6` is built: a library bulk write is one transaction. `T10-3` and `T10-4`
-are data-destruction rules, and both are *interface* failures before they are
-code failures:
+`T10-3`…`T10-7` are built. `T10-3` and `T10-4` are data-destruction rules, and
+both are *interface* failures before they are code failures:
 
-- **Blank must not read as "clear".** An empty select adjacent to a Save button
-  is a control that looks like it will write. The affordance has to say *leave
-  alone*, and clearing needs its own explicit control that says so.
-- **Toggle-all must show its scope.** *"Select all 12 shown"* rather than
-  *"Select all"*, because the header sort and filters are live and the operator
-  cannot see what is off-screen.
-- **The pre-write count is part of the control, not a toast.** `T10-7` requires
-  it to be the count that actually changes; a confirmation that overstates once
-  is a confirmation nobody reads again.
+- **Blank must not read as "clear".** The empty option is *(leave alone)*, and
+  a blank field is not written. Clearing needs its own explicit control.
+- **Toggle-all must show its scope.** The header checkbox title is
+  *"Select all N shown"*, because the header sort and filters are live and the
+  operator cannot see what is off-screen.
+- **The pre-write count is part of the control, not a toast.** `#bulk-count`
+  shows `would_change` from a `preview` POST, and that number is the write's
+  `changed` — the 12-vs-9 case. A confirmation that overstates once is a
+  confirmation nobody reads again.
 
 ### 7b.5 Model-authored text has to be visually distinct, everywhere
 
