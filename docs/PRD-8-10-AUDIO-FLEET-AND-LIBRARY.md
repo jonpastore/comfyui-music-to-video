@@ -57,7 +57,7 @@ The same operator, in the two modes the other documents do not cover:
 | P7 | Four measurement traps that each cost a wrong diagnosis are checks, not folklore | `T9-10`…`T9-13` (`T9-10` built: cache-hit empty ≠ refusal, A/B needs distinct seeds; `T9-11` built: raw+pin; `T9-12` built: `/history` is not Swarm authority, container log is; `T9-13a`/`T9-13b` built: byte completeness; staging path reads `CATALOG.companions`) |
 | P8 | A bulk edit changes exactly what was shown and asked for, or nothing | `T10-3`…`T10-7` (built) |
 | P9 | A model's words are a proposal, never a verdict and never a gate | `T10-11`…`T10-15` |
-| P10 | A song for a child, and a G-tier video for it, is a first-class thing this studio can make | `T10-18` (built). `T10-18a` (built: `r` may mention in lyrics/narrative only). `T10-18b` (built: xxx refuses minor refs everywhere including lyrics). `T10-19a` (built: named-field list at the prompt boundary). `T10-20` (built: no override reaches escalation). `T10-22` (built: locked accepts, explicit refuses, one string). `T10-24` screens the final composed string after merge/PINNED weld (built). `T10-26` (built: non-nude sexualisation of a depicted minor refused at every tier). `T10-19`/`T10-21`/`T10-23`/`T10-25` still specification |
+| P10 | A song for a child, and a G-tier video for it, is a first-class thing this studio can make | `T10-18` (built). `T10-18a` (built: `r` may mention in lyrics/narrative only). `T10-18b` (built: xxx refuses minor refs everywhere including lyrics). `T10-19` (built: escalation re-screens whole work, names blocker). `T10-19a` (built: named-field list at the prompt boundary). `T10-20` (built: no override reaches escalation). `T10-22` (built: locked accepts, explicit refuses, one string). `T10-24` screens the final composed string after merge/PINNED weld (built). `T10-26` (built: non-nude sexualisation of a depicted minor refused at every tier). `T10-21`/`T10-23`/`T10-25` still specification |
 
 **P9 is the one that has no owner anywhere else.** Four modules ask a model for
 words — `vision.py`, `chat.py`, `mixadvice.py`, `lyrics.py` — and the only rule
@@ -126,17 +126,17 @@ still not shipped (`T8-12`, provisional by absence).
    and renders. `T10-18b` is built: at `xxx` a minor reference is refused
    everywhere including lyrics; a clean `xxx` work still generates and
    renders (`studio/test_t10_18b_xxx_no_minor.py`). `T10-18c` is built.
-   `T10-19a` is built: at `r` the allowance is the named list
-   `R_ALLOWANCE_FIELDS` (`lyrics`, `narrative`) at the prompt boundary, not
-   an inverse of prompt fields. `T10-20` is built: no override channel
-   (`tier_overrides`, profile, wording, confirmation) reaches the escalation
-   re-screen. `T10-22` is built: one paired test keeps locked g/pg13 accept
-   and explicit refuse on the same child string
-   (`studio/test_t10_22_locked_accepts_explicit_refuses.py`). `T10-24` is
-   built: the send path screens the final composed string after every merge
-   and after `PINNED` is welded (`studio/test_t10_24_composed_screen.py`).
-   `T10-26` is built (non-nude sexualisation of a depicted minor refused at
-   every tier). `T10-19`/`T10-21`/`T10-23`/`T10-25` are still specification.
+   **`T10-19` is built** — escalation re-screens the whole work at the
+   destination tier and names the blocking reference
+   (`studio/test_t10_19_escalation_rescreen.py`). `T10-19a` is built: at `r`
+   the allowance is the named list `R_ALLOWANCE_FIELDS` (`lyrics`,
+   `narrative`) at the prompt boundary. `T10-20` is built: no override
+   channel reaches the escalation re-screen. `T10-22` is built: one paired
+   test keeps locked g/pg13 accept and explicit refuse on the same child
+   string (`studio/test_t10_22_locked_accepts_explicit_refuses.py`). `T10-24`
+   is built: the send path screens the final composed string after every
+   merge and after `PINNED` is welded. `T10-26` is built. `T10-21`/`T10-23`/
+   `T10-25` remain specification.
 
 ## 5. Scope
 

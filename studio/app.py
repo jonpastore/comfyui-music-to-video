@@ -4341,6 +4341,20 @@ def _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
         if char["scope_value"] != album:
             raise HTTPException(400, f"character {char['name']!r} belongs to album "
                                       f"{char['scope_value']!r}, not to {album!r}")
+    # T10-19: adding a nude view (or any non-locked tier sheet) re-screens each
+    # album work at the destination tier before jobs land.
+    album_songs = db.q(
+        "SELECT id FROM songs WHERE album=? ORDER BY id", album or "")
+    dests = set()
+    for t, v in combos:
+        if make_anchor.is_nude_view(v) or not tiers.allows_minor_depiction(t):
+            dests.add(t if not tiers.allows_minor_depiction(t) else "xxx")
+    for dest in sorted(dests):
+        for srow in album_songs:
+            try:
+                tiers.screen_work_for_tier(srow["id"], dest)
+            except ValueError as e:
+                raise HTTPException(400, str(e))
     form_pose = (form.get("pose") or "").strip()
     if form_pose:
         if len(form_pose) > MAX_PROMPT_FIELD:

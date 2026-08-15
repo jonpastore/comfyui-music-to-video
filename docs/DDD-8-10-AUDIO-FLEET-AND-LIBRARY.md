@@ -347,13 +347,21 @@ maps only those names onto `MENTION_FIELD_KINDS`; unknown or missing field
 returns `None` so `r` screens like `xxx`. A field added later is outside
 until deliberately listed.
 
-`guardrail.check_escalation(fields, dest_tier, **overrides)` is the
-escalation re-screen (`T10-19` entry point). Every field is screened at the
-destination tier; override kwargs (`confirm`, `force`, `tier_overrides`,
-`profile`, `wording`, `view_override`, … — see
-`ESCALATION_OVERRIDE_CHANNELS`) are accepted and discarded (`T10-20`).
-No channel lifts a `ContentRefused`. Per-album `set_override` still applies
-tone wording on a clean (non-locked) album.
+**`T10-19` escalation interlock.** `guardrail.screen_escalation(fields, dest)`
+re-screens every `(field, text)` pair at the destination tier and raises
+`ContentRefused` naming the field that blocks. At `r`, the T10-18a
+`MENTION_FIELD_KINDS` allowance applies; at `xxx` every field is screened.
+`tiers.collect_work_fields` / `screen_work_for_tier` walk the song's lyrics,
+storyboards, cast and album profile. Call sites: `storyboard_service.enqueue`
+(higher / non-locked tier), `tiers.set_allow_nudity` when enabling, and
+`app._enqueue_anchor_jobs` when a nude view or non-locked tier is in the plan.
+
+`guardrail.check_escalation(fields, dest_tier, **overrides)` is the same
+re-screen with override kwargs accepted and discarded (`T10-20`: `confirm`,
+`force`, `tier_overrides`, `profile`, `wording`, `view_override`, … — see
+`ESCALATION_OVERRIDE_CHANNELS`). No channel lifts a `ContentRefused`.
+Per-album `set_override` still applies tone wording on a clean (non-locked)
+album.
 
 `T10-24`: the **send** screen runs on the final composed string after every
 merge and after `PINNED` is welded — not on the field as typed.

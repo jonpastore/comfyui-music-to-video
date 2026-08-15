@@ -1132,6 +1132,12 @@ lock is the tier already on the form and the field name at the screen. A
 refuse that looks like a generic 400 with no named term is the old blanket
 screen leaking back.
 
+**Escalation (`T10-19`).** Moving the work to a higher tier, enabling
+nudity, or adding a nude view re-screens everything already stored and
+refuses with the **field name and the term** — e.g. `escalation to 'xxx'
+blocked by scene 1 image_prompt: … child`. A clean work escalates with no
+extra dialog. There is no confirm-to-override control.
+
 `T10-20` is built on the escalation re-screen: there is no confirm
 dialog, no force flag, and no tier-override / profile / wording control
 that lifts a minor-reference refusal when a work moves toward an

@@ -328,32 +328,67 @@ ESCALATION_OVERRIDE_CHANNELS = frozenset({
 })
 
 
-def check_escalation(fields, dest_tier, **_overrides):
-    """T10-19: re-screen every field the work already contains at dest_tier.
+def _field_base(field_name):
+    """Last token of a where-label: 'scene 1 image_prompt' -> 'image_prompt'."""
+    return (field_name or "").strip().lower().rsplit(" ", 1)[-1]
 
-    T10-20: override kwargs never lift a refusal. Named channels
-    (tier_overrides, profile, wording, view_override, confirm, force, …)
-    are accepted and discarded; they cannot suppress ContentRefused.
+
+def field_allows_minor_mention(field_name, tier):
+    """Whether this field may hold a minor reference at destination tier.
+
+    g/pg13: yes everywhere. r: only MENTION_FIELD_KINDS. xxx/unset: no.
+    """
+    if allows_minor_depiction(tier):
+        return True
+    return allows_minor_mention(tier, field_kind=_field_base(field_name))
+
+
+def screen_escalation(fields, destination_tier):
+    """T10-19: re-screen everything the work already contains at destination_tier.
+
+    fields is an iterable of (field_name, text). Raises ContentRefused naming
+    the field that blocks and the reference it still holds. g/pg13 destinations
+    are a no-op (already locked non-explicit). At r, lyrics/narrative use the
+    T10-18a allowance; at xxx (and unset), every field is screened.
+    """
+    dest = (destination_tier or "").strip().lower()
+    if allows_minor_depiction(dest):
+        return
+    # Unset / unknown → most restrictive (T10-25).
+    screen_tier = dest if dest else "xxx"
+    for field_name, text in fields or ():
+        if not (text or "").strip():
+            continue
+        where = field_name or "field"
+        try:
+            check_text(
+                text, where, tier=screen_tier,
+                field_kind=_field_base(field_name),
+            )
+        except ContentRefused as e:
+            raise ContentRefused(
+                f"escalation to {screen_tier!r} blocked by {where}: {e}"
+            ) from e
+
+
+def check_escalation(fields, dest_tier, **_overrides):
+    """T10-19 re-screen entry used by T10-20: override kwargs never lift.
+
+    Named channels (tier_overrides, profile, wording, view_override, confirm,
+    force, …) are accepted and discarded; they cannot suppress ContentRefused.
     `_overrides` is deliberately unread — presence is not a lift.
 
     `fields` is a mapping of field name → text (preferred: the refusal names
     the field) or an iterable of texts. Returns True when every field passes
     at the destination tier. Raises ContentRefused (terminal) otherwise.
-
-    Field names whose base token is in MENTION_FIELD_KINDS carry the T10-18a
-    r-tier mention allowance; every other field is screened as a render path.
     """
     del _overrides  # T10-20: no channel reaches the screen below
 
     if isinstance(fields, dict):
-        items = fields.items()
+        items = list(fields.items())
     else:
-        items = ((f"field[{i}]", t) for i, t in enumerate(fields or ()))
-
-    for where, text in items:
-        base = (where or "").strip().lower().rsplit(" ", 1)[-1]
-        kind = base if base in MENTION_FIELD_KINDS else None
-        check_text(text, where, tier=dest_tier, field_kind=kind)
+        items = [(f"field[{i}]", t) for i, t in enumerate(fields or ())]
+    screen_escalation(items, dest_tier)
     return True
 
 

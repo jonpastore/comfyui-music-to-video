@@ -338,15 +338,15 @@ def payload(song_id, tier):
 
 
 def enqueue(song_id, tier, model=None, scene_seconds=None, direction=None):
+    """Queue a storyboard generate. Escalation re-screens the work (T10-19)."""
     song = require_song(song_id)
     require_tier(tier)
     direction = check_direction(direction or "", tier)
-    # T10-18b: at xxx a minor reference is refused everywhere, lyrics included.
-    # A song that already names a child cannot open an xxx board (T10-19 re-check
-    # shape for the lyrics field; the full escalation surface is T10-19).
-    if tiers.refuses_minor_everywhere(tier):
-        import lyrics as _lyrics
-        _lyrics.screen(song["lyrics"] or "", tier=tier, where="lyrics")
+    # T10-19: moving a work onto a non-locked tier re-screens everything it
+    # already contains against that tier's rule, and names the blocker.
+    # Covers T10-18b lyrics-at-xxx and prompt-field blocks for r/xxx.
+    if not tiers.allows_minor_depiction(tier):
+        tiers.screen_work_for_tier(song["id"], tier)
     scene_seconds = clamp_scene_seconds(scene_seconds)
     return jobs.enqueue("storyboard", {
         "song_id": song_id, "tier": tier,

@@ -5,6 +5,7 @@ root with no dependencies, because build_refs.py and build_song.py import them
 too -- the clause is applied by the code that builds a prompt, not stored in the
 storyboard JSON. This module only adds user-defined tiers on top.
 """
+import json
 import os
 import re
 import sys
@@ -24,6 +25,7 @@ from guardrail import (  # noqa: E402,F401  (re-exported: callers use tiers.X)
     allows_minor_depiction, allows_minor_mention, LOCKED_DEPICT_TIERS,
     MENTION_FIELD_KINDS, refuses_minor_everywhere, NO_MINOR_MENTION_TIERS,
     check_escalation, ESCALATION_OVERRIDE_CHANNELS,
+    field_allows_minor_mention, screen_escalation,
 )
 
 
@@ -320,11 +322,123 @@ def check_wording(text, where="tier guardrail"):
 
 
 def set_allow_nudity(name, allow):
-    row = db.one("SELECT id FROM tiers WHERE name=?", name)
+    """Toggle the tier's nude-anchor capability.
+
+    Enabling nudity is an escalation (T10-19): every work that already has
+    content under this tier is re-screened against the destination rule before
+    the flag flips. A refusal names the blocking reference and leaves the flag.
+    """
+    row = db.one("SELECT id, allow_nudity FROM tiers WHERE name=?", name)
     if not row:
         raise ValueError(f"no such tier: {name}")
+    allow = bool(allow)
+    was = bool(row["allow_nudity"])
+    if allow and not was:
+        # Opening a nude path ends the T10-18 structural lock for this tier.
+        # Screen as the most restrictive destination so a child reference on a
+        # g work cannot ride the flag flip into an explicit path.
+        dest = name if not allows_minor_depiction(name) else "xxx"
+        for song_row in db.q(
+            """SELECT DISTINCT s.id FROM songs s
+               JOIN storyboards sb ON sb.song_id = s.id
+               WHERE sb.tier=?""",
+            name,
+        ):
+            screen_work_for_tier(song_row["id"], dest)
     db.run("UPDATE tiers SET allow_nudity=? WHERE id=?", 1 if allow else 0, row["id"])
-    return bool(allow)
+    return allow
+
+
+# Scene / board fields that land in (or compose into) a render prompt.
+# story is scene text, not the T10-18a narrative allowance.
+_WORK_SCENE_FIELDS = (
+    "image_prompt", "video_motion_prompt", "story", "camera", "motion",
+    "lighting", "location", "negative_prompt", "name",
+)
+_WORK_BOARD_FIELDS = (
+    "character_reference", "album_world_reference", "direction", "prompt",
+)
+_WORK_CHARACTER_FIELDS = (
+    "role", "identity", "wardrobe", "body", "nude_wardrobe", "anatomy", "name",
+)
+
+
+def collect_work_fields(song_id):
+    """Everything the work already contains, as (field_name, text) pairs (T10-19).
+
+    Lyrics, style text, every storyboard scene field, board-level references,
+    album cast prose, and album-profile strings. The escalation screen walks
+    this list; a field that is never collected is a field that can never block.
+    """
+    song = db.one("SELECT * FROM songs WHERE id=?", song_id)
+    if not song:
+        return []
+    out = []
+    if song["lyrics"]:
+        out.append(("lyrics", song["lyrics"]))
+    if song["style_text"]:
+        out.append(("style_text", song["style_text"]))
+    title = (song["title"] or "").strip()
+    if title:
+        out.append(("title", title))
+
+    for sb_row in db.q(
+        "SELECT * FROM storyboards WHERE song_id=? ORDER BY tier, id", song_id
+    ):
+        path = sb_row["json_path"]
+        if not path or not os.path.isfile(path):
+            continue
+        try:
+            with open(path) as f:
+                sb = json.load(f)
+        except (OSError, ValueError):
+            continue
+        tier = sb_row["tier"] or "?"
+        for key in _WORK_BOARD_FIELDS:
+            val = sb.get(key)
+            if isinstance(val, str) and val.strip():
+                out.append((f"{tier} {key}", val))
+        if "prompt" in sb_row.keys() and sb_row["prompt"]:
+            out.append((f"{tier} prompt", sb_row["prompt"]))
+        for scene in sb.get("scenes") or []:
+            num = scene.get("scene_number") or "?"
+            for key in _WORK_SCENE_FIELDS:
+                val = scene.get(key)
+                if isinstance(val, str) and val.strip():
+                    out.append((f"scene {num} {key}", val))
+
+    album = (song["album"] or "").strip()
+    if album:
+        for c in db.q(
+            "SELECT * FROM characters WHERE scope_value=? ORDER BY name", album
+        ):
+            cname = c["name"] or c["id"]
+            for key in _WORK_CHARACTER_FIELDS:
+                if key not in c.keys():
+                    continue
+                val = c[key]
+                if isinstance(val, str) and val.strip():
+                    out.append((f"character {cname} {key}", val))
+        pl = db.one(
+            "SELECT * FROM playlists WHERE name=? AND kind='playlist'", album
+        )
+        if pl:
+            for key in (
+                "style_text", "identity", "wardrobe", "body",
+                "nude_wardrobe", "anatomy", "backdrop", "composite",
+                "world", "render_tail",
+            ):
+                if key not in pl.keys():
+                    continue
+                val = pl[key]
+                if isinstance(val, str) and val.strip():
+                    out.append((f"album {key}", val))
+    return out
+
+
+def screen_work_for_tier(song_id, destination_tier):
+    """T10-19 entry: collect the work and re-screen at destination_tier."""
+    screen_escalation(collect_work_fields(song_id), destination_tier)
 
 
 def delete_tier(name):
