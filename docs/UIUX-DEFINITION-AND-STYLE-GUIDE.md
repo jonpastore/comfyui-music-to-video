@@ -341,11 +341,13 @@ durations that does not align is a column nobody scans. Storyboard and
 approve-grid clip duration is `build_song.clip_seconds(scene_seconds)` — the
 legal 8n+1 length at the clip fps, not a page-local 4.8125. Clip count is
 `build_song.n_clips_for` (`T2-13`), never a page-local `ceil(duration / CHUNK)`.
-A row whose `scene_seconds` is NULL (generated before the column) still reads
-as `CHUNK`. The renderer emits that same legal length (`T2-13a`): latent
-frames and the audio-trim window follow `clip_seconds`, not a hardcoded
-`LTX25_LEN`/`CHUNK`; a NULL `length_seconds` still renders 81 frames of
-`CHUNK`. A mixed-model job keeps each clip's **native** frames and fps
+Reference-image jobs share that count: `clip_plan` defaults to
+`n_clips_for(track, length_seconds)` so `build_refs` / `reroll_refs` do not
+re-open a CHUNK-era slot list (**refs-length**). A row whose `scene_seconds`
+is NULL (generated before the column) still reads as `CHUNK`. The renderer
+emits that same legal length (`T2-13a`): latent frames and the audio-trim
+window follow `clip_seconds`, not a hardcoded `LTX25_LEN`/`CHUNK`; a NULL
+`length_seconds` still renders 81 frames of `CHUNK`. A mixed-model job keeps each clip's **native** frames and fps
 (`T2-47`): s2v is 77@16.0, ltx25 is 81@16.8312; the editor must not
 show one fps as if both renderers produced it. Starting that job is
 refused before enqueue when any named model is unavailable on every

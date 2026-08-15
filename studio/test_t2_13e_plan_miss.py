@@ -45,7 +45,7 @@ def test_t2_13e_accepts_plan_within_one_clip(monkeypatch):
     # 5 * CHUNK = 24.0625s, miss 4.0625s < 4.8125s
     plan = build_song.clip_plan(scenes, audio_path="dummy.mp3", nclips=5)
     assert [ci for ci, _, _ in plan] == list(range(5))
-    # default nclips is ceil(track / CHUNK) and is the same accept path
+    # default nclips is n_clips_for(track) (CHUNK when no length_seconds)
     default = build_song.clip_plan(scenes, audio_path="dummy.mp3")
     assert [ci for ci, _, _ in default] == list(range(5))
 
@@ -63,9 +63,9 @@ def test_t2_13e_miss_of_exactly_one_clip_is_accepted(monkeypatch):
 def test_t2_13e_length_seconds_that_miss_the_track_are_refused(monkeypatch):
     monkeypatch.setattr(build_song, "audio_duration", lambda p: 20.0)
     scenes = [dict(SCENE, scene_number=1, length_seconds=30.0)]
-    # nclips from CHUNK is 5; 5 * clip_seconds(30) >> 20s
+    # Forced nclips overshoots; default is n_clips_for and stays in band.
     with pytest.raises(ValueError, match=r"miss"):
-        build_song.clip_plan(scenes, audio_path="dummy.mp3")
+        build_song.clip_plan(scenes, audio_path="dummy.mp3", nclips=5)
 
 
 def test_t2_13e_matching_length_seconds_are_accepted(monkeypatch):
@@ -73,7 +73,8 @@ def test_t2_13e_matching_length_seconds_are_accepted(monkeypatch):
     track = 2 * legal
     monkeypatch.setattr(build_song, "audio_duration", lambda p: track)
     scenes = [dict(SCENE, scene_number=1, length_seconds=8.0)]
-    plan = build_song.clip_plan(scenes, audio_path="dummy.mp3", nclips=2)
+    # default nclips = n_clips_for(track, 8.0) == 2
+    plan = build_song.clip_plan(scenes, audio_path="dummy.mp3")
     assert len(plan) == 2
 
 

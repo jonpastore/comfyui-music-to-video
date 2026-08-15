@@ -262,7 +262,10 @@ unbuilt work and are not" — the ledger with line counts is DDD §1.
    still lists every clip. `T2-13e` is **built**: `clip_plan` refuses
    before render when planned clip durations miss the track by more
    than one clip; assemble still clamps to the track and no longer
-   treats a 4.8125 s overrun as the norm.
+   treats a 4.8125 s overrun as the norm. **refs-length built**:
+   `clip_plan`'s audio-only default is `n_clips_for(track,
+   length_seconds)`, not `ceil(track / CHUNK)`, so `build_refs` /
+   `reroll_refs` emit one ref per legal clip, not a CHUNK-era count.
 2. **The service split**, TRD-1 and TRD-2 (`T6-A3`) — **built** as
    `sets_service.py` / `storyboard_service.py` (same shape as `qc_service.py`;
    `test_t6_a3_*`).

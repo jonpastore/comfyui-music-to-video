@@ -295,7 +295,9 @@ def clip_plan(scenes, audio_path=None, nclips=None):
     `nclips` skips the ffprobe when the caller already knows the count -- the
     studio's web layer renders this on every page view and has the duration in
     the songs row. It is an ALTERNATIVE INPUT, not a second implementation:
-    everything below is still the one allocation.
+    everything below is still the one allocation. When omitted, the count is
+    `n_clips_for(track, length_seconds)` so build_refs / reroll_refs honour the
+    song quantum (T2-13 / refs-length), not a CHUNK-era default.
 
     T2-13e: when the track length is known (audio_path), a plan whose clip
     durations miss it by more than one clip is refused here, before render.
@@ -303,7 +305,15 @@ def clip_plan(scenes, audio_path=None, nclips=None):
     """
     track = audio_duration(audio_path) if audio_path else None
     if nclips is None:
-        nclips = math.ceil(track / CHUNK)
+        # T2-13 / refs-length: one clip-count reader. build_refs, reroll_refs
+        # and build_song.main call this with audio only; a CHUNK-era default
+        # ignored scene length_seconds and forced the wrong ref count.
+        scene_seconds = next(
+            (s.get("length_seconds") for s in scenes
+             if s.get("length_seconds") is not None),
+            None,
+        )
+        nclips = n_clips_for(track, scene_seconds)
     counts = allocate(scenes, nclips)
     plan, i, durs = [], 0, []
     for scene, n in zip(scenes, counts):

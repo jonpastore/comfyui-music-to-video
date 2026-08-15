@@ -457,7 +457,10 @@ Easy omits `.tl-lanes` (affordance, not CSS) and does not delete the rows.
 `LTX_FPS`. `None` is a storyboard written before the column existed and still
 returns `CHUNK`, so nothing already on disk changes length. `n_clips_for` is
 `ceil(duration / clip_seconds(...))` — duration is the dividend, the legal
-length is the divisor, the count is ours.
+length is the divisor, the count is ours. `clip_plan` (the allocator
+`build_refs` / `reroll_refs` / `build_song.main` share) defaults that count
+through `n_clips_for(track, scene length_seconds)` — not
+`ceil(track / CHUNK)` (**refs-length**, `test_refs_length.py`).
 
 1. `T2-12a`: seconds → nearest **legal** frame count at the clip's fps. F-2's
    rule is that `frames ≡ 1 (mod 8)` serves both models, since every `8n+1` is
