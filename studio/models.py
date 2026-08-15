@@ -375,6 +375,12 @@ CATALOG = {
             "end to end, 4.9s of that sampling, peak 28.3 GB of 31.8. cerberus (24 GB laptop "
             "5090) 38.0s, peak 23.4 GB of 23.9 -- 95.8% of the card, so nothing else may be "
             "resident: run pipeline.free_vram() first, as the clip job already does.",
+            "T5-6 FINDING 2026-08-14: variant B (LTXVLatentUpsampler x2 then re-denoise) "
+            "does not fit on cerberus. The measured base already peaks at 23.4 GB of 23.9 "
+            "(95.8%) at 832x480, leaving 0.5 GB. The x2 spatial latent is four times the "
+            "pixels and the upscaler is 0.3 GiB -- that exceeds the remaining headroom on "
+            "the same graph. --refine therefore ships variant A (same-resolution second "
+            "pass). The upsampler is not wired.",
             "Needs ComfyUI at 57ce8e1a or later (2026-08-11, 'Add support for LTX 2.5'). "
             "Nothing older has LTXVDualCFGGuider or LTXVDurationPredictor at all.",
             "Needs torch built against CUDA 13. comfy/quant_ops.py disables comfy-kitchen's "
@@ -550,11 +556,10 @@ CATALOG = {
             "between the sampler and VAEDecode, AFTER LTXVSeparateAVLatent: a joint "
             "audio-video latent into a spatial upsampler is not a thing."),
         "notes": [
-            "UNMEASURED HERE, and the number that decides it is already recorded: "
-            "the ltx25 base render peaks at 23.4 GB of 23.9 on cerberus, 95.8% of "
-            "the card, at 832x480. An x2 latent refine may simply not fit. Measure "
-            "before wiring it, and if it does not fit, record that as the finding "
-            "rather than quietly shipping the same-resolution pass as a two-stage.",
+            "T5-6 2026-08-14: variant B does not fit on cerberus. Recorded on the "
+            "ltx25 notes from the measured 23.4/23.9 GB base peak (0.5 GB headroom). "
+            "--refine ships variant A. This file stays catalogued so availability "
+            "still reads True/False (T5-8); it is not attached to the refine graph.",
             "The WAN refiner (wan22_i2v_low) is NOT an alternative for LTX output: "
             "it is valid only because s2v and i2v-low share wan_2.1_vae. LTX uses "
             "its own video VAE, so handing an LTX latent to WAN is meaningless.",

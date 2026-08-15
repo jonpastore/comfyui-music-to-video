@@ -200,9 +200,10 @@ pixels; the siblings are scaled up, not letterboxed. Mixed aspect is a named
 
 **The measurement that decides whether B is possible runs first, not last.** The
 base render already peaks at 23.4 GB of 23.9 on cerberus — 95.8% of the card — at
-832×480. If B does not fit, `T5-6` requires that recorded in the `ltx25`
-catalogue notes and A ships; silently dropping the upsampler and calling A a
-two-stage is the defect this document is about, committed while fixing it.
+832×480. **`T5-6` recorded the finding on the `ltx25` notes: variant B does not
+fit.** 0.5 GB of headroom cannot hold a 4× spatial latent plus the 0.3 GiB
+upscaler on the same graph. `--refine` ships variant A. Silently dropping the
+upsampler and calling A a two-stage is the defect this document is about.
 
 **Proof, split after review:** mean absolute pixel difference > 0 is the
 **no-op guard** (`T5-1`), not the quality claim. It passes on noise and on any
