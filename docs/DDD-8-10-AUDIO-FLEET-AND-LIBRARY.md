@@ -93,6 +93,15 @@ model for one track is the drift TRD-1 §5.0 exists to prevent** — and §5.0's
 list of three near-duplications is the evidence that it happens by default, not
 by carelessness.
 
+**Built 2026-08-14.** The song editor is a one-item set (`sets.mode =
+song_editor`) so `t` stays item-relative and the rows stay in `automation`.
+`automation.editor_item(song_id)` mints that item on write, not on read.
+`GET/POST /api/songs/{id}/automation/{lane}` is the surface; POST calls
+`automation.save` and the response carries `item_audio` so a write is
+consumed by the shared path, not stored and forgotten. The editor set is
+filtered off the sets shelf — it is the song's timeline, not a second
+document. `T8-14` / `T8-15` (predicted length, preview proxy) remain.
+
 ## 3. TRD-9 — testing what already works
 
 ### 3.1 The seam is already right
@@ -218,6 +227,7 @@ each caller, or a caller that stops calling it stays green.
                          ->  insert_voice refuses missing source/consent (T8-10, built)
                          ->  h_audio records which voice, or none (T8-11, built)
                          ->  pick is its own record, not Use / mp3_path (T8-2, built)
+                         ->  song editor writes the shared automation model (T8-13, built)
     bulk edit (T10-6 built)         ->  T10-3, T10-4, T10-5, T10-7
     advice labelling  ->  T10-11..T10-15 over the four live modules
                          ->  the picked/unpicked distinction (T8-2)

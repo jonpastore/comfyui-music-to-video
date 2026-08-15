@@ -866,6 +866,9 @@ def delete_song_rows(song_id):
     Automation is keyed by set_item_id; findings and artefacts by path.
     """
     items = q("SELECT id FROM set_items WHERE song_id=?", song_id)
+    editor_sets = [r["set_id"] for r in q(
+        """SELECT si.set_id FROM set_items si JOIN sets s ON s.id = si.set_id
+           WHERE s.mode=? AND si.song_id=?""", "song_editor", song_id)]
     for r in items:
         run("DELETE FROM automation WHERE set_item_id=?", r["id"])
     paths = []
@@ -881,4 +884,6 @@ def delete_song_rows(song_id):
         run("DELETE FROM artefacts WHERE path=?", p)
     for table in SONG_CASCADE:
         run(f"DELETE FROM {table} WHERE song_id=?", song_id)
+    for sid in editor_sets:
+        run("DELETE FROM sets WHERE id=?", sid)
     run("DELETE FROM songs WHERE id=?", song_id)

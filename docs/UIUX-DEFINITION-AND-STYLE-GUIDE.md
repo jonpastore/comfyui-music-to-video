@@ -896,6 +896,16 @@ measurement — it is not a badge and not a tile. There is no threshold
 control. Putting that number on a tile now would be the inversion this
 paragraph exists to stop.
 
+### 7b.6 The song editor is the same automation surface as the set
+
+`T8-13`: `GET/POST /api/songs/{id}/automation/{lane}` is the set timeline's
+lane payload (`points`, `curve`, the stored decimated curve coming back)
+plus `automation` (`item_audio`'s fragments and loudnorm decision). Linear
+and hold only; `MAX_POINTS` and RDP are the server's, not the client's.
+The browser is a view. Drawing the lane still belongs on the set timeline
+(§5: still open); this surface is how a song-level edit reaches the same
+rows. The one-item `song_editor` set is not on the shelf.
+
 ## 8. How this document is verified
 
 A style guide is falsifiable or it is decoration.

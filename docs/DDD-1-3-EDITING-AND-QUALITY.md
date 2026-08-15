@@ -95,6 +95,8 @@ to end. Shapes only — the fields are the TRDs'.
 items, automation, predicted duration, rounding deltas), `/api/sets/{id}/items`,
 `.../items/{iid}/automation/{lane}` (POST raw points, response is the **stored,
 decimated** curve — the client re-reads what was kept, §5.3),
+`GET/POST /api/songs/{id}/automation/{lane}` (T8-13: same `automation.save` /
+`item_audio` path, one-item `song_editor` set, not a second curve model),
 `/api/songs/{id}/peaks?z=` (`pairs` plus `reason` when empty, `T1-15`),
 `/api/sets/{id}/peaks?z=`, `/api/sets/{id}/preview` (returns `is_proxy` and
 `not_applied`), `/api/sets/{id}/preview/render?at=&secs=`

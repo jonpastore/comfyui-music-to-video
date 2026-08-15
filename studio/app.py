@@ -2041,6 +2041,58 @@ def song_peaks(id: int, z: int = 0):
             "pairs": env["pairs"], "reason": env["reason"]}
 
 
+def _song_lane_payload(item_id, lane, points=None, curve=None):
+    if points is None:
+        points = automation.read(item_id, lane) if item_id else []
+    if curve is None:
+        curve = automation.read_curve(item_id, lane) if item_id else "linear"
+    audio = (automation.item_audio(item_id) if item_id
+             else {"frags": [], "suppress_loudnorm": False})
+    return {"lane": lane, "points": points, "curve": curve, "automation": audio}
+
+
+@app.get("/api/songs/{id}/automation")
+def api_song_automation(id: int):
+    """T8-13: read every lane the song editor has stored."""
+    get_song_or_404(id)
+    item = automation.editor_item(id, create=False)
+    lanes = {}
+    if item:
+        for lane in sorted(automation.lanes_for(item)):
+            lanes[lane] = _song_lane_payload(item, lane)
+    return JSONResponse({"song_id": id, "lanes": lanes})
+
+
+@app.get("/api/songs/{id}/automation/{lane}")
+def api_song_automation_lane(id: int, lane: str):
+    """T8-13: read one lane. Empty is a missing curve, not a 404."""
+    get_song_or_404(id)
+    try:
+        automation._lane(lane)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    item = automation.editor_item(id, create=False)
+    return JSONResponse(_song_lane_payload(item, lane))
+
+
+@app.post("/api/songs/{id}/automation/{lane}")
+async def api_song_automation_write(id: int, lane: str, request: Request):
+    """T8-13: write one lane through automation.save. The stored,
+    decimated curve comes back and item_audio consumes it."""
+    get_song_or_404(id)
+    body = await _api_body(request)
+    points = body.get("points")
+    if points is None:
+        raise HTTPException(400, "points required")
+    curve = body.get("curve") or "linear"
+    try:
+        item = automation.editor_item(id)
+        stored = automation.save(item, lane, points, curve=curve)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return JSONResponse(_song_lane_payload(item, lane, stored, curve))
+
+
 @app.get("/songs/{id}", response_class=HTMLResponse)
 def song_page(request: Request, id: int):
     song = get_song_or_404(id)
@@ -7131,7 +7183,9 @@ def sets_page(request: Request):
     change), plus every rendered file that predates the sets table and so has
     no set of its own -- assets from the old playlist quick-render.
     """
-    editable = [set_detail(r) for r in db.q("SELECT * FROM sets ORDER BY updated DESC, id DESC")]
+    editable = [set_detail(r) for r in db.q(
+        "SELECT * FROM sets WHERE mode != ? ORDER BY updated DESC, id DESC",
+        automation.SONG_EDITOR_MODE)]
     names = {p["id"]: p["name"] for p in db.q("SELECT id, name FROM playlists")}
     rows = []
     for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC"):
@@ -7212,6 +7266,8 @@ def create_set(name: str = Form(...), mode: str = Form("video"), tier: str = For
 @app.get("/sets/{id}", response_class=HTMLResponse)
 def set_edit_page(request: Request, id: int, at: float = 0.0):
     row = get_set_or_404(id)
+    if row["mode"] == automation.SONG_EDITOR_MODE:
+        raise HTTPException(404, "no such set")
     songs = db.q("SELECT id, title FROM songs ORDER BY title")
     ctx = {**set_detail(row, at=at), "songs": songs, "all_tiers": tiers.all_tiers(),
            "transitions": SET_TRANSITIONS}
@@ -7387,7 +7443,9 @@ def update_set(id: int, name: str = Form(...), mode: str = Form("video"),
 
 
 def _add_set_item_row(id, song_id, transition="fade", secs=2.0, beatmatch=False):
-    get_set_or_404(id)
+    row = get_set_or_404(id)
+    if row["mode"] == automation.SONG_EDITOR_MODE:
+        raise HTTPException(400, "the song editor is a one-item timeline")
     song = get_song_or_404(int(song_id))
     if transition not in SET_TRANSITIONS:
         raise HTTPException(400, f"transition must be one of {', '.join(SET_TRANSITIONS)}")
@@ -7688,7 +7746,8 @@ def delete_set(asset_id: int):
 
 @app.get("/api/sets")
 def api_sets_list():
-    rows = db.q("SELECT * FROM sets ORDER BY updated DESC, id DESC")
+    rows = db.q("SELECT * FROM sets WHERE mode != ? ORDER BY updated DESC, id DESC",
+                automation.SONG_EDITOR_MODE)
     return JSONResponse({"sets": [_set_payload(r) for r in rows]})
 
 

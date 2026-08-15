@@ -41,10 +41,15 @@ T1-10 (2026-08-14): a MAX_POINTS lane's fragment is under
 """
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import db       # noqa: E402
 import effects  # noqa: E402
+
+# T8-13: the song editor is a one-item set. Same automation rows as the
+# timeline; hidden from the sets shelf so it is not a second document.
+SONG_EDITOR_MODE = "song_editor"
 
 # Linear between points, `hold` steps. NO other curve type, and the reason is
 # not taste: every shape that is drawable but not expressible in the filter
@@ -215,6 +220,42 @@ def read(set_item_id, lane):
     return [(r["t"], r["value"]) for r in db.q(
         "SELECT t, value FROM automation WHERE set_item_id=? AND lane=? ORDER BY t",
         int(set_item_id), lane)]
+
+
+def read_curve(set_item_id, lane):
+    row = db.one(
+        "SELECT curve FROM automation WHERE set_item_id=? AND lane=? ORDER BY t",
+        int(set_item_id), lane)
+    return row["curve"] if row else "linear"
+
+
+def editor_item(song_id, create=True):
+    """The one-item timeline that is this song's editor (T8-13).
+
+    Shares set_items + automation with the set timeline. mode=song_editor
+    keeps it off the shelf. GET does not mint a row; POST does.
+    """
+    song_id = int(song_id)
+    if db.one("SELECT id FROM songs WHERE id=?", song_id) is None:
+        raise ValueError(f"no song {song_id}")
+    row = db.one(
+        """SELECT si.id FROM set_items si
+           JOIN sets s ON s.id = si.set_id
+           WHERE s.mode=? AND si.song_id=?
+           ORDER BY si.id""",
+        SONG_EDITOR_MODE, song_id)
+    if row:
+        return row["id"]
+    if not create:
+        return None
+    now = time.time()
+    sid = db.run(
+        "INSERT INTO sets (name, mode, created, updated) VALUES (?,?,?,?)",
+        f"song-editor:{song_id}", SONG_EDITOR_MODE, now, now)
+    return db.run(
+        """INSERT INTO set_items (set_id, song_id, position, transition, secs)
+           VALUES (?,?,?,?,?)""",
+        sid, song_id, 0, "cut", 0.0)
 
 
 def lanes_for(set_item_id):

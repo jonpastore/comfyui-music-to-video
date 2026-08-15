@@ -85,7 +85,9 @@ still not shipped (`T8-12`, provisional by absence).
    on every route (`T8-3`) is the remaining half. Takes generated before `T8-1`
    still cannot say what they were asked for. `T8-10` is the voice-store gate
    (built); `T8-11` is built — `h_audio` writes which voice produced the take,
-   or that none did.
+   or that none did. **`T8-13` is built** — the song editor reads and writes
+   `automation` through `automation.save` / `item_audio` (`GET/POST
+   /api/songs/{id}/automation/{lane}`); `T8-14` / `T8-15` remain.
 3. **TRD-10's bulk edit.** `T10-6` (one transaction) is built. `T10-3`/`T10-4`/`T10-5`/`T10-7` remain.
 4. **TRD-10's advice rules.** `T10-11` (payload mark) and `T10-12` (accept writes,
    records the model) and `T10-13` (`classify_sheet` text on a finding, never a
