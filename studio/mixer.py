@@ -1647,6 +1647,16 @@ def render_set_argv(items, out_path, progress=None):
     return ["ffmpeg", "-y", "-v", "error", "-stats"] + args
 
 
+def render_set_graph(items, out_path=None, progress=None):
+    """Filter-complex string for this set. Regenerated from items every call.
+
+    T1-4: no graph string is cached and reused. Mutating a stored mix
+    value must change the next string this returns.
+    """
+    argv = render_set_argv(items, out_path or "out.mp4", progress)
+    return argv[argv.index("-filter_complex") + 1]
+
+
 def render_set(items, out_path, progress=None):
     progress = progress or _NOOP
     if not items:

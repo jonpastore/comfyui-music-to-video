@@ -152,6 +152,8 @@ Six, and they are the tie-breakers when two rules below disagree.
    disabled-with-a-reason, never present and inert. Pressing Render
    and `POST /api/sets/{id}/render` produce the same ffmpeg argv
    (`T1-3`); a value that lives only in the form is not in the export.
+   Changing a stored mix value changes the next render graph (`T1-4`);
+   the page never reuses a previous ffmpeg string.
 6. **Nothing in the presentation may be load-bearing.** If deleting the
    stylesheet loses information, the information was in the wrong place.
 

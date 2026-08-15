@@ -260,6 +260,14 @@ are not in the model and do not reach argv. Two encodes of the same items
 agree on duration (`SET_DURATION_TOLERANCE`), frame count and integrated
 loudness (`studio/test_t1_3_json_export_argv.py`).
 
+**`T1-4`, 2026-08-14.** The filter graph is regenerated from the stored
+model on every render. `mixer.render_set_graph(items)` is the
+`-filter_complex` string `_render_set_args` just built — no module-level
+cache. Mutating stored `set_items.gain_db` and re-reading via
+`_set_render_items` changes that string (`volume=-6.000dB` →
+`volume=-3.000dB`). A reused ffmpeg string would stay put
+(`studio/test_t1_4_no_cached_graph.py`).
+
 **FIXED 2026-08-13 by session B, on Jon's decision, and the estimate this
 document gave was wrong twice on the way — which is the part worth keeping.**
 
