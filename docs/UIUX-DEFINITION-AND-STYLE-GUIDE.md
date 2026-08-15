@@ -584,7 +584,10 @@ from breakage. `T3-18` now distinguishes those: QC enqueues nothing, approve
 enqueues one repair. `T3-27` names the other: a finding with `actionable`
 false has no remedy, and approve refuses by that name. `T3-32`: running
 tier 1 over a song is not a jobs row and does not wait on the GPU
-worker — `POST /songs/{id}/qc` measures and returns. `T3-4.1-resolution`:
+worker — `POST /songs/{id}/qc` measures and returns. `T3-4.1-opens`:
+a missing or unreadable still REJECTs `opens` with a re-render remedy —
+not a silent skip; a real PNG is not an opens reject (PIL path, no
+image size floor). `T3-4.1-resolution`:
 a still at the wrong width×height REJECTs `resolution` with
 measured/expected WxH, unit `px` (not blank), and a re-render-pinned
 remedy — not a silent pass when the request was 320×240 and the box

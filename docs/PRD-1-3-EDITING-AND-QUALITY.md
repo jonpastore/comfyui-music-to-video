@@ -165,7 +165,10 @@ wires `depends_on` per clip; T6-2 `_claim` skips the successor until the
 predecessor is done (`test_t2_11_clip_chain_depends.py`). Under-ceiling
 songs still enqueue one batch `clips` job.
 
-`studio/qc.py` (TRD-3 tier 1 in full; **`T3-4.1-resolution` built** —
+`studio/qc.py` (TRD-3 tier 1 in full; **`T3-4.1-opens` built** —
+image `opens` via PIL: missing/unreadable REJECTs, real PNG is not an
+opens reject, no image size floor (`test_t3_4_1_opens.py`);
+**`T3-4.1-resolution` built** —
 image `resolution` via PIL size when `expect.width`+`height` are set:
 matching WxH PASSes, downscaled REJECTs with unit `px` (not `None`),
 no expect emits nothing, `test_t3_4_1_resolution.py`;
