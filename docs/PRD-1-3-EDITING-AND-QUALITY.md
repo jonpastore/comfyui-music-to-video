@@ -287,7 +287,9 @@ order and take the dependencies from here.
    defaulted from the tier (`storyboard_generation_payload`); POST accepts
    an edit. **`T2-18` built**: the same response carries the enforced
    `max_characters` and PINNED flags; one character over that cap is 400
-   quoting it (`test_t2_18_storyboard_limits.py`). `T2-19` still unbuilt.
+   quoting it (`test_t2_18_storyboard_limits.py`). **`T2-19` built**: two
+   different edited prompts against the same recorded response yield two
+   different storyboards (`test_t2_19_edited_prompt_generates.py`).
    song yield two lengths. **`T2-26` built**: `GET .../storyboard/{tier}`
    returns the album's chosen anchor images grouped per character
    (`anchors[].character` / `images[]` with `path` and `url`), so a

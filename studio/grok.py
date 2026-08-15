@@ -994,6 +994,12 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
                           character_reference=obj.get("character_reference"),
                           world_reference=obj.get("world_reference"),
                           arc_ctx=arc_ctx)
+            # T2-19: the edited prompt is part of the board, not only the
+            # request. Two different directions must yield two different
+            # storyboards even against the same recorded model response.
+            direction_text = (direction or "").strip()
+            if direction_text:
+                sb["direction"] = direction_text
             validate(sb, exemplar, expect_scenes=n_scenes)
             return sb
         except tiers.ContentRefused:

@@ -132,7 +132,9 @@ travel in the same response (`T2-18`).
 returns `prompt` from `storyboard_generation_payload`, defaulted from the
 tier; POST accepts an edited `prompt`; `T2-18` **built**: same body carries
 `max_characters`, `pinned`, `pinned_added_at_use`, `pinned_editable`; one
-character over the returned cap is 400 quoting that number),
+character over the returned cap is 400 quoting that number; `T2-19` **built**:
+the edited prompt is what `generate_storyboard` is handed — two different
+directions produce two different boards and two different model messages),
 `.../scene/{n}`, `.../meter`, `.../cast`.
 
 **C · QC** — exists. `/api/qc/run`, `/api/qc/findings`, `/{fid}`,
