@@ -388,6 +388,27 @@ def _set_duration(items, key="video"):
     return max(0.0, running_dur)
 
 
+def _transition_times(items, key="video"):
+    # Same walk as _set_duration, landing times only. No ffmpeg — probe
+    # here is the stub's constant length. Real transition_times is on
+    # mixer.py and T3-12 tests bind that.
+    if not items or len(items) < 2:
+        return []
+    running = _item_len(items[0])
+    lands = []
+    for i, it in enumerate(items[:-1]):
+        nxt = _item_len(items[i + 1])
+        if it.get("transition") == "black":
+            hold = float(it.get("hold") or 0.0)
+            lands.append(running + hold / 2.0)
+            running += nxt + hold
+            continue
+        secs = 0.0 if it.get("transition") == "cut" else float(it.get("secs", 0.0))
+        lands.append(running - secs / 2.0 if secs > 0 else running)
+        running += nxt - secs
+    return lands
+
+
 # _XFADE_NAMES, TRANSITIONS and BLACK are deliberately NOT mirrored here any
 # more. They are plain data, so _stub's fallback serves them from the real
 # mixer.py -- one source, and a constant added to mixer can never again break
@@ -478,6 +499,7 @@ _stub("mixer",
       render_set=_render_set,
       mix_audio=_mix_audio,
       set_duration=_set_duration,
+      transition_times=_transition_times,
       is_card=_is_card,
       CARD="card",
       MAX_TEMPO_STRETCH=_STUB_MAX_TEMPO_STRETCH,

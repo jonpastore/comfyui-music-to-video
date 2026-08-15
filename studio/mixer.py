@@ -1700,6 +1700,42 @@ def set_duration(items, key="video"):
     return max(0.0, running_dur)
 
 
+def transition_times(items, key="video"):
+    """Landing time of each handover, same walk as set_duration.
+
+    docs/TRD-3 T3-12: this is what the model says. QC measures the
+    rendered file and compares. One definition, beside set_duration,
+    so a second copy cannot drift.
+
+    cut: the concat instant (running_dur).
+    fade/wipe/dissolve: the centre of the overlap (running_dur - secs/2).
+    black: the centre of the hold (running_dur + hold/2).
+    """
+    if not items or len(items) < 2:
+        return []
+    items = _apply_beatmatch(items, ramp=(key == "audio"))
+    durations = [_item_duration({} if is_card(it) else probe(it[key]), it)
+                 for it in items]
+    running_dur = durations[0]
+    lands = []
+    for i in range(len(items) - 1):
+        it = items[i]
+        kind = it.get("transition", "cut")
+        if kind == BLACK:
+            fade, hold = _black_plan(it)
+            _check_transition_fits(fade, running_dur)
+            lands.append(running_dur + hold / 2.0)
+        else:
+            secs = 0.0 if kind == "cut" else float(it.get("secs", 0.0))
+            if secs > 0:
+                _check_transition_fits(secs, running_dur)
+                lands.append(running_dur - secs / 2.0)
+            else:
+                lands.append(running_dur)
+        running_dur += _advance(it, durations[i + 1])
+    return lands
+
+
 # --------------------------------------------------------- beat matching --
 # SETS_MIXING_PLAN.md phase 3. Everything down to apply_tempo_ramp is pure
 # arithmetic / string generation -- no ffmpeg call, no file on disk -- so

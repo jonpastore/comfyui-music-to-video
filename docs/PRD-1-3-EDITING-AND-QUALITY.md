@@ -93,7 +93,7 @@ the eight things that must become true; they are not a new contract.
 
 | # | outcome | proven by |
 |---|---|---|
-| P1 | The number on the screen is the number in the file — set length, to 0.05 s, with echo, hold, beatmatch, trim and an interstitial card all in play | `T1-7`, `T1-8`, `T1-27`, `T3-11` **built** (`qc.check_set` on the artefact; `test_t3_11_set_duration.py`) |
+| P1 | The number on the screen is the number in the file — set length, to 0.05 s, with echo, hold, beatmatch, trim and an interstitial card all in play; each join lands where the model says, within half a frame, measured on the rendered file | `T1-7`, `T1-8`, `T1-27`, `T3-11` **built** (`qc.check_set` on the artefact; `test_t3_11_set_duration.py`), `T3-12` **built** (`test_t3_12_transition_lands.py`) |
 | P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b` **built** (`mix_audio` RMS/s slope on a constant sine), `T1-12`, `T1-20d` |
 | P3 | Every surface is drivable with no browser, and the page and the JSON agree. A re-render, refine, repair or anchor re-roll leaves predecessor and successor both listed and selectable | `T6-A1`…`T6-A5`, `T1-3`, `T2-41` |
 | P4 | An album's songs are scenes of one story, demonstrably — arc content appears in the storyboard and is absent when the arc is; at xxx no scene prompt carries the mainstream lock and the tier's own wording does; the board's guardrail field is this tier's clause and save refuses another tier's wording | `T2-20`, `T2-21`, `T2-22` |

@@ -236,7 +236,9 @@ against `song_length` and `mismatch` beyond `SCENE_TIME_TOLERANCE`
 `build_song.clip_seconds(scene_seconds)` (`T2-24`): the same song at
 two `scene_seconds` yields two clip lengths. `finding-row` (measured / expected / unit /
 remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-20`, `T3-27`; dismiss
-stays off this row until the file bytes change, `T3-22`). The
+stays off this row until the file bytes change, `T3-22`). A set finding
+`transition_lands` (`T3-12`) is measurement only — `actionable` is false,
+same as `duration_matches_prediction`. The
 JSON already carries `remedy_class` and `actionable` (`GET /api/qc/findings`,
 `T3-27`): a false `actionable` is why the button must not exist. The
 per-box QC report is JSON only (`GET /api/qc/by-host`, `T3-1`): groups by

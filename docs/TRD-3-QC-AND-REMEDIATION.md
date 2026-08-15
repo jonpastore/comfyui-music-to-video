@@ -67,7 +67,8 @@ stated purpose is "do not rebuild" — the omission most likely to cost a rewrit
 Already satisfied by `qc.py` today: `T3-2` (expectations read from the submitted
 workflow, no hardcoded duration anywhere), `T3-4`'s measured/expected/unit on
 every check that has them, `T3-7` (8n+1 with the interpolated exemption), `T3-11`
-(imports `mixer.SET_DURATION_TOLERANCE` rather than restating it), `T3-27`
+(imports `mixer.SET_DURATION_TOLERANCE` rather than restating it), `T3-12`
+(each join vs the picture, within half a frame of `mixer.transition_times`), `T3-27`
 (every check names a remedy class; `approve()` uses the class, and a
 check with no remedy refuses rather than offering a button), and `T3-3`
 both ways. Tier 2's calibration
@@ -472,9 +473,11 @@ tier 1.
   a manifest of what was pushed where.
 - **The storyboard and the arc.** TRD-2. QC checks the output; TRD-2 decides
   what was asked for.
-- **The set timeline and its render.** TRD-1. **Two** things are shared, not
-  one: loudness (`effects.measure_loudness`, TRD-1 `T1-25`) and the set-duration
-  tolerance (`mixer.SET_DURATION_TOLERANCE`, `T1-7` and `T3-11`). Each is one
+- **The set timeline and its render.** TRD-1. **Three** things are shared, not
+  one: loudness (`effects.measure_loudness`, TRD-1 `T1-25`), the set-duration
+  tolerance (`mixer.SET_DURATION_TOLERANCE`, `T1-7` and `T3-11`), and the
+  handover times (`mixer.transition_times`, `T3-12` — measured on the
+  rendered file, within half a frame of that model). Each is one
   implementation with two callers.
   And the boundary is not "TRD-1 never measures output" — it measures its own
   render to prove a feature works, which is what `T1-9b` and `T1-12` are for.
@@ -585,3 +588,4 @@ current.
 | `T3-32` tier 1 over a song without GPU/backend | **built** | `test_t3_32_tier1_song.py` | `qc_service.run_song` measures assembled + clips + refs while a render holds the worker; `pipeline`/`gpu`/`models.where` are not called; `POST /songs/{id}/qc` does not `jobs.enqueue` |
 | `T3-11` rendered set duration vs `set_duration()` | **built** | `test_t3_11_set_duration.py` | `qc.run(kind="set")` / `qc.check_set` on the artefact: matching file PASSes; trim that moves `mixer.set_duration()` by more than `mixer.SET_DURATION_TOLERANCE` REJECTs. Just-inside the named constant PASSes, just-outside REJECTs — `DURATION_TOL_S` (0.10) would keep both green. Tolerance is imported, not restated. `measured`/`expected`/`unit` are the independently probed length, the prediction, and `s`. T1-7 is the build-time twin |
 | `T3-9` silent take on band energy | **built** | `test_t3_9_silence.py` | `qc.measure_band_energy` returns low/mid/high mean dB. Digital silence and a −70 dB tone reject. A 440 Hz tone passes on the live mid band. A 1-sample click with peak −20 dB still rejects — peak `volumedetect` would pass it. A file with no audio raises, never 0.0 |
+| `T3-12` each transition lands within half a frame | **built** | `test_t3_12_transition_lands.py` | `qc.check_transition_lands` / `qc.measure_transition_lands` read the rendered file; expected times are `mixer.transition_times` (same walk as `set_duration`). A 2 s red→blue cut passes at 2.0 s; a 3 s join against a 2 s model rejects. Two cuts each produce a land. Tolerance is `0.5 / file fps`. Measurement only — `remedy_class` is none |

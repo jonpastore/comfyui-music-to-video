@@ -205,6 +205,7 @@ CHECK_REMEDY_CLASS = {
     IDENTITY_WRONG: REMEDY_EDIT_TEXT,
     IDENTITY_DRIFT: REMEDY_NONE,
     "duration_matches_prediction": REMEDY_NONE,
+    "transition_lands": REMEDY_NONE,
     REFINER_HELP_CHECK: REMEDY_NONE,
 }
 
@@ -938,7 +939,112 @@ def check_set(path, items):
                        remedy="no remedy — a divergence between the stored "
                               "model and the filter graph; never fixed by "
                               "re-rendering"))
+    if len(items) >= 2:
+        out.extend(check_transition_lands(path, items))
     return out
+
+
+# A colour jump well above encoder noise on a still, well below a
+# red-to-blue cut. Same number the T3-12 test uses for its independent
+# reading, so measured equals that reading rather than a second threshold.
+_LAND_DELTA = 40.0
+
+
+def measure_transition_lands(path):
+    """Landing times of visual joins, from the pixels. docs/TRD-3 T3-12.
+
+    A cut is a single-frame colour jump. Time is first frame of the new
+    colour over the file's own fps. Raises if it cannot read frames —
+    an empty list would make "no join" look like a clean pass.
+    """
+    info = mixer.probe(path)
+    fps = float(info.get("fps") or 0.0)
+    if fps <= 0:
+        raise RuntimeError(f"no fps on {path} — refusing a land time")
+    frames = _frame_mean_rgb(path)
+    if len(frames) < 2:
+        raise RuntimeError(f"need 2+ frames to locate a join in {path}")
+    lands = []
+    prev = frames[0]
+    for i in range(1, len(frames)):
+        r, g, b = frames[i]
+        pr, pg, pb = prev
+        delta = ((r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2) ** 0.5
+        if delta >= _LAND_DELTA:
+            lands.append(round(i / fps, 4))
+            prev = frames[i]
+    if not lands:
+        raise RuntimeError(
+            f"no visual join in {path} — refusing a measurement that "
+            "did not happen")
+    return lands
+
+
+def _frame_mean_rgb(path):
+    """Mean RGB of every frame, 8x8. Raises if ffmpeg produced no pixels."""
+    r = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-i", path,
+         "-vf", "scale=8:8,format=rgb24", "-f", "rawvideo", "-"],
+        capture_output=True)
+    if r.returncode != 0 or not r.stdout:
+        err = (r.stderr or b"").decode("utf-8", "replace")
+        raise RuntimeError(
+            f"no frames from {path} — refusing a land time:\n"
+            + "\n".join(err.splitlines()[-10:]))
+    n = 8 * 8 * 3
+    buf = r.stdout
+    if len(buf) < n:
+        raise RuntimeError(f"no complete frame in {path}")
+    frames = []
+    for i in range(0, len(buf) // n * n, n):
+        chunk = buf[i:i + n]
+        px = len(chunk) // 3
+        frames.append((
+            sum(chunk[0::3]) / px,
+            sum(chunk[1::3]) / px,
+            sum(chunk[2::3]) / px,
+        ))
+    return frames
+
+
+def check_transition_lands(path, items):
+    """T3-12: each model join vs the picture, within half a frame.
+
+    Tolerance is 0.5 / the file's own fps, not a restated constant.
+    Remedy is none — a model/graph split is not a re-render.
+    """
+    try:
+        expected = mixer.transition_times(items)
+        measured = measure_transition_lands(path)
+        fps = float(mixer.probe(path)["fps"] or 0.0)
+    except Exception as e:
+        return [finding(path, "set", "transition_lands", REJECT,
+                        str(e).split("\n")[0],
+                        remedy="no remedy — a divergence between the stored "
+                               "model and the filter graph; never fixed by "
+                               "re-rendering")]
+    if fps <= 0:
+        return [finding(path, "set", "transition_lands", REJECT,
+                        "rendered file has no fps — cannot price half a frame",
+                        remedy="no remedy — a divergence between the stored "
+                               "model and the filter graph; never fixed by "
+                               "re-rendering")]
+    half = 0.5 / fps
+    want = [round(float(t), 4) for t in expected]
+    ok = (len(measured) == len(want)
+          and all(abs(m - e) <= half for m, e in zip(measured, want)))
+    if not ok:
+        detail = (f"rendered lands {measured} against model {want} "
+                  f"(half-frame {half:.4f}s at {fps:.4f} fps)")
+    else:
+        detail = (f"rendered lands {measured} match model {want} "
+                  f"within half a frame ({half:.4f}s)")
+    return [finding(path, "set", "transition_lands",
+                    PASS if ok else REJECT, detail,
+                    measured, want, "s",
+                    remedy="no remedy — a divergence between the stored "
+                           "model and the filter graph; never fixed by "
+                           "re-rendering")]
 
 
 def _has_video(path):

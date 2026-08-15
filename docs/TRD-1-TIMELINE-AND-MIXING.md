@@ -534,11 +534,12 @@ guess at:
   A clip being the length its workflow asked for is QC. Both are measurements of
   a rendered file and they are not the same job.
 
-  **They share exactly two things, not one**, and the "one place they touch"
+  **They share three things, not one**, and the "one place they touch"
   claim here was wrong: §9's loudness (`effects.measure_loudness`, TRD-3 §4.3
-  calls it) and the set-duration tolerance (`mixer.SET_DURATION_TOLERANCE`,
-  `T1-7` and `T3-11`). Both are one implementation with two callers, which is
-  the point — but there are two of them.
+  calls it), the set-duration tolerance (`mixer.SET_DURATION_TOLERANCE`,
+  `T1-7` and `T3-11`), and the handover times (`mixer.transition_times`,
+  TRD-3 `T3-12` — QC measures the rendered file against that model, within
+  half a frame). Each is one implementation with two callers.
 
 ## 12. Explicitly not building
 
