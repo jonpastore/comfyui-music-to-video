@@ -1037,6 +1037,9 @@ def check_video(path, expect, kind="clip"):
                         remedy="re-render")]
 
     # ---- what the workflow / source track asked for
+    # T3-4.2-duration: clip length vs workflow frames/fps (expect.duration)
+    # within DURATION_TOL_S. measured=probe, unit s. Mismatch REJECTs.
+    # Song assembled length vs songs.duration is T3-4.4-mp3.
     if expect.get("duration"):
         d, want = info["duration"], float(expect["duration"])
         # T3-4.4-mp3: assembled song expected is songs.duration (source mp3).

@@ -611,6 +611,10 @@ workflow asked for 320×240 and the box quietly wrote 160×120.
 measured/expected rate, unit `fps`, and a re-render-pinned remedy —
 not a silent pass when the workflow asked for 16 and the box quietly
 wrote 24.
+`T3-4.2-duration`: a clip at the wrong length REJECTs `duration` with
+measured/expected seconds (probe vs workflow frames÷fps), unit `s`, and a
+re-render remedy — not a silent pass when the workflow asked for 2.0 s and
+the box quietly wrote a truncated file.
 `T3-4.3-sr`: a take at the wrong
 sample rate REJECTs `sample_rate` with measured/expected Hz and a
 re-render remedy — not a silent pass when the request was 48000 and
