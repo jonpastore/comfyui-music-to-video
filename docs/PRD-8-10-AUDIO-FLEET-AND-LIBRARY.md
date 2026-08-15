@@ -68,7 +68,9 @@ the model; `T10-13` attaches `classify_sheet` text to a finding and never
 uses it as a pass/fail; `T10-14` refuses "does this match?" as a prompt
 shape and accepts "describe what differs" with non-verdict text;
 `T10-15` marks mixadvice as relational (`relative_to` / running `order` —
-quote without neighbours is a different set).
+quote without neighbours is a different set); `T10-16` keeps the image
+guardrail off audio and still refuses the same child string on every surface
+that reaches an image or video render.
 
 **P4 is a requirement, not a feature.** `insert_voice` is the store gate:
 a voice cannot be written without a recorded source and a recorded consent
@@ -100,7 +102,9 @@ still not shipped (`T8-12`, provisional by absence).
    records the model), `T10-13` (`classify_sheet` text on a finding, never a
    pass/fail), `T10-14` (match-question shape refused; describe-what-differs
    returns non-verdict text), and `T10-15` (mixadvice relational / neighbours
-   named) are built.
+   named) are built. **`T10-16` is built** — the image guardrail stays off the
+   audio path and the same child string is still refused on image/video
+   surfaces (`studio/test_t10_16_image_guardrail.py`).
 
 ## 5. Scope
 

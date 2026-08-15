@@ -934,6 +934,12 @@ carries the running `order`. Showing a `why` without that frame is showing
 advice about a different set — do not render the sentence alone as if it
 were absolute.
 
+`T10-16`: a lyric or tag that mentions a child is valid music text. The same
+string is not valid image or video prompt text. The audio generate form must
+not surface an image-guardrail refusal for nursery / child wording; storyboard
+direction, scene image prompts, and video motion prompts still refuse it with
+the ordinary minor-reference message.
+
 If advice and measurement look alike, the operator will eventually treat a
 confident sentence as a reading, which is how `41.1 vs 64.7` would have become
 a gate. The style-guide rule: **model text carries the `--muted` role and an

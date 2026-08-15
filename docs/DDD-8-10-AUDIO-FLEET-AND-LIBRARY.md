@@ -228,6 +228,13 @@ those references. `quote_without_neighbours` drops them; `about_set` then
 names a different set — advice quoted without its neighbours is not advice
 about the set it came from.
 
+`T10-16` is the image-path half of the audio/image guardrail split (`T8-4`
+owns the decision; this cites it). Free text that reaches an image or video
+render still runs `check_text` / `screen_prompt_field`; the audio generate
+route and `make_audio` do not. The measurement is one string on both sides:
+`"nursery rhyme for children"` is accepted as tags/lyrics and refused as a
+storyboard direction, scene `image_prompt`, and `video_motion_prompt`.
+
 ### 4.3 One guard, several callers
 
 `screen_prompt_field` is the single screening implementation and `T10-17` keeps
@@ -251,6 +258,7 @@ each caller, or a caller that stops calling it stays green.
                          ->  the picked/unpicked distinction (T8-2)
     bulk edit (T10-3…T10-7 built)
     advice labelling (T10-11..T10-15 built) over the four live modules
+    image/audio guard split (T10-16 built; cites T8-4)
 
 Nothing here blocks TRD 1-7. TRD-9 is first because it is cheapest and because
 everything else in the project renders through the machinery it pins down.
