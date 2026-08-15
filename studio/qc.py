@@ -236,6 +236,7 @@ CHECK_REMEDY_CLASS = {
     "channel_sat": REMEDY_RERENDER_SEED,
     "loudness": REMEDY_LOUDNORM,
     "true_peak": REMEDY_LOUDNORM,
+    "sample_rate": REMEDY_RERENDER,
     "silence": REMEDY_RERENDER,
     "not_uniform": REMEDY_RERENDER_SEED,
     "not_blank": REMEDY_RERENDER_SEED,
@@ -1052,6 +1053,21 @@ def check_audio(path, expect):
                            PASS if abs(d - want) <= tol else REJECT,
                            f"{d:.3f}s against {want:.3f}s requested",
                            round(d, 3), round(want, 3), "s", remedy="re-render"))
+
+    # T3-4.3-sr: sample rate as requested. Exact Hz; no soft tolerance.
+    # Without expect.sample_rate the check is silent (as requested only).
+    if expect.get("sample_rate"):
+        got = int(info.get("sample_rate") or 0)
+        want = int(expect["sample_rate"])
+        if not got:
+            out.append(finding(path, "audio", "sample_rate", REJECT,
+                               "no sample_rate reading on audio stream",
+                               None, want, "Hz", remedy="re-render"))
+        else:
+            out.append(finding(path, "audio", "sample_rate",
+                               PASS if got == want else REJECT,
+                               f"{got} Hz against {want} Hz requested",
+                               got, want, "Hz", remedy="re-render"))
 
     # Loudness through effects.py -- the ONE implementation. TRD-1 T1-25.
     try:

@@ -38,6 +38,8 @@ def probe(path):
         "fps": _parse_rate(vstream.get("avg_frame_rate") or vstream.get("r_frame_rate", "0/1")) if vstream else 0.0,
         "has_audio": astream is not None,
         "has_video": vstream is not None,
+        # TRD-3 §4.3 T3-4.3-sr: rate as requested. 0 when no audio stream.
+        "sample_rate": int(astream["sample_rate"]) if astream and astream.get("sample_rate") else 0,
     }
 
 

@@ -161,7 +161,9 @@ longer the phase to defer — `docs/PLAN-TRD-4-7.md` §4 is updated to match.
 `studio/qc.py` (TRD-3 tier 1 in full; **`T3-4.2-sat` built** — clip
 `channel_sat` / `measure_channel_sat` FLAGs solid green garbage (NaN
 encode mode) above `CHANNEL_SAT_LIMIT`, PASSes testsrc2/gray/black,
-`test_t3_4_2_sat.py`; **`T3-4.4-av` built** — assembled-song
+`test_t3_4_2_sat.py`; **`T3-4.3-sr` built** — `check_audio` sample
+rate as requested via `mixer.probe`: matching Hz PASSes, mismatch
+REJECTs, no expect emits nothing, `test_t3_4_3_sr.py`; **`T3-4.4-av` built** — assembled-song
 `av_sync` / `measure_av_durations`: matching A/V streams PASS within
 `DURATION_TOL_S`, a 1s gap FLAGs, clips without `want_audio` skip,
 `test_t3_4_4_av.py`; **`T3-8` built** — `expect_interpolated`
