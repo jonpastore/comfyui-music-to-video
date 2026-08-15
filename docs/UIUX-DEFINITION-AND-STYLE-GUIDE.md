@@ -379,6 +379,11 @@ The generation prompt itself is API data (`T2-17`):
 `GET /api/songs/{id}/storyboard/{tier}` returns the same defaulted-from-tier
 string the direction box prefills; the HTML is not the only place that
 string lives.
+song's `clip_seconds`, not a constant (`T2-24`). The live `meter`
+component is not this.
+Every named scene figure carries `lead` / `extra` / `background`
+(`T2-29`). `GET .../cast` returns `role` on each figure; the scene
+row shows it. The unanchored-lead warning (`T2-30`) is not this.
 
 ### 5.3 Space and radius
 

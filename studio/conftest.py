@@ -117,6 +117,12 @@ def _generate_storyboard(lyrics_text, tier, guardrail, style_note, song, model, 
     return {"scenes": [{"scene_number": 1}, {"scene_number": 2}]}
 
 
+def _require_figure_roles(sb):
+    real = _real_module("grok")
+    if real is not None:
+        real.require_figure_roles(sb)
+
+
 def _write_storyboard(sb, outdir, slug, tier):
     """Same contract as the real grok.write_storyboard, and it renders the REAL
     markdown.
@@ -221,6 +227,7 @@ _stub("grok",
       describe_anchor=lambda image_path, field, model=None, progress=None: (
           describe_calls.append((image_path, field))
           or f"drafted {field} from the anchor"),
+      require_figure_roles=_require_figure_roles,
       write_storyboard=_write_storyboard)
 
 # ---- lyrics ------------------------------------------------------------

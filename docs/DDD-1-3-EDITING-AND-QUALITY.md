@@ -549,6 +549,15 @@ flat images with no character grouping → red. Mutation: drop a cast
 member's chosen sheet → red. `T2-27` (each scene's reference image)
 is not on `_scene_json` yet.
 
+`T2-29` is **built**. A named scene figure is `{name, role}` with
+`role` in `lead` / `extra` / `background`. `_compose` keeps classified
+figures (it used to drop dicts). `write_storyboard` / `validate` /
+scene save refuse a named figure with no role or a free-text role.
+`GET /api/songs/{id}/storyboard/{tier}/cast` returns `role` on each
+figure. A bare name is a legacy lead. Mutation: coerce to strings →
+compose arm red. Mutation: dump without the check → writer arm red.
+Mutation: return names without role → API arm red. `T2-30` is not this.
+
 ### 5.6 Tier 2 is a calibration, not a metric
 
 `vision.py` is a VLM caller and is **not** the tier-2 path. TRD-3 §10 forbids a

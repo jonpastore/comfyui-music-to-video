@@ -83,6 +83,63 @@ REQUIRED_SCENE_KEYS = ("scene_number", "name", "cue", "duration_guidance", "stor
 # board can fail the same way.
 TILE_TOLERANCE_S = 0.05
 
+# T2-29: named scene figures. Free-text album-cast roles ("rival") are not these.
+FIGURE_ROLES = ("lead", "extra", "background")
+
+
+def figure_name(entry):
+    if isinstance(entry, dict):
+        return str(entry.get("name") or "").strip()
+    return str(entry or "").strip()
+
+
+def figure_role(entry):
+    """Role on a named figure. A bare name is a legacy lead."""
+    if isinstance(entry, dict):
+        return str(entry.get("role") or "").strip().lower()
+    if isinstance(entry, (str, int, float)) and str(entry).strip():
+        return "lead"
+    return ""
+
+
+def normalize_scene_figures(characters):
+    """Named scene figures as {name, role}. T2-29.
+
+    A bare name becomes a lead. A dict keeps the role it arrived with,
+    including empty, so write/validate can refuse an unclassified figure.
+    """
+    out = []
+    for raw in characters or []:
+        if isinstance(raw, dict):
+            name = str(raw.get("name") or "").strip()
+            role = str(raw.get("role") or "").strip().lower()
+        elif isinstance(raw, (str, int, float)):
+            name = str(raw).strip()
+            role = "lead"
+        else:
+            continue
+        if not name:
+            continue
+        out.append({"name": name, "role": role})
+    return out
+
+
+def require_figure_roles(sb):
+    """T2-29: every named figure carries lead / extra / background."""
+    if not isinstance(sb, dict):
+        return
+    for s in sb.get("scenes") or []:
+        num = s.get("scene_number", "?")
+        for fig in s.get("characters") or []:
+            name = figure_name(fig)
+            if not name:
+                continue
+            role = figure_role(fig)
+            if role not in FIGURE_ROLES:
+                raise ValueError(
+                    f"scene {num} named character {name!r} has no "
+                    f"role classification (lead, extra, or background)")
+
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
 
 # T2-21: the mainstream wardrobe lock that leaked into every scene of
@@ -328,13 +385,11 @@ def _exemplar_prompt(exemplar, exemplar_md):
 
 
 def _cast_block(cast):
-    """Tell the model who can be named, and that only MAIN ACTORS get named.
+    """Tell the model who can be named and to classify each as lead/extra/background.
 
-    The distinction is not cosmetic: a named character is attached to the
-    reference prompt as an extra anchor image, and Qwen-Image-Edit takes three
-    images total. Naming the crowd would burn both spare slots on people whose
-    appearance nobody needs to keep consistent, and starve the scene that has a
-    genuine second lead.
+    Only leads consume a Qwen-Image-Edit reference slot. Naming the crowd as
+    leads would burn both spare slots on people whose appearance nobody needs
+    to keep consistent, and starve the scene that has a genuine second lead.
     """
     if not cast:
         return ("There is ONE recurring character, the protagonist, described above. "
@@ -344,13 +399,11 @@ def _cast_block(cast):
     return (
         "CAST. Besides the protagonist, these named characters exist for this "
         f"release:\n{lines}\n"
-        "Give every scene a \"characters\" key: a list of the names above who are "
-        "MAIN ACTORS in that scene -- on screen, identifiable, and mattering to the "
-        "shot. Use the names EXACTLY as written.\n"
-        "Extras, dancers, bystanders and background crowd are NOT named: leave them "
-        "out of the list and describe them in the image_prompt instead. Only a main "
-        "actor is worth an anchor, and a scene can carry at most two named characters "
-        "besides the protagonist.\n"
+        "Give every scene a \"characters\" key: a list of {\"name\", \"role\"} "
+        "objects for everyone named in that scene. Use the names EXACTLY as written. "
+        "role is one of lead, extra, background. Leads are main actors who need an "
+        "anchor. Extras and background may be named but do not need one. A scene "
+        "can carry at most two leads besides the protagonist.\n"
         "An empty list is correct and common -- most scenes are the protagonist "
         "alone.\n\n")
 
@@ -424,7 +477,8 @@ def _system_prompt(tier_text, style_note, n_scenes, scene_seconds, min_scenes=1,
         "Each scene object needs exactly these keys: scene_number (int), name, cue "
         "(the lyric [Section] tag this scene belongs to), duration_guidance "
         "(a string like \"4-8 sec\"), story (one line of scene action), camera, "
-        "motion, lighting, location, characters (a list of names), image_prompt, "
+        "motion, lighting, location, characters (a list of {name, role} where "
+        "role is lead, extra, or background), image_prompt, "
         "video_motion_prompt, negative_prompt.\n\n"
         + _cast_block(cast) + _arc_block(arc_ctx) +
         f"camera MUST be built from this vocabulary (a different one every scene -- a "
@@ -548,13 +602,11 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
             s["lighting"] = s.get("palette", "")
         s.setdefault("palette", s.get("lighting", ""))
         s.setdefault("energy", energy(str(s.get("cue", ""))))
-        # Named MAIN ACTORS for this scene. Coerced to a clean list of strings:
-        # it selects which anchor images get attached downstream
-        # (build_refs.scene_cast), so a stray dict or number there would become
-        # a lookup that silently matches nothing. A name nobody anchored is kept
-        # -- it is still meaningful prose -- and simply attaches no image.
-        s["characters"] = [str(c).strip() for c in (s.get("characters") or [])
-                           if isinstance(c, (str, int, float)) and str(c).strip()]
+        # T2-29: every named figure carries lead / extra / background.
+        # A bare name is a legacy lead (generation used to name only main
+        # actors). Dicts keep the role they arrived with so a missing or
+        # free-text role can fail write/validate instead of being invented.
+        s["characters"] = normalize_scene_figures(s.get("characters"))
         # The guardrail is deliberately NOT written into image_prompt. It is
         # applied by build_refs.workflow()/build_song.workflow() at the point the
         # prompt is built -- the one chokepoint every storyboard reaches, however
@@ -644,6 +696,16 @@ def validate(sb, exemplar=None, expect_scenes=None):
             problems.append(f"scene {s.get('scene_number', '?')} missing keys: {missing}")
         if not (s.get("image_prompt") or "").strip():
             problems.append(f"scene {s.get('scene_number', '?')} has empty image_prompt")
+        num = s.get("scene_number", "?")
+        for fig in s.get("characters") or []:
+            name = figure_name(fig)
+            if not name:
+                continue
+            role = figure_role(fig)
+            if role not in FIGURE_ROLES:
+                problems.append(
+                    f"scene {num} named character {name!r} has no "
+                    f"role classification (lead, extra, or background)")
         # T2-12a: an illegal requested length fails here, not at the sampler.
         # Absent frames is a pre-T2-12a storyboard and is left alone.
         frames = s.get("frames")
@@ -1078,6 +1140,7 @@ def require_character_reference(sb):
 
 def write_storyboard(sb, outdir, slug, tier):
     require_character_reference(sb)
+    require_figure_roles(sb)
     os.makedirs(outdir, exist_ok=True)
     base = os.path.join(outdir, f"{slug}_{tier}")
     json_path, md_path = base + ".json", base + ".md"

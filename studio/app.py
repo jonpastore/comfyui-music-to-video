@@ -4856,6 +4856,22 @@ def load_storyboard(row, normalized=True):
     return build_song.normalize(sb) if normalized else sb
 
 
+def _figure_name(entry):
+    if isinstance(entry, dict):
+        return str(entry.get("name") or "").strip()
+    return str(entry or "").strip()
+
+
+def _scene_figure(entry, anchored):
+    """Named scene figure with T2-29 role. A bare name is a legacy lead."""
+    name = _figure_name(entry)
+    if isinstance(entry, dict):
+        role = str(entry.get("role") or "").strip().lower()
+    else:
+        role = "lead"
+    return {"name": name, "role": role, "anchored": name in anchored}
+
+
 def storyboard_scenes(song, sb, tier, anchored=(), scene_seconds=None):
     """Per-scene timing, prompts and reference frames for the storyboard page.
 
@@ -4921,8 +4937,9 @@ def storyboard_scenes(song, sb, tier, anchored=(), scene_seconds=None):
             "guidance": build_song.guidance_seconds(scene),
             "shots": sorted(set(shots_of.get(num, []))),
             "refs": refs, "edited": edited,
-            "cast": [{"name": n, "anchored": n in anchored}
-                     for n in (scene.get("characters") or [])],
+            "cast": [_scene_figure(n, anchored)
+                     for n in (scene.get("characters") or [])
+                     if _figure_name(n)],
         })
     return rows, nclips
 
@@ -5079,6 +5096,10 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
     # stranger; a message that points at the reference image is the wrong lesson.
     if not str((sb.get("character_reference") or "")).strip():
         raise HTTPException(400, grok.EMPTY_CHARACTER_REFERENCE)
+    try:
+        grok.require_figure_roles(sb)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     if changed:
         # stamp the edit so frames rendered before it can be shown as stale.
         # An unknown key in a scene is ignored by every builder (they read named
@@ -5181,6 +5202,10 @@ def _apply_scene_fields(song, tier, num, fields):
             changed = True
     if not str((sb.get("character_reference") or "")).strip():
         raise HTTPException(400, grok.EMPTY_CHARACTER_REFERENCE)
+    try:
+        grok.require_figure_roles(sb)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     if changed:
         scene["edited"] = time.time()
         outdir = os.path.dirname(row["json_path"])

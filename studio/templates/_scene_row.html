@@ -33,7 +33,7 @@
           title="{{ 'anchored -- attached to this scene as a reference image'
                     if c.anchored else
                     'no anchor at this tier -- rendered from scene text alone' }}">
-      {{ c.name }}{% if not c.anchored %} &middot; no anchor{% endif %}
+      {{ c.name }}{% if c.role %} &middot; {{ c.role }}{% endif %}{% if not c.anchored %} &middot; no anchor{% endif %}
     </span>
     {% endfor %}
   </p>

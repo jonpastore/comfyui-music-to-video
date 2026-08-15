@@ -172,7 +172,11 @@ def scene_cast(scene, cast):
     needs an anchor, and the storyboard is told exactly that.
     """
     out = []
-    for name in (scene.get("characters") or []):
+    for raw in (scene.get("characters") or []):
+        name = raw.get("name") if isinstance(raw, dict) else raw
+        name = str(name or "").strip()
+        if not name:
+            continue
         entry = cast.get(name)
         if entry and entry.get("image"):
             out.append((name, entry["image"], entry.get("desc", "")))
