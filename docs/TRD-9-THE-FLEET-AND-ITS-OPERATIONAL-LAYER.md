@@ -192,16 +192,12 @@ does not pay again.
   not the text encoder reports the model available and fails at load, the same
   failure as `T9-13a` by a different route.
 
-  **Satisfied in practice 2026-08-13 and NOT closed.** The gamingpc run staged
-  UNET, text encoder, VAE and LoRA together and all four verified — but
-  `~/stage_gamingpc.sh` **hardcodes its file list**. The next model staged by
-  the next person gets whatever they remember. The gap is the path, not the
-  outcome, and an outcome that happened to be right is exactly the evidence that
-  hides it. A box
-  holding the UNET and VAE but not the text encoder reports the model available
-  and fails at load — the same failure as `T9-13a` by a different route.
-  `models.CATALOG`'s `companions` already names them; the criterion is that the
-  staging path reads that list rather than a human remembering it.
+  **Built, check can fail.** `models.staging_files(key)` returns the primary
+  weight plus every name in `CATALOG[key]["companions"]`. The gamingpc run of
+  2026-08-13 staged UNET, text encoder, VAE and LoRA together and all four
+  verified, but that was a hardcoded shell list; the next model must not depend
+  on someone remembering companions. Mutation: hardcode only the primary, or
+  keep a remembered companion after `CATALOG.companions` changes → red.
 
 ## 6. The shared card
 
@@ -329,7 +325,7 @@ production, and almost none of it has a check.** That is the point of writing it
 | `T9-13c` staging sequence | **written today, untested** | today | transfer → checksums → queues idle → restart → render. **The safety rests on the idle queue, not on Swarm's cache**, which cannot be read back |
 | **`T9-11` submit stays `comfyworkflowraw`+`exactbackendid`** | **built, check can fail** | this tree | `studio/test_trd9_fleet.py::test_t9_11_submit_stays_comfyworkflowraw_plus_exactbackendid`: free draw + pin both carry raw workflow; pin carries `exactbackendid`; unit shape of `_swarm_generate` is exact. Mutation: replace raw with `model=` → red. Hazard remains real for Swarm's own routing only |
 | `T9-13a` the 26% enum | **INCIDENT CLOSED, rule kept** | today | all six staged files sha256-verified both ends, zero MISMATCH in the run. The file that was 26% written reads `OK`. The rule stands; the window is shut |
-| `T9-13b` companions | **satisfied in practice, NOT closed** | today | the run staged all four together and they verify — but `~/stage_gamingpc.sh` **hardcodes the list**. The criterion is that the path reads `CATALOG.companions`, and it does not |
+| `T9-13b` companions | **built, check can fail** | this tree | `models.staging_files(key)` returns primary + `CATALOG.companions`. `studio/test_trd9_fleet.py::test_t9_13b_staging_path_reads_catalog_companions`: qwen ships UNET+three companions; live monkeypatch of companions drops the old list and stages the new name. Mutation: hardcode only the primary or keep a remembered companion after CATALOG changes → red |
 | **gamingpc as a second image box** | **CAPABLE, NOT PROVEN** | today | all six files enumerated under the loader that will load them — `UNETLoader`, `CLIPLoader`, `VAELoader`, `LoraLoaderModelOnly` — and 31.84 GiB total / 30.01 free against a 19.12 GiB UNET plus an 8.7 GiB encoder. **Fits on paper and has never been run.** Written this way so the next session inherits a fact and not a claim |
 | **peaches-unraid onboarding** | **DONE — closed by Jon 2026-08-13** | — | took a different route from the one planned. Backend [2], running, `/system_stats` answers 200, 10.58 GiB visible. **No disk task is outstanding**; §7a is history, not work |
 | `T9-18` fleet ops name their service | **written, not enforced** | today | the lesson from the vDisk incident. A criterion about future operations — the incident it came from is closed |

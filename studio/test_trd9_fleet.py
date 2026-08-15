@@ -818,3 +818,47 @@ def test_t9_13a_truncated_or_enum_only_weight_is_not_available():
             "epoch-mtime weight reported available")
         assert models.weight_available(epoch) is False, (
             "epoch mtime alone must mean truncated")
+
+
+def test_t9_13b_staging_path_reads_catalog_companions():
+    """T9-13b: staging a model stages its companions from CATALOG, not a list.
+
+    A box with the UNET and VAE but no text encoder reports available and
+    fails at load — same failure as T9-13a by another route. The gap is the
+    path: ~/stage_gamingpc.sh hardcoding four files is not this criterion.
+
+    Mutation: empty CATALOG.companions while the primary still stages → red
+    if the path still returns the remembered companions.
+    Mutation: staging_files returns only the primary → red on the companion
+    membership half.
+    One variable: the path reads CATALOG.companions.
+    """
+    key = "qwen_image_edit_2511"
+    primary = models.CATALOG[key]["file"]
+    companions = list(models.CATALOG[key]["companions"])
+    assert companions, "fixture needs real companions so a primary-only path fails"
+    assert callable(getattr(models, "staging_files", None)), (
+        "models.staging_files is the staging path; a shell list is not T9-13b")
+
+    got = models.staging_files(key)
+    assert primary in got, f"primary weight missing from stage set: {got}"
+    for name in companions:
+        assert name in got, (
+            f"companion {name!r} was not staged with {key}; path is not "
+            f"reading CATALOG.companions: {got}")
+    assert got[0] == primary, "primary weight must lead the stage set"
+
+    was = models.CATALOG[key]["companions"]
+    try:
+        models.CATALOG[key]["companions"] = {
+            "only_for_t9_13b.safetensors": "CLIPLoader",
+        }
+        live = models.staging_files(key)
+        assert "only_for_t9_13b.safetensors" in live, (
+            "staging path ignored a live CATALOG.companions change")
+        assert companions[0] not in live, (
+            "staging path still carries a remembered companion after "
+            "CATALOG.companions changed — hardcoded list, not a catalog read")
+        assert primary in live
+    finally:
+        models.CATALOG[key]["companions"] = was

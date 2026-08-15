@@ -156,7 +156,9 @@ Each cost a wrong diagnosis once. As criteria they cost nothing again:
   (`T9-12`) — it streams over the websocket instead. `/history` at 0 is not
   evidence.
 - **Nodes are never the discriminator; files are** (`T9-13`). Every node is on
-  every box.
+  every box. **Staging a model stages its companions from `CATALOG.companions`
+  in the same act** (`T9-13b`, built: `models.staging_files`); a hardcoded shell
+  file list is not the path.
 
 ### 3.4 What TRD-9 adds rather than documents
 

@@ -958,6 +958,10 @@ Two additions specific to TRD-9:
 - **An empty registered backend is marked as a hazard, not as healthy** (`T9-9`).
   It is "running" by every measure Swarm reports and it will refuse real work.
   Green here would be the interface agreeing with the wrong signal.
+- **Staging is catalogue-driven, not a remembered file list** (`T9-13b`). The
+  operator path that puts a model on a box stages the primary weight and every
+  `CATALOG.companions` entry together; a UI or script that only names the UNET
+  reintroduces the available-but-fails-at-load chip.
 
 ### 7b.4 Bulk edit is the highest-risk form in the studio
 

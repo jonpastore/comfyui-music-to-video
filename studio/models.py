@@ -782,6 +782,21 @@ def weight_available(path=None, *, expected_bytes=None):
     return True
 
 
+def staging_files(key):
+    """Primary weight plus every companion, one act (T9-13b).
+
+    Reads CATALOG.companions. A path that hardcodes the list stages whatever
+    the last person remembered; a box holding the UNET and VAE without the
+    text encoder reports available and fails at load.
+    """
+    m = CATALOG.get(key)
+    if not m:
+        raise ValueError(f"no such model: {key}")
+    files = [m["file"]]
+    files.extend(m.get("companions") or ())
+    return files
+
+
 def spellings(name):
     """Every filename these same weights are known by. Canonical name first.
 

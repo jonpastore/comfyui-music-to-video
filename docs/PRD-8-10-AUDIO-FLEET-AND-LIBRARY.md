@@ -52,7 +52,7 @@ The same operator, in the two modes the other documents do not cover:
 | P4 | A voice reference cannot exist without a recorded source and consent | `T8-10`…`T8-12` |
 | P5 | A workflow naming a model reaches the box that holds it, under the name that box uses | `T9-1`…`T9-3` |
 | P6 | A box that went away is told apart from a workflow a box refused | `T9-6`, `T9-7` |
-| P7 | Four measurement traps that each cost a wrong diagnosis are checks, not folklore | `T9-10`…`T9-13` |
+| P7 | Four measurement traps that each cost a wrong diagnosis are checks, not folklore | `T9-10`…`T9-13` (`T9-13a`/`T9-13b` built: byte completeness; staging path reads `CATALOG.companions`) |
 | P8 | A bulk edit changes exactly what was shown and asked for, or nothing | `T10-3`…`T10-7` (built) |
 | P9 | A model's words are a proposal, never a verdict and never a gate | `T10-11`…`T10-15` |
 
