@@ -38,7 +38,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import effects  # noqa: E402  -- the ONE loudness implementation lives there
-import mixer    # noqa: E402  -- probe() and SET_DURATION_TOLERANCE
+import mixer    # noqa: E402  -- probe(), SET_DURATION_TOLERANCE, spliced_duration
 
 
 # ---------------------------------------------------------------- verdicts --
@@ -206,6 +206,7 @@ CHECK_REMEDY_CLASS = {
     IDENTITY_DRIFT: REMEDY_NONE,
     "duration_matches_prediction": REMEDY_NONE,
     "transition_lands": REMEDY_NONE,
+    "splice_duration": REMEDY_RERENDER,
     REFINER_HELP_CHECK: REMEDY_NONE,
 }
 
@@ -705,6 +706,73 @@ def _av_durations(path):
 
 # ------------------------------------------------------------------ audio --
 
+def _splice_expect(expect):
+    """source + start + end, or nothing. Missing any one is not a splice."""
+    expect = expect or {}
+    source = expect.get("source") or expect.get("mp3_path")
+    start = expect.get("start")
+    end = expect.get("end")
+    span = expect.get("span") or expect.get("bridge")
+    if isinstance(span, dict):
+        if start is None:
+            start = span.get("start")
+        if end is None:
+            end = span.get("end")
+        if source is None:
+            source = span.get("source") or span.get("mp3_path")
+    if source is None or start is None or end is None:
+        return None
+    return source, float(start), float(end)
+
+
+def check_splice(path, expect):
+    """T3-10: spliced-track duration vs mixer.bridge_seconds() arithmetic.
+
+    The 20 s / 0.1 s case lengthened the song to 20.193 s. The prediction
+    is mixer.spliced_duration, which asks bridge_seconds rather than
+    restating gap + 2×xfade. No splice keys means this check does not run.
+    """
+    spec = _splice_expect(expect)
+    if spec is None:
+        return []
+    source, start, end = spec
+    expect = expect or {}
+    if not os.path.isfile(path):
+        return [finding(path, "audio", "opens", REJECT, "file does not exist",
+                        remedy="re-render")]
+    xfade = expect.get("xfade", mixer.SPLICE_XFADE)
+    bridge_len = expect.get("bridge_len")
+    if bridge_len is None:
+        bridge_path = expect.get("bridge_path")
+        if not bridge_path and isinstance(expect.get("bridge"), str):
+            bridge_path = expect.get("bridge")
+        if bridge_path:
+            try:
+                bridge_len = mixer.probe(bridge_path)["duration"]
+            except Exception as e:
+                return [finding(path, "audio", "splice_duration", FLAG,
+                                f"cannot probe the bridge: {e}",
+                                remedy="re-splice; size the bridge with "
+                                       "mixer.bridge_seconds()")]
+    try:
+        predicted = mixer.spliced_duration(
+            source, start, end, bridge_len=bridge_len, xfade=xfade)
+        actual = mixer.probe(path)["duration"]
+    except Exception as e:
+        return [finding(path, "audio", "splice_duration", FLAG,
+                        f"cannot predict spliced duration: {e}",
+                        remedy="re-splice; size the bridge with "
+                               "mixer.bridge_seconds()")]
+    gap = abs(actual - predicted)
+    return [finding(path, "audio", "splice_duration",
+                    PASS if gap <= mixer.SPLICE_DURATION_TOLERANCE else REJECT,
+                    f"spliced {actual:.3f}s against "
+                    f"{predicted:.3f}s from mixer.bridge_seconds()",
+                    round(actual, 3), round(predicted, 3), "s",
+                    remedy="re-splice; size the bridge with "
+                           "mixer.bridge_seconds()")]
+
+
 def check_audio(path, expect):
     """Tier 1 over a generated take, a bridge or an edit. docs/TRD-3 4.3 --
     the predecessor plan had no audio tier at all."""
@@ -765,6 +833,7 @@ def check_audio(path, expect):
             f"low {bands['low']:.1f} / mid {bands['mid']:.1f} / high "
             f"{bands['high']:.1f} dB (loudest {loudest:.1f})",
             measured, SILENCE_FLOOR_DB, "dB", remedy="re-render"))
+    out.extend(check_splice(path, expect))
     return out
 
 

@@ -152,7 +152,9 @@ longer the phase to defer — `docs/PLAN-TRD-4-7.md` §4 is updated to match.
 
 `studio/qc.py` (TRD-3 tier 1 in full; **`T3-9` built** — silence is
 `measure_band_energy` low/mid/high mean, not peak `volumedetect`;
-`test_t3_9_silence.py`; **`T3-11` built** — `check_set` / `qc.run(kind="set")` compares the artefact to `mixer.set_duration()` within `mixer.SET_DURATION_TOLERANCE`, `test_t3_11_set_duration.py`), `studio/qc_service.py` + `db.findings` +
+`test_t3_9_silence.py`; **`T3-10` built** — spliced-track duration vs
+`mixer.spliced_duration` / `bridge_seconds` within
+`mixer.SPLICE_DURATION_TOLERANCE`, `test_t3_10_splice.py`; **`T3-11` built** — `check_set` / `qc.run(kind="set")` compares the artefact to `mixer.set_duration()` within `mixer.SET_DURATION_TOLERANCE`, `test_t3_11_set_duration.py`), `studio/qc_service.py` + `db.findings` +
 `/api/qc/*` including `GET /api/qc/by-host` (`T3-1`) and dismiss/reopen on
 artefact change (`T3-22`), `GET /qc` finding-row (`T3-19`: measured /
 expected / unit, editable remedy, approve; `test_t3_19_finding_row.py`),
@@ -247,7 +249,9 @@ order and take the dependencies from here.
    song yield two lengths. **`T2-33` built**: a model added to the
    catalogue appears in the song page video-model picker with no template
    change (`test_t2_33_picker_renderable.py`); a picker that calls
-   `renderable()` and discards it fails that. Remaining: `T2-8c`, §4.2–4.3
+   `renderable()` and discards it fails that. **`T2-8c` built**: every
+   scene names the lyric sections it spans; unnamed or double-named
+   fails validate (`test_t2_8c.py`). Remaining: §4.2–4.3
    wands (`T2-17`…`T2-19`), `T2-25`, `T2-34`, and casting.
 7. Per-scene model choice, W2 (`T2-42`…`T2-48`) — last, because `T2-45` needs
    `models.where()`'s three-valued answer respected at enqueue and `T2-48` needs

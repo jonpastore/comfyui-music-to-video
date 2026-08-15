@@ -717,6 +717,26 @@ def bridge_seconds(mp3_path, start, end, xfade=SPLICE_XFADE):
     return (float(end) - float(start)) + seams * xfade
 
 
+# How far a spliced file may sit from spliced_duration() before it is the
+# 20.193 s lengthening rather than mp3 container rounding. ONE constant:
+# docs/TRD-3 T3-10 imports this rather than restating it. Measured against
+# mixer.demo()'s edge-span bound (0.12 s) on a real splice.
+SPLICE_DURATION_TOLERANCE = 0.12
+
+
+def spliced_duration(mp3_path, start, end, bridge_len=None, xfade=SPLICE_XFADE):
+    """Predicted duration of the spliced track. docs/TRD-3 T3-10.
+
+    A bridge sized by bridge_seconds() returns the original length. A
+    different bridge moves the prediction by (bridge_len - want). QC
+    checks the artefact against this rather than restating the formula.
+    """
+    src = probe(mp3_path)["duration"]
+    want = bridge_seconds(mp3_path, start, end, xfade=xfade)
+    got = want if bridge_len is None else float(bridge_len)
+    return src + (got - want)
+
+
 def splice_bridge(mp3_path, bridge_path, out_path, start, end, xfade=SPLICE_XFADE,
                   progress=None):
     """Replace [start, end) of mp3_path with bridge_path. THE cut-from-the-middle.
