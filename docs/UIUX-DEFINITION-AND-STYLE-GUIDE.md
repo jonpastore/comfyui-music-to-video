@@ -365,7 +365,9 @@ so two plannings produce two TIMING statements (`T2-14b`). TIMING still
 states track length and requires scene durations to sum to it (`T2-14c`).
 Generated scenes tile the song (`T2-8b`): starts ascend, each end is the
 next start, first is 0, last is duration ± 0.05 s; a gap or overlap is
-refused at `validate`.
+refused at `validate`. A larger `scene_seconds` never yields more scenes
+for the same song (`T2-9`): the quantum is the sole divisor, not a
+lyric-section floor.
 Editing the album's arc prompt creates a new version; restore puts the
 previous wording back as the current text (`T2-5`). The album arc page
 requires a **theme** before the wand runs (`T2-14`).

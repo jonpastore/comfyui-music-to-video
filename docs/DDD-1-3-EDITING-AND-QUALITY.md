@@ -470,7 +470,9 @@ length is the divisor, the count is ours.
    (`test_t2_8b.py`). **`T2-8c` built.** `_compose` stamps `lyric_sections`
    as a partition of `parse_sections(audio_lyrics)`; `validate` refuses
    a missing field, an unnamed section, or a section named twice
-   (`test_t2_8c.py`). `T2-13b` and `T2-13c` are not blocked on the
+   (`test_t2_8c.py`). **`T2-9` built.** larger `scene_seconds` never returns
+   more scenes for the same song (`test_t2_9_monotonic.py`). `T2-13b` and
+   `T2-13c` are not blocked on the
    renderer: `h_storyboard` upserts the storyboard row and does not touch
    `refs`, so re-planning leaves the approved `(clip_idx, seed)` set
    identical (`T2-13b`); `approve_context` enumerates `clip_count`, so a
@@ -739,8 +741,8 @@ documents, not a preference.
 
     T6-13a (songs.duration)  ->  T2-12a (legal frame count + clip_seconds honours it)
                                  ->  T2-13a (renderer honours that length)
-                                 ->  T2-13c (built), T2-8b (built), T2-8c (built), T2-8, T2-9
-                                 ->  T2-13c (built), T2-13e (built), T2-8, T2-9
+                                 ->  T2-13c (built), T2-8b (built), T2-8c (built), T2-8, T2-9 (built)
+                                 ->  T2-13c (built), T2-13e (built), T2-8, T2-9 (built)
                                  ->  W2 T2-47 mixed-model native fps (built)
                                  ->  W2 T2-45 mixed unavailable refused at enqueue (built)
                                  ->  W2 T2-46 driving scene pins to cerberus (built)
