@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -12,6 +12,7 @@ import inspect
 import json
 import os
 import tempfile
+import urllib.request
 
 import db
 import jobs
@@ -532,3 +533,109 @@ def test_t9_5_nonresident_box_stays_in_the_plan_later():
         assert all(r["fits"] is True for r in ace)
     finally:
         models._object_info, models._system_stats = was_info, was_stats
+
+
+# Measured 2026-08-12 (SESSIONS.md): after a validation refuse, Swarm can
+# answer "No backends match" on the next pin for about a minute — the box is
+# benched, not gone. Same headline as T9-6 vanished; the walk must still step.
+BENCHED_AFTER_REFUSE = (
+    "No backends match the settings of the request given! Backends refused "
+    "for the following reason(s):\n- Specific backend ID# requested in "
+    "advanced parameters did not match"
+)
+VALIDATION_REFUSE = (
+    "Model in folder 'vae' with filename "
+    "'qwen_image_vae.safetensors' not found."
+)
+
+
+def test_t9_7_refusal_benches_next_pin_and_walk_still_continues():
+    """T9-7: a refuse can take a backend out from under the next walk step.
+
+    Positive half (TRD-9 §9): after a refusal, a subsequent attempt is still
+    made and the sequence is observable. Not a timing test. Mutations that
+    must go red: stop the walk on the benched "No backends match" headline
+    mid-walk; delete the walk so only the free draw runs; silent retries with
+    no progress line per pin.
+    """
+    was = (
+        pipeline.RENDER_BACKEND, pipeline.COMFY_OUTPUT, pipeline._swarm_call,
+        pipeline._stamp, pipeline.gpu.ollama_holding, pipeline.gpu.preflight,
+        pipeline.gpu.release_ollama, urllib.request.urlopen,
+    )
+    said = []
+    tries = []
+    payloads = []
+
+    class _Blob:
+        def __init__(self, b):
+            self.b = b
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return self.b
+
+    def fleet_call(path, payload, timeout=30):
+        if path.endswith("ListBackends"):
+            return {
+                str(i): {"status": "running", "title": f"box{i}",
+                         "address": f"http://10.0.0.{i}:8188"}
+                for i in range(3)
+            }
+        if path.endswith("GenerateText2Image"):
+            tries.append(path)
+            payloads.append(dict(payload))
+            n = len(tries)
+            if n == 1:
+                # free draw: validation refuse — Swarm may bench that box
+                return {"error": VALIDATION_REFUSE}
+            if n == 2:
+                # next pin hits the benched backend (same headline as vanished)
+                return {"error": BENCHED_AFTER_REFUSE}
+            # later pin still runs and succeeds
+            return {"images": ["View/local/raw/2026-08-12/0120001--unknown.png"]}
+        return {}
+
+    with tempfile.TemporaryDirectory() as out, tempfile.TemporaryDirectory() as d:
+        pipeline.RENDER_BACKEND = "swarm"
+        pipeline.COMFY_OUTPUT = out
+        pipeline._swarm_call = fleet_call
+        pipeline._stamp = lambda *a, **k: None
+        pipeline.gpu.ollama_holding = lambda: False
+        pipeline.gpu.preflight = lambda progress=None: None
+        pipeline.gpu.release_ollama = lambda progress=None: None
+        urllib.request.urlopen = lambda url, timeout=None: _Blob(b"PNGDATA")
+        try:
+            json.dump(
+                {"1": {"inputs": {"filename_prefix": "anchor_v2/front_s42"}}},
+                open(os.path.join(d, "wf.json"), "w"),
+            )
+            got = pipeline._submit_and_collect(
+                d, "anchor_v2", "*.png", said.append)
+        finally:
+            (pipeline.RENDER_BACKEND, pipeline.COMFY_OUTPUT, pipeline._swarm_call,
+             pipeline._stamp, pipeline.gpu.ollama_holding, pipeline.gpu.preflight,
+             pipeline.gpu.release_ollama, urllib.request.urlopen) = was
+
+    assert len(tries) == 3, (
+        f"walk did not continue after refuse + benched next pin: {tries}")
+    pins = [p.get("exactbackendid") for p in payloads]
+    assert pins[0] is None, f"free draw was not first: {pins}"
+    assert pins[1] == "0", f"first pin after free draw was not backend 0: {pins}"
+    assert pins[2] == "1", (
+        f"walk stopped before the pin after the benched backend: {pins}")
+    assert any("refused by SwarmUI" in m and "not found" in m for m in said), (
+        f"validation refuse not observable: {said}")
+    assert any(
+        "refused by backend 0" in m and "No backends match" in m for m in said
+    ), f"benched next pin not observable: {said}"
+    assert any("refused by" in m for m in said if "backend 0" in m), said
+    assert [os.path.basename(p) for p in got] == ["front_s42_00001_.png"], got
+    # Mid-walk benched headline must not reclassify the whole walk as vanished
+    # before later pins run — T9-6 still owns exhaust-only requeue.
+    assert not any("offline or went away" in m for m in said), said
