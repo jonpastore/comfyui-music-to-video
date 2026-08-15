@@ -3,7 +3,10 @@
 Status: written 2026-08-13. Product framing and sequencing:
 `docs/PRD-1-3-EDITING-AND-QUALITY.md`. Contract: `docs/TRD-1-TIMELINE-AND-MIXING.md`,
 `docs/TRD-2-STORY-ARC-AND-STORYBOARDS.md`, `docs/TRD-3-QC-AND-REMEDIATION.md`.
-Rules inherited from `TRD-6 §0` are cited, never restated.
+Rules inherited from `TRD-6 §0` are cited, never restated. `T6-A7` (a
+measurement that cannot fail is not evidence) is **built** as
+`test_t6_a7_measurement_can_fail.py` — equal control/mutated refused; product
+exemplar is the T6-A4 stub differential on `/queue`.
 
 **Every "built" and "not built" below was read off the tree at `7de0aea` (refreshed 2026-08-15), not
 off a document.** The 2026-08-13 snapshot was `f9ca597`. TRD-3 §2.1 records what happens otherwise: a "do not rebuild"

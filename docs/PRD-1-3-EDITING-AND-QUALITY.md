@@ -11,7 +11,7 @@ counts as the product working, **and what order the work happens in**. Each TRD
 names what it does not own; none says what ships first. Sequencing is §6 and it
 is the reason this document exists.
 
-Rules inherited from `TRD-6 §0` (`T6-A1`…`T6-A6`) apply throughout and are cited,
+Rules inherited from `TRD-6 §0` (`T6-A1`…`T6-A7`) apply throughout and are cited,
 never repeated. Prohibitions live in TRD-1 §12, TRD-2 §9 and TRD-3 §10.
 `T6-A1`'s four named loops complete over JSON (`test_t6_a1_*`), including
 the TRD-4/TRD-7 anchor loop (`test_t6_a1_anchor_loop_over_json`).
@@ -23,7 +23,9 @@ and set editor (`test_t6_a2_html_and_json_report_the_same_set_numbers`,
 `T6-A4` is proven for the queue panel (`test_t6_a4_*`); `T6-A5` is proven
 for set re-render, refine, repair and anchor re-roll (`test_t6_a5_*`,
 `qc_service.listed` / `select`). `T6-A3` is **built** as `sets_service.py` /
-`storyboard_service.py` (`test_t6_a3_*`).
+`storyboard_service.py` (`test_t6_a3_*`). `T6-A7` is **built**
+(`test_t6_a7_measurement_can_fail.py`): equal control/mutated is refused;
+T6-A4's distinctive stub counts are the product differential.
 
 ---
 
