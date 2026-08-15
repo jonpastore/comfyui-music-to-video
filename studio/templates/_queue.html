@@ -18,8 +18,8 @@
   <div class="queue-head">
     <h3>Queue</h3>
     {% if queue_active or queue_waiting %}
-    <span class="muted">{{ queue_active | length }} running &middot;
-      {{ queue_waiting | length }} waiting{% if queue_refresh_secs %} &middot;
+    <span class="muted">{{ queue_n_running }} running &middot;
+      {{ queue_n_waiting }} waiting{% if queue_refresh_secs %} &middot;
       refreshing every {{ queue_refresh_secs }}s{% endif %}</span>
     {% else %}
     <span class="muted">idle &mdash; not polling</span>
@@ -32,11 +32,11 @@
   {% else %}
   <table class="list queue-list">
     <tbody>
-    {% for e in queue_active + queue_waiting + queue_recent %}
+    {% for e in queue_rows %}
     <tr{% if e.job.status in ("failed", "cancelled") %} class="queue-bad"{% endif %}>
       <td class="status-{{ e.job.status }}" data-job-msg>{{ e.job.status }}</td>
       <td>{{ e.desc }}</td>
-      <td class="num">{% if e.elapsed is not none %}{{ "%.0f"|format(e.elapsed) }}s{% endif %}</td>
+      <td class="num">{% if e.elapsed is not none %}{{ e.elapsed }}{% endif %}</td>
       {# The progress line is where a render says which sheet of how many it is
          on. Truncated rather than wrapped: this panel sits above the work, and
          a queue that reflows the page every five seconds is worse than one

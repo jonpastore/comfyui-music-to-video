@@ -765,6 +765,8 @@ A style guide is falsifiable or it is decoration.
   this guide's own list check.
 - **No template computes.** `T6-A4`, asserted by a differential: stub the service
   to return known values and assert the page shows them unmodified.
+  `test_t6_a4_queue_page_shows_stubbed_values_unmodified` is that check for
+  `/queue`. `_jobs_panel.html` still formats elapsed.
 - **The measurements in §2 are re-runnable.** Each is a one-line count, and a
   number here that no longer reproduces is a document that has gone stale — which
   is what happened to every line-number citation in TRD-2 §3.4 within a day.

@@ -7022,8 +7022,10 @@ def queue_ctx():
     now = time.time()
 
     def entry(j):
+        raw = ((j["finished"] or now) - j["started"]) if j["started"] else None
+        elapsed = None if raw is None else f"{raw:.0f}s"
         return {"job": j, "desc": jobs.describe(j),
-                "elapsed": ((j["finished"] or now) - j["started"]) if j["started"] else None}
+                "elapsed": elapsed, "elapsed_secs": raw}
 
     rows = [dict(r) for r in db.q(
         """SELECT * FROM jobs WHERE status IN ('queued','running','cancelling')
@@ -7036,12 +7038,17 @@ def queue_ctx():
     recent = [entry(j) for j in rows if j["status"] not in ("running", "cancelling", "queued")]
     recent.reverse()                       # newest of the finished ones first
     return {"queue_active": active, "queue_waiting": waiting, "queue_recent": recent,
+            "queue_rows": active + waiting + recent,
+            "queue_n_running": len(active),
+            "queue_n_waiting": len(waiting),
+            "queue_n_recent": len(recent),
             "queue_refresh_secs": QUEUE_REFRESH_SECS if (active or waiting) else 0}
 
 
 def queue_payload(ctx=None):
     """The numbers _queue.html prints, as JSON. Same ctx so two answers
-    cannot silently diverge (T6-A2)."""
+    cannot silently diverge (T6-A2). Counts and formatted elapsed live
+    in queue_ctx (T6-A4); JSON elapsed stays the seconds number."""
     ctx = queue_ctx() if ctx is None else ctx
 
     def entry(e):
@@ -7051,13 +7058,13 @@ def queue_payload(ctx=None):
             "status": job["status"],
             "kind": job.get("kind"),
             "desc": e["desc"],
-            "elapsed": e["elapsed"],
+            "elapsed": e["elapsed_secs"],
         }
 
     return {
-        "running": len(ctx["queue_active"]),
-        "waiting": len(ctx["queue_waiting"]),
-        "recent": len(ctx["queue_recent"]),
+        "running": ctx["queue_n_running"],
+        "waiting": ctx["queue_n_waiting"],
+        "recent": ctx["queue_n_recent"],
         "refresh_secs": ctx["queue_refresh_secs"],
         "active": [entry(e) for e in ctx["queue_active"]],
         "waiting_jobs": [entry(e) for e in ctx["queue_waiting"]],

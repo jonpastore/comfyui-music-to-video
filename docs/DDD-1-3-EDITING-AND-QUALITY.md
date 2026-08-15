@@ -58,7 +58,11 @@ that is not this page.
 already works**: `qc.py` is pure measurement that touches no database, so it runs
 over a directory of old output (`T3-30`); `qc_service.py` persists and imports
 nothing from FastAPI; the five routes are thin. Copy that shape, do not invent a
-second one.
+second one. `T6-A4` holds on `/queue`: `queue_ctx` emits the counts, the row
+list and a formatted `elapsed`, and `_queue.html` interpolates them. A stub that
+returns `12.7s` and counts that are not the list lengths is what the page
+shows (`test_t6_a4_queue_page_shows_stubbed_values_unmodified`). `_jobs_panel.html`
+still formats elapsed.
 
 Two new modules, same shape:
 

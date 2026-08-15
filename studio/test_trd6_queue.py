@@ -715,3 +715,52 @@ def test_t6_a2_html_and_json_report_the_same_queue_numbers(monkeypatch):
         _T6_A2_RUNNING_ELAPSED, _T6_A2_RECENT_ELAPSED], (html_elapsed, json_elapsed)
     assert html_ids == json_ids == [running, wait_a, wait_b, done], (
         html_ids, json_ids)
+
+
+# ----------------------------------------------------------------- T6-A4 --
+
+_T6_A4_ELAPSED = "12.7s"
+_T6_A4_N_RUNNING = 3
+_T6_A4_N_WAITING = 7
+_T6_A4_REFRESH = 4
+_T6_A4_DESC = "STUB-DESC-77"
+
+
+def test_t6_a4_queue_page_shows_stubbed_values_unmodified(monkeypatch):
+    """T6-A4: stub the service; the page shows those values unmodified.
+
+    Counts are not the list lengths; elapsed is not an integer second.
+    A template that rounds, sums or reformats is a second implementation.
+    """
+    import app as appmod
+    from fastapi.testclient import TestClient
+
+    row = {
+        "job": {"id": 77, "status": "running", "progress": "sheet 3/9",
+                "error": None},
+        "desc": _T6_A4_DESC,
+        "elapsed": _T6_A4_ELAPSED,
+    }
+    stub = {
+        "queue_active": [row],
+        "queue_waiting": [{
+            "job": {"id": 78, "status": "queued", "progress": "", "error": None},
+            "desc": "STUB-WAIT-78",
+            "elapsed": None,
+        }],
+        "queue_recent": [],
+        "queue_rows": [row],
+        "queue_n_running": _T6_A4_N_RUNNING,
+        "queue_n_waiting": _T6_A4_N_WAITING,
+        "queue_refresh_secs": _T6_A4_REFRESH,
+    }
+    monkeypatch.setattr(appmod, "queue_ctx", lambda: stub)
+    with TestClient(appmod.app) as client:
+        html = client.get("/queue").text
+    assert _T6_A4_ELAPSED in html, html
+    assert _T6_A4_DESC in html, html
+    assert f"{_T6_A4_N_RUNNING} running" in html, html
+    assert f"{_T6_A4_N_WAITING} waiting" in html, html
+    assert f"every {_T6_A4_REFRESH}s" in html, html
+    assert "1 running" not in html
+    assert "13s" not in html
