@@ -1176,6 +1176,15 @@ storyboard direction, with the refusal naming the term. No new control —
 the lock is still the tier already on the form. A refuse that looks like
 a generic 400 with no named term is the old blanket screen leaking back.
 
+### 7b.7 A child-locked sheet cannot feed an explicit work
+
+`T10-23` is built. An image rendered under `g`/`pg13` carries
+`content_tier` with the file. Selecting it as a reference, anchor, plate
+or init for an `r`/`xxx` work is refused and the message names the source
+and the lock. The same file may still be selected into `g`/`pg13`. No new
+picker: the existing assign / use-as-ref / generate-with-refs paths run the
+check.
+
 ## 8. How this document is verified
 
 A style guide is falsifiable or it is decoration.

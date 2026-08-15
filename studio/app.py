@@ -2916,6 +2916,14 @@ async def assign_anchor_ref_as_sheet(request: Request, asset_id: int):
     if not tier:
         raise HTTPException(400, "pick a tier for this pose, or tick one on the form")
     valid_tier_or_400(tier)
+    # T10-23: child-locked artefact cannot become an r/xxx sheet (plate/anchor).
+    art_tier = tiers.content_tier_of(row)
+    src = os.path.basename(row["path"] or "") or f"asset#{asset_id}"
+    role = "plate" if (fields.get("role") == "pose" or form.get("role") == "pose") else "anchor"
+    try:
+        tiers.check_artefact_use(art_tier, tier, role=role, source=src)
+    except tiers.ContentRefused as e:
+        raise HTTPException(400, str(e))
     nude = fields["pose_nude"] or str(form.get("pose_nude") or "") in ("1", "on")
     if nude and not tiers.allows_nudity(tier):
         raise HTTPException(400, f"{tier.upper()} does not permit a nude sheet")
@@ -2930,7 +2938,8 @@ async def assign_anchor_ref_as_sheet(request: Request, asset_id: int):
                                     created, character_id, render_json)
               VALUES ('album',?,?,?,?,1,?,?,?)""",
            album, tier, view, row["path"], now, cid,
-           json.dumps({"source": "upload", "asset_id": asset_id, "pose_name": name}))
+           json.dumps({"source": "upload", "asset_id": asset_id, "pose_name": name,
+                       "content_tier": art_tier or tier}))
     update_ref_meta(asset_id, pose_name=name, pose_tier=tier, role="pose", pose_nude=nude)
     if request.headers.get("HX-Request"):
         return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
@@ -4319,8 +4328,12 @@ def _validate_anchor_request(album, tiers_sel, views_sel):
     return album, selected_tiers, selected_views, combos
 
 
-def _collect_anchor_ref_paths(album, character_id, ref_ids, extra_paths=None):
+def _collect_anchor_ref_paths(album, character_id, ref_ids, extra_paths=None,
+                              work_tiers=None):
+    """Resolve selected anchor_ref assets to paths. T10-23: a child-locked
+    artefact cannot feed an r/xxx (or unset) work tier."""
     picked = []
+    tiers_to_check = list(work_tiers) if work_tiers is not None else [None]
     for rid in ref_ids:
         row = db.one("SELECT * FROM assets WHERE id=? AND kind='anchor_ref'", int(rid))
         if not row:
@@ -4329,6 +4342,14 @@ def _collect_anchor_ref_paths(album, character_id, ref_ids, extra_paths=None):
         if meta.get("scope_value") != album or (meta.get("character_id") or None) != (character_id or None):
             raise HTTPException(400, "a reference image you picked belongs to another album "
                                       "or character")
+        art_tier = tiers.content_tier_of(row)
+        src = os.path.basename(row["path"] or "") or f"asset#{row['id']}"
+        for wt in tiers_to_check:
+            try:
+                tiers.check_artefact_use(
+                    art_tier, wt, role="reference", source=src)
+            except tiers.ContentRefused as e:
+                raise HTTPException(400, str(e))
         picked.append(row["path"])
     for p in extra_paths or []:
         path = os.path.abspath(str(p))
@@ -4527,14 +4548,26 @@ def _use_anchor_as_ref(id):
     album, cid = row["scope_value"], row["character_id"]
     existing = db.one("""SELECT * FROM assets WHERE kind='anchor_ref' AND path=?
                          ORDER BY id DESC""", row["path"])
+    # T10-23: content_tier travels with the file. A sheet rendered under g/pg13
+    # keeps that lock when borrowed as a reference.
+    stamp = tiers.stamp_content_tier(
+        {"scope_value": album, "character_id": cid,
+         "anchor_id": row["id"], "tier": row["tier"], "view": row["view"]},
+        row["tier"])
     if existing:
+        meta = db.jset(existing)
+        if tiers.content_tier_of(meta) != tiers.content_tier_of(stamp):
+            meta = tiers.stamp_content_tier(
+                {**meta, "anchor_id": row["id"], "tier": row["tier"],
+                 "view": row["view"]}, row["tier"])
+            db.run("UPDATE assets SET meta_json=? WHERE id=?",
+                   json.dumps(meta), existing["id"])
+            existing = db.one("SELECT * FROM assets WHERE id=?", existing["id"])
         asset = existing
     else:
         aid = db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) "
                      "VALUES (?,?,?,?,?)", None, "anchor_ref", row["path"],
-                     json.dumps({"scope_value": album, "character_id": cid,
-                                 "anchor_id": row["id"], "tier": row["tier"],
-                                 "view": row["view"]}), time.time())
+                     json.dumps(stamp), time.time())
         asset = db.one("SELECT * FROM assets WHERE id=?", aid)
     return {"id": asset["id"], "path": asset["path"], "already": bool(existing)}
 
@@ -4582,7 +4615,8 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
         ref_ids = [str(r["id"]) for r in anchor_refs(album, character_id)
                    if r.get("role") == "identity"][:2]
     paths = _collect_anchor_ref_paths(album, character_id, ref_ids,
-                                      extra_paths=extra)
+                                      extra_paths=extra,
+                                      work_tiers=selected_tiers)
     payload = _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
                                    character_id, form, paths)
     if wants_json(request):
@@ -8464,7 +8498,7 @@ async def api_anchors_generate(request: Request):
     paths = _collect_anchor_ref_paths(
         album, character_id,
         _as_str_list(body.get("ref_id") if "ref_id" in body else body.get("ref_ids")),
-        extra_paths=extra)
+        extra_paths=extra, work_tiers=selected_tiers)
     return JSONResponse(_enqueue_anchor_jobs(
         album, selected_tiers, selected_views, combos,
         body.get("n") or 4, character_id, form, paths))

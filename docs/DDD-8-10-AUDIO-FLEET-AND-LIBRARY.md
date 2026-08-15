@@ -325,10 +325,10 @@ for one idea sat 39 characters from refusing real saved content.
 **Rule 0 applies here too**: assert through `screen_prompt_field`, not through
 each caller, or a caller that stops calling it stays green.
 
-### 4.4 Minor policy (`T10-18`, `T10-20`, `T10-21`)
+### 4.4 Minor policy (`T10-18`, `T10-20`, `T10-21`, `T10-23`)
 
 `guardrail.check_text(text, where, tier=..., field_kind=...)` is the single
-screen. `LOCKED_DEPICT_TIERS = {g, pg13}` skips the refusal for depiction;
+text screen. `LOCKED_DEPICT_TIERS = {g, pg13}` skips the refusal for depiction;
 unset / anything else is `xxx` (`T10-25`). `build_prompt`,
 `build_song.workflow`, `build_refs.workflow`, scene save and storyboard
 direction pass the tier. The storyboard JSON already carries it as
@@ -384,6 +384,15 @@ suggestive framing, fetish camera language, and explicit anatomy/act
 wording). The co-occurrence is absolute — g/pg13 depiction and r
 lyrics/narrative mention do not open it. Clean child text at g/pg13 and
 adult sexualisation at r/xxx still pass.
+
+`T10-23` binds **binary artefacts**, not text. A sheet rendered under a
+child-permitting lock stamps `content_tier` on the asset meta
+(`guardrail.stamp_content_tier` / `content_tier_of`). Selection into an
+`r`/`xxx` (or unset) work as reference, anchor, plate or init runs
+`guardrail.check_artefact_use` and refuses naming the source. Wired on
+`_use_anchor_as_ref` (stamp), `_collect_anchor_ref_paths(work_tiers=…)`
+and `assign_anchor_ref_as_sheet`. Operator-uploaded photos without a
+render stamp are not child-locked.
 
 **`T10-18b` (built):** at `xxx`, a minor reference is refused everywhere in
 the work, lyrics included. `guardrail.refuses_minor_everywhere` /

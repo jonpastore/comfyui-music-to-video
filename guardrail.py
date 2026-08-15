@@ -98,6 +98,73 @@ def allows_minor_mention(tier, *, field_kind=None):
     kind = (field_kind or "").strip().lower()
     return t == "r" and kind in MENTION_FIELD_KINDS
 
+
+# T10-23: an artefact rendered under a child-permitting lock carries that
+# provenance on the file's meta. content_tier is the stamp; bare "tier" is
+# accepted as a fallback for rows that already recorded the render tier.
+ARTEFACT_TIER_KEY = "content_tier"
+
+
+def content_tier_of(meta_or_row):
+    """Tier stamped on an artefact so it travels with the file (T10-23).
+
+    Accepts plain meta, a dict row, or a sqlite3.Row with meta_json / tier.
+    Prefers content_tier, then meta.tier, then the row's tier column.
+    """
+    if meta_or_row is None:
+        return None
+    # sqlite3.Row -> dict; plain meta already is.
+    if not isinstance(meta_or_row, dict):
+        try:
+            meta_or_row = dict(meta_or_row)
+        except (TypeError, ValueError):
+            return None
+    if "meta_json" in meta_or_row:
+        try:
+            import json
+            meta = json.loads(meta_or_row.get("meta_json") or "{}")
+            if not isinstance(meta, dict):
+                meta = {}
+        except (TypeError, ValueError):
+            meta = {}
+        t = (meta.get(ARTEFACT_TIER_KEY) or meta.get("tier") or "").strip().lower()
+        if t:
+            return t
+        col = (meta_or_row.get("tier") or "").strip().lower()
+        return col or None
+    t = (meta_or_row.get(ARTEFACT_TIER_KEY) or meta_or_row.get("tier") or "")
+    return (t or "").strip().lower() or None
+
+
+def stamp_content_tier(meta, tier):
+    """Write content_tier onto artefact meta so it travels with the file."""
+    out = dict(meta or {})
+    t = (tier or "").strip().lower()
+    if t:
+        out[ARTEFACT_TIER_KEY] = t
+    return out
+
+
+def check_artefact_use(artefact_tier, work_tier, *, role="reference", source=None):
+    """Refuse a child-permitting artefact as ref/anchor/plate/init on r/xxx.
+
+    T10-23: the artefact's tier travels with the artefact. Refusal names the
+    source. Unset work tier is xxx (T10-25). Returns None on allow.
+    """
+    art = (artefact_tier or "").strip().lower()
+    work = (work_tier or "").strip().lower() or "xxx"
+    if not allows_minor_depiction(art):
+        return None
+    if allows_minor_depiction(work):
+        return None
+    role = (role or "reference").strip().lower() or "reference"
+    src = (source or "").strip() or art.upper() or "unknown"
+    raise ContentRefused(
+        f"This {role} was rendered under a child-permitting lock ({art.upper()}) "
+        f"and cannot be selected by a {work.upper()} work. "
+        f"Source: {src}. An artefact's tier travels with the file.")
+
+
 # T10-26: non-nude sexualisation co-occurring with a minor reference is refused
 # at every tier, including g/pg13 where a clean depiction is otherwise allowed.
 # Suggestive framing, lingerie-adjacent costume, fetish camera language, and

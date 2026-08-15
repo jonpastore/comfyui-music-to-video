@@ -27,6 +27,7 @@ from guardrail import (  # noqa: E402,F401  (re-exported: callers use tiers.X)
     check_escalation, ESCALATION_OVERRIDE_CHANNELS,
     field_allows_minor_mention, screen_escalation,
     references_minor, MINOR_LOCK_ATTRIBUTION_KEY, stamp_minor_lock_attribution,
+    ARTEFACT_TIER_KEY, content_tier_of, stamp_content_tier, check_artefact_use,
 )
 
 

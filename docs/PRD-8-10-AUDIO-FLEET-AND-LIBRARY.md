@@ -57,7 +57,7 @@ The same operator, in the two modes the other documents do not cover:
 | P7 | Four measurement traps that each cost a wrong diagnosis are checks, not folklore | `T9-10`…`T9-13` (`T9-10` built: cache-hit empty ≠ refusal, A/B needs distinct seeds; `T9-11` built: raw+pin; `T9-12` built: `/history` is not Swarm authority, container log is; `T9-13a`/`T9-13b` built: byte completeness; staging path reads `CATALOG.companions`) |
 | P8 | A bulk edit changes exactly what was shown and asked for, or nothing | `T10-3`…`T10-7` (built) |
 | P9 | A model's words are a proposal, never a verdict and never a gate | `T10-11`…`T10-15` |
-| P10 | A song for a child, and a G-tier video for it, is a first-class thing this studio can make | `T10-18` (built). `T10-18a` (built: `r` may mention in lyrics/narrative only). `T10-18b` (built: xxx refuses minor refs everywhere including lyrics). `T10-19` (built: escalation re-screens whole work, names blocker). `T10-19a` (built: named-field list at the prompt boundary). `T10-20` (built: no override reaches escalation). `T10-21` (built: clear does not silently unlock; explicit unlock on empty re-screen; prior renders keep attribution). `T10-22` (built: locked accepts, explicit refuses, one string). `T10-24` screens the final composed string after merge/PINNED weld (built). `T10-26` (built: non-nude sexualisation of a depicted minor refused at every tier). `T10-23`/`T10-25` still specification |
+| P10 | A song for a child, and a G-tier video for it, is a first-class thing this studio can make | `T10-18` (built). `T10-18a` (built: `r` may mention in lyrics/narrative only). `T10-18b` (built: xxx refuses minor refs everywhere including lyrics). `T10-19` (built: escalation re-screens whole work, names blocker). `T10-19a` (built: named-field list at the prompt boundary). `T10-20` (built: no override reaches escalation). `T10-21` (built: clear does not silently unlock; explicit unlock on empty re-screen; prior renders keep attribution). `T10-22` (built: locked accepts, explicit refuses, one string). `T10-23` closes the asset side channel (built). `T10-24` screens the final composed string after merge/PINNED weld (built). `T10-26` (built: non-nude sexualisation of a depicted minor refused at every tier). `T10-25` still specification |
 
 **P9 is the one that has no owner anywhere else.** Four modules ask a model for
 words — `vision.py`, `chat.py`, `mixadvice.py`, `lyrics.py` — and the only rule
@@ -135,9 +135,11 @@ still not shipped (`T8-12`, provisional by absence).
    a reference does not silently unlock; `POST /songs/{id}/unlock-minor` is
    the explicit act on an empty re-screen, and prior renders keep
    `minor_lock_attribution`. `T10-22` is built: one paired test keeps locked
-   g/pg13 accept and explicit refuse on the same child string. `T10-24` is
+   g/pg13 accept and explicit refuse on the same child string. `T10-23` is
+   built: a child-locked artefact cannot be selected as ref/anchor/plate/init
+   by an `r`/`xxx` work (`studio/test_t10_23_artefact_tier.py`). `T10-24` is
    built: the send path screens the final composed string after every merge
-   and after `PINNED` is welded. `T10-26` is built. `T10-23`/`T10-25` remain
+   and after `PINNED` is welded. `T10-26` is built. `T10-25` remains
    specification.
 
 ## 5. Scope
