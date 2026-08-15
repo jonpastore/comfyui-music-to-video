@@ -159,6 +159,14 @@ BANDS = (
 # itself is human-judged; this is the finding kind for the offline hook.
 IDENTITY_LOOK = "identity_look"
 
+# docs/TRD-7 T7-5: portrait is a head-and-shoulders crop measured on the image.
+# subject_bottom is the fraction of frame height where the figure ends.
+# Head-and-shoulders fixtures end ~0.45; full-body head-to-toe ends ~0.95.
+# 0.65 clears a tight bust crop and still FLAGs a standing full-body sheet.
+PORTRAIT_CROP = "portrait_crop"
+PORTRAIT_BOTTOM_LIMIT = 0.65
+PORTRAIT_CROP_METRIC = "subject_bottom_v1"
+
 # docs/TRD-3 T3-28: identity wrong from the first frame. The measured
 # fix is edit the text, then re-render. Swapping the reference image
 # does not fix it.
@@ -299,6 +307,7 @@ CHECK_REMEDY_CLASS = {
     "alpha": REMEDY_RERENDER_SEED,
     IDENTITY_LOOK: REMEDY_EDIT_TEXT,
     LIGHTING_LOCK: REMEDY_RERENDER,
+    PORTRAIT_CROP: REMEDY_RERENDER,
     IDENTITY_WRONG: REMEDY_EDIT_TEXT,
     IDENTITY_DRIFT: REMEDY_NONE,
     SHEET_REVIEW: REMEDY_NONE,
@@ -1767,6 +1776,7 @@ def check_image(path, expect):
     if _wants_identity_look(expect):
         out.extend(check_identity_look(path, expect, kind="image"))
     out.extend(check_channel_balance(path, expect, kind="image"))
+    out.extend(check_portrait_crop(path, expect, kind="image"))
     return out
 
 
@@ -2163,6 +2173,87 @@ def t7_7_claim():
     if not expect or t7_7_pair_sha256(*pair) != expect:
         raise ValueError("T7-7 real pair is NOT MEASURED")
     return t7_7_identity_differential(*pair)
+
+
+def measure_subject_bottom(path):
+    """Fraction of frame height where the subject ends (bottom-most figure row / H).
+
+    Studio sheets are a dark figure on a lighter wall. Subject = pixels
+    darker than the image mean luma by at least 20 levels. Empty or missing
+    raises NOT MEASURED, never 0.0. docs/TRD-7 T7-5.
+    """
+    import numpy as np
+    from PIL import Image
+    if not path or not os.path.isfile(path):
+        raise ValueError("T7-5 portrait crop is NOT MEASURED")
+    try:
+        with Image.open(path) as im:
+            arr = np.asarray(im.convert("RGB"), dtype="float64")
+    except Exception as e:
+        raise ValueError("T7-5 portrait crop is NOT MEASURED") from e
+    if arr.size == 0 or arr.ndim != 3 or arr.shape[0] < 2:
+        raise ValueError("T7-5: empty pixels are not a measurement")
+    h = arr.shape[0]
+    luma = arr[..., :3].mean(axis=-1)
+    subject = luma < (float(luma.mean()) - 20.0)
+    if not bool(subject.any()):
+        raise ValueError("T7-5: no subject pixels are not a measurement")
+    rows = np.where(subject.any(axis=1))[0]
+    return float(rows[-1] + 1) / float(h)
+
+
+def portrait_crop_score(path):
+    """How portrait-like the crop is. Higher when the figure ends higher.
+
+    score = 1 - subject_bottom. A head-and-shoulders crop scores above a
+    full-body head-to-toe figure. docs/TRD-7 T7-5.
+    """
+    return 1.0 - measure_subject_bottom(path)
+
+
+def t7_5_portrait_crop_differential(portrait_path, fullbody_path):
+    """Portrait crop must beat head-to-toe on the image. No threshold, no GPU.
+
+    held is True when the portrait path scores above the full-body path.
+    Missing images raise NOT MEASURED.
+    """
+    if not portrait_path or not os.path.isfile(portrait_path):
+        raise ValueError("T7-5 portrait crop is NOT MEASURED")
+    if not fullbody_path or not os.path.isfile(fullbody_path):
+        raise ValueError("T7-5 portrait crop is NOT MEASURED")
+    p = portrait_crop_score(portrait_path)
+    f = portrait_crop_score(fullbody_path)
+    return {
+        "metric": PORTRAIT_CROP_METRIC,
+        "portrait": p,
+        "fullbody": f,
+        "held": p > f,
+        "threshold": None,
+    }
+
+
+def check_portrait_crop(path, expect=None, kind="image"):
+    """T7-5 finding. Opt-in when view is portrait (or portrait_crop asked).
+
+    Full-body front sheets are supposed to reach head-to-toe; they do not
+    run this check. A portrait view whose figure still fills the frame
+    FLAGs — head-to-toe won.
+    """
+    expect = expect or {}
+    view = str(expect.get("view") or "")
+    asked = bool(expect.get("portrait_crop")) or view.startswith("portrait")
+    if not asked:
+        return []
+    bottom = measure_subject_bottom(path)
+    ok = bottom <= PORTRAIT_BOTTOM_LIMIT
+    return [finding(
+        path, kind, PORTRAIT_CROP,
+        PASS if ok else FLAG,
+        (f"subject bottom {bottom:.2f} of frame "
+         f"({'head-and-shoulders' if ok else 'full-body head-to-toe won'})"),
+        round(bottom, 3), PORTRAIT_BOTTOM_LIMIT, "fraction",
+        remedy="re-render; portrait must be a head-and-shoulders crop, "
+               "not full-body with a losing clause")]
 
 
 def identity_verdict(overlap):

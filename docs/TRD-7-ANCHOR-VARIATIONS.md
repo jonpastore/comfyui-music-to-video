@@ -277,7 +277,7 @@ been seen red is a claim about a check, not about the code. Commits are on
 | `T7-2` nudity gating derived | **partial** | — | derivation exists; `prompt_for` still tests `view in NUDE_VIEWS`, which is enumerated from `DEFAULT_VIEWS`, so a profile-supplied nude view is not swapped. Live gap |
 | `T7-3` new views | **not built** | — | §9.1 |
 | `T7-4` framing is the only difference | **built** | `94618db` | compose two views of one tier via `prompt_for` / `default_anchor_prompt`; remainders match after stripping the framing clause. Nude pair uses the wardrobe swap. Mutation: extra clause on `back` only → `test_t7_4_framing.py` red |
-| `T7-5` `portrait` overrides head-to-toe | **built** (compose + default latent; GPU crop NOT MEASURED) | this change | Compose: `portrait` / `portrait_nude` omit BACKDROP crop/stance/floor and COMPOSITE "standing"; framing is head-and-shoulders (`test_t7_5_portrait.py`, `test_portrait_and_seated_drop_the_standing_fullbody_backdrop`). Size: `size_for_view("portrait")` → 1024×1024; studio `apply_view_default_size` sets `width`/`height` (not a dead `size` key) when unset or still on full-body 896×1216; operator non-default sizes win. CLI `make_anchor --view portrait` defaults the empty latent the same way. Mutation: dead `size` string only → flags never reach EmptySD3LatentImage and the size test goes red. GPU head-and-shoulders crop on a real sheet is still NOT MEASURED. |
+| `T7-5` `portrait` overrides head-to-toe | **built** (harness + string; GPU portrait sheet NOT MEASURED) | this change | String omit: `test_portrait_and_seated_drop_the_standing_fullbody_backdrop`. Image half: `qc.measure_subject_bottom` / `portrait_crop_score` / `t7_5_portrait_crop_differential` / `check_portrait_crop` — head-and-shoulders synthetic PASSes, full-body FLAGs, differential holds portrait > fullbody (`test_t7_5_portrait_crop.py`). Portrait default size `1024x1024` via `make_anchor.size_for` reaches the job. No GPU portrait sheet pinned. |
 | `T7-6` anchor usable as reference | **built** | `d315c6f` | with the reference ticked, `gen_anchor`'s images list is exactly `[the anchor's path]`. Mutations: borrowed-row guard dropped → the anchor's image deleted; cascade skipped → reference left pointing at a deleted file |
 | `T7-7` identity held across views | **harness only; GPU pair NOT MEASURED**; hook built | `qc.py` + `test_t7_7_identity.py` | Offline ranking: `t7_7_identity_differential` scores a front / three_quarter pair from an anchor above the same pair from the raw photographs (`identity_embed` colour histogram, no threshold). Same-file / byte-identical pair refused. Missing images raise. `record_t7_7_real_pair` pins four sha256s; `t7_7_claim` with unpinned bytes is still NOT MEASURED. Photo-conditioned halves on disk: Catatonic jobs 244/248 (`front_nude_s1002911869` + `three_quarter_nude_s836704466`, identity-collapsed human woman, not her) and Street Cats jobs 264/268 (`front_nude_s1943749893` + `three_quarter_nude_s1096561198`; 262 cancelled). Both halves used `anchor_ref` photographs as image1/image2 — not a chosen anchor. No use-as-ref front/three_quarter pair has been rendered (no job's `images` list is a generated `anchors` path). `T7_7_REAL_PAIR_MEASURED` is False. Fleet not claimed. Compose hook still FLAGs a human-body nude compose through `run_artefact`. |
 | `T7-8` `latent_mode="image"` reachable | **built** | `d3f2f6a` | emitted graph: `empty` → node 15 `EmptySD3LatentImage`; `image` → node 15 `VAEEncode`, `pixels ["8", 0]`, denoise 0.55. Labels computed from the latent by one resolver |
@@ -300,23 +300,20 @@ before this work was 233 / 186.
 
 ### 9.1 What is left, and why it is one unit
 
-`T7-5` (compose omit + portrait latent default) is **built** — see the ledger
-row. What remains of the old unit is `T7-3` (new views as shipped framing that
-compose/render), `T7-13` (per-view framing as versioned prompts), and the
-album-versioned half of `T7-16` (`pose` as a `prompts` row; named plates are
-already `T7-20`).
+`T7-3`, `T7-5`, `T7-13` and `T7-16` are **one piece of work, not four**, and it
+was left undone on purpose rather than started and abandoned.
 
 Every framing string in `DEFAULT_VIEWS` already contains a POSE — *"standing
 upright, arms relaxed at their sides, feet apart"*. A `pose` field (`T7-16`)
 appended beside it is a contradiction in the positive prompt, which is the
 bare-skin-versus-fur failure in a new place and Day 4 measured what that costs.
 `pose` has to REPLACE that clause, so the view table has to separate camera from
-pose from crop first — and `BACKDROP` needed the same surgery, since it ends
+pose from crop first — and `BACKDROP` needs the same surgery, since it ends
 *"She stands upright and unsupported in an empty studio ... full body head to toe
-inside the frame"*, which contradicts `seated` and contradicts `portrait`. That
-decomposition landed: **the VIEW owns camera + pose + crop (and optional size),
-the BACKDROP owns studio + lighting + focus**, with `backdrop_omit` dropping
-stance/crop/floor per view.
+inside the frame"*, which contradicts `seated` and contradicts `portrait`.
+
+The decomposition that falls out: **the VIEW owns camera + pose + crop, the
+BACKDROP owns studio + lighting + focus.**
 
 **Sequencing constraint, and it is not optional:** that refactor changes what
 every existing sheet renders. It must land STRUCTURALLY FIRST — the composed

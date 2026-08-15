@@ -786,8 +786,10 @@ because it is first alphabetically, and front used to stand in for an empty
 view list (`T4-3`). Each ticked cell has its own prompt row so an edit on
 front cannot land on back (`T7-19`). Two views of one rating share identity,
 body and wardrobe; only the framing sentence differs, plus the nude swap on
-a nude cell (`T7-4`). Clipboard paste and drop add base
-photographs; they do not invent bases.
+a nude cell (`T7-4`). **Portrait** defaults the sheet size to 1024×1024
+(`T7-5`) so head-and-shoulders is not a distant figure in the standing
+896×1216 frame; an operator-chosen non-default size still wins. Clipboard
+paste and drop add base photographs; they do not invent bases.
 
 **Rendered sheets and the prompt editor share one shape.** Tier tabs, then a
 clothed / nude sub-tab, then one row per camera position. A wand on each

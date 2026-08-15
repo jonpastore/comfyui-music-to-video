@@ -91,6 +91,13 @@ swap instead of the album outfit. The check is `studio/test_t7_4_framing.py`,
 through `prompt_for` and `default_anchor_prompt`. A view-only extra clause
 makes the remainders diverge. Portrait/seated omit is `T7-5`, not this.
 
+**`T7-5` positive half is on the image.** `qc.measure_subject_bottom` /
+`portrait_crop_score` rank a head-and-shoulders fixture above a full-body
+head-to-toe fixture; `check_portrait_crop` FLAGs when `view=portrait` and the
+figure still fills the frame. `make_anchor.size_for("portrait")` defaults the
+sheet to `1024x1024` so the standing `896x1216` frame does not force a distant
+figure. GPU portrait sheet is not pinned.
+
 ## 3. The four new prompt types
 
 `prompts.py` carries 9 types today and its docstring states the extension rule —

@@ -94,7 +94,9 @@ Day 4 measured it: the nude clause asserted bare skin beside "entire body covere
 in jet-black fur", and a fixed-seed sweep watched the model resolve towards skin
 *harder* as guidance rose. Every new view, every new prompt type and every
 per-album override is a new chance to write a contradiction, which is why `T7-5`
-(portrait vs "full body head to toe") is called out by name.
+(portrait vs "full body head to toe") is called out by name. The string omit is
+not enough: the portrait crop is measured on the image (`subject_bottom`), and
+head-to-toe must not win the ranking against a head-and-shoulders fixture.
 
 **3.4 Accepted-and-ignored is the defect class.** `--refine` on the default video
 model returns before the refine block and says nothing. Five of six denoise

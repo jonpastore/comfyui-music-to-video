@@ -6045,6 +6045,36 @@ def test_portrait_and_seated_drop_the_standing_fullbody_backdrop():
             assert not re.search(pat, spec["framing"], re.I), key
 
 
+def test_portrait_default_size_reaches_the_renderer(patch_stub):
+    """T7-5 size half: portrait without a form size is 1024x1024 on the job.
+
+    896x1216 is the standing full-body frame; a head-and-shoulders crop inside
+    it is a distant figure. Mutation: drop the size_for override → width absent
+    or 896, and this goes red.
+    """
+    seen = []
+    patch_stub("pipeline", gen_anchor=lambda images, view="front", n=4, progress=None,
+                                      prefix=None, profile=None, guard="", prompt="",
+                                      render=None: (
+        seen.append(dict(render or {})) or []))
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Portrait Size Album"})
+        img = [("images", ("p.png", _png_bytes(), "image/png"))]
+        client.post("/anchors", data={
+            "album": "Portrait Size Album", "tier": "r", "view": "portrait",
+            "n": "1", "mode": "quality",
+        }, files=img)
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert seen[-1].get("width") == 1024 and seen[-1].get("height") == 1024, seen[-1]
+        # operator-chosen landscape still wins
+        client.post("/anchors", data={
+            "album": "Portrait Size Album", "tier": "r", "view": "portrait",
+            "n": "1", "mode": "quality", "size": "1216x832",
+        }, files=img)
+        wait_job(db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"])
+        assert seen[-1].get("width") == 1216 and seen[-1].get("height") == 832, seen[-1]
+
+
 def test_view_framing_type_reaches_the_composer(patch_stub):
     """T7-13: a saved view:front version is what prompt_for emits."""
     with TestClient(appmod.app) as client:
