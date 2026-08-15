@@ -420,7 +420,7 @@ current.
 | criterion | state | commit | what was measured |
 |---|---|---|---|
 | the four modules | **built, before this document** | earlier | `lyrics.py` 405, `chat.py` 330, `mixadvice.py` 247, `vision.py` 516 — 1,498 lines that no TRD cited until now |
-| `T10-1` backend chosen per call | **built, unchecked** | earlier | both `lyrics.py` and `vision.py` choose at call time, deliberately; no differential asserts it |
+| `T10-1` backend chosen per call | **built** | this change | `studio/test_t10_1_per_call_backend.py`: gateway absent then present, same process — `vision.classify_sheet` records `xai` then `local` and the paid/local path is actually taken; `lyrics._pick_backend` / `available` switch `openai-whisper` → `faster-whisper` when the preferred package appears; `available()` re-probes after the first answer |
 | `T10-3` blank leaves alone | **built** | this change | twelve songs, blank `genre`, set `genre2`; stored primary unchanged, secondary written. Same request writes the non-blank field (`studio/test_trd10.py`) |
 | `T10-4` toggle-all is the shown set | **built** | this change | `shown()` filters `offsetParent`; pick-all walks `shown()`. Twelve shown change, three hidden do not. Unfiltered `/` lists every row |
 | `T10-5` invalid refuses the batch | **built** | this change | twelve songs + valid `genre` + `genre2=NotAGenre` writes none; a valid batch writes all twelve |
