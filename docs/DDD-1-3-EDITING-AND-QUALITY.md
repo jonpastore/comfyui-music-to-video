@@ -17,7 +17,7 @@ is named.
 
 | module | lines | owns | state against its TRD |
 |---|---|---|---|
-| `studio/app.py` | 7589 | 138 routes, 25 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}/arc`, `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`; `sets_service.py` / `storyboard_service.py` are still T6-A3 |
+| `studio/app.py` | 7589 | 138 routes, 25 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}/arc`, `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`; song page `video_model` select is `models.renderable("video")` (`T2-33`); `sets_service.py` / `storyboard_service.py` are still T6-A3 |
 | `studio/mixer.py` | 2116 | set duration, `transition_times` (`T3-12` model), both filter graphs, overlap arithmetic, beatmatch, ramps, splice, song-assembly geometry (`T5-7`) and fps (`T2-13d`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox. Mixed clip fps honours the highest and is asserted on the assembled file |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `export_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` and the loudness half of §4.3. `T3-9` silence is **not** here |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `FILTER_EXPR_MAX_BYTES = 8192` (`T1-10`), `fragment`, `item_audio`, `wants_master_loudnorm` | built |
@@ -494,6 +494,15 @@ and `T2-25` are not this.
 15 s and 30 s yields two lengths. Mutation: hardcode 4.8125 → both
 arms equal. Mutation: return raw `scene_seconds` → 15.0 is not the
 legal 8n+1 length. The live `meter` component and `T2-25` are not this.
+
+`T2-33` is **built**. `GET /songs/{id}` builds the video-model select
+from `models.renderable("video")` (labels/purpose from `catalog()`).
+Adding a `CATALOG` entry with a `cli` makes that cli, label and
+purpose appear with no template change
+(`test_t2_33_picker_renderable.py`). Mutation: call `renderable()` and
+discard it, or post-filter to a stale list → the probe is absent.
+`T2-34` (unavailable shown as unavailable, with an available model
+still offered) is not this.
 
 ### 5.6 Tier 2 is a calibration, not a metric
 

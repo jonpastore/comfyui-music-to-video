@@ -352,6 +352,9 @@ The storyboard meter API reports total scene time against song length
 and flags a miss beyond a stated tolerance (`T2-23`); it reports this
 song's `clip_seconds`, not a constant (`T2-24`). The live `meter`
 component is not this.
+The song page **Video model** select is `models.renderable("video")`
+with each option's purpose in the hint (`T2-33`). Adding a catalogue
+entry with a `cli` appears there with no template change.
 
 ### 5.3 Space and radius
 
