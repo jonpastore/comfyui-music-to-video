@@ -764,3 +764,226 @@ def test_t6_a4_queue_page_shows_stubbed_values_unmodified(monkeypatch):
     assert f"every {_T6_A4_REFRESH}s" in html, html
     assert "1 running" not in html
     assert "13s" not in html
+
+
+# ----------------------------------------------------------------- T6-A1 --
+
+def _wait_job(jid, timeout=10):
+    deadline = time.time() + timeout
+    row = None
+    while time.time() < deadline:
+        row = jobs.get(jid)
+        if row and row["status"] in ("done", "failed", "cancelled"):
+            return row
+        time.sleep(0.05)
+    raise TimeoutError(f"job {jid} did not finish: {row}")
+
+
+def _json(client, method, path, **kw):
+    """One HTTP hop with Accept: application/json. HTML is a failure."""
+    headers = dict(kw.pop("headers", None) or {})
+    headers["Accept"] = "application/json"
+    r = getattr(client, method)(path, headers=headers, **kw)
+    ctype = (r.headers.get("content-type") or "").split(";")[0].strip()
+    assert r.status_code < 400, f"{method.upper()} {path} -> {r.status_code}: {r.text[:400]}"
+    assert ctype == "application/json", (
+        f"{method.upper()} {path} returned {ctype or 'no content-type'}, not JSON: "
+        f"{r.text[:200]}")
+    assert "<html" not in r.text.lower(), (
+        f"{method.upper()} {path} involved HTML: {r.text[:200]}")
+    return r.json()
+
+
+def test_t6_a1_set_empty_to_rendered_over_json():
+    """T6-A1 / TRD-1: a set from empty to rendered over JSON, no HTML.
+
+    An empty /api/sets 200 would stay green. The loop has to mint a set,
+    add a song, render, and list a candidate whose file exists.
+    """
+    import app as appmod
+    from fastapi.testclient import TestClient
+
+    stamp = f"t6a1-set-{time.time_ns()}"
+    mp3 = os.path.join(tempfile.mkdtemp(prefix="t6a1_"), "loop.mp3")
+    with open(mp3, "wb") as f:
+        f.write(b"ID3")
+    sid = db.upsert_song(stamp, title="Loop Track", mp3_path=mp3, duration=12.3)
+
+    with TestClient(appmod.app) as client:
+        created = _json(client, "post", "/api/sets",
+                        json={"name": stamp, "mode": "audio"})
+        set_id = created.get("set", created).get("id")
+        assert set_id, created
+        assert created.get("set", created).get("mode") == "audio"
+        assert created.get("items", []) == [] or created.get("count") == 0
+
+        listed = _json(client, "get", "/api/sets")
+        assert any((s.get("set") or s).get("id") == set_id for s in listed["sets"]), listed
+
+        added = _json(client, "post", f"/api/sets/{set_id}/items",
+                      json={"song_id": sid, "transition": "cut", "secs": 0})
+        items = added.get("items") or []
+        assert any(it.get("song_id") == sid for it in items), added
+
+        rendered = _json(client, "post", f"/api/sets/{set_id}/render")
+        jid = rendered.get("job_id") or (rendered.get("job") or {}).get("id")
+        assert jid, rendered
+        row = _wait_job(jid)
+        assert row["status"] == "done", row
+
+        detail = _json(client, "get", f"/api/sets/{set_id}")
+        listed_r = _json(client, "get", f"/api/sets/{set_id}/renders")
+        renders = listed_r.get("renders") or detail.get("renders") or []
+        assert renders, (listed_r, detail)
+        path = renders[0].get("path") or (renders[0].get("asset") or {}).get("path")
+        assert path and os.path.isfile(path), renders
+        assert any((r.get("set_id") == set_id) or
+                   ((r.get("asset") or {}).get("id") is not None)
+                   for r in renders), renders
+
+
+def test_t6_a1_storyboard_loop_over_json(monkeypatch):
+    """T6-A1 / TRD-2: read arc, propose, accept, generate, edit a scene,
+    read the meter, list unanchored leads -- all JSON.
+    """
+    import app as appmod
+    import tiers
+    from fastapi.testclient import TestClient
+
+    tiers.ensure_builtins()
+    stamp = f"t6a1-sb-{time.time_ns()}"
+    album = f"T6-A1 Album {stamp}"
+    mp3 = os.path.join(tempfile.mkdtemp(prefix="t6a1_"), "sb.mp3")
+    with open(mp3, "wb") as f:
+        f.write(b"ID3")
+    sid = db.upsert_song(stamp, title="Arc Track", album=album,
+                         mp3_path=mp3, duration=12.3, lyrics="she leaves")
+    pid = db.run(
+        "INSERT INTO playlists (name, kind, created) VALUES (?,?,?)",
+        album, "playlist", time.time())
+    db.run("INSERT INTO playlist_items (playlist_id, song_id, position) VALUES (?,?,?)",
+           pid, sid, 0)
+
+    def _fake_generate(album, songs, direction="", backend=None, model=None,
+                       progress=None, transitions=None):
+        song_id = songs[0]["id"]
+        return ({
+            "premise": "A cat walks the city at night and does not come back.",
+            "acts": [{"name": "Night", "songs": [song_id], "turn": "she leaves"}],
+            "songs": [{
+                "song_id": song_id, "position": 1,
+                "role": "the door", "beat": "she leaves",
+                "opens": "a shut door", "closes": "headlights",
+            }],
+            "continuity": ["the collar is brass"],
+            "album": album, "direction": direction,
+        }, "stub/model")
+
+    def _fake_sb(*_a, **_k):
+        return {"scenes": [{
+            "scene_number": 1,
+            "name": "the door",
+            "image_prompt": "she stands at the door",
+            "video_motion_prompt": "she walks out",
+            "story": "the door closing",
+            "characters": ["Unknown Lead"],
+            "duration_guidance": "5 sec",
+            "negative_prompt": "",
+            "camera": "wide",
+        }]}
+
+    monkeypatch.setattr(appmod.arc, "generate", _fake_generate)
+    monkeypatch.setattr(appmod.grok, "generate_storyboard", _fake_sb)
+
+    with TestClient(appmod.app) as client:
+        before = _json(client, "get", f"/api/playlists/{pid}/arc")
+        assert not (before.get("arc") or before.get("premise")), before
+
+        proposed = _json(client, "post", f"/api/playlists/{pid}/arc/propose",
+                         json={"direction": "keep her walking the city"})
+        proposal = proposed.get("proposal") or proposed.get("arc")
+        assert proposal and proposal.get("premise"), proposed
+        still = _json(client, "get", f"/api/playlists/{pid}/arc")
+        assert not (still.get("arc") or still.get("premise")), still
+
+        accepted = _json(client, "post", f"/api/playlists/{pid}/arc",
+                         json=proposal)
+        assert (accepted.get("arc") or accepted).get("premise"), accepted
+        stored = _json(client, "get", f"/api/playlists/{pid}/arc")
+        assert "does not come back" in (
+            (stored.get("arc") or stored).get("premise") or ""), stored
+
+        started = _json(client, "post", f"/api/songs/{sid}/storyboard/pg13",
+                        json={"scene_seconds": 4.0, "direction": "night walk"})
+        jid = started.get("job_id") or (started.get("job") or {}).get("id")
+        assert jid, started
+        row = _wait_job(jid)
+        assert row["status"] == "done", row
+
+        board = _json(client, "get", f"/api/songs/{sid}/storyboard/pg13")
+        scenes = board.get("scenes") or []
+        assert scenes, board
+        num = scenes[0].get("num") or scenes[0].get("scene_number")
+        assert num, scenes[0]
+
+        edited = _json(client, "post",
+                       f"/api/songs/{sid}/storyboard/pg13/scene/{num}",
+                       json={"image_prompt": "she looks back at the door"})
+        scene = edited.get("scene") or edited
+        prompt = scene.get("image_prompt") or ""
+        if not prompt:
+            again = _json(client, "get", f"/api/songs/{sid}/storyboard/pg13")
+            prompt = (again["scenes"][0].get("image_prompt") or "")
+        assert "looks back" in prompt, (edited, prompt)
+
+        meter = _json(client, "get", f"/api/songs/{sid}/storyboard/pg13/meter")
+        assert meter.get("nclips") or meter.get("duration") is not None, meter
+        assert "rendered" in meter or "intent" in meter, meter
+
+        cast = _json(client, "get", f"/api/songs/{sid}/storyboard/pg13/cast")
+        names = cast.get("unanchored") or []
+        assert "Unknown Lead" in names, cast
+
+
+def test_t6_a1_review_queue_over_json():
+    """T6-A1 / TRD-3: run, list, edit remedy, approve, re-check over JSON.
+
+    Inserting a finding and only listing it is the empty-surface trap.
+    """
+    import app as appmod
+    from fastapi.testclient import TestClient
+
+    path = os.path.join(tempfile.mkdtemp(prefix="t6a1_"), "review.png")
+    _png(path, size=(10, 10))
+    jobs.land(path, expect={"width": 100, "height": 100})
+
+    with TestClient(appmod.app) as client:
+        ran = _json(client, "post", "/api/qc/run",
+                    json={"path": path, "kind": "image"})
+        found = ran.get("findings") or []
+        assert found, ran
+        assert any(f.get("check") == "resolution" or f.get("check_name") == "resolution"
+                   for f in found), found
+
+        listed = _json(client, "get", "/api/qc/findings")
+        rows = [f for f in listed["findings"] if f.get("path") == jobs.canonical_path(path)
+                or f.get("path") == path]
+        assert rows, listed
+        fid = rows[0]["id"]
+
+        remedy = _json(client, "post", f"/api/qc/findings/{fid}/remedy",
+                       data={"text": "regenerate at 100x100"})
+        assert remedy.get("remedy") == "regenerate at 100x100", remedy
+        assert _json(client, "get", f"/api/qc/findings/{fid}")["remedy"] == (
+            "regenerate at 100x100")
+
+        approved = _json(client, "post", f"/api/qc/findings/{fid}/approve")
+        assert approved.get("status") == "approved", approved
+
+        _png(path, size=(100, 100))
+        rechecked = _json(client, "post", f"/api/qc/findings/{fid}/recheck")
+        again = rechecked.get("findings") or []
+        res = [f for f in again if (
+            f.get("check") == "resolution" or f.get("check_name") == "resolution")]
+        assert res, rechecked
+        assert res[0].get("verdict") == "pass", res[0]

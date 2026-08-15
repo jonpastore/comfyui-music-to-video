@@ -17,7 +17,7 @@ is named.
 
 | module | lines | owns | state against its TRD |
 |---|---|---|---|
-| `studio/app.py` | 6331 | 113 routes, and most of the logic behind them | the structural problem, §2 |
+| `studio/app.py` | 7589 | 138 routes, 25 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}/arc`, `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`; `sets_service.py` / `storyboard_service.py` are still T6-A3 |
 | `studio/mixer.py` | 2116 | set duration, both filter graphs, overlap arithmetic, beatmatch, ramps, splice, song-assembly geometry (`T5-7`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `export_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` **and** `T3-9`/§4.3 |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `fragment`, `item_audio`, `wants_master_loudnorm` | built |
@@ -46,13 +46,13 @@ absent.
 
 ## 2. The structural problem, and the pattern that already solves it
 
-`app.py` is 6331 lines and 113 routes, of which **five were `/api/qc/*` JSON**
-and `/queue` now answers JSON from the same `queue_ctx()` as the fragment
-(`T6-A2`). Everything else is a route handler that reads rows, decides,
-formats and returns HTML. `render_set_route` is TRD-1 §10's named example: it
-reads the items, joins the songs, chooses the audio-or-video path, builds every
-item dict and enqueues, all inside the handler and all unreachable from a client
-that is not this page.
+`app.py` is 7589 lines and 138 routes, of which **25 are `/api/*` JSON**.
+`T6-A1`'s three named loops complete over those paths (set empty→rendered,
+storyboard, review queue). `/queue` still answers JSON from the same
+`queue_ctx()` as the fragment (`T6-A2`). The HTML handlers still decide;
+`sets_service.py` and `storyboard_service.py` are still the T6-A3 move.
+`render_set_route` is TRD-1 §10's named example: `_set_render_items` plus
+`_enqueue_set_render` is now the shared entry the JSON loop calls.
 
 `T6-A1`…`T6-A4` are the requirement. **`qc_service.py` is the pattern and it
 already works**: `qc.py` is pure measurement that touches no database, so it runs
@@ -81,7 +81,8 @@ endpoint report the same numbers, asserted by comparing them in one test.
 The first object is the queue panel: `GET /queue` HTML and
 `Accept: application/json` share `queue_ctx()`
 (`test_t6_a2_html_and_json_report_the_same_queue_numbers`). Set, storyboard
-and review still write theirs as those loops move.
+and review loops now complete over JSON (`test_t6_a1_*`); their T6-A2
+number-agreement tests still sit with those surfaces.
 
 ## 3. API surface
 
@@ -105,11 +106,12 @@ decimated** curve — the client re-reads what was kept, §5.3),
 `.../meter`, `.../cast`. The generation prompt and **the limits that apply to it**
 travel in the same response (`T2-18`).
 
-**C · QC** — exists. `/api/qc/findings`, `/{fid}`, `/{fid}/remedy`,
-`/{fid}/dismiss`, `/{fid}/approve`, `/api/qc/by-host` (`T3-1`: groups by
-`host`, NULL host is the `unattributed` bucket). Dismiss needs a reason
-and leaves the open queue; re-running QC on the same bytes keeps it
-dismissed; rewriting the file reopens that `(path, check)` row (`T3-22`).
+**C · QC** — exists. `/api/qc/run`, `/api/qc/findings`, `/{fid}`,
+`/{fid}/remedy`, `/{fid}/dismiss`, `/{fid}/approve`, `/{fid}/recheck`,
+`/api/qc/by-host` (`T3-1`: groups by `host`, NULL host is the
+`unattributed` bucket). Dismiss needs a reason and leaves the open queue;
+re-running QC on the same bytes keeps it dismissed; rewriting the file
+reopens that `(path, check)` row (`T3-22`).
 
 **Q · queue** — `GET /queue` answers HTML or JSON from the same `queue_ctx()`
 (`T6-A2`). The JSON body carries `running`, `waiting`, `recent`,

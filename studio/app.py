@@ -1667,6 +1667,31 @@ def wants_json(request):
     return "application/json" in (request.headers.get("accept") or "")
 
 
+async def _api_body(request):
+    """JSON object or form fields. T6-A1 curl loops send either."""
+    ctype = request.headers.get("content-type") or ""
+    if "application/json" in ctype:
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(400, "body must be JSON")
+        if body is None:
+            return {}
+        if not isinstance(body, dict):
+            raise HTTPException(400, "body must be a JSON object")
+        return body
+    form = await request.form()
+    return {k: form.get(k) for k in form}
+
+
+def _json_row(row):
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return dict(row)
+    return {k: row[k] for k in row.keys()}
+
+
 def song_entry(s, in_sets=None):
     """One Library row's worth of context. Extracted so the row can be rendered
     on its own after an async upload -- the alternative was building the markup
@@ -2145,6 +2170,29 @@ def api_qc_approve(fid: int):
     except KeyError:
         raise HTTPException(404, f"no finding {fid}")
     return {"ok": True, "id": row["id"], "status": row["status"]}
+
+
+@app.post("/api/qc/run")
+async def api_qc_run(request: Request):
+    """T6-A1 / TRD-3: run QC over JSON. Findings appear without the HTML page."""
+    body = await _api_body(request)
+    path = (body.get("path") or "").strip()
+    kind = (body.get("kind") or "image").strip() or "image"
+    if not path:
+        raise HTTPException(400, "path required")
+    found = qc_service.run_artefact(path, kind)
+    return JSONResponse({"findings": found})
+
+
+@app.post("/api/qc/findings/{fid}/recheck")
+def api_qc_recheck(fid: int):
+    """Re-run the finding's artefact against the same stored expectation."""
+    try:
+        row = qc_service.get(fid)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    found = qc_service.run_artefact(row["path"], row["kind"] or "image")
+    return JSONResponse({"findings": found, "finding": _json_row(qc_service.get(fid))})
 
 
 @app.post("/songs/{id}/analyse")
@@ -4838,6 +4886,142 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
         "chunk": build_song.clip_seconds(row["scene_seconds"])})
 
 
+def _scene_json(r):
+    scene = r.get("scene") or {}
+    return {
+        "num": r["num"],
+        "scene_number": r["num"],
+        "name": r["name"],
+        "start": r["start"],
+        "end": r["end"],
+        "length": r["length"],
+        "guidance": r["guidance"],
+        "image_prompt": scene.get("image_prompt") or "",
+        "video_motion_prompt": scene.get("video_motion_prompt") or "",
+        "story": scene.get("story") or "",
+        "cast": r["cast"],
+        "clips": r["clips"],
+    }
+
+
+def _storyboard_payload(song, tier):
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", song["id"], tier)
+    if not row:
+        raise HTTPException(404, "no storyboard for this tier yet")
+    try:
+        sb = load_storyboard(row)
+    except (OSError, json.JSONDecodeError) as e:
+        raise HTTPException(500, f"storyboard file is unreadable: {e}") from None
+    cast = cast_anchors(song["album"] or "", tier)
+    sb_secs = row["scene_seconds"]
+    rows, nclips = storyboard_scenes(song, sb, tier, {c["name"] for c, _a in cast},
+                                     scene_seconds=sb_secs)
+    cov = coverage(rows, nclips, song["duration"], sb_secs)
+    unanchored = sorted({n["name"] for r in rows for n in r["cast"] if not n["anchored"]})
+    return {
+        "song_id": song["id"],
+        "tier": tier,
+        "scenes": [_scene_json(r) for r in rows],
+        "coverage": cov,
+        "unanchored": unanchored,
+        "scene_seconds": sb_secs,
+        "nclips": nclips,
+    }
+
+
+def _enqueue_storyboard(song_id, tier, model="", scene_seconds=4.0, direction=""):
+    get_song_or_404(song_id)
+    valid_tier_or_400(tier)
+    direction = check_direction(direction or "")
+    try:
+        scene_seconds = float(scene_seconds)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "scene_seconds must be a finite number")
+    if not math.isfinite(scene_seconds):
+        raise HTTPException(400, "scene_seconds must be a finite number")
+    scene_seconds = min(max(scene_seconds, 1.0), 60.0)
+    return jobs.enqueue("storyboard", {
+        "song_id": song_id, "tier": tier,
+        "model": (model or models.chat_default()) or None,
+        "scene_seconds": scene_seconds, "direction": direction,
+    }, song_id=song_id)
+
+
+def _apply_scene_fields(song, tier, num, fields):
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", song["id"], tier)
+    if not row:
+        raise HTTPException(404, "no storyboard for this tier yet")
+    sb = load_storyboard(row, normalized=False)
+    scene = next((s for s in sb.get("scenes", []) if s.get("scene_number") == num), None)
+    if scene is None:
+        raise HTTPException(404, f"no scene {num} in this storyboard")
+    changed = False
+    for field in EDITABLE_SCENE_FIELDS:
+        if field not in fields:
+            continue
+        value = (fields.get(field) or "").strip()
+        if len(value) > MAX_SCENE_FIELD:
+            raise HTTPException(400, f"{field} is {len(value)} characters; keep it under {MAX_SCENE_FIELD}")
+        try:
+            tiers.check_text(value, f"scene {num} {field}")
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        if (scene.get(field) or "") != value:
+            scene[field] = value
+            changed = True
+    if changed:
+        scene["edited"] = time.time()
+        outdir = os.path.dirname(row["json_path"])
+        grok.write_storyboard(sb, outdir, song["slug"], tier)
+    return scene
+
+
+@app.get("/api/songs/{id}/storyboard/{tier}")
+def api_storyboard_get(id: int, tier: str):
+    return JSONResponse(_storyboard_payload(get_song_or_404(id), valid_tier_or_400(tier)))
+
+
+@app.post("/api/songs/{id}/storyboard/{tier}")
+async def api_storyboard_generate(id: int, tier: str, request: Request):
+    body = await _api_body(request)
+    jid = _enqueue_storyboard(id, tier, body.get("model") or "",
+                              body.get("scene_seconds") or 4.0,
+                              body.get("direction") or "")
+    return JSONResponse({"job_id": jid, "song_id": id, "tier": tier})
+
+
+@app.post("/api/songs/{id}/storyboard/{tier}/scene/{num}")
+async def api_storyboard_edit_scene(id: int, tier: str, num: int, request: Request):
+    song = get_song_or_404(id)
+    valid_tier_or_400(tier)
+    body = await _api_body(request)
+    scene = _apply_scene_fields(song, tier, num, body)
+    payload = _storyboard_payload(song, tier)
+    payload["scene"] = {
+        "num": num,
+        "image_prompt": scene.get("image_prompt") or "",
+        "video_motion_prompt": scene.get("video_motion_prompt") or "",
+        "story": scene.get("story") or "",
+    }
+    return JSONResponse(payload)
+
+
+@app.get("/api/songs/{id}/storyboard/{tier}/meter")
+def api_storyboard_meter(id: int, tier: str):
+    payload = _storyboard_payload(get_song_or_404(id), valid_tier_or_400(tier))
+    meter = dict(payload["coverage"])
+    meter["nclips"] = payload["nclips"]
+    return JSONResponse(meter)
+
+
+@app.get("/api/songs/{id}/storyboard/{tier}/cast")
+def api_storyboard_cast(id: int, tier: str):
+    payload = _storyboard_payload(get_song_or_404(id), valid_tier_or_400(tier))
+    return JSONResponse({"unanchored": payload["unanchored"],
+                         "scenes": [{"num": s["num"], "cast": s["cast"]}
+                                    for s in payload["scenes"]]})
+
+
 @app.post("/songs/{id}/refs")
 def start_refs(id: int, tier: List[str] = Form([]), limit: int = Form(0)):
     # Form([]) not Form(...): an unticked checkbox group is simply absent from
@@ -6002,6 +6186,86 @@ def view_arc(request: Request, id: int):
         "backends": have, "models": models, "defaults": defaults})
 
 
+def _playlist_tracks(pid):
+    return [dict(r) for r in db.q(
+        """SELECT s.id, s.title, s.lyrics FROM playlist_items pi
+           JOIN songs s ON s.id = pi.song_id
+           WHERE pi.playlist_id=? ORDER BY pi.position""", pid)]
+
+
+def _load_arc(pid):
+    row = db.one("SELECT * FROM arcs WHERE playlist_id=?", pid)
+    if not row or not row["json_path"] or not os.path.isfile(row["json_path"]):
+        return None
+    try:
+        with open(row["json_path"]) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _persist_arc(pl, data, model="", direction=""):
+    songs = _playlist_tracks(pl["id"])
+    titles = {s["id"]: s["title"] for s in songs}
+    outdir = os.path.join(db.DATA, "arcs", safe_name(pl["name"]))
+    json_path, md_path = arc.write(data, outdir, safe_name(pl["name"]), titles)
+    db.run("""INSERT INTO arcs (playlist_id, json_path, md_path, model, prompt, created)
+              VALUES (?,?,?,?,?,?)
+              ON CONFLICT(playlist_id) DO UPDATE SET json_path=excluded.json_path,
+              md_path=excluded.md_path, model=excluded.model, prompt=excluded.prompt,
+              created=excluded.created""",
+           pl["id"], json_path, md_path, model, direction, time.time())
+    return data
+
+
+@app.get("/api/playlists/{id}/arc")
+def api_arc_get(id: int):
+    get_playlist_or_404(id)
+    return JSONResponse({"arc": _load_arc(id)})
+
+
+@app.post("/api/playlists/{id}/arc/propose")
+async def api_arc_propose(id: int, request: Request):
+    """T2-15: generate a proposal and do not write it."""
+    pl = get_playlist_or_404(id)
+    body = await _api_body(request)
+    try:
+        direction = arc.check_direction(body.get("direction") or "")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    songs = _playlist_tracks(id)
+    if not songs:
+        raise HTTPException(400, "this album has no songs yet -- add some first")
+    try:
+        data, used = arc.generate(pl["name"], songs, direction=direction,
+                                  backend=body.get("backend") or None,
+                                  model=body.get("model") or None,
+                                  transitions=SET_TRANSITIONS)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    summaries = [arc.for_song(data, s["id"]) for s in songs]
+    return JSONResponse({"proposal": data, "summaries": summaries, "model": used})
+
+
+@app.post("/api/playlists/{id}/arc")
+async def api_arc_accept(id: int, request: Request):
+    """T2-15: accepting writes. The previous file is replaced only now."""
+    pl = get_playlist_or_404(id)
+    body = await _api_body(request)
+    raw = body.get("arc") if isinstance(body.get("arc"), dict) else body
+    songs = _playlist_tracks(id)
+    if not songs:
+        raise HTTPException(400, "this album has no songs yet -- add some first")
+    try:
+        data = arc.validate(raw, [s["id"] for s in songs], SET_TRANSITIONS)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    data["album"] = pl["name"]
+    data["direction"] = raw.get("direction") or ""
+    _persist_arc(pl, data, model=raw.get("model") or "", direction=data["direction"])
+    return JSONResponse({"arc": data})
+
+
 @app.post("/playlists/{id}/render")
 def render_playlist(id: int, include_videos: bool = Form(False), tier: List[str] = Form([])):
     """Render the set.
@@ -6430,6 +6694,35 @@ def set_detail(row):
             "one_button_master_version": mixer.ONE_BUTTON_MASTER_VERSION}
 
 
+def _set_renders(row):
+    """Every candidate rendered from this set, newest first (T1-26 / T6-A5)."""
+    out = []
+    for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC"):
+        meta = db.jset(a)
+        if meta.get("set_id") != row["id"]:
+            continue
+        rec = _set_render_row(a)
+        out.append({
+            "id": a["id"], "path": a["path"], "set_id": row["id"],
+            "mode": rec["mode"], "tier": rec["tier"],
+            "duration": rec["duration"], "missing": rec["missing"],
+        })
+    return out
+
+
+def _set_payload(row):
+    detail = set_detail(row)
+    return {
+        "set": _json_row(detail["set"]),
+        "items": [_json_row(it) for it in detail["items"]],
+        "count": detail["count"],
+        "total_secs": detail["total_secs"],
+        "renders": _set_renders(row),
+        "mode_audience": detail["mode_audience"],
+        "duration_error": detail["duration_error"],
+    }
+
+
 @app.get("/sets", response_class=HTMLResponse)
 def sets_page(request: Request):
     """The Sets shelf: every editable set (the document you can open and
@@ -6458,9 +6751,8 @@ def new_set_page(request: Request):
                                       {"playlists": playlists, "all_tiers": tiers.all_tiers()})
 
 
-@app.post("/sets/new")
-def create_set(name: str = Form(...), mode: str = Form("video"), tier: str = Form(""),
-               playlist_id: BlankInt = Form(None)):
+def _create_set_row(name, mode="video", tier="", playlist_id=None):
+    """Mint a set. Shared by the HTML form and the T6-A1 JSON loop."""
     name = (name or "").strip()
     if not name:
         raise HTTPException(400, "name required")
@@ -6477,8 +6769,11 @@ def create_set(name: str = Form(...), mode: str = Form("video"), tier: str = For
     tier = (tier or "").strip() or None
     if tier:
         valid_tier_or_400(tier)
-    if playlist_id is not None:
+    if playlist_id is not None and playlist_id != "":
+        playlist_id = int(playlist_id)
         get_playlist_or_404(playlist_id)
+    else:
+        playlist_id = None
     now = time.time()
     sid = db.run("""INSERT INTO sets (name, playlist_id, tier, mode, created, updated)
                     VALUES (?,?,?,?,?,?)""", name, playlist_id, tier, mode, now, now)
@@ -6502,6 +6797,13 @@ def create_set(name: str = Form(...), mode: str = Form("video"), tier: str = For
             db.run("""INSERT INTO set_items (set_id, song_id, position, transition, secs, hold)
                       VALUES (?,?,?,?,?,?)""", sid, it["song_id"], it["position"],
                    kind, float(secs or 0.0), hold)
+    return sid
+
+
+@app.post("/sets/new")
+def create_set(name: str = Form(...), mode: str = Form("video"), tier: str = Form(""),
+               playlist_id: BlankInt = Form(None)):
+    sid = _create_set_row(name, mode, tier, playlist_id)
     return RedirectResponse(f"/sets/{sid}", status_code=303)
 
 
@@ -6682,13 +6984,13 @@ def update_set(id: int, name: str = Form(...), mode: str = Form("video"),
     return RedirectResponse(f"/sets/{id}", status_code=303)
 
 
-@app.post("/sets/{id}/items")
-def add_set_item(id: int, song_id: int = Form(...), transition: str = Form("fade"),
-                 secs: float = Form(2.0), beatmatch: bool = Form(False)):
+def _add_set_item_row(id, song_id, transition="fade", secs=2.0, beatmatch=False):
     get_set_or_404(id)
-    song = get_song_or_404(song_id)
+    song = get_song_or_404(int(song_id))
     if transition not in SET_TRANSITIONS:
         raise HTTPException(400, f"transition must be one of {', '.join(SET_TRANSITIONS)}")
+    secs = float(secs)
+    beatmatch = bool(beatmatch) and beatmatch not in (0, "0", "false", "False")
     # Appending a song activates the PREVIOUS last item's own transition/secs
     # (unused while it had no next item) -- check the whole sequence still
     # renders before adding, not just this one new row. Same tolerance
@@ -6699,9 +7001,16 @@ def add_set_item(id: int, song_id: int = Form(...), transition: str = Form("fade
              if song["mp3_path"] and os.path.isfile(song["mp3_path"]) else None)
     _refuse_if_unrenderable(_mix_items_for_set(id, extra_item=extra))
     pos_row = db.one("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM set_items WHERE set_id=?", id)
-    db.run("""INSERT INTO set_items (set_id, song_id, position, transition, secs, beatmatch)
-              VALUES (?,?,?,?,?,?)""", id, song_id, pos_row["p"], transition, secs, int(beatmatch))
+    iid = db.run("""INSERT INTO set_items (set_id, song_id, position, transition, secs, beatmatch)
+              VALUES (?,?,?,?,?,?)""", id, int(song_id), pos_row["p"], transition, secs, int(beatmatch))
     db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
+    return iid
+
+
+@app.post("/sets/{id}/items")
+def add_set_item(id: int, song_id: int = Form(...), transition: str = Form("fade"),
+                 secs: float = Form(2.0), beatmatch: bool = Form(False)):
+    _add_set_item_row(id, song_id, transition, secs, beatmatch)
     return RedirectResponse(f"/sets/{id}", status_code=303)
 
 
@@ -6926,12 +7235,17 @@ def _set_render_items(row):
     return build
 
 
-@app.post("/sets/{id}/render")
-def render_set_route(id: int):
+def _enqueue_set_render(id):
+    """Build the item list and enqueue render_set. HTML and JSON share this."""
     row = get_set_or_404(id)
     build = _set_render_items(row)
-    jobs.enqueue("render_set", {"set_id": id, "playlist_id": row["playlist_id"],
-                                "mode": row["mode"], "tier": row["tier"], "items": build})
+    return jobs.enqueue("render_set", {"set_id": id, "playlist_id": row["playlist_id"],
+                                       "mode": row["mode"], "tier": row["tier"], "items": build})
+
+
+@app.post("/sets/{id}/render")
+def render_set_route(id: int):
+    _enqueue_set_render(id)
     return RedirectResponse(f"/sets/{id}", status_code=303)
 
 
@@ -6949,6 +7263,49 @@ def delete_set(asset_id: int):
             pass
     db.run("DELETE FROM assets WHERE id=?", asset_id)
     return RedirectResponse("/sets", status_code=303)
+
+
+@app.get("/api/sets")
+def api_sets_list():
+    rows = db.q("SELECT * FROM sets ORDER BY updated DESC, id DESC")
+    return JSONResponse({"sets": [_set_payload(r) for r in rows]})
+
+
+@app.post("/api/sets")
+async def api_sets_create(request: Request):
+    body = await _api_body(request)
+    sid = _create_set_row(body.get("name"), body.get("mode") or "audio",
+                          body.get("tier") or "", body.get("playlist_id"))
+    return JSONResponse(_set_payload(get_set_or_404(sid)))
+
+
+@app.get("/api/sets/{id}")
+def api_set_get(id: int):
+    return JSONResponse(_set_payload(get_set_or_404(id)))
+
+
+@app.post("/api/sets/{id}/items")
+async def api_set_add_item(id: int, request: Request):
+    body = await _api_body(request)
+    if body.get("song_id") in (None, ""):
+        raise HTTPException(400, "song_id required")
+    _add_set_item_row(id, body["song_id"],
+                      body.get("transition") or "fade",
+                      body.get("secs") if body.get("secs") not in (None, "") else 2.0,
+                      body.get("beatmatch") or False)
+    return JSONResponse(_set_payload(get_set_or_404(id)))
+
+
+@app.post("/api/sets/{id}/render")
+def api_set_render(id: int):
+    jid = _enqueue_set_render(id)
+    return JSONResponse({"job_id": jid, "set_id": id})
+
+
+@app.get("/api/sets/{id}/renders")
+def api_set_renders(id: int):
+    row = get_set_or_404(id)
+    return JSONResponse({"renders": _set_renders(row)})
 
 
 # ------------------------------------------------------------------ models --
