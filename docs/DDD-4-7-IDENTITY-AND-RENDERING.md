@@ -234,9 +234,13 @@ non-semantic perturbation. The quality claim needs a named metric on a fixed
 fixture set moving in a stated direction. `T5-2`'s wording in TRD-5 now names
 both: MAD > 0 is the no-op guard; Laplacian variance on the same pair is the
 quality metric. `qc.t5_2_refine_differential` measures decoded frames (arrays
-or video paths). Missing frames raise `NOT MEASURED`; `skip` is not a reading.
-`T5_2_REAL_CLIP_MEASURED` stays False until a same-seed GPU pair is decoded.
-A graph-only assert is `T5-1`, not `T5-2`.
+or video paths). `accept_t5_2_gpu_pair` is the renderer hook: it records the
+pair and flips `T5_2_REAL_CLIP_MEASURED` only when `source=gpu` and frames
+are populated. `check_refine_differential` emits the finding when a
+`refine_off` sibling is named; unasked clip QC stays silent. Missing frames
+raise `NOT MEASURED`; `skip` is not a reading. The default flag stays False
+until a Comfy same-seed pair is accepted. A graph-only assert is `T5-1`,
+not `T5-2`.
 
 **Ceilings (`T5-9`).** `build_song.CLIP_CEILINGS` (mirrored on the video
 `CATALOG` rows) labels LTX 15 s as a **measured** cost ceiling and s2v

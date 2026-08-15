@@ -125,6 +125,10 @@ _IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 REFINER_HELP_CHECK = "refiner_help"
 REFINER_HELP_METRIC = "tier2_score_delta_v1"
 
+# docs/TRD-5 T5-2: MAD + Laplacian on a same-seed refine-off / refine-on
+# pair. Graph growth is T5-1. This check is measurement-only.
+REFINE_DIFFERENTIAL = "refine_differential"
+
 # docs/TRD-3 T3-16: overlap is a decision, not a number the operator
 # has to interpret. "inconclusive" is a success; a threshold is not.
 INCONCLUSIVE = "inconclusive"
@@ -149,8 +153,9 @@ HUMAN_BODY_PHRASES = (
 # docs/TRD-5 T5-2: the renderer assigns decoded (plain, refined) uint8/float
 # arrays here after a same-seed pair lands. None is NOT MEASURED. skip is
 # not a reading. Deleting this name is the mutation the harness test uses.
-# T5_2_REAL_CLIP_MEASURED stays False until a GPU pair is decoded; flipping
-# it without populating the hook is the lie the harness test catches.
+# T5_2_REAL_CLIP_MEASURED stays False until accept_t5_2_gpu_pair(...,
+# source="gpu") records a decoded pair. Flipping it without populating
+# the hook is the lie the harness test catches.
 T5_2_REAL_CLIP_FRAMES = None
 T5_2_REAL_CLIP_MEASURED = False
 T5_2_REAL_CLIP_SEED = None
@@ -223,6 +228,7 @@ CHECK_REMEDY_CLASS = {
     "transition_lands": REMEDY_NONE,
     "splice_duration": REMEDY_RERENDER,
     REFINER_HELP_CHECK: REMEDY_NONE,
+    REFINE_DIFFERENTIAL: REMEDY_NONE,
 }
 
 _DEFAULT_REMEDY = {
@@ -517,6 +523,88 @@ def t5_2_claim():
     return out
 
 
+def accept_t5_2_gpu_pair(plain, refined, seed=None, source=None):
+    """Decode a same-seed refine-off / refine-on pair and record it.
+
+    source='gpu' is the renderer path: populate the hook and flip
+    T5_2_REAL_CLIP_MEASURED. Lavfi / synthetic must pass source='harness'
+    (or omit it) so the GPU flag stays False. Missing frames raise.
+    """
+    global T5_2_REAL_CLIP_MEASURED
+    d = t5_2_refine_differential(plain, refined)
+    record_t5_2_real_clip(plain, refined, seed=seed)
+    d["seed"] = seed
+    d["source"] = source or "harness"
+    if source == "gpu":
+        if t5_2_real_clip_frames() is None:
+            raise ValueError("T5-2 real clip MAD is NOT MEASURED")
+        T5_2_REAL_CLIP_MEASURED = True
+    return d
+
+
+def t5_2_finding(report, path=None):
+    """T5-2 finding. MAD == 0 or sharpness not up is FLAG, not a free pass."""
+    if not report or report.get("mad") is None:
+        raise ValueError("T5-2 real clip MAD is NOT MEASURED")
+    if report.get("sharpness_off") is None or report.get("sharpness_on") is None:
+        raise ValueError("T5-2 real clip MAD is NOT MEASURED")
+    path = path or "t5_2_pair"
+    mad = float(report["mad"])
+    off = float(report["sharpness_off"])
+    on = float(report["sharpness_on"])
+    changed = mad > 0
+    sharper = on > off
+    measured = {
+        "mad": mad,
+        "sharpness_off": off,
+        "sharpness_on": on,
+        "seed": report.get("seed"),
+    }
+    if changed and sharper:
+        detail = (f"refine-on vs off MAD {mad:.4f}, "
+                  f"Laplacian {on:.4f} > {off:.4f}")
+        verdict = PASS
+    elif not changed:
+        detail = f"refine-on vs off MAD {mad:.4f}: no-op (identical frames)"
+        verdict = FLAG
+    else:
+        detail = (f"refine-on vs off MAD {mad:.4f} but sharpness "
+                  f"{on:.4f} <= {off:.4f}")
+        verdict = FLAG
+    return finding(
+        path, "clip", REFINE_DIFFERENTIAL, verdict, detail,
+        measured, {"mad_gt": 0, "sharpness": "up"}, "mad+laplacian")
+
+
+def check_refine_differential(path, expect, kind="clip"):
+    """T5-2 on a named same-seed sibling. Unasked clips stay silent."""
+    expect = expect or {}
+    sibling = expect.get("refine_off") or expect.get("plain")
+    if not sibling:
+        return []
+    seed = expect.get("seed")
+    seed_off = expect.get("seed_off", seed)
+    seed_on = expect.get("seed_on", seed)
+    if seed_off is not None and seed_on is not None and seed_off != seed_on:
+        return [finding(
+            path, kind, REFINE_DIFFERENTIAL, FLAG,
+            f"seeds {seed_off} vs {seed_on} — T5-2 needs the same seed",
+            {"seed_off": seed_off, "seed_on": seed_on},
+            "same seed", None)]
+    try:
+        d = t5_2_refine_differential(sibling, path)
+    except ValueError as e:
+        if "NOT MEASURED" not in str(e):
+            raise
+        return [finding(
+            path, kind, REFINE_DIFFERENTIAL, FLAG, str(e),
+            None, "decoded pair", None)]
+    d["seed"] = seed if seed is not None else seed_off
+    row = t5_2_finding(d, path=path)
+    row["kind"] = kind
+    return [row]
+
+
 def t4_13_real_sheet_path():
     """Hook the renderer populates. None until a rendered sheet is pointed at."""
     return T4_13_REAL_SHEET_PATH
@@ -737,6 +825,7 @@ def check_video(path, expect, kind="clip"):
                        else f"{len(frozen)} frozen span(s) of 0.5s or longer",
                        len(frozen), 0, "spans",
                        remedy="re-render with a different seed"))
+    out.extend(check_refine_differential(path, expect, kind=kind))
     return out
 
 

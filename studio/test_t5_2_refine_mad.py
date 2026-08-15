@@ -189,3 +189,125 @@ def test_t5_2_record_hook_round_trip():
         qc.T5_2_REAL_CLIP_FRAMES = prev_frames
         qc.T5_2_REAL_CLIP_MEASURED = prev_flag
         qc.T5_2_REAL_CLIP_SEED = prev_seed
+
+
+def _restore_t5_2():
+    return (
+        qc.T5_2_REAL_CLIP_FRAMES,
+        qc.T5_2_REAL_CLIP_MEASURED,
+        qc.T5_2_REAL_CLIP_SEED,
+    )
+
+
+def _reset_t5_2(prev):
+    qc.T5_2_REAL_CLIP_FRAMES, qc.T5_2_REAL_CLIP_MEASURED, qc.T5_2_REAL_CLIP_SEED = prev
+
+
+def test_t5_2_accept_same_seed_decoded_pair_mad_and_sharpness(tmp_path):
+    """Renderer-facing accept on decoded files. Lavfi is not a 5090 clip.
+
+    Mutation: delete accept_t5_2_gpu_pair, or return without measuring.
+    source omitted / harness must not flip T5_2_REAL_CLIP_MEASURED.
+    """
+    prev = _restore_t5_2()
+    try:
+        plain_p = _lavfi_mp4(
+            str(tmp_path / "off.mp4"), "color=c=gray:s=32x32:r=8:d=0.25")
+        refined_p = _lavfi_mp4(
+            str(tmp_path / "on.mp4"), "testsrc2=size=32x32:rate=8:duration=0.25")
+        d = qc.accept_t5_2_gpu_pair(plain_p, refined_p, seed=1000, source="harness")
+        assert d["mad"] > 0, d
+        assert d["sharpness_on"] > d["sharpness_off"], d
+        assert d["seed"] == 1000, d
+        assert d.get("source") == "harness", d
+        assert qc.T5_2_REAL_CLIP_MEASURED is False, (
+            "lavfi/harness must not flip the GPU flag")
+        got = qc.t5_2_real_clip_frames()
+        assert got is not None
+        assert qc.t5_2_refine_differential(*got)["mad"] == d["mad"]
+    finally:
+        _reset_t5_2(prev)
+    assert qc.T5_2_REAL_CLIP_MEASURED is False
+
+
+def test_t5_2_accept_source_gpu_flips_measured_only_with_frames(tmp_path):
+    """source=gpu is the renderer path. Empty hook still NOT MEASURED."""
+    prev = _restore_t5_2()
+    try:
+        with pytest.raises(ValueError, match="NOT MEASURED"):
+            qc.accept_t5_2_gpu_pair(None, None, seed=1000, source="gpu")
+        assert qc.T5_2_REAL_CLIP_MEASURED is False
+
+        plain_p = _lavfi_mp4(
+            str(tmp_path / "off.mp4"), "color=c=gray:s=32x32:r=8:d=0.25")
+        refined_p = _lavfi_mp4(
+            str(tmp_path / "on.mp4"), "testsrc2=size=32x32:rate=8:duration=0.25")
+        d = qc.accept_t5_2_gpu_pair(plain_p, refined_p, seed=1000, source="gpu")
+        assert d["mad"] > 0, d
+        assert d["sharpness_on"] > d["sharpness_off"], d
+        assert qc.T5_2_REAL_CLIP_MEASURED is True
+        claimed = qc.t5_2_claim()
+        assert claimed["mad"] == d["mad"]
+        assert claimed["seed"] == 1000
+    finally:
+        _reset_t5_2(prev)
+    assert qc.T5_2_REAL_CLIP_MEASURED is False
+
+
+def test_t5_2_finding_pass_and_identical_is_flag(tmp_path):
+    """The finding can fail: identical frames are MAD 0, not PASS."""
+    plain_p = _lavfi_mp4(
+        str(tmp_path / "off.mp4"), "color=c=gray:s=32x32:r=8:d=0.25")
+    refined_p = _lavfi_mp4(
+        str(tmp_path / "on.mp4"), "testsrc2=size=32x32:rate=8:duration=0.25")
+    ok = qc.t5_2_finding(qc.t5_2_refine_differential(plain_p, refined_p),
+                         path=refined_p)
+    assert ok["check"] == qc.REFINE_DIFFERENTIAL
+    assert ok["verdict"] == qc.PASS, ok
+    assert ok["remedy_class"] == qc.REMEDY_NONE
+    assert ok["measured"]["mad"] > 0
+
+    same = qc.t5_2_finding(qc.t5_2_refine_differential(plain_p, plain_p),
+                           path=plain_p)
+    assert same["verdict"] != qc.PASS, same
+    assert same["measured"]["mad"] == 0.0
+
+
+def test_t5_2_check_video_emits_finding_when_sibling_given(tmp_path, monkeypatch):
+    """Unasked clip QC stays silent. A named refine-off sibling is T5-2."""
+    from conftest import _real_module
+    real = _real_module("mixer")
+    assert real is not None, "real mixer.py failed to import"
+    monkeypatch.setattr(qc, "mixer", real)
+    # Above MIN_VIDEO_BYTES so check_video reaches the T5-2 hook.
+    plain_p = _lavfi_mp4(
+        str(tmp_path / "off.mp4"), "color=c=gray:s=64x64:r=8:d=1")
+    refined_p = _lavfi_mp4(
+        str(tmp_path / "on.mp4"), "testsrc2=size=64x64:rate=8:duration=1")
+    silent = [f for f in qc.check_video(refined_p, {})
+              if f["check"] == qc.REFINE_DIFFERENTIAL]
+    assert silent == []
+
+    found = [f for f in qc.check_video(
+        refined_p, {"refine_off": plain_p, "seed": 1000})
+        if f["check"] == qc.REFINE_DIFFERENTIAL]
+    assert found and found[0]["verdict"] == qc.PASS, found
+    assert found[0]["measured"]["seed"] == 1000
+
+    missing = [f for f in qc.check_video(
+        refined_p, {"refine_off": str(tmp_path / "gone.mp4")})
+        if f["check"] == qc.REFINE_DIFFERENTIAL]
+    assert missing and missing[0]["verdict"] != qc.PASS, missing
+    assert "NOT MEASURED" in (missing[0]["detail"] or "")
+
+
+def test_t5_2_mismatched_seeds_are_not_the_criterion(tmp_path):
+    """Same seed is the one variable. Two seeds FLAG; they are not T5-2."""
+    plain_p = _lavfi_mp4(
+        str(tmp_path / "off.mp4"), "color=c=gray:s=32x32:r=8:d=0.25")
+    refined_p = _lavfi_mp4(
+        str(tmp_path / "on.mp4"), "testsrc2=size=32x32:rate=8:duration=0.25")
+    found = qc.check_refine_differential(
+        refined_p, {"refine_off": plain_p, "seed_off": 1000, "seed_on": 2000})
+    assert found and found[0]["verdict"] != qc.PASS, found
+    assert "seed" in (found[0]["detail"] or "").lower()
