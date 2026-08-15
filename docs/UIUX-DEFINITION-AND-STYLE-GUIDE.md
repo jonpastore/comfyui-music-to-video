@@ -987,6 +987,16 @@ source from whether a job ran — the stored columns are the record. When a
 source chip or badge is shown, it reads those columns; a row that predates
 them stays blank rather than guessing.
 
+### 7b.4b Lyrics: edit freely; re-transcribe says it replaces (`T10-9`)
+
+The song page Lyrics card is the draft Whisper wrote and the operator owns.
+Saving marks the row edited (`lyrics_edited=1`). A later automatic re-fetch
+does not put the draft back over the edit. **Re-transcribe is a separate
+control** under the save form: it carries `lyrics.REPLACE_WARNING` in plain
+text ("Re-transcribe replaces the current lyrics, including any edits") and
+a confirm before the POST, so the destructive half is named before it runs —
+same *what this will do* shape as §7b.2, not a silent second save.
+
 ### 7b.5 Model-authored text has to be visually distinct, everywhere
 
 `T10-11` marks it in the payload; this is what the payload is for. **One

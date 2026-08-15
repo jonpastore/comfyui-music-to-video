@@ -231,6 +231,21 @@ _stub("grok",
       write_storyboard=_write_storyboard)
 
 # ---- lyrics ------------------------------------------------------------
+def _may_replace_lyrics(song, force=False):
+    # Mirrors lyrics.may_replace_lyrics (T10-9). Callable stubs do not fall
+    # through to the real module. Accepts sqlite Row or mapping.
+    if force or not song:
+        return True
+    try:
+        raw = song["lyrics_edited"] if "lyrics_edited" in song.keys() else 0
+    except (TypeError, AttributeError, KeyError):
+        raw = song.get("lyrics_edited", 0) if hasattr(song, "get") else 0
+    try:
+        return not int(raw or 0)
+    except (TypeError, ValueError):
+        return True
+
+
 _stub("lyrics",
       available=lambda: (True, "stub ready"),
       # backend is T10-8 provenance; h_transcribe stores it via db.store_lyrics.
@@ -242,7 +257,10 @@ _stub("lyrics",
           "device": "cpu",
       },
       to_sections=lambda result, gap=3.0: "[Section 1]\nhi\n",
-      estimate_duration=lambda mp3: 12.3)
+      estimate_duration=lambda mp3: 12.3,
+      may_replace_lyrics=_may_replace_lyrics,
+      REPLACE_WARNING=(
+          "Re-transcribe replaces the current lyrics, including any edits."))
 
 # ---- analyse ------------------------------------------------------------
 # librosa is not installed on the system python the test suite runs on

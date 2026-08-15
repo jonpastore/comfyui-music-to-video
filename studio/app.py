@@ -934,6 +934,12 @@ def h_transcribe(args, progress):
     song = db.one("SELECT * FROM songs WHERE id=?", args["song_id"])
     if not song:
         return
+    force = bool(args.get("force"))
+    # T10-9: a human edit survives a re-fetch. Only force (explicit
+    # re-transcribe) may overwrite lyrics_edited rows.
+    if not lyrics.may_replace_lyrics(song, force=force):
+        progress("keeping edited lyrics; re-transcribe explicitly to replace")
+        return {"chars": len(song["lyrics"] or ""), "kept_edit": True}
     ok, msg = lyrics.available()
     if not ok:
         raise RuntimeError(msg)
@@ -944,9 +950,11 @@ def h_transcribe(args, progress):
     result = lyrics.transcribe(song["mp3_path"], progress)
     text = lyrics.to_sections(result)
     # T10-8: which backend produced it, and that it is a transcription.
+    # store_lyrics also clears lyrics_edited (T10-9).
     db.store_lyrics(song["id"], text, source="transcription",
                     backend=result.get("backend"))
-    return {"chars": len(text), "backend": result.get("backend")}
+    return {"chars": len(text), "backend": result.get("backend"),
+            "replaced": force, "kept_edit": False}
 
 
 @jobs.handler("analyse")
@@ -2331,6 +2339,7 @@ def song_page(request: Request, id: int):
         "takes": takes, "audio_model": models.get(models.default_for("audio")),
         "best_model": best, "render_tiers": render_tiers,
         "findings": findings,
+        "lyrics_replace_warning": lyrics.REPLACE_WARNING,
         **storyboard_form_ctx(song, form_tier, chat_models, best),
     })
 
@@ -2540,7 +2549,18 @@ def toggle_explicit(id: int):
 def save_lyrics(id: int, lyrics_text: str = Form(...)):
     get_song_or_404(id)
     # T10-8: supplied text is not a transcription; clear any prior backend.
+    # T10-9: store_lyrics marks lyrics_edited so a re-fetch cannot discard it.
     db.store_lyrics(id, lyrics_text, source="supplied")
+    return RedirectResponse(f"/songs/{id}", status_code=303)
+
+
+@app.post("/songs/{id}/retranscribe")
+def retranscribe_lyrics(id: int):
+    """Explicit re-transcribe replaces stored lyrics, including edits (T10-9)."""
+    song = get_song_or_404(id)
+    if not song["mp3_path"]:
+        raise HTTPException(400, "this song has no audio to transcribe")
+    jobs.enqueue("transcribe", {"song_id": id, "force": True}, song_id=id)
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 

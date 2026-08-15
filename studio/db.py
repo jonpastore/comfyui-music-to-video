@@ -413,6 +413,9 @@ MIGRATIONS = [
     # predates this.
     "ALTER TABLE songs ADD COLUMN lyrics_source TEXT",
     "ALTER TABLE songs ADD COLUMN lyrics_backend TEXT",
+    # T10-9: operator edit of transcribed lyrics. A re-fetch must not discard
+    # the correction; only an explicit re-transcribe (force) clears this.
+    "ALTER TABLE songs ADD COLUMN lyrics_edited INTEGER DEFAULT 0",
     # T2-7: which model was asked when this version was produced.
     "ALTER TABLE prompt_versions ADD COLUMN model TEXT",
 ]
@@ -768,10 +771,12 @@ LYRICS_SOURCES = ("transcription", "supplied")
 
 
 def store_lyrics(song_id, text, *, source, backend=None):
-    """Persist lyrics with provenance (T10-8).
+    """Persist lyrics with provenance (T10-8) and edit flag (T10-9).
 
     A transcription must name the backend that produced it. Supplied text
     clears lyrics_backend so the two remain distinguishable on the stored row.
+    Supplied text is a human edit (lyrics_edited=1); a transcription clears
+    that flag so a later re-fetch may overwrite until the operator edits again.
     """
     if source not in LYRICS_SOURCES:
         raise ValueError(f"unknown lyrics source: {source!r}")
@@ -779,10 +784,13 @@ def store_lyrics(song_id, text, *, source, backend=None):
         if not backend:
             raise ValueError("transcription requires a backend")
         backend_val = backend
+        edited = 0
     else:
         backend_val = None
-    run("UPDATE songs SET lyrics=?, lyrics_source=?, lyrics_backend=? WHERE id=?",
-        text, source, backend_val, song_id)
+        edited = 1
+    run("UPDATE songs SET lyrics=?, lyrics_source=?, lyrics_backend=?, "
+        "lyrics_edited=? WHERE id=?",
+        text, source, backend_val, edited, song_id)
 
 
 def jset(row, key="meta_json"):

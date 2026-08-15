@@ -226,6 +226,34 @@ def interface_payload(result):
     }
 
 
+# T10-9: a human edit of a Whisper draft must not be discarded by a later
+# re-fetch. Explicit re-transcribe (force=True) is the only replace path, and
+# the surface that offers it must carry this wording.
+REPLACE_WARNING = (
+    "Re-transcribe replaces the current lyrics, including any edits.")
+
+
+def may_replace_lyrics(song, force=False):
+    """Whether a re-fetch/transcribe may overwrite stored lyrics (T10-9).
+
+    force=True is the explicit re-transcribe path. Otherwise a row marked
+    lyrics_edited keeps its text. Accepts a sqlite Row or a mapping.
+    """
+    if force:
+        return True
+    if not song:
+        return True
+    try:
+        raw = song["lyrics_edited"] if "lyrics_edited" in song.keys() else 0
+    except (TypeError, AttributeError, KeyError):
+        raw = song.get("lyrics_edited", 0) if hasattr(song, "get") else 0
+    try:
+        edited = int(raw or 0)
+    except (TypeError, ValueError):
+        edited = 0
+    return not edited
+
+
 def estimate_duration(mp3_path):
     """Seconds, via ffprobe."""
     out = subprocess.run(

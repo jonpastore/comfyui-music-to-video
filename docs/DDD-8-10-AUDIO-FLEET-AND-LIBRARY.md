@@ -210,6 +210,21 @@ clears `lyrics_backend`. Both paths are the job handler and
 `POST /songs/{id}/lyrics`. A free-text source would let the criterion pass
 for a row that recorded something else — `LYRICS_SOURCES` is the closed set.
 
+### 4.2a′ Lyrics edits survive a re-fetch (`T10-9`)
+
+`songs.lyrics_edited` is set when the operator saves lyrics (`store_lyrics`
+with `source=supplied`). A re-fetch is the ordinary `transcribe` job without
+`force` — the same path upload enqueues — and `lyrics.may_replace_lyrics`
+refuses to overwrite when that flag is set. `h_transcribe` returns
+`kept_edit` and leaves the stored text alone.
+
+The only replace path is explicit: `POST /songs/{id}/retranscribe` enqueues
+`transcribe` with `force=True`, clears `lyrics_edited` via a fresh
+transcription `store_lyrics`, and writes the new draft. The song page shows
+`lyrics.REPLACE_WARNING` ("Re-transcribe replaces the current lyrics,
+including any edits") next to the control so the act says what it will do
+before it runs.
+
 ### 4.2b The advice rules are a payload contract, not UI copy
 
 `T10-11` marks model-authored strings **in the payload**, the same shape as
@@ -288,7 +303,7 @@ each caller, or a caller that stops calling it stays green.
                          ->  the picked/unpicked distinction (T8-2)
     bulk edit (T10-3…T10-7 built)
     vision provider record (T10-2 built)
-    lyrics provenance (T10-8 built) ->  T10-9 (edit survives re-fetch)
+    lyrics provenance (T10-8 built) ->  T10-9 (edit survives re-fetch, built)
     advice labelling (T10-11..T10-15 built) over the four live modules
     image/audio guard split (T10-16 built; cites T8-4)
 

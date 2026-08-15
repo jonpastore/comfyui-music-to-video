@@ -103,7 +103,9 @@ still not shipped (`T8-12`, provisional by absence).
 3a. **TRD-10's lyrics provenance.** `T10-8` is built: a transcription stores
    which backend produced it and that it is a transcription; supplied text
    is stored as supplied with no backend, and the two remain distinguishable.
-   `T10-9` (edit survives re-fetch) and `T10-10` (empty is explicit) remain.
+   **`T10-9` is built** — a saved lyric edit survives a re-fetch;
+   `POST /songs/{id}/retranscribe` is the explicit replace path and says it
+   will replace. `T10-10` (empty is explicit) remains.
 4. **TRD-10's advice rules.** `T10-2` (paid fallback marked in the record),
    `T10-11` (payload mark), `T10-12` (accept writes, records the model),
    `T10-13` (`classify_sheet` text on a finding, never a pass/fail),
