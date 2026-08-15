@@ -545,3 +545,170 @@ def test_t3_25_forced_true_remote_repair_is_submitted(monkeypatch):
     row = qc_service.get(fid)
     assert row["repair_path"] == dest
     assert row["status"] == qc_service.REPAIRED
+
+
+_T324_REFINER = "wan22_i2v_low"
+_T324_PAIR = "wan22_i2v"
+_T324_REFINER_FILE = models.CATALOG[_T324_REFINER]["file"]
+_T324_PAIR_FILE = models.CATALOG[_T324_PAIR]["file"]
+
+_T324_ETHAN = {
+    "id": "3", "title": "ethan",
+    "address": "http://ethan:8188",
+    "fits": None, "file_here": _T324_REFINER_FILE,
+    "vram_gib": 15.92, "confirmed": True,
+}
+_T324_PEACHES = {
+    "id": "2", "title": "peaches",
+    "address": "http://100.95.184.29:8188",
+    "fits": None, "file_here": _T324_REFINER_FILE,
+    "vram_gib": 10.58, "confirmed": True,
+}
+_T324_CERBERUS = {
+    "id": "0", "title": "cerberus",
+    "address": "http://127.0.0.1:8188",
+    "fits": None, "file_here": _T324_REFINER_FILE,
+    "vram_gib": 23.42, "confirmed": True,
+}
+
+
+def _t324_where_only(monkeypatch, where_rows):
+    """Stub where() only. Real fits() is the T3-24 arithmetic."""
+    asked = []
+
+    def _where(key, backends):
+        asked.append(("where", key, backends))
+        return [dict(r) for r in where_rows]
+
+    monkeypatch.setattr(models, "where", _where)
+    monkeypatch.setattr(pipeline, "swarm_backends", lambda: [])
+    return asked
+
+
+def _t324_watch_fits(monkeypatch):
+    """Record real fits() answers. Do not replace the arithmetic."""
+    real = models.fits
+    calls = []
+
+    def _fits(key, vram_gib):
+        result = real(key, vram_gib)
+        calls.append((key, vram_gib, result))
+        return result
+
+    monkeypatch.setattr(models, "fits", _fits)
+    return calls
+
+
+def _t324_watch_invoke(monkeypatch):
+    chosen = []
+    orig = qc_service._invoke_actuator
+
+    def _wrap(actuator, src, dest, args, progress):
+        chosen.append({
+            "actuator": actuator,
+            "backend": args.get("backend"),
+            "requires": args.get("requires"),
+            "file_here": args.get("file_here"),
+        })
+        return orig(actuator, src, dest, args, progress)
+
+    monkeypatch.setattr(qc_service, "_invoke_actuator", _wrap)
+    return chosen
+
+
+def test_t3_24_refiner_routed_off_15_92_to_24_and_submitted(monkeypatch):
+    """T3-24: resident cost, not UNET 13.31, decides the box.
+
+    ethan (15.92) is first and has the correctly-named file. If fits()
+    still read weights_gib the 15.92 card would win. peaches is in the
+    fleet and cannot hold the refiner. The 24 GiB box is SUBMITTED.
+    Default dispatch_repair — real fits(), not a stubbed True/False.
+    """
+    spec = models.CATALOG[_T324_REFINER]
+    resident = spec.get("resident_gib", spec["weights_gib"])
+    assert resident > spec["weights_gib"], (
+        "T3-24 is gone if resident_gib collapses back to the UNET's 13.31")
+    assert resident >= 19.6, resident
+    assert models.fits(_T324_REFINER, 15.92) is False
+    assert models.fits(_T324_REFINER, 13.31) is False
+    assert models.fits(_T324_REFINER, 10.58) is False
+    assert models.fits(_T324_REFINER, 23.42) is True
+
+    asked = _t324_where_only(
+        monkeypatch, [_T324_ETHAN, _T324_PEACHES, _T324_CERBERUS])
+    fit_calls = _t324_watch_fits(monkeypatch)
+    submitted = _t323_actuators(monkeypatch)
+    chosen = _t324_watch_invoke(monkeypatch)
+    fid, src, args = _finding_with_file("t324_route")
+    args = dict(args)
+    args["kind"] = "clip"
+    args["check_name"] = "soft"
+    args["remedy"] = "refine pass"
+    args["requires"] = _T324_REFINER
+    args.pop("backend", None)
+    args.pop("host", None)
+    dest = args["repair_path"]
+
+    qc_service.h_repair(args, lambda m: None)
+
+    assert any(c[0] == "where" and c[1] == _T324_REFINER for c in asked), asked
+    assert (_T324_REFINER, 15.92, False) in fit_calls, fit_calls
+    assert (_T324_REFINER, 10.58, False) in fit_calls, fit_calls
+    assert (_T324_REFINER, 23.42, True) in fit_calls, fit_calls
+    assert chosen and chosen[0]["backend"] == "0", chosen
+    assert chosen[0]["requires"] == _T324_REFINER
+    assert chosen[0]["file_here"] == _T324_REFINER_FILE
+    assert submitted, "correctly-named refiner on a 24 GiB box was not SUBMITTED"
+    assert os.path.isfile(src)
+    assert os.path.isfile(dest), "actuator submitted but dest was not written"
+    with open(src, "rb") as f:
+        original = f.read()
+    with open(dest, "rb") as f:
+        written = f.read()
+    assert written != original, "dest is a byte-copy of the broken artefact"
+    row = qc_service.get(fid)
+    assert row["repair_path"] == dest
+    assert row["status"] == qc_service.REPAIRED
+
+
+def test_t3_24_peaches_cannot_take_the_pair(monkeypatch):
+    """T3-24: the i2v pair is 13.31x2; peaches (10.58) cannot hold it.
+
+    Default dispatch_repair. Real fits(). Refusal names the fit, not
+    'GPU work is still missing'. Actuator must not run.
+    """
+    pair = models.CATALOG[_T324_PAIR]
+    cost = pair.get("resident_gib", pair["weights_gib"])
+    assert cost > 10.58, cost
+    assert models.fits(_T324_PAIR, 10.58) is False
+    assert models.fits(_T324_PAIR, 23.42) is False, (
+        "the pair does not fit resident on a 24 GiB card either")
+
+    peaches = dict(_T324_PEACHES, file_here=_T324_PAIR_FILE)
+    asked = _t324_where_only(monkeypatch, [peaches])
+    fit_calls = _t324_watch_fits(monkeypatch)
+    submitted = _t323_actuators(monkeypatch)
+    fid, src, args = _finding_with_file("t324_peach")
+    args = dict(args)
+    args["kind"] = "clip"
+    args["requires"] = _T324_PAIR
+    args["backend"] = "2"
+    dest = args["repair_path"]
+
+    try:
+        qc_service.h_repair(args, lambda m: None)
+    except Exception as e:
+        msg = str(e).lower()
+        assert "gpu work is still missing" not in msg, e
+        assert any(w in msg for w in (
+            "fit", "cannot run", "no box", "unfittable")), e
+    else:
+        raise AssertionError("peaches took the i2v pair")
+
+    assert any(c[0] == "where" and c[1] == _T324_PAIR for c in asked), asked
+    assert (_T324_PAIR, 10.58, False) in fit_calls, fit_calls
+    assert submitted == [], "actuator ran after peaches could not hold the pair"
+    assert not os.path.isfile(dest)
+    row = qc_service.get(fid)
+    assert row["repair_path"] in (None, "")
+    assert row["status"] != qc_service.REPAIRED

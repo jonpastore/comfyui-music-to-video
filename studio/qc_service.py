@@ -398,8 +398,9 @@ def dispatch_repair(src, dest, args, progress):
 
     A pin under a name the box does not have, or a box that does not
     fit, is refused before submit (T3-23). dest is the actuator's file,
-    never a copy of src. Remote output is refused by name until
-    can_move_output is true (T3-25)."""
+    never a copy of src. The refiner's resident cost, not the UNET's
+    13.31, is what fits() answers (T3-24). Remote output is refused by
+    name until can_move_output is true (T3-25)."""
     host = _repair_source_host(src, args)
     if not can_move_output(host):
         raise ValueError(

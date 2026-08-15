@@ -414,7 +414,8 @@ from breakage. `T3-18` now distinguishes those: QC enqueues nothing, approve
 enqueues one repair. `T3-23` names a routing refusal (unfittable, or pinned
 under a name the box does not have) instead of looking like a successful copy.
 `T3-25` names `can_move_output` when a remote output cannot be moved back.
-`T3-24` is the remaining silence on this lane.
+`T3-24` names the refiner as too big for a 15.92 GiB card (and for peaches)
+and routes it to a 24 GiB box that holds the file.
 
 ### 5.8 Motion
 

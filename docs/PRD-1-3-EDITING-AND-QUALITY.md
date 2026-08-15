@@ -195,10 +195,11 @@ order and take the dependencies from here.
    not built and that is a successful outcome.
 9. Repair routing (`T3-23`) is built: `dispatch_repair` asks `where()` /
    `fits()` / `resolve()`, refuses a mis-named pin before submit, and
-   dest is the `fix_ref` / `gen_postproc` file. `T3-25` is built:
-   `can_move_output` refuses remote repair by name until the check is
-   true; forcing it true SUBMITS. Next on this lane: `T3-24` (refiner
-   19.6 GiB as a box decision).
+   dest is the `fix_ref` / `gen_postproc` file. `T3-24` is built: the
+   refiner's resident cost (~19.6 GiB), not the UNET's 13.31, routes it
+   off a 15.92 GiB card onto a 24 GiB one; peaches cannot take the pair.
+   `T3-25` is built: `can_move_output` refuses remote repair by name
+   until the check is true; forcing it true SUBMITS.
 10. Every generated still is vision-scored into `qc_json` (`T3-31`). A
     refine pass writes a new candidate beside the generate; it is not a
     silent overwrite and not a VLM gate.

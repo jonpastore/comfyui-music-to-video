@@ -67,15 +67,17 @@ workflow, no hardcoded duration anywhere), `T3-4`'s measured/expected/unit on
 every check that has them, `T3-7` (8n+1 with the interpolated exemption), `T3-11`
 (imports `mixer.SET_DURATION_TOLERANCE` rather than restating it), `T3-27`
 (a remedy on every finding), and `T3-3` both ways. What is NOT built is the
-rest of tier 2 (`T3-14`…`T3-16`: no threshold, no gate, no UI) and `T3-24`
-(refiner arithmetic as a box decision). `T3-13` writes the calibrations row.
-`T3-23` is wired: `dispatch_repair` asks `models.where()` / `models.fits()` /
-`models.resolve()`, refuses an unfittable or mis-named pin before submit, and
-invokes `pipeline.gen_postproc` or `pipeline.fix_ref` so dest is the actuator's
-file. `T3-25` is a callable: `can_move_output(host)` — remote repair is refused
-by that name until the check is true, and forcing it true SUBMITS. `approve()`
-enqueues a dest ≠ source; `h_repair` writes that dest only when
-`dispatch_repair` produces it, and refuses a silent copy of the broken file.
+rest of tier 2 (`T3-14`…`T3-16`: no threshold, no gate, no UI). `T3-13` writes
+the calibrations row. `T3-23` is wired: `dispatch_repair` asks `models.where()` /
+`models.fits()` / `models.resolve()`, refuses an unfittable or mis-named pin
+before submit, and invokes `pipeline.gen_postproc` or `pipeline.fix_ref` so dest
+is the actuator's file. `T3-24` uses the refiner's resident cost (~19.6 GiB),
+not the UNET's 13.31: a 15.92 GiB card is skipped, a 24 GiB box that holds the
+correct name is SUBMITTED, and peaches cannot take the pair. `T3-25` is a
+callable: `can_move_output(host)` — remote repair is refused by that name until
+the check is true, and forcing it true SUBMITS. `approve()` enqueues a dest ≠
+source; `h_repair` writes that dest only when `dispatch_repair` produces it, and
+refuses a silent copy of the broken file.
 
 **Tier 0's two properties that QC must respect**, both from the code that writes
 it: group by `host`, never by `backend` (Swarm renumbers ids when a backend is
@@ -329,8 +331,9 @@ PASS/FAIL because the finding arrives actionable.
   exactly one**. That second half exists: `approve()` enqueues one `repair` job
   and does not write dest itself. `dispatch_repair` now routes via
   `where()`/`fits()`/`resolve()` and submits `fix_ref` / `gen_postproc`
-  (`T3-23`). `T3-25` consults `can_move_output` before submit. The remaining
-  gap is `T3-24` (refiner 19.6 GiB as a box decision).
+  (`T3-23`). `T3-24` asks real `fits()` so the refiner's resident cost, not
+  the UNET's 13.31, picks the box. `T3-25` consults `can_move_output` before
+  submit.
 - `T3-19` The remedy prompt is **editable before approval**, and the edited text
   is what runs. A differential: approve the same finding twice with two different
   remedy texts and confirm two different jobs were submitted — not by checking
@@ -486,16 +489,18 @@ tier 1.
    marked **provisional** and says what it cannot yet distinguish.
 
    One-sided in this document today, listed so nobody has to re-derive it:
-   `T3-4` (fields present but never checked for sense), `T3-14`, `T3-20`, `T3-22`, `T3-24` and `T3-27`. `T3-1` now has the two-host count half. `T3-6` / `T3-18` / `T3-23` / `T3-25` have their positive halves: dest ≠ source, a correctly-named model on a box that holds it is SUBMITTED, and a remote repair with `can_move_output` forced true is SUBMITTED.
+   `T3-4` (fields present but never checked for sense), `T3-14`, `T3-20`, `T3-22` and `T3-27`. `T3-1` now has the two-host count half. `T3-6` / `T3-18` / `T3-23` / `T3-24` / `T3-25` have their positive halves: dest ≠ source, a correctly-named model on a box that holds it is SUBMITTED, the refiner is routed off a 15.92 GiB card onto a 24 GiB one, and a remote repair with `can_move_output` forced true is SUBMITTED.
 
 ### The positive half of each one-sided criterion
 
 `T3-6` and `T3-18` have the enqueue + dest≠source halves. `T3-23` has both
 halves: a pin under a name the box does not have is refused before submit, and
 a correctly-named model on a box that holds it is SUBMITTED (dest is the
-actuator's file, not a copy of the input). `T3-25` has both halves: remote
-repair is refused by the name `can_move_output` until the check is true, and
-forcing the check true SUBMITS.
+actuator's file, not a copy of the input). `T3-24` has both halves: peaches
+cannot take the pair, and a correctly-named refiner on a box that holds it
+is SUBMITTED to the 24 GiB card, not the 15.92 GiB one. `T3-25` has both
+halves: remote repair is refused by the name `can_move_output` until the
+check is true, and forcing the check true SUBMITS.
 
 | criterion | its positive half |
 |---|---|
@@ -533,7 +538,8 @@ current.
 | `T3-1` group by host | **built** | `test_t3_1_by_host.py` | report over artefacts from two hosts has two groups with the planted counts; NULL host is an explicit unattributed bucket. Host is still canonical (`e20346f`) |
 | `T3-13` score the 18 stills | **built** | `test_t3_13_identity.py` | `qc.score_zimage_sweep` reports overlap, separation and every file over 12-bad/6-good; `qc_service.run_zimage_calibration` stores the row with `threshold` NULL. A stored threshold is refused. No gate, no UI |
 | `T3-14`…`T3-16` | **not built** | — | no threshold setter, no pose-pair ordering, no gate. Overlap is reported; it does not decide anything yet |
-| **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-23` and `T3-25` are their own rows. Remaining: `T3-24` |
+| **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-23`, `T3-24` and `T3-25` are their own rows. Remaining in §6: T3-19…T3-22, T3-26…T3-28 |
 | `T3-23` repair routing | **built** | `160547d` | default `dispatch_repair` asks `where()`/`fits()`/`resolve()`, refuses a pin under a name the box does not have before submit (`test_t3_23_pinned_name_the_box_does_not_have_is_refused_before_submit`), and a correctly-named model on a box that holds it is SUBMITTED (`test_t3_23_correctly_named_model_on_a_box_that_holds_it_is_submitted`). dest is the actuator's file (`fix_ref` / `gen_postproc`), not a copy of src |
+| `T3-24` refiner resident cost | **built** | pending | real `fits()` (not a stub) routes `wan22_i2v_low` off a 15.92 GiB card onto a 24 GiB one that holds the correct name (`test_t3_24_refiner_routed_off_15_92_to_24_and_submitted`); peaches cannot take the i2v pair (`test_t3_24_peaches_cannot_take_the_pair`) |
 | `T3-25` remote output move | **built** | pending | `can_move_output` is callable; remote repair is refused by that name (`test_t3_25_remote_repair_refused_by_name_until_check_is_true`); forcing the check true SUBMITS (`test_t3_25_forced_true_remote_repair_is_submitted`) |
 | `T3-31` vision score on generated stills | **built** | this slice | `score_generated_still` runs on anchors, refs, rerolls, `fix_ref` and artwork. `qc_json` is stored. A refine sibling is a new file (`test_h_anchor_refine_writes_sibling_not_overwrite`). Still advisory — not a gate |
