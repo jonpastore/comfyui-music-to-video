@@ -77,6 +77,11 @@ REQUIRED_SCENE_KEYS = ("scene_number", "name", "cue", "duration_guidance", "stor
                        "camera", "motion", "lighting", "image_prompt",
                        "video_motion_prompt", "negative_prompt")
 
+# T2-8b: last scene end vs song duration. Adjacent end==start is exact by
+# construction in _compose; validate still uses this window so a hand-edited
+# board can fail the same way.
+TILE_TOLERANCE_S = 0.05
+
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
 
 
@@ -463,9 +468,27 @@ def _parse_response(content):
     return obj
 
 
+def _tile_spans(n, duration):
+    """n contiguous [start, end] windows covering [0, duration].
+
+    Last end is the song duration itself so float rounding cannot leave a
+    tail gap. Each start is the previous end, so end==next start is exact.
+    """
+    dur = float(duration or 0.0)
+    if n <= 0:
+        return []
+    spans = []
+    for i in range(n):
+        start = 0.0 if i == 0 else spans[-1][1]
+        end = dur if i == n - 1 else round((i + 1) * dur / n, 4)
+        spans.append((start, end))
+    return spans
+
+
 def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_seconds,
              character_reference=None, world_reference=None, arc_ctx=None):
     out = []
+    dur = float(song.get("duration") or 0.0)
     for i, raw in enumerate(scenes, 1):
         s = dict(raw)
         s.setdefault("scene_number", i)
@@ -496,11 +519,16 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
         s["length_seconds"] = round(frames / LTX_FPS, 4)
         out.append(s)
 
+    for s, (start, end) in zip(out, _tile_spans(len(out), dur)):
+        s["start"] = start
+        s["end"] = end
+
     board = {
         "project": "Grok Storyboard",
         "album": song.get("album", ""),
         "track_number": 0,
         "title": song.get("title", ""),
+        "duration": dur,
         "version": str(tier),
         "storyboard_strategy": {
             "scene_count": len(out),
@@ -567,6 +595,48 @@ def validate(sb, exemplar=None, expect_scenes=None):
     nums = [s.get("scene_number") for s in scenes]
     if nums != list(range(1, len(scenes) + 1)):
         problems.append(f"scene_number not contiguous starting at 1: {nums}")
+
+    # T2-8b: scenes tile the song. Replacement for the deleted section-floor
+    # coverage guarantee — every second is in exactly one scene.
+    dur = sb.get("duration")
+    spans = []
+    for s in scenes:
+        num = s.get("scene_number", "?")
+        try:
+            start = float(s["start"])
+            end = float(s["end"])
+        except (KeyError, TypeError, ValueError):
+            problems.append(f"scene {num} missing start/end (gap)")
+            continue
+        spans.append((start, end, num))
+    if spans:
+        if abs(spans[0][0] - 0.0) > TILE_TOLERANCE_S:
+            problems.append(
+                f"gap: first scene starts at {spans[0][0]}, not 0")
+        for prev, nxt in zip(spans, spans[1:]):
+            if not (nxt[0] > prev[0]):
+                problems.append(
+                    f"start times do not ascend: scene {nxt[2]} starts at "
+                    f"{nxt[0]} after scene {prev[2]} at {prev[0]}")
+            delta = nxt[0] - prev[1]
+            if delta > TILE_TOLERANCE_S:
+                problems.append(
+                    f"gap between scene {prev[2]} and {nxt[2]}")
+            elif delta < -TILE_TOLERANCE_S:
+                problems.append(
+                    f"overlap between scene {prev[2]} and {nxt[2]}")
+        if dur is None:
+            problems.append("storyboard has no duration (cannot check coverage)")
+        else:
+            tail = float(dur) - spans[-1][1]
+            if tail > TILE_TOLERANCE_S:
+                problems.append(
+                    f"gap: last scene ends at {spans[-1][1]}, "
+                    f"song duration is {dur}")
+            elif tail < -TILE_TOLERANCE_S:
+                problems.append(
+                    f"overlap: last scene ends at {spans[-1][1]}, "
+                    f"past song duration {dur}")
 
     # No "the guardrail must appear in image_prompt" check any more. The clause is
     # applied downstream by the prompt builders, so asserting it here would only

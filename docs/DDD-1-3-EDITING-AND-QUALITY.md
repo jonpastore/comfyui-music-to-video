@@ -357,7 +357,9 @@ length is the divisor, the count is ours.
    the ceiling **gate** on that request: over the labeled measured/chosen
    ceiling is refused or split, not annotated. It does not change the planner
    divisor — `clip_seconds(30)` and `n_clips_for(…, 30)` stay.
-3. Then `T2-8`/`T2-9`. `T2-13b` and `T2-13c` are not blocked on the
+3. Then `T2-8`/`T2-9`. **`T2-8b` built.** `_compose` stamps `start`/`end`
+   covering `[0, song.duration]`; `validate` refuses a gap or overlap
+   (`test_t2_8b.py`). `T2-13b` and `T2-13c` are not blocked on the
    renderer: `h_storyboard` upserts the storyboard row and does not touch
    `refs`, so re-planning leaves the approved `(clip_idx, seed)` set
    identical (`T2-13b`); `approve_context` enumerates `clip_count`, so a
@@ -379,6 +381,10 @@ and fail this. `T2-14c` is **built**: the return value still states track
 length and requires scene durations to sum to approximately it. Deleting
 the TIMING block wholesale leaves `T2-14a` green and fails this. The
 function is pure; assert on its return value, never by grepping the source.
+
+`T2-8b` is **built**. `_compose` stamps each scene's `start`/`end` so they
+tile `[0, duration]`; `validate` refuses a gap or overlap. Mutation: drop
+the check → a gapped board is accepted.
 
 `T2-20` is **built**. `_compose` stamps `album_arc` from `arc_ctx` beat and
 continuity onto the generated board; no arc leaves the field off. Same
@@ -481,7 +487,7 @@ documents, not a preference.
 
     T6-13a (songs.duration)  ->  T2-12a (legal frame count + clip_seconds honours it)
                                  ->  T2-13a (renderer honours that length)
-                                 ->  T2-13c (built), T2-8, T2-9
+                                 ->  T2-13c (built), T2-8b (built), T2-8, T2-9
                                  ->  W2 T2-47 mixed-model native fps (built)
                                  ->  W2 per-scene models (T2-48)
 
