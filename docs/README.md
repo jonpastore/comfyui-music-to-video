@@ -92,7 +92,7 @@ and it is what the review found missing.
         asserted byte-identical -- `pose` beside "standing upright, arms
         relaxed at their sides" is a shipped prompt contradiction)
 
-    qc_service.py pattern --> sets_service, storyboard_service (T6-A3)
+    qc_service.py pattern --> sets_service, storyboard_service (T6-A3, built)
     approve() stops raising --> T3-6 and T3-18 stop being provisional
     calibration row --> tier 2 threshold --> tier 2 UI  (never the other order)
 

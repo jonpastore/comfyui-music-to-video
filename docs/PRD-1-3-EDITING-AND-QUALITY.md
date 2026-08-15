@@ -22,7 +22,8 @@ and set editor (`test_t6_a2_html_and_json_report_the_same_set_numbers`,
 `T6-A2-set`). Storyboard still writes its own T6-A2 as that loop moves.
 `T6-A4` is proven for the queue panel (`test_t6_a4_*`); `T6-A5` is proven
 for set re-render, refine, repair and anchor re-roll (`test_t6_a5_*`,
-`qc_service.listed` / `select`). `T6-A3` remains the rest of P3.
+`qc_service.listed` / `select`). `T6-A3` is **built** as `sets_service.py` /
+`storyboard_service.py` (`test_t6_a3_*`).
 
 ---
 
@@ -261,9 +262,9 @@ unbuilt work and are not" — the ledger with line counts is DDD §1.
    before render when planned clip durations miss the track by more
    than one clip; assemble still clamps to the track and no longer
    treats a 4.8125 s overrun as the norm.
-2. **The service split**, TRD-1 and TRD-2 (`T6-A3`). `qc_service.py` already
-   demonstrates it and is the pattern to copy. Doing this after the features
-   means writing them twice.
+2. **The service split**, TRD-1 and TRD-2 (`T6-A3`) — **built** as
+   `sets_service.py` / `storyboard_service.py` (same shape as `qc_service.py`;
+   `test_t6_a3_*`).
 
 ### P1 — SUPERSEDED BY §6.0, kept for its dependency edges
 

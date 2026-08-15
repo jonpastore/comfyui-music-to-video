@@ -40,6 +40,8 @@ import effects    # per-item audio DJ effects -- pure, no deps, validated for re
 import automation  # set-item curves: fragments + the loudnorm decision
 import qc          # tier-1 output checks: pure measurement, no db, no app
 import qc_service   # recording those findings and answering the review queue
+import sets_service  # TRD-1 / T6-A3: sets, items, render — no FastAPI
+import storyboard_service  # TRD-2 / T6-A3: arc, board, meter — no FastAPI
 import video_fx   # per-item video look effects -- same, pure/no deps
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -1804,6 +1806,17 @@ def _json_row(row):
     if isinstance(row, dict):
         return dict(row)
     return {k: row[k] for k in row.keys()}
+
+
+def _svc_http(exc):
+    """Map a service error to HTTP. The service decides; this only translates."""
+    if isinstance(exc, LookupError):
+        raise HTTPException(404, str(exc))
+    if isinstance(exc, ValueError):
+        raise HTTPException(400, str(exc))
+    if isinstance(exc, RuntimeError):
+        raise HTTPException(500, str(exc))
+    raise exc
 
 
 def song_entry(s, in_sets=None):
@@ -5151,44 +5164,22 @@ def storyboard_generation_payload(song, tier):
     }
 
 
-def enqueue_storyboard(song_id, tier, model="", scene_seconds=4.0, direction=""):
+def enqueue_storyboard(song_id, tier, model="", scene_seconds=None, direction=""):
     """Queue a storyboard generate. Shared by the HTML form and the JSON API."""
-    get_song_or_404(song_id)
-    valid_tier_or_400(tier)
-    direction = check_direction(direction)
     try:
-        scene_seconds = float(scene_seconds)
-    except (TypeError, ValueError):
-        raise HTTPException(400, "scene_seconds must be a finite number")
-    if not math.isfinite(scene_seconds):
-        raise HTTPException(400, "scene_seconds must be a finite number")
-    scene_seconds = min(max(scene_seconds, 1.0), 60.0)
-    jid = jobs.enqueue("storyboard", {
-        "song_id": song_id, "tier": tier,
-        "model": (model or models.chat_default()) or None,
-        "scene_seconds": scene_seconds, "direction": direction,
-    }, song_id=song_id)
-    return jid, direction
+        direction = storyboard_service.check_direction(direction)
+        jid = storyboard_service.enqueue(song_id, tier, model, scene_seconds, direction)
+        return jid, direction
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
 
 
 def check_direction(direction):
-    """Screen the direction box exactly as a custom tier's wording is screened.
-
-    Same two functions, for the same two reasons: check_text() refuses minor
-    references before any model is called, and check_override() refuses text
-    that argues with the pinned clause. The length cap is larger than a tier's
-    500 because this is a brief for one song, not a reusable rating.
-    """
-    direction = (direction or "").strip()
-    if len(direction) > grok.MAX_DIRECTION:
-        raise HTTPException(400, f"the direction is {len(direction)} characters; keep it "
-                                  f"under {grok.MAX_DIRECTION}. It is a brief, not a script.")
+    """Screen the direction box exactly as a custom tier's wording is screened."""
     try:
-        tiers.check_text(direction, "storyboard direction")
-        tiers.check_override(direction)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    return direction
+        return storyboard_service.check_direction(direction)
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
 
 
 @app.get("/songs/{id}/storyboard-form", response_class=HTMLResponse)
@@ -5247,7 +5238,7 @@ async def api_start_storyboard(id: int, tier: str, request: Request):
     jid, direction = enqueue_storyboard(
         id, tier,
         model=body.get("model") or "",
-        scene_seconds=body.get("scene_seconds", 4.0),
+        scene_seconds=body.get("scene_seconds"),
         direction=prompt)
     return JSONResponse({"job_id": jid, "tier": tier, "prompt": direction})
 
@@ -5651,22 +5642,11 @@ def _storyboard_payload(song, tier):
     }
 
 
-def _enqueue_storyboard(song_id, tier, model="", scene_seconds=4.0, direction=""):
-    get_song_or_404(song_id)
-    valid_tier_or_400(tier)
-    direction = check_direction(direction or "")
+def _enqueue_storyboard(song_id, tier, model="", scene_seconds=None, direction=""):
     try:
-        scene_seconds = float(scene_seconds)
-    except (TypeError, ValueError):
-        raise HTTPException(400, "scene_seconds must be a finite number")
-    if not math.isfinite(scene_seconds):
-        raise HTTPException(400, "scene_seconds must be a finite number")
-    scene_seconds = min(max(scene_seconds, 1.0), 60.0)
-    return jobs.enqueue("storyboard", {
-        "song_id": song_id, "tier": tier,
-        "model": (model or models.chat_default()) or None,
-        "scene_seconds": scene_seconds, "direction": direction,
-    }, song_id=song_id)
+        return storyboard_service.enqueue(song_id, tier, model, scene_seconds, direction)
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
 
 
 def _apply_scene_fields(song, tier, num, fields):
@@ -5728,13 +5708,10 @@ async def api_storyboard_edit_scene(id: int, tier: str, num: int, request: Reque
 
 @app.get("/api/songs/{id}/storyboard/{tier}/meter")
 def api_storyboard_meter(id: int, tier: str):
-    payload = _storyboard_payload(get_song_or_404(id), valid_tier_or_400(tier))
-    meter = dict(payload["coverage"])
-    meter["nclips"] = payload["nclips"]
-    meter.update(scene_time_report(meter.get("intent"), meter.get("duration")))
-    # T2-24: this song's legal clip length, not CHUNK / 4.8125.
-    meter["clip_seconds"] = build_song.clip_seconds(payload.get("scene_seconds"))
-    return JSONResponse(meter)
+    try:
+        return JSONResponse(storyboard_service.meter(id, tier))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
 
 
 @app.get("/api/songs/{id}/storyboard/{tier}/cast")
@@ -7628,53 +7605,12 @@ def new_set_page(request: Request):
                                       {"playlists": playlists, "all_tiers": tiers.all_tiers()})
 
 
-def _create_set_row(name, mode="video", tier="", playlist_id=None):
+def _create_set_row(name, mode=None, tier="", playlist_id=None):
     """Mint a set. Shared by the HTML form and the T6-A1 JSON loop."""
-    name = (name or "").strip()
-    if not name:
-        raise HTTPException(400, "name required")
-    # free text a user typed -- screened exactly like the anchor prompt and
-    # tier wording, for the same reason: it flows into no prompt today, but a
-    # field nobody screens is the one that eventually does.
     try:
-        tiers.check_text(name, "set name")
-        tiers.check_override(name)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    if mode not in ("audio", "video"):
-        raise HTTPException(400, "mode must be 'audio' or 'video'")
-    tier = (tier or "").strip() or None
-    if tier:
-        valid_tier_or_400(tier)
-    if playlist_id is not None and playlist_id != "":
-        playlist_id = int(playlist_id)
-        get_playlist_or_404(playlist_id)
-    else:
-        playlist_id = None
-    now = time.time()
-    sid = db.run("""INSERT INTO sets (name, playlist_id, tier, mode, created, updated)
-                    VALUES (?,?,?,?,?,?)""", name, playlist_id, tier, mode, now, now)
-    if playlist_id is not None:
-        # Seeds from the playlist's current ordering -- a STARTING POINT, not a
-        # link: editing the set afterward never writes back to the playlist,
-        # and re-ordering the playlist later never reaches this set either.
-        #
-        # If the album has a story arc, its transition_out DEFAULTS each
-        # handover: the arc is where a fade to black was argued for, so this is
-        # where that argument arrives. It is still only a default -- the arc
-        # proposes and the set editor disposes, and every one is overridable.
-        pl_row = db.one("SELECT name FROM playlists WHERE id=?", playlist_id)
-        by_song = {s["song_id"]: s.get("transition_out") or {}
-                   for s in album_arc(pl_row["name"] if pl_row else "").get("songs") or []}
-        for it in db.q("SELECT * FROM playlist_items WHERE playlist_id=? ORDER BY position", playlist_id):
-            t = by_song.get(it["song_id"]) or {}
-            kind = t.get("kind") if t.get("kind") in SET_TRANSITIONS else it["transition"]
-            secs = t.get("secs") if t.get("kind") in SET_TRANSITIONS else it["secs"]
-            hold = float(t.get("hold") or 0.0) if kind == mixer.BLACK else 0.0
-            db.run("""INSERT INTO set_items (set_id, song_id, position, transition, secs, hold)
-                      VALUES (?,?,?,?,?,?)""", sid, it["song_id"], it["position"],
-                   kind, float(secs or 0.0), hold)
-    return sid
+        return sets_service.create(name, mode, tier, playlist_id)
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
 
 
 @app.post("/sets/new")
@@ -7863,29 +7799,11 @@ def update_set(id: int, name: str = Form(...), mode: str = Form("video"),
     return RedirectResponse(f"/sets/{id}", status_code=303)
 
 
-def _add_set_item_row(id, song_id, transition="fade", secs=2.0, beatmatch=False):
-    row = get_set_or_404(id)
-    if row["mode"] == automation.SONG_EDITOR_MODE:
-        raise HTTPException(400, "the song editor is a one-item timeline")
-    song = get_song_or_404(int(song_id))
-    if transition not in SET_TRANSITIONS:
-        raise HTTPException(400, f"transition must be one of {', '.join(SET_TRANSITIONS)}")
-    secs = float(secs)
-    beatmatch = bool(beatmatch) and beatmatch not in (0, "0", "false", "False")
-    # Appending a song activates the PREVIOUS last item's own transition/secs
-    # (unused while it had no next item) -- check the whole sequence still
-    # renders before adding, not just this one new row. Same tolerance
-    # _mix_items_for_set gives every existing row: a missing mp3 (deleted,
-    # moved) is skipped rather than treated as a validation failure.
-    extra = ({"audio": song["mp3_path"], "transition": transition, "secs": secs, "hold": 0.0,
-             "in_secs": None, "out_secs": None, **_beatmatch_fields({"beatmatch": beatmatch}, song)}
-             if song["mp3_path"] and os.path.isfile(song["mp3_path"]) else None)
-    _refuse_if_unrenderable(_mix_items_for_set(id, extra_item=extra))
-    pos_row = db.one("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM set_items WHERE set_id=?", id)
-    iid = db.run("""INSERT INTO set_items (set_id, song_id, position, transition, secs, beatmatch)
-              VALUES (?,?,?,?,?,?)""", id, int(song_id), pos_row["p"], transition, secs, int(beatmatch))
-    db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
-    return iid
+def _add_set_item_row(id, song_id, transition=None, secs=None, beatmatch=None):
+    try:
+        return sets_service.add_item(id, song_id, transition, secs, beatmatch)
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
 
 
 @app.post("/sets/{id}/items")
@@ -8137,10 +8055,10 @@ def _set_render_items(row):
 
 def _enqueue_set_render(id):
     """Build the item list and enqueue render_set. HTML and JSON share this."""
-    row = get_set_or_404(id)
-    build = _set_render_items(row)
-    return jobs.enqueue("render_set", {"set_id": id, "playlist_id": row["playlist_id"],
-                                       "mode": row["mode"], "tier": row["tier"], "items": build})
+    try:
+        return sets_service.enqueue_render(id)
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
 
 
 @app.post("/sets/{id}/render")
@@ -8167,59 +8085,59 @@ def delete_set(asset_id: int):
 
 @app.get("/api/sets")
 def api_sets_list():
-    rows = db.q("SELECT * FROM sets WHERE mode != ? ORDER BY updated DESC, id DESC",
-                automation.SONG_EDITOR_MODE)
-    return JSONResponse({"sets": [_set_payload(r) for r in rows]})
+    return JSONResponse({"sets": sets_service.listed()})
 
 
 @app.post("/api/sets")
 async def api_sets_create(request: Request):
     body = await _api_body(request)
-    sid = _create_set_row(body.get("name"), body.get("mode") or "audio",
-                          body.get("tier") or "", body.get("playlist_id"))
-    return JSONResponse(_set_payload(get_set_or_404(sid)))
+    try:
+        sid = sets_service.create(body.get("name"), body.get("mode"),
+                                  body.get("tier"), body.get("playlist_id"))
+        return JSONResponse(sets_service.payload(sid))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
 
 
 @app.get("/api/sets/{id}")
 def api_set_get(id: int):
-    return JSONResponse(_set_payload(get_set_or_404(id)))
+    try:
+        return JSONResponse(sets_service.payload(id))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
 
 
 @app.post("/api/sets/{id}/items")
 async def api_set_add_item(id: int, request: Request):
     body = await _api_body(request)
-    if body.get("song_id") in (None, ""):
-        raise HTTPException(400, "song_id required")
-    _add_set_item_row(id, body["song_id"],
-                      body.get("transition") or "fade",
-                      body.get("secs") if body.get("secs") not in (None, "") else 2.0,
-                      body.get("beatmatch") or False)
-    return JSONResponse(_set_payload(get_set_or_404(id)))
+    try:
+        sets_service.add_item(id, body.get("song_id"),
+                              body.get("transition"), body.get("secs"),
+                              body.get("beatmatch"))
+        return JSONResponse(sets_service.payload(id))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
 
 
 @app.post("/api/sets/{id}/items/{item_id}/automation/{lane}")
 async def api_set_item_automation(id: int, item_id: int, lane: str, request: Request):
     """T1-11: write one lane. The stored, decimated curve comes back;
     two points at the same t are 400 and the body names that t."""
-    get_set_or_404(id)
-    if not db.one("SELECT id FROM set_items WHERE id=? AND set_id=?", item_id, id):
-        raise HTTPException(404, "no such item")
     body = await _api_body(request)
-    points = body.get("points")
-    if points is None:
-        raise HTTPException(400, "points required")
-    curve = body.get("curve") or "linear"
     try:
-        stored = automation.save(item_id, lane, points, curve=curve)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    return JSONResponse({"lane": lane, "points": stored, "curve": curve})
+        return JSONResponse(sets_service.save_automation(
+            id, item_id, lane, body.get("points"), body.get("curve")))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
 
 
 @app.post("/api/sets/{id}/render")
 def api_set_render(id: int):
-    jid = _enqueue_set_render(id)
-    return JSONResponse({"job_id": jid, "set_id": id})
+    try:
+        jid = sets_service.enqueue_render(id)
+        return JSONResponse({"job_id": jid, "set_id": id})
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
 
 
 @app.get("/api/sets/{id}/renders")
