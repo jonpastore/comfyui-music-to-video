@@ -236,14 +236,16 @@ would hide the quiet passages, which are exactly what you look at it to
 find) stays true either way. An empty envelope must surface `reason`, not
 a silent strip.
 
-**Genuinely not built** — the live `meter` component (`T2-25` pre-queue
-gate; live loudness-against-target as you mix — the export asset already
+**Genuinely not built** — the live `meter` component (live
+loudness-against-target as you mix — the export asset already
 names measured I/TP and the off-target flag, `T1-25`).
 `GET /api/songs/{id}/storyboard/{tier}/meter` reports `scene_time`
 against `song_length` and `mismatch` beyond `SCENE_TIME_TOLERANCE`
 (`T2-23`). It reports this song's `clip_seconds` from
 `build_song.clip_seconds(scene_seconds)` (`T2-24`): the same song at
-two `scene_seconds` yields two clip lengths.
+two `scene_seconds` yields two clip lengths. **`T2-25` built**:
+`POST /songs/{id}/clips` refuses a scene-time miss (400, no job)
+and still queues an in-tolerance board.
 
 `finding-row` **built** (`GET /qc`, `_finding_row.html`,
 `test_t3_19_finding_row.py`): measured / expected / unit / editable
@@ -352,8 +354,8 @@ refused; the message says identity comes from the text, not the
 reference image (`T2-31`, `T2-32`).
 The storyboard meter API reports total scene time against song length
 and flags a miss beyond a stated tolerance (`T2-23`); it reports this
-song's `clip_seconds`, not a constant (`T2-24`). The live `meter`
-component is not this.
+song's `clip_seconds`, not a constant (`T2-24`). A miss is refused
+before clips enqueue (`T2-25`). The live `meter` component is not this.
 The song page **Video model** select is `models.renderable("video")`
 with each option's purpose in the hint (`T2-33`). Adding a catalogue
 entry with a `cli` appears there with no template change.

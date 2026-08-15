@@ -251,8 +251,10 @@ order and take the dependencies from here.
    change (`test_t2_33_picker_renderable.py`); a picker that calls
    `renderable()` and discards it fails that. **`T2-8c` built**: every
    scene names the lyric sections it spans; unnamed or double-named
-   fails validate (`test_t2_8c.py`). Remaining: §4.2–4.3
-   wands (`T2-17`…`T2-19`), `T2-25`, `T2-34`, and casting.
+   fails validate (`test_t2_8c.py`). **`T2-25` built**: a scene-time
+   miss is 400 before clips enqueue; in-tolerance still queues
+   (`test_t2_25_scene_time_enqueue.py`). Remaining: §4.2–4.3
+   wands (`T2-17`…`T2-19`), `T2-34`, and casting.
 7. Per-scene model choice, W2 (`T2-42`…`T2-48`) — last, because `T2-45` needs
    `models.where()`'s three-valued answer respected at enqueue and `T2-48` needs
    per-model ceilings, which is P0 item 1 again. The renderer half of those
