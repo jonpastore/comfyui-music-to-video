@@ -246,6 +246,14 @@ def _may_replace_lyrics(song, force=False):
         return True
 
 
+def _screen_lyrics(text, *, tier=None, where="lyrics"):
+    # Mirrors lyrics.screen (T10-18b). Callable stubs do not fall through.
+    import guardrail
+    if not guardrail.refuses_minor_everywhere(tier):
+        return text or ""
+    return guardrail.check_text(text, where, tier="xxx")
+
+
 _stub("lyrics",
       available=lambda: (True, "stub ready"),
       # backend is T10-8 provenance; h_transcribe stores it via db.store_lyrics.
@@ -259,6 +267,7 @@ _stub("lyrics",
       to_sections=lambda result, gap=3.0: "[Section 1]\nhi\n",
       estimate_duration=lambda mp3: 12.3,
       may_replace_lyrics=_may_replace_lyrics,
+      screen=_screen_lyrics,
       REPLACE_WARNING=(
           "Re-transcribe replaces the current lyrics, including any edits."))
 

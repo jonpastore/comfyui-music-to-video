@@ -965,6 +965,10 @@ def h_transcribe(args, progress):
     pipeline.free_vram(progress)
     result = lyrics.transcribe(song["mp3_path"], progress)
     text = lyrics.to_sections(result)
+    # T10-18b: transcription into an xxx work is still a lyrics write.
+    if db.one("SELECT id FROM storyboards WHERE song_id=? AND tier=?",
+              song["id"], "xxx"):
+        lyrics.screen(text, tier="xxx")
     # T10-8: which backend produced it, and that it is a transcription.
     # store_lyrics also clears lyrics_edited (T10-9).
     db.store_lyrics(song["id"], text, source="transcription",
@@ -2565,6 +2569,12 @@ def toggle_explicit(id: int):
 @app.post("/songs/{id}/lyrics")
 def save_lyrics(id: int, lyrics_text: str = Form(...)):
     get_song_or_404(id)
+    # T10-18b: an xxx work refuses a minor reference in lyrics too.
+    if db.one("SELECT id FROM storyboards WHERE song_id=? AND tier=?", id, "xxx"):
+        try:
+            lyrics.screen(lyrics_text, tier="xxx")
+        except ValueError as e:
+            raise HTTPException(400, str(e))
     # T10-8: supplied text is not a transcription; clear any prior backend.
     # T10-9: store_lyrics marks lyrics_edited so a re-fetch cannot discard it.
     db.store_lyrics(id, lyrics_text, source="supplied")
@@ -6280,6 +6290,12 @@ MAX_AUDIO_SECS = 240.0
 MAX_AUDIO_TAKES = 4
 
 
+def _screen_xxx_audio_text(text, where):
+    """T10-18b work-level screen. Named so generate_audio's `lyrics` form
+    param cannot shadow the lyrics module at the call site."""
+    return lyrics.screen(text, tier="xxx", where=where)
+
+
 @app.post("/songs/{id}/audio/generate")
 def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
                    seconds: float = Form(30.0), n: int = Form(1),
@@ -6288,10 +6304,11 @@ def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
                    bridge_start: str = Form(""), bridge_end: str = Form("")):
     """Queue an ACE-Step take for this song.
 
-    Deliberately NOT screened by tiers.check_text: the image guardrail is off
-    the audio path on purpose (it refused nursery rhymes), and ACE-Step reads
-    tags as musical style tokens, so wording about what must not be DEPICTED is
-    noise there at best. The bounds below are the only thing this route asserts.
+    The image guardrail is off the bare audio path on purpose (T8-4 / T10-16:
+    it refused nursery rhymes). T10-18b is the exception: when this song already
+    has an xxx storyboard, tags and lyrics are work fields of an explicit work
+    and a minor reference is refused. ACE-Step still reads tags as style tokens;
+    the work-level ban is the only policy that runs here.
     """
     song = get_song_or_404(id)
     tags = " ".join((tags or "").split())
@@ -6305,6 +6322,14 @@ def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
     for value, bound, what in ((tags, MAX_TAGS, "tags"), (lyrics or "", MAX_LYRICS, "lyrics")):
         if len(value) > bound:
             raise HTTPException(400, f"{what} is {len(value)} characters; keep it under {bound}")
+    # T10-18b: xxx work — refuse minor references in tags and lyrics.
+    # Form param is also named `lyrics`, so call the module through a helper.
+    if db.one("SELECT id FROM storyboards WHERE song_id=? AND tier=?", id, "xxx"):
+        try:
+            _screen_xxx_audio_text(tags, "tags")
+            _screen_xxx_audio_text(lyrics or "", "lyrics")
+        except ValueError as e:
+            raise HTTPException(400, str(e))
     # Replacing a span is the only thing here that is an EDIT of this track
     # rather than a new one, so it computes its own length and ignores the
     # seconds box: the bridge has to be the gap PLUS the two crossfades that

@@ -353,6 +353,16 @@ suggestive framing, fetish camera language, and explicit anatomy/act
 wording). The co-occurrence is absolute — g/pg13 depiction and r
 lyrics/narrative mention do not open it. Clean child text at g/pg13 and
 adult sexualisation at r/xxx still pass.
+
+**`T10-18b` (built):** at `xxx`, a minor reference is refused everywhere in
+the work, lyrics included. `guardrail.refuses_minor_everywhere` /
+`NO_MINOR_MENTION_TIERS` name the tier; `lyrics.screen(text, tier=...)` is
+the lyrics/tags entry. Callers: POST `/songs/{id}/lyrics` and audio generate
+when the song already has an `xxx` storyboard; storyboard `enqueue` at `xxx`
+re-screens stored lyrics; transcription into an `xxx` work screens before
+store. Bare audio without an `xxx` board stays off the image guardrail
+(`T10-16` / `T8-4`). A clean `xxx` work still generates and renders
+(`studio/test_t10_18b_xxx_no_minor.py`).
 ## 5. Build order
 
     TRD-9 tests (no new behaviour)  ->  a routing change becomes provable

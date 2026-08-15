@@ -38,6 +38,12 @@ PINNED = (
 # view reachable). Unset / anything else is treated as xxx (T10-25).
 LOCKED_DEPICT_TIERS = frozenset({"g", "pg13"})
 
+# T10-18b: at xxx a minor may not be mentioned in ANY field of the work,
+# lyrics included. Distinct from LOCKED_DEPICT_TIERS (where depiction is
+# allowed). Render-path check_text still treats unset as xxx (T10-25);
+# lyrics screening keys off this set when the work is known to be at xxx.
+NO_MINOR_MENTION_TIERS = frozenset({"xxx"})
+
 # T10-18a: at r, a minor may be mentioned only in these field kinds. Anything
 # that reaches a render prompt is outside this set. T10-19a owns the inventory
 # of which form fields map onto which kind; the kinds themselves live here.
@@ -47,6 +53,11 @@ MENTION_FIELD_KINDS = frozenset({"lyrics", "narrative"})
 def allows_minor_depiction(tier):
     """True only at the locked non-explicit tiers named by T10-18."""
     return (tier or "").strip().lower() in LOCKED_DEPICT_TIERS
+
+
+def refuses_minor_everywhere(tier):
+    """True at xxx: no field of the work may reference a minor (T10-18b)."""
+    return (tier or "").strip().lower() in NO_MINOR_MENTION_TIERS
 
 
 def allows_minor_mention(tier, *, field_kind=None):

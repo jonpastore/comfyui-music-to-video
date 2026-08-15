@@ -254,6 +254,21 @@ def may_replace_lyrics(song, force=False):
     return not edited
 
 
+def screen(text, *, tier=None, where="lyrics"):
+    """T10-18b: at xxx, lyrics (and tags) may not reference a minor.
+
+    g/pg13 may mention (T10-18). r may mention in lyrics (T10-18a). The
+    image guardrail stays off make_audio itself (T8-4 / T10-16); this is
+    the work-level screen when the work is at xxx.
+    """
+    # Late import: guardrail lives at the repo root; tiers re-exports it and
+    # puts that root on sys.path for studio callers.
+    import tiers
+    if not tiers.refuses_minor_everywhere(tier):
+        return text or ""
+    return tiers.check_text(text, where, tier="xxx")
+
+
 def estimate_duration(mp3_path):
     """Seconds, via ffprobe."""
     out = subprocess.run(

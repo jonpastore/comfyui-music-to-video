@@ -22,7 +22,7 @@ from guardrail import (  # noqa: E402,F401  (re-exported: callers use tiers.X)
     check_text, compose,
     _SINGLE, _PHRASES, _ALLOW, _normalize, _tokens,
     allows_minor_depiction, allows_minor_mention, LOCKED_DEPICT_TIERS,
-    MENTION_FIELD_KINDS,
+    MENTION_FIELD_KINDS, refuses_minor_everywhere, NO_MINOR_MENTION_TIERS,
     check_escalation, ESCALATION_OVERRIDE_CHANNELS,
 )
 
