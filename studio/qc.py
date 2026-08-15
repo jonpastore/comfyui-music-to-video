@@ -94,6 +94,15 @@ _ZIMAGE_SEED_RE = re.compile(r"_s(\d+)_")
 # identity collapse (cat head on a human form). Offline, no pixels.
 HUMAN_BODY_PHRASES = ("human form", "human body", "human skin", "bare skin")
 
+# docs/TRD-5 T5-2: the renderer assigns decoded (plain, refined) uint8/float
+# arrays here after a same-seed pair lands. None is NOT MEASURED. skip is
+# not a reading. Deleting this name is the mutation the harness test uses.
+# T5_2_REAL_CLIP_MEASURED stays False until a GPU pair is decoded; flipping
+# it without populating the hook is the lie the harness test catches.
+T5_2_REAL_CLIP_FRAMES = None
+T5_2_REAL_CLIP_MEASURED = False
+T5_2_REAL_CLIP_SEED = None
+
 
 def finding(path, kind, check, verdict, detail, measured=None, expected=None,
             unit=None, remedy=None):
@@ -199,6 +208,121 @@ def _stderr_events(path, filt, pattern):
         ["ffmpeg", "-nostdin", "-v", "info", "-i", path, "-vf", filt, "-f", "null", "-"],
         capture_output=True, text=True)
     return re.findall(pattern, r.stderr)
+
+
+# --------------------------------------------------------------- T5-2 MAD --
+
+def t5_2_real_clip_frames():
+    """Hook the renderer populates. None until a same-seed GPU pair lands."""
+    return T5_2_REAL_CLIP_FRAMES
+
+
+def record_t5_2_real_clip(plain_frames, refined_frames, seed=None):
+    """Renderer calls this with decoded arrays after a refine-on/off pair."""
+    global T5_2_REAL_CLIP_FRAMES, T5_2_REAL_CLIP_SEED
+    T5_2_REAL_CLIP_FRAMES = (plain_frames, refined_frames)
+    T5_2_REAL_CLIP_SEED = seed
+
+
+def decode_video_frames(path):
+    """Decode every frame as float64 RGB (n, h, w, 3). Missing path raises."""
+    import numpy as np
+    if not path or not os.path.isfile(path):
+        raise ValueError("T5-2 real clip MAD is NOT MEASURED")
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=width,height", "-print_format", "json",
+         path],
+        capture_output=True, text=True)
+    streams = (json.loads(probe.stdout or "{}").get("streams") or [{}])
+    s = streams[0] if streams else {}
+    try:
+        w, h = int(s["width"]), int(s["height"])
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("T5-2 real clip MAD is NOT MEASURED") from None
+    raw = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-i", path,
+         "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        capture_output=True)
+    if raw.returncode != 0 or not raw.stdout:
+        raise ValueError("T5-2 real clip MAD is NOT MEASURED")
+    buf = np.frombuffer(raw.stdout, dtype="uint8")
+    pix = w * h * 3
+    if pix <= 0 or buf.size % pix != 0:
+        raise ValueError(f"T5-2: decoded size {buf.size} is not {w}x{h}x3")
+    n = buf.size // pix
+    return buf.reshape(n, h, w, 3).astype("float64")
+
+
+def _as_float_frames(frames, name):
+    import numpy as np
+    if frames is None:
+        raise ValueError("T5-2 real clip MAD is NOT MEASURED")
+    if isinstance(frames, (str, bytes, os.PathLike)):
+        frames = decode_video_frames(frames)
+    arr = np.asarray(frames, dtype="float64")
+    if arr.size == 0:
+        raise ValueError(f"T5-2: empty {name} frames are not a measurement")
+    return arr
+
+
+def mean_absolute_difference(plain, refined):
+    """Pixel MAD. Missing or empty arrays RAISE, never return 0.0."""
+    import numpy as np
+    a = _as_float_frames(plain, "plain")
+    b = _as_float_frames(refined, "refined")
+    if a.shape != b.shape:
+        raise ValueError(f"T5-2: frame shape {a.shape} vs {b.shape}")
+    return float(np.mean(np.abs(a - b)))
+
+
+def _as_gray_frames(frames, name):
+    arr = _as_float_frames(frames, name)
+    if arr.ndim == 2:
+        arr = arr[None, ...]
+    elif arr.ndim == 3 and arr.shape[-1] in (3, 4):
+        arr = arr[..., :3].mean(axis=-1)[None, ...]
+    elif arr.ndim == 4:
+        arr = arr[..., :3].mean(axis=-1)
+    elif arr.ndim != 3:
+        raise ValueError(f"T5-2: unsupported {name} frame rank {arr.ndim}")
+    return arr
+
+
+def laplacian_sharpness(frames):
+    """Mean per-frame Laplacian variance. Higher is sharper. Empty RAISE."""
+    gray = _as_gray_frames(frames, "sharpness")
+    if gray.shape[-2] < 3 or gray.shape[-1] < 3:
+        raise ValueError("T5-2: frames too small to measure sharpness")
+    c = gray[:, 1:-1, 1:-1]
+    lap = (
+        gray[:, :-2, 1:-1] + gray[:, 2:, 1:-1]
+        + gray[:, 1:-1, :-2] + gray[:, 1:-1, 2:]
+        - 4.0 * c
+    )
+    var = lap.reshape(lap.shape[0], -1).var(axis=1)
+    return float(var.mean())
+
+
+def t5_2_refine_differential(plain, refined):
+    """T5-2 numbers. Missing frames fail closed (NOT MEASURED), never skip."""
+    return {
+        "mad": mean_absolute_difference(plain, refined),
+        "sharpness_off": laplacian_sharpness(plain),
+        "sharpness_on": laplacian_sharpness(refined),
+    }
+
+
+def t5_2_claim():
+    """The real-clip gate. MEASURED with an empty hook is still NOT MEASURED."""
+    if not T5_2_REAL_CLIP_MEASURED:
+        raise ValueError("T5-2 real clip MAD is NOT MEASURED")
+    frames = t5_2_real_clip_frames()
+    if frames is None:
+        raise ValueError("T5-2 real clip MAD is NOT MEASURED")
+    out = t5_2_refine_differential(*frames)
+    out["seed"] = T5_2_REAL_CLIP_SEED
+    return out
 
 
 # ------------------------------------------------------------------ video --
@@ -866,6 +990,22 @@ def demo():
             assert "no lavfi.signalstats.YAVG readings" in str(e), e
         else:
             raise AssertionError("a video filter on an audio file reported a reading")
+
+        # T5-2 harness: MAD can fail (identical = 0) and missing frames raise.
+        import numpy as np
+        a = np.zeros((2, 8, 8, 3), dtype="float64")
+        a[:, 4:, :] = 255
+        b = a.copy()
+        b[:, :, ::2] += 40
+        d = t5_2_refine_differential(a, b)
+        assert d["mad"] > 0, d
+        assert mean_absolute_difference(a, a) == 0.0
+        try:
+            t5_2_refine_differential(None, None)
+        except ValueError as e:
+            assert "NOT MEASURED" in str(e), e
+        else:
+            raise AssertionError("T5-2 missing frames did not fail closed")
 
     print("qc.py OK")
 

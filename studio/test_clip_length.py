@@ -1,5 +1,7 @@
 """T2-12a legal 8n+1 rounding, T2-13 one clip-count reader, and T5-1 / T5-3 / T5-4 / T5-10 refine.
 
+T5-2 (MAD on decoded frames) lives in test_t5_2_refine_mad.py. Graph-only is not T5-2.
+
 Asserted through the public functions the routes actually call
 (docs/TRD-6 T6-A10): build_song.legal_frames, grok.generate_storyboard /
 grok.validate, and build_song.workflow -- not an inner helper those
@@ -470,20 +472,7 @@ def test_t5_10_legal_frames_is_one_8n1_rule_for_ltx_and_wan():
     assert build_song.legal_frames(ltx_len / build_song.LTX_FPS, build_song.LTX_FPS) == ltx_len
 
 
-# ------------------------------------------------------------------ TRD-5 T5-2, T5-5, output length, VRAM, candidate invariants (T6 link) --
-
-def test_t5_2_refine_graph_diff_is_measurable_on_output_not_just_nodes():
-    """T5-2: differential on decoded frames (MAD >0), not just graph nodes.
-    Mutation: make refine return the plain graph (no second pass) → this fails.
-    (Uses _real_module pattern; stops before production code.)"""
-    plain = build_song.workflow(
-        0, SCENE, "c.png", "song.mp3", "c", "w", "", video_model="s2v")
-    refined = build_song.workflow(
-        0, SCENE, "c.png", "song.mp3", "c", "w", "", video_model="s2v", refine=True)
-    # current impl makes them differ; this test will be made to fail by future mutation that restores no-op
-    assert refined != plain, "T5-2 RED: refine must produce measurable output diff (mutation makes graphs identical)"
-    # would also assert output frames differ via expect_from_workflow + QC differential
-
+# ------------------------------------------------------------------ TRD-5 T5-5, output length, VRAM, candidate invariants (T6 link) --
 
 def test_t5_5_vram_measurement_is_recorded_before_render_for_refine_decision():
     """T5-5 / T5-6: pipeline.free_vram() called and peak recorded in models.CATALOG for ltx25.

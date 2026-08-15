@@ -566,8 +566,11 @@ sentences and the operator acts differently on each.
 
 The studio has two live instances of the same defect and both are UI-visible:
 
-- **`--refine` on `ltx25`** returns before the refine block and says nothing
-  (`T5-1`). The catalogue default. A checkbox that does nothing.
+- **`--refine` on `ltx25`** attaches variant A (same-resolution second pass)
+  (`T5-1`). Whether that changed the picture is `T5-2`: decoded-frame MAD
+  and Laplacian variance, same seed, on vs off. A graph growing is not
+  that reading. Missing frames raise; a skip is not a reading. The real
+  GPU pair is **NOT MEASURED**.
 - **Five of six `DENOISE_CHOICES`** *were* labelled *"on an anchor this returns
   noise"*, correctly, because `latent_mode` was pinned to `"empty"`. **`T7-8`
   shipped 2026-08-13 (`d3f2f6a`) and unpinned it** — corrected after review

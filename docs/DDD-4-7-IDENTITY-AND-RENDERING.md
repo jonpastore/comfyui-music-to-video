@@ -204,8 +204,12 @@ two-stage is the defect this document is about, committed while fixing it.
 **Proof, split after review:** mean absolute pixel difference > 0 is the
 **no-op guard** (`T5-1`), not the quality claim. It passes on noise and on any
 non-semantic perturbation. The quality claim needs a named metric on a fixed
-fixture set moving in a stated direction. `T5-2`'s wording in TRD-5 conflates the
-two and should be split there.
+fixture set moving in a stated direction. `T5-2`'s wording in TRD-5 now names
+both: MAD > 0 is the no-op guard; Laplacian variance on the same pair is the
+quality metric. `qc.t5_2_refine_differential` measures decoded frames (arrays
+or video paths). Missing frames raise `NOT MEASURED`; `skip` is not a reading.
+`T5_2_REAL_CLIP_MEASURED` stays False until a same-seed GPU pair is decoded.
+A graph-only assert is `T5-1`, not `T5-2`.
 
 **Ceilings (`T5-9`).** `build_song.CLIP_CEILINGS` (mirrored on the video
 `CATALOG` rows) labels LTX 15 s as a **measured** cost ceiling and s2v
