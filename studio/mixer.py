@@ -178,6 +178,72 @@ def peaks_from_path(audio_path, z=0):
     return {"pairs": pairs, "reason": None}
 
 
+# Browser preview applies gain and position (docs/TRD-1 §6.2). Every other
+# key that would run at render is listed in not_applied. A static catalogue
+# of every effect would stay green when nothing is on the item.
+PROXY_APPLIED_KEYS = frozenset({"gain_db", "pan"})
+
+
+def _stored_effects(effects_json):
+    if not effects_json:
+        return {}
+    if isinstance(effects_json, dict):
+        return effects_json
+    try:
+        data = json.loads(effects_json)
+    except (ValueError, TypeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _not_applied_keys(effects_json):
+    stored = _stored_effects(effects_json)
+    cfg = dict(effects.DEFAULT_EFFECTS)
+    cfg.update(stored)
+    keys = []
+    if cfg.get("sweep"):
+        keys.append("sweep")
+    if cfg.get("eq_kill"):
+        keys.append("eq_kill")
+    if cfg.get("echo_out"):
+        keys.append("echo_out")
+    if cfg.get("phaser"):
+        keys.append("phaser")
+    if cfg.get("flanger"):
+        keys.append("flanger")
+    if cfg.get("loudnorm", True):
+        keys.append("loudnorm")
+    if cfg.get("duck") is not None:
+        keys.append("duck")
+    for k in video_fx.VIDEO_KEYS:
+        if stored.get(k):
+            keys.append(k)
+    return [k for k in keys if k not in PROXY_APPLIED_KEYS]
+
+
+def preview_proxy(items):
+    """T1-16: browser playback is a proxy.
+
+    Returns {"is_proxy": True, "not_applied": [...]} computed from the
+    items' actual effects. Gain and pan are applied in the browser; every
+    other key that would run at render is listed. Adding an effect makes
+    it appear; a static catalogue does not.
+    """
+    seen = []
+    have = set()
+    for item in items or ():
+        raw = None
+        try:
+            raw = item["effects_json"]
+        except (KeyError, IndexError, TypeError):
+            raw = None
+        for key in _not_applied_keys(raw):
+            if key not in have:
+                have.add(key)
+                seen.append(key)
+    return {"is_proxy": True, "not_applied": seen}
+
+
 def _write_concat_list(paths):
     fd, list_path = tempfile.mkstemp(suffix=".txt")
     with os.fdopen(fd, "w") as f:
@@ -1553,6 +1619,10 @@ def demo():
     assert 1 <= len(_env) <= PEAKS_MAX_POINTS, len(_env)
     assert max(p[1] for p in _env) == 0.91 and min(p[0] for p in _env) == -0.73
     assert peaks([], z=0) == []
+    _px = preview_proxy([{"effects_json": json.dumps({
+        "echo_out": {"decay": 0.5, "delay": 200}, "loudnorm": False})}])
+    assert _px["is_proxy"] is True and "echo_out" in _px["not_applied"]
+    assert "eq_kill" not in _px["not_applied"]
     tmpdir = tempfile.mkdtemp(prefix="mixer_demo_")
     try:
         clip_a = os.path.join(tmpdir, "clip a.mp4")   # space in path, deliberately

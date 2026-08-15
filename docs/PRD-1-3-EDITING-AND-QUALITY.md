@@ -168,7 +168,9 @@ order and take the dependencies from here.
 3. Clock and rounding (`T1-5`, `T1-6`); peaks and the waveform data model
    (`T1-13`/`T1-14` **built** as `mixer.peaks`; `T1-15` empty-reason **built**
    as `{pairs, reason}` on `peaks_from_path` / `GET /api/songs/{id}/peaks`);
-   the proxy-preview contract (`T1-16`, `T1-17`).
+   the proxy-preview contract (`T1-16` **built** as `mixer.preview_proxy` /
+   `GET /api/sets/{id}/preview` `{is_proxy, not_applied}`; `T1-17` render
+   preview still unbuilt).
 4. The master stage (`T1-20a`…`T1-20d`). It is a prerequisite for automation
    being *usable*, not an enhancement: without it, per-item `loudnorm` flattens
    every curve `automation.py` can already store and render.

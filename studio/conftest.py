@@ -412,6 +412,12 @@ _stub("mixer",
           if audio_path and os.path.isfile(audio_path)
           else {"pairs": [], "reason": ("no_audio" if not audio_path else "missing")}),
       PEAKS_MAX_POINTS=2048,
+      # T1-16: preview_proxy is pure (no ffmpeg). The stub must serve the
+      # real one so adding an effect lists it; a fake static list would
+      # stay green.
+      preview_proxy=(_real_module("mixer").preview_proxy
+                     if _real_module("mixer") is not None
+                     else (lambda items: {"is_proxy": True, "not_applied": []})),
       # T1-19: applied_master_chain is pure (no ffmpeg). The stub must
       # serve the real one so h_render_set records the same chain
       # _master_lines applies, not a parallel default.

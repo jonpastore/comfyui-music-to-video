@@ -281,9 +281,10 @@ for deliberately.
 Preview: the browser plays source files with gain and position applied. **No
 second DSP engine in Web Audio.** The proxy declaration is data —
 `{"is_proxy": true, "not_applied": [...]}` — computed from the item's actual
-effects, so `T1-16`'s test (add an effect, see it appear in `not_applied`) fails
-a static list. "Render preview" goes through the *same* code path as a full
-render, bounded to a span, and is the only preview that claims accuracy.
+effects by `mixer.preview_proxy` and served at `GET /api/sets/{id}/preview`,
+so `T1-16`'s test (add an effect, see it appear in `not_applied`) fails
+a static list. "Render preview" (`T1-17`) goes through the *same* code path as a
+full render, bounded to a span, and is the only preview that claims accuracy.
 
 ### 5.5 Clip length: one blocked chain, and the order it unblocks in
 

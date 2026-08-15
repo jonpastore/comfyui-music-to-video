@@ -6137,6 +6137,15 @@ def get_set_or_404(id):
     return row
 
 
+@app.get("/api/sets/{id}/preview")
+def set_preview(id: int):
+    """T1-16: browser playback is a proxy. The warning is data."""
+    get_set_or_404(id)
+    items = [dict(r) for r in db.q(
+        "SELECT id, effects_json FROM set_items WHERE set_id=? ORDER BY position", id)]
+    return mixer.preview_proxy(items)
+
+
 def _set_render_row(a):
     """One rendered asset (kind='set'), formatted for display -- shared by the
     shelf (legacy renders with no set of their own) and the editor (renders

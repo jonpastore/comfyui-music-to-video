@@ -143,8 +143,10 @@ Six, and they are the tie-breakers when two rules below disagree.
    (§5.5).
 5. **Never promise what the renderer will not produce.** The interface rule
    version of the project's oldest defect: a preview says it is a proxy
-   (`T1-16`), an estimated length says it is estimated, and a control that cannot
-   act is absent or disabled-with-a-reason, never present and inert.
+   (`T1-16`: `GET /api/sets/{id}/preview` returns `{is_proxy, not_applied}` so
+   the warning is data, not a sentence in one template), an estimated length
+   says it is estimated, and a control that cannot act is absent or
+   disabled-with-a-reason, never present and inert.
 6. **Nothing in the presentation may be load-bearing.** If deleting the
    stylesheet loses information, the information was in the wrong place.
 
