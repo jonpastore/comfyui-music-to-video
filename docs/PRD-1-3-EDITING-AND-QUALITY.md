@@ -369,6 +369,9 @@ order and take the dependencies from here.
    an anchor are silent.
    **`T2-28` remaining**: `POST /songs/{id}/refs` must refuse when a
    named lead has no chosen sheet, not only paint the banner.
+   **refs-identity built**: per-clip refs condition on the chosen
+   sheet as image1 (identity), not a standing 4748 plate; each ref is
+   scored against that chosen path (`test_t2_refs_identity.py`).
 7. Per-scene model choice, W2 (`T2-42`…`T2-48`) — last, because `T2-45` needs
    `models.where()`'s three-valued answer respected at enqueue and `T2-48` needs
    per-model ceilings, which is P0 item 1 again. The renderer half of those

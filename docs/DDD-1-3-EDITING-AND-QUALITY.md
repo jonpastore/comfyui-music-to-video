@@ -648,6 +648,16 @@ leads (`T2-30`). `POST /songs/{id}/refs` still only requires a chosen
 protagonist sheet. A miss on a named lead must 400 before a refs job
 is written.
 
+**refs-identity is built.** `start_refs` resolves `chosen_anchor` and
+freezes its path into the refs job. `h_refs` stages that path via
+`install_input` and passes it to `pipeline.gen_refs` as `--anchor`.
+`build_refs.workflow` loads it on node 7 / image1 (identity lock). A
+standing plate (seed 4748, unchosen anchors row, pose `anchor_ref`)
+never becomes image1 and never the `score_generated_still` base. An
+intentional composition base takes image2 only. Mutation: plate as
+`--anchor` → image1 arm red. Mutation: enqueue plate while a chosen
+sheet exists → enqueue arm red. `studio/test_t2_refs_identity.py`.
+
 `T2-30` is **built**. `unanchored_leads(rows)` returns names of figures
 with `role == "lead"` and no chosen anchor. Storyboard HTML banner,
 `_storyboard_payload` / `GET .../cast` / storyboard JSON share that
