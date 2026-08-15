@@ -100,6 +100,26 @@ def get(vid):
     return db.one("SELECT * FROM prompt_versions WHERE id=?", vid)
 
 
+def running(vid):
+    """The prompt row a render RUNS, looked up by stored id.
+
+    docs/TRD-3 T3-20: the version that RUNS is the one stored. A copied
+    string on a job is not the source of truth — reading this back after
+    approval is how the criterion is checked. A missing or deleted id is
+    a refusal, not a fallback to a copy.
+    """
+    if vid is None or vid == "":
+        raise ValueError("no prompt version to run")
+    try:
+        vid = int(vid)
+    except (TypeError, ValueError):
+        raise ValueError(f"not a prompt version id: {vid!r}")
+    row = get(vid)
+    if not row:
+        raise ValueError(f"prompt version {vid} no longer exists")
+    return row
+
+
 def latest(album, prompt_type, tier="", character_id=None):
     rows = versions(album, prompt_type, tier, character_id)
     return rows[0] if rows else None
@@ -272,10 +292,25 @@ def demo():
     assert "used 2x" in summary(get(b["id"]))
     assert "unused" in summary(get(a["id"]))
 
+    # T3-20: running() is the stored row, same id. A deleted version
+    # cannot run — falling back to a copied string is the mutation.
+    ran = running(b["id"])
+    assert ran["id"] == b["id"] and ran["text"] == fixed["text"]
+    try:
+        running(None)
+        raise AssertionError("running() accepted an empty id")
+    except ValueError:
+        pass
+
     # deleting leaves a GAP rather than renumbering: the number is how a render
     # is referred to afterwards, and closing the gap would repoint an old note
     delete(a["id"])
     assert [r["version_number"] for r in versions("Street Cats", "body")] == [2]
+    try:
+        running(a["id"])
+        raise AssertionError("a deleted version still ran")
+    except ValueError as e:
+        assert str(a["id"]) in str(e), e
     assert save("Street Cats", "body", "third try", "third")["version_number"] == 3, \
         "a deleted version's number was reused"
 

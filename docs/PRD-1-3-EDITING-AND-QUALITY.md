@@ -93,7 +93,7 @@ the eight things that must become true; they are not a new contract.
 | P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every clip, a re-plan leaving approved `(clip_idx, seed)` unchanged, the planner prompt not naming a fixed 4.8125 s quantum, its clip-length text derived from planning, and TIMING still stating track length and sum-to-track | `T2-8`, `T2-12a`, `T2-13a`, `T2-13b`, `T2-13c`, `T2-14a`, `T2-14b`, `T2-14c` |
 | P5a | Assembling a song with a 1664×960 clip among 832×480 siblings keeps the ×2 size and does not letterbox; mixed aspect is refused | `T5-7` |
 | P6 | Every rendered artefact is measured against the workflow that asked for it, never against a constant | `T3-2`, `T3-4`, `T3-7` |
-| P7 | A finding arrives actionable — measured, expected, unit, a remedy class, and an editable prompt — and nothing runs without approval. A dismissed finding stays off the queue until the artefact itself changes | `T3-18`, `T3-19`, `T3-22`, `T3-27` |
+| P7 | A finding arrives actionable — measured, expected, unit, a remedy class, and an editable prompt — and nothing runs without approval. A dismissed finding stays off the queue until the artefact itself changes. The remedy that RUNS is the stored prompts row | `T3-18`, `T3-19`, `T3-20`, `T3-22`, `T3-27` |
 | P8 | Identity failures are attributed to the text, never to the reference image | `T2-31`, `T2-32`, `T3-17`, `T3-28` |
 
 **P8 is the one to defend hardest.** It is measured, not theoretical: same
@@ -207,7 +207,10 @@ order and take the dependencies from here.
    refiner's resident cost (~19.6 GiB), not the UNET's 13.31, routes it
    off a 15.92 GiB card onto a 24 GiB one; peaches cannot take the pair.
    `T3-25` is built: `can_move_output` refuses remote repair by name
-   until the check is true; forcing it true SUBMITS.
+   until the check is true; forcing it true SUBMITS. `T3-20` is built:
+   the approved remedy that RUNS is the stored `prompts` row, same id,
+   read back after approval — a copied string on the job is not what
+   the actuator receives.
 10. Every generated still is vision-scored into `qc_json` (`T3-31`). A
     refine pass writes a new candidate beside the generate; it is not a
     silent overwrite and not a VLM gate.

@@ -210,7 +210,7 @@ a silent strip.
 
 **Genuinely not built** — `meter` (scene time against song length, `T2-23`;
 loudness against target, `T1-25`), `finding-row` (measured / expected / unit /
-remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-27`; dismiss
+remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-20`, `T3-27`; dismiss
 stays off this row until the file bytes change, `T3-22`). The
 per-box QC report is JSON only (`GET /api/qc/by-host`, `T3-1`): groups by
 `host`, NULL host is an explicit `unattributed` bucket. No page; do not
@@ -422,7 +422,9 @@ What need not: drawing an automation curve.
 Disabled without a reason is banned. "Approve" greyed out with no explanation is
 the same defect as a button that does nothing — the operator cannot tell refusal
 from breakage. `T3-18` now distinguishes those: QC enqueues nothing, approve
-enqueues one repair. `T3-23` names a routing refusal (unfittable, or pinned
+enqueues one repair. `T3-20`: the wording that runs is the stored
+`prompts` row — same id on the finding and the job after approval, not
+a stale copy in the form. `T3-23` names a routing refusal (unfittable, or pinned
 under a name the box does not have) instead of looking like a successful copy.
 `T3-25` names `can_move_output` when a remote output cannot be moved back.
 `T3-24` names the refiner as too big for a 15.92 GiB card (and for peaches)

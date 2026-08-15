@@ -234,6 +234,13 @@ def set_remedy(fid, text, album=None):
         raise ValueError(f"remedy is {len(text)} characters, the limit is {MAX_REMEDY}")
     row = get(fid)
     vid = row["remedy_prompt_id"]
+    # Once a version exists, further edits stay versioned: the album is
+    # the stored row's scope, so we do not invent one. Editing creates
+    # a version (T3-20); the edited text is what runs (T3-19).
+    if not album and vid:
+        existing = prompts.get(vid)
+        if existing:
+            album = existing["scope_value"]
     if album:
         v = prompts.save(album, "qc_remedy", text,
                          label=f"{row['kind']} {row['check_name']}"[:prompts.MAX_LABEL])
@@ -409,8 +416,27 @@ def _place_repair(src, dest, produced):
     return dest
 
 
-def _invoke_actuator(actuator, src, dest, args, progress):
+def _running_remedy(args):
+    """The wording a repair RUNS. T3-20: when a prompts row is named,
+    that row is the source of truth — same id, looked up now, not the
+    copied string on the job. A missing stored row is a refusal.
+    Text-only jobs (T3-19, no album so no version) still run their
+    edited text."""
     args = args or {}
+    vid = args.get("remedy_prompt_id")
+    if vid is None or vid == "":
+        return (args.get("remedy") or ""), None
+    row = prompts.running(vid)
+    return row["text"], row["id"]
+
+
+def _invoke_actuator(actuator, src, dest, args, progress):
+    args = dict(args or {})
+    remedy, vid = _running_remedy(args)
+    args["remedy"] = remedy
+    if vid is not None:
+        args["remedy_prompt_id"] = vid
+        prompts.mark_used([vid])
     if actuator == "fix_ref":
         made = pipeline.fix_ref(
             slug=args.get("slug") or "repair",
@@ -420,7 +446,7 @@ def _invoke_actuator(actuator, src, dest, args, progress):
             image_path=src,
             seed=int(args.get("seed") or 0),
             progress=progress,
-            instruction=args.get("remedy") or "",
+            instruction=remedy,
             face_path=args.get("face_path"),
             mask_path=args.get("mask_path"),
             pad=tuple(args.get("pad") or (0, 0, 0, 0)),
@@ -491,6 +517,9 @@ def h_repair(args, progress):
             if args.get("repair_path") else args.get("repair_path"))
     if not dest or dest == src:
         raise ValueError("a repair must write a new candidate, not overwrite")
+    # T3-20: refuse a missing stored row before any write. A stubbed
+    # writer must not run a copied string after the version is gone.
+    _running_remedy(args)
     progress(f"repair finding {args.get('finding_id')}")
     produce_repair(src, dest, args, progress)
     if not os.path.isfile(dest) or dest == src:
@@ -507,8 +536,9 @@ def h_repair(args, progress):
         if fid:
             db.run("UPDATE findings SET status=?, repair_path=?, resolved=? WHERE id=?",
                    REPAIRED, dest, time.time(), int(fid))
+    remedy, vid = _running_remedy(args)
     return {"finding_id": fid, "repair_path": dest,
-            "remedy": args.get("remedy")}
+            "remedy": remedy, "remedy_prompt_id": vid}
 
 
 def approve(fid):
@@ -517,8 +547,9 @@ def approve(fid):
     QC never auto-heals (T3-18). This is the only call that enqueues a repair,
     and it is the function the /api/qc/findings/{id}/approve route calls
     (T6-A10). The job names a dest that is not the original path (T3-6) and
-    carries the edited remedy (T3-19). repair_path on the finding stays empty
-    until h_repair writes that new file.
+    carries the edited remedy (T3-19). When the remedy is a prompts row,
+    the job carries that id and that is the wording that RUNS (T3-20).
+    repair_path on the finding stays empty until h_repair writes that new file.
     """
     row = get(fid)
     if row["status"] == DISMISSED:
@@ -526,6 +557,11 @@ def approve(fid):
     remedy = (row["remedy"] or "").strip()
     if not remedy:
         raise ValueError("approving a finding needs a remedy -- edit one first")
+    vid = row["remedy_prompt_id"]
+    if vid:
+        stored = prompts.running(vid)
+        remedy = stored["text"]
+        vid = stored["id"]
     src = jobs.canonical_path(row["path"])
     dest = jobs.canonical_path(_repair_dest(src))
     orig = db.one("SELECT expect_json FROM artefacts WHERE path=?", src)
@@ -539,7 +575,7 @@ def approve(fid):
     _, key = _repair_actuator_and_key({
         "kind": row["kind"], "check_name": row["check_name"], "remedy": remedy,
     })
-    jobs.enqueue("repair", {
+    payload = {
         "finding_id": int(fid),
         "path": src,
         "repair_path": dest,
@@ -547,7 +583,10 @@ def approve(fid):
         "check_name": row["check_name"],
         "kind": row["kind"],
         "requires": key,
-    })
+    }
+    if vid:
+        payload["remedy_prompt_id"] = vid
+    jobs.enqueue("repair", payload)
     db.run("UPDATE findings SET status=? WHERE id=?", APPROVED, int(fid))
     return get(fid)
 
@@ -743,6 +782,10 @@ def demo():
         hist = prompts.versions("Street Cats", "qc_remedy")
         assert len(hist) == 2, [dict(h) for h in hist]
         assert get(fid)["remedy_prompt_id"] == v["remedy_prompt_id"]
+        # T3-20: the row that would RUN is that stored id, not a copy
+        ran_text, ran_id = _running_remedy(
+            {"remedy": "a stale copy", "remedy_prompt_id": v["remedy_prompt_id"]})
+        assert ran_id == v["remedy_prompt_id"] and ran_text == "second wording"
 
         # --- T3-22: a dismissal needs a reason, and a dismissed finding leaves
         # the open queue
@@ -767,6 +810,10 @@ def demo():
         first = json.loads(queued[0]["args_json"])
         assert first["finding_id"] == fid and first["remedy"]
         assert first["repair_path"] and first["repair_path"] != src
+        # T3-20: the id that RUNS is the stored prompts row, read back
+        assert first["remedy_prompt_id"] == get(fid)["remedy_prompt_id"]
+        assert prompts.running(first["remedy_prompt_id"])["id"] == first["remedy_prompt_id"]
+        assert prompts.running(first["remedy_prompt_id"])["text"] == first["remedy"]
         landed = get(fid)["repair_path"]
         assert landed in (None, "") or landed != src
         # T3-6 positive: the handler writes dest; naming it on the job is not
