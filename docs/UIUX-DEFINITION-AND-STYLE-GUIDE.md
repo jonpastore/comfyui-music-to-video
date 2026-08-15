@@ -343,7 +343,10 @@ legal 8n+1 length at the clip fps, not a page-local 4.8125. Clip count is
 `build_song.n_clips_for` (`T2-13`), never a page-local `ceil(duration / CHUNK)`.
 Reference-image jobs share that count: `clip_plan` defaults to
 `n_clips_for(track, length_seconds)` so `build_refs` / `reroll_refs` do not
-re-open a CHUNK-era slot list (**refs-length**). A row whose `scene_seconds`
+re-open a CHUNK-era slot list (**refs-length**). Each generated ref graph
+also records the legal clip duration for that clip
+(`clip_seconds` / `legal_frames` on `clip_NNN.expect.json`, not CHUNK);
+`gen_refs` stamps it onto the landed still. A row whose `scene_seconds`
 is NULL (generated before the column) still reads as `CHUNK`. The renderer
 emits that same legal length (`T2-13a`): latent frames and the audio-trim
 window follow `clip_seconds`, not a hardcoded `LTX25_LEN`/`CHUNK`; a NULL

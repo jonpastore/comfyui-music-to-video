@@ -266,6 +266,10 @@ unbuilt work and are not" — the ledger with line counts is DDD §1.
    `clip_plan`'s audio-only default is `n_clips_for(track,
    length_seconds)`, not `ceil(track / CHUNK)`, so `build_refs` /
    `reroll_refs` emit one ref per legal clip, not a CHUNK-era count.
+   **Per-clip expect built**: each ref graph writes
+   `clip_NNN.expect.json` with `clip_seconds` / `legal_frames` for that
+   scene (not CHUNK); `pipeline.gen_refs` stamps it
+   (`test_t2_refs_clip_seconds.py`).
 2. **The service split**, TRD-1 and TRD-2 (`T6-A3`) — **built** as
    `sets_service.py` / `storyboard_service.py` (same shape as `qc_service.py`;
    `test_t6_a3_*`).

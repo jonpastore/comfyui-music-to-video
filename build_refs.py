@@ -19,7 +19,8 @@ import argparse, json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import guardrail  # noqa: E402  (applied here, NOT stored in the storyboard)
 from build_song import (allocate, audio_duration, shot_directive, sname,
-                        normalize, clip_plan, CHUNK)  # noqa: E402  (shared allocation)
+                        normalize, clip_plan, clip_seconds, legal_frames,
+                        LTX_FPS)  # noqa: E402  (shared allocation)
 
 # Lightning LoRA settings: 4 steps at cfg 1.0. NOTE: at cfg 1.0 ComfyUI skips
 # the negative pass entirely, so scene negative_prompt has no effect -- the
@@ -57,6 +58,27 @@ SAMPLERS = ("euler", "euler_ancestral", "dpmpp_2m", "dpmpp_2m_sde", "dpmpp_3m_sd
 # stays last so it remains the fallback for anything unrecognised.
 REF_METHODS = ("offset", "index", "uxo/uno", "index_timestep_zero")
 SCHEDULERS = ("simple", "karras", "normal", "sgm_uniform", "beta", "exponential")
+
+
+def ref_expect(scene, width, height):
+    """What this reference frame's clip ASKED FOR: duration / frames / size.
+
+    Wave-2 refs-length: the still is one frame, but it stands for a clip of
+    legal length. clip_seconds / legal_frames are the same divisor the video
+    graph will honour (T2-13a); CHUNK only when length_seconds is missing so
+    pre-T2-12a boards do not re-time. Written beside each workflow as
+    clip_NNN.expect.json so pipeline.gen_refs can stamp the landed still.
+    """
+    seconds = clip_seconds(scene.get("length_seconds"))
+    frames = legal_frames(seconds, LTX_FPS)
+    return {
+        "duration": round(seconds, 4),
+        "frames": frames,
+        "fps": round(LTX_FPS, 4),
+        "width": int(width),
+        "height": int(height),
+        "frame_step": 8,
+    }
 
 
 def sampler_settings(mode="fast", **over):
@@ -411,6 +433,10 @@ def main():
                 "filename_prefix": f"refs_{args.slug}/clip_{ci:03d}"}}
             with open(f"{args.outdir}/clip_{ci:03d}.json", "w") as f:
                 json.dump(wf, f)
+            # T2-refs-length: each graph records the legal clip duration this
+            # still stands for — clip_seconds / legal_frames, not CHUNK.
+            with open(f"{args.outdir}/clip_{ci:03d}.expect.json", "w") as f:
+                json.dump(ref_expect(scene, args.width, args.height), f)
         print(f"{args.slug} {dur:.1f}s -> {i} reference images "
               f"across {len(scenes)} scenes ({args.width}x{args.height}), "
               f"~{i*15/60:.0f} min to render")

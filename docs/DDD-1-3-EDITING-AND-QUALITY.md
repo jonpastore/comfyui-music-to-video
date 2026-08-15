@@ -461,7 +461,12 @@ returns `CHUNK`, so nothing already on disk changes length. `n_clips_for` is
 length is the divisor, the count is ours. `clip_plan` (the allocator
 `build_refs` / `reroll_refs` / `build_song.main` share) defaults that count
 through `n_clips_for(track, scene length_seconds)` — not
-`ceil(track / CHUNK)` (**refs-length**, `test_refs_length.py`).
+`ceil(track / CHUNK)` (**refs-length**, `test_refs_length.py`). Each
+ref graph also writes `clip_NNN.expect.json` via `build_refs.ref_expect`
+with `clip_seconds` / `legal_frames` (CHUNK only when
+`length_seconds` is missing); `pipeline.gen_refs` stamps those expects
+and submit skips `.expect.json` (**refs-length per-clip**,
+`test_t2_refs_clip_seconds.py`).
 
 1. `T2-12a`: seconds → nearest **legal** frame count at the clip's fps. F-2's
    rule is that `frames ≡ 1 (mod 8)` serves both models, since every `8n+1` is

@@ -80,7 +80,7 @@ def test_gen_refs_writes_chosen_sheet_as_image1(monkeypatch, tmp_path):
 
     def fake_submit(wf_dir, progress=None):
         for f in sorted(os.listdir(wf_dir)):
-            if f.endswith(".json"):
+            if f.endswith(".json") and not f.endswith(".expect.json"):
                 written.append(json.load(open(os.path.join(wf_dir, f))))
         return []
 

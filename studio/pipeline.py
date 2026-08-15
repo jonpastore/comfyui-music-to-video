@@ -45,6 +45,18 @@ def _slug_tier(slug, tier):
     return f"{slug}_{tier}"
 
 
+def _workflow_jsons(wf_dir):
+    """Workflow graphs only — skip clip_NNN.expect.json sidecars.
+
+    build_song / build_refs write expect next to each graph. submit_dir and
+    swarm submit must not POST those as Comfy workflows.
+    """
+    return sorted(
+        f for f in os.listdir(wf_dir)
+        if f.endswith(".json") and not f.endswith(".expect.json")
+    )
+
+
 def _run_script(script, args, progress=None):
     progress = progress or (lambda msg: None)
     path = os.path.join(SCRIPTS, script)
@@ -470,7 +482,7 @@ def submit_dir(wf_dir, progress=None):
     # during a single 90-second render did nothing until that render was done
     # -- and ComfyUI kept the GPU and wrote the file anyway.
     cancelled = getattr(progress, "cancelled", None)
-    files = sorted(f for f in os.listdir(wf_dir) if f.endswith(".json"))
+    files = _workflow_jsons(wf_dir)
     ids = []
     for i, name in enumerate(files, 1):
         wf = json.load(open(os.path.join(wf_dir, name)))
@@ -510,7 +522,7 @@ def submitted_prefixes(wf_dir):
     job that asked for it.
     """
     out = set()
-    for name in sorted(f for f in os.listdir(wf_dir) if f.endswith(".json")):
+    for name in _workflow_jsons(wf_dir):
         try:
             wf = json.load(open(os.path.join(wf_dir, name)))
         except (ValueError, OSError):
@@ -871,7 +883,7 @@ def submit_swarm(wf_dir, prefix_dir, pattern, progress=None):
     """
     progress = progress or (lambda msg: None)
     cancelled = getattr(progress, "cancelled", None)
-    files = sorted(f for f in os.listdir(wf_dir) if f.endswith(".json"))
+    files = _workflow_jsons(wf_dir)
     out_dir = os.path.join(COMFY_OUTPUT, prefix_dir)
     os.makedirs(out_dir, exist_ok=True)
     seen = set(collect(prefix_dir, pattern))
@@ -1182,15 +1194,35 @@ def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
             if cast_path:
                 os.remove(cast_path)
         if limit:
-            keep = sorted(f for f in os.listdir(wf_dir) if f.endswith(".json"))[:int(limit)]
-            for f in os.listdir(wf_dir):
-                if f.endswith(".json") and f not in keep:
+            keep = _workflow_jsons(wf_dir)[:int(limit)]
+            keep_idx = set()
+            for f in keep:
+                m = re.match(r"clip_(\d+)\.json$", f)
+                if m:
+                    keep_idx.add(int(m.group(1)))
+            for f in list(os.listdir(wf_dir)):
+                m = re.match(r"clip_(\d+)\.(json|expect\.json)$", f)
+                if m and int(m.group(1)) not in keep_idx:
                     os.remove(os.path.join(wf_dir, f))
             if progress:
                 progress(f"limited to first {len(keep)} of the song's clips")
         paths = _submit_and_collect(wf_dir, f"refs_{bs}", "*.png", progress)
-    return [{"clip_idx": int(m.group(1)), "path": p, "seed": 7000 + int(m.group(1))}
-            for p, m in _clip_records(paths)]
+        # T2-refs-length: build_refs writes clip_NNN.expect.json with the legal
+        # clip duration (clip_seconds / legal_frames), not CHUNK. Stamp before
+        # the TemporaryDirectory is gone — same path gen_clips uses for video.
+        expects = {}
+        for f in sorted(os.listdir(wf_dir)):
+            m = re.match(r"clip_(\d+)\.expect\.json$", f)
+            if m:
+                try:
+                    with open(os.path.join(wf_dir, f)) as fh:
+                        expects[int(m.group(1))] = json.load(fh)
+                except Exception as e:      # noqa: BLE001 -- bookkeeping
+                    _say(progress, f"could not read {f}: {e}")
+    records = [{"clip_idx": int(m.group(1)), "path": p, "seed": 7000 + int(m.group(1))}
+               for p, m in _clip_records(paths)]
+    _stamp_expect(records, expects, progress)
+    return records
 
 
 def reroll(slug, tier, storyboard_json, anchor_name, mp3_path, clip_indices, progress=None,
@@ -1280,9 +1312,15 @@ def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None, l
         elif limit:
             # a full song is 40-80 clips at ~90s each on one GPU; limit lets you
             # confirm the chain end to end before committing an hour to it
-            keep = sorted(f for f in os.listdir(wf_dir) if f.endswith(".json"))[:int(limit)]
-            for f in os.listdir(wf_dir):
-                if f.endswith(".json") and f not in keep:
+            keep = _workflow_jsons(wf_dir)[:int(limit)]
+            keep_idx = set()
+            for f in keep:
+                m = re.match(r"clip_(\d+)\.json$", f)
+                if m:
+                    keep_idx.add(int(m.group(1)))
+            for f in list(os.listdir(wf_dir)):
+                m = re.match(r"clip_(\d+)\.(json|expect\.json)$", f)
+                if m and int(m.group(1)) not in keep_idx:
                     os.remove(os.path.join(wf_dir, f))
             if progress:
                 progress(f"limited to first {len(keep)} clips")
@@ -1771,7 +1809,7 @@ def demo():
     written = {}
 
     def fake_submit_dir(wf_dir, progress=None):
-        written["files"] = sorted(os.listdir(wf_dir))
+        written["files"] = _workflow_jsons(wf_dir)
         for f in written["files"]:
             wf = json.load(open(os.path.join(wf_dir, f)))
             for node in wf.values():
@@ -1794,7 +1832,8 @@ def demo():
                              mp3_path], check=True, capture_output=True)
             gen_refs("demo", "pg13", sb_path, "anchor.png", mp3_path)
         assert written.get("files"), "no workflow JSONs written"
-        assert all(f.endswith(".json") for f in written["files"]), written["files"]
+        assert all(f.endswith(".json") and not f.endswith(".expect.json")
+                   for f in written["files"]), written["files"]
 
         # --- and the real make_audio.py through gen_audio() ------------------
         # The checkpoint NAME is the routing policy, so it is asserted on the
