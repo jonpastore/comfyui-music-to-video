@@ -1076,10 +1076,14 @@ echo, eq, loudnorm and the rest appear only when stored.
 
 `T10-18` is built. At `g` and `pg13` the storyboard direction, scene
 prompts, and the video/still builders accept a minor reference — a song
-for a niece is a first-class work. At `r`/`xxx` the same string is still
-refused and the refusal names the term. No new control: the lock is the
-tier already on the form. A refuse that looks like a generic 400 with no
-named term is the old blanket screen leaking back.
+for a niece is a first-class work. `T10-18a` is built: at `r`, lyrics and
+narrative may mention a child; scene prompts, character fields, album
+profile, and every composed render string still refuse, and the refusal
+names the term. An `r` work with the mention in lyrics still generates
+audio and renders adult scenes. At `xxx` every field refuses. No new
+control: the lock is the tier already on the form. A refuse that looks
+like a generic 400 with no named term is the old blanket screen leaking
+back.
 
 ## 8. How this document is verified
 

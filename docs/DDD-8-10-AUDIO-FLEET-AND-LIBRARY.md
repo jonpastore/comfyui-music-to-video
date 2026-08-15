@@ -290,13 +290,18 @@ each caller, or a caller that stops calling it stays green.
 
 ### 4.4 Minor policy (`T10-18`)
 
-`guardrail.check_text(text, where, tier=...)` is the single screen.
-`LOCKED_DEPICT_TIERS = {g, pg13}` skips the refusal; unset / anything else
-is `xxx` (`T10-25`). `build_prompt`, `build_song.workflow`,
-`build_refs.workflow`, scene save and storyboard direction pass the tier.
-The storyboard JSON already carries it as `version`. `PINNED` stays welded;
-`PINNED_AGE_FLOOR = 18` is the documented floor (`T10-18c`). `r` still
-refuses every field — lyrics-only mention at `r` is `T10-18a`, not this.
+`guardrail.check_text(text, where, tier=..., field_kind=...)` is the single
+screen. `LOCKED_DEPICT_TIERS = {g, pg13}` skips the refusal for depiction;
+unset / anything else is `xxx` (`T10-25`). `build_prompt`,
+`build_song.workflow`, `build_refs.workflow`, scene save and storyboard
+direction pass the tier. The storyboard JSON already carries it as
+`version`. `PINNED` stays welded; `PINNED_AGE_FLOOR = 18` is the documented
+floor (`T10-18c`).
+
+`T10-18a`: at `r`, `allows_minor_mention(tier, field_kind=...)` is true only
+for `MENTION_FIELD_KINDS = {lyrics, narrative}`. Render-reaching calls omit
+`field_kind` (or pass a non-mention kind) and still refuse. `build_prompt`
+is always a render path and never takes the mention allowance.
 
 ## 5. Build order
 

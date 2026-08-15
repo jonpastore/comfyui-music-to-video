@@ -38,10 +38,27 @@ PINNED = (
 # view reachable). Unset / anything else is treated as xxx (T10-25).
 LOCKED_DEPICT_TIERS = frozenset({"g", "pg13"})
 
+# T10-18a: at r, a minor may be mentioned only in these field kinds. Anything
+# that reaches a render prompt is outside this set. T10-19a owns the inventory
+# of which form fields map onto which kind; the kinds themselves live here.
+MENTION_FIELD_KINDS = frozenset({"lyrics", "narrative"})
+
 
 def allows_minor_depiction(tier):
     """True only at the locked non-explicit tiers named by T10-18."""
     return (tier or "").strip().lower() in LOCKED_DEPICT_TIERS
+
+
+def allows_minor_mention(tier, *, field_kind=None):
+    """T10-18a: True only at r for lyrics/narrative field kinds.
+
+    Depiction is allows_minor_depiction. This is the mention-only half: an r
+    work may say a child exists in story text; it may not put that reference
+    into any string that reaches a render prompt.
+    """
+    t = (tier or "").strip().lower()
+    kind = (field_kind or "").strip().lower()
+    return t == "r" and kind in MENTION_FIELD_KINDS
 
 # Terms whose presence in USER-SUPPLIED text (a custom tier's guardrail, a style
 # note, a prompt override) is refused outright. This is a hard input filter and
@@ -190,14 +207,18 @@ def _tokens(text):
     return out
 
 
-def check_text(text, where="input", *, tier=None):
-    """Refuse text that references minors, except at g/pg13 (T10-18).
+def check_text(text, where="input", *, tier=None, field_kind=None):
+    """Refuse text that references minors, except:
 
-    A song for a child, and a video for it, is a first-class thing this
-    studio can make — but only where explicit content cannot be reached.
+    - at g/pg13 (T10-18): depiction is permitted
+    - at r with field_kind in lyrics/narrative (T10-18a): mention only;
+      the reference must never reach a render prompt
+
     Unset tier is xxx (T10-25). Raises ContentRefused (terminal).
     """
     if allows_minor_depiction(tier):
+        return text
+    if allows_minor_mention(tier, field_kind=field_kind):
         return text
     raw = (text or "").lower()
     m = _AGE_RE.search(raw)
@@ -284,7 +305,8 @@ def build_prompt(text, tier_text="", where="prompt", *, tier=None):
     the clause does not get it twice.
 
     Raises ContentRefused (terminal) if the text references a minor, except at
-    g/pg13 where T10-18 permits depiction.
+    g/pg13 where T10-18 permits depiction. build_prompt is always a render
+    path: T10-18a's lyrics/narrative allowance never applies here.
     """
     # Strip our own clause BEFORE screening. PINNED enumerates the forbidden
     # terms, so any text already carrying it (a storyboard generated before the
