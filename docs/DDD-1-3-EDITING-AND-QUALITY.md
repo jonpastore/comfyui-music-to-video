@@ -85,9 +85,12 @@ The first object is the queue panel: `GET /queue` HTML and
 `Accept: application/json` share `queue_ctx()`
 (`test_t6_a2_html_and_json_report_the_same_queue_numbers`). Review queue
 T6-A2 is `test_t6_a2_html_and_json_report_the_same_review_queue_numbers`
-(`/qc` HTML vs `/api/qc/findings`, same `qc_service.queue()`). Set,
-storyboard, review and anchor loops now complete over JSON (`test_t6_a1_*`);
-set and storyboard still write their own T6-A2 number-agreement tests.
+(`/qc` HTML vs `/api/qc/findings`, same `qc_service.queue()`). Set HTML
+`/sets/{id}` and JSON `/api/sets/{id}` share `set_detail()`
+(`test_t6_a2_html_and_json_report_the_same_set_numbers`, `T6-A2-set`).
+Set, storyboard, review and anchor loops now complete over JSON
+(`test_t6_a1_*`); storyboard still writes its own T6-A2 number-agreement
+test.
 
 ## 3. API surface
 
@@ -95,7 +98,8 @@ Named per journey, because `T6-A1` requires a curl script to drive each one end
 to end. Shapes only — the fields are the TRDs'.
 
 **A · set timeline** — `GET/POST /api/sets`, `/api/sets/{id}` (model in full:
-items, automation, predicted duration, rounding deltas), `/api/sets/{id}/items`,
+items, automation, predicted duration, rounding deltas; HTML `/sets/{id}` and
+JSON share `set_detail()`, `T6-A2-set`), `/api/sets/{id}/items`,
 `.../items/{iid}/automation/{lane}` (POST raw points, response is the **stored,
 decimated** curve — the client re-reads what was kept, §5.3),
 `GET/POST /api/songs/{id}/automation/{lane}` (T8-13: same `automation.save` /

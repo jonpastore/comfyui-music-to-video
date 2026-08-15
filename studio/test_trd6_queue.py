@@ -784,6 +784,64 @@ def test_t6_a2_html_and_json_report_the_same_review_queue_numbers():
     assert "blank" not in html_checks and "blank" not in json_checks
 
 
+_T6_A2_SET_COUNT = 3
+_T6_A2_SET_TOTAL = 137.0  # distinctive; not 0, not the stub item sum
+
+
+def test_t6_a2_html_and_json_report_the_same_set_numbers(patch_stub):
+    """T6-A2-set: HTML /sets/{id} and JSON /api/sets/{id} report the same
+    numbers for one fixture. Distinctive 3 items / 137s so two empty answers
+    cannot pass. Same set_detail()."""
+    import app as appmod
+    from fastapi.testclient import TestClient
+    from test_app import _upload_song
+
+    patch_stub("mixer", set_duration=lambda items, key="video": _T6_A2_SET_TOTAL)
+
+    with TestClient(appmod.app) as client:
+        songs = [_upload_song(client, f"T6-A2 Set {i}")
+                 for i in range(_T6_A2_SET_COUNT)]
+        created = client.post("/api/sets",
+                              json={"name": "T6-A2 Set Fixture", "mode": "audio"})
+        assert created.status_code == 200, created.text
+        set_id = created.json()["set"]["id"]
+        for song in songs:
+            r = client.post(f"/api/sets/{set_id}/items",
+                            json={"song_id": song["id"],
+                                  "transition": "cut", "secs": 0})
+            assert r.status_code == 200, r.text
+
+        html = client.get(f"/sets/{set_id}")
+        js = client.get(f"/api/sets/{set_id}")
+
+    assert html.status_code == 200, html.text
+    page = html.text
+    assert js.status_code == 200, js.text
+    ctype = (js.headers.get("content-type") or "").split(";")[0].strip()
+    assert ctype == "application/json", (
+        f"/api/sets/{{id}} returned {ctype or 'no content-type'}, not JSON: "
+        f"{js.text[:200]}")
+    assert "<html" not in js.text.lower(), js.text[:200]
+    body = js.json()
+
+    html_count = int(re.search(r"(\d+) items?", page).group(1))
+    html_hms = re.search(
+        r"running length <strong>([^<]+)</strong>", page).group(1).strip()
+    html_dur = float(re.search(r'data-duration="([^"]+)"', page).group(1))
+    html_ids = [int(n) for n in re.findall(r'id="item-(\d+)"', page)]
+
+    json_ids = [it["id"] for it in body["items"]]
+
+    assert html_count == body["count"] == _T6_A2_SET_COUNT, (
+        html_count, body.get("count"), body)
+    assert html_dur == body["total_secs"] == _T6_A2_SET_TOTAL, (
+        html_dur, body.get("total_secs"), body)
+    assert html_hms == appmod.hms(_T6_A2_SET_TOTAL), (
+        html_hms, appmod.hms(_T6_A2_SET_TOTAL))
+    assert html_ids == json_ids, (html_ids, json_ids)
+    assert len(html_ids) == _T6_A2_SET_COUNT, html_ids
+
+
 # ----------------------------------------------------------------- T6-A4 --
 
 _T6_A4_ELAPSED = "12.7s"
