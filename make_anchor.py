@@ -104,6 +104,12 @@ BACKDROP_PARTS = (
 )
 BACKDROP = "".join(p for _, p in BACKDROP_PARTS)
 
+# Empty-latent defaults. Full-body standing sheets stay 896×1216. Portrait is
+# head-and-shoulders: the same 3:4 tall frame makes a distant figure. docs/TRD-7
+# T7-5, T7-12.
+DEFAULT_SIZE = (896, 1216)
+PORTRAIT_SIZE = (1024, 1024)
+
 # ONE table. Adding a view is one entry: label (UI), framing (camera+pose+crop),
 # pose (the replaceable stance clause inside framing), backdrop_omit (which
 # BACKDROP_PARTS to drop). `pose` on the profile REPLACES that clause — it must
@@ -215,6 +221,7 @@ VIEWS = {
         "pose": "",
         "camera": "PORTRAIT VIEW character reference sheet of a single adult character, ",
         "backdrop_omit": ("stance", "crop", "floor"),
+        "size": PORTRAIT_SIZE,
     },
     "portrait_nude": {
         "label": "portrait, nude",
@@ -224,6 +231,7 @@ VIEWS = {
         "pose": "",
         "camera": "PORTRAIT VIEW nude character reference sheet of a single adult character, ",
         "backdrop_omit": ("stance", "crop", "floor"),
+        "size": PORTRAIT_SIZE,
     },
     "on_all_fours": {
         "label": "on all fours, clothed",
@@ -279,6 +287,19 @@ def view_entry(view):
 
 def _omit(view):
     return view_entry(view).get("backdrop_omit") or ()
+
+
+def size_for_view(view):
+    """Default empty-latent (width, height) for this view. docs/TRD-7 T7-5.
+
+    Portrait is head-and-shoulders; the standing full-body 896×1216 makes a
+    distant figure. Other views keep DEFAULT_SIZE. A view may set size on its
+    VIEWS row; absent means DEFAULT_SIZE.
+    """
+    size = view_entry(view).get("size")
+    if size and len(size) == 2:
+        return (int(size[0]), int(size[1]))
+    return DEFAULT_SIZE
 
 
 def _pose_clause(text):
@@ -528,8 +549,11 @@ def main():
                                                   "as named in ComfyUI/input")
     ap.add_argument("--outdir", required=True)
     ap.add_argument("--n", type=int, default=6)
-    ap.add_argument("--width", type=int, default=896)
-    ap.add_argument("--height", type=int, default=1216)
+    ap.add_argument("--width", type=int, default=None,
+                    help="empty-latent width. Default is size_for_view(--view): "
+                         "896 for full-body sheets, 1024 for portrait (T7-5).")
+    ap.add_argument("--height", type=int, default=None,
+                    help="empty-latent height. Default is size_for_view(--view).")
     ap.add_argument("--view", choices=list(VIEWS), default="front")
     ap.add_argument("--prefix", default="anchor_v2")
     ap.add_argument("--seed", type=int, default=None,
@@ -577,6 +601,14 @@ def main():
         # image to encode, so this would silently render the other mode -- and
         # at denoise 0.55 that is noise, an hour later, with nothing saying why.
         ap.error("--latent image needs at least one reference image to encode")
+    # View-aware latent size when the caller did not pin either edge. Portrait
+    # is 1024×1024 by default so head-and-shoulders is not a distant figure in
+    # a tall full-body frame. docs/TRD-7 T7-5.
+    dw, dh = size_for_view(args.view)
+    if args.width is None:
+        args.width = dw
+    if args.height is None:
+        args.height = dh
 
     settings = build_refs.sampler_settings(
         args.mode, steps=args.steps, cfg=args.cfg, sampler_name=args.sampler_name,
