@@ -619,7 +619,9 @@ FLAGs `clipped_samples` with the rail count and a loudnorm remedy —
 not a silent pass when samples sit at digital full scale. `T3-4.3-dc`: a `dc_offset` FLAG names
 the abs mean sample as a full-scale fraction above the limit and a
 re-render remedy — not a silent pass on a constant-biased take.
-`T3-4.4-av`: an assembled song whose
+`T3-3`: a silent LTX clip does not emit `has_audio` (clips are silent by
+design); an assembled song with no audio stream REJECTs `has_audio` with
+a re-assemble remedy — not a silent pass on a mute assemble. `T3-4.4-av`: an assembled song whose
 audio and video stream durations disagree FLAGs `av_sync` with measured
 gap in seconds and a re-assemble remedy — not a silent pass when the
 tracks drift. `T3-4.4-gap`: an assembled song with a black stretch on a planned join is a reject that names re-assemble; a clean hard cut does not. `T3-20`: the wordingthat runs is the stored `prompts` row — same id on the finding and the job

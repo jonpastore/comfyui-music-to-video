@@ -200,6 +200,9 @@ sine PASSes 0, hard-clipped takes FLAG, `test_t3_4_3_clip.py`;
 `measure_edge_silence` FLAGs leading or trailing null pad above
 `EDGE_SILENCE_LIMIT_S` (0.25 s), PASSes a clean tone and a 0.15 s pad,
 distinct from T3-9 whole-file band energy, `test_t3_4_3_edge.py`;
+**`T3-3` built** — silent LTX clip does not emit `has_audio`;
+assembled song with no audio stream REJECTs `has_audio` (re-assemble);
+`test_t3_3_has_audio.py` (was demo-only / clip-skip half of av only);
 **`T3-4.4-av` built** — assembled-song
 `av_sync` / `measure_av_durations`: matching A/V streams PASS within
 `DURATION_TOL_S`, a 1s gap FLAGs, clips without `want_audio` skip,
