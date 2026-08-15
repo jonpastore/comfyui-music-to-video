@@ -22,7 +22,7 @@ _REPO_ROOT = os.environ.get("STUDIO_SCRIPTS") or os.path.dirname(
 sys.path.insert(0, _REPO_ROOT)
 from build_storyboard import parse_sections, to_md, energy  # noqa: E402
 from build_song import (  # noqa: E402
-    SHOT_RULES, CHUNK, LTX_FPS, legal_frames, guidance_seconds, n_clips_for)
+    SHOT_RULES, LTX_FPS, legal_frames, guidance_seconds, n_clips_for)
 
 import tiers  # noqa: E402  (ContentRefused must be catchable by type)
 
@@ -392,21 +392,18 @@ def _system_prompt(tier_text, style_note, n_scenes, scene_seconds, min_scenes=1,
         + (f"Target pacing is about {scene_seconds:.0f} seconds of runtime per scene."
            if scene_seconds else
            "Pace the scenes yourself from the music: a scene lasts as long as its beat "
-           "does. A scene longer than the renderer's 4.8125s clip is fine -- it is cut "
+           "does. A scene longer than one rendered clip is fine -- it is cut "
            "into consecutive clips automatically -- so say what it needs in "
            "duration_guidance rather than trimming to fit.")
     )
 
 
 def _user_prompt(lyrics, song, tier, n_scenes):
-    """The model needs the song's real length AND the renderer's clip quantum.
+    """The model needs the song's real length.
 
     Without the duration it invents scene times that do not add up to the track.
-    Without the 4.8125 s quantum it emits guidance like "3-5 sec" that cannot be
-    rendered as a whole number of clips, and build_song.allocate() then rounds
-    each scene independently -- pacing drifts against the audio across a 40-80
-    clip song. Quoting both, and asking for guidance in whole clip multiples,
-    is what keeps the storyboard's timing honest.
+    Clip length is per song; a fixed quantum here would tell the model to plan
+    for a length the renderer is no longer bound to.
     """
     dur = float(song.get("duration") or 0.0)
     total_clips = n_clips_for(dur)
@@ -416,13 +413,7 @@ def _user_prompt(lyrics, song, tier, n_scenes):
         f"({song.get('genre', '')}). Content tier: {tier}.\n\n"
         f"TIMING (hard constraints from the renderer):\n"
         f"- Track length: {dur:.1f} seconds ({mins}:{secs:02d}).\n"
-        f"- The video renderer emits fixed clips of exactly {CHUNK:.4f} s "
-        f"(77 frames at 16 fps). Nothing shorter or longer can be produced.\n"
-        f"- The whole track is therefore {total_clips} clips.\n"
-        f"- Each scene is rendered as a WHOLE NUMBER of those clips. Write every "
-        f"duration_guidance as a range whose midpoint is close to a multiple of "
-        f"{CHUNK:.2f} s (e.g. \"4-6 sec\" = 1 clip, \"9-11 sec\" = 2 clips, "
-        f"\"14-15 sec\" = 3 clips). Never ask for less than one clip.\n"
+        f"- The whole track is {total_clips} clips.\n"
         f"- The scene durations must add up to roughly {dur:.0f} seconds. Spend more "
         f"clips on choruses, drops and instrumental passages; fewer on short spoken lines.\n\n"
         "Lyrics (Suno-style [Section] tags mark scene boundaries -- respect them as "

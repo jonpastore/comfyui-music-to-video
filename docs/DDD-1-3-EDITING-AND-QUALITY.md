@@ -282,13 +282,13 @@ length is the divisor, the count is ours.
    upserts the storyboard row and does not touch `refs`, so re-planning the
    same storyboard leaves the approved `(clip_idx, seed)` set identical.
 
-`W1-4` sits alongside and is a **prompt**, not code: `grok._user_prompt` still
-tells the model the renderer emits fixed 4.8125 s clips and to round every
-`duration_guidance` to multiples of it. Leaving it changes nothing that runs and
-everything that comes back — the same shape as the section floor, where the
-formula was fixed and `validate()` quietly regenerated the old answer. The
-function is pure; assert on its return value (`T2-14a`…`T2-14c`), never by
-grepping the source.
+`W1-4` sits alongside and is a **prompt**, not code. `T2-14a` is **built**:
+`grok._user_prompt` no longer names a fixed 4.8125 s quantum, does not say
+nothing shorter or longer can be produced, and does not tell the model to
+round `duration_guidance` to multiples of a constant. `_system_prompt` no
+longer names 4.8125 s either. `T2-14b` (clip-length text derived from
+planning) and `T2-14c` (TIMING purpose asserted) remain. The function is
+pure; assert on its return value, never by grepping the source.
 
 ### 5.6 Tier 2 is a calibration, not a metric
 
