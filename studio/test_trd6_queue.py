@@ -882,7 +882,9 @@ def test_t6_a1_storyboard_loop_over_json(monkeypatch):
         }, "stub/model")
 
     def _fake_sb(*_a, **_k):
-        return {"scenes": [{
+        return {
+            "character_reference": "a sleek black feline DJ",
+            "scenes": [{
             "scene_number": 1,
             "name": "the door",
             "image_prompt": "she stands at the door",
