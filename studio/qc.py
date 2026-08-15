@@ -74,10 +74,20 @@ FPS_TOL = 0.01
 # getting darker is a reason to re-run those numbers, not to nudge this one.
 LUMA_FLOOR = 24.0
 
-# A take whose loudest sample is under this is empty, not quiet. Measured
-# 2026-08-13 with volumedetect: a 440 Hz tone peaks at -18.1 dB and digital
-# silence at -91.0 dB, so -60 sits a long way from both.
+# A take whose loudest of low/mid/high *mean* band energy is under this
+# is empty, not quiet. Peak volumedetect is refused: a 1-sample click
+# reads peak -20.0 dB and still has band means below -70 (measured
+# 2026-08-14). Digital silence is -91.0 in every band; a 440 Hz tone
+# at -14 dB is mid -35.5. -60 sits a long way from both.
 SILENCE_FLOOR_DB = -60.0
+
+# T3-9 bands. Brick-wall they are not — 440 Hz leaks into low at -45 —
+# but 80 / 440 / 8000 Hz each light exactly one band as the loudest.
+BANDS = (
+    ("low", "highpass=f=20,lowpass=f=250"),
+    ("mid", "highpass=f=250,lowpass=f=4000"),
+    ("high", "highpass=f=4000,lowpass=f=16000"),
+)
 
 # docs/TRD-7 T7-7: the sheet must be HER, not the pose-plate person. The look
 # itself is human-judged; this is the finding kind for the offline hook.
@@ -313,33 +323,39 @@ def _readings(path, filt, key, audio=False):
     return vals
 
 
-def _volume(path):
-    """{"mean_db", "max_db"} via ffmpeg's volumedetect.
+def _band_mean_db(text):
+    m = re.search(r"mean_volume:\s*(-?(?:\d+(?:\.\d+)?|inf)) dB", text or "")
+    if not m:
+        return None
+    raw = m.group(1)
+    if raw == "-inf":
+        return float("-inf")
+    if raw == "inf":
+        return float("inf")
+    return float(raw)
 
-    Not astats: `astats=metadata=1,metadata=print` will not initialise in this
-    filtergraph at all ("Error initializing a simple filtergraph"), so it
-    produced no readings for every file including ones that plainly have audio
-    -- a measurement that fails identically on good and bad input is worse than
-    none, because it looks like a finding. volumedetect prints one line to
-    stderr and separates the cases cleanly: measured 2026-08-13, a 440 Hz tone
-    reads max -18.1 dB and digital silence reads -91.0 dB.
 
-    Raises if it printed nothing, for the reason in the module docstring.
+def measure_band_energy(path):
+    """Mean energy in low/mid/high. RAISES if a band printed nothing.
+
+    T3-9. Not peak volumedetect (a 1-sample click peaks at -20 dB and
+    is still empty). Not aspectralstats (emits nothing without a
+    metadata printer and once compared 0.0 to 0.0).
     """
-    r = subprocess.run(
-        ["ffmpeg", "-nostdin", "-v", "info", "-i", path, "-af", "volumedetect",
-         "-f", "null", "-"], capture_output=True, text=True)
-    got = {}
-    for name in ("mean_volume", "max_volume"):
-        m = re.search(rf"{name}:\s*(-?\d+(?:\.\d+)?) dB", r.stderr)
-        if m:
-            got[name.split("_")[0] + "_db"] = float(m.group(1))
-    if "max_db" not in got:
-        raise RuntimeError(
-            f"volumedetect printed no level for {path} -- refusing to report a "
-            "measurement that did not happen:\n"
-            + "\n".join(r.stderr.splitlines()[-15:]))
-    return got
+    out = {}
+    for name, filt in BANDS:
+        r = subprocess.run(
+            ["ffmpeg", "-nostdin", "-v", "info", "-i", path,
+             "-af", f"{filt},volumedetect", "-f", "null", "-"],
+            capture_output=True, text=True)
+        val = _band_mean_db(r.stderr)
+        if val is None:
+            raise RuntimeError(
+                f"band {name} printed no mean_volume for {path} -- refusing "
+                "to report a measurement that did not happen:\n"
+                + "\n".join((r.stderr or "").splitlines()[-15:]))
+        out[name] = val
+    return out
 
 
 def _stderr_events(path, filt, pattern):
@@ -734,18 +750,20 @@ def check_audio(path, expect):
                                loud["true_peak_db"], effects.LOUDNORM_TP, "dBFS",
                                remedy="re-run loudnorm"))
 
-    # Silence. A take that came back empty is the failure this catches, and it
-    # is measured as band energy rather than asserted -- see the module docstring.
+    # T3-9. Loudest of low/mid/high mean energy, never peak volumedetect.
     try:
-        vol = _volume(path)
+        bands = measure_band_energy(path)
     except RuntimeError as e:
         out.append(finding(path, "audio", "silence", FLAG, str(e).split("\n")[0]))
     else:
-        out.append(finding(path, "audio", "silence",
-                           PASS if vol["max_db"] > SILENCE_FLOOR_DB else REJECT,
-                           f"peak {vol['max_db']:.1f} dB, mean "
-                           f"{vol.get('mean_db', float('nan')):.1f} dB",
-                           vol["max_db"], SILENCE_FLOOR_DB, "dB", remedy="re-render"))
+        loudest = max(bands.values())
+        measured = {k: round(bands[k], 1) for k in ("low", "mid", "high")}
+        out.append(finding(
+            path, "audio", "silence",
+            PASS if loudest > SILENCE_FLOOR_DB else REJECT,
+            f"low {bands['low']:.1f} / mid {bands['mid']:.1f} / high "
+            f"{bands['high']:.1f} dB (loudest {loudest:.1f})",
+            measured, SILENCE_FLOOR_DB, "dB", remedy="re-render"))
     return out
 
 

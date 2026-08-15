@@ -275,10 +275,12 @@ trailing silence; DC offset; band energy present across low/mid/high.
 `T1-25` names the same owner. The draft had each document pointing at the other,
 which is how a measurement said to be taken once ends up taken twice.
 
-- `T3-9` A silent or near-silent take is rejected. Measured band energies, not
-  `aspectralstats` — that filter emits nothing without a metadata printer, and a
-  check built on it returned 0.0 for both sides of a comparison and passed on no
-  data, behind an `if` that made it a no-op (2026-08-12).
+- `T3-9` A silent or near-silent take is rejected. Measured low/mid/high band
+  energies, not peak `volumedetect` and not `aspectralstats`. A 1-sample click
+  reads peak −20 dB and is still empty (band means below −70, 2026-08-14).
+  `aspectralstats` emits nothing without a metadata printer, and a check built
+  on it returned 0.0 for both sides of a comparison and passed on no data,
+  behind an `if` that made it a no-op (2026-08-12).
 - `T3-10` A spliced track's duration is checked against `mixer.bridge_seconds()`'
   own arithmetic. A span within a crossfade of either edge once deleted audio and
   **lengthened** the song — 20 s spliced at 0.1 s came back 20.193 s — and that
@@ -582,3 +584,4 @@ current.
 | `T3-27` every check names a remedy class | **built** | `test_t3_27_remedy_class.py` | `qc.CHECK_REMEDY_CLASS` on every named check. `approve()` puts `remedy_class` on the job and `_repair_actuator_and_key` uses the class, not the edited text (`test_t3_27_approve_uses_the_class_not_the_remedy_text`). `duration_matches_prediction` is `none`; `actionable` is false and approve refuses (`test_t3_27_no_remedy_refuses_approve`) |
 | `T3-32` tier 1 over a song without GPU/backend | **built** | `test_t3_32_tier1_song.py` | `qc_service.run_song` measures assembled + clips + refs while a render holds the worker; `pipeline`/`gpu`/`models.where` are not called; `POST /songs/{id}/qc` does not `jobs.enqueue` |
 | `T3-11` rendered set duration vs `set_duration()` | **built** | `test_t3_11_set_duration.py` | `qc.run(kind="set")` / `qc.check_set` on the artefact: matching file PASSes; trim that moves `mixer.set_duration()` by more than `mixer.SET_DURATION_TOLERANCE` REJECTs. Just-inside the named constant PASSes, just-outside REJECTs — `DURATION_TOL_S` (0.10) would keep both green. Tolerance is imported, not restated. `measured`/`expected`/`unit` are the independently probed length, the prediction, and `s`. T1-7 is the build-time twin |
+| `T3-9` silent take on band energy | **built** | `test_t3_9_silence.py` | `qc.measure_band_energy` returns low/mid/high mean dB. Digital silence and a −70 dB tone reject. A 440 Hz tone passes on the live mid band. A 1-sample click with peak −20 dB still rejects — peak `volumedetect` would pass it. A file with no audio raises, never 0.0 |

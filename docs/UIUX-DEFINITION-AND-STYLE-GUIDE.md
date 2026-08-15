@@ -243,7 +243,8 @@ per-box QC report is JSON only (`GET /api/qc/by-host`, `T3-1`): groups by
 `host`, NULL host is an explicit `unattributed` bucket. No page; do not
 pre-empt `finding-row` with one. An identity-wrong finding's remedy is
 "edit the text, then re-render" (`T3-28`); the queue must not offer
-"swap the reference image".
+"swap the reference image". A silence finding (`T3-9`) shows low / mid /
+high band energy, not a peak; a take that only clicked is empty.
 
 ## 5. The style guide
 
