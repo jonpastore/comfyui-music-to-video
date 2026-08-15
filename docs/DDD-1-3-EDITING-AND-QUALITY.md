@@ -122,7 +122,8 @@ confirmation is 400, `T2-16`). Same routes, no parallel `/api/*` tree
 `.../meter`, `.../cast`. The GET payload carries `anchors` — chosen album
 sheets grouped per character (`character`, `character_id`, `images` with
 `path`/`url`/`view`; protagonist first) so a client can draw the strip
-(`T2-26`). Per-scene reference images are still HTML-only (`T2-27`).
+(`T2-26`). Each scene object also carries its reference stills
+(`refs` with `path`/`url` next to `image_prompt`, `T2-27`).
 The generation prompt and **the limits that apply to it**
 travel in the same response (`T2-18`).
 `GET/POST /api/songs/{id}/storyboard/{tier}` (`T2-17` **built**: GET
@@ -556,8 +557,16 @@ still offered) is not this.
 `album_chosen_anchors` is the one query; the HTML page and the JSON
 share it. Chosen sheets only. Mutation: omit the key → red. Mutation:
 flat images with no character grouping → red. Mutation: drop a cast
-member's chosen sheet → red. `T2-27` (each scene's reference image)
-is not on `_scene_json` yet.
+member's chosen sheet → red.
+
+`T2-27` is **built**. `_scene_json` includes `refs` next to
+`image_prompt` / `story` / `video_motion_prompt`: per-clip `idx`,
+`path`/`url` of the latest candidate, plus `candidates[]` (`id`,
+`path`, `url`, `seed`, `approved`). `storyboard_scenes` is the one
+mapping; HTML `_scene_row.html` and the JSON share it. Scene A does
+not carry scene B's still. Another tier stays out. Mutation: omit
+`refs` on the scene → red. Mutation: top-level refs only → red.
+Mutation: copy another scene's still onto this scene → red.
 
 `T2-29` is **built**. A named scene figure is `{name, role}` with
 `role` in `lead` / `extra` / `background`. `_compose` keeps classified

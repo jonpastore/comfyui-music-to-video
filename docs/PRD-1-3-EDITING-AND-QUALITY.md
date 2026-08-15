@@ -273,8 +273,11 @@ order and take the dependencies from here.
    song yield two lengths. **`T2-26` built**: `GET .../storyboard/{tier}`
    returns the album's chosen anchor images grouped per character
    (`anchors[].character` / `images[]` with `path` and `url`), so a
-   client can show the strip without the HTML page. Remaining: `T2-8c`,
-   §4 wands (`T2-14`…`T2-19`), `T2-25`, `T2-27` scene refs, and casting.
+   client can show the strip without the HTML page.
+   **`T2-27` built**: each `scenes[]` object on
+   `GET .../storyboard/{tier}` carries `refs` (`path` / `url` per clip)
+   next to the editable description. Another scene's still is not this.
+   Remaining: `T2-8c`, §4 wands (`T2-14`…`T2-19`), `T2-25`, and casting.
    song yield two lengths. **`T2-29` built**: every named scene figure
    carries `lead` / `extra` / `background`; `GET .../cast` returns
    `role`; save/write refuses an unclassified or free-text role.

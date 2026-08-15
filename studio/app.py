@@ -5148,6 +5148,34 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
         "chunk": build_song.clip_seconds(row["scene_seconds"])})
 
 
+def _ref_candidate_json(row):
+    path = row["path"]
+    return {
+        "id": row["id"],
+        "path": path,
+        "url": media_url(path),
+        "seed": row["seed"],
+        "approved": bool(row["approved"]),
+    }
+
+
+def _scene_refs_json(r):
+    """T2-27: this scene's stills. Latest candidate is path/url on the clip."""
+    out = []
+    for ref in r.get("refs") or []:
+        cands = [_ref_candidate_json(c) for c in (ref.get("candidates") or [])]
+        latest = cands[-1] if cands else None
+        out.append({
+            "idx": ref["idx"],
+            "approved": bool(ref.get("approved")),
+            "stale": bool(ref.get("stale")),
+            "path": None if latest is None else latest["path"],
+            "url": None if latest is None else latest["url"],
+            "candidates": cands,
+        })
+    return out
+
+
 def _scene_json(r):
     scene = r.get("scene") or {}
     return {
@@ -5165,6 +5193,7 @@ def _scene_json(r):
         "video_model": scene.get("video_model") or "",
         "cast": r["cast"],
         "clips": r["clips"],
+        "refs": _scene_refs_json(r),
     }
 
 
