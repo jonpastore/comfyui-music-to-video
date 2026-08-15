@@ -104,8 +104,10 @@ filtered off the sets shelf — it is the song's timeline, not a second
 document. **`T8-14` is built** — `_song_editor_mix_items` feeds
 `mixer.set_duration` then `mixer.mix_audio` (`GET .../editor/duration`,
 `POST .../editor/render`); prediction is emitted before the mix and the
-probed file lands within `mixer.SET_DURATION_TOLERANCE`. `T8-15`
-(preview proxy) remains.
+probed file lands within `mixer.SET_DURATION_TOLERANCE`. **`T8-15` is
+built** — `GET /api/songs/{id}/preview` returns `mixer.preview_proxy`
+over the editor item's `effects_json` (`is_proxy`, `not_applied`); same
+rule as T1-16 on the set surface.
 
 ## 3. TRD-9 — testing what already works
 
@@ -278,6 +280,7 @@ each caller, or a caller that stops calling it stays green.
                          ->  generated/resynthesised/bridged each list a take (T8-3, built)
                          ->  song editor writes the shared automation model (T8-13, built)
                          ->  song editor predicted length = rendered length (T8-14, built)
+                         ->  song editor preview is a proxy with not_applied (T8-15, built)
     bulk edit (T10-6 built)         ->  T10-3, T10-4, T10-5, T10-7
     advice labelling  ->  T10-11..T10-15 over the four live modules
                          ->  the picked/unpicked distinction (T8-2)

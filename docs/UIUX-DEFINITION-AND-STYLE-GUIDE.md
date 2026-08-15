@@ -1047,6 +1047,13 @@ the probed length matches within `mixer.SET_DURATION_TOLERANCE`. Same
 number the set editor already shows as running length — not a second
 arithmetic path.
 
+`T8-15`: song-editor preview is a proxy, same rule as the set
+(`T1-16`). `GET /api/songs/{id}/preview` returns
+`{is_proxy: true, not_applied: [...]}` from the editor item's
+effects — the warning is data every client carries, not a sentence in
+one template. Gain and pan stay off the list (browser applies them);
+echo, eq, loudnorm and the rest appear only when stored.
+
 ## 8. How this document is verified
 
 A style guide is falsifiable or it is decoration.

@@ -2159,6 +2159,23 @@ def _song_editor_mix_items(song_id):
              "automation": automation.item_audio(item_id)}]
 
 
+@app.get("/api/songs/{id}/preview")
+def api_song_editor_preview(id: int):
+    """T8-15: browser playback is a proxy (T1-16 on this surface).
+
+    not_applied is computed from the editor item's effects_json via
+    mixer.preview_proxy — not a static catalogue.
+    """
+    get_song_or_404(id)
+    item_id = automation.editor_item(id, create=False)
+    if item_id is None:
+        items = [{"effects_json": None}]
+    else:
+        row = db.one("SELECT effects_json FROM set_items WHERE id=?", item_id)
+        items = [{"effects_json": row["effects_json"] if row else None}]
+    return mixer.preview_proxy(items)
+
+
 @app.get("/api/songs/{id}/editor/duration")
 def api_song_editor_duration(id: int):
     """T8-14: predicted length for the song editor, via mixer.set_duration."""
