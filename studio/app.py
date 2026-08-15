@@ -5763,12 +5763,29 @@ def start_refs(id: int, tier: List[str] = Form([]), limit: int = Form(0)):
     anchors = {}
     for t in selected:
         valid_tier_or_400(t)
-        if not db.one("SELECT id FROM storyboards WHERE song_id=? AND tier=?", id, t):
+        sb_row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, t)
+        if not sb_row:
             raise HTTPException(400, f"generate a storyboard for tier '{t}' first")
         anchor = chosen_anchor("album", song["album"] or "", t)
         if not anchor:
             raise HTTPException(400, f"no chosen anchor for tier '{t}' on this album "
                                       f"-- generate and pick one on /anchors first")
+        # T2-28: named leads need chosen sheets too. Banner/cast (T2-30) is not
+        # enough — refuse before a refs job is written. Extras/background stay out.
+        try:
+            sb = load_storyboard(sb_row)
+        except (OSError, json.JSONDecodeError) as e:
+            raise HTTPException(500, f"storyboard file is unreadable: {e}") from None
+        cast = cast_anchors(song["album"] or "", t)
+        rows, _ = storyboard_scenes(
+            song, sb, t, {c["name"] for c, _a in cast},
+            scene_seconds=sb_row["scene_seconds"])
+        missing = unanchored_leads(rows)
+        if missing:
+            raise HTTPException(
+                400,
+                f"named lead(s) have no chosen anchor for tier '{t}': "
+                f"{', '.join(missing)} -- generate and pick sheets on /anchors first")
         anchors[t] = anchor
     limit = max(0, limit)
     for t in selected:

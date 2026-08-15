@@ -373,8 +373,10 @@ order and take the dependencies from here.
    **Cast slots built**: named leads with chosen sheets occupy image2/3
    on the ref graph; extras/background never take those slots even with
    a sheet (`test_cast_slots_only_leads_with_chosen_sheets_take_image2_and_image3`).
-   **`T2-28` remaining**: `POST /songs/{id}/refs` must refuse when a
-   named lead has no chosen sheet, not only paint the banner.
+   **`T2-28` built**: `POST /songs/{id}/refs` 400s and writes no refs
+   job when a named lead has no chosen sheet
+   (`test_t2_28_refs_unanchored_leads.py`); extras/background do not
+   block enqueue. Banner alone is not enough.
    **refs-identity built**: per-clip refs condition on the chosen
    sheet as image1 (identity), not a standing 4748 plate; each ref is
    scored against that chosen path (`test_t2_refs_identity.py`).
