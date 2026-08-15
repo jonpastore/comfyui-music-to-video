@@ -133,7 +133,7 @@ longer the phase to defer — `docs/PLAN-TRD-4-7.md` §4 is updated to match.
 ### Already built and deployed (do not rebuild)
 
 `studio/qc.py` (TRD-3 tier 1 in full), `studio/qc_service.py` + `db.findings` +
-`/api/qc/*`, `studio/automation.py` + `db.automation` (TRD-1 §5's curve model,
+`/api/qc/*` including `GET /api/qc/by-host` (`T3-1`), `studio/automation.py` + `db.automation` (TRD-1 §5's curve model,
 decimation and filter emission), `studio/arc.py` + the arc routes (TRD-2 §3.1's
 JSON-canonical arc), `db.artefacts` (tier 0), `prompts.py` (TRD-2 §3.3's
 versioning, reused by `T3-20`). TRD-3 §2.1 is explicit that §4 and §6 "read as

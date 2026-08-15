@@ -57,6 +57,7 @@ not been shown to separate known-good from known-bad does not gate anything.
 | Versioned prompts with usage counts and no renumbering after delete | `prompts.py` |
 | **Tier 1 itself — every check in §4** | **`studio/qc.py`**: `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise` |
 | **The findings table, the queue, and the remedy edit** | **`studio/qc_service.py`** + `db.findings`; `/api/qc/*` and the `qc` job kind in `app.py` |
+| **T3-1** per-box report groups by `host`; NULL host is `unattributed` | **`qc_service.by_host`** + `GET /api/qc/by-host` |
 
 **§4 and §6 below read as unbuilt work and are not.** An audit found this table
 listing seven items, none of them the QC implementation, in a section whose
@@ -483,7 +484,7 @@ tier 1.
    marked **provisional** and says what it cannot yet distinguish.
 
    One-sided in this document today, listed so nobody has to re-derive it:
-   `T3-1`, `T3-4` (fields present but never checked for sense), `T3-14`, `T3-20`, `T3-22`, `T3-24` and `T3-27`. `T3-6` / `T3-18` / `T3-23` have their positive halves: dest ≠ source, and a correctly-named model on a box that holds it is SUBMITTED.
+   `T3-4` (fields present but never checked for sense), `T3-14`, `T3-20`, `T3-22`, `T3-24` and `T3-27`. `T3-1` now has the two-host count half. `T3-6` / `T3-18` / `T3-23` have their positive halves: dest ≠ source, and a correctly-named model on a box that holds it is SUBMITTED.
 
 ### The positive half of each one-sided criterion
 
@@ -524,7 +525,7 @@ current.
 | `T3-7` the model's own latent step | **built** | `d4a39c2` | asserted both ways on one 77-frame file: passes at step 4, flags at step 8 naming 81 |
 | `T3-4` measured/expected/unit | **built** | earlier | on every check that has them |
 | `T3-5` re-running does not duplicate | **built** | earlier | `UNIQUE(path, check_name)`; the mutation audit found the upsert alone was not the guard |
-| `T3-1` group by host | **partial** | `e20346f` | the host column is now canonical — one box, one identity — but the grouped report itself is not built |
+| `T3-1` group by host | **built** | `test_t3_1_by_host.py` | report over artefacts from two hosts has two groups with the planted counts; NULL host is an explicit unattributed bucket. Host is still canonical (`e20346f`) |
 | **tier 2, §5 entire** | **not built** | — | no calibration, no embedding metric. `T3-13`…`T3-16` are the order and none has run |
 | **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-23` is its own row. Remaining: `T3-24`, `T3-25` |
 | `T3-23` repair routing | **built** | `160547d` | default `dispatch_repair` asks `where()`/`fits()`/`resolve()`, refuses a pin under a name the box does not have before submit (`test_t3_23_pinned_name_the_box_does_not_have_is_refused_before_submit`), and a correctly-named model on a box that holds it is SUBMITTED (`test_t3_23_correctly_named_model_on_a_box_that_holds_it_is_submitted`). dest is the actuator's file (`fix_ref` / `gen_postproc`), not a copy of src |

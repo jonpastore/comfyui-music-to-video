@@ -202,7 +202,10 @@ either way.
 
 **Genuinely not built** — `meter` (scene time against song length, `T2-23`;
 loudness against target, `T1-25`), `finding-row` (measured / expected / unit /
-remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-27`).
+remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-27`). The
+per-box QC report is JSON only (`GET /api/qc/by-host`, `T3-1`): groups by
+`host`, NULL host is an explicit `unattributed` bucket. No page; do not
+pre-empt `finding-row` with one.
 
 ## 5. The style guide
 

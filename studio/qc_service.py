@@ -28,6 +28,7 @@ import prompts  # noqa: E402
 OPEN, APPROVED, RUNNING, REPAIRED, DISMISSED = (
     "open", "approved", "running", "repaired", "dismissed")
 
+UNATTRIBUTED = "unattributed"
 MAX_REMEDY = 4000
 
 
@@ -145,6 +146,28 @@ def summary(path=None):
     sql += " GROUP BY verdict"
     counts = {r["verdict"]: r["n"] for r in db.q(sql, *args)}
     return {v: counts.get(v, 0) for v in (qc.PASS, qc.FLAG, qc.REJECT)}
+
+
+def by_host():
+    """Per-box quality report. Groups artefacts by host (T3-1).
+
+    NULL host is an explicit unattributed bucket with a count. Group
+    by host, never backend -- Swarm renumbers backend ids.
+    """
+    rows = db.q(
+        """SELECT CASE
+                    WHEN host IS NULL OR TRIM(host) = '' THEN ?
+                    ELSE host
+                  END AS host,
+                  COUNT(*) AS n
+             FROM artefacts
+            GROUP BY 1
+            ORDER BY CASE WHEN host = ? THEN 1 ELSE 0 END, host""",
+        UNATTRIBUTED, UNATTRIBUTED)
+    groups = [{"host": r["host"], "n": r["n"]} for r in rows]
+    if not any(g["host"] == UNATTRIBUTED for g in groups):
+        groups.append({"host": UNATTRIBUTED, "n": 0})
+    return groups
 
 
 def set_remedy(fid, text, album=None):

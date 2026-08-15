@@ -1948,6 +1948,12 @@ def api_qc_findings(status: str = "open", kind: str = "", tier: int = 0,
                                           tier=tier or None, include_pass=include_pass)]})
 
 
+@app.get("/api/qc/by-host")
+def api_qc_by_host():
+    """T3-1: per-box report. qc_service.by_host decides; this route forwards."""
+    return JSONResponse({"groups": qc_service.by_host()})
+
+
 @app.get("/api/qc/findings/{fid}")
 def api_qc_finding(fid: int):
     try:

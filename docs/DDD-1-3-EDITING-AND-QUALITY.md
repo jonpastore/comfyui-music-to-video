@@ -22,7 +22,7 @@ is named.
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` **and** `T3-9`/§4.3 |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `fragment`, `item_audio`, `wants_master_loudnorm` | built |
 | `studio/qc.py` | 642 | TRD-3 tier 1 in full: `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise` | built |
-| `studio/qc_service.py` | 308 | findings, queue, remedy edit, dismiss, reopen; `approve()` enqueues dest ≠ source; `dispatch_repair` asks `where()`/`fits()`/`resolve()` then submits `fix_ref` / `gen_postproc` | built except `T3-24` / `T3-25` |
+| `studio/qc_service.py` | 308 | findings, queue, `by_host` (`T3-1`), remedy edit, dismiss, reopen; `approve()` enqueues dest ≠ source; `dispatch_repair` asks `where()`/`fits()`/`resolve()` then submits `fix_ref` / `gen_postproc` | built except `T3-24` / `T3-25` |
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2: JSON-canonical arc, `to_md`, `validate`, `for_song`, screened both directions | built |
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning, reused by `T3-20` | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
@@ -86,7 +86,8 @@ decimated** curve — the client re-reads what was kept, §5.3),
 travel in the same response (`T2-18`).
 
 **C · QC** — exists. `/api/qc/findings`, `/{fid}`, `/{fid}/remedy`,
-`/{fid}/dismiss`, `/{fid}/approve`.
+`/{fid}/dismiss`, `/{fid}/approve`, `/api/qc/by-host` (`T3-1`: groups by
+`host`, NULL host is the `unattributed` bucket).
 
 Every list response carries help text per control, with warnings marked
 distinctly from notes (`T2-36`) — a client that cannot tell them apart hides the
