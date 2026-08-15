@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-11, T9-13a, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-11, T9-13a, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -15,6 +15,7 @@ import tempfile
 import urllib.request
 
 import db
+import fleet_watch
 import jobs
 import models
 from conftest import _real_module
@@ -639,6 +640,76 @@ def test_t9_7_refusal_benches_next_pin_and_walk_still_continues():
     # Mid-walk benched headline must not reclassify the whole walk as vanished
     # before later pins run — T9-6 still owns exhaust-only requeue.
     assert not any("offline or went away" in m for m in said), said
+
+
+# T9-8. fleet_watch already edges on up/down; without a count assertion a
+# poll-spam notify still looks green. Exercise once() with a flapping box:
+# first reading silent, one alert per real transition, zero on re-polls.
+
+
+def test_t9_8_state_change_alerts_once_per_transition_not_per_poll():
+    """T9-8: a backend state change says something once per transition.
+
+    Positive half (TRD-9 §9): a flapping box produces one alert per
+    transition, asserted by count. A box that stays down across many polls
+    fires once on the edge; recovery is a second edge; same-state re-polls
+    fire nothing. First reading is never an alert (restart must not spam).
+    Wired through once() so a transitions()-only fix that never notifies
+    still goes red.
+    """
+    up = {"h": {"label": "box", "up": True, "detail": "ok",
+                "running": 0, "pending": 0}}
+    down = {"h": {"label": "box", "up": False, "detail": "URLError",
+                  "running": None, "pending": None}}
+
+    assert fleet_watch.transitions({}, up) == [], (
+        "a first reading alerted — every watcher restart would spam")
+    assert fleet_watch.transitions(up, up) == []
+    assert fleet_watch.transitions(down, down) == []
+
+    # stay down for many polls: one edge only
+    fired, state = 0, up
+    for _ in range(20):
+        fired += len(fleet_watch.transitions(state, down))
+        state = down
+    assert fired == 1, (
+        f"a box down for 20 scans alerted {fired} times — once-per-poll flood")
+    assert len(fleet_watch.transitions(state, up)) == 1, (
+        "the recovery after a long outage was missed")
+
+    # flap: each edge is one, asserted by count
+    seq = [up, down, up, down, up]
+    edges = sum(len(fleet_watch.transitions(seq[i - 1], seq[i]))
+                for i in range(1, len(seq)))
+    assert edges == 4, f"flapping edges counted {edges}, want 4"
+
+    # once() path: notify is what "says something". Mock scan + notify.
+    # Sequence: first up (seed), down, down, down, up, up → 2 alerts.
+    alerts = []
+    readings = [up, down, down, down, up, up]
+    idx = {"i": 0}
+    was_scan, was_notify = fleet_watch.scan, fleet_watch.notify
+    try:
+        def fake_scan(fleet=None):
+            r = readings[min(idx["i"], len(readings) - 1)]
+            idx["i"] += 1
+            return r
+
+        fleet_watch.scan = fake_scan
+        fleet_watch.notify = (
+            lambda lines, webhook=None: alerts.append(list(lines)) or True)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "s.json")
+            for _ in readings:
+                fleet_watch.once(
+                    state_path=path, webhook="http://example/hook", quiet=True)
+        assert len(alerts) == 2, (
+            f"once() alerted {len(alerts)} times on a 2-edge flap "
+            f"(seed + down×3 + up×2); want 2 — one per transition")
+        assert any("OFFLINE" in line for line in alerts[0])
+        assert any("ONLINE" in line for line in alerts[1])
+    finally:
+        fleet_watch.scan, fleet_watch.notify = was_scan, was_notify
 
 
 # Swarm keys that would consult the connect-time node/model list for routing.
