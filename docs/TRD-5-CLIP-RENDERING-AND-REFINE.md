@@ -147,9 +147,9 @@ measurement beside it. The **values** are renderer facts and belong here.
 ## 6. Explicitly not building
 
 - **No WAN refiner on LTX output.** §1.
-- **No frame handoff from scratch** for chained clips: `LTXVAddGuide`,
-  `LTXVAddGuideMulti` and `LTXVAddGuidesFromBatch` are installed on cerberus and
-  inject a guide frame at an index. TRD-2 `T2-10` needs exactly that.
+- **No frame handoff from scratch** for chained clips: `LTXVAddGuide` is
+  installed and `build_song.attach_ltxv_guide` wires it. Do not invent a
+  second mechanism. TRD-2 `T2-10` owns the criterion; this graph is how.
 - **No third variant.** A and B are the shapes LTX documents; a bespoke one is a
   new failure surface for no measured gain.
 
@@ -194,10 +194,10 @@ from the other side.
 
 **A reviewer read that sentence as a refusal to build it**, because it sits in a
 section headed *"Explicitly not building"* — and an implementer will read it the
-same way. Meanwhile **no document says who wires those nodes into
-`build_song`**: TRD-2 owns the criterion that clip N+1 starts on clip N's last
-frame, TRD-5 owns the graph, and neither claims the implementation. That is the
-shape of the hole TRD-6 was written to fill. The sentence belongs in §2, not §6.
+same way. **Closed 2026-08-15:** `build_song.attach_ltxv_guide` wires
+`LTXVAddGuide` at frame 0 for a chain successor. TRD-2 still owns `T2-10`;
+this document owns the node. The sentence stays "do not reinvent", not
+"do not build".
 
 
 ---

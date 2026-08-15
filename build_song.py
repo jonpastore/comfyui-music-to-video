@@ -531,6 +531,105 @@ def scene_over_ceiling(scene, default_model="ltx25"):
     return seconds > clip_ceiling(model)["seconds"] + 1e-9
 
 
+def render_ceiling(video_model="ltx25"):
+    """Seconds one render job is allowed to ask for. TRD-5 §5 / T2-10."""
+    return clip_ceiling(video_model)["seconds"]
+
+
+def chain_clip_count(scene_seconds, ceiling=None, video_model="ltx25"):
+    """How many clips one scene becomes. T2-10: ceil(scene_seconds / ceiling)."""
+    if not isinstance(scene_seconds, (int, float)) or not math.isfinite(scene_seconds) or scene_seconds <= 0:
+        raise ValueError(f"scene_seconds must be a finite number > 0, got {scene_seconds!r}")
+    cap = render_ceiling(video_model) if ceiling is None else ceiling
+    if not isinstance(cap, (int, float)) or not math.isfinite(cap) or cap <= 0:
+        raise ValueError(f"ceiling must be a finite number > 0, got {cap!r}")
+    return math.ceil(scene_seconds / cap)
+
+
+def chain_plan(scene_seconds, ceiling=None, video_model="ltx25"):
+    """[{chain_idx, duration, depends_on}] covering one scene. T2-10 / T2-11."""
+    if ceiling is None:
+        parts = split_to_ceiling(scene_seconds, video_model)
+    else:
+        n = chain_clip_count(scene_seconds, ceiling)
+        parts = [scene_seconds / n] * n
+    return [
+        {"chain_idx": i, "duration": d, "depends_on": None if i == 0 else i - 1}
+        for i, d in enumerate(parts)
+    ]
+
+
+def _video_frames(path):
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-count_frames", "-show_entries", "stream=nb_read_frames,nb_frames",
+         "-of", "csv=p=0", path],
+        capture_output=True, text=True, check=True).stdout.strip()
+    for part in out.replace("\n", ",").split(","):
+        part = part.strip()
+        if part.isdigit():
+            return int(part)
+    raise RuntimeError(f"could not read frame count from {path}: {out!r}")
+
+
+def extract_video_frame(path, which="last", dest=None):
+    """Write the first or last frame of a clip to dest (png). T2-10."""
+    if which not in ("first", "last"):
+        raise ValueError(f"which must be 'first' or 'last', got {which!r}")
+    if dest is None:
+        dest = f"{path}.{which}.png"
+    if which == "first":
+        cmd = ["ffmpeg", "-y", "-v", "error", "-i", path, "-frames:v", "1", dest]
+    else:
+        n = _video_frames(path)
+        if n < 1:
+            raise ValueError(f"no video frames in {path}")
+        cmd = ["ffmpeg", "-y", "-v", "error", "-i", path,
+               "-vf", f"select=eq(n\\,{n - 1})", "-vsync", "vfr",
+               "-frames:v", "1", dest]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0 or not os.path.isfile(dest):
+        raise RuntimeError(r.stderr or f"ffmpeg failed extracting {which} from {path}")
+    return dest
+
+
+def frame_pixels(path):
+    """RGB24 bytes of a still. Used to compare extracted chain frames."""
+    r = subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", path,
+         "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        capture_output=True)
+    if r.returncode != 0 or not r.stdout:
+        raise RuntimeError(r.stderr.decode("utf-8", "replace") or f"no pixels from {path}")
+    return r.stdout
+
+
+def chain_first_frame(prev_clip, dest=None):
+    """Clip N's last frame — the first-frame guide for clip N+1. T2-10."""
+    if dest is None:
+        dest = os.path.splitext(prev_clip)[0] + ".last.png"
+    return extract_video_frame(prev_clip, "last", dest)
+
+
+def chain_seam_matches(prev_clip, next_clip, max_mad=12):
+    """True when last frame of N equals first frame of N+1. T2-10.
+
+    Compared as pixels, not as a planned chain. yuv420p encode of a still
+    used as the successor's first frame is allowed `max_mad` mean abs error.
+    """
+    last = extract_video_frame(prev_clip, "last", dest=prev_clip + ".seam-last.png")
+    first = extract_video_frame(next_clip, "first", dest=next_clip + ".seam-first.png")
+    a, b = frame_pixels(last), frame_pixels(first)
+    if len(a) != len(b):
+        return False
+    if a == b:
+        return True
+    acc = 0
+    for x, y in zip(a, b):
+        acc += abs(x - y)
+    return (acc / len(a)) <= max_mad
+
+
 def ltx25_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard, with_audio=True):
     """LTX-2.5, the audio-conditioned path -- same contract as ltx_workflow.
 
@@ -741,8 +840,91 @@ def _refine_ltx(wf, i):
     return wf
 
 
+def attach_ltxv_guide(wf, image, frame_idx=0, strength=1.0):
+    """Inject a guide frame via LTXVAddGuide. T2-10 / W1-7.
+
+    Do not invent a handoff: the node is already installed. Clip N+1's first
+    frame is clip N's last, so frame_idx defaults to 0. Rewires the guider
+    and the video latent consumers onto the node's (positive, negative, latent)
+    outputs.
+    """
+    if any(n.get("class_type") == "LTXVAddGuide" for n in wf.values()):
+        return wf
+    decode_id = next((k for k, n in wf.items() if n["class_type"] == "VAEDecode"), None)
+    if decode_id is None:
+        raise ValueError("ltx chain: no VAEDecode, cannot find the video VAE")
+    vae_id = wf[decode_id]["inputs"]["vae"][0]
+    cond_id = next((k for k, n in wf.items() if n["class_type"] == "LTXVConditioning"), None)
+    if cond_id is None:
+        raise ValueError("ltx chain: no LTXVConditioning to attach LTXVAddGuide to")
+    latent_src = next((k for k, n in wf.items()
+                       if n["class_type"] in ("LTXVImgToVideoInplace", "LTXVImgToVideo")), None)
+    if latent_src is None:
+        latent_src = next((k for k, n in wf.items()
+                           if n["class_type"] == "EmptyLTXVLatentVideo"), None)
+    if latent_src is None:
+        raise ValueError("ltx chain: no video latent for LTXVAddGuide")
+    latent_slot = 2 if wf[latent_src]["class_type"] == "LTXVImgToVideo" else 0
+
+    used = set(wf)
+    load_id = scale_id = prep_id = guide_id = None
+    for n in range(40, 80):
+        k = str(n)
+        if k in used:
+            continue
+        if load_id is None:
+            load_id = k
+        elif scale_id is None:
+            scale_id = k
+        elif prep_id is None:
+            prep_id = k
+        else:
+            guide_id = k
+            break
+    if guide_id is None:
+        raise ValueError("ltx chain: no free node ids for LTXVAddGuide")
+
+    wf[load_id] = {"class_type": "LoadImage", "inputs": {"image": image}}
+    wf[scale_id] = {"class_type": "ImageScale", "inputs": {
+        "image": [load_id, 0], "upscale_method": "lanczos",
+        "width": W, "height": H, "crop": "center"}}
+    # 2.5 already preprocesses the conditioning image; keep the same compression.
+    if any(n.get("class_type") == "LTXVPreprocess" for n in wf.values()):
+        wf[prep_id] = {"class_type": "LTXVPreprocess", "inputs": {
+            "image": [scale_id, 0], "img_compression": LTX25_IMG_COMPRESSION}}
+        guide_image = [prep_id, 0]
+    else:
+        guide_image = [scale_id, 0]
+
+    wf[guide_id] = {"class_type": "LTXVAddGuide", "inputs": {
+        "positive": [cond_id, 0],
+        "negative": [cond_id, 1],
+        "vae": [vae_id, 0],
+        "latent": [latent_src, latent_slot],
+        "image": guide_image,
+        "frame_idx": int(frame_idx),
+        "strength": float(strength),
+    }}
+    for n in wf.values():
+        if n is wf[guide_id]:
+            continue
+        ins = n.get("inputs") or {}
+        for k, v in list(ins.items()):
+            if not (isinstance(v, list) and len(v) == 2):
+                continue
+            src, slot = v[0], v[1]
+            if src == cond_id and slot in (0, 1) and n["class_type"] in (
+                    "LTXVDualCFGGuider", "SamplerCustom", "SamplerCustomAdvanced"):
+                ins[k] = [guide_id, slot]
+            if src == latent_src and slot == latent_slot and k in (
+                    "video_latent", "latent_image", "latent"):
+                ins[k] = [guide_id, 2]
+    return wf
+
+
 def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
-             video_model="s2v", ref_motion=None, control_video=None, refine=False):
+             video_model="s2v", ref_motion=None, control_video=None, refine=False,
+             guide_image=None, prev_clip=None):
     """Same rule as build_refs.workflow: the pinned clause is attached HERE, at
     the point the prompt is built, not read out of the storyboard JSON.
 
@@ -757,6 +939,9 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
     a motion-style reference clip, and a driving clip for pose or structure.
 
     refine=True adds a low-denoise second pass with the i2v low-noise expert.
+
+    guide_image / prev_clip: T2-10 chain successor. prev_clip's last frame
+    (or guide_image directly) is injected at frame 0 via LTXVAddGuide.
     """
     # T5-9: an over-long single-clip request is refused here, not annotated.
     honour_ceiling(requested_clip_seconds(scene, video_model), video_model)
@@ -772,6 +957,11 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
         # branches everywhere -- which is how all three end up subtly wrong.
         build = ltx25_workflow if video_model == "ltx25" else ltx_workflow
         wf = build(i, scene, ref_image, audio_file, char_lock, world_lock, guard)
+        if prev_clip and not guide_image:
+            guide_image = chain_first_frame(prev_clip)
+        if guide_image:
+            # T2-10: clip N+1 starts on clip N's last frame via LTXVAddGuide.
+            wf = attach_ltxv_guide(wf, guide_image)
         if refine:
             # T5-1: --refine must not be a silent no-op on the LTX families.
             # Variant A, same-resolution re-denoise. Do NOT hand the LTX latent
@@ -1037,6 +1227,15 @@ def demo():
         assert "measured" in str(e)
     parts = split_to_ceiling(30.0, "ltx25")
     assert len(parts) >= 2 and abs(sum(parts) - 30.0) < 1e-9
+    # T2-10: a 30 s scene is two 15 s clips; n_clips_for is unchanged.
+    assert render_ceiling("ltx25") == 15.0
+    assert chain_clip_count(30.0) == 2
+    assert chain_plan(30.0)[1]["depends_on"] == 0
+    guided = workflow(1, scene, "c.png", "song.mp3", "c", "w", "",
+                      video_model="ltx25", guide_image="n.last.png")
+    assert any(n["class_type"] == "LTXVAddGuide" for n in guided.values())
+    gnode = next(n for n in guided.values() if n["class_type"] == "LTXVAddGuide")
+    assert gnode["inputs"]["frame_idx"] == 0
     # T2-48: per-scene model picks the ceiling. Same 30s, two models.
     s2v30 = clips_for_scene({"length_seconds": 30.0, "video_model": "s2v"})
     ltx30 = clips_for_scene({"length_seconds": 30.0, "video_model": "ltx25"})

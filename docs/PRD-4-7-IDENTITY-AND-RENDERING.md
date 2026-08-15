@@ -109,6 +109,7 @@ the severe one.
 | P7 | `--refine` either refines or refuses, and whether it helps is measured rather than assumed | `T5-1`…`T5-6` |
 | P7a | A ×2 clip among 832×480 siblings assembles at 1664×960 with no silent letterbox; mixed aspect is refused | `T5-7` |
 | P7b | Each clip ceiling is labeled measured or chosen; an over-long single-clip request is refused or split, not only annotated | `T5-9` |
+| P7f | A long LTX scene is a chain whose successor graph uses `LTXVAddGuide` so the first frame is the predecessor's last | `T2-10` |
 | P7c | Refine-on vs refine-off is judged on decoded frames (MAD > 0, sharpness up), not graph nodes. Missing measurement fails closed. GPU pair still NOT MEASURED | `T5-2` |
 | P7d | If LTX variant B does not fit, that is a recorded finding on `ltx25` and `--refine` ships A; the upsampler is never dropped silently | `T5-6` |
 | P7e | Peak VRAM of shipped refine variant A is measured on the box, or fail-closed `NOT MEASURED`. Copying the base 23.4/23.9 figure onto `refine_peak` is a quote, not a reading | `T5-5` |

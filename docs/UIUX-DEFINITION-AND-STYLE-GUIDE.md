@@ -348,7 +348,9 @@ into s2v-sized clips, a 30 s scene on `ltx25` into 15 s ones, and each
 chain tiles that scene. QC compares each clip to that native rate, not the song's output fps (`T2-13f`): using the song rate flags every correct clip of the other model. A single-clip request
 over the model's ceiling (`T5-9`) is a
 named refusal (measured vs chosen), not a quiet annotation; split is
-`split_to_ceiling` / `clips_for_scene`. Re-generating a storyboard keeps every approved reference
+`split_to_ceiling` / `clips_for_scene`. A scene over the 15 s render ceiling
+is a clip chain: the next clip's first frame is the last frame of the one
+before (`T2-10`). Re-generating a storyboard keeps every approved reference
 (`T2-13b`); the approve grid still shows the same `(clip_idx, seed)` picks.
 The grid lists every duration-owned clip even when the storyboard has
 fewer scenes (`T2-13c`); a 20-scene board on a 41-clip song still

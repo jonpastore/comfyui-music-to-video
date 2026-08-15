@@ -205,6 +205,13 @@ inserted **before `VAEDecode` (node 23)**:
 Variant **B** adds `LatentUpscaleModelLoader` → `LTXVLatentUpsampler` at step 2.
 Every node either needs is installed on cerberus, verified against `/object_info`.
 
+**Chain handoff (`T2-10`).** A scene longer than the LTX cost ceiling (15 s)
+becomes `ceil(scene_seconds / ceiling)` clips. Clip N+1 does not invent a
+first-frame trick: `attach_ltxv_guide` inserts `LTXVAddGuide` at `frame_idx=0`
+with clip N's last frame, and the DualCFGGuider consumes that node's
+conditioning. `n_clips_for` is the song count and is unchanged; `T2-11`
+(ready vs queued) is not this slice.
+
 **Assembly geometry (`T5-7`), ready before B ships.** `mixer.assembly_geometry`
 picks the largest same-aspect size among the clips, and `assemble_song` scales
 to that size with an exact `scale=W:H` — no `force_original_aspect_ratio=decrease`

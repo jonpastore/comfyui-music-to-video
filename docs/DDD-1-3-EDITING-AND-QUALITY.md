@@ -26,7 +26,7 @@ is named.
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2 JSON-canonical arc; §3.3 `save_prompt`/`restore_prompt` (`T2-5`); §4.1 wand (`require_theme`, proposal files, `apply_summaries`) | built (`T2-5`/`T2-14`/`T2-15`/`T2-16`) |
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning; `restore(vid)` puts previous text back as a new version (`T2-5`); `delete` drops a row and does not renumber survivors (`T2-6`); `running(vid)` is the row a render RUNS (`T3-20`) | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
-| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow`, `clips_for_scene` | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5; `main()` honours per-scene `video_model` (`T2-47`), per-model ceilings (`T2-48`), and per-scene `ref_motion` / `control_video` (`T2-46`) |
+| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow`, `clips_for_scene`, `chain_clip_count`, `LTXVAddGuide` handoff (`T2-10`) | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5; `main()` honours per-scene `video_model` (`T2-47`), per-model ceilings (`T2-48`), and per-scene `ref_motion` / `control_video` (`T2-46`). A scene over the 15 s LTX ceiling is `ceil(scene / ceiling)` clips; successor graph injects N's last frame at index 0 |
 | `studio/db.py` | 559 | schema | `automation`, `findings` (`artefact_hash`, `remedy_class`), `artefacts`, `sets.mode_audience`, `calibrations` landed; `sets.out_fps` did not, §4 |
 | `studio/vision.py` | 516 | VLM calls, local-first | **not** tier 2, §5.6 |
 
