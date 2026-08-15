@@ -55,10 +55,12 @@ What they need from these four, in their own terms:
 5. *"Show me, on each candidate, how well it matches the base photographs
    and the prompt I asked for — then I pick. A repaired sheet is a new
    candidate with its own score. An `h_reroll` dest, an approved repair
-   dest, and a standalone refine dest are scored the same way. If scoring
-   could not run, name the xAI or local failure; do not shrug 'unknown'.
-   Confidence is the worse of identity and pose, not an average that can
-   read 95% on a human-faced two-tail sheet."*
+   dest, and a standalone refine dest are scored the same way. Per-clip
+   refs score against the chosen anchor as identity bases, not a standing
+   plate or the broken source. If scoring could not run, name the xAI or
+   local failure; do not shrug 'unknown'. Confidence is the worse of
+   identity and pose, not an average that can read 95% on a human-faced
+   two-tail sheet."*
    (`T3-31`, `T4-19`)
 6. *"I have sixteen clothed pose photographs. I name each one, assign a
    tier or generate a tier version, and the identity pair stays the

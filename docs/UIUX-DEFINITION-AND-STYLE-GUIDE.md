@@ -899,10 +899,12 @@ stores `qc_json`. The artwork generate is a scored
 `assets` row even when a refined cover is what the playlist card shows.
 Anchor tiles in `_anchor_group.html` show `confidence` (0–100) against
 the **base photographs and the prompt**, or the named xAI/local failure
-when scoring failed (`vision: xAI …` / `vision: local …`). Never
-"vision unknown". The stored `qc_json` names the provider that actually
-answered and marks a paid fallback (`fallback=true`, `T10-2`) so cost is
-attributable without reading a bill. Not a gate. The operator still picks.
+when scoring failed (`vision: xAI …` / `vision: local …`). Ref tiles score
+against the album's **chosen anchor** (not a standing plate on the job
+and not the broken source). Never "vision unknown". The stored `qc_json`
+names the provider that actually answered and marks a paid fallback
+(`fallback=true`, `T10-2`) so cost is attributable without reading a
+bill. Not a gate. The operator still picks.
 A refine pass or a `fix_anchor` writes a sibling file; it does not overwrite.
 Predecessor and successor are both listed and selectable (`T6-A5`:
 `qc_service.listed` / `select`; set re-render, repair and anchor re-roll

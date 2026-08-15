@@ -537,6 +537,22 @@ def chosen_anchor(scope_kind, scope_value, tier, view="front", character_id=None
                   scope_kind, scope_value, tier, view, character_id)
 
 
+def ref_score_bases(song, tier, fallback=None):
+    """Identity bases for scoring a landed ref: the album's chosen anchor.
+
+    A job arg plate, the broken source, or empty bases still produce a
+    qc_json row — that is not enough. score_candidate must see the chosen
+    sheet so the confidence is identity vs the lock, not vs itself.
+    """
+    album = (song["album"] if song else None) or ""
+    row = chosen_anchor("album", album, tier)
+    if row and row["path"]:
+        return [row["path"]]
+    if fallback:
+        return [fallback]
+    return []
+
+
 def album_cast(album):
     """The album's named supporting characters, in name order.
 
@@ -1307,7 +1323,7 @@ def h_refs(args, progress):
                                  guard=tiers.compose_guardrail(tier, album), body=body,
                                  cast=cast)
     now = time.time()
-    bases = [args.get("anchor_path")] if args.get("anchor_path") else []
+    bases = ref_score_bases(song, tier, args.get("anchor_path"))
     landed = list(results)
     if args.get("refine", True):
         for r in list(results):
@@ -1352,7 +1368,7 @@ def h_reroll(args, progress):
                                body=album_profile(album)["body"],
                                note=args.get("note", ""), cast=cast)
     now = time.time()
-    bases = [anchor["path"]] if anchor else []
+    bases = ref_score_bases(song, tier, anchor["path"] if anchor else None)
     landed = list(results)
     if args.get("refine", True):
         for r in list(results):
@@ -1450,7 +1466,8 @@ def h_fix_ref(args, progress):
         instruction=args.get("instruction", ""),
         guard=tiers.compose_guardrail(tier, song["album"] or ""), body=body)
     now = time.time()
-    bases = [args.get("face_path") or args.get("image_path")]
+    bases = ref_score_bases(
+        song, tier, args.get("face_path") or args.get("image_path"))
     landed = list(results)
     if args.get("refine", False):
         for r in list(results):

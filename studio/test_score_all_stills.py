@@ -164,6 +164,50 @@ def test_h_refs_stores_qc_json(monkeypatch, tmp_path):
     assert json.loads(row["qc_json"])["confidence"] == 61
 
 
+def test_h_refs_scores_vs_chosen_anchor(monkeypatch, tmp_path):
+    """Each landed ref is score_candidate'd with the chosen anchor as bases.
+    Storing any qc_json is not enough: empty bases or the job plate still
+    write a row."""
+    chosen = _png(str(tmp_path / "chosen_anchor.png"))
+    plate = _png(str(tmp_path / "standing_plate.png"))
+    ref = _png(str(tmp_path / "ref.png"))
+    seen = []
+
+    def fake_score(path, bases, prompt="", progress=None):
+        seen.append((path, list(bases or []), prompt))
+        return {"confidence": 61, "identity": 70, "prompt": 55,
+                "notes": "scored", "backend": "stub"}
+
+    monkeypatch.setattr(appmod.vision, "score_candidate", fake_score)
+    monkeypatch.setattr(appmod.pipeline, "install_input",
+                        lambda p, name=None: os.path.basename(p))
+    monkeypatch.setattr(appmod.pipeline, "gen_refs",
+                        lambda *a, **k: [{"clip_idx": 0, "path": ref, "seed": 9}])
+    album = f"QC Refs Score {time.time_ns()}"
+    sid = db.run(
+        "INSERT INTO songs (title, album, slug, created) VALUES (?,?,?,?)",
+        "QC Refs Score", album, f"qc-refs-score-{time.time_ns()}", time.time())
+    db.run("INSERT INTO storyboards (song_id, tier, json_path, md_path, scene_count, created) "
+           "VALUES (?,?,?,?,?,?)", sid, "xxx", "/sb.json", "/sb.md", 1, time.time())
+    db.run(
+        """INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen,
+                                created, character_id)
+           VALUES (?,?,?,?,?,1,?,?)""",
+        "album", album, "xxx", "front", chosen, time.time(), None)
+    # Job may carry a standing plate for gen; scoring must still use the chosen sheet.
+    appmod.h_refs({
+        "song_id": sid, "tier": "xxx", "anchor_path": plate, "refine": False,
+    }, lambda m: None)
+    row = db.one("SELECT * FROM refs WHERE path=?", ref)
+    assert row and row["qc_json"], "ref landed without qc_json"
+    assert seen, "score_candidate never ran"
+    path, bases, prompt = seen[0]
+    assert path == ref
+    assert bases == [chosen], f"ref scored vs {bases!r}, not chosen anchor"
+    assert plate not in bases
+    assert ref not in bases
+
+
 def test_h_reroll_stores_qc_json(monkeypatch, tmp_path):
     """h_reroll is a named still lander (T3-31). The generate row must
     carry qc_json + confidence; named landers already persist their own
@@ -196,6 +240,43 @@ def test_h_reroll_stores_qc_json(monkeypatch, tmp_path):
     assert row["origin"] == "reroll"
 
 
+def test_h_reroll_scores_vs_chosen_anchor(monkeypatch, tmp_path):
+    """h_reroll lands are scored vs the chosen anchor, not the reroll bytes."""
+    sheet = _png(str(tmp_path / "reroll.png"))
+    anchor = _png(str(tmp_path / "anchor.png"))
+    seen = []
+
+    def fake_score(path, bases, prompt="", progress=None):
+        seen.append((path, list(bases or []), prompt))
+        return {"confidence": 61, "identity": 70, "prompt": 55,
+                "notes": "scored", "backend": "stub"}
+
+    monkeypatch.setattr(appmod.vision, "score_candidate", fake_score)
+    monkeypatch.setattr(appmod.pipeline, "install_input",
+                        lambda p, name=None: os.path.basename(p))
+    monkeypatch.setattr(appmod.pipeline, "reroll",
+                        lambda *a, **k: [{"clip_idx": 0, "path": sheet, "seed": 11}])
+    album = f"QC Reroll Score {time.time_ns()}"
+    sid = db.run(
+        "INSERT INTO songs (title, album, slug, created) VALUES (?,?,?,?)",
+        "QC Reroll Score", album, f"qc-reroll-score-{time.time_ns()}", time.time())
+    db.run("INSERT INTO storyboards (song_id, tier, json_path, md_path, scene_count, created) "
+           "VALUES (?,?,?,?,?,?)", sid, "xxx", "/sb.json", "/sb.md", 1, time.time())
+    db.run(
+        """INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen,
+                                created, character_id)
+           VALUES (?,?,?,?,?,1,?,?)""",
+        "album", album, "xxx", "front", anchor, time.time(), None)
+    appmod.h_reroll({
+        "song_id": sid, "tier": "xxx", "clip_indices": [0], "refine": False,
+    }, lambda m: None)
+    assert seen, "score_candidate never ran"
+    path, bases, _prompt = seen[0]
+    assert path == sheet
+    assert bases == [anchor], f"reroll scored vs {bases!r}, not chosen anchor"
+    assert sheet not in bases
+
+
 def test_h_fix_ref_stores_qc_json(monkeypatch, tmp_path):
     src = _png(str(tmp_path / "broken.png"))
     out = _png(str(tmp_path / "fixed.png"))
@@ -212,6 +293,43 @@ def test_h_fix_ref_stores_qc_json(monkeypatch, tmp_path):
     row = db.one("SELECT * FROM refs WHERE path=?", out)
     assert row
     assert json.loads(row["qc_json"])["confidence"] == 61
+
+
+def test_h_fix_ref_scores_vs_chosen_anchor(monkeypatch, tmp_path):
+    """fix_ref dest is scored vs the chosen anchor, not the broken source."""
+    src = _png(str(tmp_path / "broken.png"))
+    out = _png(str(tmp_path / "fixed.png"))
+    anchor = _png(str(tmp_path / "chosen_anchor.png"))
+    seen = []
+
+    def fake_score(path, bases, prompt="", progress=None):
+        seen.append((path, list(bases or []), prompt))
+        return {"confidence": 61, "identity": 70, "prompt": 55,
+                "notes": "scored", "backend": "stub"}
+
+    monkeypatch.setattr(appmod.vision, "score_candidate", fake_score)
+    monkeypatch.setattr(appmod.pipeline, "fix_ref",
+                        lambda *a, **k: [{"clip_idx": 0, "path": out, "seed": 3}])
+    album = f"QC Fix Score {time.time_ns()}"
+    sid = db.run(
+        "INSERT INTO songs (title, album, slug, created) VALUES (?,?,?,?)",
+        "QC Fix Score", album, f"qc-fix-score-{time.time_ns()}", time.time())
+    db.run(
+        """INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen,
+                                created, character_id)
+           VALUES (?,?,?,?,?,1,?,?)""",
+        "album", album, "xxx", "front", anchor, time.time(), None)
+    appmod.h_fix_ref({
+        "song_id": sid, "tier": "xxx", "clip_idx": 0, "mode": "face",
+        "image_path": src, "seed": 3, "refine": False,
+    }, lambda m: None)
+    row = db.one("SELECT * FROM refs WHERE path=?", out)
+    assert row and row["qc_json"]
+    assert seen, "score_candidate never ran"
+    path, bases, _prompt = seen[0]
+    assert path == out
+    assert bases == [anchor], f"fix_ref scored vs {bases!r}, not chosen anchor"
+    assert src not in bases
 
 
 def test_h_fix_anchor_stores_qc_json(monkeypatch, tmp_path):

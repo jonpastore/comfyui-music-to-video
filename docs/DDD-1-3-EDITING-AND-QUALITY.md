@@ -696,7 +696,10 @@ VLM verdict by name — asked "does this match?", a model answers yes — though
 may write a *description* attached to a finding. `app.score_generated_still`
 stores that advisory `qc_json` on every landed still (anchors, refs including
 `h_reroll`, artwork generate and its refine sibling, and the sibling
-`h_fix_anchor` writes).
+`h_fix_anchor` writes). Landed refs resolve identity bases through
+`app.ref_score_bases` → the album's chosen anchor path
+(`test_h_refs_scores_vs_chosen_anchor` and the reroll/fix_ref twins); a job
+plate or the broken source is not enough.
 `qc_service.persist_still_qc` scores an `h_repair` dest still and a standalone
 `refine_generated_still` dest onto `artefacts.qc_json` (and updates a dest
 candidate row if one already exists). `h_artwork` inserts one scored `assets`

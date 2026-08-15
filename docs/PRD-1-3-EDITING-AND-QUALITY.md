@@ -439,7 +439,10 @@ order and take the dependencies from here.
 10. Every generated still is vision-scored into `qc_json` (`T3-31`),
     including a `fix_anchor` sibling, an `h_reroll` dest, the artwork
     generate (not only the refined cover), an `h_repair` dest still,
-    and a standalone `refine_generated_still` dest. A refine or
+    and a standalone `refine_generated_still` dest. Per-clip refs
+    (`h_refs`, `h_reroll`, `h_fix_ref`) are scored against the album's
+    **chosen anchor** as `score_candidate` bases — not a job plate or
+    the broken source. Storing any `qc_json` is not enough. A refine or
     repair pass writes a new candidate beside the generate; it is
     not a silent overwrite and not a VLM gate. QC never auto-heals
     (`T3-18`); dest exists after approve, except the explicit refine

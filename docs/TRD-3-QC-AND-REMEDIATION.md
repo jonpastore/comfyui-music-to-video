@@ -255,9 +255,13 @@ alpha not fully transparent.
   the operator's base images and the prompt that produced it.** That
   includes generate, reroll, `fix_ref`, `fix_anchor`, artwork, an
   `h_repair` dest still, and a standalone `refine_generated_still`
-  dest. The score is stored on the candidate row (`qc_json`) and on
-  the landed artefact when dest is not a named-lander insert, and
-  shown on the tile. A `fix_anchor` lands a **new** scored candidate;
+  dest. **Landed refs (`h_refs`, `h_reroll`, `h_fix_ref`) score against
+  the album's chosen anchor** via `ref_score_bases` — not a standing
+  plate on the job args, not the broken source, and not empty bases.
+  Storing any `qc_json` is not enough; `score_candidate` must receive
+  that path as bases. The score is stored on the candidate row
+  (`qc_json`) and on the landed artefact when dest is not a
+  named-lander insert, and shown on the tile. A `fix_anchor` lands a **new** scored candidate;
   it does not overwrite the sheet being repaired. Artwork generate is
   its own scored `assets` row; a refine sibling is a second scored
   row, not a replacement of the generate. `h_repair` dest and
@@ -793,6 +797,7 @@ current.
 | `T3-25` remote output move | **built** | pending | `can_move_output` is callable; remote repair is refused by that name (`test_t3_25_remote_repair_refused_by_name_until_check_is_true`); forcing the check true SUBMITS (`test_t3_25_forced_true_remote_repair_is_submitted`) |
 | `T3-26` whether the refiner helps | **built** | this slice | fail-closed labelled-set measurement, not opportunistic: no-op / worse scores produce a finding that says not helping (`test_t3_26_no_improve_finding_says_not_helping`); an improvement reports help (`test_t3_26_improved_labelled_set_reports_help`); empty set, missing file, missing score raise NOT MEASURED; catalogue `proven: opportunistic` is not the answer |
 | `T3-31` vision score on generated stills | **built** | this slice | `score_generated_still` runs on anchors, refs, rerolls (`test_h_reroll_stores_qc_json`), `fix_ref`, `fix_anchor` and artwork. `persist_still_qc` scores `h_repair` dest and standalone `refine_generated_still` dest onto `artefacts.qc_json`. Stored `confidence` is clamped to `min(identity, prompt)` so a 95% composition score cannot hide a 20% identity miss (`test_parse_score_confidence_is_min_of_identity_and_prompt`). The tile shows id/pose when they diverge, plus the VL note. Still advisory — not a gate |
+| `T3-31` refs scored vs chosen anchor | **built** | this slice | `ref_score_bases` resolves the album's chosen sheet for `h_refs` / `h_reroll` / `h_fix_ref`. `score_candidate` bases are that path, not a job plate, the broken source, or empty. Storing any `qc_json` is not enough (`test_h_refs_scores_vs_chosen_anchor`, `test_h_reroll_scores_vs_chosen_anchor`, `test_h_fix_ref_scores_vs_chosen_anchor`). Mutation: pass job plate as bases → red. Mutation: score fix_ref vs source → red |
 | `T3-21` original and repair listed and scored | **built** | this slice | after `h_repair`, `qc_service.pair(fid)` returns original and dest (`test_t3_21_original_and_repair_are_listed_and_scored`): both landed artefacts, both with findings and a `qc.summarise` verdict. dest ≠ src alone is T3-6 |
 | `T3-22` dismissed stays dismissed | **built** | this slice | same bytes stay dismissed (`test_t3_22_dismissed_stays_dismissed_until_artefact_changes`); rewriting the file reopens the same `(path, check)` row. `findings.artefact_hash` is the change detector |
 | `T3-20` remedy versioned in `prompts` | **built** | `test_t3_20_remedy_runs.py` | the version that RUNS is the stored `prompt_versions` row — same id, read back after approval (`test_t3_20_approve_reads_back_the_same_stored_id`). Mutating the job's copied text still sends the stored wording (`test_t3_20_running_remedy_is_the_stored_row_not_the_job_copy`). A deleted row is refused, not replaced by the copy |
