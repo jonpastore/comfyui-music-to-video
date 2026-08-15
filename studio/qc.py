@@ -89,6 +89,12 @@ LUMA_FLOOR = 24.0
 CHANNEL_SAT_LIMIT = 80.0
 _CHANNEL_SAT_SAMPLE = 64
 
+# TRD-3 §4.1 alpha not fully transparent. Max alpha over the sheet
+# (0–255). Fully transparent is max 0 — a blank render by another name.
+# RGB without an alpha channel is treated as 255 (opaque). ALPHA_MIN
+# is 1 so any non-zero opacity PASSes; only all-zero alpha REJECTs.
+ALPHA_MIN = 1.0
+
 # A take whose loudest of low/mid/high *mean* band energy is under this
 # is empty, not quiet. Peak volumedetect is refused: a 1-sample click
 # reads peak -20.0 dB and still has band means below -70 (measured
@@ -290,6 +296,7 @@ CHECK_REMEDY_CLASS = {
     "edge_silence": REMEDY_RERENDER,
     "not_uniform": REMEDY_RERENDER_SEED,
     "not_blank": REMEDY_RERENDER_SEED,
+    "alpha": REMEDY_RERENDER_SEED,
     IDENTITY_LOOK: REMEDY_EDIT_TEXT,
     LIGHTING_LOCK: REMEDY_RERENDER,
     IDENTITY_WRONG: REMEDY_EDIT_TEXT,
@@ -1604,6 +1611,36 @@ def check_identity_wrong(path, expect, kind="clip"):
         identity_wrong_remedy())]
 
 
+def measure_alpha(path):
+    """Max/mean alpha over an image (0–255). RGB without alpha is 255.
+
+    T3-4.1-alpha: fully transparent is max 0. Raises when the path is
+    not a readable image — never 0.0 on no data.
+    """
+    from PIL import Image
+    import numpy as np
+    try:
+        with Image.open(path) as im:
+            im.load()
+            has_alpha = (
+                im.mode in ("RGBA", "LA", "PA")
+                or (im.mode == "P" and "transparency" in im.info)
+            )
+            if not has_alpha:
+                return {"max": 255.0, "mean": 255.0}
+            a = np.asarray(im.convert("RGBA"), dtype="float32")[..., 3]
+            if a.size == 0:
+                raise RuntimeError(
+                    f"alpha produced no readings for {path} -- refusing to "
+                    f"report 0.0 on no data")
+            return {"max": float(a.max()), "mean": float(a.mean())}
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(
+            f"alpha not measured for {path}: {e}") from e
+
+
 def check_image(path, expect):
     out = []
     if not os.path.isfile(path):
@@ -1651,6 +1688,24 @@ def check_image(path, expect):
                        f"mean level {mean:.1f}",
                        round(mean, 1), LUMA_FLOOR, "levels",
                        remedy="re-render with a different seed"))
+    # T3-4.1-alpha: alpha not fully transparent. RGB without alpha is
+    # opaque (max 255). All-zero alpha REJECTs — no judgement.
+    try:
+        alpha = measure_alpha(path)
+    except RuntimeError as e:
+        out.append(finding(path, "image", "alpha", REJECT,
+                           str(e).split("\n")[0],
+                           None, ALPHA_MIN, "levels",
+                           remedy="re-render with a different seed"))
+    else:
+        amax = alpha["max"]
+        out.append(finding(
+            path, "image", "alpha",
+            PASS if amax >= ALPHA_MIN else REJECT,
+            (f"max alpha {amax:.0f}" if amax >= ALPHA_MIN
+             else f"fully transparent (max alpha {amax:.0f})"),
+            round(amax, 1), ALPHA_MIN, "levels",
+            remedy="re-render with a different seed"))
     if _wants_identity_look(expect):
         out.extend(check_identity_look(path, expect, kind="image"))
     out.extend(check_channel_balance(path, expect, kind="image"))
