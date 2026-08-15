@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-10, T9-11, T9-13a, T9-14, T9-16, T9-17, T9-18, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-10, T9-11, T9-12, T9-13a, T9-14, T9-16, T9-17, T9-18, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -1315,3 +1315,52 @@ def test_t9_10_cache_hit_is_not_a_refusal_and_ab_uses_different_seeds():
         "A/B with the same seed was accepted — that measures the cache")
     assert not pipeline.ab_paths_use_distinct_seeds(None, 43)
     assert not pipeline.ab_paths_use_distinct_seeds(42, None)
+# T9-12. Swarm advertises comfy_saveimage_ws and streams outputs; ComfyUI's
+# /history never records those jobs. An empty /history is not "the box did
+# not run". The authority is the container log.
+# Measured wording from a live Comfy container after a Swarm pin succeeded.
+SWARM_RAN_LOG = (
+    "got prompt\n"
+    "Prompt executed in 9.70 seconds\n"
+)
+
+
+def test_t9_12_history_is_not_authority_for_swarm_jobs():
+    """T9-12: Swarm-routed jobs leave /history unchanged; log is authority.
+
+    One-sided trap (TRD-9 §9): passes if nobody checks. Positive half: a
+    Swarm job leaves /history empty before and after while the container log
+    shows execution — the job ran. Using /history alone as an idle/ran
+    oracle must go red.
+    """
+    empty = {}
+    # Positive half: history unchanged (empty) + log shows execution → ran.
+    assert pipeline.swarm_job_ran(
+        history_before=empty,
+        history_after=empty,
+        container_log=SWARM_RAN_LOG,
+    ) is True, (
+        "a Swarm-routed job whose /history stayed empty was not recognized "
+        "as ran when the container log showed execution")
+    # /history alone is never authority for Swarm — empty does not prove idle,
+    # and a non-empty dict still does not decide ran/idle for this path.
+    assert pipeline.history_proves_swarm_idle(empty) is False, (
+        "empty /history was treated as proof the Swarm path was idle")
+    assert pipeline.history_proves_swarm_idle({"pid": {"outputs": {}}}) is False, (
+        "/history contents decided Swarm idle — history is not authority")
+    assert pipeline.history_is_swarm_authority() is False
+    # No log evidence → not proven ran, even if someone stuffed /history.
+    assert pipeline.swarm_job_ran(
+        history_before=empty,
+        history_after={"pid": {"outputs": {}}},
+        container_log="",
+    ) is False, (
+        "/history alone was accepted as proof a Swarm job ran")
+    assert pipeline.swarm_job_ran(
+        history_before=empty,
+        history_after=empty,
+        container_log="",
+    ) is False, "silent log was treated as ran"
+    assert pipeline.container_log_shows_execution(SWARM_RAN_LOG) is True
+    assert pipeline.container_log_shows_execution("") is False
+    assert pipeline.container_log_shows_execution("server started") is False

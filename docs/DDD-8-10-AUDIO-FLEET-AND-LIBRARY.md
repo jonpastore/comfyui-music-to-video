@@ -158,7 +158,9 @@ Each cost a wrong diagnosis once. As criteria they cost nothing again:
   Checked by `test_t9_11_submit_stays_comfyworkflowraw_plus_exactbackendid`.
 - **ComfyUI's `/history` does not record jobs that arrived through SwarmUI**
   (`T9-12`) — it streams over the websocket instead. `/history` at 0 is not
-  evidence.
+  evidence. Checked by `test_t9_12_history_is_not_authority_for_swarm_jobs`:
+  empty history before and after with a container log that shows execution is
+  `ran`; the log is authority, not `/history`.
 - **Nodes are never the discriminator; files are** (`T9-13`). Every node is on
   every box. **Staging a model stages its companions from `CATALOG.companions`
   in the same act** (`T9-13b`, built: `models.staging_files`); a hardcoded shell

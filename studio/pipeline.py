@@ -912,7 +912,42 @@ def ab_paths_use_distinct_seeds(seed_a, seed_b):
         return int(seed_a) != int(seed_b)
     except (TypeError, ValueError):
         return seed_a != seed_b
+# T9-12. Measured: SwarmUI advertises comfy_saveimage_ws and streams outputs
+# back; ComfyUI's /history does not record those jobs. An operator who sees
+# /history stay at 0 and concludes the box did not run is wrong. The authority
+# is the container log.
+_COMFY_EXEC_LOG = ("got prompt", "prompt executed")
 
+
+def history_is_swarm_authority():
+    """Always False. Swarm-routed jobs do not appear in Comfy /history (T9-12)."""
+    return False
+
+
+def history_proves_swarm_idle(history):
+    """Empty /history is not proof a Swarm path was idle (T9-12).
+
+    Always False: Swarm leaves /history unchanged whether the box ran or not.
+    """
+    return False
+
+
+def container_log_shows_execution(log_text):
+    """True when a Comfy container log shows a prompt ran (T9-12 authority)."""
+    m = str(log_text or "").lower()
+    return any(t in m for t in _COMFY_EXEC_LOG)
+
+
+def swarm_job_ran(*, history_before=None, history_after=None, container_log=None):
+    """Whether a Swarm-routed job executed (T9-12).
+
+    /history is not consulted. A Swarm job leaves history unchanged (often
+    empty both before and after); only the container log is authority.
+    history_before/after are accepted so a caller that measured them cannot
+    silently substitute them for the log — they must not drive the result.
+    """
+    del history_before, history_after
+    return container_log_shows_execution(container_log)
 
 def submit_swarm(wf_dir, prefix_dir, pattern, progress=None):
     """submit_dir + collect for RENDER_BACKEND=swarm, and they cannot be split.

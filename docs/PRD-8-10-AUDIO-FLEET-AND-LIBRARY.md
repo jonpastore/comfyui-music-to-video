@@ -54,7 +54,7 @@ The same operator, in the two modes the other documents do not cover:
 | P6 | A box that went away is told apart from a workflow a box refused | `T9-6`, `T9-7` |
 | P6a | A fleet op that needs a stop names which service, and never more | `T9-18` (built: `fleet_watch.name_stop`; vDisk lesson — docker only, not the array) |
 | P6b | An unreachable alert transport degrades to a recorded state change, never silence | `T9-17` (built: `fleet_watch` `_alert` record + check) |
-| P7 | Four measurement traps that each cost a wrong diagnosis are checks, not folklore | `T9-10`…`T9-13` (`T9-10` built: cache-hit empty ≠ refusal, A/B needs distinct seeds; `T9-11` built: raw+pin; `T9-13a`/`T9-13b` built: byte completeness; staging path reads `CATALOG.companions`) |
+| P7 | Four measurement traps that each cost a wrong diagnosis are checks, not folklore | `T9-10`…`T9-13` (`T9-10` built: cache-hit empty ≠ refusal, A/B needs distinct seeds; `T9-11` built: raw+pin; `T9-12` built: `/history` is not Swarm authority, container log is; `T9-13a`/`T9-13b` built: byte completeness; staging path reads `CATALOG.companions`) |
 | P8 | A bulk edit changes exactly what was shown and asked for, or nothing | `T10-3`…`T10-7` (built) |
 | P9 | A model's words are a proposal, never a verdict and never a gate | `T10-11`…`T10-15` |
 | P10 | A song for a child, and a G-tier video for it, is a first-class thing this studio can make | `T10-18` (built). `T10-18a` (built: `r` may mention in lyrics/narrative only). `T10-18b`…`T10-26` still specification |
