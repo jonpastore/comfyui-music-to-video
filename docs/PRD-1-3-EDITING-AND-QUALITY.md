@@ -166,6 +166,9 @@ rate as requested via `mixer.probe`: matching Hz PASSes, mismatch
 REJECTs, no expect emits nothing, `test_t3_4_3_sr.py`; **`T3-4.3-ch` built** — `mixer.probe` exposes
 `channels`; `check_audio` `channels` when `expect.channels` is set
 (stereo vs 2 PASS, mono vs 2 REJECT, unit `ch`), `test_t3_4_3_ch.py`;
+**`T3-4.3-clip` built** — audio
+`clipped_samples` / `measure_clipped_samples` counts s16 rails; clean
+sine PASSes 0, hard-clipped takes FLAG, `test_t3_4_3_clip.py`;
 **`T3-4.4-av` built** — assembled-song
 `av_sync` / `measure_av_durations`: matching A/V streams PASS within
 `DURATION_TOL_S`, a 1s gap FLAGs, clips without `want_audio` skip,

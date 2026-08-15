@@ -96,6 +96,13 @@ _CHANNEL_SAT_SAMPLE = 64
 # at -14 dB is mid -35.5. -60 sits a long way from both.
 SILENCE_FLOOR_DB = -60.0
 
+# TRD-3 §4.3 clipped-sample count. Samples at the s16 rails
+# (±32767/32768) are hard-clipped. Zero is the only PASS. Measured
+# 2026-08-15: sine@-14dB → 0 rails; sine+20dB / 2*sin aevalsrc →
+# thousands of rails. Not peak volumedetect and not Peak_count (a
+# clean sine still has a Peak_count > 0).
+CLIPPED_SAMPLES_LIMIT = 0
+
 # T3-9 bands. Brick-wall they are not — 440 Hz leaks into low at -45 —
 # but 80 / 440 / 8000 Hz each light exactly one band as the loudest.
 BANDS = (
@@ -237,6 +244,7 @@ CHECK_REMEDY_CLASS = {
     "loudness": REMEDY_LOUDNORM,
     "true_peak": REMEDY_LOUDNORM,
     "sample_rate": REMEDY_RERENDER,
+    "clipped_samples": REMEDY_LOUDNORM,
     "silence": REMEDY_RERENDER,
     "channels": REMEDY_RERENDER,
     "not_uniform": REMEDY_RERENDER_SEED,
@@ -418,6 +426,36 @@ def measure_band_energy(path):
                 + "\n".join((r.stderr or "").splitlines()[-15:]))
         out[name] = val
     return out
+
+
+def measure_clipped_samples(path):
+    """Count of s16 samples at digital full scale (hard-clipped rails).
+
+    TRD-3 §4.3 clipped-sample count. Decode every channel to pcm_s16le
+    and count samples at ≤−32767 or ≥32767. RAISES when no sample can
+    be read — never 0 on no data. Not Peak_count (a clean sine still
+    reports peaks) and not true-peak LUFS (that is effects.py).
+    """
+    if not path or not os.path.isfile(path):
+        raise RuntimeError(
+            f"clipped samples not measured: no audio file at {path}")
+    r = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-i", path,
+         "-f", "s16le", "-acodec", "pcm_s16le", "-"],
+        capture_output=True)
+    raw = r.stdout or b""
+    if len(raw) < 2:
+        raise RuntimeError(
+            f"clipped samples not measured: no pcm samples from {path}:\n"
+            + "\n".join((r.stderr or b"").decode("utf-8", "replace").splitlines()[-15:]))
+    import array
+    samples = array.array("h")
+    samples.frombytes(raw[: len(raw) - (len(raw) % 2)])
+    if not samples:
+        raise RuntimeError(
+            f"clipped samples not measured: empty pcm from {path}")
+    # s16 full scale is ±32767; lavfi hard-clips also land on -32768.
+    return sum(1 for s in samples if s <= -32767 or s >= 32767)
 
 
 def _stderr_events(path, filt, pattern):
@@ -1100,6 +1138,22 @@ def check_audio(path, expect):
                                f"{effects.LOUDNORM_TP:.1f} ceiling",
                                loud["true_peak_db"], effects.LOUDNORM_TP, "dBFS",
                                remedy="re-run loudnorm"))
+
+    # T3-4.3-clip: hard-clipped sample count (s16 rails). §4.3.
+    try:
+        n_clip = measure_clipped_samples(path)
+    except RuntimeError as e:
+        out.append(finding(path, "audio", "clipped_samples", FLAG,
+                           str(e).split("\n")[0]))
+    else:
+        over = n_clip > CLIPPED_SAMPLES_LIMIT
+        out.append(finding(
+            path, "audio", "clipped_samples",
+            FLAG if over else PASS,
+            (f"{n_clip} clipped sample(s) at digital full scale"
+             if over else "no clipped samples at digital full scale"),
+            int(n_clip), CLIPPED_SAMPLES_LIMIT, "samples",
+            remedy="re-run loudnorm"))
 
     # T3-9. Loudest of low/mid/high mean energy, never peak volumedetect.
     try:

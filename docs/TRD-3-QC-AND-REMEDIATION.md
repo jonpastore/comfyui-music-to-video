@@ -296,6 +296,13 @@ which is how a measurement said to be taken once ends up taken twice.
   `re-render`. Stereo vs request 2 PASSes; mono vs request 2 REJECTs. Without
   `expect.channels` the check is silent (same pattern as duration). Measured
   equals the independent probe reading (`test_t3_4_3_ch.py`).
+- `T3-4.3-clip` **Clipped-sample count** — s16 samples at digital full scale
+  (rails ≤−32767 or ≥32767) after a pcm decode of every channel. Zero rails
+  PASSes; any rail hit FLAGs with `measured` equal to the independent count,
+  `expected` `CLIPPED_SAMPLES_LIMIT` (0), unit `samples`, remedy loudnorm.
+  `qc.measure_clipped_samples` owns the reading and raises on no audio — never
+  0 on no data. Not Peak_count (a clean sine still has peaks) and not
+  true-peak LUFS (that is `effects.measure_loudness`).
 - `T3-9` A silent or near-silent take is rejected. Measured low/mid/high band
   energies, not peak `volumedetect` and not `aspectralstats`. A 1-sample click
   reads peak −20 dB and is still empty (band means below −70, 2026-08-14).
@@ -583,10 +590,11 @@ current.
 
 | criterion | state | commit | what was measured |
 |---|---|---|---|
-| **tier 1, §4 entire** | **built** | earlier + `T3-4.2-sat` + `T3-4.3-sr` + `T3-4.3-ch` + `T3-4.4-av` | `studio/qc.py` — `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise`. Every threshold measured, every `_readings()` raises rather than returning 0.0. Channel saturation was the §4.2 row still missing a red test until `T3-4.2-sat`. Sample rate as requested was code-without-a-finding until `T3-4.3-sr`. §4.3 channel count needed `mixer.probe["channels"]` until `T3-4.3-ch`. Assembled-song av_sync was code-without-a-red-test until `T3-4.4-av` |
+| **tier 1, §4 entire** | **built** | earlier + `T3-4.2-sat` + `T3-4.3-sr` + `T3-4.3-ch` + `T3-4.3-clip` + `T3-4.4-av` | `studio/qc.py` — `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise`. Every threshold measured, every `_readings()` raises rather than returning 0.0. Channel saturation was the §4.2 row still missing a red test until `T3-4.2-sat`. Sample rate as requested was code-without-a-finding until `T3-4.3-sr`. §4.3 channel count needed `mixer.probe["channels"]` until `T3-4.3-ch`. Clipped-sample count was the §4.3 row without a red test until `T3-4.3-clip`. Assembled-song av_sync was code-without-a-red-test until `T3-4.4-av` |
 | `T3-4.2-sat` channel saturation (NaN / green garbage) | **built** | this slice | `qc.measure_channel_sat` + `check_video` `channel_sat`: solid green/lime FLAG above `CHANNEL_SAT_LIMIT` (80 levels of green dominance); testsrc2 / gray / black PASS; measured equals the independent reading (`test_t3_4_2_sat.py`). No frames raises, never 0.0 |
 | `T3-4.3-sr` sample rate as requested | **built** | this slice | `mixer.probe` returns `sample_rate`; `check_audio` emits `sample_rate` when `expect.sample_rate` is set: matching Hz PASSes, 44100 against 48000 REJECTs, measured equals probe, unit `Hz`, remedy re-render; without expect the check emits nothing (`test_t3_4_3_sr.py`). No reading REJECTs, never a silent skip |
 | `T3-4.3-ch` channel count as requested | **built** | this slice | `mixer.probe` exposes `channels` (0 when no audio). `check_audio` emits `channels` when `expect.channels` is set: stereo vs 2 PASSes, mono vs 2 REJECTs; measured/expected/unit `ch`, remedy re-render; without expect the check is silent; measured equals the independent probe reading (`test_t3_4_3_ch.py`) |
+| `T3-4.3-clip` clipped-sample count | **built** | this slice | `qc.measure_clipped_samples` + `check_audio` `clipped_samples`: s16 rails ≤−32767/≥32767; clean sine@−14dB PASSes 0; volume=+20dB and `2*sin` aevalsrc FLAG with measured = independent count, expected `CLIPPED_SAMPLES_LIMIT` (0), unit `samples`, remedy loudnorm (`test_t3_4_3_clip.py`). No audio raises, never 0 on no data. Not Peak_count / not true-peak alone |
 | `T3-4.4-av` assembled song A/V stream durations agree | **built** | this slice | `qc.measure_av_durations` + `check_video` `av_sync` when `want_audio` (song defaults it): matching streams PASS within `DURATION_TOL_S`; video 2s / audio 3s FLAGs gap 1.0s; measured is abs gap, expected 0.0, unit `s`, remedy re-assemble (`test_t3_4_4_av.py`). No reading FLAGs / raises, never silent skip. Clips without `want_audio` do not emit `av_sync` |
 | `T3-2` no hardcoded expectation | **built** | earlier | expectations read from the submitted workflow via `build_song.expect_from_workflow` |
 | `T3-7` the model's own latent step | **built** | `d4a39c2` | asserted both ways on one 77-frame file: passes at step 4, flags at step 8 naming 81 |
