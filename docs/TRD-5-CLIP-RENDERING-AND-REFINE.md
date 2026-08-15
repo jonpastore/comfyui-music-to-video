@@ -215,5 +215,5 @@ current.
 | `T5-8` upscaler availability is `True`/`False`, never `None` | **built** | earlier | `ltx25_latent_upscaler` catalogued, and `models.installed()` taught ComfyUI's newer enum shape — it had been seeing **7 files on a box with 37** |
 | `T5-1`…`T5-4` refine on LTX | **built (graph)** | `test_clip_length.py` | `_refine_ltx` attaches a second pass; silent no-op is gone. T5-2 MAD on a real clip is **NOT MEASURED** |
 | `T5-5`/`T5-6` the VRAM measurement | **not measured** | — | the base render already peaks at 23.4 of 23.9 GB on cerberus; whether variant B fits is unknown and is the thing to measure first |
-| `T5-7` geometry at assembly | **not built** | — | |
+| `T5-7` geometry at assembly | **built (assembly)** | `test_t5_7_assembly_geometry.py` | same-aspect mixed sizes honour the largest (1664×960 among 832×480); mixed aspect is refused by name. Variant B itself is still not shipped — ×2 reaching `CreateVideo` waits on `T5-5`/`T5-6` |
 | `T5-9`/`T5-10` ceilings and the legal-length rule | **partial** | `legal_frames` + `clip_seconds` | planner rounds to 8n+1; `clip_seconds` honours it so song length owns clip count. `None` stays `CHUNK`. Renderer still emits `LTX25_LEN`. `T5-9` ceiling enforcement is not this slice |

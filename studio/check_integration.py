@@ -537,6 +537,22 @@ if mixer:
     check("mixer.probe", lambda: sig(mixer, "probe", ["path"]))
     check("mixer.assemble_song", lambda: sig(
         mixer, "assemble_song", ["clip_paths", "mp3_path", "out_path"]))
+    check("mixer.assembly_geometry", lambda: sig(
+        mixer, "assembly_geometry", ["infos"]))
+    check("T5-7 assembly_geometry honours 1664x960 among 832x480", lambda: (
+        None if mixer.assembly_geometry([
+            {"width": 832, "height": 480},
+            {"width": 1664, "height": 960},
+            {"width": 832, "height": 480}]) == (1664, 960)
+        else (_ for _ in ()).throw(AssertionError("1664x960 dropped"))))
+    check("T5-7 assembly_geometry refuses mixed aspect", lambda: (
+        _expect_valueerror(lambda: mixer.assembly_geometry([
+            {"width": 832, "height": 480},
+            {"width": 640, "height": 480}]))))
+    check("T5-7 assembly scale has no pad/letterbox", lambda: (
+        None if ("pad=" not in mixer.assembly_scale_filter(0, 1664, 960)
+                 and "force_original_aspect_ratio" not in mixer.assembly_scale_filter(0, 1664, 960))
+        else (_ for _ in ()).throw(AssertionError("assembly scale letterboxes"))))
     check("mixer.render_set", lambda: sig(mixer, "render_set", ["items", "out_path"]))
     check("mixer.mix_audio", lambda: sig(mixer, "mix_audio", ["items", "out_path"]))
     check("mixer.set_duration", lambda: sig(mixer, "set_duration", ["items"]))

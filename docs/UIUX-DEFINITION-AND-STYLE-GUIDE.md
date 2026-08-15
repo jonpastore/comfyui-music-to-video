@@ -363,6 +363,8 @@ Rules that apply at every level:
 - **Milestones where the pipeline has them.** Storyboard → refs → clips →
   approve → assemble is the real shape of the work, and a chip row showing which
   step a song is on answers "where is this album" without opening five pages.
+  Assemble does not silently letterbox: a ×2 clip among 832×480 siblings
+  keeps 1664×960; mixed aspect is a named refusal (`T5-7`), not black bars.
 
 ### 5.6 Density, layout and breakpoints
 

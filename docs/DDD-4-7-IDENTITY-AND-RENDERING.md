@@ -180,6 +180,14 @@ inserted **before `VAEDecode` (node 23)**:
 Variant **B** adds `LatentUpscaleModelLoader` → `LTXVLatentUpsampler` at step 2.
 Every node either needs is installed on cerberus, verified against `/object_info`.
 
+**Assembly geometry (`T5-7`), ready before B ships.** `mixer.assembly_geometry`
+picks the largest same-aspect size among the clips, and `assemble_song` scales
+to that size with an exact `scale=W:H` — no `force_original_aspect_ratio=decrease`
+and no `pad`. A 1664×960 B clip among 832×480 siblings therefore keeps its
+pixels; the siblings are scaled up, not letterboxed. Mixed aspect is a named
+`ValueError`. `_normalize_filter`'s decrease+pad path stays on `render_set`
+(playlist songs of different geometry), not on song assembly.
+
 **The measurement that decides whether B is possible runs first, not last.** The
 base render already peaks at 23.4 GB of 23.9 on cerberus — 95.8% of the card — at
 832×480. If B does not fit, `T5-6` requires that recorded in the `ltx25`

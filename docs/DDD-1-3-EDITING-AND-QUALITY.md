@@ -18,7 +18,7 @@ is named.
 | module | lines | owns | state against its TRD |
 |---|---|---|---|
 | `studio/app.py` | 6331 | 113 routes, and most of the logic behind them | the structural problem, §2 |
-| `studio/mixer.py` | 2116 | set duration, both filter graphs, overlap arithmetic, beatmatch, ramps, splice | TRD-1's engine. Built; one measured gap, §5.2 |
+| `studio/mixer.py` | 2116 | set duration, both filter graphs, overlap arithmetic, beatmatch, ramps, splice, song-assembly geometry (`T5-7`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` **and** `T3-9`/§4.3 |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `fragment`, `item_audio`, `wants_master_loudnorm` | built |
 | `studio/qc.py` | 642 | TRD-3 tier 1 in full: `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise` | built |

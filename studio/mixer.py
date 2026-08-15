@@ -177,18 +177,51 @@ def _write_concat_list(paths):
     return list_path
 
 
-def _crossfade_chain(n, durations, fade, transition="fade"):
+def assembly_geometry(infos):
+    """Target (width, height) for assemble_song. docs/TRD-5 T5-7.
+
+    Same-aspect mixed sizes honour the largest, so a 1664x960 B clip among
+    832x480 siblings keeps its pixels. Mixed aspect is refused: scale+pad
+    would letterbox silently.
+    """
+    sizes = []
+    for info in infos:
+        w, h = int(info.get("width") or 0), int(info.get("height") or 0)
+        if w <= 0 or h <= 0:
+            raise ValueError(f"clip has no video geometry ({w}x{h})")
+        sizes.append((w, h))
+    unique = list(dict.fromkeys(sizes))
+    if len(unique) == 1:
+        return unique[0]
+    w0, h0 = unique[0]
+    for w, h in unique[1:]:
+        if w * h0 != w0 * h:
+            listed = ", ".join(f"{a}x{b}" for a, b in unique)
+            raise ValueError(
+                f"mixed clip aspect ratios ({listed}); "
+                "assembly will not letterbox — render every clip at one size")
+    return max(unique, key=lambda s: s[0] * s[1])
+
+
+def assembly_scale_filter(idx, w, h):
+    """Exact scale to (w, h). No decrease+pad — that letterboxes T5-7."""
+    return f"[{idx}:v]scale={w}:{h}:flags=lanczos,setsar=1[v{idx}n]"
+
+
+def _crossfade_chain(n, durations, fade, transition="fade", src=None):
     """[i:v]xfade... lines chaining n video inputs with a constant crossfade.
     Returns (lines, final_label, final_duration). Pure string generation --
     no ffmpeg call -- so it's unit-testable on its own (see demo())."""
-    running, running_dur, lines = "0:v", durations[0], []
+    def label(i):
+        return src(i) if src is not None else f"{i}:v"
+    running, running_dur, lines = label(0), durations[0], []
     for i in range(1, n):
         offset = running_dur - fade
         if offset < 0:
             raise ValueError(f"fade={fade}s longer than clip {i - 1} duration={running_dur}s")
-        label = f"vx{i}"
-        lines.append(f"[{running}][{i}:v]xfade=transition={transition}:duration={fade:.3f}:offset={offset:.3f}[{label}]")
-        running, running_dur = label, running_dur + durations[i] - fade
+        out = f"vx{i}"
+        lines.append(f"[{running}][{label(i)}]xfade=transition={transition}:duration={fade:.3f}:offset={offset:.3f}[{out}]")
+        running, running_dur = out, running_dur + durations[i] - fade
     return lines, running, running_dur
 
 
@@ -204,11 +237,15 @@ def assemble_song(clip_paths, mp3_path, out_path, progress=None, fade=0.0):
     # not (it is unreliable when the video is re-encoded from a concat
     # demuxer), so the length is stated outright as well.
     audio_dur = probe(mp3_path)["duration"]
+    clip_infos = [probe(p) for p in clip_paths]
+    tw, th = assembly_geometry(clip_infos)
+    need_scale = any((i["width"], i["height"]) != (tw, th) for i in clip_infos)
 
     tmp = _atomic_out(out_path)
     list_path = None
     try:
-        if fade <= 0:
+        n = len(clip_paths)
+        if fade <= 0 and not need_scale:
             # concat demuxer: fast, and stream-copy-friendly if callers ever
             # want to skip the re-encode -- kept re-encoding here to match
             # assemble.sh's fix for encoder-parameter drift between clips.
@@ -218,14 +255,28 @@ def assemble_song(clip_paths, mp3_path, out_path, progress=None, fade=0.0):
                     "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
                     "-c:a", "aac", "-b:a", "192k", "-shortest", "-t", f"{audio_dur:.3f}", tmp]
         else:
-            durations = [probe(p)["duration"] for p in clip_paths]
-            lines, vlabel, _ = _crossfade_chain(len(clip_paths), durations, fade)
             inputs = []
             for p in clip_paths:
                 inputs += ["-i", p]
             inputs += ["-i", mp3_path]
-            args = inputs + ["-filter_complex", ";\n".join(lines),
-                              "-map", f"[{vlabel}]", "-map", f"{len(clip_paths)}:a",
+            if fade <= 0:
+                lines = [assembly_scale_filter(i, tw, th) for i in range(n)]
+                concat_in = "".join(f"[v{i}n]" for i in range(n))
+                lines.append(f"{concat_in}concat=n={n}:v=1:a=0[vout]")
+                vlabel = "vout"
+                graph = ";".join(lines)
+            else:
+                durations = [info["duration"] for info in clip_infos]
+                if need_scale:
+                    pre = [assembly_scale_filter(i, tw, th) for i in range(n)]
+                    xf, vlabel, _ = _crossfade_chain(
+                        n, durations, fade, src=lambda i: f"v{i}n")
+                    graph = ";\n".join(pre + xf)
+                else:
+                    xf, vlabel, _ = _crossfade_chain(n, durations, fade)
+                    graph = ";\n".join(xf)
+            args = inputs + ["-filter_complex", graph,
+                              "-map", f"[{vlabel}]", "-map", f"{n}:a",
                               "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
                               "-c:a", "aac", "-b:a", "192k", "-shortest", "-t", f"{audio_dur:.3f}", tmp]
         progress("assembling")
