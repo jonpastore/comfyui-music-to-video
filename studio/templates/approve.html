@@ -4,7 +4,7 @@
 <p class="meta"><a href="/songs/{{ song.id }}">&larr; back to song</a> &middot;
    <a href="/songs/{{ song.id }}/storyboard/{{ tier }}">storyboard &amp; timing</a></p>
 
-{% if not clips %}
+{% if not nclips %}
 <p class="empty">No storyboard/refs yet for this tier.</p>
 {% else %}
 
@@ -17,7 +17,7 @@
     <button type="submit" class="danger">Approve all, replacing my picks</button>
   </form>
   <span class="muted">
-    {{ clips | selectattr("approved") | list | length }} of {{ clips | length }} approved
+    {{ clips | selectattr("approved") | list | length }} of {{ nclips }} approved
     {% if flagged_idxs %}
     &middot; <span class="warn">{{ flagged_idxs | length }} flagged by the image review</span>
     {% endif %}
@@ -49,7 +49,7 @@
   alone; the second overrides them. Then unapprove the few that are wrong.
   Keyboard: <kbd>J</kbd>/<kbd>K</kbd> move, <kbd>A</kbd> approve, <kbd>R</kbd> reroll.</p>
 
-<div class="clip-grid">
+<div class="clip-grid" data-nclips="{{ nclips }}">
   {% for clip in clips %}
     {% include "_clip_tile.html" %}
   {% endfor %}

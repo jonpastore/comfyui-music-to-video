@@ -303,10 +303,11 @@ length is the divisor, the count is ours.
    the ceiling **gate** on that request: over the labeled measured/chosen
    ceiling is refused or split, not annotated. It does not change the planner
    divisor — `clip_seconds(30)` and `n_clips_for(…, 30)` stay.
-3. Then `T2-13c` (the approve grid must still show every clip),
-   `T2-8`/`T2-9`. `T2-13b` is not blocked on the renderer: `h_storyboard`
-   upserts the storyboard row and does not touch `refs`, so re-planning the
-   same storyboard leaves the approved `(clip_idx, seed)` set identical.
+3. Then `T2-8`/`T2-9`. `T2-13b` and `T2-13c` are not blocked on the
+   renderer: `h_storyboard` upserts the storyboard row and does not touch
+   `refs`, so re-planning leaves the approved `(clip_idx, seed)` set
+   identical (`T2-13b`); `approve_context` enumerates `clip_count`, so a
+   20-scene storyboard on a 41-clip song still lists every clip (`T2-13c`).
 
 `W1-4` sits alongside and is a **prompt**, not code. `T2-14a` is **built**:
 `grok._user_prompt` no longer names a fixed 4.8125 s quantum, does not say
@@ -389,7 +390,7 @@ documents, not a preference.
 
     T6-13a (songs.duration)  ->  T2-12a (legal frame count + clip_seconds honours it)
                                  ->  T2-13a (renderer honours that length)
-                                 ->  T2-13c, T2-8, T2-9
+                                 ->  T2-13c (built), T2-8, T2-9
                                  ->  W2 per-scene models (T2-48)
 
     qc_service pattern  ->  sets_service     ->  clock/rounding, peaks, preview

@@ -4851,8 +4851,9 @@ def approve_context(song, tier):
     for r in refs_rows:
         by_clip.setdefault(r["clip_idx"], []).append(r)
     flags = latest_flags(song["id"], tier)
+    nclips = clip_count(song, scene_seconds_for(song["id"], tier))
     clips = []
-    for i in range(clip_count(song, scene_seconds_for(song["id"], tier))):
+    for i in range(nclips):
         cands = by_clip.get(i, [])
         clips.append({"idx": i, "candidates": cands,
                       "approved": any(c["approved"] for c in cands),
@@ -4862,8 +4863,8 @@ def approve_context(song, tier):
     if chosen_anchor("album", song["album"] or "", tier):
         faces.append(("protagonist", "protagonist"))
     faces += [(str(c["id"]), c["name"]) for c, _a in cast_anchors(song["album"] or "", tier)]
-    return {"song": song, "tier": tier, "clips": clips, "faces": faces,
-            "flagged_idxs": sorted(flags)}
+    return {"song": song, "tier": tier, "clips": clips, "nclips": nclips,
+            "faces": faces, "flagged_idxs": sorted(flags)}
 
 
 @app.get("/songs/{id}/approve/{tier}", response_class=HTMLResponse)

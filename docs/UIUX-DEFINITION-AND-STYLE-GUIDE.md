@@ -270,6 +270,9 @@ frames and the audio-trim window follow `clip_seconds`, not a hardcoded
 named refusal (measured vs chosen), not a quiet annotation; split is
 `split_to_ceiling`. Re-generating a storyboard keeps every approved reference
 (`T2-13b`); the approve grid still shows the same `(clip_idx, seed)` picks.
+The grid lists every duration-owned clip even when the storyboard has
+fewer scenes (`T2-13c`); a 20-scene board on a 41-clip song still
+renders tiles 0..40.
 The storyboard planner prompt does not tell the model clips are a fixed
 4.8125 s (`T2-14a`). Its clip-length line is `clip_seconds(scene_seconds)`,
 so two plannings produce two TIMING statements (`T2-14b`). TIMING still
