@@ -2172,8 +2172,10 @@ def song_page(request: Request, id: int):
     # and must not be selectable.
     default_video = models.default_for("video")
     wired = models.renderable("video")
+    backends = pipeline.swarm_backends()
     video_models = [{"value": wired[e["key"]], "label": e["label"], "purpose": e["purpose"],
-                     "available": e["available"], "default": e["key"] == default_video}
+                     "available": models.available_on_fleet(e["key"], backends),
+                     "default": e["key"] == default_video}
                     for e in models.catalog(role="video") if e["key"] in wired]
     all_tiers = tiers.all_tiers()
     form_tier = next(iter(storyboards), None) or (all_tiers[0]["name"] if all_tiers else "")

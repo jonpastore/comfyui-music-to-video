@@ -1016,6 +1016,26 @@ def named_video_keys(scenes, default=None):
     return keys
 
 
+def available_on_fleet(key, backends):
+    """Fleet-wide availability for one catalogue key.
+
+    True  — a reachable backend confirmed it (where() has confirmed).
+    False — every reachable backend was asked and lacks it (where() empty
+            after at least one box answered). A refusal, not a candidate.
+    None  — no box could be asked, or only unasked boxes remain. A
+            candidate, not a refusal. Empty / missing backends are this,
+            not False — that is the T6-A6 / T2-34 collapse.
+    """
+    if not backends:
+        return None
+    rows = where(key, backends)
+    if any(r.get("confirmed") for r in rows):
+        return True
+    if rows:
+        return None
+    return False
+
+
 def unavailable_on_reachable(key, backends):
     """True when every reachable backend answered False for this key.
 

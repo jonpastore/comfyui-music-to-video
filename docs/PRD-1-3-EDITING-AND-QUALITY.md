@@ -280,8 +280,11 @@ order and take the dependencies from here.
    scene names the lyric sections it spans; unnamed or double-named
    fails validate (`test_t2_8c.py`). **`T2-25` built**: a scene-time
    miss is 400 before clips enqueue; in-tolerance still queues
-   (`test_t2_25_scene_time_enqueue.py`). Remaining: §4.2–4.3
-   wands (`T2-17`…`T2-19`), `T2-34`, and casting.
+   (`test_t2_25_scene_time_enqueue.py`). **`T2-34` built**: the
+   clip-pass picker marks a model `where()` says False on every
+   reachable backend as unavailable and still offers a confirmed one
+   (`test_t2_34_unavailable_shown.py`). Remaining: §4.2–4.3
+   wands (`T2-17`…`T2-19`), and casting.
    the time meter (§5.1), casting (§5.3). **`T2-17` built**:
    `GET /api/songs/{id}/storyboard/{tier}` returns the generation prompt
    defaulted from the tier (`storyboard_generation_payload`); POST accepts

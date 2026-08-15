@@ -396,7 +396,9 @@ song's `clip_seconds`, not a constant (`T2-24`). A miss is refused
 before clips enqueue (`T2-25`). The live `meter` component is not this.
 The song page **Video model** select is `models.renderable("video")`
 with each option's purpose in the hint (`T2-33`). Adding a catalogue
-entry with a `cli` appears there with no template change.
+entry with a `cli` appears there with no template change. A model
+`where()` says False on every reachable backend is shown disabled,
+not offered; a confirmed model stays selectable (`T2-34`).
 A scene may name its own `video_model` beside `camera` (`T2-42`,
 `T2-43`). The field is editable on the scene row
 (`EDITABLE_SCENE_FIELDS`) and returned on
@@ -727,6 +729,11 @@ vocabulary in §5.4 gains one member for capability specifically:
 The middle and the right one must never look the same. "Nobody could ask the
 sleeping gaming PC" and "peaches does not have this model" are different
 sentences and the operator acts differently on each.
+
+The song page's clip-pass picker uses the same three values (`T2-34`):
+`where()` False on every reachable backend is a disabled option
+(shown, not offered); a confirmed model stays selectable. Unknown
+(`None`) stays a candidate, not a refusal.
 
 ### 7a.3 A control the backend cannot honour is marked, never inert
 
