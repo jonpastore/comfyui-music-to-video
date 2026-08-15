@@ -22,6 +22,7 @@
     {% if r.scene.location %}{{ r.scene.location }} &middot; {% endif %}
     {% if r.scene.lighting %}{{ r.scene.lighting }} &middot; {% endif %}
     camera: {{ r.scene.camera or "unset" }}
+    &middot; video model: {{ r.scene.video_model or "job default" }}
     <span class="muted">&middot; asks for {{ "%.0f"|format(r.guidance) }}s</span>
   </p>
 

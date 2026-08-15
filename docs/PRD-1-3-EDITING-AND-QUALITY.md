@@ -292,7 +292,11 @@ order and take the dependencies from here.
    **`T2-45` built**: a mixed-model song is refused before enqueue when
    any named model is `False` on every reachable backend
    (`test_t2_45_enqueue_unavailable.py`); `None` stays a candidate.
-   `T2-42`…`T2-44` and `T2-46` remain.
+   **`T2-42` / `T2-43` built**: a scene may carry `video_model`;
+   absent, the job `--video-model` applies. It lives beside `camera`
+   on the storyboard, is editable through `EDITABLE_SCENE_FIELDS`,
+   and is readable over JSON (`test_t2_42_scene_video_model.py`).
+   `T2-44` and `T2-46` remain.
    **`T2-13f` built**: QC judges each of those clips at its native fps, not the song's (`test_t2_13f_native_fps.py`); comparing against the song rate flags the other model.
 
 ### P3 — QC tier 2 and repair

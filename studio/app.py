@@ -4838,9 +4838,11 @@ async def api_start_storyboard(id: int, tier: str, request: Request):
 # Scene fields the storyboard page lets you edit. image_prompt is what the
 # reference renderer actually sends; video_motion_prompt is what the clip
 # renderer sends; story is the human line the detail-shot path falls back to
-# (build_refs.tighten_for_detail). Nothing else is editable here on purpose --
-# camera feeds SHOT_RULES matching and scene_number keys the whole allocation.
-EDITABLE_SCENE_FIELDS = ("image_prompt", "video_motion_prompt", "story")
+# (build_refs.tighten_for_detail). video_model is a directorial fact on the
+# scene (T2-42 / T2-43); camera still feeds SHOT_RULES and is not editable
+# here -- scene_number keys the whole allocation.
+EDITABLE_SCENE_FIELDS = ("image_prompt", "video_motion_prompt", "story",
+                         "video_model")
 MAX_SCENE_FIELD = 4000
 
 
@@ -5159,6 +5161,8 @@ def _scene_json(r):
         "image_prompt": scene.get("image_prompt") or "",
         "video_motion_prompt": scene.get("video_motion_prompt") or "",
         "story": scene.get("story") or "",
+        "camera": scene.get("camera") or "",
+        "video_model": scene.get("video_model") or "",
         "cast": r["cast"],
         "clips": r["clips"],
     }
@@ -5255,6 +5259,8 @@ async def api_storyboard_edit_scene(id: int, tier: str, num: int, request: Reque
         "image_prompt": scene.get("image_prompt") or "",
         "video_motion_prompt": scene.get("video_motion_prompt") or "",
         "story": scene.get("story") or "",
+        "camera": scene.get("camera") or "",
+        "video_model": scene.get("video_model") or "",
     }
     return JSONResponse(payload)
 

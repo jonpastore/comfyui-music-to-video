@@ -455,6 +455,12 @@ length is the divisor, the count is ours.
    `validate` refuses a gap or overlap. `main()` expands an over-ceiling
    scene into that chain instead of handing 30 s to `workflow`.
    Mutation: ignore `video_model` → both scenes take 15 s.
+   **`T2-42` / `T2-43` built.** `_scene_json` returns `video_model`
+   beside `camera`; an unmarked scene stays empty and
+   `clips_for_scene` / `main()` take `--video-model`.
+   `EDITABLE_SCENE_FIELDS` includes `video_model`; the scene row
+   shows it beside camera (`test_t2_42_scene_video_model.py`).
+   `T2-44` refuse-at-save and `T2-46` pin-to-cerberus are not.
    **`T2-13d` built:** `assemble_song` normalises those native rates to
    one output fps (highest) on the assembled file. Concat first-clip-wins
    is not that check.

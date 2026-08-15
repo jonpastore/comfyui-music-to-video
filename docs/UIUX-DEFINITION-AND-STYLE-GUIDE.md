@@ -378,6 +378,11 @@ before clips enqueue (`T2-25`). The live `meter` component is not this.
 The song page **Video model** select is `models.renderable("video")`
 with each option's purpose in the hint (`T2-33`). Adding a catalogue
 entry with a `cli` appears there with no template change.
+A scene may name its own `video_model` beside `camera` (`T2-42`,
+`T2-43`). The field is editable on the scene row
+(`EDITABLE_SCENE_FIELDS`) and returned on
+`GET /api/songs/{id}/storyboard/{tier}`; absent means the job
+picker applies.
 The generation prompt itself is API data (`T2-17`):
 `GET /api/songs/{id}/storyboard/{tier}` returns the same defaulted-from-tier
 string the direction box prefills; the HTML is not the only place that
