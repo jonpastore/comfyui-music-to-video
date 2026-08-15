@@ -79,6 +79,7 @@ to end. Shapes only — the fields are the TRDs'.
 items, automation, predicted duration, rounding deltas), `/api/sets/{id}/items`,
 `.../items/{iid}/automation/{lane}` (POST raw points, response is the **stored,
 decimated** curve — the client re-reads what was kept, §5.3),
+`/api/songs/{id}/peaks?z=` (`pairs` plus `reason` when empty, `T1-15`),
 `/api/sets/{id}/peaks?z=`, `/api/sets/{id}/preview` (returns `is_proxy` and
 `not_applied`), `/api/sets/{id}/preview/render?at=&secs=`,
 `/api/sets/{id}/render`, `/api/sets/{id}/renders` (every candidate, `T1-26`,
@@ -254,8 +255,12 @@ Peaks: computed on the **existing** `analyse` job, which already decodes the fil
 — do not decode it twice. Stored beside the song, served decimated at
 `PEAKS_MAX_POINTS = 2048` per request. Decimation is a **min/max reduce, not a
 resample** (`T1-14`): a waveform that under-reports a peak lies about where the
-loud part is. The reduce is `mixer.peaks(samples, z)` (`T1-13`/`T1-14`);
-analyse storage and `/api/sets/{id}/peaks?z=` are not wired yet.
+loud part is. The reduce is `mixer.peaks(samples, z)` (`T1-13`/`T1-14`).
+`GET /api/songs/{id}/peaks` serves `{song_id, z, n, pairs, reason}`:
+`reason` is `null` when there are pairs, and `no_audio` / `missing` /
+`unreadable` when `pairs` is empty (`T1-15`). A flat line is silence;
+empty without a reason is forbidden. Analyse storage and
+`/api/sets/{id}/peaks?z=` are not wired yet.
 
 The limit is stated in the design because it will otherwise be discovered by a
 feature request: `analyse.py` loads mono at 22050 Hz, chosen because it matched

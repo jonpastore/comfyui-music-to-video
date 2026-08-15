@@ -196,12 +196,15 @@ values.
 
 The waveform is the part that must change rather than grow: today it is
 `mixer.waveform_png()` set as a `background-image` on the block. `mixer.peaks`
-now returns the decimated min/max pairs (`T1-13`/`T1-14`); the UI still draws
-the picture. `T1-15` and the swap onto those numbers remain — the regions have
-to be draggable, and a picture cannot be. Same component, different source; the
-CSS comment about text-shadow over the waveform (dimming it would hide the
-quiet passages, which are exactly what you look at it to find) stays true
-either way.
+now returns the decimated min/max pairs (`T1-13`/`T1-14`);
+`GET /api/songs/{id}/peaks` adds `reason` when there is nothing to draw
+(`T1-15`: `no_audio` / `missing` / `unreadable`, never a flat line). The UI
+still draws the picture. The swap onto those numbers remains — the regions
+have to be draggable, and a picture cannot be. Same component, different
+source; the CSS comment about text-shadow over the waveform (dimming it
+would hide the quiet passages, which are exactly what you look at it to
+find) stays true either way. An empty envelope must surface `reason`, not
+a silent strip.
 
 **Genuinely not built** — `meter` (scene time against song length, `T2-23`;
 loudness against target, `T1-25`), `finding-row` (measured / expected / unit /

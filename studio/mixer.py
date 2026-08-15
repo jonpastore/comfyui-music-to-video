@@ -130,9 +130,9 @@ def peaks(samples, z=0):
 
     At most PEAKS_MAX_POINTS [min, max] pairs, regardless of song length or
     z, and at least one pair when samples is non-empty. Empty input is []
-    (T1-15 owns the explicit reason). Decimation is a min/max reduce over
-    contiguous spans, not a resample: a bucket's pair is exactly the
-    full-resolution min and max over that span.
+    — the explicit reason lives on peaks_from_path (T1-15). Decimation is
+    a min/max reduce over contiguous spans, not a resample: a bucket's
+    pair is exactly the full-resolution min and max over that span.
 
     z is the zoom the request asked for. The cap holds at every z. A
     windowed zoom is a later slice; this one covers the whole signal.
@@ -153,19 +153,29 @@ def peaks(samples, z=0):
 
 
 def peaks_from_path(audio_path, z=0):
-    """Decode one file to samples, then peaks(). Missing path is []."""
-    if not audio_path or not os.path.isfile(audio_path):
-        return []
+    """Decode one file to samples, then peaks().
+
+    Empty is never a flat line: {pairs: [], reason} (T1-15). A song that
+    has audio is {pairs, reason: None}. peaks() itself stays a list —
+    the reason belongs on the path, where "no file" lives.
+    """
+    if not audio_path:
+        return {"pairs": [], "reason": "no_audio"}
+    if not os.path.isfile(audio_path):
+        return {"pairs": [], "reason": "missing"}
     raw = subprocess.run(
         ["ffmpeg", "-v", "error", "-i", audio_path, "-ac", "1", "-ar", "8000",
          "-f", "f32le", "-"],
         capture_output=True, check=False)
     if raw.returncode != 0 or not raw.stdout:
-        return []
+        return {"pairs": [], "reason": "unreadable"}
     import struct
     n = len(raw.stdout) // 4
     samples = list(struct.unpack("<" + "f" * n, raw.stdout[:n * 4]))
-    return peaks(samples, z=z)
+    pairs = peaks(samples, z=z)
+    if not pairs:
+        return {"pairs": [], "reason": "unreadable"}
+    return {"pairs": pairs, "reason": None}
 
 
 def _write_concat_list(paths):

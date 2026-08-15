@@ -1,4 +1,4 @@
-"""T1-13 / T1-14 waveform peaks as data.
+"""T1-13 / T1-14 / T1-15 waveform peaks as data.
 
 mixer.waveform_png() is a picture. The timeline needs numbers: a request
 for zoom level z returns at most PEAKS_MAX_POINTS (2048) min/max pairs,
@@ -6,7 +6,9 @@ and at least one pair when the song has audio. Decimation is a min/max
 reduce over the same span, not a resample (docs/TRD-1 §6.1).
 
 Both halves or neither: return [] passes the upper bound and makes T1-14
-vacuous over zero buckets.
+vacuous over zero buckets. T1-15: no audio / missing mp3 is empty pairs
+plus a reason, not a flat line. A zero-length envelope with no reason
+fails; silence stays a flat envelope.
 
 The real mixer is stubbed for the rest of the suite (ffmpeg). These
 tests load it under a private name, the same way test_clip_length.py
@@ -62,8 +64,44 @@ def test_t1_14_global_extrema_survive_decimation():
     assert min(p[0] for p in pairs) == -0.73
 
 
-def test_t1_13_missing_path_is_empty():
-    assert _mixer().peaks_from_path("/no/such/file.mp3") == []
+def test_t1_15_no_audio_is_empty_with_reason():
+    """A song with no mp3 is not silence. Empty pairs plus a reason,
+    or the client draws a flat line (docs/TRD-1 T1-15)."""
+    env = _mixer().peaks_from_path(None)
+    assert env["pairs"] == []
+    assert env.get("reason"), "a zero-length envelope with no reason is a flat line"
+    assert env["reason"] == "no_audio"
+
+
+def test_t1_15_missing_mp3_is_empty_with_reason():
+    env = _mixer().peaks_from_path("/no/such/file.mp3")
+    assert env["pairs"] == []
+    assert env.get("reason"), "a zero-length envelope with no reason is a flat line"
+    assert env["reason"] == "missing"
+
+
+def test_t1_15_empty_path_is_empty_with_reason():
+    env = _mixer().peaks_from_path("")
+    assert env["pairs"] == []
+    assert env.get("reason"), "a zero-length envelope with no reason is a flat line"
+    assert env["reason"] == "no_audio"
+
+
+def test_t1_15_unreadable_file_is_empty_with_reason(tmp_path):
+    junk = tmp_path / "not-audio.mp3"
+    junk.write_bytes(b"this is not audio")
+    env = _mixer().peaks_from_path(str(junk))
+    assert env["pairs"] == []
+    assert env.get("reason"), "a zero-length envelope with no reason is a flat line"
+    assert env["reason"] == "unreadable"
+
+
+def test_t1_15_silence_is_a_flat_line_not_empty():
+    """Silence has audio. It must stay a flat envelope, not the empty
+    result, or T1-15 cannot tell the two apart."""
+    pairs = _mixer().peaks([0.0] * 8, z=0)
+    assert pairs
+    assert all(p == [0.0, 0.0] for p in pairs)
 
 
 def test_t1_14_per_bucket_equals_full_resolution_minmax():

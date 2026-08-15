@@ -80,6 +80,33 @@ def test_t1_13_song_peaks_json_is_bounded():
         assert 1 <= data["n"] <= 2048
         assert data["n"] == len(data["pairs"])
         assert all(len(p) == 2 for p in data["pairs"])
+        assert data["reason"] is None
+
+
+def test_t1_15_song_without_audio_returns_empty_peaks_with_reason():
+    """T1-15: no audio is empty + reason, not a flat line."""
+    with TestClient(appmod.app) as client:
+        sid = db.upsert_song("t1-15-no-audio", title="No Audio Peaks")
+        r = client.get(f"/api/songs/{sid}/peaks")
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["pairs"] == []
+        assert data["n"] == 0
+        assert data.get("reason"), "a zero-length envelope with no reason is a flat line"
+        assert data["reason"] == "no_audio"
+
+
+def test_t1_15_missing_mp3_returns_empty_peaks_with_reason():
+    with TestClient(appmod.app) as client:
+        sid = db.upsert_song("t1-15-missing", title="Missing Mp3 Peaks",
+                             mp3_path="/no/such/file.mp3")
+        r = client.get(f"/api/songs/{sid}/peaks")
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["pairs"] == []
+        assert data["n"] == 0
+        assert data.get("reason"), "a zero-length envelope with no reason is a flat line"
+        assert data["reason"] == "missing"
 
 
 def test_upload_mp3_creates_song_and_enqueues_transcribe():

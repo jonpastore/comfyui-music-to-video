@@ -1873,14 +1873,15 @@ async def bulk_set_genres(request: Request):
 
 @app.get("/api/songs/{id}/peaks")
 def song_peaks(id: int, z: int = 0):
-    """T1-13: peaks as data for the timeline. The browser does not decode."""
+    """T1-13 / T1-15: peaks as data. Empty carries a reason, not a flat line."""
     song = get_song_or_404(id)
     try:
         z = max(0, int(z))
     except (TypeError, ValueError):
         z = 0
-    pairs = mixer.peaks_from_path(song["mp3_path"], z=z)
-    return {"song_id": id, "z": z, "n": len(pairs), "pairs": pairs}
+    env = mixer.peaks_from_path(song["mp3_path"], z=z)
+    return {"song_id": id, "z": z, "n": len(env["pairs"]),
+            "pairs": env["pairs"], "reason": env["reason"]}
 
 
 @app.get("/songs/{id}", response_class=HTMLResponse)

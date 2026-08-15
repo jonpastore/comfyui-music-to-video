@@ -387,8 +387,12 @@ _stub("mixer",
       # and take T1-14 with it (docs/TRD-1 §6.1).
       peaks=(_real_module("mixer").peaks if _real_module("mixer") is not None
              else (lambda samples, z=0: [])),
+      # T1-15: empty is {pairs, reason}, never a bare []. A path that
+      # exists still fakes one pair so the app suite does not decode.
       peaks_from_path=lambda audio_path, z=0: (
-          [[-0.5, 0.5]] if audio_path else []),
+          {"pairs": [[-0.5, 0.5]], "reason": None}
+          if audio_path and os.path.isfile(audio_path)
+          else {"pairs": [], "reason": ("no_audio" if not audio_path else "missing")}),
       PEAKS_MAX_POINTS=2048,
       # T1-19: applied_master_chain is pure (no ffmpeg). The stub must
       # serve the real one so h_render_set records the same chain
