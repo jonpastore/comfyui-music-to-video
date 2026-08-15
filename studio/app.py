@@ -4803,10 +4803,16 @@ def start_storyboard(id: int, tier: str = Form(...), model: str = Form(""),
 
 @app.get("/api/songs/{id}/storyboard/{tier}")
 def api_storyboard_prompt(id: int, tier: str):
-    """T2-17: generation prompt, defaulted from the tier, before generate."""
+    """T2-17 prompt always; T2-26 board+anchors when a readable board exists."""
     song = get_song_or_404(id)
-    valid_tier_or_400(tier)
-    return JSONResponse(storyboard_generation_payload(song, tier))
+    tier = valid_tier_or_400(tier)
+    gen = storyboard_generation_payload(song, tier)
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", song["id"], tier)
+    if not row or not row["json_path"] or not os.path.isfile(row["json_path"]):
+        return JSONResponse(gen)
+    payload = _storyboard_payload(song, tier)
+    payload.update(gen)
+    return JSONResponse(payload)
 
 
 @app.post("/api/songs/{id}/storyboard/{tier}")
@@ -5235,20 +5241,6 @@ def _apply_scene_fields(song, tier, num, fields):
         outdir = os.path.dirname(row["json_path"])
         grok.write_storyboard(sb, outdir, song["slug"], tier)
     return scene
-
-
-@app.get("/api/songs/{id}/storyboard/{tier}")
-def api_storyboard_get(id: int, tier: str):
-    return JSONResponse(_storyboard_payload(get_song_or_404(id), valid_tier_or_400(tier)))
-
-
-@app.post("/api/songs/{id}/storyboard/{tier}")
-async def api_storyboard_generate(id: int, tier: str, request: Request):
-    body = await _api_body(request)
-    jid = _enqueue_storyboard(id, tier, body.get("model") or "",
-                              body.get("scene_seconds") or 4.0,
-                              body.get("direction") or "")
-    return JSONResponse({"job_id": jid, "song_id": id, "tier": tier})
 
 
 @app.post("/api/songs/{id}/storyboard/{tier}/scene/{num}")

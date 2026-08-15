@@ -312,14 +312,23 @@ def clip_plan(scenes, audio_path=None, nclips=None):
             plan.append((i, scene, shot_directive(scene, i)))
             durs.append(dur)
             i += 1
-    if track is not None and durs:
-        planned = sum(durs)
-        quantum = max(durs)
-        if abs(planned - track) > quantum + 1e-9:
-            raise ValueError(
-                f"clip plan {planned:.4f}s misses track {track:.4f}s "
-                f"by more than one clip ({quantum:.4f}s)")
+    refuse_plan_miss(plan, track)
     return plan
+
+
+def refuse_plan_miss(plan, track):
+    """T2-13e: refuse a plan that misses the track by more than one clip."""
+    if track is None or not plan:
+        return
+    durs = [clip_seconds(scene.get("length_seconds")) for _, scene, _ in plan]
+    if not durs:
+        return
+    planned = sum(durs)
+    quantum = max(durs)
+    if abs(planned - track) > quantum + 1e-9:
+        raise ValueError(
+            f"clip plan {planned:.4f}s misses track {track:.4f}s "
+            f"by more than one clip ({quantum:.4f}s)")
 
 
 # The two video paths. s2v is the default and the only one driven by the audio;
@@ -894,6 +903,7 @@ def main():
             plan_clips.append((i, clip_scene, shot_directive(clip_scene, i)))
     else:
         plan_clips = clip_plan(scenes, args.audio)
+    refuse_plan_miss(plan_clips, dur)
     nclips = len(plan_clips)
 
     audio_name = args.audio_name or os.path.basename(args.audio)

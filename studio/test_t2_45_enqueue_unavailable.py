@@ -89,7 +89,7 @@ def _a_ref(sid, tier, clip_idx, seed=7000):
 
 
 def _ready_song(slug, scenes):
-    sid = db.upsert_song(slug, title=slug, duration=10.0)
+    sid = db.upsert_song(slug, title=slug, duration=12.0)
     song = db.one("SELECT * FROM songs WHERE id=?", sid)
     _write_board(sid, song["slug"], "pg13", scenes)
     n = appmod.clip_count(song, appmod.scene_seconds_for(sid, "pg13"))
