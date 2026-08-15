@@ -182,7 +182,10 @@ encode mode) above `CHANNEL_SAT_LIMIT`, PASSes testsrc2/gray/black,
 `test_t3_4_2_sat.py`; **`T3-4.2-black_frames` built** — partial black while mean PASSes FLAGs `black_frames`, `test_t3_4_2_black_frames.py`; **`T3-4.2-size_floor` built** — clip under `MIN_VIDEO_BYTES` REJECTs, `test_t3_4_2_size_floor.py`; **`T3-4.2-luma` built** — mean luma below `LUMA_FLOOR` REJECTs, `test_t3_4_2_luma.py`; **`T3-4.3-duration` built** — audio duration as requested within `DURATION_TOL_S`, `test_t3_4_3_duration.py`; **`T3-4.3-loudness` built** — `check_audio` FLAG/PASS via `effects.measure_loudness`, `test_t3_4_3_loudness.py`; **`T3-4.2-resolution` built** — clip `resolution`
 vs workflow width/height via `mixer.probe`: matching WxH PASSes,
 downscaled REJECTs with unit `px`, no expect emits nothing,
-`test_t3_4_2_resolution.py`; **`T3-4.3-sr` built** — `check_audio` sample
+`test_t3_4_2_resolution.py`; **`T3-4.2-fps` built** — clip `fps` vs
+workflow request via `mixer.probe` within `FPS_TOL`: matching PASSes,
+retimed FLAGs with unit `fps`, no expect emits nothing,
+`test_t3_4_2_fps.py` (RIFE out_fps is `T3-8`); **`T3-4.3-sr` built** — `check_audio` sample
 rate as requested via `mixer.probe`: matching Hz PASSes, mismatch
 REJECTs, no expect emits nothing, `test_t3_4_3_sr.py`; **`T3-4.3-true-peak` built** — `check_audio` true peak vs `effects.LOUDNORM_TP` (+`TRUE_PEAK_TOLERANCE_DB`) via `effects.measure_loudness`: under PASSes, over FLAGs, missing Peak FLAGs, `test_t3_4_3_true_peak.py`; **`T3-4.3-ch` built** — `mixer.probe` exposes
 `channels`; `check_audio` `channels` when `expect.channels` is set

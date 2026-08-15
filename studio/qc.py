@@ -1083,6 +1083,8 @@ def check_video(path, expect, kind="clip"):
                                + ("" if legal else f"; nearest legal is {near}"),
                                frames, near, "frames", remedy="re-render"))
 
+    # T3-4.2-fps: rate vs the workflow request within FPS_TOL. unit fps (T3-4).
+    # Mismatch FLAGs (retime is not a hard reject). T3-8 owns RIFE out_fps.
     if expect.get("fps"):
         f, want = info["fps"], float(expect["fps"])
         out.append(finding(path, kind, "fps",

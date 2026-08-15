@@ -602,6 +602,10 @@ silent pass on a solid green clip. `T3-4.2-resolution`: a clip at the
 wrong width×height REJECTs `resolution` with measured/expected WxH,
 unit `px`, and a re-render-pinned remedy — not a silent pass when the
 workflow asked for 320×240 and the box quietly wrote 160×120.
+`T3-4.2-fps`: a clip at the wrong frame rate FLAGs `fps` with
+measured/expected rate, unit `fps`, and a re-render-pinned remedy —
+not a silent pass when the workflow asked for 16 and the box quietly
+wrote 24.
 `T3-4.3-sr`: a take at the wrong
 sample rate REJECTs `sample_rate` with measured/expected Hz and a
 re-render remedy — not a silent pass when the request was 48000 and
