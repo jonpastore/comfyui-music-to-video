@@ -378,6 +378,12 @@ length is the divisor, the count is ours.
    **`T2-13d` built:** `assemble_song` normalises those native rates to
    one output fps (highest) on the assembled file. Concat first-clip-wins
    is not that check.
+   **`T2-13f` built.**
+   `qc.clip_qc_expect` keeps that native fps as the clip's QC question;
+   the song's output fps is assembly's (`T2-13d`) and is ignored here.
+   Mixed s2v@16 / LTX@16.8312 each pass their own check
+   (`test_t2_13f_native_fps.py`). Copying the song rate onto the clip
+   flags the other model.
 
 `W1-4` sits alongside and is a **prompt**, not code. `T2-14a` is **built**:
 `grok._user_prompt` no longer names a fixed 4.8125 s quantum, does not say
@@ -500,6 +506,7 @@ documents, not a preference.
                                  ->  W2 T2-47 mixed-model native fps (built)
                                  ->  W2 T2-48 per-scene ceilings compose (built)
                                  ->  T2-13d assembly one output fps (built)
+                                 ->  T2-13f clip QC uses native fps (built)
 
     qc_service pattern  ->  sets_service     ->  clock/rounding, peaks, preview
                                              ->  master fix (5.2)  ->  audiences (T1-18..T1-20)

@@ -1255,8 +1255,31 @@ def refiner_help_finding(report, path=None):
 
 # ------------------------------------------------------------------- run --
 
-def run(path, kind, expect=None, items=None):
-    """Every tier-1 check for one artefact. kind: image|audio|clip|song|set."""
+def clip_qc_expect(clip_expect, song_fps=None):
+    """T2-13f: a clip is judged at its native fps, not the song's.
+
+    Mixed s2v@16 / LTX@16.8312 each pass only against the rate their
+    workflow asked for. song_fps is the assembly target (T2-13d) and
+    is a different artefact's question; copying it here flags every
+    correct clip of the other model. Absent native fps stays absent —
+    inventing the song rate is the same defect.
+    """
+    out = dict(clip_expect or {})
+    native = out.get("fps")
+    if native is None:
+        return out
+    out["fps"] = float(native)
+    if song_fps is not None:
+        float(song_fps)
+    return out
+
+
+def run(path, kind, expect=None, items=None, song_fps=None):
+    """Every tier-1 check for one artefact. kind: image|audio|clip|song|set.
+
+    song_fps is the assembled song's output rate (T2-13d). Clips ignore
+    it (T2-13f).
+    """
     expect = dict(expect or {})
     if kind == "image":
         out = check_image(path, expect)
@@ -1268,6 +1291,7 @@ def run(path, kind, expect=None, items=None):
         expect.setdefault("want_audio", True)
         out = check_video(path, expect, kind="song")
     else:
+        expect = clip_qc_expect(expect, song_fps=song_fps)
         out = check_video(path, expect, kind="clip")
     out.extend(check_identity_wrong(path, expect, kind=kind))
     return out

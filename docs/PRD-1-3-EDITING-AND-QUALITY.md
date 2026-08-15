@@ -99,7 +99,7 @@ the eight things that must become true; they are not a new contract.
 | P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every clip, a re-plan leaving approved `(clip_idx, seed)` unchanged, the planner prompt not naming a fixed 4.8125 s quantum, its clip-length text derived from planning, TIMING still stating track length and sum-to-track, and generated scenes tiling `[0, duration]` with no gap or overlap | `T2-8`, `T2-8b`, `T2-12a`, `T2-13a`, `T2-13b`, `T2-13c`, `T2-14a`, `T2-14b`, `T2-14c` |
 | P5a | Assembling a song with a 1664×960 clip among 832×480 siblings keeps the ×2 size and does not letterbox; mixed aspect is refused | `T5-7` |
 | P5b | Every clip of one song is normalised to one output fps, asserted on the assembled file | `T2-13d` |
-| P6 | Every rendered artefact is measured against the workflow that asked for it, never against a constant | `T3-2`, `T3-4`, `T3-7` |
+| P6 | Every rendered artefact is measured against the workflow that asked for it, never against a constant. A mixed-model clip is judged at its native fps, not the song's output fps | `T3-2`, `T3-4`, `T3-7`, `T2-13f` |
 | P7 | A finding arrives actionable — measured, expected, unit, a remedy class, and an editable prompt — and nothing runs without approval. A dismissed finding stays off the queue until the artefact itself changes. The remedy that RUNS is the stored prompts row. Approving produces a new candidate; original and repair are both listed and scored | `T3-18`, `T3-19`, `T3-20`, `T3-21`, `T3-22`, `T3-27` |
 | P8 | Identity failures are attributed to the text, never to the reference image | `T2-31`, `T2-32`, `T3-17`, `T3-28` |
 
@@ -225,6 +225,7 @@ order and take the dependencies from here.
    splits on the s2v ceiling and a 30 s `ltx25` scene into 15 s clips,
    each tiling its scene (`test_t2_48_ceilings_compose.py`).
    `T2-42`…`T2-46` remain.
+   **`T2-13f` built**: QC judges each of those clips at its native fps, not the song's (`test_t2_13f_native_fps.py`); comparing against the song rate flags the other model.
 
 ### P3 — QC tier 2 and repair
 
