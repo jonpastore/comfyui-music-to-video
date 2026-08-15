@@ -311,7 +311,7 @@ for one idea sat 39 characters from refusing real saved content.
 **Rule 0 applies here too**: assert through `screen_prompt_field`, not through
 each caller, or a caller that stops calling it stays green.
 
-### 4.4 Minor policy (`T10-18`)
+### 4.4 Minor policy (`T10-18`, `T10-20`)
 
 `guardrail.check_text(text, where, tier=..., field_kind=...)` is the single
 screen. `LOCKED_DEPICT_TIERS = {g, pg13}` skips the refusal for depiction;
@@ -332,6 +332,14 @@ prompt boundary, not "whatever is not a prompt". `field_kind_for(field)`
 maps only those names onto `MENTION_FIELD_KINDS`; unknown or missing field
 returns `None` so `r` screens like `xxx`. A field added later is outside
 until deliberately listed.
+
+`guardrail.check_escalation(fields, dest_tier, **overrides)` is the
+escalation re-screen (`T10-19` entry point). Every field is screened at the
+destination tier; override kwargs (`confirm`, `force`, `tier_overrides`,
+`profile`, `wording`, `view_override`, … — see
+`ESCALATION_OVERRIDE_CHANNELS`) are accepted and discarded (`T10-20`).
+No channel lifts a `ContentRefused`. Per-album `set_override` still applies
+tone wording on a clean (non-locked) album.
 
 ## 5. Build order
 

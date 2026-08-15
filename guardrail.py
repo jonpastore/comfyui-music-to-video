@@ -245,6 +245,46 @@ def check_text(text, where="input", *, tier=None, field_kind=None):
     return text
 
 
+# T10-20: channels that must never short-circuit escalation (T10-19). Accepted
+# as kwargs so a call site that passes them still re-screens fully — presence
+# is not a lift. A refusal a determined operator can click through is a
+# refusal that will be clicked through.
+ESCALATION_OVERRIDE_CHANNELS = frozenset({
+    "confirm", "confirmation", "force", "override", "allow_override",
+    "operator_confirm", "tier_overrides", "profile", "wording",
+    "view_override",
+})
+
+
+def check_escalation(fields, dest_tier, **_overrides):
+    """T10-19: re-screen every field the work already contains at dest_tier.
+
+    T10-20: override kwargs never lift a refusal. Named channels
+    (tier_overrides, profile, wording, view_override, confirm, force, …)
+    are accepted and discarded; they cannot suppress ContentRefused.
+    `_overrides` is deliberately unread — presence is not a lift.
+
+    `fields` is a mapping of field name → text (preferred: the refusal names
+    the field) or an iterable of texts. Returns True when every field passes
+    at the destination tier. Raises ContentRefused (terminal) otherwise.
+
+    Field names whose base token is in MENTION_FIELD_KINDS carry the T10-18a
+    r-tier mention allowance; every other field is screened as a render path.
+    """
+    del _overrides  # T10-20: no channel reaches the screen below
+
+    if isinstance(fields, dict):
+        items = fields.items()
+    else:
+        items = ((f"field[{i}]", t) for i, t in enumerate(fields or ()))
+
+    for where, text in items:
+        base = (where or "").strip().lower().rsplit(" ", 1)[-1]
+        kind = base if base in MENTION_FIELD_KINDS else None
+        check_text(text, where, tier=dest_tier, field_kind=kind)
+    return True
+
+
 def compose(tier_text=""):
     """Full guardrail for a prompt: tier wording first, PINNED last and always.
 
