@@ -6456,13 +6456,14 @@ def set_edit_page(request: Request, id: int):
     return templates.TemplateResponse(request, "set_edit.html", ctx)
 
 
-def _suggest_ctx(request, id, suggested, note="", form=None, item_id=None):
+def _suggest_ctx(request, id, suggested, note="", form=None, item_id=None,
+                 proposal=None):
     """Re-render the editor with a suggestion filled into the form fields.
 
     A suggestion POPULATES; it does not save. Writing straight to the database
     would make an AI proposal indistinguishable from a decision, and there would
     be nothing to compare it against. The values sit in the form until the human
-    presses Save, exactly as if they had typed them.
+    Accepts (T10-12) or presses Save, exactly as if they had typed them.
 
     `form` is what was submitted, and it is layered UNDER the suggestion and
     OVER the database. Rebuilding purely from the database discarded whatever
@@ -6472,14 +6473,20 @@ def _suggest_ctx(request, id, suggested, note="", form=None, item_id=None):
     """
     if wants_json(request):
         direction = (form.get("mix_direction") if form else "") or ""
-        return JSONResponse(mixadvice.interface_payload(
-            suggested, _suggest_items(id), direction=direction))
+        payload = mixadvice.interface_payload(
+            suggested, _suggest_items(id), direction=direction)
+        if proposal:
+            payload["proposal_id"] = proposal["id"]
+            payload["model"] = proposal["model"]
+        return JSONResponse(payload)
     row = get_set_or_404(id)
     ctx = {**set_detail(row), "songs": db.q("SELECT id, title FROM songs ORDER BY title"),
            "all_tiers": tiers.all_tiers(), "transitions": SET_TRANSITIONS,
            "suggest_note": note,
            # the box that drove this, still holding what was typed in it
-           "set_direction": (form.get("mix_direction") if form else "") or ""}
+           "set_direction": (form.get("mix_direction") if form else "") or "",
+           "proposal_id": proposal["id"] if proposal else None,
+           "proposal_model": proposal["model"] if proposal else ""}
     # A per-item suggest posts THAT item's form; a whole-set suggest posts only
     # the direction. Either way, only the submitting item's typed values are in
     # hand, so they are applied to that item alone.
@@ -6532,14 +6539,39 @@ async def suggest_set(request: Request, id: int):
     form = await request.form()
     items = _suggest_items(id)
     try:
-        sug = mixadvice.suggest(items, (form.get("mix_direction") or "").strip())
+        rec, sug = mixadvice.propose(items, (form.get("mix_direction") or "").strip(),
+                                     target=f"set:{id}")
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:
         raise HTTPException(502, f"the model could not be reached: {e}") from None
     note = (f"suggested settings for {len(sug)} of {len(items)} items -- nothing is saved until "
-            f"you press Save on an item") if sug else "the model returned nothing usable"
-    return _suggest_ctx(request, id, sug, note, form=form)
+            f"you Accept or press Save on an item") if sug else "the model returned nothing usable"
+    return _suggest_ctx(request, id, sug, note, form=form, proposal=rec)
+
+
+@app.post("/sets/{id}/proposals/{pid}/accept")
+def accept_set_proposal(request: Request, id: int, pid: int):
+    """T10-12: accepting a retained mixadvice proposal writes the stored mix.
+
+    Suggest retains. This is the human act. The model stays on the proposal.
+    """
+    get_set_or_404(id)
+    try:
+        rec = mixadvice.accept_proposal(pid, target=f"set:{id}")
+    except KeyError:
+        raise HTTPException(404, "no such proposal for this set")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if wants_json(request):
+        return JSONResponse({
+            "id": rec["id"],
+            "model": rec["model"],
+            "accepted": rec["accepted"],
+            "applied": rec["applied"],
+            "payload": rec["payload"],
+        })
+    return RedirectResponse(f"/sets/{id}", status_code=303)
 
 
 @app.post("/sets/{id}/items/{item_id}/suggest", response_class=HTMLResponse)
@@ -6551,15 +6583,16 @@ async def suggest_set_item(request: Request, id: int, item_id: int):
     form = await request.form()
     items = _suggest_items(id)
     try:
-        sug = mixadvice.suggest(items, (form.get("mix_direction") or "").strip(),
-                                 only_id=item_id)
+        rec, sug = mixadvice.propose(items, (form.get("mix_direction") or "").strip(),
+                                     only_id=item_id, target=f"set:{id}")
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:
         raise HTTPException(502, f"the model could not be reached: {e}") from None
-    note = ("suggested -- press Save to keep it" if sug
+    note = ("suggested -- Accept to keep it, or press Save" if sug
             else "the model returned nothing usable for that item")
-    return _suggest_ctx(request, id, sug, note, form=form, item_id=item_id)
+    return _suggest_ctx(request, id, sug, note, form=form, item_id=item_id,
+                        proposal=rec)
 
 
 @app.post("/sets/{id}")

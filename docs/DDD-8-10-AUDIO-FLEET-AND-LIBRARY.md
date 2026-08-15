@@ -181,6 +181,13 @@ against a counted `cells`; lyrics marks transcribed `text` against segment
 duration; chat marks every returned string and leaves `data` intact.
 `POST /sets/{id}/suggest` with `Accept: application/json` is the live route.
 
+`T10-12` is a write rule, not a label. `advice.retain` stores the proposal
+(`advice_proposals`) and does not touch the target. `advice.accept` is the
+human act: it calls the surface's apply function, writes the stored value,
+and keeps the model on the row so "what did it suggest and what did I do"
+is still answerable. mixadvice's apply writes `set_items`. The live accept
+route is `POST /sets/{id}/proposals/{pid}/accept`.
+
 `T10-14` is the sharpest and the least obvious: **a model is never asked a
 question whose answer it cannot be visibly wrong about.** "Does this match?" is
 refused as a *prompt shape*; "describe what differs" is not. The recorded

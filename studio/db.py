@@ -588,6 +588,22 @@ CREATE TABLE IF NOT EXISTS calibrations (
   created REAL);
 """
 
+ADVICE_PROPOSALS_SCHEMA = """
+-- T10-12: a proposal is retained so "what did it suggest and what did I do"
+-- is answerable. Suggest writes here only. Accept writes the target stored
+-- values and records the model. This row is never the stored mix itself.
+CREATE TABLE IF NOT EXISTS advice_proposals (
+  id INTEGER PRIMARY KEY,
+  surface TEXT NOT NULL,
+  model TEXT NOT NULL,
+  target TEXT,
+  payload_json TEXT NOT NULL,
+  accepted INTEGER DEFAULT 0,
+  applied_json TEXT,
+  created REAL,
+  accepted_at REAL);
+"""
+
 
 def _nullable_set_item_song_id(c):
     """T1-28: a card is a set_items row with song_id NULL. CREATE TABLE IF
@@ -658,6 +674,7 @@ def conn():
         c.executescript(CREDENTIALS_SCHEMA)
         c.executescript(TAKES_SCHEMA)
         c.executescript(CALIBRATIONS_SCHEMA)
+        c.executescript(ADVICE_PROPOSALS_SCHEMA)
         _migrate(c)
         _local.c = c
     return c

@@ -737,6 +737,10 @@ The client reads `authored`. `model` is advice; `measurement` is a reading and
 must carry `unit`; `operator` is typed text. The set editor's mix `why` is
 `--muted` plus a `model` tag; a measurement is never given that tag.
 
+`T10-12`: Suggest and Accept are separate controls. Suggest retains a proposal
+and writes no mix values. Accept writes the mix and names the model that
+proposed it. A filled-in form that was never Accepted is still a proposal.
+
 This is the interface half of `T10-14`. If advice and measurement look alike, the
 operator will eventually treat a confident sentence as a reading, which is how
 `41.1 vs 64.7` would have become a gate. The style-guide rule: **model text

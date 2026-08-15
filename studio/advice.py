@@ -1,13 +1,23 @@
-"""T10-11: mark model-authored strings in the payload.
+"""T10-11 / T10-12: mark model-authored strings; retain proposals; accept writes.
 
 One shape, used by lyrics, chat, mixadvice and vision. A client that cannot
 tell advice from a measurement will show the wrong one (T2-36's shape). The
 mark is a field the client reads, not a sentence in a template.
+
+T10-12: no advice surface writes a stored value. retain() keeps the proposal
+so "what did it suggest and what did I do" is answerable. accept() is the
+human act that writes, and it records the model.
 """
+import json
+import time
+
+import db
 
 MODEL = "model"
 MEASUREMENT = "measurement"
 OPERATOR = "operator"
+
+SURFACES = ("mixadvice", "vision", "lyrics", "chat")
 
 
 def mark(text, authored, *, unit=None):
@@ -48,6 +58,54 @@ def separate(payload):
         if kind in out:
             out[kind].append(rec)
     return out
+
+
+def retain(surface, payload, *, model, target=None):
+    """Store a proposal. Writes nothing to the target the proposal is about."""
+    if surface not in SURFACES:
+        raise ValueError(f"unknown advice surface {surface!r}")
+    model = (model or "").strip()
+    if not model:
+        raise ValueError("a proposal without a model cannot be attributed")
+    pid = db.run(
+        """INSERT INTO advice_proposals
+           (surface, model, target, payload_json, accepted, created)
+           VALUES (?,?,?,?,0,?)""",
+        surface, model, target, json.dumps(payload), time.time())
+    return get(pid)
+
+
+def get(pid):
+    """The retained proposal, or None."""
+    row = db.one("SELECT * FROM advice_proposals WHERE id=?", pid)
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "surface": row["surface"],
+        "model": row["model"],
+        "target": row["target"],
+        "payload": json.loads(row["payload_json"]),
+        "accepted": bool(row["accepted"]),
+        "applied": json.loads(row["applied_json"]) if row["applied_json"] else None,
+        "created": row["created"],
+        "accepted_at": row["accepted_at"],
+    }
+
+
+def accept(pid, apply):
+    """Human act: apply writes the stored value. The model stays on the row."""
+    rec = get(pid)
+    if rec is None:
+        raise KeyError(pid)
+    if rec["accepted"]:
+        raise ValueError("proposal already accepted")
+    written = apply(rec)
+    db.run(
+        """UPDATE advice_proposals SET accepted=1, applied_json=?, accepted_at=?
+           WHERE id=?""",
+        json.dumps(written), time.time(), pid)
+    return get(pid)
 
 
 def demo():

@@ -63,7 +63,8 @@ specific and already recorded: a plausible metric ranked the wrong image first,
 41.1 against 64.7, and *a VLM asked the same question would have agreed with
 it*. `T10-11` now marks those words in the payload (`authored=model`,
 measurements `authored=measurement` plus a unit) so a client can separate them;
-`T10-12`…`T10-15` are still the rest of the rule.
+`T10-12` retains a proposal and writes the stored mix only on accept, recording
+the model; `T10-13`…`T10-15` are still the rest of the rule.
 
 **P4 is a requirement, not a feature.** `insert_voice` is the store gate:
 a voice cannot be written without a recorded source and a recorded consent
@@ -85,8 +86,8 @@ still not shipped (`T8-12`, provisional by absence).
    (built); `T8-11` is built — `h_audio` writes which voice produced the take,
    or that none did.
 3. **TRD-10's bulk edit.** `T10-6` (one transaction) is built. `T10-3`/`T10-4`/`T10-5`/`T10-7` remain.
-4. **TRD-10's advice rules.** `T10-11` (payload mark) is built. `T10-12`…`T10-15`
-   are still labelling and refusals over surfaces that already exist.
+4. **TRD-10's advice rules.** `T10-11` (payload mark) and `T10-12` (accept writes,
+   records the model) are built. `T10-13`…`T10-15` remain.
 
 ## 5. Scope
 

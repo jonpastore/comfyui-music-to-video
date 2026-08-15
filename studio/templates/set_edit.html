@@ -164,10 +164,18 @@
     <p class="hint">The model is shown every track's tempo, key and energy in running order,
       because what happens at item three depends on what item two did. It proposes transitions,
       lengths, beat-matching and effects for all of them at once; each item's own Suggest
-      re-rolls one handover against that same whole-set context. Nothing is saved until you
-      press Save on an item.</p>
+      re-rolls one handover against that same whole-set context. Suggest retains the
+      proposal. Accept writes it and records the model.</p>
     <button type="submit">Suggest for the whole set</button>
   </form>
+  {% if proposal_id %}
+  <form method="post" action="/sets/{{ set.id }}/proposals/{{ proposal_id }}/accept"
+        class="stack-form">
+    <p class="hint"><span class="tag">model</span> {{ proposal_model }}
+      &mdash; proposal {{ proposal_id }} is retained, not stored as the mix.</p>
+    <button type="submit">Accept suggestion</button>
+  </form>
+  {% endif %}
   {% if suggest_note %}<p class="hint"><strong>{{ suggest_note }}</strong></p>{% endif %}
 </section>
 
@@ -278,7 +286,7 @@
   {% endif %}
   {% if it.suggest_why %}
   <p class="hint muted">{% if it.suggest_authored == "model" %}<span class="tag">model</span> {% endif %}<strong>Why:</strong> {{ it.suggest_why }}
-    <span>&mdash; not saved until you press Save</span></p>
+    <span>&mdash; not stored until you Accept</span></p>
   {% endif %}
   {% if "defaults_visible" in affordances %}
   <p class="hint">Loudness matching is always on. Optional keys: sweep, eq_kill, echo_out, phaser,

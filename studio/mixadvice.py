@@ -11,8 +11,9 @@ the ones mixer can actually emit, every number is clamped to a range this
 studio will accept, and every effects blob is run through the SAME
 effects.parse_effects / video_fx.parse_effects_json the render path uses -- so
 a suggestion can never put a value into a filtergraph that hand-editing would
-have been refused for. A suggestion is a proposal for form fields, not a
-committed edit: the routes populate the editor and the human presses Save.
+have been refused for. A suggestion is a proposal, not a committed edit: propose() retains it
+and writes nothing to the set. Accept is the human act that writes, and
+it records the model (T10-12).
 """
 import json
 
@@ -156,6 +157,72 @@ def clean(raw, valid_ids, only_id=None):
         if s:
             out[iid] = s
     return out
+
+
+def _model_used(model):
+    if model:
+        return model
+    try:
+        import grok
+        return grok._resolve_model(model)
+    except Exception:
+        return "stub"
+
+
+def propose(items, direction="", only_id=None, model=None, progress=None, *, target):
+    """Ask, retain the proposal, write nothing to the set.
+
+    Returns (retained record, clean suggestions). Accept is a separate act
+    (T10-12): this only stores what was suggested and which model said it.
+    """
+    sug = suggest(items, direction, only_id, model, progress)
+    payload = {
+        "suggestions": [{"id": int(iid), **s} for iid, s in sug.items()],
+        "interface": interface_payload(sug, items, direction),
+    }
+    rec = advice.retain("mixadvice", payload, model=_model_used(model), target=target)
+    return rec, sug
+
+
+def apply(proposal):
+    """Write set_items from a retained mixadvice proposal. Accept calls this."""
+    import db
+    target = proposal.get("target") or ""
+    if not str(target).startswith("set:"):
+        raise ValueError("mixadvice proposal is not for a set")
+    set_id = int(str(target).split(":", 1)[1])
+    written = []
+    for entry in (proposal.get("payload") or {}).get("suggestions") or []:
+        try:
+            iid = int(entry.get("id"))
+        except (TypeError, ValueError):
+            continue
+        row = db.one("SELECT * FROM set_items WHERE id=? AND set_id=?", iid, set_id)
+        if not row:
+            continue
+        transition = entry["transition"] if "transition" in entry else row["transition"]
+        secs = entry["secs"] if "secs" in entry else row["secs"]
+        beatmatch = entry["beatmatch"] if "beatmatch" in entry else row["beatmatch"]
+        effects_json = entry["effects_json"] if "effects_json" in entry else row["effects_json"]
+        db.run(
+            """UPDATE set_items SET transition=?, secs=?, beatmatch=?, effects_json=?
+               WHERE id=?""",
+            transition, secs, int(bool(beatmatch)), effects_json, iid)
+        written.append({"id": iid, "transition": transition, "secs": secs,
+                        "beatmatch": bool(beatmatch), "effects_json": effects_json})
+    return written
+
+
+def accept_proposal(pid, *, target=None):
+    """Human act. Writes the stored mix and records the model on the proposal."""
+    rec = advice.get(pid)
+    if rec is None:
+        raise KeyError(pid)
+    if rec["surface"] != "mixadvice":
+        raise ValueError("not a mixadvice proposal")
+    if target is not None and rec["target"] != target:
+        raise KeyError(pid)
+    return advice.accept(pid, apply)
 
 
 def suggest(items, direction="", only_id=None, model=None, progress=None):
