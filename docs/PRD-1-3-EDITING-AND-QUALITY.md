@@ -345,12 +345,13 @@ order and take the dependencies from here.
    class, `approve()` uses that class (not the edited wording), and a
    check with no remedy refuses rather than offering a button.
 10. Every generated still is vision-scored into `qc_json` (`T3-31`),
-    including a `fix_anchor` sibling, the artwork generate (not only
-    the refined cover), an `h_repair` dest still, and a standalone
-    `refine_generated_still` dest. A refine or repair pass writes a
-    new candidate beside the generate; it is not a silent overwrite
-    and not a VLM gate. QC never auto-heals (`T3-18`); dest exists
-    after approve, except the explicit refine sibling.
+    including a `fix_anchor` sibling, an `h_reroll` dest, the artwork
+    generate (not only the refined cover), an `h_repair` dest still,
+    and a standalone `refine_generated_still` dest. A refine or
+    repair pass writes a new candidate beside the generate; it is
+    not a silent overwrite and not a VLM gate. QC never auto-heals
+    (`T3-18`); dest exists after approve, except the explicit refine
+    sibling.
 
 ### Deferred to another document, on purpose
 

@@ -164,6 +164,38 @@ def test_h_refs_stores_qc_json(monkeypatch, tmp_path):
     assert json.loads(row["qc_json"])["confidence"] == 61
 
 
+def test_h_reroll_stores_qc_json(monkeypatch, tmp_path):
+    """h_reroll is a named still lander (T3-31). The generate row must
+    carry qc_json + confidence; named landers already persist their own
+    dest. Refine is off so this is the reroll itself, not a sibling."""
+    sheet = _png(str(tmp_path / "reroll.png"))
+    anchor = _png(str(tmp_path / "anchor.png"))
+    monkeypatch.setattr(appmod.vision, "score_candidate", _score)
+    monkeypatch.setattr(appmod.pipeline, "install_input",
+                        lambda p, name=None: os.path.basename(p))
+    monkeypatch.setattr(appmod.pipeline, "reroll",
+                        lambda *a, **k: [{"clip_idx": 0, "path": sheet, "seed": 11}])
+    album = f"QC Reroll {time.time_ns()}"
+    sid = db.run(
+        "INSERT INTO songs (title, album, slug, created) VALUES (?,?,?,?)",
+        "QC Reroll", album, f"qc-reroll-{time.time_ns()}", time.time())
+    db.run("INSERT INTO storyboards (song_id, tier, json_path, md_path, scene_count, created) "
+           "VALUES (?,?,?,?,?,?)", sid, "xxx", "/sb.json", "/sb.md", 1, time.time())
+    db.run(
+        """INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen,
+                                created, character_id)
+           VALUES (?,?,?,?,?,1,?,?)""",
+        "album", album, "xxx", "front", anchor, time.time(), None)
+    appmod.h_reroll({
+        "song_id": sid, "tier": "xxx", "clip_indices": [0], "refine": False,
+    }, lambda m: None)
+    row = db.one("SELECT * FROM refs WHERE path=?", sheet)
+    assert row, "reroll was not stored"
+    assert row["qc_json"], "h_reroll still lander has no qc_json"
+    assert json.loads(row["qc_json"])["confidence"] == 61
+    assert row["origin"] == "reroll"
+
+
 def test_h_fix_ref_stores_qc_json(monkeypatch, tmp_path):
     src = _png(str(tmp_path / "broken.png"))
     out = _png(str(tmp_path / "fixed.png"))

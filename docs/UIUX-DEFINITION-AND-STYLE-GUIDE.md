@@ -782,8 +782,8 @@ earn a screen.
 
 ### 7a.6a Candidate tiles carry a vision confidence
 
-`T3-31` / `T4-19`. Each generated still — anchors, refs, rerolls,
-`fix_ref` results, `fix_anchor` siblings, artwork generate and its
+`T3-31` / `T4-19`. Each generated still — anchors, refs, `h_reroll`
+dests, `fix_ref` results, `fix_anchor` siblings, artwork generate and its
 refine sibling, an `h_repair` dest still, and a standalone refine dest —
 stores `qc_json`. The artwork generate is a scored
 `assets` row even when a refined cover is what the playlist card shows.
