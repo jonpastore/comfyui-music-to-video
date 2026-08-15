@@ -363,6 +363,16 @@ re-screens stored lyrics; transcription into an `xxx` work screens before
 store. Bare audio without an `xxx` board stays off the image guardrail
 (`T10-16` / `T8-4`). A clean `xxx` work still generates and renders
 (`studio/test_t10_18b_xxx_no_minor.py`).
+
+**`T10-22` (built):** the explicit path's refusal is absolute and unchanged.
+Paired with `T10-18` in one test on the same string: `LOCKED_DEPICT_TIERS`
+(`g`/`pg13`) accept a minor reference on `check_text` and scene save; any
+tier that is not locked non-explicit (`r`/`xxx`/unset/custom) refuses that
+same string on `check_text`, and the `xxx` storyboard direction and scene
+fields refuse it on the HTTP surface
+(`studio/test_t10_22_locked_accepts_explicit_refuses.py`). No new API —
+`allows_minor_depiction` / `check_text` already own the split.
+
 ## 5. Build order
 
     TRD-9 tests (no new behaviour)  ->  a routing change becomes provable

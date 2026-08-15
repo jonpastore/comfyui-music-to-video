@@ -1140,15 +1140,18 @@ The refusal names both the minor hit and the sexualisation hit. Clean
 child text at g/pg13 and adult sexualisation at r/xxx still save and
 render — this is not a blanket ban on either half alone.
 
-audio and renders adult scenes. `T10-18b` is built: at `xxx` the refuse
-is absolute and includes lyrics and audio tags once the song has an `xxx`
-storyboard — saving lyrics, generating audio, or opening an `xxx` board
-against existing child lyrics returns 400 naming the term. A clean `xxx`
-work still saves lyrics, generates audio, and edits scenes without a
-refuse. The audio path without an `xxx` board still accepts a
-nursery-rhyme string (`T10-16`). No new control: the lock is the tier
-already on the form. A refuse that looks like a generic 400 with no
-named term is the old blanket screen leaking back.
+`T10-18b` is built: at `xxx` the refuse is absolute and includes lyrics
+and audio tags once the song has an `xxx` storyboard — saving lyrics,
+generating audio, or opening an `xxx` board against existing child lyrics
+returns 400 naming the term. A clean `xxx` work still saves lyrics,
+generates audio, and edits scenes without a refuse. The audio path
+without an `xxx` board still accepts a nursery-rhyme string (`T10-16`).
+
+`T10-22` is built as the paired surface check: the same child string that
+saves on a g/pg13 scene is refused on an explicit (`xxx`) scene field and
+storyboard direction, with the refusal naming the term. No new control —
+the lock is still the tier already on the form. A refuse that looks like
+a generic 400 with no named term is the old blanket screen leaking back.
 
 ## 8. How this document is verified
 
