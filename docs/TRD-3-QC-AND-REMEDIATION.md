@@ -58,6 +58,7 @@ not been shown to separate known-good from known-bad does not gate anything.
 | **Tier 1 itself — every check in §4** | **`studio/qc.py`**: `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise` |
 | **The findings table, the queue, and the remedy edit** | **`studio/qc_service.py`** + `db.findings`; `/api/qc/*` and the `qc` job kind in `app.py` |
 | **T3-1** per-box report groups by `host`; NULL host is `unattributed` | **`qc_service.by_host`** + `GET /api/qc/by-host` |
+| **T3-22** dismissed stays dismissed until the artefact changes | **`qc_service.record`** + `findings.artefact_hash`; same check reopens when the file bytes change |
 
 **§4 and §6 below read as unbuilt work and are not.** An audit found this table
 listing seven items, none of them the QC implementation, in a section whose
@@ -492,7 +493,7 @@ tier 1.
    marked **provisional** and says what it cannot yet distinguish.
 
    One-sided in this document today, listed so nobody has to re-derive it:
-   `T3-4` (fields present but never checked for sense), `T3-20`, `T3-22` and `T3-27`. `T3-1` now has the two-host count half. `T3-6` / `T3-14` / `T3-18` / `T3-23` / `T3-24` / `T3-25` have their positive halves: dest ≠ source, WITH a stored calibration a threshold CAN be set, a correctly-named model on a box that holds it is SUBMITTED, the refiner is routed off a 15.92 GiB card onto a 24 GiB one, and a remote repair with `can_move_output` forced true is SUBMITTED.
+   `T3-4` (fields present but never checked for sense), `T3-20` and `T3-27`. `T3-1` now has the two-host count half. `T3-6` / `T3-14` / `T3-18` / `T3-23` / `T3-24` / `T3-25` have their positive halves: dest ≠ source, WITH a stored calibration a threshold CAN be set, a correctly-named model on a box that holds it is SUBMITTED, the refiner is routed off a 15.92 GiB card onto a 24 GiB one, and a remote repair with `can_move_output` forced true is SUBMITTED. `T3-22` has both halves: dismissed stays dismissed on the same bytes, and the same check REAPPEARS when the artefact changes.
 
 ### The positive half of each one-sided criterion
 
@@ -543,8 +544,9 @@ current.
 | `T3-14` no threshold without calibration | **built** | `test_t3_14_threshold.py` | `set_threshold` is refused with no calibration row, naming T3-13; WITH a stored row the value is written on that row. A non-T3-13 dataset does not unlock it. Not a UI |
 | `T3-15` pose change is not identity failure | **built** | `test_t3_15_identity.py` | `identity_embed` is a colour histogram; `identity_score` ranks the anchored sheet above the pose-plate look. Pixel distance still inverts that pair |
 | `T3-16` overlap is inconclusive, no gate | **built** | `test_t3_16_overlap_inconclusive.py` | `identity_verdict` names overlap inconclusive; `build_identity_gate` returns built False / threshold NULL; a threshold on that report (or via `set_threshold`) is refused. Separated ranges are not called inconclusive. No UI |
-| **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-23`, `T3-24` and `T3-25` are their own rows. Remaining in §6: T3-19…T3-22, T3-26…T3-28 |
+| **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-22`, `T3-23`, `T3-24` and `T3-25` are their own rows. Remaining in §6: T3-19…T3-21, T3-26…T3-28 |
 | `T3-23` repair routing | **built** | `160547d` | default `dispatch_repair` asks `where()`/`fits()`/`resolve()`, refuses a pin under a name the box does not have before submit (`test_t3_23_pinned_name_the_box_does_not_have_is_refused_before_submit`), and a correctly-named model on a box that holds it is SUBMITTED (`test_t3_23_correctly_named_model_on_a_box_that_holds_it_is_submitted`). dest is the actuator's file (`fix_ref` / `gen_postproc`), not a copy of src |
 | `T3-24` refiner resident cost | **built** | `a4b7ef9` | real `fits()` (not a stub) routes `wan22_i2v_low` off a 15.92 GiB card onto a 24 GiB one that holds the correct name (`test_t3_24_refiner_routed_off_15_92_to_24_and_submitted`); peaches cannot take the i2v pair (`test_t3_24_peaches_cannot_take_the_pair`) |
 | `T3-25` remote output move | **built** | pending | `can_move_output` is callable; remote repair is refused by that name (`test_t3_25_remote_repair_refused_by_name_until_check_is_true`); forcing the check true SUBMITS (`test_t3_25_forced_true_remote_repair_is_submitted`) |
 | `T3-31` vision score on generated stills | **built** | this slice | `score_generated_still` runs on anchors, refs, rerolls, `fix_ref` and artwork. `qc_json` is stored. A refine sibling is a new file (`test_h_anchor_refine_writes_sibling_not_overwrite`). Still advisory — not a gate |
+| `T3-22` dismissed stays dismissed | **built** | this slice | same bytes stay dismissed (`test_t3_22_dismissed_stays_dismissed_until_artefact_changes`); rewriting the file reopens the same `(path, check)` row. `findings.artefact_hash` is the change detector |

@@ -220,6 +220,7 @@ CREATE TABLE IF NOT EXISTS findings (
   remedy_prompt_id INTEGER,           -- prompt_versions.id; editable, versioned
   status TEXT DEFAULT 'open',         -- open|approved|running|repaired|dismissed
   dismissed_why TEXT,
+  artefact_hash TEXT,                 -- sha256 of path; T3-22 reopen when it changes
   repair_path TEXT,
   created REAL, resolved REAL,
   UNIQUE(path, check_name));
@@ -396,6 +397,8 @@ MIGRATIONS = [
     # mixer.set_duration. An overlay (brand_path) changes no length; this does.
     "ALTER TABLE set_items ADD COLUMN card_path TEXT",
     "ALTER TABLE set_items ADD COLUMN card_secs REAL",
+    # T3-22: dismissed stays dismissed until the artefact bytes change.
+    "ALTER TABLE findings ADD COLUMN artefact_hash TEXT",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and

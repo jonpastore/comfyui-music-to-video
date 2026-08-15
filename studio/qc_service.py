@@ -12,6 +12,7 @@ directory of old output; this module is what persists an answer.
 
     python3 qc_service.py      # self-check against a temporary database
 """
+import hashlib
 import json
 import os
 import sys
@@ -39,6 +40,29 @@ def _txt(v):
     return None if v is None else str(v)
 
 
+def artefact_hash(path):
+    """sha256 of the file bytes. Empty string when the path is missing.
+
+    Empty is a known-missing fingerprint, not NULL. NULL is reserved for
+    rows that predate this column so the first re-run after migrate does
+    not reopen every old dismissal (T3-22).
+    """
+    if not path or not os.path.isfile(path):
+        return ""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _same_artefact(old, new):
+    """True when the dismissed baseline is this file, or there is none yet."""
+    if old is None:
+        return True
+    return old == new
+
+
 def _expect_from_artefacts(path):
     """T6-11 / T6-12: the question stored against this path, or {}."""
     row = db.one("SELECT expect_json FROM artefacts WHERE path=?", path)
@@ -62,24 +86,43 @@ def record(findings):
     second row (docs/TRD-3 T3-5): re-running after a repair is the normal case,
     and a queue that grows a duplicate every run is a queue nobody reads. The
     human's own columns -- status, why it was dismissed, the edited remedy
-    prompt -- are NOT overwritten by a re-run, because a re-measurement is not a
-    reason to forget that somebody already looked at it.
+    prompt -- are NOT overwritten by a re-run of the same bytes, because a
+    re-measurement is not a reason to forget that somebody already looked at
+    it. T3-22: a dismissed finding REOPENS when the artefact bytes change
+    and the check still fails. Deleting that comparison keeps dismissed
+    forever.
     """
     now = time.time()
     n = 0
     for f in findings:
         path = jobs.canonical_path(f["path"])
+        digest = artefact_hash(path)
+        existing = db.one(
+            "SELECT status, artefact_hash FROM findings WHERE path=? AND check_name=?",
+            path, f["check"])
+        status = OPEN
+        if existing:
+            status = existing["status"] or OPEN
+            if status == DISMISSED and not _same_artefact(
+                    existing["artefact_hash"], digest) and f["verdict"] != qc.PASS:
+                status = OPEN
         db.run("""INSERT INTO findings
                     (path, kind, tier, check_name, verdict, measured, expected,
-                     unit, detail, remedy, status, created)
-                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                     unit, detail, remedy, status, created, artefact_hash)
+                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                   ON CONFLICT(path, check_name) DO UPDATE SET
                      verdict=excluded.verdict, measured=excluded.measured,
                      expected=excluded.expected, unit=excluded.unit,
-                     detail=excluded.detail, created=excluded.created""",
+                     detail=excluded.detail, created=excluded.created,
+                     artefact_hash=excluded.artefact_hash,
+                     status=excluded.status,
+                     resolved=CASE
+                       WHEN excluded.status=? AND findings.status=?
+                       THEN NULL ELSE findings.resolved END""",
                path, f["kind"], f["tier"], f["check"], f["verdict"],
                _txt(f.get("measured")), _txt(f.get("expected")), f.get("unit"),
-               f.get("detail"), f.get("remedy"), OPEN, now)
+               f.get("detail"), f.get("remedy"), status, now, digest,
+               OPEN, DISMISSED)
         n += 1
     return n
 
@@ -209,8 +252,10 @@ def dismiss(fid, why):
     why = (why or "").strip()
     if not why:
         raise ValueError("dismissing a finding needs a reason")
-    db.run("UPDATE findings SET status=?, dismissed_why=?, resolved=? WHERE id=?",
-           DISMISSED, why, time.time(), int(fid))
+    row = get(fid)
+    digest = artefact_hash(row["path"])
+    db.run("UPDATE findings SET status=?, dismissed_why=?, resolved=?, artefact_hash=? WHERE id=?",
+           DISMISSED, why, time.time(), digest, int(fid))
     return get(fid)
 
 
@@ -654,6 +699,26 @@ def demo():
         assert again["status"] == DISMISSED, "a re-run reopened a dismissed finding"
         assert again["remedy"] == "leave it alone", "a re-run overwrote an edited remedy"
         assert again["verdict"] == qc.REJECT, "the re-measurement itself was not stored"
+        # T3-22 positive: same check REAPPEARS when the bytes change.
+        changed = os.path.join(d, "changed.bin")
+        with open(changed, "wb") as fh:
+            fh.write(b"v1")
+        record([{
+            "path": changed, "kind": "clip", "tier": 1, "check": "duration",
+            "verdict": qc.REJECT, "measured": "1", "expected": "2",
+            "unit": "s", "detail": "short", "remedy": "re-render",
+        }])
+        ch = db.one("SELECT * FROM findings WHERE path=?", changed)
+        dismiss(ch["id"], "looked at v1")
+        with open(changed, "wb") as fh:
+            fh.write(b"v2")
+        record([{
+            "path": changed, "kind": "clip", "tier": 1, "check": "duration",
+            "verdict": qc.REJECT, "measured": "1", "expected": "2",
+            "unit": "s", "detail": "short", "remedy": "re-render",
+        }])
+        assert get(ch["id"])["status"] == OPEN, \
+            "dismissed finding did not reappear after the artefact changed"
         reopen(dur["id"])
 
         # --- T3-18: running QC enqueues nothing. Ever. Approving one finding

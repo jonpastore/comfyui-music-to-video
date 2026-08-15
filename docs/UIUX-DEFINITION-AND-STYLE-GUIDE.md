@@ -210,7 +210,8 @@ a silent strip.
 
 **Genuinely not built** — `meter` (scene time against song length, `T2-23`;
 loudness against target, `T1-25`), `finding-row` (measured / expected / unit /
-remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-27`). The
+remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-27`; dismiss
+stays off this row until the file bytes change, `T3-22`). The
 per-box QC report is JSON only (`GET /api/qc/by-host`, `T3-1`): groups by
 `host`, NULL host is an explicit `unattributed` bucket. No page; do not
 pre-empt `finding-row` with one.
@@ -421,7 +422,8 @@ enqueues one repair. `T3-23` names a routing refusal (unfittable, or pinned
 under a name the box does not have) instead of looking like a successful copy.
 `T3-25` names `can_move_output` when a remote output cannot be moved back.
 `T3-24` names the refiner as too big for a 15.92 GiB card (and for peaches)
-and routes it to a 24 GiB box that holds the file.
+and routes it to a 24 GiB box that holds the file. A dismissed finding
+does not sit in the open queue until the file itself changes (`T3-22`).
 
 ### 5.8 Motion
 

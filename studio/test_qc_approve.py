@@ -1,4 +1,5 @@
-"""TDD for docs/TRD-3 T3-18 / T3-6 / T3-19: approve() is the human sign-off.
+"""TDD for docs/TRD-3 T3-18 / T3-6 / T3-19 / T3-22: approve() is the human
+sign-off, and a dismissed finding stays dismissed until the artefact changes.
 
 The route in app.api_qc_approve calls qc_service.approve and decides nothing
 else (T6-A10). These tests call that same function -- not a helper it wraps,
@@ -29,6 +30,56 @@ def _jobs_for(fid):
         if args.get("finding_id") == fid:
             out.append((row, args))
     return out
+
+
+def _reject(path, measured="4.8"):
+    return {
+        "path": path, "kind": "clip", "tier": 1, "check": "duration",
+        "verdict": "reject", "measured": measured, "expected": "30.0",
+        "unit": "s", "detail": "short render", "remedy": "re-render",
+    }
+
+
+def test_t3_22_dismissed_stays_dismissed_until_artefact_changes():
+    """T3-22 pair: dismissed stays dismissed on the same bytes; the same
+    check REAPPEARS when the artefact changes.
+
+    Deleting change detection keeps the first half green forever.
+    Always-reopening on re-run keeps the second half green and loses
+    the first. Measured-value drift on the same file is not a change.
+    """
+    path = _new_path("t322")
+    with open(path, "wb") as f:
+        f.write(b"clip-bytes-v1")
+
+    qc_service.record([_reject(path)])
+    fid = db.one("SELECT id FROM findings WHERE path=?", path)["id"]
+    qc_service.dismiss(fid, "false positive on this render")
+
+    assert qc_service.get(fid)["status"] == qc_service.DISMISSED
+    assert fid not in [r["id"] for r in qc_service.queue()]
+
+    qc_service.record([_reject(path, measured="4.9")])
+    same = qc_service.get(fid)
+    assert same["status"] == qc_service.DISMISSED, (
+        "re-running QC on unchanged bytes reopened a dismissed finding")
+    assert fid not in [r["id"] for r in qc_service.queue()]
+    assert same["dismissed_why"] == "false positive on this render"
+    assert same["measured"] == "4.9"
+    assert same["id"] == fid
+
+    with open(path, "wb") as f:
+        f.write(b"clip-bytes-v2-re-rendered")
+
+    qc_service.record([_reject(path, measured="5.1")])
+    again = qc_service.get(fid)
+    assert again["id"] == fid, "change must reopen the same finding, not insert"
+    assert again["status"] == qc_service.OPEN, (
+        "dismissed finding did not reappear after the artefact changed")
+    assert fid in [r["id"] for r in qc_service.queue()], (
+        "reappeared finding is missing from the open queue")
+    assert again["measured"] == "5.1"
+    assert again["verdict"] == "reject"
 
 
 def test_t3_18_qc_enqueues_nothing_until_approve():
