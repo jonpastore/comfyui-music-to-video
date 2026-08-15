@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-4, T9-6, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -465,3 +465,70 @@ def test_t9_4_claim_consumer_treats_none_as_candidate_and_false_as_refusal():
             _t9_4_restore_jobs(was_jobs)
     finally:
         _t9_4_restore_fleet(*was_fleet)
+
+
+# T9-5. Two answering boxes that both HOLD the file. The 10.58 GiB card
+# cannot keep wan22_s2v resident (15.27 GiB, measured 1.44x). Same stability
+# class, slow box has the lower id — dropping `fits is False` from the sort
+# key puts the slow box first and the order assertion goes red.
+# T9-4 peaches lacks qwen (available False); that fixture cannot see this.
+T9_5_SLOW = {
+    "id": "0", "title": "tiny", "status": "running",
+    "address": "http://10.0.0.10:8188",
+}
+T9_5_FITS = {
+    "id": "2", "title": "wide", "status": "running",
+    "address": "http://10.0.0.12:8188",
+}
+T9_5_FLEET = [T9_5_SLOW, T9_5_FITS]
+T9_5_HOLDING = {
+    "UNETLoader": {"input": {"required": {"unet_name": [
+        ["wan2.2_s2v_14B_fp8_scaled.safetensors"]]}}},
+    "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [
+        ["ace_step_v1_3.5b.safetensors"]]}}},
+}
+T9_5_INFO = {
+    "http://10.0.0.10:8188": T9_5_HOLDING,
+    "http://10.0.0.12:8188": T9_5_HOLDING,
+}
+T9_5_STATS = {
+    "http://10.0.0.10:8188": {"vram_gib": 10.58, "gpu": "RTX 2080 Ti"},
+    "http://10.0.0.12:8188": {"vram_gib": 23.42, "gpu": "RTX 5090"},
+}
+
+
+def test_t9_5_nonresident_box_stays_in_the_plan_later():
+    """T9-5: a box that cannot hold the model resident is later, not out.
+
+    Positive half (TRD-9 §9): a plan with a fitting AND a non-fitting box
+    still includes the slow one, later in the order. Dropping fits=False
+    rows, or sorting only by id/stability, must go red. Same fleet, a
+    model both cards hold resident, or a "small cards last" sort stays
+    green on s2v alone.
+    """
+    was_info, was_stats = models._object_info, models._system_stats
+    models._object_info = lambda url=None: T9_5_INFO.get(url)
+    models._system_stats = lambda url=None: T9_5_STATS.get(url)
+    try:
+        assert models.fits("wan22_s2v", 10.58) is False
+        assert models.fits("wan22_s2v", 23.42) is True
+        assert models.fits("ace_step_v1", 10.58) is True
+        assert models.fits("ace_step_v1", 23.42) is True
+
+        plan = models.where("wan22_s2v", T9_5_FLEET)
+        ids = [r["id"] for r in plan]
+        assert "0" in ids, (
+            f"the 10.58 GiB box that holds s2v was dropped: {plan}")
+        assert "2" in ids, (
+            f"the fitting box was not in the plan: {plan}")
+        assert ids.index("2") < ids.index("0"), (
+            f"the non-resident box was not later in the plan: {ids}")
+        assert next(r for r in plan if r["id"] == "0")["fits"] is False
+        assert next(r for r in plan if r["id"] == "2")["fits"] is True
+
+        ace = models.where("ace_step_v1", T9_5_FLEET)
+        ace_ids = [r["id"] for r in ace]
+        assert ace_ids == ["0", "2"], ace_ids
+        assert all(r["fits"] is True for r in ace)
+    finally:
+        models._object_info, models._system_stats = was_info, was_stats
