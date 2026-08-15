@@ -1092,6 +1092,20 @@ def applied_master_chain(items):
     return one_button_master(extra)
 
 
+def export_loudness(path, items=None):
+    """T1-25: measured I/TP and whether the file missed its own target.
+
+    Target is the master chain that ran, else loudnorm_filter()'s defaults.
+    effects.py owns the measurement; this picks the target the graph used
+    so the asset row does not flag a legal -23 master as off -16.
+    """
+    chain = applied_master_chain(items or [])
+    if chain:
+        return effects.export_loudness(
+            path, I=chain["params"]["I"], TP=chain["params"]["TP"])
+    return effects.export_loudness(path)
+
+
 def _master_lines(items, lines, running):
     """THE MASTER STAGE. docs/TRD-1 8a.
 

@@ -64,6 +64,10 @@ DUCK_RELEASE_MS = 300.0
 LOUDNORM_I = -16.0   # EBU R128 target LUFS for streaming, not broadcast's -23
 LOUDNORM_TP = -1.5
 LOUDNORM_LRA = 11.0
+# Stated export tolerance of those targets. docs/TRD-1 T1-25 flags a
+# render outside this window rather than silently shipping it.
+LOUDNESS_TOLERANCE_LU = 2.0
+TRUE_PEAK_TOLERANCE_DB = 0.5
 
 
 def _range(name, value, lo, hi):
@@ -212,6 +216,31 @@ def measure_loudness(path):
             "for a measurement that did not happen:\n%s"
             % (path, "\n".join(r.stderr.splitlines()[-15:])))
     return {"lufs": lufs, "true_peak_db": peak}
+
+
+def export_loudness(path, I=None, TP=None):
+    """T1-25 record: measured I/TP plus whether the file missed its target.
+
+    Target defaults to loudnorm_filter()'s I/TP. A caller that ran a
+    different chain (the one-button master, a recorded I) passes that
+    chain's numbers so the flag is against the render's own target, not
+    a hardcoded -16.
+    """
+    measured = measure_loudness(path)
+    target_i = LOUDNORM_I if I is None else float(I)
+    target_tp = LOUDNORM_TP if TP is None else float(TP)
+    lufs = measured["lufs"]
+    peak = measured["true_peak_db"]
+    flagged = abs(lufs - target_i) > LOUDNESS_TOLERANCE_LU
+    if peak is not None and peak > target_tp + TRUE_PEAK_TOLERANCE_DB:
+        flagged = True
+    return {
+        "lufs": lufs,
+        "true_peak_db": peak,
+        "target_lufs": target_i,
+        "target_true_peak_db": target_tp,
+        "flagged": flagged,
+    }
 
 
 def loudnorm_filter(I=None, TP=None, LRA=None):

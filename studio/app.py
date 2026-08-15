@@ -1593,6 +1593,8 @@ def h_render_set(args, progress):
     chain = mixer.applied_master_chain(args.get("items") or [])
     if chain:
         meta["master_chain"] = chain
+    # T1-25: name measured I/TP on the asset; flag a miss of its own target.
+    meta["loudness"] = mixer.export_loudness(out, args.get("items") or [])
     db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
            None, "set", out, json.dumps(meta), time.time())
     if set_id:
@@ -6235,7 +6237,8 @@ def _set_render_row(a):
             pass
     return {"asset": a, "mode": meta.get("mode", "video"), "tier": meta.get("tier"),
             "missing": missing, "size": size, "duration": duration,
-            "master_chain": meta.get("master_chain")}
+            "master_chain": meta.get("master_chain"),
+            "loudness": meta.get("loudness")}
 
 
 def _beatmatch_plan(items, songs, mode):

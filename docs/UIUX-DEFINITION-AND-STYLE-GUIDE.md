@@ -202,7 +202,10 @@ the mastering-chain numbers and unrounded steps. Switching the select
 writes only `sets.mode_audience`. A CSS class that hid the same fields
 would fail `T1-18` — easy changes the mix. After an easy render the
 card shows the named chain that ran (`T1-19`), not a hidden set of
-values.
+values. After any render the same card names measured integrated
+loudness and true peak (`T1-25`); an off-target file is marked
+"off target" rather than silently shipped. That is the asset row,
+not the live `meter`.
 
 The waveform is the part that must change rather than grow: today it is
 `mixer.waveform_png()` set as a `background-image` on the block. `mixer.peaks`
@@ -217,7 +220,8 @@ find) stays true either way. An empty envelope must surface `reason`, not
 a silent strip.
 
 **Genuinely not built** — `meter` (scene time against song length, `T2-23`;
-loudness against target, `T1-25`), `finding-row` (measured / expected / unit /
+live loudness-against-target as you mix — the export asset already names
+measured I/TP and the off-target flag, `T1-25`), `finding-row` (measured / expected / unit /
 remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-20`, `T3-27`; dismiss
 stays off this row until the file bytes change, `T3-22`). The
 per-box QC report is JSON only (`GET /api/qc/by-host`, `T3-1`): groups by

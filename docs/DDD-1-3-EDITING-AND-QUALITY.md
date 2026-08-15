@@ -19,7 +19,7 @@ is named.
 |---|---|---|---|
 | `studio/app.py` | 6331 | 113 routes, and most of the logic behind them | the structural problem, §2 |
 | `studio/mixer.py` | 2116 | set duration, both filter graphs, overlap arithmetic, beatmatch, ramps, splice, song-assembly geometry (`T5-7`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox |
-| `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` **and** `T3-9`/§4.3 |
+| `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `export_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` **and** `T3-9`/§4.3 |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `fragment`, `item_audio`, `wants_master_loudnorm` | built |
 | `studio/qc.py` | 642 | TRD-3 tier 1 in full; T3-13 `score_zimage_sweep`; T3-15 histogram `identity_embed`; T3-16 `identity_verdict`; T3-26 `measure_refiner_help` (fail-closed labelled set, not opportunistic); T3-28 `check_identity_wrong` / `identity_wrong_remedy` | built |
 | `studio/qc_service.py` | 308 | findings, queue, `by_host` (`T3-1`), remedy edit, dismiss, reopen; `artefact_hash` keeps a dismissal on the same bytes and reopens the same check when the file changes (`T3-22`); `approve()` enqueues dest ≠ source; the version that RUNS is `findings.remedy_prompt_id` looked up at execute (`T3-20`); `dispatch_repair` asks `where()`/`fits()`/`resolve()` then submits `fix_ref` / `gen_postproc`; real `fits()` routes the refiner by resident cost (`T3-24`); `can_move_output` gates remote repair (`T3-25`); `run_zimage_calibration` writes the T3-13 row; `set_threshold` writes a value only on a stored separated row (`T3-14`/`T3-16`); `build_identity_gate` never builds; T3-28 refuses a swap-the-reference identity-wrong remedy; `record_refiner_help` persists the T3-26 finding | built |
@@ -199,6 +199,17 @@ applies those params; `h_render_set` writes the same object to
 not None. The set editor shows name+version+params on the render
 card. Changing I moves measured LUFS
 (`studio/test_t1_19_master_chain.py`).
+
+**`T1-25`, 2026-08-14.** `effects.export_loudness(path, I=, TP=)` is
+the named record: measured LUFS / true peak, the target those were
+compared to, and `flagged` when either sits outside
+`LOUDNESS_TOLERANCE_LU` (2.0) or `TRUE_PEAK_TOLERANCE_DB` (0.5) of
+that target. `mixer.export_loudness` supplies the master chain's I/TP
+when the master ran, else the loudnorm defaults. `h_render_set`
+writes it to `assets.meta_json.loudness`. The render card shows the
+numbers and "off target" when flagged. The live `meter` component is
+still not this.
+(`studio/test_t1_25_export_loudness.py`).
 
 **FIXED 2026-08-13 by session B, on Jon's decision, and the estimate this
 document gave was wrong twice on the way — which is the part worth keeping.**

@@ -195,7 +195,10 @@ order and take the dependencies from here.
    and the same set with easy off does not. **`T1-19` built** — easy's
    one-button master is the named chain `one-button-master` v1, recorded
    on the render (`assets.meta_json.master_chain`); changing I moves
-   measured loudness.
+   measured loudness. **`T1-25` built** — an export names measured
+   integrated loudness and true peak on `assets.meta_json.loudness`;
+   a render outside `effects.LOUDNESS_TOLERANCE_LU` /
+   `TRUE_PEAK_TOLERANCE_DB` of its own target is flagged.
 
 ### P2 — the arc through to the storyboard
 

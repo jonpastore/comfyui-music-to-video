@@ -468,6 +468,13 @@ _stub("mixer",
       one_button_master=(_real_module("mixer").one_button_master
                          if _real_module("mixer") is not None
                          else (lambda params=None: None)),
+      # T1-25: real export_loudness shells out to ebur128. The stub
+      # names in-tolerance numbers so h_render_set can write the asset
+      # row without measuring the empty file mix_audio writes here.
+      export_loudness=lambda path, items=None: {
+          "lufs": -16.0, "true_peak_db": -1.5,
+          "target_lufs": -16.0, "target_true_peak_db": -1.5,
+          "flagged": False},
       render_set=_render_set,
       mix_audio=_mix_audio,
       set_duration=_set_duration,

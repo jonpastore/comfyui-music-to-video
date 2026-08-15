@@ -379,6 +379,15 @@
       TP={{ r.master_chain.params.TP }}
       LRA={{ r.master_chain.params.LRA }}</p>
     {% endif %}
+    {% if r.loudness %}
+    <p class="hint{% if r.loudness.flagged %} warn{% endif %}">
+      {{ "%.1f"|format(r.loudness.lufs) }} LUFS
+      {% if r.loudness.true_peak_db is not none %}
+      / {{ "%.1f"|format(r.loudness.true_peak_db) }} dBTP
+      {% endif %}
+      {% if r.loudness.flagged %}· off target{% endif %}
+    </p>
+    {% endif %}
     {% if not r.missing %}
       {% if r.mode == "audio" %}
       <audio controls preload="none" src="{{ media_url(r.asset.path) }}"></audio>
