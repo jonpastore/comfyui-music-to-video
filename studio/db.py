@@ -588,24 +588,32 @@ CREATE TABLE IF NOT EXISTS calibrations (
 
 def _nullable_set_item_song_id(c):
     """T1-28: a card is a set_items row with song_id NULL. CREATE TABLE IF
-    NOT EXISTS does not drop NOT NULL on a live table, so rebuild once."""
+    NOT EXISTS does not drop NOT NULL on a live table, so rebuild once.
+
+    Rebuild from PRAGMA table_info so ALTER-added columns (card_path,
+    card_secs, …) survive. Recreating from sqlite_master's original
+    CREATE and INSERT SELECT * drops those extras."""
     cols = c.execute("PRAGMA table_info(set_items)").fetchall()
     if not cols:
         return
     song = next((r for r in cols if r[1] == "song_id"), None)
     if song is None or not song[3]:
         return
-    row = c.execute(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='set_items'"
-    ).fetchone()
-    if not row or not row[0]:
-        return
-    sql = row[0].replace("song_id INTEGER NOT NULL", "song_id INTEGER", 1)
-    if sql == row[0]:
-        return
+    defs, names = [], []
+    for _cid, name, ctype, notnull, dflt, pk in cols:
+        names.append(name)
+        bits = [name, ctype or "TEXT"]
+        if pk:
+            bits.append("PRIMARY KEY")
+        elif name != "song_id" and notnull:
+            bits.append("NOT NULL")
+        if dflt is not None:
+            bits.append("DEFAULT " + str(dflt))
+        defs.append(" ".join(bits))
     c.execute("ALTER TABLE set_items RENAME TO set_items__old")
-    c.execute(sql)
-    c.execute("INSERT INTO set_items SELECT * FROM set_items__old")
+    c.execute("CREATE TABLE set_items (" + ", ".join(defs) + ")")
+    quoted = ",".join(names)
+    c.execute(f"INSERT INTO set_items ({quoted}) SELECT {quoted} FROM set_items__old")
     c.execute("DROP TABLE set_items__old")
     c.execute("CREATE INDEX IF NOT EXISTS idx_set_items ON set_items(set_id, position)")
 

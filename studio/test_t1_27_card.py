@@ -172,3 +172,25 @@ def test_t1_27_render_set_matches_priced_card(tmp_path):
     on_song = _rgb(out, 0.4)
     assert sum(on_card) > sum(on_song) + 40, (
         f"card never reached the picture: card={on_card} song={on_song}")
+
+
+def test_t1_28_rebuild_keeps_altered_columns():
+    """Live DBs have ALTER extras; sqlite_master CREATE does not."""
+    import sqlite3
+    import db as dbmod
+    c = sqlite3.connect(":memory:")
+    c.execute("""CREATE TABLE set_items (
+        id INTEGER PRIMARY KEY, set_id INTEGER NOT NULL,
+        song_id INTEGER NOT NULL, position INTEGER NOT NULL)""")
+    c.execute("ALTER TABLE set_items ADD COLUMN card_path TEXT")
+    c.execute("ALTER TABLE set_items ADD COLUMN card_secs REAL")
+    c.execute("INSERT INTO set_items (set_id, song_id, position, card_path, card_secs) "
+              "VALUES (1, 9, 0, '/card.png', 3.0)")
+    dbmod._nullable_set_item_song_id(c)
+    info = {r[1]: r for r in c.execute("PRAGMA table_info(set_items)")}
+    assert info["song_id"][3] == 0, "song_id still NOT NULL"
+    assert "card_path" in info and "card_secs" in info
+    row = c.execute("SELECT song_id, card_path, card_secs FROM set_items").fetchone()
+    assert row == (9, "/card.png", 3.0)
+    c.execute("INSERT INTO set_items (set_id, song_id, position) VALUES (1, NULL, 1)")
+    assert c.execute("SELECT COUNT(*) FROM set_items WHERE song_id IS NULL").fetchone()[0] == 1
