@@ -66,13 +66,14 @@ Already satisfied by `qc.py` today: `T3-2` (expectations read from the submitted
 workflow, no hardcoded duration anywhere), `T3-4`'s measured/expected/unit on
 every check that has them, `T3-7` (8n+1 with the interpolated exemption), `T3-11`
 (imports `mixer.SET_DURATION_TOLERANCE` rather than restating it), `T3-27`
-(a remedy on every finding), and `T3-3` both ways. What is NOT built is tier 2
-entirely, and `T3-24` (refiner arithmetic as a box decision). `T3-23` is wired:
-`dispatch_repair` asks `models.where()` / `models.fits()` / `models.resolve()`,
-refuses an unfittable or mis-named pin before submit, and invokes
-`pipeline.gen_postproc` or `pipeline.fix_ref` so dest is the actuator's file.
-`T3-25` is a callable: `can_move_output(host)` — remote repair is refused by
-that name until the check is true, and forcing it true SUBMITS. `approve()`
+(a remedy on every finding), and `T3-3` both ways. What is NOT built is the
+rest of tier 2 (`T3-14`…`T3-16`: no threshold, no gate, no UI) and `T3-24`
+(refiner arithmetic as a box decision). `T3-13` writes the calibrations row.
+`T3-23` is wired: `dispatch_repair` asks `models.where()` / `models.fits()` /
+`models.resolve()`, refuses an unfittable or mis-named pin before submit, and
+invokes `pipeline.gen_postproc` or `pipeline.fix_ref` so dest is the actuator's
+file. `T3-25` is a callable: `can_move_output(host)` — remote repair is refused
+by that name until the check is true, and forcing it true SUBMITS. `approve()`
 enqueues a dest ≠ source; `h_repair` writes that dest only when
 `dispatch_repair` produces it, and refuses a silent copy of the broken file.
 
@@ -530,7 +531,8 @@ current.
 | `T3-4` measured/expected/unit | **built** | earlier | on every check that has them |
 | `T3-5` re-running does not duplicate | **built** | earlier | `UNIQUE(path, check_name)`; the mutation audit found the upsert alone was not the guard |
 | `T3-1` group by host | **built** | `test_t3_1_by_host.py` | report over artefacts from two hosts has two groups with the planted counts; NULL host is an explicit unattributed bucket. Host is still canonical (`e20346f`) |
-| **tier 2, §5 entire** | **not built** | — | no calibration, no embedding metric. `T3-13`…`T3-16` are the order and none has run |
+| `T3-13` score the 18 stills | **built** | `test_t3_13_identity.py` | `qc.score_zimage_sweep` reports overlap, separation and every file over 12-bad/6-good; `qc_service.run_zimage_calibration` stores the row with `threshold` NULL. A stored threshold is refused. No gate, no UI |
+| `T3-14`…`T3-16` | **not built** | — | no threshold setter, no pose-pair ordering, no gate. Overlap is reported; it does not decide anything yet |
 | **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-23` and `T3-25` are their own rows. Remaining: `T3-24` |
 | `T3-23` repair routing | **built** | `160547d` | default `dispatch_repair` asks `where()`/`fits()`/`resolve()`, refuses a pin under a name the box does not have before submit (`test_t3_23_pinned_name_the_box_does_not_have_is_refused_before_submit`), and a correctly-named model on a box that holds it is SUBMITTED (`test_t3_23_correctly_named_model_on_a_box_that_holds_it_is_submitted`). dest is the actuator's file (`fix_ref` / `gen_postproc`), not a copy of src |
 | `T3-25` remote output move | **built** | pending | `can_move_output` is callable; remote repair is refused by that name (`test_t3_25_remote_repair_refused_by_name_until_check_is_true`); forcing the check true SUBMITS (`test_t3_25_forced_true_remote_repair_is_submitted`) |

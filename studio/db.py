@@ -559,6 +559,20 @@ CREATE TABLE IF NOT EXISTS take_voices (
 CREATE INDEX IF NOT EXISTS idx_take_voices ON take_voices(take_id);
 """
 
+CALIBRATIONS_SCHEMA = """
+-- T3-13 report. threshold is NULL until T3-14/T3-16 earn one; a number
+-- here without that calibration is the defect those criteria exist to stop.
+CREATE TABLE IF NOT EXISTS calibrations (
+  id INTEGER PRIMARY KEY,
+  metric TEXT NOT NULL,
+  dataset TEXT NOT NULL,
+  n_good INTEGER, n_bad INTEGER,
+  separation REAL, overlap REAL,
+  scores_json TEXT NOT NULL,
+  threshold REAL,
+  created REAL);
+"""
+
 
 def _migrate(c):
     for stmt in MIGRATIONS:
@@ -595,6 +609,7 @@ def conn():
         c.executescript(ARCS_SCHEMA)
         c.executescript(CREDENTIALS_SCHEMA)
         c.executescript(TAKES_SCHEMA)
+        c.executescript(CALIBRATIONS_SCHEMA)
         _migrate(c)
         _local.c = c
     return c

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Tier 1 of docs/TRD-3: deterministic checks on what was actually rendered.
 
+T3-13's identity score also lives here (pure; no database, no threshold).
+
 ffprobe, ffmpeg's own analysis filters, PIL and numpy. No model, no opinion.
 
 THE RULE THAT SHAPES EVERY CHECK HERE: each one compares the artefact against
@@ -76,6 +78,17 @@ SILENCE_FLOOR_DB = -60.0
 # docs/TRD-7 T7-7: the sheet must be HER, not the pose-plate person. The look
 # itself is human-judged; this is the finding kind for the offline hook.
 IDENTITY_LOOK = "identity_look"
+
+# docs/TRD-3 T3-13: identity score, not pixel distance. The metric name is
+# stored on the calibrations row so a later extractor is a new row, not a
+# silent rewrite of this one.
+IDENTITY_METRIC = "identity_cosine_v1"
+
+# zimage_sweep seeds recorded in docs/TRD-3 §2.2. …654 holds fur; the other
+# two draw a cat head on human legs at every step count.
+ZIMAGE_GOOD_SEEDS = frozenset({29364654})
+ZIMAGE_BAD_SEEDS = frozenset({29364380, 29364517})
+_ZIMAGE_SEED_RE = re.compile(r"_s(\d+)_")
 
 # docs/TRD-4 T4-14: a nude compose that asserts a human body is the measured
 # identity collapse (cat head on a human form). Offline, no pixels.
@@ -543,6 +556,156 @@ def _has_video(path):
         return mixer.probe(path)["has_video"]
     except Exception:
         return False
+
+
+# -------------------------------------------------------- tier 2 score --
+# T3-13. Pure measurement: no database, no threshold, no verdict. The
+# report is overlap, separation, and every file. A later extractor plugs
+# in as embed= or score_fn=; pixel MSE is not an extractor.
+
+
+def zimage_label(path):
+    """good|bad from the recorded seed. An unknown name raises."""
+    name = os.path.basename(path)
+    m = _ZIMAGE_SEED_RE.search(name)
+    if not m:
+        raise RuntimeError(f"zimage_sweep file has no seed: {path}")
+    seed = int(m.group(1))
+    if seed in ZIMAGE_GOOD_SEEDS:
+        return "good", seed
+    if seed in ZIMAGE_BAD_SEEDS:
+        return "bad", seed
+    raise RuntimeError(f"unknown zimage_sweep seed {seed} in {path}")
+
+
+def list_zimage_sweep(root):
+    """The 18 labelled stills. A short or extra set raises, not a skip."""
+    if not os.path.isdir(root):
+        raise RuntimeError(f"zimage_sweep directory missing: {root}")
+    items = []
+    for name in sorted(os.listdir(root)):
+        if not name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+            continue
+        path = os.path.join(root, name)
+        if not os.path.isfile(path):
+            continue
+        label, seed = zimage_label(path)
+        items.append({"path": path, "label": label, "seed": seed})
+    n_good = sum(1 for i in items if i["label"] == "good")
+    n_bad = sum(1 for i in items if i["label"] == "bad")
+    if n_good != 6 or n_bad != 12:
+        raise RuntimeError(
+            f"zimage_sweep must be 12 known-bad and 6 known-good; "
+            f"got {n_bad} bad, {n_good} good under {root}")
+    return items
+
+
+def identity_embed(path):
+    """Coarse 2x2 RGB means. Not flattened pixels, not MSE.
+
+    Pixel distance is refused by name (docs/TRD-3 §5). This is an
+    embedding so cosine can run without a GPU extractor; siglip2_naflex
+    replaces it later as embed= without changing the report shape.
+    """
+    from PIL import Image
+    import numpy as np
+    if not os.path.isfile(path):
+        raise RuntimeError(f"identity embed: file does not exist: {path}")
+    with Image.open(path) as im:
+        arr = np.asarray(im.convert("RGB"), dtype="float32")
+    if arr.size == 0:
+        raise RuntimeError(f"identity embed: empty image: {path}")
+    h, w, _ = arr.shape
+    ys = (0, h // 2, h)
+    xs = (0, w // 2, w)
+    cells = []
+    for i in range(2):
+        for j in range(2):
+            block = arr[ys[i]:ys[i + 1], xs[j]:xs[j + 1]]
+            if block.size == 0:
+                raise RuntimeError(f"identity embed: empty cell in {path}")
+            cells.extend(block.mean(axis=(0, 1)).tolist())
+    return cells
+
+
+def _cosine(a, b):
+    import math
+    if len(a) != len(b) or not a:
+        raise RuntimeError("identity score compared embeddings of different rank")
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    if na == 0.0 or nb == 0.0:
+        raise RuntimeError("identity score got a zero embedding")
+    return dot / (na * nb)
+
+
+def identity_score(path, reference, embed=None):
+    """Cosine of path's embedding against a reference vector."""
+    embed = embed or identity_embed
+    vec = embed(path)
+    return _cosine(vec, list(reference))
+
+
+def range_overlap(xs, ys):
+    """Intersection / union of two closed score ranges. Empty raises."""
+    if not xs or not ys:
+        raise RuntimeError("cannot report overlap of an empty distribution")
+    lo_a, hi_a = min(xs), max(xs)
+    lo_b, hi_b = min(ys), max(ys)
+    inter = max(0.0, min(hi_a, hi_b) - max(lo_a, lo_b))
+    union = max(hi_a, hi_b) - min(lo_a, lo_b)
+    if union == 0.0:
+        return 1.0
+    return inter / union
+
+
+def mean_separation(good, bad):
+    """mean(good) - mean(bad). Empty raises."""
+    if not good or not bad:
+        raise RuntimeError("cannot report separation of an empty distribution")
+    return (sum(good) / len(good)) - (sum(bad) / len(bad))
+
+
+def score_zimage_sweep(root, reference=None, embed=None, score_fn=None):
+    """T3-13 report: 12 bad, 6 good, overlap, separation, every file.
+
+    threshold is always None. A score_fn is how tests pin the arithmetic;
+    production passes a reference embedding (or path) and embed=.
+    """
+    items = list_zimage_sweep(root)
+    embed = embed or identity_embed
+    ref_vec = None
+    if score_fn is None:
+        if reference is None:
+            raise RuntimeError(
+                "score_zimage_sweep needs a reference embedding or a score_fn")
+        try:
+            ref_vec = list(reference)
+            if not ref_vec or isinstance(reference, (str, bytes)):
+                raise TypeError
+        except TypeError:
+            ref_vec = embed(reference)
+    rows = []
+    for item in items:
+        if score_fn is not None:
+            score = float(score_fn(item["path"], item["label"]))
+        else:
+            score = identity_score(item["path"], ref_vec, embed=embed)
+        rows.append({"path": item["path"], "label": item["label"],
+                     "seed": item["seed"], "score": score})
+    good = [r["score"] for r in rows if r["label"] == "good"]
+    bad = [r["score"] for r in rows if r["label"] == "bad"]
+    return {
+        "metric": IDENTITY_METRIC,
+        "dataset": "zimage_sweep",
+        "n_good": len(good),
+        "n_bad": len(bad),
+        "overlap": range_overlap(good, bad),
+        "separation": mean_separation(good, bad),
+        "scores": rows,
+        "threshold": None,
+    }
 
 
 # ------------------------------------------------------------------- run --

@@ -185,10 +185,11 @@ order and take the dependencies from here.
 
 ### P3 — QC tier 2 and repair
 
-8. Tier 2, **calibration first and in this order**: score the 18 images of
-   `zimage_sweep/`, report both distributions, and build no threshold and no UI
-   until that report exists (`T3-13`, `T3-14`, `T3-16`). If they overlap, the
-   gate is not built and that is a successful outcome.
+8. Tier 2, **calibration first and in this order**: `T3-13` scores the 18
+   images of `zimage_sweep/` and stores overlap, separation and every file
+   on a `calibrations` row with no threshold. `T3-14` / `T3-16` still
+   refuse a threshold and a UI; if the distributions overlap, the gate is
+   not built and that is a successful outcome.
 9. Repair routing (`T3-23`) is built: `dispatch_repair` asks `where()` /
    `fits()` / `resolve()`, refuses a mis-named pin before submit, and
    dest is the `fix_ref` / `gen_postproc` file. `T3-25` is built:

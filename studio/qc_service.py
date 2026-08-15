@@ -505,6 +505,39 @@ def approve(fid):
     return get(fid)
 
 
+def record_calibration(report):
+    """Persist a T3-13 report. threshold stays NULL — storing one is the
+    failure T3-13 exists to prevent. T3-14 is what later allows a value."""
+    if report.get("threshold") is not None:
+        raise ValueError(
+            "T3-13 stores no threshold; the report is overlap and separation")
+    scores = report.get("scores")
+    if not scores:
+        raise RuntimeError("calibration report has no per-file scores")
+    cid = db.run(
+        """INSERT INTO calibrations
+             (metric, dataset, n_good, n_bad, separation, overlap,
+              scores_json, threshold, created)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        report.get("metric") or qc.IDENTITY_METRIC,
+        report.get("dataset") or "zimage_sweep",
+        int(report["n_good"]), int(report["n_bad"]),
+        report["separation"], report["overlap"],
+        json.dumps(scores), None, time.time())
+    return db.one("SELECT * FROM calibrations WHERE id=?", cid)
+
+
+def latest_calibration(dataset="zimage_sweep"):
+    return db.one(
+        "SELECT * FROM calibrations WHERE dataset=? ORDER BY id DESC", dataset)
+
+
+def run_zimage_calibration(root, score_fn=None, embed=None, reference=None):
+    """Score the 18 stills and write the calibrations row (T3-13)."""
+    return record_calibration(qc.score_zimage_sweep(
+        root, reference=reference, embed=embed, score_fn=score_fn))
+
+
 def demo():
     """Self-check against a temporary database, so it never touches real rows."""
     import tempfile
