@@ -202,6 +202,8 @@ Dragging the running order or a trim (`in_secs`/`out_secs`/`secs`)
 must leave every stored point's `(lane, t, value)` put (`T1-1`):
 `t` is from the start of the item, not the set, so the curve does
 not slide when the block moves.
+Two points posted at the same `t` are refused by name (`T1-11`), so a
+lane editor can show the instant rather than a generic save failure.
 
 **Three audiences, one editor.** `set_edit.html` now carries a
 `mode_audience` select (`easy|normal|advanced`). These are affordance

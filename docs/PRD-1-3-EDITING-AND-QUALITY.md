@@ -162,7 +162,8 @@ rows; `T1-9b` **built** — a stored −12→0 dB
 ramp's RMS/s slope survives `mix_audio` within
 `mixer.GAIN_CURVE_SLOPE_TOLERANCE`; `T1-10` **built** — a `MAX_POINTS`
 lane's `fragment` is ≤ `FILTER_EXPR_MAX_BYTES` (8 KB) and `mix_audio`
-accepts it), `studio/arc.py` + the arc routes (TRD-2 §3.1's
+accepts it; `T1-11` **built** — POST of two
+points at the same `t` is 400 and names that `t`), `studio/arc.py` + the arc routes (TRD-2 §3.1's
 JSON-canonical arc), `db.artefacts` (tier 0), `prompts.py` (TRD-2 §3.3's
 versioning, reused by `T3-20`). TRD-3 §2.1 is explicit that §4 and §6 "read as
 unbuilt work and are not" — the ledger with line counts is DDD §1.

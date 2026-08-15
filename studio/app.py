@@ -7360,6 +7360,25 @@ async def api_set_add_item(id: int, request: Request):
     return JSONResponse(_set_payload(get_set_or_404(id)))
 
 
+@app.post("/api/sets/{id}/items/{item_id}/automation/{lane}")
+async def api_set_item_automation(id: int, item_id: int, lane: str, request: Request):
+    """T1-11: write one lane. The stored, decimated curve comes back;
+    two points at the same t are 400 and the body names that t."""
+    get_set_or_404(id)
+    if not db.one("SELECT id FROM set_items WHERE id=? AND set_id=?", item_id, id):
+        raise HTTPException(404, "no such item")
+    body = await _api_body(request)
+    points = body.get("points")
+    if points is None:
+        raise HTTPException(400, "points required")
+    curve = body.get("curve") or "linear"
+    try:
+        stored = automation.save(item_id, lane, points, curve=curve)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return JSONResponse({"lane": lane, "points": stored, "curve": curve})
+
+
 @app.post("/api/sets/{id}/render")
 def api_set_render(id: int):
     jid = _enqueue_set_render(id)

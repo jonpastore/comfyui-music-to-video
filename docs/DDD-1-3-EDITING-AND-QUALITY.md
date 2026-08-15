@@ -327,6 +327,11 @@ rather than handing ffmpeg a graph it will reject. Measured on
 `gain_db` / `lowpass_hz` / `highpass_hz` in
 `studio/test_t1_10_filter_expr.py`.
 
+**`T1-11` is built (2026-08-14).** `POST /api/sets/{id}/items/{iid}/automation/{lane}`
+writes one lane through `automation.save`. Two points at the same `t` are
+400 and the body names that `t`. The module demo already refused; the
+route is what the client posts to.
+
 What is left is `T1-12` per remaining lane, as a differential (`pan` by L/R
 energy ratio, the filter lanes by band energy). `gain_db` RMS/s is T1-9b.
 This is the criterion that catches a lane wired into the UI and not into
