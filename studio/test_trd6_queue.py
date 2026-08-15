@@ -719,6 +719,71 @@ def test_t6_a2_html_and_json_report_the_same_queue_numbers(monkeypatch):
         html_ids, json_ids)
 
 
+def test_t6_a2_html_and_json_report_the_same_review_queue_numbers():
+    """T6-A2 / review: GET /qc HTML and GET /api/qc/findings report the same
+    open-queue numbers. Distinctive 4.8/30.0 and 896/1024 so two empty
+    answers cannot pass. Pass rows stay out of the default queue."""
+    import app as appmod
+    from fastapi.testclient import TestClient
+
+    _isolate()
+    qc_service.record([
+        {"path": "/tmp/t6a2-a.mp4", "kind": "clip", "tier": 1,
+         "check": "duration", "verdict": "reject", "measured": "4.8",
+         "expected": "30.0", "unit": "s", "detail": "short render",
+         "remedy": "re-render"},
+        {"path": "/tmp/t6a2-b.png", "kind": "image", "tier": 1,
+         "check": "resolution", "verdict": "flag", "measured": "896",
+         "expected": "1024", "unit": "px", "detail": "narrow",
+         "remedy": "re-render pinned"},
+        {"path": "/tmp/t6a2-c.png", "kind": "image", "tier": 1,
+         "check": "blank", "verdict": "pass", "measured": "0",
+         "expected": "0", "unit": "", "detail": "ok", "remedy": ""},
+    ])
+
+    with TestClient(appmod.app) as client:
+        html = client.get("/qc")
+        js = client.get("/api/qc/findings")
+
+    assert html.status_code == 200, html.text
+    page = html.text
+    ctype = (js.headers.get("content-type") or "").split(";")[0].strip()
+    assert js.status_code == 200, js.text
+    assert ctype == "application/json", (
+        f"/api/qc/findings returned {ctype or 'no content-type'}, not JSON: "
+        f"{js.text[:200]}")
+    assert "<html" not in js.text.lower(), js.text[:200]
+    body = js.json()
+    rows = body["findings"]
+    assert len(rows) == 2, rows
+
+    html_ids = [int(n) for n in re.findall(r'data-finding="(\d+)"', page)]
+    html_measured = re.findall(r'data-measured="([^"]*)"', page)
+    html_expected = re.findall(r'data-expected="([^"]*)"', page)
+    html_units = re.findall(r'data-unit="([^"]*)"', page)
+    html_checks = re.findall(r'data-check="([^"]*)"', page)
+
+    json_ids = [int(f["id"]) for f in rows]
+    json_measured = [str(f["measured"]) for f in rows]
+    json_expected = [str(f["expected"]) for f in rows]
+    json_units = [str(f["unit"] or "") for f in rows]
+    json_checks = [f.get("check_name") or f.get("check") for f in rows]
+
+    assert html_ids == json_ids, (html_ids, json_ids)
+    assert html_measured == json_measured == ["4.8", "896"], (
+        html_measured, json_measured)
+    assert html_expected == json_expected == ["30.0", "1024"], (
+        html_expected, json_expected)
+    assert html_units == json_units == ["s", "px"], (html_units, json_units)
+    assert html_checks == json_checks == ["duration", "resolution"], (
+        html_checks, json_checks)
+    assert "No open findings" not in page
+    assert "4.8" in page and "30.0" in page and "896" in page and "1024" in page
+    assert "data-finding=" in page
+    # pass-row must not leak into the default review queue on either surface
+    assert "blank" not in html_checks and "blank" not in json_checks
+
+
 # ----------------------------------------------------------------- T6-A4 --
 
 _T6_A4_ELAPSED = "12.7s"

@@ -83,9 +83,11 @@ Migration is per-loop, not per-file. Move one journey (PRD §4) at a time, and
 endpoint report the same numbers, asserted by comparing them in one test.
 The first object is the queue panel: `GET /queue` HTML and
 `Accept: application/json` share `queue_ctx()`
-(`test_t6_a2_html_and_json_report_the_same_queue_numbers`). Set, storyboard,
-review and anchor loops now complete over JSON (`test_t6_a1_*`); their T6-A2
-number-agreement tests still sit with those surfaces.
+(`test_t6_a2_html_and_json_report_the_same_queue_numbers`). Review queue
+T6-A2 is `test_t6_a2_html_and_json_report_the_same_review_queue_numbers`
+(`/qc` HTML vs `/api/qc/findings`, same `qc_service.queue()`). Set,
+storyboard, review and anchor loops now complete over JSON (`test_t6_a1_*`);
+set and storyboard still write their own T6-A2 number-agreement tests.
 
 ## 3. API surface
 
@@ -168,6 +170,11 @@ HTML `POST /anchors` and `POST /anchors/{id}/pick` share `_enqueue_anchor_jobs`
 **Q · queue** — `GET /queue` answers HTML or JSON from the same `queue_ctx()`
 (`T6-A2`). The JSON body carries `running`, `waiting`, `recent`,
 `refresh_secs` and the job ids/elapsed the fragment prints.
+
+**R · review queue** — `GET /qc` HTML and `GET /api/qc/findings` both read
+`qc_service.queue()` (`T6-A2`). The page interpolates finding-row measured /
+expected / unit; the JSON list carries the same ids and numbers
+(`test_t6_a2_html_and_json_report_the_same_review_queue_numbers`).
 
 Every list response carries help text per control, with warnings marked
 distinctly from notes (`T2-36`) — a client that cannot tell them apart hides the
@@ -828,7 +835,8 @@ replace opening the picture; it decides which pictures to open.
 
 - **The service split stalls half-done**, leaving two ways to reach the same
   logic. `T6-A2` is the guard and it must be written per loop as the loop moves,
-  not at the end. The queue panel is written; set, storyboard and review are not.
+  not at the end. Queue panel and review queue are written; set and storyboard
+  are not.
 - **Peaks get used as a quality signal.** They are a 22050 Hz mono envelope.
   Anything about clipping needs the second decode, stated in §5.4 so it is a
   decision rather than a discovery.

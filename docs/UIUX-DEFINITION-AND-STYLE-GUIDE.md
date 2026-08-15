@@ -43,7 +43,7 @@ Three facts about the domain decide almost every rule below:
 | `static/style.css` | 1247 lines |
 | `static/app.js` | 1589 lines, hand-written, 55 `addEventListener` |
 | `templates/` | 29 files, 3481 lines |
-| routes | 156, of which **36** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue` answers JSON with the same numbers the fragment prints (`T6-A2`) |
+| routes | 156, of which **36** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue` and `/qc` each match their JSON surface on the same numbers (`T6-A2`) |
 
 ### 2.2 The root finding: tokens exist for colour, and for nothing else
 
@@ -1041,10 +1041,10 @@ A style guide is falsifiable or it is decoration.
   elements and asserts each resolves a `:focus-visible` style. Deleting the rule
   must turn it red.
 - **The nav matches the agreed order**, asserted against one list that both
-  `base.html` and the API read. `T6-A2`'s first object is the queue panel:
-  `/queue` HTML and JSON report the same numbers
-  (`test_t6_a2_html_and_json_report_the_same_queue_numbers`). Nav is still
-  this guide's own list check.
+  `base.html` and the API read. `T6-A2` objects written so far: the queue panel
+  (`test_t6_a2_html_and_json_report_the_same_queue_numbers`) and the review
+  queue (`test_t6_a2_html_and_json_report_the_same_review_queue_numbers`).
+  Nav is still this guide's own list check.
 - **No template computes.** `T6-A4`, asserted by a differential: stub the service
   to return known values and assert the page shows them unmodified.
   `test_t6_a4_queue_page_shows_stubbed_values_unmodified` is that check for
