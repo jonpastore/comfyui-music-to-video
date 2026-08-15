@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-13a, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -639,3 +639,62 @@ def test_t9_7_refusal_benches_next_pin_and_walk_still_continues():
     # Mid-walk benched headline must not reclassify the whole walk as vanished
     # before later pins run — T9-6 still owns exhaust-only requeue.
     assert not any("offline or went away" in m for m in said), said
+
+
+def test_t9_13a_truncated_or_enum_only_weight_is_not_available():
+    """T9-13a: a file is not a model; enum membership is not availability.
+
+    Measured 2026-08-13: gamingpc's UNETLoader listed the Qwen UNET at 26% of
+    its bytes. models.installed() reads the loader enum, never the bytes, so a
+    truncated weight reported available and failed at load.
+
+    Two free detection rules (TRD-9):
+      - epoch mtime → truncated (rsync --partial sets mtime only on completion)
+      - size short of expected_bytes → truncated (--inplace carries a live mtime)
+
+    Enum-only (path=None) is not available either: that is the defect shape.
+    Positive half: a complete file with non-epoch mtime and full size IS
+    available — or a predicate that always returns False stays green on the
+    refusal arms alone.
+    """
+    assert callable(getattr(models, "weight_available", None)), (
+        "models.weight_available is the byte check; enum-only is the defect")
+
+    # Enum-only: no path, no bytes. The loader enum listed the name; that is
+    # not a model.
+    assert models.weight_available(None) is False, (
+        "enum-only evidence read as available")
+    assert models.weight_available(None, expected_bytes=1000) is False, (
+        "enum-only with an expected size still is not a model")
+    assert models.weight_available("") is False
+    assert models.weight_available("/no/such/weight.safetensors",
+                                   expected_bytes=1000) is False
+
+    with tempfile.TemporaryDirectory() as d:
+        full = os.path.join(d, "qwen_image_edit_2511_fp8mixed.safetensors")
+        with open(full, "wb") as f:
+            f.write(b"\0" * 1000)
+        os.utime(full, (1_700_000_000, 1_700_000_000))
+        assert models.weight_available(full, expected_bytes=1000) is True, (
+            "a complete weight with live mtime and full size must be available")
+        assert models.weight_available(full) is True, (
+            "complete weight without expected_bytes still passes epoch check")
+
+        # 26% of source size — the live gamingpc shape. Live mtime (so epoch
+        # alone cannot catch it); size against source is the gate.
+        short = os.path.join(d, "short.safetensors")
+        with open(short, "wb") as f:
+            f.write(b"\0" * 260)
+        os.utime(short, (1_700_000_000, 1_700_000_000))
+        assert models.weight_available(short, expected_bytes=1000) is False, (
+            "a 26%-sized weight with live mtime reported available")
+
+        # rsync --partial interrupted: real size, epoch mtime.
+        epoch = os.path.join(d, "epoch.safetensors")
+        with open(epoch, "wb") as f:
+            f.write(b"\0" * 1000)
+        os.utime(epoch, (0, 0))
+        assert models.weight_available(epoch, expected_bytes=1000) is False, (
+            "epoch-mtime weight reported available")
+        assert models.weight_available(epoch) is False, (
+            "epoch mtime alone must mean truncated")

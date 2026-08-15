@@ -757,6 +757,31 @@ def refine_peak(model="ltx25"):
     return peak
 
 
+def weight_available(path=None, *, expected_bytes=None):
+    """True only when on-disk bytes look complete (T9-13a).
+
+    A file is not a model. installed() reads the loader enum, never the bytes,
+    so a truncated weight at a real filename reports available and fails at
+    load. This is the byte check the enum cannot make:
+
+      - path=None / missing file → False (enum-only is not availability)
+      - epoch mtime → False (rsync --partial sets mtime only on completion)
+      - size short of expected_bytes → False (--inplace keeps a live mtime)
+    """
+    if not path or not os.path.isfile(path):
+        return False
+    try:
+        st = os.stat(path)
+    except OSError:
+        return False
+    # rsync --partial leaves mtime at the epoch until the transfer completes.
+    if st.st_mtime <= 0:
+        return False
+    if expected_bytes is not None and st.st_size < int(expected_bytes):
+        return False
+    return True
+
+
 def spellings(name):
     """Every filename these same weights are known by. Canonical name first.
 
