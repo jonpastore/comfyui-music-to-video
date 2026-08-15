@@ -4855,6 +4855,31 @@ def scene_time_report(scene_time, song_length):
     }
 
 
+def refuse_if_scene_time_mismatch(song, tier):
+    """T2-25: a miss is refused before clips enqueue, not only on GET /meter.
+
+    Unreadable boards are skipped so a missing fixture path still hits the
+    existing duration/refs gates rather than a new 500.
+    """
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?",
+                 song["id"], tier)
+    path = row["json_path"] if row else None
+    if not row or not path or not os.path.isfile(path):
+        return
+    try:
+        sb = load_storyboard(row)
+    except (OSError, json.JSONDecodeError):
+        return
+    scene_time = sum(build_song.guidance_seconds(s) for s in (sb.get("scenes") or []))
+    report = scene_time_report(scene_time, song["duration"])
+    if report["mismatch"]:
+        raise HTTPException(
+            400,
+            f"scene time {report['scene_time']}s does not match song length "
+            f"{report['song_length']}s (tolerance {report['tolerance']}) -- "
+            "fix the storyboard before queuing clips")
+
+
 def coverage(rows, nclips, duration, clip_secs=None):
     """How the storyboard's PACING INTENT compares with the track.
 
@@ -5467,6 +5492,7 @@ async def start_clips(id: int, tier: str = Form(...), video_model: str = Form(""
         # it would look like it worked
         raise HTTPException(400, "ref_motion and control_video are s2v inputs -- i2v has "
                                   "neither. Switch to s2v or remove the clips.")
+    refuse_if_scene_time_mismatch(song, tier)
     jobs.enqueue("clips", {"song_id": id, "tier": tier, "video_model": video_model,
                             "refine": bool(refine), "ref_motion": motion_path,
                             "control_video": control_path}, song_id=id)
