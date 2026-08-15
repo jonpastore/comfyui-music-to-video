@@ -341,6 +341,11 @@ destination tier; override kwargs (`confirm`, `force`, `tier_overrides`,
 No channel lifts a `ContentRefused`. Per-album `set_override` still applies
 tone wording on a clean (non-locked) album.
 
+`T10-24`: the **send** screen runs on the final composed string after every
+merge and after `PINNED` is welded — not on the field as typed.
+`build_prompt` composes (user text + tier wording + `PINNED`), peels the
+welded guard (longest clause first so xxx tier wording cannot self-trip),
+then `check_text` on the remainder. Field entry screens remain; both run.
 ## 5. Build order
 
     TRD-9 tests (no new behaviour)  ->  a routing change becomes provable

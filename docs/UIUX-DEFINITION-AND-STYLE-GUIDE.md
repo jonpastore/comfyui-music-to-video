@@ -1126,6 +1126,11 @@ that lifts a minor-reference refusal when a work moves toward an
 explicit tier. Album `tier_overrides` still edit tone on a clean work;
 they do not soft-open a locked one.
 
+`T10-24` is built on the send path, not as a second form control: what
+reaches a model is screened after every merge and after `PINNED` is
+welded. A field that looked clean when typed can still refuse at render
+if composition forms a blocked phrase; the refusal still names the term.
+
 ## 8. How this document is verified
 
 A style guide is falsifiable or it is decoration.

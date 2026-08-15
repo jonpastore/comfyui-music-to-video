@@ -338,24 +338,39 @@ def build_prompt(text, tier_text="", where="prompt", *, tier=None):
 
         pos = guardrail.build_prompt(pos, tier_wording, tier=tier)
 
-    Screens the text first, then attaches the clause -- that order matters,
-    because PINNED itself enumerates the forbidden terms ("no minors, no
-    children ..."), so checking afterwards would match our own wording and refuse
-    every prompt. Attaching is idempotent, so a storyboard that already carries
-    the clause does not get it twice.
+    T10-24: compose first (every user merge is already in `text`, then tier
+    wording + PINNED welded last), then screen the FINAL composed string —
+    not the field as typed. Callers that screen fragments and merge after
+    the screen are checking something else; the send chokepoint re-checks
+    the joined user string.
 
-    Raises ContentRefused (terminal) if the text references a minor, except at
-    g/pg13 where T10-18 permits depiction. build_prompt is always a render
-    path: T10-18a's lyrics/narrative allowance never applies here.
+    PINNED and some tier wording enumerate forbidden terms ("no minors, no
+    children ...", "never introduce minors or juvenile settings"), so the
+    welded guard is peeled before the lexical check — longest clause first,
+    or removing PINNED alone would leave the rest of the tier unmatched and
+    self-trip. The check still sees every user merge that was composed in.
+
+    Attaching is idempotent, so a storyboard that already carries the clause
+    does not get it twice.
+
+    Raises ContentRefused (terminal) if the composed user text references a
+    minor, except at g/pg13 where T10-18 permits depiction. build_prompt is
+    always a render path: T10-18a's lyrics/narrative allowance never applies
+    here.
     """
-    # Strip our own clause BEFORE screening. PINNED enumerates the forbidden
-    # terms, so any text already carrying it (a storyboard generated before the
-    # clause moved into code, or one that echoed it) matches the filter and gets
-    # refused. Doing this here rather than only in build_song.normalize() means a
-    # caller that forgets to normalize is still safe -- reroll_refs.py did exactly
-    # that and refused every scene.
     text = strip(text)
-    check_text(text, where, tier=tier)
-    # stripped comparison, same reason as compose(): a trailing space must not
-    # decide whether the clause is attached twice
-    return text if PINNED.strip() in text else (text + " " + compose(tier_text)).strip()
+    guard = compose(tier_text)
+    if PINNED.strip() in text:
+        composed = text
+    else:
+        composed = (text + " " + guard).strip()
+    # Peel welded policy before screening. Longer clauses first: `guard`
+    # contains PINNED, and removing PINNED first would leave tier wording
+    # that still names blocked terms (xxx: "never introduce minors...").
+    remainder = composed
+    for clause in (guard.strip(), guard, PINNED.strip(), PINNED):
+        if clause:
+            remainder = remainder.replace(clause, " ")
+    remainder = re.sub(r"\s{2,}", " ", remainder).strip()
+    check_text(remainder, where, tier=tier)
+    return composed
