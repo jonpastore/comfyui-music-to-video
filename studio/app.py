@@ -244,6 +244,42 @@ templates.env.filters["rendertag"] = render_tag
 templates.env.filters["runsettings"] = lambda row: candidate_settings(row)
 
 
+def score_generated_still(path, bases, prompt="", progress=None):
+    """Advisory T3-31 score for any landed still. Never a gate."""
+    try:
+        return json.dumps(vision.score_candidate(
+            path, bases or [], prompt or "", progress))
+    except Exception as e:
+        if progress:
+            progress(f"vision score skipped: {e}")
+        return json.dumps({
+            "confidence": None, "identity": None, "prompt": None,
+            "notes": "", "error": str(e)[:200], "backend": "local",
+        })
+
+
+def refine_generated_still(src, progress=None, extra=None):
+    """Postproc repair: a NEW file beside src. Never overwrite (T3-6)."""
+    root, ext = os.path.splitext(src)
+    dest = f"{root}_refine{ext or '.png'}"
+    if os.path.abspath(dest) == os.path.abspath(src):
+        dest = src + ".refine.png"
+    args = {
+        "kind": "image",
+        "path": src,
+        "repair_path": dest,
+        "remedy": "refine identity, asked pose and surface; keep the same adult character",
+        "mode": "inpaint",
+        "slug": extra.get("slug") if extra else "still",
+        "tier": (extra or {}).get("tier") or "r",
+        "clip_idx": int((extra or {}).get("clip_idx") or 0),
+        "seed": int((extra or {}).get("seed") or 0),
+    }
+    if extra:
+        args.update({k: v for k, v in extra.items() if v is not None})
+    return qc_service.produce_repair(src, dest, args, progress)
+
+
 def qc_tag(row):
     """One-line advisory vision score, or "" if this row was never scored."""
     if not row:
@@ -926,13 +962,19 @@ def h_anchor(args, progress):
     settings = None if run_id else json.dumps(resolved_settings(render))
     now = time.time()
     asked = args.get("prompt") or ""
-    for p in paths:
-        qc = None
-        try:
-            qc = json.dumps(vision.score_candidate(
-                p, args.get("images") or [], asked, progress))
-        except Exception as e:
-            progress(f"vision score skipped: {e}")
+    bases = args.get("images") or []
+    landed = list(paths)
+    if args.get("refine", True):
+        for p in list(paths):
+            try:
+                dest = refine_generated_still(p, progress, {
+                    "slug": "anchor", "tier": args["tier"],
+                })
+                landed.append(dest)
+            except Exception as e:
+                progress(f"refine skipped: {e}")
+    for p in landed:
+        qc = score_generated_still(p, bases, asked, progress)
         db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen, created,
                                         character_id, render_json, run_id, qc_json)
                   VALUES (?,?,?,?,?,0,?,?,?,?,?)""",
@@ -1133,12 +1175,28 @@ def h_refs(args, progress):
                                  guard=tiers.compose_guardrail(tier, album), body=body,
                                  cast=cast)
     now = time.time()
-    for r in results:
+    bases = [args.get("anchor_path")] if args.get("anchor_path") else []
+    landed = list(results)
+    if args.get("refine", True):
+        for r in list(results):
+            try:
+                dest = refine_generated_still(r["path"], progress, {
+                    "slug": song["slug"], "tier": tier,
+                    "clip_idx": r["clip_idx"], "seed": r.get("seed") or 0,
+                })
+                landed.append({"clip_idx": r["clip_idx"], "path": dest,
+                               "seed": (r.get("seed") or 0) + 100000})
+            except Exception as e:
+                progress(f"refine skipped: {e}")
+    n_gen = len(results)
+    for i, r in enumerate(landed):
+        qc = score_generated_still(r["path"], bases, f"{tier} ref", progress)
+        origin = "refine" if i >= n_gen else "gen"
         db.run("""INSERT OR IGNORE INTO refs (song_id, tier, clip_idx, path, seed, approved,
-                                               created, origin)
-                  VALUES (?,?,?,?,?,0,?,'gen')""",
-               sid, tier, r["clip_idx"], r["path"], r.get("seed"), now)
-    return {"count": len(results)}
+                                               created, origin, qc_json)
+                  VALUES (?,?,?,?,?,0,?,?,?)""",
+               sid, tier, r["clip_idx"], r["path"], r.get("seed"), now, origin, qc)
+    return {"count": len(landed)}
 
 
 @jobs.handler("reroll")
@@ -1162,12 +1220,27 @@ def h_reroll(args, progress):
                                body=album_profile(album)["body"],
                                note=args.get("note", ""), cast=cast)
     now = time.time()
-    for r in results:
+    bases = [anchor["path"]] if anchor else []
+    landed = list(results)
+    if args.get("refine", True):
+        for r in list(results):
+            try:
+                dest = refine_generated_still(r["path"], progress, {
+                    "slug": song["slug"], "tier": tier,
+                    "clip_idx": r["clip_idx"], "seed": r.get("seed") or 0,
+                })
+                landed.append({"clip_idx": r["clip_idx"], "path": dest,
+                               "seed": (r.get("seed") or 0) + 100000})
+            except Exception as e:
+                progress(f"refine skipped: {e}")
+    for i, r in enumerate(landed):
+        qc = score_generated_still(r["path"], bases, args.get("note") or "reroll", progress)
+        origin = "refine" if i >= len(results) else "reroll"
         db.run("""INSERT OR IGNORE INTO refs (song_id, tier, clip_idx, path, seed, approved,
-                                               created, origin)
-                  VALUES (?,?,?,?,?,0,?,'reroll')""",
-               sid, tier, r["clip_idx"], r["path"], r.get("seed"), now)
-    return {"count": len(results)}
+                                               created, origin, qc_json)
+                  VALUES (?,?,?,?,?,0,?,?,?)""",
+               sid, tier, r["clip_idx"], r["path"], r.get("seed"), now, origin, qc)
+    return {"count": len(landed)}
 
 
 @jobs.handler("artwork")
@@ -1206,10 +1279,19 @@ def h_artwork(args, progress):
                                   source_path=args.get("source_path"), guard=guard)
     if not paths:
         raise RuntimeError("the artwork render produced no image")
-    db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
-           None, "artwork", paths[0],
+    cover = paths[0]
+    if args.get("refine", True):
+        try:
+            cover = refine_generated_still(paths[0], progress, {"slug": safe_name(p["name"])})
+            paths = [cover] + paths
+        except Exception as e:
+            progress(f"refine skipped: {e}")
+    bases = [args.get("anchor_path") or args.get("source_path")]
+    qc = score_generated_still(cover, [b for b in bases if b], prompt, progress)
+    db.run("INSERT INTO assets (song_id, kind, path, meta_json, created, qc_json) VALUES (?,?,?,?,?,?)",
+           None, "artwork", cover,
            json.dumps({"playlist_id": args["playlist_id"], "model": args.get("model"),
-                       "prompt": prompt}), time.time())
+                       "prompt": prompt}), time.time(), qc)
     progress(f"{len(paths)} cover candidate(s); using the first")
     db.run("UPDATE playlists SET image_path=? WHERE id=?", paths[0], args["playlist_id"])
     return {"path": paths[0]}
@@ -1229,12 +1311,27 @@ def h_fix_ref(args, progress):
         instruction=args.get("instruction", ""),
         guard=tiers.compose_guardrail(tier, song["album"] or ""), body=body)
     now = time.time()
-    for r in results:
+    bases = [args.get("face_path") or args.get("image_path")]
+    landed = list(results)
+    if args.get("refine", False):
+        for r in list(results):
+            try:
+                dest = refine_generated_still(r["path"], progress, {
+                    "slug": song["slug"], "tier": tier,
+                    "clip_idx": r["clip_idx"],
+                })
+                landed.append({"clip_idx": r["clip_idx"], "path": dest,
+                               "seed": r.get("seed")})
+            except Exception as e:
+                progress(f"refine skipped: {e}")
+    for r in landed:
+        qc = score_generated_still(r["path"], bases, args.get("instruction") or args["mode"],
+                                   progress)
         db.run("""INSERT OR IGNORE INTO refs (song_id, tier, clip_idx, path, seed, approved,
-                                               created, origin)
-                  VALUES (?,?,?,?,?,0,?,?)""",
-               sid, tier, r["clip_idx"], r["path"], r.get("seed"), now, args["mode"])
-    return {"count": len(results), "mode": args["mode"]}
+                                               created, origin, qc_json)
+                  VALUES (?,?,?,?,?,0,?,?,?)""",
+               sid, tier, r["clip_idx"], r["path"], r.get("seed"), now, args["mode"], qc)
+    return {"count": len(landed), "mode": args["mode"]}
 
 
 @jobs.handler("clips")

@@ -294,7 +294,10 @@ grepping the source.
 
 `vision.py` is a VLM caller and is **not** the tier-2 path. TRD-3 §10 forbids a
 VLM verdict by name — asked "does this match?", a model answers yes — though it
-may write a *description* attached to a finding.
+may write a *description* attached to a finding. `app.score_generated_still`
+stores that advisory `qc_json` on every landed still (anchors, refs, artwork).
+`refine_generated_still` writes a sibling via `qc_service.produce_repair`; it
+never overwrites the generate.
 
 Design, in the order `T3-13`…`T3-16` fix:
 

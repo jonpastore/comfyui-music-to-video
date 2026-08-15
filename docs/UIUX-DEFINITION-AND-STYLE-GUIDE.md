@@ -599,14 +599,14 @@ earn a screen.
 
 ### 7a.6a Candidate tiles carry a vision confidence
 
-`T3-31` / `T4-19`. Each candidate in `_anchor_group.html` shows the
-stored `qc_json.confidence` (0–100) against the **base photographs and
-the prompt**, or the named xAI/local failure when scoring failed
-(`vision: xAI …` / `vision: local …`). Never "vision unknown" — that hid
-the two live causes (no local VL, xAI 400). It is a badge on
-the existing tile — not a new page, not a gate. The operator still
-picks. Old rows with no `qc_json` stay blank, same as a missing render
-tag.
+`T3-31` / `T4-19`. Each generated still — anchors, refs, rerolls,
+`fix_ref` results, artwork — stores `qc_json`. Anchor tiles in
+`_anchor_group.html` show `confidence` (0–100) against the **base
+photographs and the prompt**, or the named xAI/local failure when
+scoring failed (`vision: xAI …` / `vision: local …`). Never "vision
+unknown". Not a gate. The operator still picks. A refine pass writes a
+sibling file; it does not overwrite. Old rows with no `qc_json` stay
+blank, same as a missing render tag.
 
 ### 7a.6 What the queue owes these four
 

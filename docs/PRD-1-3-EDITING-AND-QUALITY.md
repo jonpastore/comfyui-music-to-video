@@ -196,6 +196,9 @@ order and take the dependencies from here.
    `can_move_output` refuses remote repair by name until the check is
    true; forcing it true SUBMITS. Next on this lane: `T3-24` (refiner
    19.6 GiB as a box decision).
+10. Every generated still is vision-scored into `qc_json` (`T3-31`). A
+    refine pass writes a new candidate beside the generate; it is not a
+    silent overwrite and not a VLM gate.
 
 ### Deferred to another document, on purpose
 

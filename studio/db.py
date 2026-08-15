@@ -385,6 +385,9 @@ MIGRATIONS = [
     # that predates audiences keeps today's controls and today's mix.
     # Switching this column must not rewrite set_items or automation.
     "ALTER TABLE sets ADD COLUMN mode_audience TEXT DEFAULT 'normal'",
+    # T3-31 on every generated still, not only anchors. Advisory.
+    "ALTER TABLE refs ADD COLUMN qc_json TEXT",
+    "ALTER TABLE assets ADD COLUMN qc_json TEXT",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and
