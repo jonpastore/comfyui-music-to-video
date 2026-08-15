@@ -666,6 +666,34 @@ def measure_pixel_std(path):
     return float(arr.std(axis=(0, 1)).max())
 
 
+def measure_mean_level(path):
+    """Mean RGB level for not_blank (TRD-3 §4.1).
+
+    Solid black is ~0, below LUMA_FLOOR (24). A real still sits above.
+    Distinct from measure_pixel_std (spatial std / not_uniform). RAISES
+    when the file cannot be opened as an image — never 0.0 on no data.
+    """
+    import numpy as np
+    from PIL import Image
+    if not path or not os.path.isfile(path):
+        raise RuntimeError(
+            f"mean_level produced no readings for {path} -- refusing to "
+            "report a measurement that did not happen")
+    try:
+        with Image.open(path) as im:
+            im.load()
+            arr = np.asarray(im.convert("RGB"), dtype="float32")
+    except Exception as e:
+        raise RuntimeError(
+            f"mean_level produced no readings for {path} -- refusing to "
+            f"report a measurement that did not happen: {e}") from e
+    if arr.size < 1:
+        raise RuntimeError(
+            f"mean_level produced no readings for {path} -- refusing to "
+            "report a measurement that did not happen")
+    return float(arr.mean())
+
+
 def measure_channel_sat(path):
     """Per-frame green dominance G-(R+B)/2 on a scaled RGB decode.
 
@@ -1710,7 +1738,9 @@ def check_image(path, expect):
                        f"pixel standard deviation {std:.2f}",
                        round(std, 2), UNIFORM_STD_FLOOR, "levels",
                        remedy="re-render with a different seed"))
-    mean = float(arr.mean())
+    # T3-4.1-not_blank: mean RGB level vs LUMA_FLOOR. Distinct from
+    # not_uniform — solid bright red PASSes mean and REJECTs std.
+    mean = measure_mean_level(path)
     out.append(finding(path, "image", "not_blank",
                        PASS if mean >= LUMA_FLOOR else REJECT,
                        f"mean level {mean:.1f}",

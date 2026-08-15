@@ -179,7 +179,10 @@ opaque/partial alpha PASS, unit `levels`, `test_t3_4_1_alpha.py`;
 **`T3-4.1-not_uniform` built** —
 image `not_uniform` / `measure_pixel_std` REJECTs solid flat colour
 (max per-channel spatial std ≤ `UNIFORM_STD_FLOOR`), PASSes testsrc2,
-`test_t3_4_1_not_uniform.py`; **`T3-4.2-luma` built** — clip
+`test_t3_4_1_not_uniform.py`; **`T3-4.1-not_blank` built** —
+image `not_blank` / `measure_mean_level` REJECTs solid black below
+`LUMA_FLOOR`, PASSes testsrc2, distinct from `not_uniform` (solid bright
+red PASSes not_blank), `test_t3_4_1_not_blank.py`; **`T3-4.2-luma` built** — clip
 `luma` / `measure_luma` REJECTs solid black below `LUMA_FLOOR`, PASSes
 testsrc2, `test_t3_4_2_luma.py`; **`T3-4.2-sat` built** — clip
 `channel_sat` / `measure_channel_sat` FLAGs solid green garbage (NaN
