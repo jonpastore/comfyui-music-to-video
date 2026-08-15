@@ -442,8 +442,14 @@ reports `scene_time` (sum of scene `duration_guidance`), `song_length`
 (the song duration), `tolerance` (`SCENE_TIME_TOLERANCE`, 0.15 of song
 length) and `mismatch` when the absolute delta exceeds that.
 In-tolerance is not flagged. Mutation: always report the numbers and
-never set `mismatch` → the miss arm fails. The live `meter` component,
-`T2-24` and `T2-25` are not this.
+never set `mismatch` → the miss arm fails. The live `meter` component
+and `T2-25` are not this.
+
+`T2-24` is **built**. The same meter reports `clip_seconds` from
+`build_song.clip_seconds(scene_seconds)`, not `CHUNK`. Same song at
+15 s and 30 s yields two lengths. Mutation: hardcode 4.8125 → both
+arms equal. Mutation: return raw `scene_seconds` → 15.0 is not the
+legal 8n+1 length. The live `meter` component and `T2-25` are not this.
 
 ### 5.6 Tier 2 is a calibration, not a metric
 

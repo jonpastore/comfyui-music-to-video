@@ -5070,6 +5070,8 @@ def api_storyboard_meter(id: int, tier: str):
     meter = dict(payload["coverage"])
     meter["nclips"] = payload["nclips"]
     meter.update(scene_time_report(meter.get("intent"), meter.get("duration")))
+    # T2-24: this song's legal clip length, not CHUNK / 4.8125.
+    meter["clip_seconds"] = build_song.clip_seconds(payload.get("scene_seconds"))
     return JSONResponse(meter)
 
 
