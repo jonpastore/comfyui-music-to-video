@@ -287,6 +287,7 @@ CHECK_REMEDY_CLASS = {
     "duration_matches_prediction": REMEDY_NONE,
     "transition_lands": REMEDY_NONE,
     "splice_duration": REMEDY_RERENDER,
+    "nclips": REMEDY_REASSEMBLE,
     REFINER_HELP_CHECK: REMEDY_NONE,
     REFINE_DIFFERENTIAL: REMEDY_NONE,
 }
@@ -1744,6 +1745,80 @@ def _has_video(path):
         return False
 
 
+# --------------------------------------------- assembled song, §4.4 --
+
+def _build_song():
+    """THE clip_plan owner. Lazy so qc import stays light for stills."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    import build_song  # noqa: E402  -- single owner of clip allocation
+    return build_song
+
+
+def _measured_nclips(expect):
+    """How many clips went into the assemble. None when no claim."""
+    expect = expect or {}
+    if expect.get("nclips") is not None:
+        return int(expect["nclips"])
+    if expect.get("clip_count") is not None:
+        return int(expect["clip_count"])
+    clips = expect.get("clips")
+    if clips is not None:
+        return len(clips)
+    return None
+
+
+def planned_nclips(expect):
+    """len(build_song.clip_plan(...)). THE expected count for T3-4.4-nclips.
+
+    Goes through clip_plan, not a second ceil and not scene_count. A
+    20-scene board on a 41-clip track still expects 41.
+    """
+    expect = expect or {}
+    scenes = expect.get("scenes") or []
+    if not scenes:
+        raise ValueError("scenes required for clip_plan")
+    bs = _build_song()
+    if expect.get("audio_path"):
+        plan = bs.clip_plan(scenes, audio_path=expect["audio_path"])
+    else:
+        if expect.get("duration") is None:
+            raise ValueError("duration or audio_path required for clip_plan")
+        n = bs.n_clips_for(float(expect["duration"]),
+                           expect.get("scene_seconds"))
+        plan = bs.clip_plan(scenes, nclips=n)
+    return len(plan)
+
+
+def check_nclips(path, expect, kind="song"):
+    """T3-4.4-nclips: assembled clip count vs build_song.clip_plan.
+
+    Measured is how many clips the assemble used (expect.nclips or
+    len(expect.clips)). Expected is len(clip_plan). No claim → no
+    finding (do not invent a pass).
+    """
+    measured = _measured_nclips(expect)
+    if measured is None:
+        return []
+    try:
+        expected = planned_nclips(expect)
+    except Exception as e:
+        return [finding(path, kind, "nclips", REJECT,
+                        str(e).split("\n")[0],
+                        measured, None, "clips",
+                        remedy="re-assemble with every planned clip")]
+    ok = measured == expected
+    return [finding(
+        path, kind, "nclips",
+        PASS if ok else REJECT,
+        (f"{measured} clips against clip_plan {expected}"
+         if not ok else
+         f"{measured} clips match clip_plan"),
+        measured, expected, "clips",
+        remedy="re-assemble with every planned clip")]
+
+
 # -------------------------------------------------------- tier 2 score --
 # T3-13. Pure measurement: no database, no threshold, no verdict. The
 # report is overlap, separation, and every file. A later extractor plugs
@@ -2246,6 +2321,7 @@ def run(path, kind, expect=None, items=None, song_fps=None):
     elif kind == "song":
         expect.setdefault("want_audio", True)
         out = check_video(path, expect, kind="song")
+        out.extend(check_nclips(path, expect, kind="song"))
     else:
         expect = clip_qc_expect(expect, song_fps=song_fps)
         out = check_video(path, expect, kind="clip")

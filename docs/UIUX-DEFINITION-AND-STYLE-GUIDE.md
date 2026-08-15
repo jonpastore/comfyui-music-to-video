@@ -283,7 +283,9 @@ pre-empt `finding-row` with one. An identity-wrong finding's remedy is
 "swap the reference image". A silence finding (`T3-9`) shows low / mid /
 high band energy, not a peak; a take that only clicked is empty. An
 edge-silence finding (`T3-4.3-edge`) shows leading / trailing seconds
-against `EDGE_SILENCE_LIMIT_S`, not whole-file band energy. A
+against `EDGE_SILENCE_LIMIT_S`, not whole-file band energy. An assembled-song
+`nclips` finding (`T3-4.4-nclips`) is the assembly count vs `len(clip_plan)`
+in `clips` — same finding-row, remedy class `re-assemble`. A
 spliced-track finding (`T3-10`) shows measured vs predicted seconds
 from `mixer.bridge_seconds`, not a restated gap + 2×xfade. An assembled
 song duration finding (`T3-4.4-mp3`) shows measured vs `songs.duration`

@@ -328,6 +328,12 @@ duration matches the source mp3 within tolerance; the clip count matches
 planned join from `joins` / `clip_durations` reject; a hard cut with no black
 span passes; without a plan the check does not run).
 
+- `T3-4.4-nclips` **Assembled clip count equals `len(build_song.clip_plan(...))`.**
+  Measured is how many clips went into the assemble (`expect.nclips` or
+  `len(expect.clips)`). Expected goes through `clip_plan`, not a second
+  `ceil` and not `scene_count` — a 3-scene board on a long track still
+  expects the plan's count. No claim → no finding.
+
 ### 4.5 Sets
 
 - `T3-11` **The rendered set's duration equals `mixer.set_duration()`'s
@@ -636,4 +642,5 @@ current.
 | `T3-10` spliced-track duration vs `bridge_seconds` | **built** | `test_t3_10_splice.py` | `qc.check_splice` / `check_audio` compare the artefact to `mixer.spliced_duration` (which asks `bridge_seconds`) within `mixer.SPLICE_DURATION_TOLERANCE`. A correctly sized edge splice PASSes; 20 s spliced at 0.1 s coming back 20.193 s REJECTs. A change to `bridge_seconds` moves the expected. Tolerance is imported, not restated |
 | `T3-12` each transition lands within half a frame | **built** | `test_t3_12_transition_lands.py` | `qc.check_transition_lands` / `qc.measure_transition_lands` read the rendered file; expected times are `mixer.transition_times` (same walk as `set_duration`). A 2 s red→blue cut passes at 2.0 s; a 3 s join against a 2 s model rejects. Two cuts each produce a land. Tolerance is `0.5 / file fps`. Measurement only — `remedy_class` is none |
 | `T3-4.4-gap` no black gap at an assembled song join | **built** | this slice | `qc.check_join_black_gap` / `qc.measure_join_black_gap` on kind `song`: black spans (Y < `LUMA_FLOOR`, ≥2 frames) that cover a planned join from `joins` / `clip_durations` REJECT; a hard cut with no black span PASSes; no plan → check does not run. `measured` is the hit count, `expected` 0, `unit` spans, `remedy_class` re-assemble (`test_t3_4_4_gap.py`). Not T3-12, not whole-file `black_frames` |
+| `T3-4.4-nclips` assembled clip count vs `clip_plan` | **built** | `test_t3_4_4_nclips.py` | `qc.check_nclips` / `qc.run(kind="song")`: matching `nclips` PASSes; short assemble REJECTs; a 3-scene board on a 195.792 s track expects `len(clip_plan)` not `scene_count`. Expected goes through `build_song.clip_plan`. `measured`/`expected`/`unit` are the assembly count, the plan length, and `clips`. No claim → no finding. Remedy class `re-assemble` |
 | `T3-31` vision badge names backend failure | **built** | `80575de` | `qc_tag` shows `vision: xAI …` / `vision: local …`; `score_candidate` stores the backend that actually failed after local-then-xAI fallback, not `available()`'s hope. `test_anchor_qc.py` asserts neither badge nor stored error says "unknown" |
