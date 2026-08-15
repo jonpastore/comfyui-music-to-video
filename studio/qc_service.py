@@ -507,9 +507,41 @@ def approve(fid):
     return get(fid)
 
 
+def identity_calibration_report(report):
+    """T3-16 decision on a T3-13 measurement. Overlap says inconclusive
+    and does not invent a threshold or a gate."""
+    out = dict(report)
+    if "overlap" not in out:
+        raise RuntimeError("identity report needs an overlap")
+    verdict = qc.identity_verdict(out["overlap"])
+    out["verdict"] = verdict
+    if verdict == qc.INCONCLUSIVE:
+        if out.get("threshold") is not None:
+            raise ValueError(
+                "T3-16: overlapping distributions are inconclusive; "
+                "they do not earn a threshold")
+        out["threshold"] = None
+        out["gate"] = False
+    return out
+
+
+def build_identity_gate(report):
+    """T3-16: overlapping distributions do not earn a gate.
+
+    Separated ranges are named, not gated — T3-14 is the setter.
+    A threshold on an overlapping report is refused by name.
+    """
+    decided = identity_calibration_report(report)
+    return {
+        "built": False,
+        "verdict": decided["verdict"],
+        "threshold": None,
+    }
+
+
 def record_calibration(report):
     """Persist a T3-13 report. threshold stays NULL — storing one is the
-    failure T3-13 exists to prevent. T3-14 is what later allows a value."""
+    failure T3-13 exists to prevent. T3-14's setter is what writes a value."""
     if report.get("threshold") is not None:
         raise ValueError(
             "T3-13 stores no threshold; the report is overlap and separation")
@@ -532,6 +564,27 @@ def record_calibration(report):
 def latest_calibration(dataset="zimage_sweep"):
     return db.one(
         "SELECT * FROM calibrations WHERE dataset=? ORDER BY id DESC", dataset)
+
+
+def set_threshold(threshold, dataset="zimage_sweep"):
+    """T3-14: a threshold cannot be configured without a stored calibration.
+
+    Attempting to set one with no calibration row is refused, naming why.
+    With a stored row the value is written on that row unless T3-16
+    names the distributions inconclusive. This is not a gate and not a UI.
+    """
+    row = latest_calibration(dataset)
+    if row is None:
+        raise ValueError(
+            f"cannot set a threshold: no stored T3-13 calibration "
+            f"for {dataset}")
+    if qc.identity_verdict(row["overlap"]) == qc.INCONCLUSIVE:
+        raise ValueError(
+            "T3-16: overlapping distributions are inconclusive; "
+            "they do not earn a threshold")
+    db.run("UPDATE calibrations SET threshold=? WHERE id=?",
+           float(threshold), row["id"])
+    return db.one("SELECT * FROM calibrations WHERE id=?", row["id"])
 
 
 def run_zimage_calibration(root, score_fn=None, embed=None, reference=None):

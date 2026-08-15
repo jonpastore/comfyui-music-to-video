@@ -572,8 +572,8 @@ CREATE INDEX IF NOT EXISTS idx_take_voices ON take_voices(take_id);
 """
 
 CALIBRATIONS_SCHEMA = """
--- T3-13 report. threshold is NULL until T3-14/T3-16 earn one; a number
--- here without that calibration is the defect those criteria exist to stop.
+-- T3-13 report. T3-14 may set threshold on this row; T3-16 is the gate.
+-- A number here without a stored calibration is the defect T3-14 stops.
 CREATE TABLE IF NOT EXISTS calibrations (
   id INTEGER PRIMARY KEY,
   metric TEXT NOT NULL,

@@ -21,8 +21,8 @@ is named.
 | `studio/mixer.py` | 2116 | set duration, both filter graphs, overlap arithmetic, beatmatch, ramps, splice, song-assembly geometry (`T5-7`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` **and** `T3-9`/§4.3 |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `fragment`, `item_audio`, `wants_master_loudnorm` | built |
-| `studio/qc.py` | 642 | TRD-3 tier 1 in full; T3-13 `score_zimage_sweep` (overlap, separation, per-file; no threshold) | built |
-| `studio/qc_service.py` | 308 | findings, queue, `by_host` (`T3-1`), remedy edit, dismiss, reopen; `approve()` enqueues dest ≠ source; `dispatch_repair` asks `where()`/`fits()`/`resolve()` then submits `fix_ref` / `gen_postproc`; real `fits()` routes the refiner by resident cost (`T3-24`); `can_move_output` gates remote repair (`T3-25`); `run_zimage_calibration` writes the T3-13 row | built except T3-14…T3-16 |
+| `studio/qc.py` | 642 | TRD-3 tier 1 in full; T3-13 `score_zimage_sweep`; T3-15 histogram `identity_embed`; T3-16 `identity_verdict` | built |
+| `studio/qc_service.py` | 308 | findings, queue, `by_host` (`T3-1`), remedy edit, dismiss, reopen; `approve()` enqueues dest ≠ source; `dispatch_repair` asks `where()`/`fits()`/`resolve()` then submits `fix_ref` / `gen_postproc`; real `fits()` routes the refiner by resident cost (`T3-24`); `can_move_output` gates remote repair (`T3-25`); `run_zimage_calibration` writes the T3-13 row; `set_threshold` writes a value only on a stored separated row (`T3-14`/`T3-16`); `build_identity_gate` never builds | built |
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2: JSON-canonical arc, `to_md`, `validate`, `for_song`, screened both directions | built |
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning, reused by `T3-20` | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
@@ -33,11 +33,15 @@ is named.
 Deliberately absent, verified by `grep -rn` over `studio/*.py` and the root
 scripts: no *configurable* master chain (T1-19 records the fixed
 `one-button-master` v1 on the render; §8a stays fixed-order, not a
-control surface), no peaks store, no threshold, no
+control surface), no peaks store, no
 tier-2 gate or UI. `calibrations` and `qc.score_zimage_sweep` landed for
-`T3-13` (overlap/separation/per-file, `threshold` NULL). `siglip2_naflex`
+`T3-13` (overlap/separation/per-file, `threshold` NULL). `T3-14`
+`set_threshold` writes a number on a stored separated row and refuses
+without one. `T3-15` is a colour histogram, not a spatial grid.
+`T3-16` names overlap inconclusive and does not build a gate.
+`siglip2_naflex`
 is still only a `models.py` catalogue entry; the default embedder is a
-coarse RGB grid so the report can run without a GPU. `insightface` is
+colour histogram so the report can run without a GPU. `insightface` is
 absent.
 
 ## 2. The structural problem, and the pattern that already solves it
@@ -103,7 +107,8 @@ wrong one, and day 8's rule is that the warnings do not move.
 
 Landed already: `automation`, `findings`, `artefacts`, `storyboards.scene_seconds`,
 `sets.mode_audience` (`easy|normal|advanced`, default `normal`; `T1-20`),
-`calibrations` (`T3-13`, `threshold` stays NULL), and the interstitial card
+`calibrations` (`T3-13`; `T3-14` may write `threshold` only after a
+separated row exists), and the interstitial card
 (`set_items.song_id` nullable, `card_path`, `card_secs`; `mixer.is_card` /
 `set_duration` prices it; `POST /sets/{id}/cards`). Switching audience writes
 only that column. Easy is `mixer.master_engaged` reading `mode_audience ==
@@ -325,18 +330,18 @@ Design, in the order `T3-13`…`T3-16` fix:
    (same prompt, same anchor, same day; on two seeds the model draws bare human
    legs with a cat's head at every step count, on the third it holds fur head to
    toe). **Built** as `qc.score_zimage_sweep` / `qc.identity_score`. Default
-   embedder is a coarse RGB grid (not pixel MSE). `siglip2_naflex` is still
-   the intended production extractor and is not wired; `insightface` is the
-   alternative.
+   embedder is a colour histogram (not pixel MSE, not a spatial grid).
+   `siglip2_naflex` is still the intended production extractor and is not
+   wired; `insightface` is the alternative.
 2. Write a `calibrations` row: both distributions, the overlap, the separation,
    and **every individual file's score**. **Built** (`qc_service.run_zimage_calibration`);
-   `threshold` is refused. That report is the T3-13 deliverable.
-3. No threshold, no gate, no UI until T3-14/T3-16 decide. If the distributions
-   overlap, the report says so and the gate is not built — `T3-16` calls that a
-   success, and the failure mode it avoids is shipping a threshold that splits
-   noise.
+   `threshold` is refused at write. That report is the T3-13 deliverable.
+3. `T3-14` can set a threshold on a stored calibration and refuses without
+   one, naming why. `T3-16` names overlap inconclusive and does not build
+   a gate — that is a success, and the failure mode it avoids is shipping
+   a threshold that splits noise. No UI.
 4. `T3-15` is the regression guard: the metric must not rank a deliberate pose
-   change as an identity failure. It is asserted against the recorded pair that
+   change as an identity failure. **Built** against the recorded pair that
    pixel distance got backwards — 41.1 for the wrong render, 64.7 for the right
    one.
 
@@ -387,7 +392,7 @@ documents, not a preference.
                         ->  storyboard_service ->  arc flows, meter, casting
 
     zimage_sweep scored  ->  calibrations row  ->  threshold (only if separated)  ->  tier 2 UI
-    (T3-13 landed the first two; threshold and UI stay off until T3-14/T3-16)
+    (T3-13..T3-16 landed the first three; the UI stays off)
     T3-23 routing (where/fits/resolve + actuator)  ->  T3-24 refiner box pick
                                                    ->  T3-25 remote-output move
 

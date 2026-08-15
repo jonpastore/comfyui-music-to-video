@@ -724,9 +724,10 @@ carries the `--muted` role and an explicit marker; measurements carry
 `--text` and a unit.** A number without a unit is a claim, not a measurement.
 
 `T3-13` is not a screen. Overlap and separation live on the `calibrations`
-row; there is no badge, no gate and no threshold control until `T3-14` /
-`T3-16` earn one. Putting that number on a tile now would be the inversion
-this paragraph exists to stop.
+row. `T3-14` can write a threshold on a stored separated row (service,
+not a tile); `T3-16` still builds no gate. There is no badge and no
+threshold control. Putting that number on a tile now would be the
+inversion this paragraph exists to stop.
 
 ## 8. How this document is verified
 

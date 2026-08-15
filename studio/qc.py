@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Tier 1 of docs/TRD-3: deterministic checks on what was actually rendered.
 
-T3-13's identity score also lives here (pure; no database, no threshold).
+T3-13's identity score also lives here (pure; no database). T3-15 is the
+histogram embed; T3-16 is identity_verdict. The threshold setter is not
+in this file.
 
 ffprobe, ffmpeg's own analysis filters, PIL and numpy. No model, no opinion.
 
@@ -83,6 +85,11 @@ IDENTITY_LOOK = "identity_look"
 # stored on the calibrations row so a later extractor is a new row, not a
 # silent rewrite of this one.
 IDENTITY_METRIC = "identity_cosine_v1"
+
+# docs/TRD-3 T3-16: overlap is a decision, not a number the operator
+# has to interpret. "inconclusive" is a success; a threshold is not.
+INCONCLUSIVE = "inconclusive"
+SEPARATED = "separated"
 
 # zimage_sweep seeds recorded in docs/TRD-3 §2.2. …654 holds fur; the other
 # two draw a cat head on human legs at every step count.
@@ -731,11 +738,12 @@ def list_zimage_sweep(root):
 
 
 def identity_embed(path):
-    """Coarse 2x2 RGB means. Not flattened pixels, not MSE.
+    """Colour histogram. Not flattened pixels, not a spatial grid.
 
-    Pixel distance is refused by name (docs/TRD-3 §5). This is an
-    embedding so cosine can run without a GPU extractor; siglip2_naflex
-    replaces it later as embed= without changing the report shape.
+    Pixel distance is refused by name (docs/TRD-3 §5 / T3-15): it ranked
+    the pose-plate look above a deliberate pose change. Identity here is
+    the colour distribution so pose is not the score. siglip2_naflex
+    replaces this later as embed= without changing the report shape.
     """
     from PIL import Image
     import numpy as np
@@ -745,17 +753,13 @@ def identity_embed(path):
         arr = np.asarray(im.convert("RGB"), dtype="float32")
     if arr.size == 0:
         raise RuntimeError(f"identity embed: empty image: {path}")
-    h, w, _ = arr.shape
-    ys = (0, h // 2, h)
-    xs = (0, w // 2, w)
-    cells = []
-    for i in range(2):
-        for j in range(2):
-            block = arr[ys[i]:ys[i + 1], xs[j]:xs[j + 1]]
-            if block.size == 0:
-                raise RuntimeError(f"identity embed: empty cell in {path}")
-            cells.extend(block.mean(axis=(0, 1)).tolist())
-    return cells
+    q = np.clip((arr / 64.0).astype("int32"), 0, 3)
+    idx = q[:, :, 0] * 16 + q[:, :, 1] * 4 + q[:, :, 2]
+    hist = np.bincount(idx.ravel(), minlength=64).astype("float64")
+    total = float(hist.sum())
+    if total == 0.0:
+        raise RuntimeError(f"identity embed: empty image: {path}")
+    return (hist / total).tolist()
 
 
 def _cosine(a, b):
@@ -775,6 +779,13 @@ def identity_score(path, reference, embed=None):
     embed = embed or identity_embed
     vec = embed(path)
     return _cosine(vec, list(reference))
+
+
+def identity_verdict(overlap):
+    """T3-16: overlapping ranges cannot split known-good from known-bad."""
+    if overlap is None:
+        raise RuntimeError("identity verdict needs an overlap")
+    return INCONCLUSIVE if float(overlap) > 0 else SEPARATED
 
 
 def range_overlap(xs, ys):

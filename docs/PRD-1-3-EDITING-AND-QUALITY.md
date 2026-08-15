@@ -193,9 +193,11 @@ order and take the dependencies from here.
 
 8. Tier 2, **calibration first and in this order**: `T3-13` scores the 18
    images of `zimage_sweep/` and stores overlap, separation and every file
-   on a `calibrations` row with no threshold. `T3-14` / `T3-16` still
-   refuse a threshold and a UI; if the distributions overlap, the gate is
-   not built and that is a successful outcome.
+   on a `calibrations` row with no threshold. `T3-14` can set a threshold
+   on that row and refuses without one, naming why. `T3-15` ranks the
+   recorded pose pair (histogram, not pixel distance). `T3-16` names
+   overlap inconclusive and does not build a gate; that is a successful
+   outcome. There is still no tier-2 UI.
 9. Repair routing (`T3-23`) is built: `dispatch_repair` asks `where()` /
    `fits()` / `resolve()`, refuses a mis-named pin before submit, and
    dest is the `fix_ref` / `gen_postproc` file. `T3-24` is built: the

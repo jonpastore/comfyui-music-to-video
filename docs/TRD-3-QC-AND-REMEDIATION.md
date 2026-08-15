@@ -66,9 +66,12 @@ Already satisfied by `qc.py` today: `T3-2` (expectations read from the submitted
 workflow, no hardcoded duration anywhere), `T3-4`'s measured/expected/unit on
 every check that has them, `T3-7` (8n+1 with the interpolated exemption), `T3-11`
 (imports `mixer.SET_DURATION_TOLERANCE` rather than restating it), `T3-27`
-(a remedy on every finding), and `T3-3` both ways. What is NOT built is the
-rest of tier 2 (`T3-14`…`T3-16`: no threshold, no gate, no UI). `T3-13` writes
-the calibrations row. `T3-23` is wired: `dispatch_repair` asks `models.where()` /
+(a remedy on every finding), and `T3-3` both ways. Tier 2's calibration
+order is built: `T3-13` writes the calibrations row, `T3-14` is a setter
+(with a stored row a threshold can be set; without one it is refused,
+naming why), `T3-15` ranks the recorded pose pair, and `T3-16` names
+overlap inconclusive and builds no gate. There is still no tier-2 UI.
+`T3-23` is wired: `dispatch_repair` asks `models.where()` /
 `models.fits()` / `models.resolve()`, refuses an unfittable or mis-named pin
 before submit, and invokes `pipeline.gen_postproc` or `pipeline.fix_ref` so dest
 is the actuator's file. `T3-24` uses the refiner's resident cost (~19.6 GiB),
@@ -489,7 +492,7 @@ tier 1.
    marked **provisional** and says what it cannot yet distinguish.
 
    One-sided in this document today, listed so nobody has to re-derive it:
-   `T3-4` (fields present but never checked for sense), `T3-14`, `T3-20`, `T3-22` and `T3-27`. `T3-1` now has the two-host count half. `T3-6` / `T3-18` / `T3-23` / `T3-24` / `T3-25` have their positive halves: dest ≠ source, a correctly-named model on a box that holds it is SUBMITTED, the refiner is routed off a 15.92 GiB card onto a 24 GiB one, and a remote repair with `can_move_output` forced true is SUBMITTED.
+   `T3-4` (fields present but never checked for sense), `T3-20`, `T3-22` and `T3-27`. `T3-1` now has the two-host count half. `T3-6` / `T3-14` / `T3-18` / `T3-23` / `T3-24` / `T3-25` have their positive halves: dest ≠ source, WITH a stored calibration a threshold CAN be set, a correctly-named model on a box that holds it is SUBMITTED, the refiner is routed off a 15.92 GiB card onto a 24 GiB one, and a remote repair with `can_move_output` forced true is SUBMITTED.
 
 ### The positive half of each one-sided criterion
 
@@ -537,7 +540,9 @@ current.
 | `T3-5` re-running does not duplicate | **built** | earlier | `UNIQUE(path, check_name)`; the mutation audit found the upsert alone was not the guard |
 | `T3-1` group by host | **built** | `test_t3_1_by_host.py` | report over artefacts from two hosts has two groups with the planted counts; NULL host is an explicit unattributed bucket. Host is still canonical (`e20346f`) |
 | `T3-13` score the 18 stills | **built** | `test_t3_13_identity.py` | `qc.score_zimage_sweep` reports overlap, separation and every file over 12-bad/6-good; `qc_service.run_zimage_calibration` stores the row with `threshold` NULL. A stored threshold is refused. No gate, no UI |
-| `T3-14`…`T3-16` | **not built** | — | no threshold setter, no pose-pair ordering, no gate. Overlap is reported; it does not decide anything yet |
+| `T3-14` no threshold without calibration | **built** | `test_t3_14_threshold.py` | `set_threshold` is refused with no calibration row, naming T3-13; WITH a stored row the value is written on that row. A non-T3-13 dataset does not unlock it. Not a UI |
+| `T3-15` pose change is not identity failure | **built** | `test_t3_15_identity.py` | `identity_embed` is a colour histogram; `identity_score` ranks the anchored sheet above the pose-plate look. Pixel distance still inverts that pair |
+| `T3-16` overlap is inconclusive, no gate | **built** | `test_t3_16_overlap_inconclusive.py` | `identity_verdict` names overlap inconclusive; `build_identity_gate` returns built False / threshold NULL; a threshold on that report (or via `set_threshold`) is refused. Separated ranges are not called inconclusive. No UI |
 | **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-23`, `T3-24` and `T3-25` are their own rows. Remaining in §6: T3-19…T3-22, T3-26…T3-28 |
 | `T3-23` repair routing | **built** | `160547d` | default `dispatch_repair` asks `where()`/`fits()`/`resolve()`, refuses a pin under a name the box does not have before submit (`test_t3_23_pinned_name_the_box_does_not_have_is_refused_before_submit`), and a correctly-named model on a box that holds it is SUBMITTED (`test_t3_23_correctly_named_model_on_a_box_that_holds_it_is_submitted`). dest is the actuator's file (`fix_ref` / `gen_postproc`), not a copy of src |
 | `T3-24` refiner resident cost | **built** | `a4b7ef9` | real `fits()` (not a stub) routes `wan22_i2v_low` off a 15.92 GiB card onto a 24 GiB one that holds the correct name (`test_t3_24_refiner_routed_off_15_92_to_24_and_submitted`); peaches cannot take the i2v pair (`test_t3_24_peaches_cannot_take_the_pair`) |
