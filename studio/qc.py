@@ -169,9 +169,14 @@ T4_13_REAL_SHEET_MEASURED = False
 # identity(front, three_quarter) from an anchor vs the same pair from
 # raw photographs. No threshold. None is NOT MEASURED. skip is not a
 # reading. T7_7_REAL_PAIR_MEASURED stays False until a GPU four-image
-# set is recorded; flipping it with an empty hook is the lie.
-# Do not claim the fleet to populate this.
+# set is recorded; flipping it with an empty hook or unpinned bytes is
+# the lie. Do not claim the fleet to populate this.
+# Photo-conditioned half landed: Catatonic jobs 244/248 (front_nude
+# s1002911869 + three_quarter_nude s836704466). Identity-collapsed
+# human woman, not her. Street Cats three_quarter job 262 cancelled,
+# 268 queued. No use-as-ref pair has been rendered.
 T7_7_REAL_PAIR = None
+T7_7_REAL_PAIR_SHA256 = None
 T7_7_REAL_PAIR_MEASURED = False
 
 # docs/TRD-3 T3-27 / §6.2. The class is what approve() runs. A check with
@@ -1292,12 +1297,25 @@ def t7_7_real_pair():
     return T7_7_REAL_PAIR
 
 
+def t7_7_pair_sha256(anchor_front, anchor_three_quarter,
+                     photo_front, photo_three_quarter):
+    """Four hex digests. Missing files raise NOT MEASURED."""
+    paths = (
+        _t7_7_require(anchor_front, "anchor_front"),
+        _t7_7_require(anchor_three_quarter, "anchor_three_quarter"),
+        _t7_7_require(photo_front, "photo_front"),
+        _t7_7_require(photo_three_quarter, "photo_three_quarter"),
+    )
+    return tuple(_t7_7_file_digest(p).hex() for p in paths)
+
+
 def record_t7_7_real_pair(anchor_front, anchor_three_quarter,
-                          photo_front, photo_three_quarter):
+                          photo_front, photo_three_quarter, sha256=None):
     """Renderer calls this with the four rendered paths. Does not flip MEASURED."""
-    global T7_7_REAL_PAIR
+    global T7_7_REAL_PAIR, T7_7_REAL_PAIR_SHA256
     T7_7_REAL_PAIR = (
         anchor_front, anchor_three_quarter, photo_front, photo_three_quarter)
+    T7_7_REAL_PAIR_SHA256 = sha256 or t7_7_pair_sha256(*T7_7_REAL_PAIR)
 
 
 def t7_7_claim():
@@ -1306,6 +1324,9 @@ def t7_7_claim():
         raise ValueError("T7-7 real pair is NOT MEASURED")
     pair = t7_7_real_pair()
     if pair is None:
+        raise ValueError("T7-7 real pair is NOT MEASURED")
+    expect = T7_7_REAL_PAIR_SHA256
+    if not expect or t7_7_pair_sha256(*pair) != expect:
         raise ValueError("T7-7 real pair is NOT MEASURED")
     return t7_7_identity_differential(*pair)
 

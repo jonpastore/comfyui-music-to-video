@@ -119,9 +119,14 @@ the sheet that was approved. Session B shipped `T7-6` on 2026-08-13 (`d315c6f`).
 `T7-7` — does it actually hold identity across views — now has the offline
 ranking harness: `t7_7_identity_differential` on a rendered front /
 three_quarter pair versus the same pair from the raw photographs. No
-threshold. The GPU four-image set is still NOT MEASURED. The compose hook
-FLAGs a human-body nude compose, including the live-studio "Human woman's
-body" clause, through `run_artefact`. That is not the picture measurement.
+threshold. The GPU four-image set is still NOT MEASURED. The
+photo-conditioned half is on disk (Catatonic jobs 244/248: a front /
+three_quarter pair of the identity-collapsed human woman, not her). The
+use-as-ref half has never been rendered; Street Cats `three_quarter` job
+262 cancelled and 268 is queued. `t7_7_claim` refuses unpinned bytes.
+The compose hook FLAGs a human-body nude compose, including the
+live-studio "Human woman's body" clause, through `run_artefact`. That is
+not the picture measurement.
 
 ## 5. Priorities
 

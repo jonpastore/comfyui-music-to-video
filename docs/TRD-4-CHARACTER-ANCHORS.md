@@ -349,8 +349,11 @@ character"*, which is true on clothed and nude sheets alike.
 `T4-13`'s channel-balance harness now FLAGs olive/magenta fixtures and PASSes a
 grey wall (`qc.LIGHTING_LOCK`); a current GPU sheet is still **NOT MEASURED**.
 `T7-7` now has a painted-pair ranking harness (`t7_7_identity_differential`);
-the GPU four-image set has not been recorded. Neither has been run on a live
-sheet. Every other check in this session was on strings, graphs and schemas.
+the GPU four-image set has not been recorded. The photo-conditioned half
+(Catatonic jobs 244/248) is on disk; the use-as-ref half has not been
+rendered. `T4-13` is still NOT MEASURED on this tree. Neither criterion
+has a live four-image claim. Every other check in this session was on
+strings, graphs and schemas.
 
 Jobs 230/231/232 on the production box all finished more than four hours before
 the 11:11:38 restart, so **no sheet on that box was rendered by this code**. The

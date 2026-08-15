@@ -169,9 +169,13 @@ by side; one recorded answer. No threshold is invented — review asked for one 
 a fake number on a judgement call is worse than an honest human step. The
 offline ranking (`t7_7_identity_differential`) is that comparison: which pair
 holds identity, with no cutoff. `T7_7_REAL_PAIR_MEASURED` stays False until a
-GPU four-image set is recorded. The compose hook (`b081030`) FLAGs a compose
-that asserts a human body — live-studio "Human woman's body" included — through
-`run_artefact`. That does not replace the picture look.
+GPU four-image set is recorded. `record_t7_7_real_pair` pins four sha256s;
+unpinned bytes stay NOT MEASURED. The photo-conditioned half is on disk
+(Catatonic jobs 244/248). The use-as-ref front / three_quarter pair has not
+been rendered; Street Cats `three_quarter` job 262 cancelled, 268 queued.
+The compose hook (`b081030`) FLAGs a compose that asserts a human body —
+live-studio "Human woman's body" included — through `run_artefact`. That
+does not replace the picture look.
 
 ## 5. Refine on LTX
 
