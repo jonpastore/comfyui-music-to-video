@@ -168,8 +168,9 @@ in a document is stale the moment the constants move.
   uploaded them or clicked "Use as reference" on a sheet they already
   accepted. Each candidate tile shows the `T3-31` vision confidence against
   those bases and the prompt, or the named xAI/local scoring failure —
-  not "vision unknown". Mutation: a generate that writes extra
-  `anchor_ref` rows fails this.
+  not "vision unknown". A `fix_anchor` lands a new scored candidate; it
+  does not overwrite and does not leave `qc_json` NULL. Mutation: a
+  generate that writes extra `anchor_ref` rows fails this.
 
 ## 7. Explicitly not building
 

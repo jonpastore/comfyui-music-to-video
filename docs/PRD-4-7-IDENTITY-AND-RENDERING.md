@@ -49,8 +49,9 @@ What they need from these four, in their own terms:
    cannot render."*
 4. *"Tell me what is running, where, and whether it is actually alive."*
 5. *"Show me, on each candidate, how well it matches the base photographs
-   and the prompt I asked for — then I pick. If scoring could not run,
-   name the xAI or local failure; do not shrug 'unknown'."* (`T3-31`, `T4-19`)
+   and the prompt I asked for — then I pick. A repaired sheet is a new
+   candidate with its own score. If scoring could not run, name the xAI
+   or local failure; do not shrug 'unknown'."* (`T3-31`, `T4-19`)
 
 ## 3. The product rules
 

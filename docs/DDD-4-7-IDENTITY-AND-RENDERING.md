@@ -34,7 +34,7 @@ ControlNet.
 | `studio/tiers.py` | `compose_guardrail`, `check_text`, `check_override`, `check_tier_policy` |
 | `build_song.py` | TRD-5's territory: `workflow()`, the LTX branches, `clip_plan`, `expect_from_workflow` |
 | `studio/jobs.py`, `pipeline.py`, `db.py` | TRD-6's territory |
-| `studio/vision.py` | `score_candidate(path, bases, prompt)` — advisory identity+prompt match; a failure stores the xAI/local error and the backend that actually failed (not `available()`'s hope); `h_anchor` writes `anchors.qc_json`; `qc_tag` shows the named failure, never "vision unknown" (`T3-31`, `T4-19`) |
+| `studio/vision.py` | `score_candidate(path, bases, prompt)` — advisory identity+prompt match; a failure stores the xAI/local error and the backend that actually failed (not `available()`'s hope); `h_anchor` and `h_fix_anchor` write `anchors.qc_json`; `qc_tag` shows the named failure, never "vision unknown" (`T3-31`, `T4-19`) |
 
 **The pipeline, and it is not a loop of adding bases:** operator base
 photographs (`assets` kind `anchor_ref`) → generate *candidates*

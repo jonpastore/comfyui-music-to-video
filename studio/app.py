@@ -4380,14 +4380,17 @@ def h_fix_anchor(args, progress):
             row["tier"], row["scope_value"] if row["scope_kind"] == "album" else ""),
         body=prof["body"])
     now = time.time()
+    bases = [args.get("face_path") or row["path"]]
+    asked = args.get("instruction") or args["mode"]
     for r in results:
         # a NEW candidate in the same group, never a replacement: the sheet you
         # were fixing stays until you pick the fix
+        qc = score_generated_still(r["path"], bases, asked, progress)
         db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen,
-                                        created, character_id)
-                  VALUES (?,?,?,?,?,0,?,?)""",
+                                        created, character_id, qc_json)
+                  VALUES (?,?,?,?,?,0,?,?,?)""",
                row["scope_kind"], row["scope_value"], row["tier"], row["view"],
-               r["path"], now, row["character_id"])
+               r["path"], now, row["character_id"], qc)
     return {"count": len(results), "mode": args["mode"]}
 
 

@@ -194,10 +194,13 @@ writes a row naming the check and **keeps the file**.
 opens; resolution as requested; not uniform; not blank; not a single flat colour;
 alpha not fully transparent.
 
-- `T3-31` **Each generated anchor candidate is scored by a vision model against
-  the operator's base images and the prompt that produced it.** The score is
-  stored on the candidate row (`anchors.qc_json`) and shown on the tile. It is
-  **advisory**: it never picks, deletes, or rejects. A vision failure stores
+- `T3-31` **Each generated still is scored by a vision model against
+  the operator's base images and the prompt that produced it.** That
+  includes generate, reroll, `fix_ref`, `fix_anchor`, and artwork. The
+  score is stored on the candidate row (`qc_json`) and shown on the
+  tile. A `fix_anchor` lands a **new** scored candidate; it does not
+  overwrite the sheet being repaired. It is **advisory**: it never
+  picks, deletes, or rejects. A vision failure stores
   `confidence: null` plus the xAI or local error that caused it. The tile
   names that backend failure (`qc_tag`); it must not collapse it to
   "vision unknown". Still not a fail — the candidate stays pickable. §7
@@ -549,7 +552,7 @@ current.
 | `T3-23` repair routing | **built** | `160547d` | default `dispatch_repair` asks `where()`/`fits()`/`resolve()`, refuses a pin under a name the box does not have before submit (`test_t3_23_pinned_name_the_box_does_not_have_is_refused_before_submit`), and a correctly-named model on a box that holds it is SUBMITTED (`test_t3_23_correctly_named_model_on_a_box_that_holds_it_is_submitted`). dest is the actuator's file (`fix_ref` / `gen_postproc`), not a copy of src |
 | `T3-24` refiner resident cost | **built** | `a4b7ef9` | real `fits()` (not a stub) routes `wan22_i2v_low` off a 15.92 GiB card onto a 24 GiB one that holds the correct name (`test_t3_24_refiner_routed_off_15_92_to_24_and_submitted`); peaches cannot take the i2v pair (`test_t3_24_peaches_cannot_take_the_pair`) |
 | `T3-25` remote output move | **built** | pending | `can_move_output` is callable; remote repair is refused by that name (`test_t3_25_remote_repair_refused_by_name_until_check_is_true`); forcing the check true SUBMITS (`test_t3_25_forced_true_remote_repair_is_submitted`) |
-| `T3-31` vision score on generated stills | **built** | this slice | `score_generated_still` runs on anchors, refs, rerolls, `fix_ref` and artwork. `qc_json` is stored. A refine sibling is a new file (`test_h_anchor_refine_writes_sibling_not_overwrite`). Still advisory — not a gate |
+| `T3-31` vision score on generated stills | **built** | this slice | `score_generated_still` runs on anchors, refs, rerolls, `fix_ref`, `fix_anchor` and artwork. `qc_json` is stored (`test_h_fix_anchor_stores_qc_json`). A refine sibling is a new file (`test_h_anchor_refine_writes_sibling_not_overwrite`). Still advisory — not a gate |
 | `T3-22` dismissed stays dismissed | **built** | this slice | same bytes stay dismissed (`test_t3_22_dismissed_stays_dismissed_until_artefact_changes`); rewriting the file reopens the same `(path, check)` row. `findings.artefact_hash` is the change detector |
 | `T3-20` remedy versioned in `prompts` | **built** | `test_t3_20_remedy_runs.py` | the version that RUNS is the stored `prompt_versions` row — same id, read back after approval (`test_t3_20_approve_reads_back_the_same_stored_id`). Mutating the job's copied text still sends the stored wording (`test_t3_20_running_remedy_is_the_stored_row_not_the_job_copy`). A deleted row is refused, not replaced by the copy |
 | `T3-28` identity-wrong never swaps the reference | **built** | `test_t3_28_identity_wrong_remedy.py` | `qc.check_identity_wrong` (also via `qc.run`) proposes "edit the text, then re-render"; `qc.proposes_reference_swap` is the detector. `record` / `set_remedy` / `approve` refuse a swap-the-reference wording and name that identity comes from the text. A legal text-edit remedy is stored. |

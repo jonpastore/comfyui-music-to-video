@@ -639,13 +639,13 @@ earn a screen.
 ### 7a.6a Candidate tiles carry a vision confidence
 
 `T3-31` / `T4-19`. Each generated still — anchors, refs, rerolls,
-`fix_ref` results, artwork — stores `qc_json`. Anchor tiles in
-`_anchor_group.html` show `confidence` (0–100) against the **base
-photographs and the prompt**, or the named xAI/local failure when
-scoring failed (`vision: xAI …` / `vision: local …`). Never "vision
-unknown". Not a gate. The operator still picks. A refine pass writes a
-sibling file; it does not overwrite. Old rows with no `qc_json` stay
-blank, same as a missing render tag.
+`fix_ref` results, `fix_anchor` siblings, artwork — stores `qc_json`.
+Anchor tiles in `_anchor_group.html` show `confidence` (0–100) against
+the **base photographs and the prompt**, or the named xAI/local failure
+when scoring failed (`vision: xAI …` / `vision: local …`). Never
+"vision unknown". Not a gate. The operator still picks. A refine pass
+or a `fix_anchor` writes a sibling file; it does not overwrite. Old
+rows with no `qc_json` stay blank, same as a missing render tag.
 
 ### 7a.6 What the queue owes these four
 

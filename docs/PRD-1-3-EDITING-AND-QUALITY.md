@@ -222,9 +222,11 @@ order and take the dependencies from here.
    the approved remedy that RUNS is the stored `prompts` row, same id,
    read back after approval — a copied string on the job is not what
    the actuator receives.
-10. Every generated still is vision-scored into `qc_json` (`T3-31`). A
-    refine pass writes a new candidate beside the generate; it is not a
-    silent overwrite and not a VLM gate.
+10. Every generated still is vision-scored into `qc_json` (`T3-31`),
+    including a `fix_anchor` sibling. A refine pass writes a new
+    candidate beside the generate; it is not a silent overwrite and not
+    a VLM gate. `fix_anchor` itself is the operator-approved repair
+    (`T3-18`); it does not auto-heal.
 
 ### Deferred to another document, on purpose
 

@@ -102,6 +102,31 @@ def test_h_fix_ref_stores_qc_json(monkeypatch, tmp_path):
     assert json.loads(row["qc_json"])["confidence"] == 61
 
 
+def test_h_fix_anchor_stores_qc_json(monkeypatch, tmp_path):
+    src = _png(str(tmp_path / "anchor.png"))
+    out = _png(str(tmp_path / "anchor_fixed.png"))
+    monkeypatch.setattr(appmod.vision, "score_candidate", _score)
+    monkeypatch.setattr(appmod.pipeline, "fix_ref",
+                        lambda *a, **k: [{"clip_idx": 0, "path": out, "seed": 7}])
+    aid = db.run(
+        """INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen,
+                                created, character_id)
+           VALUES (?,?,?,?,?,0,?,?)""",
+        "album", f"QC FixAnchor {time.time_ns()}", "xxx", "front", src, time.time(), None)
+    appmod.h_fix_anchor({
+        "anchor_id": aid, "mode": "inpaint", "seed": 7,
+        "instruction": "tail aside, expose vulva",
+    }, lambda m: None)
+    src_row = db.one("SELECT * FROM anchors WHERE id=?", aid)
+    new_row = db.one("SELECT * FROM anchors WHERE path=?", out)
+    assert src_row, "source candidate must stay"
+    assert src_row["path"] == src
+    assert new_row, "fix must land a new candidate"
+    assert new_row["id"] != aid
+    assert new_row["qc_json"], "h_fix_anchor still lands a new candidate with no qc_json"
+    assert json.loads(new_row["qc_json"])["confidence"] == 61
+
+
 def test_h_artwork_stores_qc_json(monkeypatch, tmp_path):
     cover = _png(str(tmp_path / "cover.png"))
     monkeypatch.setattr(appmod.vision, "score_candidate", _score)
