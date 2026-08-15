@@ -900,7 +900,8 @@ rule that the unpicked one stays reachable (`T6-A5`, `T8-2` — `qc_service.list
 / `select` is the pick act for a re-produced pair). Pick does not
 write `songs.mp3_path`; Use on a generated take is refused. The tile reads the
 `takes` row (`T8-1`: tags, lyrics, seed, duration, params as sent), not the
-live song row.
+live song row. It labels **which path produced the take** — generated,
+resynthesised or bridged (`T8-3`) — beside the playable file path.
 
 What differs is that **you cannot judge audio from a thumbnail.** A tile that
 shows a waveform and a duration is showing metadata; the operator has to press

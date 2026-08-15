@@ -3,10 +3,11 @@
 insert_take / pick live here. The audio job's land path is asserted in
 test_t8_1_gen_audio_lands_as_take_and_keeps_the_ask -- a take that only
 exists as an assets row cannot say what it was asked for after the song
-moves. T8-10 is insert_voice: no row without a recorded source and a
-recorded consent state, and the refusal names which is missing. T8-11 is
-h_audio: a take generated with a voice records which, and one generated
-without records that too.
+moves. T8-3 positive half: generated, resynthesised and bridged each land
+a take listed with its origin and path. T8-10 is insert_voice: no row
+without a recorded source and a recorded consent state, and the refusal
+names which is missing. T8-11 is h_audio: a take generated with a voice
+records which, and one generated without records that too.
 """
 import os
 import time
@@ -148,6 +149,47 @@ def test_t8_3_take_records_generated_resynthesised_or_bridged():
     assert listed == {g: "generated", r: "resynthesised", b: "bridged"}
     with pytest.raises(ValueError, match="origin"):
         db.insert_take(sid, "/x.mp3", "repaint")
+
+
+def test_t8_3_generated_resynthesised_and_bridged_each_produce_a_listed_take():
+    """T8-3 positive half: each production path lands a take listed with its
+    origin and file path. insert_take CHECK alone is one-sided — a tree that
+    only ever wrote generated would still pass that test.
+    """
+    import app as appmod
+
+    mp3 = os.path.join(db.DATA, f"seed-t8-3-{time.time_ns()}.mp3")
+    os.makedirs(db.DATA, exist_ok=True)
+    with open(mp3, "wb") as fh:
+        fh.write(b"ID3" + b"\0" * 64)
+
+    sid = _song(style_text="drums, 128 bpm warehouse", lyrics="[verse]\nmeow",
+                mp3_path=mp3)
+    base = {
+        "song_id": sid,
+        "tags": "drums, 128 bpm warehouse",
+        "lyrics": "[verse]\nmeow",
+        "seconds": 12.0,
+        "n": 1,
+        "denoise": 0.7,
+    }
+    appmod.h_audio(dict(base, seed=42), lambda _m: None)
+    appmod.h_audio(dict(base, seed=43, source_path=mp3, denoise=0.6),
+                   lambda _m: None)
+    appmod.h_audio(dict(base, seed=44, seconds=2.5,
+                        bridge={"start": 5.0, "end": 7.5}),
+                   lambda _m: None)
+
+    listed = db.list_takes(sid)
+    by_origin = {t["origin"]: t for t in listed}
+    assert set(by_origin) == {"generated", "resynthesised", "bridged"}, (
+        f"expected all three paths as listed takes, got {sorted(by_origin)}")
+    for origin, take in by_origin.items():
+        assert take["path"], f"{origin} take has no path"
+        assert os.path.isfile(take["path"]), (
+            f"{origin} path missing: {take['path']}")
+        assert os.path.realpath(take["path"]).startswith(
+            os.path.realpath(db.DATA)), take["path"]
 
 
 def test_t8_2a_song_style_text_is_copied_onto_the_take():

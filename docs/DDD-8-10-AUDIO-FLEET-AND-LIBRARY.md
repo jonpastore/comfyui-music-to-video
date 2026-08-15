@@ -46,9 +46,10 @@ describes an ask that never happened. `T8-1`'s differential is exactly this —
 change the song's tags after generating, and the take must still report what it
 was generated with.
 
-`parent_id` and `origin` (`gen | cover | repaint | svc`) make a repaint's lineage
-readable, which is what turns "is this any good" into "is this better than the
-one it came from".
+`parent_id` and `origin` (`generated | resynthesised | bridged` — the three
+paths `h_audio` actually runs; `T8-3`) make a take's lineage readable: which
+route produced it, and for a rework whether it is better than the one it came
+from.
 
 **Migration:** `T6-17`'s rule — every addition is an `ALTER`/`CREATE` and
 existing rows keep working. The open question is whether existing audio `assets`
@@ -265,6 +266,7 @@ each caller, or a caller that stops calling it stays green.
                          ->  insert_voice refuses missing source/consent (T8-10, built)
                          ->  h_audio records which voice, or none (T8-11, built)
                          ->  pick is its own record, not Use / mp3_path (T8-2, built)
+                         ->  generated/resynthesised/bridged each list a take (T8-3, built)
                          ->  song editor writes the shared automation model (T8-13, built)
                          ->  song editor predicted length = rendered length (T8-14, built)
     bulk edit (T10-6 built)         ->  T10-3, T10-4, T10-5, T10-7

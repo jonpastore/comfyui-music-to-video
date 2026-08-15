@@ -86,10 +86,11 @@ still not shipped (`T8-12`, provisional by absence).
    project renders through it.
 2. **TRD-8's take model.** New generations land as `takes` rows (`T8-1`); pick
    (`T8-2`) is built — picking records `takes.picked` and does not write
-   `songs.mp3_path`; Use on a generated take is refused. The three-path origin
-   on every route (`T8-3`) is the remaining half. Takes generated before `T8-1`
-   still cannot say what they were asked for. `T8-10` is the voice-store gate
-   (built); `T8-11` is built — `h_audio` writes which voice produced the take,
+   `songs.mp3_path`; Use on a generated take is refused. **`T8-3` is built** —
+   generated, resynthesised and bridged each land a take listed with its
+   origin and path. Takes generated before `T8-1` still cannot say what they
+   were asked for. `T8-10` is the voice-store gate (built); `T8-11` is built —
+   `h_audio` writes which voice produced the take,
    or that none did. **`T8-13` is built** — the song editor reads and writes
    `automation` through `automation.save` / `item_audio` (`GET/POST
    /api/songs/{id}/automation/{lane}`). **`T8-14` is built** — predicted
