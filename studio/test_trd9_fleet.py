@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-11, T9-13a, T9-16, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-11, T9-13a, T9-14, T9-16, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -1034,3 +1034,77 @@ def test_t9_16_store_credential_usable_by_alert_with_provenance():
                 os.environ.pop(env, None)
             else:
                 os.environ[env] = val
+def test_t9_14_render_refused_when_other_tenant_holds_card_and_starts_when_free():
+    """T9-14: shared-card pressure from ollama refuses the render, naming the tenant.
+
+    Positive half (TRD-9 §9): with the card free, the same render starts.
+    Measured failure: ollama pins ~22 GB; unload can clear /api/ps while free
+    VRAM stays low — the refusal must still name ollama, not only free GB.
+    Asserted through _submit_and_collect so submit is not started on refuse.
+    Mutations that must go red: always refuse; refuse without naming ollama;
+    start submit on the pressure path.
+    """
+    GB = pipeline.gpu.GB
+    card = {"free": 8.0, "models": [], "returns": 0.0, "pending": 0}
+    submitted = []
+
+    def _g(url, timeout=5):
+        if url.endswith("/system_stats"):
+            return {"devices": [{"vram_free": int(card["free"] * GB),
+                                 "vram_total": int(24 * GB)}]}
+        if card["pending"] > 0:
+            card["pending"] -= 1
+            if card["pending"] == 0:
+                card["models"] = []
+                card["free"] += card["returns"]
+        return {"models": list(card["models"])}
+
+    def _p(url, payload, timeout=30):
+        card["pending"] = 3
+        return b""
+
+    was = (
+        pipeline.RENDER_BACKEND, pipeline.submit_dir, pipeline.submit_swarm,
+        pipeline.submitted_prefixes, pipeline.collect, pipeline._stamp,
+        pipeline.gpu._get, pipeline.gpu._post,
+    )
+    pipeline.gpu._get, pipeline.gpu._post = _g, _p
+    pipeline.RENDER_BACKEND = "comfy"
+    pipeline.submitted_prefixes = lambda d: set()
+    pipeline.collect = lambda *a, **k: []
+    pipeline._stamp = lambda *a, **k: None
+    pipeline.submit_swarm = lambda *a, **k: []
+    pipeline.submit_dir = lambda *a, **k: submitted.append("comfy")
+
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            # pressure: ollama held 21.9 GB; unload clears /api/ps; free stays 0.25
+            card.update(
+                free=0.25, returns=0.0, pending=0,
+                models=[{"model": "qwen3.6:27b",
+                         "size_vram": int(21.9 * GB),
+                         "expires_at": "2026-08-12T21:40:00Z"}],
+            )
+            submitted.clear()
+            try:
+                pipeline._submit_and_collect(d, "x", "*.png", lambda m: None)
+                raise AssertionError(
+                    "render started while the other tenant held the card")
+            except RuntimeError as e:
+                msg = str(e)
+                assert "ollama" in msg.lower(), (
+                    f"refusal did not name the other tenant: {msg}")
+                assert "0.2" in msg or "0.25" in msg or "free" in msg.lower(), msg
+            assert submitted == [], (
+                f"submit ran on shared-card pressure: {submitted}")
+
+            # positive half: same path, card free → render starts
+            card.update(free=8.0, returns=0.0, pending=0, models=[])
+            submitted.clear()
+            pipeline._submit_and_collect(d, "x", "*.png", lambda m: None)
+            assert submitted == ["comfy"], (
+                f"free card did not start the render: {submitted}")
+    finally:
+        (pipeline.RENDER_BACKEND, pipeline.submit_dir, pipeline.submit_swarm,
+         pipeline.submitted_prefixes, pipeline.collect, pipeline._stamp,
+         pipeline.gpu._get, pipeline.gpu._post) = was

@@ -108,6 +108,10 @@ def preflight(progress=None):
     effort about the result: if the card is genuinely too full after ollama has
     let go, this raises rather than letting ComfyUI OOM, because an OOM here
     presents as a job that succeeded with no images.
+
+    T9-14: when the other tenant (ollama) held the card, the refusal names it.
+    Unload can clear /api/ps while free VRAM stays low; still blame the tenant
+    that held at the start, not only models still listed after the wait.
     """
     held = ollama_holding()
     if held:
@@ -119,11 +123,15 @@ def preflight(progress=None):
     free, total = v
     if free >= MIN_FREE_GB * GB:
         return
-    who = ", ".join(f"{m['name']} holding {m['bytes'] / GB:.1f} GB" for m in ollama_holding())
+    # Prefer models still resident; fall back to who held at preflight start.
+    blame = ollama_holding() or held
+    who = ", ".join(
+        f"{m['name']} holding {m['bytes'] / GB:.1f} GB" for m in blame
+    ) if blame else ""
     raise RuntimeError(
         f"the GPU has {free / GB:.1f} GB free of {total / GB:.1f} GB, and a render needs at "
         f"least {MIN_FREE_GB:.1f} GB"
-        + (f"; ollama still has {who}" if who else "")
+        + (f"; other tenant ollama: {who}" if who else "")
         + ". Run `python3 gpu.py comfy` on the render box, or free it another way, and "
           "start this again.")
 
@@ -185,7 +193,7 @@ def demo():
 
     # 1. the measured failure: 21.9 GB pinned, 0.25 GB free. ollama is asked to
     #    let go, and when the memory does NOT come back the render is refused
-    #    with both numbers rather than left to OOM.
+    #    with both numbers and the tenant name rather than left to OOM.
     card.update(free=0.25, returns=0.0,
                 models=[{"model": "qwen3.6:27b", "size_vram": int(21.9 * GB),
                          "expires_at": "2026-08-12T21:40:00Z"}])
@@ -194,6 +202,7 @@ def demo():
         raise AssertionError("a card with 0.25 GB free was accepted for a render")
     except RuntimeError as e:
         assert "0.2 GB free" in str(e) and "24.0 GB" in str(e), str(e)
+        assert "ollama" in str(e) and "qwen3.6:27b" in str(e), str(e)
     assert calls and calls[0]["keep_alive"] == 0, calls
     assert any("21.9 GB" in s and "qwen3.6:27b" in s for s in said), said
 
