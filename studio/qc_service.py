@@ -8,7 +8,8 @@ something, a mobile client cannot -- so nothing is decided in a route handler.
 
 The split from qc.py is deliberate and is the one docs/TRD-3 T3-30 asks for:
 qc.py is pure measurement and touches no database, so it can be run over a
-directory of old output; this module is what persists an answer.
+directory of old output; this module is what persists an answer. T3-17's
+per-artefact identity score is recorded here; qc.run cannot see it.
 
     python3 qc_service.py      # self-check against a temporary database
 """
@@ -99,6 +100,49 @@ def _identity_wrong_remedy(check, remedy):
     return qc.identity_wrong_remedy(remedy)
 
 
+def _chosen_anchor_path(expect):
+    """T3-17: the chosen anchor named on the artefact's expect, if any."""
+    expect = expect or {}
+    for key in ("anchor_path", "identity_path"):
+        path = str(expect.get(key) or "").strip()
+        if path:
+            return path
+    return ""
+
+
+def _identity_drift_finding(path, kind, report):
+    """Tier-2 measurement. Scored, not gated — verdict is PASS."""
+    row = qc.finding(
+        path, kind, qc.IDENTITY_DRIFT, qc.PASS,
+        (f"compliance {report['compliance']:.1f} vs chosen anchor "
+         f"{os.path.basename(report['anchor'])}, variation "
+         f"{report['variation']:.4f} over {report['n']} samples"),
+        report["compliance"], None, "pct",
+        remedy=("scored, not gated — look at the picture; "
+                "identity comes from the text"))
+    row["tier"] = 2
+    return row
+
+
+def score_identity_artefact(path, anchor=None, expect=None, kind=None):
+    """T3-17: score one artefact against the chosen anchor and record it.
+
+    Cause-agnostic. character_reference and prompt text are not inputs.
+    """
+    path = jobs.canonical_path(path)
+    if expect is None:
+        expect = _expect_from_artefacts(path)
+    else:
+        expect = dict(expect)
+    anchor = (str(anchor).strip() if anchor else "") or _chosen_anchor_path(expect)
+    if kind is None:
+        ext = os.path.splitext(path)[1].lower()
+        kind = "image" if ext in {".png", ".jpg", ".jpeg", ".webp", ".bmp"} else "clip"
+    report = qc.score_identity_artefact(path, anchor)
+    record([_identity_drift_finding(path, kind, report)])
+    return report
+
+
 def record(findings):
     """Persist findings. Returns the number of rows written.
 
@@ -174,6 +218,13 @@ def run_artefact(path, kind, expect=None, items=None, record_pass=True):
     found = qc.run(path, kind, expect=expect, items=items)
     for f in found:
         f["path"] = path
+    # T3-17: tier 2 only. qc.run cannot see this. Skip when the named
+    # chosen anchor is not a file — a missing path is not a score.
+    anchor = _chosen_anchor_path(expect)
+    if (kind != "audio" and anchor and os.path.isfile(path)
+            and os.path.isfile(anchor)):
+        report = qc.score_identity_artefact(path, anchor)
+        found.append(_identity_drift_finding(path, kind, report))
     record(found if record_pass else [f for f in found if f["verdict"] != qc.PASS])
     return found
 

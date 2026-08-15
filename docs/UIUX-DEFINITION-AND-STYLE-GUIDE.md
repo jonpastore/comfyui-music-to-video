@@ -804,9 +804,11 @@ carries the `--muted` role and an explicit marker; measurements carry
 
 `T3-13` is not a screen. Overlap and separation live on the `calibrations`
 row. `T3-14` can write a threshold on a stored separated row (service,
-not a tile); `T3-16` still builds no gate. There is no badge and no
-threshold control. Putting that number on a tile now would be the
-inversion this paragraph exists to stop.
+not a tile); `T3-16` still builds no gate. `T3-17` scores each artefact
+against the chosen anchor (compliance, variation, n) as a tier-2
+measurement — it is not a badge and not a tile. There is no threshold
+control. Putting that number on a tile now would be the inversion this
+paragraph exists to stop.
 
 ## 8. How this document is verified
 

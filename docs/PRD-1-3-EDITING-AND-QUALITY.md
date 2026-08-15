@@ -111,8 +111,10 @@ keeping only the harness. A remedy that proposes swapping the reference image
 teaches the operator a false lesson, which is why `T3-28` forbids it by name.
 `qc.check_identity_wrong` (via `qc.run`) proposes "edit the text, then
 re-render"; `record` / `set_remedy` / `approve` refuse a swap-the-reference
-wording. The picture still has to be looked at — this is the remedy, not a
-gate. The storyboard-side pair is `T2-31` / `T2-32`: saving an empty
+wording. `T3-17` scores that artefact against the chosen anchor
+regardless of cause — it does not require an empty `character_reference`.
+The picture still has to be looked at — this is the score and the remedy,
+not a gate. The storyboard-side pair is `T2-31` / `T2-32`: saving an empty
 `character_reference` is refused, and the message says identity comes
 from the text, not the reference image.
 
@@ -243,7 +245,10 @@ order and take the dependencies from here.
    on that row and refuses without one, naming why. `T3-15` ranks the
    recorded pose pair (histogram, not pixel distance). `T3-16` names
    overlap inconclusive and does not build a gate; that is a successful
-   outcome. There is still no tier-2 UI.
+   outcome. `T3-17` is **built**: identity drift is scored per artefact
+   against the chosen anchor, whatever caused it — a non-empty reference
+   plus text that does not name the species still scores. Tier 1 cannot
+   see the score. There is still no tier-2 UI.
 9. Repair routing (`T3-23`) is built: `dispatch_repair` asks `where()` /
    `fits()` / `resolve()`, refuses a mis-named pin before submit, and
    dest is the `fix_ref` / `gen_postproc` file. `T3-24` is built: the

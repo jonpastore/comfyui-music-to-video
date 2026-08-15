@@ -2,7 +2,8 @@
 """Tier 1 of docs/TRD-3: deterministic checks on what was actually rendered.
 
 T3-13's identity score also lives here (pure; no database). T3-15 is the
-histogram embed; T3-16 is identity_verdict. The threshold setter is not
+histogram embed; T3-16 is identity_verdict. T3-17 scores each artefact
+against the chosen anchor (cause-agnostic). The threshold setter is not
 in this file. T3-26's labelled-set refiner measurement lives here too.
 T3-28's identity-wrong remedy: edit the text, never swap the reference image.
 
@@ -100,6 +101,12 @@ _REFERENCE_SWAP_MARKERS = (
 # silent rewrite of this one.
 IDENTITY_METRIC = "identity_cosine_v1"
 
+# docs/TRD-3 T3-17: per-artefact drift against the chosen anchor.
+# N sampled frames; a still is n=1. Not a gate.
+IDENTITY_DRIFT = "identity_drift"
+IDENTITY_SAMPLE_N = 8
+_IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+
 # docs/TRD-3 T3-26: whether the refiner helps is measured on a labelled
 # set. Catalogue proven: opportunistic is not that measurement.
 REFINER_HELP_CHECK = "refiner_help"
@@ -186,6 +193,7 @@ CHECK_REMEDY_CLASS = {
     IDENTITY_LOOK: REMEDY_EDIT_TEXT,
     LIGHTING_LOCK: REMEDY_RERENDER,
     IDENTITY_WRONG: REMEDY_EDIT_TEXT,
+    IDENTITY_DRIFT: REMEDY_NONE,
     "duration_matches_prediction": REMEDY_NONE,
     REFINER_HELP_CHECK: REMEDY_NONE,
 }
@@ -964,6 +972,23 @@ def list_zimage_sweep(root):
     return items
 
 
+def identity_embed_array(arr):
+    """Colour histogram of an RGB array. Same bins as identity_embed."""
+    import numpy as np
+    arr = np.asarray(arr, dtype="float32")
+    if arr.ndim == 3 and arr.shape[-1] >= 4:
+        arr = arr[..., :3]
+    if arr.size == 0 or arr.ndim != 3 or arr.shape[-1] != 3:
+        raise RuntimeError("identity embed: empty image")
+    q = np.clip((arr / 64.0).astype("int32"), 0, 3)
+    idx = q[:, :, 0] * 16 + q[:, :, 1] * 4 + q[:, :, 2]
+    hist = np.bincount(idx.ravel(), minlength=64).astype("float64")
+    total = float(hist.sum())
+    if total == 0.0:
+        raise RuntimeError("identity embed: empty image")
+    return (hist / total).tolist()
+
+
 def identity_embed(path):
     """Colour histogram. Not flattened pixels, not a spatial grid.
 
@@ -980,13 +1005,7 @@ def identity_embed(path):
         arr = np.asarray(im.convert("RGB"), dtype="float32")
     if arr.size == 0:
         raise RuntimeError(f"identity embed: empty image: {path}")
-    q = np.clip((arr / 64.0).astype("int32"), 0, 3)
-    idx = q[:, :, 0] * 16 + q[:, :, 1] * 4 + q[:, :, 2]
-    hist = np.bincount(idx.ravel(), minlength=64).astype("float64")
-    total = float(hist.sum())
-    if total == 0.0:
-        raise RuntimeError(f"identity embed: empty image: {path}")
-    return (hist / total).tolist()
+    return identity_embed_array(arr)
 
 
 def _cosine(a, b):
@@ -1141,6 +1160,79 @@ def score_zimage_sweep(root, reference=None, embed=None, score_fn=None):
         "overlap": range_overlap(good, bad),
         "separation": mean_separation(good, bad),
         "scores": rows,
+        "threshold": None,
+    }
+
+
+def _sample_indices(length, n):
+    if length <= 0:
+        raise RuntimeError("identity drift: no frames")
+    n = int(n)
+    if n < 1:
+        raise RuntimeError("identity drift needs a sample count")
+    n = min(n, length)
+    if n == 1:
+        return [0]
+    return [int(round(i * (length - 1) / (n - 1))) for i in range(n)]
+
+
+def _stdev(xs):
+    if len(xs) < 2:
+        return 0.0
+    mean = sum(xs) / len(xs)
+    return (sum((x - mean) ** 2 for x in xs) / len(xs)) ** 0.5
+
+
+def sample_identity_frames(path, n=IDENTITY_SAMPLE_N):
+    """Evenly sample up to n RGB frames. A still is one frame."""
+    from PIL import Image
+    import numpy as np
+    if not path or not os.path.isfile(path):
+        raise RuntimeError(f"identity drift: file does not exist: {path}")
+    ext = os.path.splitext(path)[1].lower()
+    if ext in _IMAGE_EXT:
+        with Image.open(path) as im:
+            arr = np.asarray(im.convert("RGB"))
+        if arr.size == 0:
+            raise RuntimeError(f"identity drift: empty image: {path}")
+        return [arr]
+    frames = decode_video_frames(path)
+    if frames is None or len(frames) == 0:
+        raise RuntimeError(f"identity drift: no frames in {path}")
+    return [frames[i] for i in _sample_indices(len(frames), n)]
+
+
+def score_identity_artefact(path, anchor, n=None):
+    """T3-17: identity of one artefact vs the chosen anchor.
+
+    Cause-agnostic: does not inspect character_reference or prompt text.
+    Scores the pixels. No threshold, no verdict, no gate. A still reports
+    n=1 and variation 0; a clip reports the spread across sampled frames.
+    """
+    if not anchor or not str(anchor).strip():
+        raise RuntimeError("identity drift needs a chosen anchor")
+    anchor = str(anchor)
+    if not os.path.isfile(anchor):
+        raise RuntimeError(
+            f"identity drift: chosen anchor does not exist: {anchor}")
+    if not path or not os.path.isfile(path):
+        raise RuntimeError(f"identity drift: file does not exist: {path}")
+    ref = identity_embed(anchor)
+    frames = sample_identity_frames(
+        path, IDENTITY_SAMPLE_N if n is None else n)
+    scores = [_cosine(identity_embed_array(frame), ref) for frame in frames]
+    mean = sum(scores) / len(scores)
+    return {
+        "path": path,
+        "anchor": anchor,
+        "metric": IDENTITY_METRIC,
+        "tier": 2,
+        "check": IDENTITY_DRIFT,
+        "score": mean,
+        "compliance": mean * 100.0,
+        "variation": _stdev(scores),
+        "n": len(scores),
+        "scores": scores,
         "threshold": None,
     }
 

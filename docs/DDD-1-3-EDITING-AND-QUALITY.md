@@ -21,8 +21,8 @@ is named.
 | `studio/mixer.py` | 2116 | set duration, both filter graphs, overlap arithmetic, beatmatch, ramps, splice, song-assembly geometry (`T5-7`) and fps (`T2-13d`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox. Mixed clip fps honours the highest and is asserted on the assembled file |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `export_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` **and** `T3-9`/§4.3 |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `fragment`, `item_audio`, `wants_master_loudnorm` | built |
-| `studio/qc.py` | 642 | TRD-3 tier 1 in full; T3-13 `score_zimage_sweep`; T3-15 histogram `identity_embed`; T3-16 `identity_verdict`; T3-26 `measure_refiner_help` (fail-closed labelled set, not opportunistic); T3-28 `check_identity_wrong` / `identity_wrong_remedy`; T3-27 `CHECK_REMEDY_CLASS` / `actuator_for` | built |
-| `studio/qc_service.py` | 308 | findings, queue, `by_host` (`T3-1`), remedy edit, dismiss, reopen; `artefact_hash` keeps a dismissal on the same bytes and reopens the same check when the file changes (`T3-22`); `approve()` enqueues dest ≠ source; `pair()` lists original and repair, both scored (`T3-21`); approve uses `remedy_class` (`T3-27`); the version that RUNS is `findings.remedy_prompt_id` looked up at execute (`T3-20`); `dispatch_repair` asks `where()`/`fits()`/`resolve()` then submits `fix_ref` / `gen_postproc`; real `fits()` routes the refiner by resident cost (`T3-24`); `can_move_output` gates remote repair (`T3-25`); `run_zimage_calibration` writes the T3-13 row; `set_threshold` writes a value only on a stored separated row (`T3-14`/`T3-16`); `build_identity_gate` never builds; T3-28 refuses a swap-the-reference identity-wrong remedy; `record_refiner_help` persists the T3-26 finding; `run_song` is tier 1 over a song's artefacts with no GPU and no backend (`T3-32`) | built |
+| `studio/qc.py` | 642 | TRD-3 tier 1 in full; T3-13 `score_zimage_sweep`; T3-15 histogram `identity_embed`; T3-16 `identity_verdict`; T3-17 `score_identity_artefact` (per artefact vs chosen anchor); T3-26 `measure_refiner_help` (fail-closed labelled set, not opportunistic); T3-28 `check_identity_wrong` / `identity_wrong_remedy`; T3-27 `CHECK_REMEDY_CLASS` / `actuator_for` | built |
+| `studio/qc_service.py` | 308 | findings, queue, `by_host` (`T3-1`), remedy edit, dismiss, reopen; `artefact_hash` keeps a dismissal on the same bytes and reopens the same check when the file changes (`T3-22`); `approve()` enqueues dest ≠ source; `pair()` lists original and repair, both scored (`T3-21`); approve uses `remedy_class` (`T3-27`); the version that RUNS is `findings.remedy_prompt_id` looked up at execute (`T3-20`); `dispatch_repair` asks `where()`/`fits()`/`resolve()` then submits `fix_ref` / `gen_postproc`; real `fits()` routes the refiner by resident cost (`T3-24`); `can_move_output` gates remote repair (`T3-25`); `run_zimage_calibration` writes the T3-13 row; `set_threshold` writes a value only on a stored separated row (`T3-14`/`T3-16`); `build_identity_gate` never builds; T3-17 `score_identity_artefact` / `run_artefact` records the per-artefact score as a tier-2 measurement, no gate; T3-28 refuses a swap-the-reference identity-wrong remedy; `record_refiner_help` persists the T3-26 finding; `run_song` is tier 1 over a song's artefacts with no GPU and no backend (`T3-32`) | built |
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2: JSON-canonical arc, `to_md`, `validate`, `for_song`, screened both directions | built |
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning; `running(vid)` is the row a render RUNS (`T3-20`) | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
@@ -39,6 +39,8 @@ tier-2 gate or UI. `calibrations` and `qc.score_zimage_sweep` landed for
 `set_threshold` writes a number on a stored separated row and refuses
 without one. `T3-15` is a colour histogram, not a spatial grid.
 `T3-16` names overlap inconclusive and does not build a gate.
+`T3-17` scores each artefact against the chosen anchor; it is not a
+gate and not a UI.
 `siglip2_naflex`
 is still only a `models.py` catalogue entry; the default embedder is a
 colour histogram so the report can run without a GPU. `insightface` is
@@ -456,7 +458,7 @@ sibling via `qc_service.produce_repair`; it never overwrites the generate.
 `h_fix_anchor` is the operator-started repair; it scores the new file and
 does not overwrite or auto-heal.
 
-Design, in the order `T3-13`…`T3-16` fix:
+Design, in the order `T3-13`…`T3-17` fix:
 
 1. Extractor over `zimage_sweep/`'s **12 known-bad and 6 known-good** images
    (same prompt, same anchor, same day; on two seeds the model draws bare human
@@ -476,12 +478,18 @@ Design, in the order `T3-13`…`T3-16` fix:
    change as an identity failure. **Built** against the recorded pair that
    pixel distance got backwards — 41.1 for the wrong render, 64.7 for the right
    one.
+5. `T3-17` scores **each artefact** against the chosen anchor, whatever
+   caused the gap. **Built** as `qc.score_identity_artefact` (pure) and
+   `qc_service.score_identity_artefact` / `run_artefact` (recorded, tier 2).
+   The reachable case is a non-empty reference plus text that does not
+   name the species. `qc.run` (tier 1) cannot see the score. No threshold,
+   no gate, no UI.
 
 Reported per artefact: a calibrated compliance percentage, a **variation** figure
 across the sampled frames, and the sample count both came from. Variation is the
 one that matters more now than it did: chained clips start from a generated
 frame, not an approved reference, so drift *within* a long clip is the reachable
-failure.
+failure. `score_identity_artefact` is that report.
 
 ### 5.7 What has to exist before a repair is a repair
 
@@ -543,7 +551,7 @@ documents, not a preference.
                         ->  storyboard_service ->  arc flows, meter, casting
 
     zimage_sweep scored  ->  calibrations row  ->  threshold (only if separated)  ->  tier 2 UI
-    (T3-13..T3-16 landed the first three; the UI stays off)
+    (T3-13..T3-16 landed the first three; T3-17 scores per artefact; the UI stays off)
     T3-23 routing (where/fits/resolve + actuator)  ->  T3-24 refiner box pick
                                                    ->  T3-25 remote-output move
                                                    ->  T3-26 labelled-set "does it help"
