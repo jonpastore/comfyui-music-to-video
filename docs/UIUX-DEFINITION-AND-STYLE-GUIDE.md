@@ -988,9 +988,10 @@ unit is a claim, not a measurement.
 row. `T3-14` can write a threshold on a stored separated row (service,
 not a tile); `T3-16` still builds no gate. `T3-17` scores each artefact
 against the chosen anchor (compliance, variation, n) as a tier-2
-measurement — it is not a badge and not a tile. There is no threshold
-control. Putting that number on a tile now would be the inversion this
-paragraph exists to stop.
+measurement. `T3-17-ui`: those three numbers appear on the QC finding-row
+(`/qc`), with unit, not as a badge or a tile and not as a threshold
+control. Putting that number on a tile or turning it into a gate would
+be the inversion this paragraph exists to stop.
 
 ### 7b.6 The song editor is the same automation surface as the set
 

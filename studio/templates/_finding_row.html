@@ -1,5 +1,6 @@
 {# QC queue atom: measured / expected / unit, editable remedy, approve.
-   T3-4 / T3-19 / T3-27. The route interpolates; this file does not compute.
+   T3-4 / T3-19 / T3-27. T3-17-ui: identity_drift shows compliance /
+   variation / n. The route interpolates; this file does not compute.
    A false actionable is why the button is absent, not why it does nothing. #}
 <article class="finding-row card" id="finding-{{ f.id }}"
          data-finding="{{ f.id }}"
@@ -7,12 +8,25 @@
          data-expected="{{ f.expected }}"
          data-unit="{{ f.unit }}"
          data-actionable="{{ 'true' if f.actionable else 'false' }}"
-         data-check="{{ f.check_name }}">
+         data-check="{{ f.check_name }}"
+         {% if f.check_name == 'identity_drift' %}data-compliance="{{ f.compliance }}" data-variation="{{ f.variation }}" data-n="{{ f.n }}"{% endif %}>
   <header class="section-head">
     <h3>{{ f.check_name }}</h3>
     <span class="tag">{{ f.verdict }}</span>
     <span class="tag">{{ f.remedy_class }}</span>
+    {% if f.tier %}<span class="tag">tier {{ f.tier }}</span>{% endif %}
   </header>
+  {% if f.check_name == 'identity_drift' %}
+  <p class="meta identity-drift-scores">
+    <span class="num" data-field="compliance">{{ f.compliance }}</span>
+    <span class="muted">compliance</span>
+    <span class="num" data-field="variation">{{ f.variation }}</span>
+    <span class="muted">variation</span>
+    <span class="num" data-field="n">{{ f.n }}</span>
+    <span class="muted">n</span>
+    <span class="num" data-field="unit">{{ f.unit }}</span>
+  </p>
+  {% else %}
   <p class="meta">
     <span class="num" data-field="measured">{{ f.measured }}</span>
     <span class="muted">measured</span>
@@ -21,6 +35,7 @@
     <span class="muted">expected</span>
     <span class="num" data-field="unit">{{ f.unit }}</span>
   </p>
+  {% endif %}
   {% if f.detail %}<p class="hint">{{ f.detail }}</p>{% endif %}
   <p class="muted">{{ f.path }}</p>
   {% if f.actionable %}

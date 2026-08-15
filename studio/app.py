@@ -2323,7 +2323,7 @@ def start_qc(id: int, tier: str = Form("")):
 
 @app.get("/qc", response_class=HTMLResponse)
 def qc_queue_page(request: Request):
-    """The review queue as finding-rows (T3-4 / T3-19 / T3-27)."""
+    """The review queue as finding-rows (T3-4 / T3-19 / T3-27 / T3-17-ui)."""
     return templates.TemplateResponse(request, "qc.html", {
         "findings": qc_service.queue(),
     })

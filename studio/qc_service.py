@@ -16,6 +16,7 @@ per-artefact identity score is recorded here; qc.run cannot see it.
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 
@@ -32,6 +33,14 @@ OPEN, APPROVED, RUNNING, REPAIRED, DISMISSED = (
 
 UNATTRIBUTED = "unattributed"
 MAX_REMEDY = 4000
+
+# T3-17-ui: detail written by _identity_drift_finding; parse for the QC surface.
+_IDENTITY_DRIFT_DETAIL = re.compile(
+    r"compliance\s+(?P<compliance>[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)"
+    r".*?\bvariation\s+(?P<variation>[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)"
+    r".*?\bover\s+(?P<n>\d+)\s+samples",
+    re.I | re.S,
+)
 
 
 def _txt(v):
@@ -50,13 +59,39 @@ def _remedy_class_of(finding):
     return qc.CHECK_REMEDY_CLASS.get(d.get("check") or d.get("check_name") or "")
 
 
+def _enrich_identity_drift(d):
+    """T3-17-ui: compliance / variation / n on the row the template reads."""
+    name = d.get("check_name") or d.get("check") or ""
+    if name != qc.IDENTITY_DRIFT:
+        return d
+    if d.get("compliance") is not None and d.get("variation") is not None and d.get("n") is not None:
+        return d
+    m = _IDENTITY_DRIFT_DETAIL.search(d.get("detail") or "")
+    if m:
+        d["compliance"] = float(m.group("compliance"))
+        d["variation"] = float(m.group("variation"))
+        d["n"] = int(m.group("n"))
+    elif d.get("measured") is not None and d.get("measured") != "":
+        try:
+            d["compliance"] = float(d["measured"])
+        except (TypeError, ValueError):
+            pass
+    # Prefer measured for compliance — full precision survived the TEXT column.
+    if d.get("measured") is not None and d.get("measured") != "":
+        try:
+            d["compliance"] = float(d["measured"])
+        except (TypeError, ValueError):
+            pass
+    return d
+
+
 def _as_finding_row(row):
     """sqlite row plus whether approve has something to run (T3-27)."""
     d = dict(row)
     cls = _remedy_class_of(d)
     d["remedy_class"] = cls
     d["actionable"] = qc.is_actionable(cls)
-    return d
+    return _enrich_identity_drift(d)
 
 
 def artefact_hash(path):
@@ -111,16 +146,26 @@ def _chosen_anchor_path(expect):
 
 
 def _identity_drift_finding(path, kind, report):
-    """Tier-2 measurement. Scored, not gated — verdict is PASS."""
+    """Tier-2 measurement. Scored, not gated — verdict is PASS.
+
+    Detail carries compliance / variation / n in a parseable shape so the
+    QC surface (T3-17-ui) can show the three numbers without a schema change.
+    """
+    compliance = float(report["compliance"])
+    variation = float(report["variation"])
+    n = int(report["n"])
     row = qc.finding(
         path, kind, qc.IDENTITY_DRIFT, qc.PASS,
-        (f"compliance {report['compliance']:.1f} vs chosen anchor "
+        (f"compliance {compliance:.10g} vs chosen anchor "
          f"{os.path.basename(report['anchor'])}, variation "
-         f"{report['variation']:.4f} over {report['n']} samples"),
-        report["compliance"], None, "pct",
+         f"{variation:.10g} over {n} samples"),
+        compliance, None, "pct",
         remedy=("scored, not gated — look at the picture; "
                 "identity comes from the text"))
     row["tier"] = 2
+    row["compliance"] = compliance
+    row["variation"] = variation
+    row["n"] = n
     return row
 
 
@@ -291,7 +336,9 @@ def run_song(song_id, tier="", progress=None):
 def queue(status=OPEN, kind=None, tier=None, include_pass=False):
     """The review queue IS the findings table filtered. docs/TRD-3 3.
 
-    Defaults to what a human still has to look at: open, and not the passes.
+    Defaults to what a human still has to look at: open, and not the passes —
+    except T3-17 identity_drift, which is always scored as PASS (no gate) and
+    must still appear so compliance / variation / n are visible (T3-17-ui).
     """
     sql = "SELECT * FROM findings WHERE 1=1"
     args = []
@@ -305,7 +352,8 @@ def queue(status=OPEN, kind=None, tier=None, include_pass=False):
         sql += " AND tier=?"
         args.append(int(tier))
     if not include_pass:
-        sql += " AND verdict != 'pass'"
+        sql += " AND (verdict != 'pass' OR check_name=?)"
+        args.append(qc.IDENTITY_DRIFT)
     # rejects before flags, newest first: the order a person would want to work
     sql += " ORDER BY CASE verdict WHEN 'reject' THEN 0 ELSE 1 END, created DESC, id DESC"
     return [_as_finding_row(r) for r in db.q(sql, *args)]

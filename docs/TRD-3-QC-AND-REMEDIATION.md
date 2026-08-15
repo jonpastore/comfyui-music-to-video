@@ -77,8 +77,9 @@ order is built: `T3-13` writes the calibrations row, `T3-14` is a setter
 naming why), `T3-15` ranks the recorded pose pair, `T3-16` names
 overlap inconclusive and builds no gate, and `T3-17` scores each
 artefact against the chosen anchor (compliance, variation, sample
-count) without caring which cause produced the gap. There is still
-no tier-2 UI.
+count) without caring which cause produced the gap. `T3-17-ui` shows
+those three numbers on the QC finding-row surface (still no gate,
+no threshold control).
 `T3-23` is wired: `dispatch_repair` asks `models.where()` /
 `models.fits()` / `models.resolve()`, refuses an unfittable or mis-named pin
 before submit, and invokes `pipeline.gen_postproc` or `pipeline.fix_ref` so dest
@@ -654,6 +655,7 @@ current.
 | `T3-15` pose change is not identity failure | **built** | `test_t3_15_identity.py` | `identity_embed` is a colour histogram; `identity_score` ranks the anchored sheet above the pose-plate look. Pixel distance still inverts that pair |
 | `T3-16` overlap is inconclusive, no gate | **built** | `test_t3_16_overlap_inconclusive.py` | `identity_verdict` names overlap inconclusive; `build_identity_gate` returns built False / threshold NULL; a threshold on that report (or via `set_threshold`) is refused. Separated ranges are not called inconclusive. No UI |
 | `T3-17` identity drift scored per artefact | **built** | `test_t3_17_identity_drift.py` | `qc.score_identity_artefact` scores each artefact against the chosen anchor (compliance, variation, sample count). Cause-agnostic: a non-empty reference with no species in the text still scores, and the same pixels score the same whatever the prompt said. `qc.run` (tier 1) cannot see it; `qc_service.run_artefact` records a tier-2 measurement with no threshold and no gate |
+| `T3-17-ui` identity-drift scores on QC surface | **built** | `test_t3_17_ui_identity_drift.py` | `GET /qc` finding-row shows compliance, variation, n for each `identity_drift` row. Default queue keeps that PASS (scored, not gated) so the three numbers are visible; not a threshold control and not a gate |
 | **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-19`, `T3-20`, `T3-21`, `T3-22`, `T3-23`, `T3-24`, `T3-25`, `T3-26` and `T3-27` are their own rows |
 | `T3-23` repair routing | **built** | `160547d` | default `dispatch_repair` asks `where()`/`fits()`/`resolve()`, refuses a pin under a name the box does not have before submit (`test_t3_23_pinned_name_the_box_does_not_have_is_refused_before_submit`), and a correctly-named model on a box that holds it is SUBMITTED (`test_t3_23_correctly_named_model_on_a_box_that_holds_it_is_submitted`). dest is the actuator's file (`fix_ref` / `gen_postproc`), not a copy of src |
 | `T3-24` refiner resident cost | **built** | `a4b7ef9` | real `fits()` (not a stub) routes `wan22_i2v_low` off a 15.92 GiB card onto a 24 GiB one that holds the correct name (`test_t3_24_refiner_routed_off_15_92_to_24_and_submitted`); peaches cannot take the i2v pair (`test_t3_24_peaches_cannot_take_the_pair`) |

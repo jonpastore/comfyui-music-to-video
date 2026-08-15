@@ -371,7 +371,9 @@ order and take the dependencies from here.
    outcome. `T3-17` is **built**: identity drift is scored per artefact
    against the chosen anchor, whatever caused it — a non-empty reference
    plus text that does not name the species still scores. Tier 1 cannot
-   see the score. There is still no tier-2 UI.
+   see the score. `T3-17-ui` is **built**: compliance, variation and n
+   are visible on the QC finding-row surface (still no gate, no
+   threshold control).
 9. Repair routing (`T3-23`) is built: `dispatch_repair` asks `where()` /
    `fits()` / `resolve()`, refuses a mis-named pin before submit, and
    dest is the `fix_ref` / `gen_postproc` file. `T3-24` is built: the

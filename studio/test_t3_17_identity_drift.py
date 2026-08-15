@@ -7,7 +7,8 @@ by the halfway point. The score is against the chosen anchor and does
 not care which cause produced the gap. Tier 1 cannot see it; tier 2
 is the only tier that can.
 
-No threshold, no gate, no UI. A scorer that only runs on an empty
+No threshold, no gate. Surface for the three numbers is T3-17-ui
+(test_t3_17_ui_identity_drift.py). A scorer that only runs on an empty
 reference, that aggregates two artefacts into one number, that lives
 inside qc.run, or that ignores the chosen anchor, must go red.
 """
