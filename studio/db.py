@@ -578,6 +578,22 @@ CREATE TABLE IF NOT EXISTS take_voices (
 CREATE INDEX IF NOT EXISTS idx_take_voices ON take_voices(take_id);
 """
 
+LINEAGE_SCHEMA = """
+-- T6-A5: a re-produced candidate sits beside its predecessor. listed()
+-- and select() are the shared entry point; either path stays selectable.
+CREATE TABLE IF NOT EXISTS lineage (
+  id INTEGER PRIMARY KEY,
+  kind TEXT NOT NULL,
+  grp TEXT NOT NULL,
+  predecessor TEXT NOT NULL,
+  successor TEXT NOT NULL,
+  selected TEXT,
+  created REAL NOT NULL,
+  UNIQUE(kind, grp, successor));
+
+CREATE INDEX IF NOT EXISTS idx_lineage ON lineage(kind, grp, id);
+"""
+
 CALIBRATIONS_SCHEMA = """
 -- T3-13 report. T3-14 may set threshold on this row; T3-16 is the gate.
 -- A number here without a stored calibration is the defect T3-14 stops.
@@ -679,6 +695,7 @@ def conn():
         c.executescript(TAKES_SCHEMA)
         c.executescript(CALIBRATIONS_SCHEMA)
         c.executescript(ADVICE_PROPOSALS_SCHEMA)
+        c.executescript(LINEAGE_SCHEMA)
         _migrate(c)
         _local.c = c
     return c

@@ -33,7 +33,7 @@ ControlNet.
 | `studio/prompts.py` | `PROMPT_TYPES` — 9 today, 4 more in `T7-13`…`T7-16` |
 | `studio/tiers.py` | `compose_guardrail`, `check_text`, `check_override`, `check_tier_policy` |
 | `build_song.py` | TRD-5's territory: `workflow()`, the LTX branches, `clip_plan`, `expect_from_workflow` |
-| `studio/jobs.py`, `pipeline.py`, `db.py` | TRD-6's territory |
+| `studio/jobs.py`, `pipeline.py`, `db.py` | TRD-6's territory. `qc_service.listed` / `select` / `record_pair` own T6-A5: predecessor and successor both listed and selectable. `h_render_set`, `refine_generated_still`, `h_repair` and `h_anchor` call `record_pair`. |
 | `studio/vision.py` | `score_candidate(path, bases, prompt)` — advisory identity+prompt match; a failure stores the xAI/local error and the backend that actually failed (not `available()`'s hope); `h_anchor` and `h_fix_anchor` write `anchors.qc_json`; `h_artwork` writes `assets.qc_json` on the generate and on a refine sibling; `qc_tag` shows the named failure, never "vision unknown" (`T3-31`, `T4-19`) |
 
 **The pipeline, and it is not a loop of adding bases:** operator base

@@ -145,8 +145,8 @@ lean on it and none defines it.
 
 - `T6-5` Every transition is **recorded with its time**, so "why did this take
   four hours" is answerable from rows rather than from logs.
-- `T6-6` A **re-render is a new candidate, never a replacement** — the rule
-  TRD-1 `T1-26` and TRD-3 `T3-6` both state. One implementation of it, here.
+- `T6-6` cites `T6-A5`: a re-render is a new candidate, never a replacement.
+  TRD-1 `T1-26` and TRD-3 `T3-6` both state that rule; the test is `test_t6_a5_*`.
 - `T6-7` `landed` requires the file to exist. A row claiming an artefact that is
   not on disk is the state QC then measures nothing against.
 
@@ -288,3 +288,4 @@ current.
 | `T6-A2` HTML and JSON report the same numbers | **built** | this change | `test_t6_a2_html_and_json_report_the_same_queue_numbers`: `/queue` HTML and `Accept: application/json` report the same 1 running / 2 waiting / 58s / 15s / 5s for one fixture. Same `queue_ctx()`. Distinctive numbers so two empty answers cannot pass. Set / storyboard / review still write their own T6-A2 as those loops move. |
 | `T6-A1` named JSON loops complete | **built** | this change | Empty `/api/*` is not enough. `test_t6_a1_set_empty_to_rendered_over_json`, `test_t6_a1_storyboard_loop_over_json`, `test_t6_a1_review_queue_over_json` drive the three named loops over JSON with no HTML: create set → add item → render → list a file; propose arc (unsaved) → accept → generate storyboard → edit scene → meter → unanchored; QC run → list → remedy → approve → recheck that can pass. TRD-4/TRD-7 still have not named their loop. |
 | `T6-A4` no template computes | **built** | this change | `test_t6_a4_queue_page_shows_stubbed_values_unmodified`: stub `queue_ctx` with elapsed `12.7s` and counts 3/7 (not the list lengths); `/queue` shows those strings unmodified. `_queue.html` interpolates `queue_n_running`, `queue_n_waiting`, `queue_rows`, `e.elapsed`. `_jobs_panel.html` still formats elapsed. |
+| `T6-A5` predecessor and successor listed and selectable | **built** | this change | `qc_service.listed` / `select` are the shared entry point (T6-A10). Set re-render (`h_render_set`), refine (`refine_generated_still`), repair (`h_repair`) and anchor re-roll (`h_anchor`) each write a sibling and call `record_pair`. `test_t6_a5_*` picks the predecessor, then the successor; both files stay. `GET/POST /api/qc/lineage`, `GET /api/sets/{id}/renders` + `/pick`. T6-6 cites this criterion. |

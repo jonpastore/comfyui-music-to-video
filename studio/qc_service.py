@@ -631,6 +631,138 @@ def dispatch_repair(src, dest, args, progress):
     return _invoke_actuator(actuator, src, dest, args, progress)
 
 
+LINEAGE_KINDS = ("set_rerender", "refine", "repair", "anchor_reroll")
+
+
+def lineage_group(kind, predecessor=None, **extra):
+    """Stable group key for one predecessor/successor pair (T6-A5)."""
+    if kind not in LINEAGE_KINDS:
+        raise ValueError(f"unknown lineage kind: {kind}")
+    if kind == "set_rerender":
+        sid = extra.get("set_id")
+        if sid is None:
+            raise ValueError("set_rerender lineage needs set_id")
+        return f"set:{int(sid)}"
+    if kind == "refine":
+        return jobs.canonical_path(predecessor)
+    if kind == "repair":
+        fid = extra.get("finding_id")
+        if fid is not None and fid != "":
+            return f"repair:{int(fid)}"
+        return jobs.canonical_path(predecessor)
+    cid = extra.get("character_id")
+    return "anchor:%s:%s:%s:%s:%s" % (
+        extra.get("scope_kind") or "album",
+        extra.get("scope_value") or "",
+        extra.get("tier") or "",
+        extra.get("view") or "front",
+        "" if cid is None else str(cid),
+    )
+
+
+def record_pair(kind, predecessor, successor, group=None, **extra):
+    """T6-A5: successor is written beside predecessor, never over it."""
+    if kind not in LINEAGE_KINDS:
+        raise ValueError(f"unknown lineage kind: {kind}")
+    pred = jobs.canonical_path(predecessor)
+    succ = jobs.canonical_path(successor)
+    if not pred or not succ or pred == succ:
+        raise ValueError("a successor must be written beside its predecessor")
+    if extra:
+        group = group or lineage_group(kind, pred, **extra)
+    group = group or lineage_group(kind, pred)
+    existing = db.one(
+        "SELECT selected FROM lineage WHERE kind=? AND grp=? ORDER BY id DESC",
+        kind, group)
+    selected = existing["selected"] if existing and existing["selected"] else pred
+    db.run("""INSERT INTO lineage
+                (kind, grp, predecessor, successor, selected, created)
+              VALUES (?,?,?,?,?,?)
+              ON CONFLICT(kind, grp, successor) DO UPDATE SET
+                predecessor=excluded.predecessor""",
+           kind, group, pred, succ, selected, time.time())
+    return listed(kind, group)
+
+
+def listed(kind, group):
+    """Predecessor and successor, both listed and selectable (T6-A5)."""
+    if kind not in LINEAGE_KINDS:
+        raise ValueError(f"unknown lineage kind: {kind}")
+    rows = db.q(
+        "SELECT * FROM lineage WHERE kind=? AND grp=? ORDER BY id", kind, group)
+    if not rows:
+        return []
+    selected = None
+    for r in rows:
+        if r["selected"]:
+            selected = r["selected"]
+    items = []
+    seen = set()
+    first_pred = jobs.canonical_path(rows[0]["predecessor"])
+    for r in rows:
+        for raw in (r["predecessor"], r["successor"]):
+            path = jobs.canonical_path(raw)
+            if not path or path in seen:
+                continue
+            seen.add(path)
+            items.append({
+                "kind": kind,
+                "group": group,
+                "role": "predecessor" if path == first_pred else "successor",
+                "path": path,
+                "selectable": True,
+                "selected": path == selected,
+            })
+    return items
+
+
+def select(kind, group, path):
+    """Pick either listed candidate. The other stays listed (T6-A5)."""
+    items = listed(kind, group)
+    path = jobs.canonical_path(path)
+    if not any(c["path"] == path for c in items):
+        raise ValueError(f"candidate is not listed for {kind}/{group}")
+    db.run("UPDATE lineage SET selected=? WHERE kind=? AND grp=?",
+           path, kind, group)
+    _apply_select(kind, group, path)
+    return listed(kind, group)
+
+
+def _apply_select(kind, group, path):
+    """Mirror the pick onto the table the rest of the studio already reads."""
+    if kind == "anchor_reroll":
+        row = db.one("SELECT * FROM anchors WHERE path=?", path)
+        if not row:
+            return
+        db.run("""UPDATE anchors SET chosen=0 WHERE scope_kind=? AND scope_value=?
+                  AND tier=? AND view=? AND character_id IS ?""",
+               row["scope_kind"], row["scope_value"], row["tier"],
+               row["view"], row["character_id"])
+        db.run("UPDATE anchors SET chosen=1 WHERE id=?", row["id"])
+        return
+    if kind == "set_rerender":
+        try:
+            set_id = int(str(group).split(":", 1)[1])
+        except (IndexError, ValueError):
+            return
+        for a in db.q("SELECT * FROM assets WHERE kind='set'"):
+            meta = db.jset(a)
+            if meta.get("set_id") != set_id:
+                continue
+            meta["chosen"] = 1 if jobs.canonical_path(a["path"]) == path else 0
+            db.run("UPDATE assets SET meta_json=? WHERE id=?",
+                   json.dumps(meta), a["id"])
+        return
+    if kind == "refine":
+        row = db.one("SELECT * FROM refs WHERE path=?", path)
+        if not row:
+            return
+        db.run("""UPDATE refs SET approved=0
+                  WHERE song_id=? AND tier=? AND clip_idx=?""",
+               row["song_id"], row["tier"], row["clip_idx"])
+        db.run("UPDATE refs SET approved=1 WHERE id=?", row["id"])
+
+
 def produce_repair(src, dest, args, progress):
     """Write dest as a new candidate beside src. Never the input path.
 
@@ -683,6 +815,8 @@ def h_repair(args, progress):
         if fid:
             db.run("UPDATE findings SET status=?, repair_path=?, resolved=? WHERE id=?",
                    REPAIRED, dest, time.time(), int(fid))
+    if src:
+        record_pair("repair", src, dest, finding_id=fid)
     remedy, vid = _running_remedy(args)
     return {"finding_id": fid, "repair_path": dest,
             "remedy": remedy, "remedy_prompt_id": vid}

@@ -277,7 +277,10 @@ def refine_generated_still(src, progress=None, extra=None):
     }
     if extra:
         args.update({k: v for k, v in extra.items() if v is not None})
-    return qc_service.produce_repair(src, dest, args, progress)
+    dest = qc_service.produce_repair(src, dest, args, progress)
+    qc_service.record_pair("refine", src, dest,
+                           group=qc_service.lineage_group("refine", src))
+    return dest
 
 
 def qc_tag(row):
@@ -986,6 +989,11 @@ def h_anchor(args, progress):
     now = time.time()
     asked = args.get("prompt") or ""
     bases = args.get("images") or []
+    prev = db.q("""SELECT path FROM anchors WHERE scope_kind=? AND scope_value=?
+                   AND tier=? AND view=? AND character_id IS ?
+                   ORDER BY chosen DESC, id DESC""",
+                args["scope_kind"], args["scope_value"], args["tier"], view, cid)
+    pred_path = prev[0]["path"] if prev else None
     landed = list(paths)
     if args.get("refine", True):
         for p in list(paths):
@@ -1003,6 +1011,14 @@ def h_anchor(args, progress):
                   VALUES (?,?,?,?,?,0,?,?,?,?,?)""",
                args["scope_kind"], args["scope_value"], args["tier"], view, p, now, cid,
                settings, run_id, qc)
+    if pred_path:
+        group = qc_service.lineage_group(
+            "anchor_reroll", pred_path,
+            scope_kind=args["scope_kind"], scope_value=args["scope_value"],
+            tier=args["tier"], view=view, character_id=cid)
+        for p in landed:
+            if jobs.canonical_path(p) != jobs.canonical_path(pred_path):
+                qc_service.record_pair("anchor_reroll", pred_path, p, group=group)
     # Refs refuse a tier with no chosen sheet. Every live row sat at chosen=0
     # because generate never picked. If this group still has none, the first
     # new candidate is it. Pick still overrides. Mutation: delete this block
@@ -1583,8 +1599,11 @@ def h_render_set(args, progress):
     tier = args.get("tier")
     suffix = f"_{tier}" if tier else ""
     ext = "mp3" if args.get("mode") == "audio" else "mp4"
-    fname = f"{base}{suffix}_{int(time.time() * 1000)}.{ext}" if set_row else f"{base}{suffix}.{ext}"
+    fname = f"{base}{suffix}_{time.time_ns()}.{ext}" if set_row else f"{base}{suffix}.{ext}"
     out = os.path.join(outdir, fname)
+    if set_row and os.path.exists(out):
+        fname = f"{base}{suffix}_{time.time_ns()}_{os.getpid()}.{ext}"
+        out = os.path.join(outdir, fname)
     # mode defaults to video so a job enqueued by an older build still means
     # what it meant when it was queued
     if args.get("mode") == "audio":
@@ -1602,10 +1621,17 @@ def h_render_set(args, progress):
         meta["master_chain"] = chain
     # T1-25: name measured I/TP on the asset; flag a miss of its own target.
     meta["loudness"] = mixer.export_loudness(out, args.get("items") or [])
-    db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
-           None, "set", out, json.dumps(meta), time.time())
+    new_id = db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+                    None, "set", out, json.dumps(meta), time.time())
     if set_id:
         db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), set_id)
+        prevs = [a for a in db.q(
+            "SELECT * FROM assets WHERE kind='set' AND id<? ORDER BY id DESC", new_id)
+                 if db.jset(a).get("set_id") == set_id]
+        if prevs:
+            qc_service.record_pair(
+                "set_rerender", prevs[0]["path"], out,
+                group=qc_service.lineage_group("set_rerender", out, set_id=set_id))
     return {"path": out}
 
 
@@ -2148,6 +2174,31 @@ def api_qc_approve(fid: int):
     except KeyError:
         raise HTTPException(404, f"no finding {fid}")
     return {"ok": True, "id": row["id"], "status": row["status"]}
+
+
+@app.get("/api/qc/lineage")
+def api_lineage(kind: str, group: str):
+    """T6-A5: predecessor and successor, both listed and selectable."""
+    try:
+        return JSONResponse({"candidates": qc_service.listed(kind, group)})
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/qc/lineage/select")
+async def api_lineage_select(request: Request, kind: str = Form(""),
+                             group: str = Form(""), path: str = Form("")):
+    """T6-A5: pick either listed candidate. The route forwards; listed/select decide."""
+    ctype = (request.headers.get("content-type") or "")
+    if "json" in ctype:
+        body = await request.json()
+        kind = body.get("kind") or kind
+        group = body.get("group") or group
+        path = body.get("path") or path
+    try:
+        return JSONResponse({"candidates": qc_service.select(kind, group, path)})
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/api/qc/run")
@@ -7290,6 +7341,21 @@ def api_set_render(id: int):
 def api_set_renders(id: int):
     row = get_set_or_404(id)
     return JSONResponse({"renders": _set_renders(row)})
+
+
+@app.post("/api/sets/{id}/renders/pick")
+async def api_set_render_pick(id: int, request: Request, path: str = Form("")):
+    """T6-A5: pick either listed set render. The other stays listed."""
+    get_set_or_404(id)
+    ctype = (request.headers.get("content-type") or "")
+    if "json" in ctype:
+        body = await request.json()
+        path = body.get("path") or path
+    group = qc_service.lineage_group("set_rerender", set_id=id)
+    try:
+        return JSONResponse({"renders": qc_service.select("set_rerender", group, path)})
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 # ------------------------------------------------------------------ models --

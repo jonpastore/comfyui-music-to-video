@@ -689,8 +689,11 @@ Anchor tiles in `_anchor_group.html` show `confidence` (0–100) against
 the **base photographs and the prompt**, or the named xAI/local failure
 when scoring failed (`vision: xAI …` / `vision: local …`). Never
 "vision unknown". Not a gate. The operator still picks. A refine pass
-or a `fix_anchor` writes a sibling file; it does not overwrite. Old
-rows with no `qc_json` stay blank, same as a missing render tag.
+or a `fix_anchor` writes a sibling file; it does not overwrite.
+Predecessor and successor are both listed and selectable (`T6-A5`:
+`qc_service.listed` / `select`; set re-render, repair and anchor re-roll
+use the same pair). Old rows with no `qc_json` stay blank, same as a
+missing render tag.
 
 ### 7a.6 What the queue owes these four
 
@@ -713,7 +716,8 @@ Added 2026-08-13. Same system as §4 and §5; only what these three ask of it.
 TRD-8's take is *"one generated candidate for a song, exactly as a `refs` row is
 one candidate frame"* — so it is **`media-tile` with an audio body**, not a new
 pattern. Same states, same pick act (`POST /songs/{id}/takes/{id}/pick`), same
-rule that the unpicked one stays reachable (`T6-A5`, `T8-2`). Pick does not
+rule that the unpicked one stays reachable (`T6-A5`, `T8-2` — `qc_service.listed`
+/ `select` is the pick act for a re-produced pair). Pick does not
 write `songs.mp3_path`; Use on a generated take is refused. The tile reads the
 `takes` row (`T8-1`: tags, lyrics, seed, duration, params as sent), not the
 live song row.

@@ -98,7 +98,10 @@ decimated** curve — the client re-reads what was kept, §5.3),
 `not_applied`), `/api/sets/{id}/preview/render?at=&secs=`
 (`is_proxy: false`, the accurate span),
 `/api/sets/{id}/render`, `/api/sets/{id}/renders` (every candidate, `T1-26`,
-`T6-A5`).
+`T6-A5`) and `POST /api/sets/{id}/renders/pick` (either listed render is
+selectable). `GET /api/qc/lineage?kind=&group=` and `POST /api/qc/lineage/select`
+are the same pair for refine, repair and anchor re-roll — `qc_service.listed`
+and `qc_service.select` decide; the route forwards.
 
 **B · arc and storyboard** — `GET/POST /api/playlists/{id}/arc`,
 `.../arc/propose` (proposal is not saved until accepted, `T2-15`),
@@ -116,7 +119,9 @@ reason and leaves the open queue; re-running QC on the same bytes keeps
 it dismissed; rewriting the file reopens that `(path, check)` row
 (`T3-22`). `POST /songs/{id}/qc` calls `qc_service.run_song` in-process
 (`T3-32`): tier 1 over that song's artefacts does not enqueue behind
-the GPU worker.
+the GPU worker. `/api/qc/lineage` lists predecessor and successor for a
+re-render / refine / repair / anchor re-roll; `/api/qc/lineage/select`
+picks either (`T6-A5`).
 
 **Q · queue** — `GET /queue` answers HTML or JSON from the same `queue_ctx()`
 (`T6-A2`). The JSON body carries `running`, `waiting`, `recent`,
@@ -132,9 +137,10 @@ Landed already: `automation`, `findings` (including `artefact_hash` for
 `T3-22` and `remedy_class` for `T3-27`), `artefacts`, `storyboards.scene_seconds`,
 `sets.mode_audience` (`easy|normal|advanced`, default `normal`; `T1-20`),
 `calibrations` (`T3-13`; `T3-14` may write `threshold` only after a
-separated row exists), and the interstitial card
+separated row exists), the interstitial card
 (`set_items.song_id` nullable, `card_path`, `card_secs`; `mixer.is_card` /
-`set_duration` prices it; `POST /sets/{id}/cards`). Switching audience writes
+`set_duration` prices it; `POST /sets/{id}/cards`), and `lineage`
+(`T6-A5`: predecessor/successor pair, either selectable). Switching audience writes
 only that column. Easy is `mixer.master_engaged` reading `mode_audience ==
 "easy"` on the item dict — the same application point as a gain curve
 (`T1-18`, `T1-20c`, `T1-20d`).
@@ -507,7 +513,8 @@ into a real candidate (`T3-23`):
    Catalogue `proven: opportunistic` is not the answer.
 
 Every repair writes a **new candidate beside the original** (`T6-A5`).
-`h_repair` lands dest and the original; `qc_service.pair(fid)` lists both
+`h_repair` lands dest and the original; `qc_service.listed` / `select`
+list both and either is selectable. `qc_service.pair(fid)` lists both
 as landed artefacts with findings and a `qc.summarise` verdict (`T3-21`),
 so "did the repair help" is answerable rather than asserted.
 

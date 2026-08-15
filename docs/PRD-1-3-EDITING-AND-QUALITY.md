@@ -17,8 +17,9 @@ never repeated. Prohibitions live in TRD-1 §12, TRD-2 §9 and TRD-3 §10.
 `T6-A2` compares the HTML queue panel and JSON `/queue` in one test
 (`test_t6_a2_html_and_json_report_the_same_queue_numbers`); set, storyboard
 and review still write their own T6-A2 as those loops move.
-`T6-A4` is proven for the queue panel (`test_t6_a4_*`); `T6-A3` remains
-the rest of P3.
+`T6-A4` is proven for the queue panel (`test_t6_a4_*`); `T6-A5` is proven
+for set re-render, refine, repair and anchor re-roll (`test_t6_a5_*`,
+`qc_service.listed` / `select`). `T6-A3` remains the rest of P3.
 
 ---
 
@@ -94,7 +95,7 @@ the eight things that must become true; they are not a new contract.
 |---|---|---|
 | P1 | The number on the screen is the number in the file — set length, to 0.05 s, with echo, hold, beatmatch, trim and an interstitial card all in play | `T1-7`, `T1-8`, `T1-27`, `T3-11` |
 | P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b` **built** (`mix_audio` RMS/s slope on a constant sine), `T1-12`, `T1-20d` |
-| P3 | Every surface is drivable with no browser, and the page and the JSON agree | `T6-A1`…`T6-A4`, `T1-3`, `T2-41` |
+| P3 | Every surface is drivable with no browser, and the page and the JSON agree. A re-render, refine, repair or anchor re-roll leaves predecessor and successor both listed and selectable | `T6-A1`…`T6-A5`, `T1-3`, `T2-41` |
 | P4 | An album's songs are scenes of one story, demonstrably — arc content appears in the storyboard and is absent when the arc is; at xxx no scene prompt carries the mainstream lock and the tier's own wording does; the board's guardrail field is this tier's clause and save refuses another tier's wording | `T2-20`, `T2-21`, `T2-22` |
 | P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every clip, a re-plan leaving approved `(clip_idx, seed)` unchanged, the planner prompt not naming a fixed 4.8125 s quantum, its clip-length text derived from planning, TIMING still stating track length and sum-to-track, and generated scenes tiling `[0, duration]` with no gap or overlap | `T2-8`, `T2-8b`, `T2-12a`, `T2-13a`, `T2-13b`, `T2-13c`, `T2-14a`, `T2-14b`, `T2-14c` |
 | P5a | Assembling a song with a 1664×960 clip among 832×480 siblings keeps the ×2 size and does not letterbox; mixed aspect is refused | `T5-7` |

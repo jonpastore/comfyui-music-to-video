@@ -989,3 +989,144 @@ def test_t6_a1_review_queue_over_json():
             f.get("check") == "resolution" or f.get("check_name") == "resolution")]
         assert res, rechecked
         assert res[0].get("verdict") == "pass", res[0]
+
+
+# ----------------------------------------------------------------- T6-A5 --
+
+def _t6_a5_assert_pair(kind, group, pred, succ):
+    """Shared entry point: qc_service.listed / select (T6-A10). Both files
+    stay; either pick keeps the other listed."""
+    pred = jobs.canonical_path(pred)
+    succ = jobs.canonical_path(succ)
+    assert pred != succ
+    assert os.path.isfile(pred) and os.path.isfile(succ), (
+        f"{kind}: a write that overwrote the predecessor is not T6-A5")
+
+    listed = qc_service.listed(kind, group)
+    paths = [c["path"] for c in listed]
+    assert pred in paths and succ in paths, (
+        f"{kind}: listed {paths}, expected predecessor {pred} and successor {succ}")
+    assert all(c.get("selectable") for c in listed), listed
+    assert len({c["path"] for c in listed}) >= 2, listed
+
+    picked_pred = qc_service.select(kind, group, pred)
+    assert [c["path"] for c in picked_pred if c["selected"]] == [pred], picked_pred
+    assert succ in [c["path"] for c in picked_pred], picked_pred
+
+    picked_succ = qc_service.select(kind, group, succ)
+    assert [c["path"] for c in picked_succ if c["selected"]] == [succ], picked_succ
+    assert pred in [c["path"] for c in picked_succ], (
+        f"{kind}: selecting the successor dropped the predecessor")
+    assert os.path.isfile(pred) and os.path.isfile(succ)
+
+
+def test_t6_a5_set_rerender_predecessor_and_successor_listed_and_selectable(monkeypatch):
+    """T6-A5 / set re-render: two h_render_set calls leave both files listed
+    and either selectable. A timestamp collision that overwrites stays red."""
+    import app as appmod
+
+    data = _isolate()
+
+    def _mix(items, out, progress=None):
+        parent = os.path.dirname(out)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(out, "wb") as f:
+            f.write(b"ID3-mix")
+
+    monkeypatch.setattr(appmod.mixer, "mix_audio", _mix)
+    monkeypatch.setattr(appmod.mixer, "export_loudness",
+                        lambda *a, **k: {"i": -14.0, "tp": -1.0, "ok": True})
+
+    mp3 = os.path.join(data, "t6a5.mp3")
+    with open(mp3, "wb") as f:
+        f.write(b"ID3")
+    sid = db.upsert_song("t6a5-set", title="Set Pair", mp3_path=mp3, duration=12.3)
+    set_id = db.run(
+        "INSERT INTO sets (name, created, updated, mode) VALUES (?,?,?,?)",
+        "t6a5", time.time(), time.time(), "audio")
+    db.run("INSERT INTO set_items (set_id, song_id, position, transition, secs) "
+           "VALUES (?,?,?,?,?)", set_id, sid, 0, "cut", 0.0)
+    items = [{"audio": mp3, "transition": "cut", "secs": 0}]
+    first = appmod.h_render_set(
+        {"set_id": set_id, "mode": "audio", "items": items}, lambda m: None)
+    second = appmod.h_render_set(
+        {"set_id": set_id, "mode": "audio", "items": items}, lambda m: None)
+    assert first["path"] != second["path"], first
+    group = qc_service.lineage_group("set_rerender", set_id=set_id)
+    _t6_a5_assert_pair("set_rerender", group, first["path"], second["path"])
+
+
+def test_t6_a5_refine_predecessor_and_successor_listed_and_selectable():
+    """T6-A5 / refine: refine_generated_still writes beside src; both selectable."""
+    import app as appmod
+
+    data = _isolate()
+    src = os.path.join(data, "still.png")
+    _png(src)
+    orig = qc_service.dispatch_repair
+    try:
+        qc_service.dispatch_repair = _write_repaired
+        dest = appmod.refine_generated_still(src, lambda m: None)
+    finally:
+        qc_service.dispatch_repair = orig
+    assert dest != src
+    group = qc_service.lineage_group("refine", src)
+    _t6_a5_assert_pair("refine", group, src, dest)
+
+
+def test_t6_a5_repair_predecessor_and_successor_listed_and_selectable():
+    """T6-A5 / repair: h_repair dest is a new candidate; original stays selectable."""
+    data = _isolate()
+    fid, src, args = _repair_args(data, "t6a5-repair.png")
+    dest = jobs.canonical_path(args["repair_path"])
+    orig = qc_service.dispatch_repair
+    try:
+        qc_service.dispatch_repair = _write_repaired
+        qc_service.h_repair(args, lambda m: None)
+    finally:
+        qc_service.dispatch_repair = orig
+    group = qc_service.lineage_group("repair", src, finding_id=fid)
+    _t6_a5_assert_pair("repair", group, src, dest)
+
+
+def test_t6_a5_anchor_reroll_predecessor_and_successor_listed_and_selectable():
+    """T6-A5 / anchor re-roll: a second generate adds a new anchors row;
+    the previous sheet stays listed and selectable."""
+    import app as appmod
+    import pipeline
+
+    data = _isolate()
+    count = {"i": 0}
+
+    def _gen(images, view="front", n=4, progress=None, **kw):
+        p = os.path.join(data, f"anchor_{count['i']}.png")
+        count["i"] += 1
+        _png(p)
+        return [p]
+
+    orig = pipeline.gen_anchor
+    pipeline.gen_anchor = _gen
+    try:
+        args = {
+            "scope_kind": "album", "scope_value": "T6A5 Album",
+            "tier": "r", "view": "front", "n": 1,
+            "images": [os.path.join(data, "base.png")],
+            "refine": False,
+        }
+        _png(args["images"][0])
+        first = appmod.h_anchor(args, lambda m: None)
+        second = appmod.h_anchor(args, lambda m: None)
+    finally:
+        pipeline.gen_anchor = orig
+
+    rows = db.q(
+        "SELECT path FROM anchors WHERE scope_value=? ORDER BY id", "T6A5 Album")
+    assert len(rows) >= 2, rows
+    pred, succ = rows[0]["path"], rows[-1]["path"]
+    group = qc_service.lineage_group(
+        "anchor_reroll", pred,
+        scope_kind="album", scope_value="T6A5 Album",
+        tier="r", view="front", character_id=None)
+    _t6_a5_assert_pair("anchor_reroll", group, pred, succ)
+    assert first["n"] == 1 and second["n"] == 1
