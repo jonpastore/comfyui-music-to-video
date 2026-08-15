@@ -113,9 +113,9 @@ the severe one.
 | P2 | Text that a tier forbids cannot be saved under it, and text it permits can | `T4-5`…`T4-9` |
 | P3 | The composed positive prompt contains no negation, names the body parts, names the reference slots, and never says "bare skin" on a furred character | `T4-10`…`T4-14`, `T4-18` |
 | P3a | Lighting lock is channel balance on the rendered sheet (olive/magenta FLAG, grey PASS), not the `BACKDROP` string. Job 257 `front_nude` seed 5151 PASSes 8.06; sibling seed 5288 still FLAGs 14.76 | `T4-13` |
-| P4 | A new view is one table entry, and is tier-gated by what it *is* rather than by a list somebody remembered to update | `T7-1`…`T7-3` |
+| P4 | A new view is one table entry, and is tier-gated by what it *is* rather than by a list somebody remembered to update | `T7-1`/`T7-2` built (`make_anchor.VIEWS` + `is_nude_view`). `T7-3` (measured new-view renders) remains |
 | P5 | An approved sheet can be the identity lock for the next sheet — the lever that keeps clips on-model, applied to anchors | `T7-6`…`T7-8` |
-| P6 | The four things that shape every sheet — view framing, backdrop, composite, pose — are versioned, per-album prompts rather than code constants | `T7-13`…`T7-19` |
+| P6 | The four things that shape every sheet — view framing, backdrop, composite, pose — are versioned, per-album prompts rather than code constants | `T7-13` built (`view:<key>` from the view table). `T7-14`/`T7-15`/`T7-19` built. Album `pose` row in `T7-16` remains |
 | P7 | `--refine` either refines or refuses, and whether it helps is measured rather than assumed | `T5-1`…`T5-6` |
 | P7a | A ×2 clip among 832×480 siblings assembles at 1664×960 with no silent letterbox; mixed aspect is refused | `T5-7` |
 | P7b | Each clip ceiling is labeled measured or chosen; an over-long single-clip request is refused or split, not only annotated | `T5-9` |
@@ -151,13 +151,12 @@ not the picture measurement.
 Full ordering and dependencies are `docs/PLAN-TRD-4-7.md` §3-§4. The product-level
 statement of it:
 
-1. **Make a view cheap** (P4). Everything downstream multiplies by the number of
-   views, so a view set living in four hand-kept places makes every later item
-   four edits.
+1. **Make a view cheap** (P4). `T7-1`/`T7-2` landed: one `VIEWS` table, nudity
+   derived. Everything downstream still multiplies by the number of views;
+   `T7-3` (those views as measured renders) is what is left.
 2. **Make the words editable and versioned** (P6). The operator's real loop is
-   tune-render-compare, and `prompts.py` already answers *"what did I have in the
-   body field when that sheet came out right?"* for nine types and not for the
-   four that matter most.
+   tune-render-compare. `view:<key>` (`T7-13`), `backdrop` and `composite` are
+   versioned; the leftover is the album `pose` row (`T7-16`).
 3. **Prove identity holds** (P5's `T7-7`). One measurement, and it is a
    human-judged one.
 4. **Finish TRD-4's remainder** (P1-P3), most of which is differentials for

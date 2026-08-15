@@ -877,8 +877,9 @@ and the usage count — which counts **renders, not loads**, because a wording y
 looked at and rejected is not a wording you used. Deleting a version leaves a
 gap; remaining numbers do not compact (`T2-6`). A version also records
 **which model was asked and when** (`T2-7`), so a regression can be traced
-to a model change rather than guessed. `T7-13`'s `view:<key>` types
-are generated from the view table, so the UI iterates types rather than listing
+to a model change rather than guessed. `T7-13` is built: `view:<key>` types
+are generated from the view table (`test_view_framing_type_reaches_the_composer`),
+so the UI iterates types rather than listing
 them; a type added to `PROMPT_TYPES` appears with no template change. That is the
 same rule `T2-33` sets for the model picker.
 

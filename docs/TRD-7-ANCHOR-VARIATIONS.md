@@ -273,8 +273,8 @@ been seen red is a claim about a check, not about the code. Commits are on
 
 | criterion | state | commit | what was measured |
 |---|---|---|---|
-| `T7-1` one view table | **partial** | — | `NUDE_VIEWS` is derived via `make_anchor.is_nude_view()`, one source. `ANCHOR_VIEWS` (labels) and `DEFAULT_VIEWS` (framing) are still two places, so adding a view is still two edits |
-| `T7-2` nudity gating derived | **partial** | — | derivation exists; `prompt_for` still tests `view in NUDE_VIEWS`, which is enumerated from `DEFAULT_VIEWS`, so a profile-supplied nude view is not swapped. Live gap |
+| `T7-1` one view table | **built** | `make_anchor.VIEWS` | One table. `DEFAULT_VIEWS` is `{k: v["framing"] for k, v in VIEWS.items()}`; `app.ANCHOR_VIEWS` is `{k: v["label"] for k, v in VIEWS.items()}`. Adding a view is one `VIEWS` entry. `test_app.py` asserts the two projections stay derived. Mutation: hand-keep a second label map → red |
+| `T7-2` nudity gating derived | **built** | `is_nude_view` | `prompt_for` uses `is_nude_view(view)` (`endswith("_nude")`), not `view in NUDE_VIEWS`. `test_a_profile_supplied_nude_view_still_swaps_wardrobe`: a `kneeling_nude` key absent from `VIEWS` still takes `nude_wardrobe`. `check_integration` / `is_nude_view("three_quarter_nude")`. Mutation: restore `view in NUDE_VIEWS` → profile-supplied nude stays clothed |
 | `T7-3` new views | **not built** | — | §9.1 |
 | `T7-4` framing is the only difference | **built** | `94618db` | compose two views of one tier via `prompt_for` / `default_anchor_prompt`; remainders match after stripping the framing clause. Nude pair uses the wardrobe swap. Mutation: extra clause on `back` only → `test_t7_4_framing.py` red |
 | `T7-5` `portrait` overrides head-to-toe | **built** (harness + string; GPU portrait sheet NOT MEASURED) | this change | String omit: `test_t7_5_portrait.py` + `test_portrait_and_seated_drop_the_standing_fullbody_backdrop`. Size: `size_for_view` / `apply_view_default_size` → portrait latent 1024×1024 (standing 896×1216 upgraded; operator non-default wins). Image half: `qc.measure_subject_bottom` / `portrait_crop_score` / `t7_5_portrait_crop_differential` / `check_portrait_crop` — head-and-shoulders synthetic PASSes, full-body FLAGs, differential holds portrait > fullbody (`test_t7_5_portrait_crop.py`). No GPU portrait sheet pinned. |
@@ -285,12 +285,12 @@ been seen red is a claim about a check, not about the code. Commits are on
 | `T7-10` slot names are real | **built** | `7836d6f` | two cast members → `image2`→`nyx.png`, `image3`→`ghost.png`, each named by the slot its own file is on. The refusal half predates this; the positive half is the commit |
 | `T7-11` `lora_strength` settable | **built** | `71ad7b4` | 0.5 survives quality mode's cfg 4.5; unset resolves to 0.0. The `sampler_settings` interlock holds both ways |
 | `T7-12` width/height settable | **built** | `71ad7b4` | `size=1024x1024` → `EmptySD3LatentImage {"width": 1024, "height": 1024}`. **Every sheet before this was 896×1216, because neither flag was ever passed** |
-| `T7-13` per-view framing versioned | **not built** | — | §9.1 |
+| `T7-13` per-view framing versioned | **built** | `prompts.py` | `PROMPT_TYPES` generated as `view:<key>` from `make_anchor.VIEWS` (untiered). `test_view_framing_type_reaches_the_composer`: a saved `view:front` version is what `default_anchor_prompt` / `prompt_for` emit, including for a cast member. Mutation: drop the `PROMPT_TYPES.update` or skip album view: text in the composer → red |
 | `T7-14` `backdrop` a versioned type | **built** | `d5526cb` | album override reaches the composed prompt and the constant does not appear beside it |
 | `T7-15` `composite` a versioned type | **built** | `d5526cb` | appears at `n_refs=2`, absent at `n_refs=1`, album wording replaces the constant |
 | `T7-16` `pose` | **partial** | `T7-20` | Named uploaded poses (`T7-20`, `77e33d7`) are the operator path: a plate is a named photo, not a second standing clause. The album-versioned `pose` prompt type in §9.1 is still not a `prompts` row |
-| `T7-17` composed and previewed | **built** for `T7-14`/`T7-15` | `d5526cb` | the preview runs the real composer, so both appear by construction |
-| `T7-18` screened and walked | **built** for `T7-14`/`T7-15` | `d5526cb` | both go through `screen_prompt_field`; the negation walker now covers the studio's `ANCHOR_PROFILE_FIELDS` defaults, not only `make_anchor`'s constants |
+| `T7-17` composed and previewed | **built** for `T7-13`/`T7-14`/`T7-15` | `d5526cb` + `view:` types | the preview runs the real composer; a saved `view:front` reaches `prompt_for` (`test_view_framing_type_reaches_the_composer`) |
+| `T7-18` screened and walked | **built** for `T7-13`/`T7-14`/`T7-15` | `d5526cb` | `view:` / backdrop / composite / pose go through `screen_prompt_field` / `prompts.save`; the negation walker covers studio `ANCHOR_PROFILE_FIELDS` defaults, not only `make_anchor`'s constants |
 | `T7-19` per-view prompt box | **built** | `415584d` | an edit reaches only its own view; the sibling view composes its own. Mutation: the back sheet came back holding `"FRONT VIEW character reference sheet of ..."` — the reported symptom |
 | `T7-20` named uploaded poses | **built** | this change | An operator names a base image, optionally assigns a tier, and either generates a sheet for that pose (identity photos + that plate) or assigns the upload itself as the chosen sheet. Upload cap is 24. Custom `pose_<id>` views omit the standing backdrop clause. Mutation: 95/20/40 score stores 20; assign creates a chosen `anchors` row from the file |
 
@@ -300,8 +300,10 @@ before this work was 233 / 186.
 
 ### 9.1 What is left, and why it is one unit
 
-`T7-3`, `T7-5`, `T7-13` and `T7-16` are **one piece of work, not four**, and it
-was left undone on purpose rather than started and abandoned.
+`T7-5` (portrait crop + size) and `T7-13` (`view:<key>` types) are built.
+`T7-3` (new views as measured renders) and the album-versioned `pose` row in
+`T7-16` remain the leftover of that unit. They were left as one piece rather
+than started and abandoned.
 
 Every framing string in `DEFAULT_VIEWS` already contains a POSE — *"standing
 upright, arms relaxed at their sides, feet apart"*. A `pose` field (`T7-16`)

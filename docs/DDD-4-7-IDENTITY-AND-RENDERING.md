@@ -30,7 +30,7 @@ ControlNet.
 | `make_anchor.py` | the view table, the positive constants, `is_nude_view`, `prompt_for`, the call into `workflow()` |
 | `build_refs.py` | the graph: `workflow()`, `sampler_settings`, `assign_ref_slots`, `cast_clause`, `negative_applies` |
 | `studio/app.py` | the anchor routes, `ANCHOR_VIEWS` labels, `ANCHOR_RENDER_FLAGS`, `DENOISE_CHOICES`, the preview |
-| `studio/prompts.py` | `PROMPT_TYPES` — 9 today, 4 more in `T7-13`…`T7-16` |
+| `studio/prompts.py` | `PROMPT_TYPES` — composer fields plus `view:<key>` generated from `VIEWS` (`T7-13`), plus `backdrop`/`composite`/`pose` |
 | `studio/tiers.py` | `compose_guardrail`, `check_text` (tier-aware: g/pg13 may depict T10-18; r lyrics/narrative mention T10-18a), `screen_work_for_tier` / `screen_escalation` / `check_escalation` (T10-19 entry; T10-20 ignores override kwargs), `check_override`, `check_tier_policy` |
 | `build_song.py` | TRD-5's territory: `workflow()`, the LTX branches, `clip_plan`, `expect_from_workflow` |
 | `studio/jobs.py`, `pipeline.py`, `db.py` | TRD-6's territory. `qc_service.listed` / `select` / `record_pair` own T6-A5: predecessor and successor both listed and selectable. `h_render_set`, `refine_generated_still`, `h_repair` and `h_anchor` call `record_pair`. |
@@ -49,32 +49,14 @@ photos as image1 and that file as image2 (`T7-20`). Assign writes an
 
 ## 2. The view table — one table, two projections
 
-`T7-2` is done in both files: `make_anchor.NUDE_VIEWS` and `app.NUDE_VIEWS` are
-both now `tuple/frozenset(v for v in … if is_nude_view(v))`, so nudity is derived
-from what a view *is*. **`T7-1` is not done**, and the reason is visible in the
-two tables that remain:
-
-    make_anchor.DEFAULT_VIEWS   {key: framing sentence}
-    app.ANCHOR_VIEWS            {key: human label}
-
-Same keys, two files, two hand-kept dicts. Adding `three_quarter` today means
-editing both — one for the sentence the model reads, one for the words the
-operator reads. That is the same shape `NUDE_VIEWS` had before it was derived.
-
-**Design: one table in `make_anchor.py`, two accessors.**
-
-    VIEWS = {
-      "front":       {"label": "front, clothed", "framing": "FRONT VIEW …"},
-      "three_quarter": {"label": "three-quarter, clothed",
-                        "framing": "THREE-QUARTER VIEW … body turned 45° … "},
-      …
-    }
-
-`app.py` reads `make_anchor.VIEWS` for its labels; nothing keys a second dict on
-view names. Nudity stays **derived** (`is_nude_view`) rather than becoming a
-third field, because a field is a thing somebody can forget to set and a
-derivation is not — that is exactly the argument `is_nude_view`'s own docstring
-makes and it should not be walked back for the label.
+`T7-1` and `T7-2` are done. One table, `make_anchor.VIEWS`, with two
+projections (`DEFAULT_VIEWS` = framing, `app.ANCHOR_VIEWS` = labels). Nudity
+is derived (`is_nude_view` / `endswith("_nude")`); `prompt_for` does not test
+`view in NUDE_VIEWS`, so a profile-supplied `*_nude` key still swaps wardrobe
+(`test_a_profile_supplied_nude_view_still_swaps_wardrobe`). Adding a view is
+one `VIEWS` entry. Nudity stays **derived** rather than becoming a third
+field, because a field is a thing somebody can forget to set and a derivation
+is not.
 
 `T7-3`'s new views — `three_quarter`, `profile`, `seated`, `portrait`,
 `on_all_fours`, each with a nude parallel — are then entries, and `T7-5`'s
@@ -101,8 +83,10 @@ portrait sheet is not pinned.
 
 ## 3. The four new prompt types
 
-`prompts.py` carries 9 types today and its docstring states the extension rule —
-*"adding a type here is all that is needed to give it history"*. Four more:
+`prompts.py` carries the composer fields plus `view:<key>` generated from
+`VIEWS` (`T7-13`, `test_view_framing_type_reaches_the_composer`). The
+extension rule is still *"adding a type here is all that is needed to give it
+history"*. The four types:
 
 | type | tiered | why it is a prompt and not a constant |
 |---|---|---|
