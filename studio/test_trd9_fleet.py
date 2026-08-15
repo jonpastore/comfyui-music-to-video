@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-11, T9-13a, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-11, T9-13a, T9-16, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -14,10 +14,12 @@ import os
 import tempfile
 import urllib.request
 
+import creds
 import db
 import fleet_watch
 import jobs
 import models
+import pytest
 from conftest import _real_module
 
 pipeline = _real_module("pipeline")
@@ -933,3 +935,102 @@ def test_t9_13b_staging_path_reads_catalog_companions():
         assert primary in live
     finally:
         models.CATALOG[key]["companions"] = was
+
+
+# T9-16. Defaults keep secrets outside the tree; the encrypted store feeds
+# fleet_watch.notify; status() names provenance without rendering the value.
+# Absence alone is one-sided (TRD-9 §9) — a studio with no credential feature
+# would pass "nothing in the repo". The positive half is the alert path.
+_REPO_ROOT = os.path.realpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
+
+
+def _t9_16_outside_repo(path):
+    if not path:
+        return True
+    real = os.path.realpath(os.path.expanduser(path))
+    return not (real == _REPO_ROOT or real.startswith(_REPO_ROOT + os.sep))
+
+
+def test_t9_16_store_credential_usable_by_alert_with_provenance():
+    """T9-16: no credential in the repo; store names source; alert path uses it.
+
+    One-sided trap (TRD-9 §9): absence alone passes with no credential feature.
+    Positive half: a credential loaded from the store is usable by the alert
+    path, and its provenance is recorded.
+    """
+    # Defaults must not land under the git tree — a .env next to studio/ is one
+    # `git add -A` from the remote.
+    assert _t9_16_outside_repo(creds.KEY_PATH), (
+        f"cred key defaults inside the repo: {creds.KEY_PATH}")
+    assert _t9_16_outside_repo(creds.ENV_FILE), (
+        f"ENV_FILE defaults inside the repo: {creds.ENV_FILE}")
+    for name, p in creds.PROVIDERS.items():
+        assert _t9_16_outside_repo(p.get("file")), (
+            f"provider {name} file defaults inside the repo: {p.get('file')}")
+
+    secret = "https://hooks.example.test/services/T9-16-STORE-ONLY"
+    was_db = (db.DATA, db.DB_PATH, creds.KEY_PATH, creds.ENV_FILE)
+    was_files = {n: dict(p) for n, p in creds.PROVIDERS.items()}
+    was_env = {p["env"]: os.environ.pop(p["env"], None)
+               for p in creds.PROVIDERS.values()}
+    data = tempfile.mkdtemp(prefix="t916_")
+    db.DATA = data
+    db.DB_PATH = os.path.join(data, "t.db")
+    db._local.__dict__.clear()
+    creds.KEY_PATH = os.path.join(tempfile.mkdtemp(prefix="t916key_"), "cred.key")
+    creds.ENV_FILE = os.path.join(data, "no-such.env")
+    for p in creds.PROVIDERS.values():
+        p["file"] = ""
+    posted = []
+
+    class _Ok:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b"ok"
+
+    def _urlopen(req, timeout=None):
+        posted.append(getattr(req, "full_url", None) or req.get_full_url())
+        return _Ok()
+
+    was_urlopen = urllib.request.urlopen
+    try:
+        try:
+            creds.put("slack_webhook", secret)
+        except creds.Unavailable:
+            pytest.skip("cryptography not installed; storing is refused by design")
+
+        assert creds.get("slack_webhook") == secret, (
+            "store did not round-trip the alert credential")
+        with open(db.DB_PATH, "rb") as f:
+            assert secret.encode() not in f.read(), (
+                "the secret is recoverable from the sqlite file")
+
+        st = {s["name"]: s for s in creds.status()}["slack_webhook"]
+        assert st["set"] is True and st["stored"] is True, st
+        assert "stored" in st["source"].lower() and "encrypt" in st["source"].lower(), (
+            f"provenance not named: {st['source']!r}")
+        assert secret not in st["source"] and secret not in str(st), (
+            "status rendered the credential value")
+
+        # Positive half: fleet_watch.notify(webhook=None) reads the store.
+        urllib.request.urlopen = _urlopen
+        assert fleet_watch.notify(["T9-16 store alert"], webhook=None) is True
+        assert posted == [secret], (
+            f"alert path did not use the store-loaded webhook: {posted}")
+    finally:
+        urllib.request.urlopen = was_urlopen
+        db.DATA, db.DB_PATH, creds.KEY_PATH, creds.ENV_FILE = was_db
+        db._local.__dict__.clear()
+        for n, p in was_files.items():
+            creds.PROVIDERS[n].update(p)
+        for env, val in was_env.items():
+            if val is None:
+                os.environ.pop(env, None)
+            else:
+                os.environ[env] = val
