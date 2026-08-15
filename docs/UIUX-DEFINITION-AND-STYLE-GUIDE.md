@@ -188,6 +188,10 @@ card is a block like any other (`T1-27`/`T1-28`): it is labelled MEOW P, sized
 by `card_secs`, and it is a `set_items` row, not a comment on the strip.
 The **time axis** is server-rendered: `mixer.timeline_axis(set_duration())`
 emits `.tl-tick[data-t]` seconds in the HTML (T1-8's stub-offset shape).
+A rendered set is QC'd against that same number (`T3-11`): `qc.check_set`
+PASSes when `ffprobe` duration sits within `mixer.SET_DURATION_TOLERANCE`,
+REJECTs when it does not. Measurement, not a new widget — the finding is
+the existing QC row (`measured` / `expected` / `s`).
 Still open: draggable joins, automation lanes and a playhead.
 A stored `gain_db` ramp does reach the rendered file (`T1-9b`, RMS/s
 slope on `mix_audio`); the lanes to *draw* it are not in the UI yet.
