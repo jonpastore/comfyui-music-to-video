@@ -90,6 +90,7 @@ the severe one.
 | P1 | A sheet cannot be produced from a silent default — no tier, view, or wardrobe falls back to something nobody chose | `T4-1`…`T4-4` |
 | P2 | Text that a tier forbids cannot be saved under it, and text it permits can | `T4-5`…`T4-9` |
 | P3 | The composed positive prompt contains no negation, names the body parts, names the reference slots, and never says "bare skin" on a furred character | `T4-10`…`T4-14`, `T4-18` |
+| P3a | Lighting lock is channel balance on the rendered sheet (olive/magenta FLAG, grey PASS), not the `BACKDROP` string. A current GPU sheet is NOT MEASURED | `T4-13` |
 | P4 | A new view is one table entry, and is tier-gated by what it *is* rather than by a list somebody remembered to update | `T7-1`…`T7-3` |
 | P5 | An approved sheet can be the identity lock for the next sheet — the lever that keeps clips on-model, applied to anchors | `T7-6`…`T7-8` |
 | P6 | The four things that shape every sheet — view framing, backdrop, composite, pose — are versioned, per-album prompts rather than code constants | `T7-13`…`T7-19` |
@@ -175,7 +176,9 @@ coordinator (TRD-6 §7).
 
 ## 8. Open, and needing Jon
 
-- **`T4-13` cannot be closed without a render.** It is a differential on the
+- **`T4-13` cannot be closed without a render.** The pixel harness is in
+  `qc.check_channel_balance` (olive/magenta FLAG, grey PASS; `BACKDROP` is not
+  the proof; `T4_13_REAL_SHEET_MEASURED` is False). It is a differential on the
   rendered image's channel balance and must fail against a current render. It is
   the criterion for the defect that prompted the whole prompt rewrite, and
   marking it done from the prompt text is the failure mode. **Blocked on the

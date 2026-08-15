@@ -288,7 +288,7 @@ deployed and live on cerberus.
 | `T4-10` `_NEGATION_ALLOWED` empty | **built** | prior session + `4032aba` | the walker now covers the studio's `ANCHOR_PROFILE_FIELDS` defaults as well as `make_anchor`'s constants — see below, that widening is what caught the live defect |
 | `T4-11` body clause names the parts | **built, and it did not reach a render until `4032aba`** | `4032aba` | see §9.1 |
 | `T4-12` references named by slot | **built** | `7836d6f` | the refusal half (a third photograph stops asserting a second person) predates this; the POSITIVE half is the commit — two cast members reach the graph as `image2`→`nyx.png`, `image3`→`ghost.png`, each named by the slot its own file is on. **Rescoped to the CAST path**: the anchor path deliberately does NOT name a slot "the wardrobe reference" — see §9.2 |
-| `T4-13` positive lighting lock | **built** in the string | prior session | `BACKDROP` carries the colour-temperature lock. The criterion asks for a channel-balance differential on a rendered image and **that has never been run** |
+| `T4-13` positive lighting lock | **harness only; real sheet NOT MEASURED** | `qc.py` + `test_trd4_unverified.py` | Channel-balance FLAG on an olive/magenta fixture, PASS on a grey wall; a black figure on an olive wall still FLAGs (whole-image mean is not the metric). `BACKDROP` already contains the lock words and is not the proof. `T4_13_REAL_SHEET_MEASURED` is False. No GPU sheet has been pointed at |
 | `T4-14` nude view drops wardrobe, never says "bare skin" | **built** | prior session | measured on the composed prompt: wardrobe clause present on `front`, absent on `front_nude` |
 | `T4-15` profile still overrides the five fields | **built, and now two more** | `d5526cb` | `backdrop` and `composite` joined `identity`/`wardrobe`/`body`/`nude_wardrobe`/`anatomy` as album-owned, versioned, screened text |
 | `T4-16`/`T4-17` the negative does not move | **holds** | — | nothing moved out of the negative; the fast-mode drop is still stated on the form |
@@ -341,9 +341,11 @@ character"*, which is true on clothed and nude sheets alike.
 
 ### 9.3 What is still unmeasured, and it is the same thing every time
 
-`T4-13`'s channel balance and `T7-7`'s identity differential both require
-**looking at a rendered image**, and neither has been run. Every check in this
-session was on strings, graphs and schemas.
+`T4-13`'s channel-balance harness now FLAGs olive/magenta fixtures and PASSes a
+grey wall (`qc.LIGHTING_LOCK`); a current GPU sheet is still **NOT MEASURED**.
+`T7-7`'s identity differential still requires **looking at a rendered image**.
+Neither has been run on a live sheet. Every other check in this session was on
+strings, graphs and schemas.
 
 Jobs 230/231/232 on the production box all finished more than four hours before
 the 11:11:38 restart, so **no sheet on that box was rendered by this code**. The

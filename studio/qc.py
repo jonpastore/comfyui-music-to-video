@@ -116,6 +116,16 @@ T5_2_REAL_CLIP_FRAMES = None
 T5_2_REAL_CLIP_MEASURED = False
 T5_2_REAL_CLIP_SEED = None
 
+# docs/TRD-4 T4-13: positive lighting lock on rendered channel balance.
+# Green/magenta casts are the reported symptom. BACKDROP already says
+# "evenly lit"; that string is not this criterion. The metric is
+# |G - (R+B)/2| on the outer border (studio wall), not the whole-image
+# mean — a black figure on an olive wall averages toward equal channels.
+LIGHTING_LOCK = "channel_balance"
+LIGHTING_CAST_LIMIT = 12.0
+T4_13_REAL_SHEET_PATH = None
+T4_13_REAL_SHEET_MEASURED = False
+
 
 def finding(path, kind, check, verdict, detail, measured=None, expected=None,
             unit=None, remedy=None):
@@ -336,6 +346,75 @@ def t5_2_claim():
     out = t5_2_refine_differential(*frames)
     out["seed"] = T5_2_REAL_CLIP_SEED
     return out
+
+
+def t4_13_real_sheet_path():
+    """Hook the renderer populates. None until a rendered sheet is pointed at."""
+    return T4_13_REAL_SHEET_PATH
+
+
+def record_t4_13_real_sheet(path):
+    """Point T4-13 at a rendered sheet. Does not flip MEASURED."""
+    global T4_13_REAL_SHEET_PATH
+    T4_13_REAL_SHEET_PATH = path
+
+
+def backdrop_channel_means(path):
+    """Mean RGB of pixels at or above mean luma (the studio wall).
+
+    Whole-image mean is not the metric: a black figure on an olive wall
+    averages toward equal channels and hides the T4-13 defect. Missing
+    or empty RAISE, never 0.0.
+    """
+    import numpy as np
+    from PIL import Image
+    if not path or not os.path.isfile(path):
+        raise ValueError("T4-13 real sheet channel balance is NOT MEASURED")
+    try:
+        with Image.open(path) as im:
+            arr = np.asarray(im.convert("RGB"), dtype="float64")
+    except Exception as e:
+        raise ValueError("T4-13 real sheet channel balance is NOT MEASURED") from e
+    if arr.size == 0 or arr.ndim != 3 or arr.shape[-1] < 3:
+        raise ValueError("T4-13: empty pixels are not a measurement")
+    rgb = arr[..., :3]
+    luma = rgb.mean(axis=-1)
+    pixels = rgb[luma >= float(luma.mean())]
+    if pixels.size == 0:
+        raise ValueError("T4-13: empty backdrop sample is not a measurement")
+    return pixels.mean(axis=0)
+
+
+def lighting_cast(means):
+    """Green/magenta axis: G - (R+B)/2. Positive is olive, negative magenta."""
+    r, g, b = (float(means[0]), float(means[1]), float(means[2]))
+    return g - (r + b) / 2.0
+
+
+def check_channel_balance(path, expect=None, kind="image"):
+    """T4-13 finding. Cast on the studio wall, not the BACKDROP string."""
+    means = backdrop_channel_means(path)
+    cast = lighting_cast(means)
+    mag = abs(cast)
+    side = "olive/green" if cast >= 0 else "magenta"
+    ok = mag <= LIGHTING_CAST_LIMIT
+    return [finding(
+        path, kind, LIGHTING_LOCK,
+        PASS if ok else FLAG,
+        f"backdrop {side} cast {mag:.1f} (R={means[0]:.1f} G={means[1]:.1f} "
+        f"B={means[2]:.1f})",
+        round(mag, 2), LIGHTING_CAST_LIMIT, "levels",
+        remedy="re-render; T4-13 is even neutral studio lighting, not a colour cast")]
+
+
+def t4_13_claim():
+    """The real-sheet gate. MEASURED with an empty hook is still NOT MEASURED."""
+    if not T4_13_REAL_SHEET_MEASURED:
+        raise ValueError("T4-13 real sheet channel balance is NOT MEASURED")
+    path = t4_13_real_sheet_path()
+    if not path:
+        raise ValueError("T4-13 real sheet channel balance is NOT MEASURED")
+    return check_channel_balance(path)
 
 
 # ------------------------------------------------------------------ video --
@@ -659,6 +738,7 @@ def check_image(path, expect):
                        remedy="re-render with a different seed"))
     if _wants_identity_look(expect):
         out.extend(check_identity_look(path, expect, kind="image"))
+    out.extend(check_channel_balance(path, expect, kind="image"))
     return out
 
 
@@ -992,12 +1072,33 @@ def demo():
         img = _mk(["-f", "lavfi", "-i", "testsrc2=size=256x192", "-frames:v", "1"],
                   p("ok.png"))
         i = run(img, "image", {"width": 256, "height": 192})
-        assert worst(i) == PASS, summarise(i)
+        # testsrc2 is a colour bar, not a studio sheet — channel_balance may FLAG.
+        failed = set(summarise(i)["failed"])
+        assert failed <= {LIGHTING_LOCK}, summarise(i)
         flat = _mk(["-f", "lavfi", "-i", "color=c=black:size=256x192", "-frames:v", "1"],
                    p("flat.png"))
         fl = run(flat, "image", {})
         assert {"not_uniform", "not_blank"} <= set(summarise(fl)["failed"]), fl
         assert run(img, "image", {"width": 999, "height": 192})[0]["verdict"] == REJECT
+
+        # T4-13: olive wall FLAGs; grey wall with a dark figure PASSes.
+        from PIL import Image as _Im
+        import numpy as np
+        olive = np.full((64, 64, 3), (140, 160, 120), dtype="uint8")
+        _Im.fromarray(olive).save(p("olive.png"))
+        ol = [x for x in run(p("olive.png"), "image", {}) if x["check"] == LIGHTING_LOCK]
+        assert ol and ol[0]["verdict"] == FLAG, ol
+        grey = np.full((64, 64, 3), 128, dtype="uint8")
+        grey[16:48, 16:48] = 20
+        _Im.fromarray(grey).save(p("neutral.png"))
+        neu = [x for x in run(p("neutral.png"), "image", {}) if x["check"] == LIGHTING_LOCK]
+        assert neu and neu[0]["verdict"] == PASS, neu
+        try:
+            backdrop_channel_means(None)
+        except ValueError as e:
+            assert "NOT MEASURED" in str(e), e
+        else:
+            raise AssertionError("T4-13 missing path did not fail closed")
 
         # --- and the refusal that keeps this file honest: a measurement that
         # produced no reading raises instead of returning 0.0

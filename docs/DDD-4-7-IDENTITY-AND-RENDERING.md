@@ -293,4 +293,8 @@ Plus the two this subject is most exposed to:
 - **When an image looks wrong, look at it.** `T4-13`, `T7-5` and `T7-7` are all
   criteria about what a picture looks like. The identity collapse, the world that
   never rendered and the LoRA that did nothing all passed every deterministic
-  check this project had.
+  check this project had. `T4-13` now has a pixel harness:
+  `qc.LIGHTING_LOCK` / `check_channel_balance` FLAGs olive and magenta fixtures
+  and PASSes a grey wall; whole-image mean is not the metric (a black figure on
+  an olive wall still FLAGs). The `BACKDROP` string is not the proof.
+  `T4_13_REAL_SHEET_MEASURED` stays False until a rendered sheet is pointed at.

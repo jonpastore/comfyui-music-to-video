@@ -1,8 +1,11 @@
-"""TRD-4 criteria the 2026-08-13 ledger left unverified: T4-8, T4-9, T4-18.
+"""TRD-4 criteria the 2026-08-13 ledger left unverified: T4-8, T4-9, T4-13, T4-18.
 
 T4-5/T4-6/T4-7 already live in test_app.py. This file only covers what that
 session marked unverified or partial. Public routes and the real composer —
 T6-A10 — not the functions they wrap.
+
+T4-13 is pixels, not the BACKDROP string. Green/magenta cast on a rendered
+sheet FLAGs; the colour-temperature lock in the constant is not the proof.
 """
 import os
 import re
@@ -13,6 +16,7 @@ from fastapi.testclient import TestClient
 
 import db
 import prompts
+import qc
 import tiers
 import app as appmod
 
@@ -198,3 +202,143 @@ def test_t4_18_pinned_last():
     assert pinned in composed, "PINNED is missing from the composed prompt"
     assert composed.rstrip().endswith(pinned), (
         f"PINNED is not last: ...{composed[-160:]!r}")
+
+
+# ------------------------------------------------------------------ T4-13 --
+# Lighting lock is a channel-balance differential on pixels. Olive/sage and
+# magenta are the reported casts. BACKDROP already says "evenly lit"; that
+# string is not this criterion.
+
+OLIVE = (140, 160, 120)
+MAGENTA = (180, 110, 180)
+NEUTRAL = (128, 128, 128)
+FIGURE = (18, 18, 18)
+
+
+def _rgb_png(path, rgb, size=(64, 64)):
+    from PIL import Image
+    Image.new("RGB", size, rgb).save(path)
+    return str(path)
+
+
+def _figure_on_wall(path, wall, figure=FIGURE, size=64, inset=6):
+    """Black figure on a coloured studio wall. Whole-image mean hides the wall."""
+    from PIL import Image
+    im = Image.new("RGB", (size, size), wall)
+    for y in range(inset, size - inset):
+        for x in range(inset, size - inset):
+            im.putpixel((x, y), figure)
+    im.save(path)
+    return str(path)
+
+
+def _by_check(findings, name):
+    return [f for f in findings if f["check"] == name]
+
+
+def test_t4_13_tests_do_not_skip():
+    """A skip call is not a reading. Mutation: insert a skip call → red."""
+    src = open(__file__, encoding="utf-8").read()
+    skip_call = "pytest" + ".skip("
+    skip_mark = "pytest" + ".mark.skip"
+    assert skip_call not in src
+    assert skip_mark not in src
+
+
+def test_t4_13_olive_cast_flags(tmp_path):
+    """Reported defect: olive/sage backdrop FLAGs on pixels, not on text."""
+    sheet = _rgb_png(tmp_path / "olive.png", OLIVE)
+    found = qc.check_image(sheet, {})
+    hit = _by_check(found, qc.LIGHTING_LOCK)
+    assert hit and hit[0]["verdict"] == qc.FLAG, found
+    assert hit[0]["measured"] is not None
+    assert float(hit[0]["measured"]) > qc.LIGHTING_CAST_LIMIT
+
+
+def test_t4_13_magenta_cast_flags(tmp_path):
+    """The other named symptom. Magenta is |cast| the other way."""
+    sheet = _rgb_png(tmp_path / "magenta.png", MAGENTA)
+    found = qc.check_image(sheet, {})
+    hit = _by_check(found, qc.LIGHTING_LOCK)
+    assert hit and hit[0]["verdict"] == qc.FLAG, found
+    assert float(hit[0]["measured"]) > qc.LIGHTING_CAST_LIMIT
+
+
+def test_t4_13_neutral_grey_passes(tmp_path):
+    """Even neutral studio lighting: balanced channels PASS."""
+    sheet = _figure_on_wall(tmp_path / "neutral.png", NEUTRAL)
+    found = qc.check_image(sheet, {})
+    hit = _by_check(found, qc.LIGHTING_LOCK)
+    assert hit and hit[0]["verdict"] == qc.PASS, found
+    assert float(hit[0]["measured"]) <= qc.LIGHTING_CAST_LIMIT
+
+
+def test_t4_13_backdrop_string_is_not_the_criterion(tmp_path):
+    """BACKDROP already carries the lock words. That is not T4-13.
+
+    Mutation: a test that only greps BACKDROP stays green on an olive sheet.
+    """
+    assert "evenly lit" in make_anchor.BACKDROP
+    assert "Even neutral studio lighting" in make_anchor.BACKDROP
+    sheet = _rgb_png(tmp_path / "olive.png", OLIVE)
+    found = qc.check_image(sheet, {})
+    hit = _by_check(found, qc.LIGHTING_LOCK)
+    assert hit and hit[0]["verdict"] == qc.FLAG, (
+        "olive sheet passed because BACKDROP contains the lighting lock")
+
+
+def test_t4_13_figure_on_olive_wall_flags(tmp_path):
+    """Whole-image mean is not the metric. A black figure on an olive wall
+    averages toward equal channels and would hide the defect.
+    """
+    sheet = _figure_on_wall(tmp_path / "figure_olive.png", OLIVE)
+    import numpy as np
+    from PIL import Image
+    arr = np.asarray(Image.open(sheet).convert("RGB"), dtype="float64")
+    whole = arr.mean(axis=(0, 1))
+    whole_cast = abs(whole[1] - (whole[0] + whole[2]) / 2.0)
+    assert whole_cast < qc.LIGHTING_CAST_LIMIT, (
+        f"fixture is not load-bearing: whole-image cast {whole_cast} already FLAGs")
+    found = qc.check_image(sheet, {})
+    hit = _by_check(found, qc.LIGHTING_LOCK)
+    assert hit and hit[0]["verdict"] == qc.FLAG, found
+
+
+def test_t4_13_missing_path_not_measured():
+    """No pixels is NOT MEASURED, never cast 0.0."""
+    with pytest.raises(ValueError, match="NOT MEASURED"):
+        qc.backdrop_channel_means("/no/such/sheet.png")
+    with pytest.raises(ValueError, match="NOT MEASURED"):
+        qc.t4_13_claim()
+
+
+def test_t4_13_real_sheet_not_measured():
+    """T4-13 on a current GPU sheet is NOT MEASURED.
+
+    Flip T4_13_REAL_SHEET_MEASURED only after a rendered sheet is pointed at.
+    Mutation: set MEASURED True with an empty hook → this goes red.
+    """
+    assert qc.T4_13_REAL_SHEET_MEASURED is False, (
+        "T4-13 real sheet is NOT MEASURED; flip only after a render")
+    assert qc.t4_13_real_sheet_path() is None
+    with pytest.raises(ValueError, match="NOT MEASURED"):
+        qc.t4_13_claim()
+
+
+def test_t4_13_measured_true_with_empty_hook_is_a_lie():
+    """The flag without a path is the lie the harness exists to catch."""
+    prev = qc.T4_13_REAL_SHEET_MEASURED
+    try:
+        qc.T4_13_REAL_SHEET_MEASURED = True
+        with pytest.raises(ValueError, match="NOT MEASURED"):
+            qc.t4_13_claim()
+    finally:
+        qc.T4_13_REAL_SHEET_MEASURED = prev
+
+
+def test_t4_13_through_run(tmp_path):
+    """Studio QC entry is qc.run. Same olive sheet, same FLAG."""
+    sheet = _rgb_png(tmp_path / "olive.png", OLIVE)
+    found = qc.run(sheet, "image", {})
+    hit = _by_check(found, qc.LIGHTING_LOCK)
+    assert hit and hit[0]["verdict"] == qc.FLAG, found
