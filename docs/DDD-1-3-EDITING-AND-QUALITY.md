@@ -22,7 +22,7 @@ is named.
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` **and** `T3-9`/§4.3 |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `fragment`, `item_audio`, `wants_master_loudnorm` | built |
 | `studio/qc.py` | 642 | TRD-3 tier 1 in full: `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise` | built |
-| `studio/qc_service.py` | 308 | findings, queue, remedy edit, dismiss, reopen; `approve()` enqueues dest ≠ source; `h_repair` writes dest only via `dispatch_repair` | built except GPU dispatch (`T3-23`) |
+| `studio/qc_service.py` | 308 | findings, queue, remedy edit, dismiss, reopen; `approve()` enqueues dest ≠ source; `dispatch_repair` asks `where()`/`fits()`/`resolve()` then submits `fix_ref` / `gen_postproc` | built except `T3-24` / `T3-25` |
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2: JSON-canonical arc, `to_md`, `validate`, `for_song`, screened both directions | built |
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning, reused by `T3-20` | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
@@ -315,17 +315,17 @@ failure.
 ### 5.7 What has to exist before a repair is a repair
 
 `qc_service.approve()` enqueues one `repair` job with dest ≠ source. It does
-not write dest and it does not run a GPU. Three things turn that job into a
-real candidate, and until they land dest is not produced — `h_repair` refuses
-a silent copy rather than marking the finding repaired:
+not write dest and it does not run a GPU. `dispatch_repair` now turns that job
+into a real candidate (`T3-23`):
 
-1. **Remedy → action mapping.** Every check already declares a remedy class
-   (`T3-27`); approving must dispatch it to a real actuator — `fix_ref.py` for
-   images, `make_postproc.py` for clips, a re-render for the rest.
+1. **Remedy → action mapping.** Image findings submit `pipeline.fix_ref`;
+   clip / upscale findings submit `pipeline.gen_postproc`. A silent
+   `shutil.copy2` of src is still refused.
 2. **Routing that asks first.** `models.where()` and `models.fits()` choose the
-   box, `models.resolve()` names the file *that box* uses, and `T6-A6`'s three
-   values are respected — `False` refuses, `None` is a candidate. The refiner is
-   ~19.6 GiB resident and fits neither peaches (10.58 GiB) nor a 15.92 GiB card,
+   box, `models.resolve()` names the file *that box* uses, and a pin under a
+   name the box does not have is refused before submit. `T6-A6`'s three values
+   stay: `False` refuses, `None` is a candidate. The refiner is ~19.6 GiB
+   resident (`T3-24`) and fits neither peaches (10.58 GiB) nor a 15.92 GiB card,
    so "clean up peaches output" means peaches renders and cerberus refines, and
    the artefact crosses boxes.
 3. **A callable cross-box precondition** (`T3-25`), not a sentence: something
@@ -352,7 +352,8 @@ documents, not a preference.
                         ->  storyboard_service ->  arc flows, meter, casting
 
     zimage_sweep scored  ->  calibrations row  ->  threshold (only if separated)  ->  tier 2 UI
-    remedy dispatch + routing + T3-25 check    ->  dispatch_repair writes dest  ->  T3-23 real
+    T3-23 routing (where/fits/resolve + actuator)  ->  T3-24 refiner box pick
+                                                   ->  T3-25 remote-output move
 
 `duck` and `layer` are off this graph on purpose: refused everywhere and honestly
 so (`T1-23`), and `layer` goes first when they are scheduled because `xfade`

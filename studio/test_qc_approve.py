@@ -9,6 +9,8 @@ import os
 import time
 
 import db
+import models
+import pipeline
 import qc_service
 
 
@@ -215,8 +217,13 @@ def test_t3_h_repair_gpu_work_is_still_missing():
     dest = args["repair_path"]
     try:
         qc_service.h_repair(args, lambda m: None)
-    except RuntimeError as e:
-        assert "gpu" in str(e).lower() or "no new file" in str(e).lower(), e
+    except (RuntimeError, ValueError) as e:
+        msg = str(e).lower()
+        assert (
+            "gpu" in msg or "no new file" in msg
+            or "no box" in msg or "cannot run" in msg
+            or "does not have" in msg or "does not fit" in msg
+        ), e
         assert not os.path.isfile(dest)
         row = qc_service.get(fid)
         assert row["repair_path"] in (None, "")
@@ -232,3 +239,202 @@ def test_t3_h_repair_gpu_work_is_still_missing():
     assert written != original, (
         "h_repair cloned the broken artefact -- GPU work is still missing")
     assert qc_service.get(fid)["repair_path"] == dest
+
+
+_T323_FLEET = [{"id": "0", "title": "cerberus",
+                "address": "http://127.0.0.1:8188"}]
+_T323_FILE = models.CATALOG["qwen_image_edit_2511"]["file"]
+
+
+def _t323_route(monkeypatch, *, where_rows, fit, resolved, fleet=_T323_FLEET):
+    """Watch where/fits/resolve. Do not replace dispatch_repair."""
+    asked = []
+
+    def _where(key, backends):
+        asked.append(("where", key, backends))
+        return list(where_rows)
+
+    def _fits(key, vram_gib):
+        asked.append(("fits", key, vram_gib))
+        return fit
+
+    def _resolve(name, pool):
+        asked.append(("resolve", name, pool))
+        return resolved
+
+    monkeypatch.setattr(models, "where", _where)
+    monkeypatch.setattr(models, "fits", _fits)
+    monkeypatch.setattr(models, "resolve", _resolve)
+    monkeypatch.setattr(pipeline, "swarm_backends", lambda: fleet)
+    return asked
+
+
+def _t323_actuators(monkeypatch):
+    """Record submit. Write dest only if dispatch_repair calls us."""
+    submitted = []
+
+    def _fix_ref(slug, tier, clip_idx, mode, image_path, seed, progress=None,
+                 **kw):
+        out = image_path + ".fixed"
+        with open(image_path, "rb") as f:
+            payload = f.read()
+        with open(out, "wb") as f:
+            f.write(payload + b"-fixed")
+        submitted.append(("fix_ref", image_path, out))
+        return [{"clip_idx": clip_idx, "path": out, "seed": seed}]
+
+    def _gen_postproc(clip_paths, slug, multiplier=2, upscale="",
+                      progress=None):
+        src = clip_paths[0]
+        out = src + ".post"
+        with open(src, "rb") as f:
+            payload = f.read()
+        with open(out, "wb") as f:
+            f.write(payload + b"-post")
+        submitted.append(("gen_postproc", src, out))
+        return [out]
+
+    monkeypatch.setattr(pipeline, "fix_ref", _fix_ref)
+    monkeypatch.setattr(pipeline, "gen_postproc", _gen_postproc)
+    return submitted
+
+
+def test_t3_23_pinned_name_the_box_does_not_have_is_refused_before_submit(
+        monkeypatch):
+    """T3-23: a pin under a name the box does not have is refused BEFORE
+    submit. Default dispatch_repair — not a monkeypatched writer. The
+    unwired 'GPU work is still missing' raise is not this refusal."""
+    asked = _t323_route(
+        monkeypatch,
+        where_rows=[{"id": "0", "title": "cerberus",
+                     "address": "http://127.0.0.1:8188",
+                     "fits": True, "file_here": None, "vram_gib": 23.42,
+                     "confirmed": True}],
+        fit=True,
+        resolved=None)
+    submitted = _t323_actuators(monkeypatch)
+    fid, src, args = _finding_with_file("t323_pin")
+    args = dict(args)
+    args["kind"] = "image"
+    args["backend"] = "0"
+    args["requires"] = "qwen_image_edit_2511"
+    dest = args["repair_path"]
+    try:
+        qc_service.h_repair(args, lambda m: None)
+    except Exception as e:
+        msg = str(e).lower()
+        assert "gpu work is still missing" not in msg, e
+        assert any(w in msg for w in (
+            "does not have", "cannot run", "no box", "unfittable",
+            "does not fit", "pinned")), e
+    else:
+        raise AssertionError(
+            "repair pinned to a box under a name it does not have was submitted")
+    assert submitted == [], "actuator ran before routing refused"
+    assert any(c[0] == "where" for c in asked), "routing never asked where()"
+    assert any(c[0] == "fits" for c in asked), "routing never asked fits()"
+    assert any(c[0] == "resolve" for c in asked), "routing never asked resolve()"
+    assert not os.path.isfile(dest)
+    row = qc_service.get(fid)
+    assert row["repair_path"] in (None, "")
+    assert row["status"] != qc_service.REPAIRED
+
+
+def test_t3_23_dispatch_repair_refuses_when_fits_says_unfittable(monkeypatch):
+    """T3-23: where()/fits() saying the box cannot run it is a named
+    refusal, not 'GPU work is still missing'."""
+    asked = _t323_route(
+        monkeypatch,
+        where_rows=[{"id": "2", "title": "peaches",
+                     "address": "http://100.95.184.29:8188",
+                     "fits": False, "file_here": _T323_FILE,
+                     "vram_gib": 10.58, "confirmed": True}],
+        fit=False,
+        resolved=_T323_FILE)
+    submitted = _t323_actuators(monkeypatch)
+    fid, src, args = _finding_with_file("t323_fit")
+    args = dict(args)
+    args["kind"] = "image"
+    args["backend"] = "2"
+    args["requires"] = "qwen_image_edit_2511"
+    dest = args["repair_path"]
+    try:
+        qc_service.h_repair(args, lambda m: None)
+    except Exception as e:
+        msg = str(e).lower()
+        assert "gpu work is still missing" not in msg, e
+        assert any(w in msg for w in (
+            "fit", "cannot run", "no box", "unfittable")), e
+    else:
+        raise AssertionError("unfittable repair was submitted")
+    assert submitted == [], "actuator ran after fits() said no"
+    assert any(c[0] == "where" for c in asked)
+    assert any(c[0] == "fits" for c in asked)
+    assert not os.path.isfile(dest)
+    assert qc_service.get(fid)["status"] != qc_service.REPAIRED
+
+
+def test_t3_23_correctly_named_model_on_a_box_that_holds_it_is_submitted(
+        monkeypatch):
+    """T3-23 positive: default dispatch_repair asks where/fits/resolve,
+    then submits the actuator. dest is NEW bytes, never a copy of src."""
+    asked = _t323_route(
+        monkeypatch,
+        where_rows=[{"id": "0", "title": "cerberus",
+                     "address": "http://127.0.0.1:8188",
+                     "fits": True, "file_here": _T323_FILE,
+                     "vram_gib": 23.42, "confirmed": True}],
+        fit=True,
+        resolved=_T323_FILE)
+    submitted = _t323_actuators(monkeypatch)
+    fid, src, args = _finding_with_file("t323_ok")
+    args = dict(args)
+    args["kind"] = "image"
+    args["backend"] = "0"
+    args["requires"] = "qwen_image_edit_2511"
+    dest = args["repair_path"]
+
+    qc_service.h_repair(args, lambda m: None)
+
+    assert any(c[0] == "where" for c in asked), "routing never asked where()"
+    assert any(c[0] == "fits" for c in asked), "routing never asked fits()"
+    assert any(c[0] == "resolve" for c in asked), "routing never asked resolve()"
+    assert submitted and submitted[0][0] == "fix_ref", submitted
+    assert os.path.isfile(src)
+    assert os.path.isfile(dest), "actuator submitted but dest was not written"
+    with open(src, "rb") as f:
+        original = f.read()
+    with open(dest, "rb") as f:
+        written = f.read()
+    assert written != original, "dest is a byte-copy of the broken artefact"
+    row = qc_service.get(fid)
+    assert row["repair_path"] == dest
+    assert row["status"] == qc_service.REPAIRED
+
+
+def test_t3_23_clip_finding_submits_make_postproc(monkeypatch):
+    """T3-23: clip/postproc findings choose gen_postproc, not fix_ref."""
+    _t323_route(
+        monkeypatch,
+        where_rows=[{"id": "0", "title": "cerberus",
+                     "address": "http://127.0.0.1:8188",
+                     "fits": True, "file_here": _T323_FILE,
+                     "vram_gib": 23.42, "confirmed": True}],
+        fit=True,
+        resolved=_T323_FILE)
+    submitted = _t323_actuators(monkeypatch)
+    fid, src, args = _finding_with_file("t323_clip")
+    args = dict(args)
+    args["kind"] = "clip"
+    args["check_name"] = "resolution"
+    args["remedy"] = "upscale pass"
+    args["backend"] = "0"
+    dest = args["repair_path"]
+
+    qc_service.h_repair(args, lambda m: None)
+
+    assert submitted and submitted[0][0] == "gen_postproc", submitted
+    assert os.path.isfile(dest)
+    with open(src, "rb") as f, open(dest, "rb") as g:
+        assert f.read() != g.read()
+    assert qc_service.get(fid)["status"] == qc_service.REPAIRED

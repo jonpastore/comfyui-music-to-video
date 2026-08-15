@@ -181,9 +181,11 @@ order and take the dependencies from here.
    `zimage_sweep/`, report both distributions, and build no threshold and no UI
    until that report exists (`T3-13`, `T3-14`, `T3-16`). If they overlap, the
    gate is not built and that is a successful outcome.
-9. Repair routing (`T3-23`): `approve()` already enqueues dest ≠ source.
-   What remains is dispatching that job to `make_postproc` / `fix_ref` via
-   `models.where()` / `models.fits()`, so dest is the actuator's file.
+9. Repair routing (`T3-23`) is built: `dispatch_repair` asks `where()` /
+   `fits()` / `resolve()`, refuses a mis-named pin before submit, and
+   dest is the `fix_ref` / `gen_postproc` file. Next on this lane:
+   `T3-24` (refiner 19.6 GiB as a box decision) and `T3-25` (remote
+   output move).
 
 ### Deferred to another document, on purpose
 

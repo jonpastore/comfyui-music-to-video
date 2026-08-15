@@ -482,6 +482,7 @@ _stub("pipeline",
       stage_refs=lambda slug, tier, ref_paths: [],
       gen_artwork=lambda slug, prompt, anchor_path, progress=None, guard="", n=1, size=1024: [],
       fix_ref=lambda *a, **kw: [],
+      gen_postproc=lambda clip_paths, slug, multiplier=2, upscale="", progress=None: [],
       gen_clips=lambda slug, tier, sb, mp3, ref_paths, progress=None: [],
       gen_audio=_gen_audio,
       contact_sheet=_contact_sheet)

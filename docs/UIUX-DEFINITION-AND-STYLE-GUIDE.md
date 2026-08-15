@@ -384,9 +384,9 @@ What need not: drawing an automation curve.
 Disabled without a reason is banned. "Approve" greyed out with no explanation is
 the same defect as a button that does nothing — the operator cannot tell refusal
 from breakage. `T3-18` now distinguishes those: QC enqueues nothing, approve
-enqueues one repair. The remaining silence is `T3-23` — dest not appearing
-because the GPU actuator is not wired, which must say so rather than look like
-a successful copy.
+enqueues one repair. `T3-23` names a routing refusal (unfittable, or pinned
+under a name the box does not have) instead of looking like a successful copy.
+`T3-24` / `T3-25` are the remaining silences on this lane.
 
 ### 5.8 Motion
 

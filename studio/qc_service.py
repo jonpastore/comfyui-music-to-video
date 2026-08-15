@@ -20,6 +20,8 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import db      # noqa: E402
 import jobs    # noqa: E402
+import models  # noqa: E402
+import pipeline  # noqa: E402
 import qc      # noqa: E402
 import prompts  # noqa: E402
 
@@ -218,12 +220,145 @@ def _same_bytes(a, b, chunk=1024 * 1024):
                 return True
 
 
-def dispatch_repair(src, dest, args, progress):
-    """GPU actuator seam (T3-23 / make_postproc / fix_ref).
+def _repair_actuator_and_key(args):
+    """fix_ref for images; gen_postproc for clips. Model key is catalogued."""
+    args = args or {}
+    kind = (args.get("kind") or "").lower()
+    text = f"{args.get('remedy') or ''} {args.get('check_name') or ''}".lower()
+    key = args.get("requires") or args.get("model")
+    wants_fix = kind == "image" or any(
+        w in text for w in ("face", "inpaint", "outpaint"))
+    wants_post = any(w in text for w in (
+        "upscale", "interpolat", "postproc", "soft"))
+    if wants_fix and not wants_post:
+        return "fix_ref", key or "qwen_image_edit_2511"
+    if wants_post or kind in ("clip", "song"):
+        return "gen_postproc", key or "ltx25_latent_upscaler"
+    if kind == "image":
+        return "fix_ref", key or "qwen_image_edit_2511"
+    return "gen_postproc", key or "ltx25_latent_upscaler"
 
-    A byte-copy of the broken artefact is not a repair. Tests replace this
-    to write dest. Production raises until those actuators land here."""
-    raise RuntimeError("repair wrote no new file — GPU work is still missing")
+
+def _pin_matches(box, pin):
+    if pin is None or pin == "":
+        return True
+    pin = str(pin)
+    addr = box.get("address") or ""
+    host = models.canonical_host(addr)
+    return pin in {str(box.get("id")), box.get("title") or "", addr, host or ""}
+
+
+def _route_repair(args):
+    """Ask where/fits/resolve before any submit (T3-23)."""
+    actuator, key = _repair_actuator_and_key(args)
+    backends = pipeline.swarm_backends()
+    candidates = models.where(key, backends)
+    pin = args.get("backend") if args else None
+    if pin is None or pin == "":
+        pin = (args or {}).get("host") or (args or {}).get("pin")
+    if pin is not None and pin != "":
+        candidates = [c for c in candidates if _pin_matches(c, pin)]
+    spec = models.CATALOG.get(key) or {}
+    filename = spec.get("file")
+    chosen = None
+    last_reason = None
+    for box in candidates:
+        fit = models.fits(key, box.get("vram_gib"))
+        if fit is False:
+            last_reason = (
+                f"{key} does not fit {box.get('title') or box.get('id')} "
+                f"({box.get('vram_gib')} GiB)")
+            continue
+        pool = {box["file_here"]} if box.get("file_here") else set()
+        resolved = models.resolve(filename, pool) if filename else box.get("file_here")
+        if filename and resolved is None:
+            last_reason = (
+                f"repair pinned to {pin or box.get('id')} under a name it "
+                f"does not have: {filename}")
+            if pin is not None and pin != "":
+                continue
+            if box.get("confirmed") is True:
+                continue
+        chosen = dict(box, file_here=resolved or box.get("file_here"), fits=fit)
+        break
+    if chosen is None:
+        if pin is not None and pin != "":
+            raise ValueError(
+                last_reason or (
+                    f"repair pinned to {pin} under a name it does not have: "
+                    f"{filename or key}"))
+        raise ValueError(last_reason or f"no box can run repair model {key}")
+    return actuator, key, chosen
+
+
+def _place_repair(src, dest, produced):
+    """Put the actuator's file at dest. Never src, never a silent no-op."""
+    path = produced
+    if isinstance(produced, list):
+        if not produced:
+            path = None
+        elif isinstance(produced[0], dict):
+            path = produced[0].get("path")
+        else:
+            path = produced[0]
+    if not path or not os.path.isfile(path):
+        raise RuntimeError("repair actuator produced no file")
+    if os.path.abspath(path) == os.path.abspath(src):
+        raise RuntimeError("repair actuator returned the source")
+    if os.path.abspath(path) != os.path.abspath(dest):
+        parent = os.path.dirname(dest)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(path, "rb") as fh:
+            data = fh.read()
+        with open(dest, "wb") as fh:
+            fh.write(data)
+    return dest
+
+
+def _invoke_actuator(actuator, src, dest, args, progress):
+    args = args or {}
+    if actuator == "fix_ref":
+        made = pipeline.fix_ref(
+            slug=args.get("slug") or "repair",
+            tier=args.get("tier") or "r",
+            clip_idx=int(args.get("clip_idx") or 0),
+            mode=args.get("mode") or "inpaint",
+            image_path=src,
+            seed=int(args.get("seed") or 0),
+            progress=progress,
+            instruction=args.get("remedy") or "",
+            face_path=args.get("face_path"),
+            mask_path=args.get("mask_path"),
+            pad=tuple(args.get("pad") or (0, 0, 0, 0)),
+            guard=args.get("guard") or "",
+            body=args.get("body") or "",
+        )
+    else:
+        made = pipeline.gen_postproc(
+            [src],
+            slug=args.get("slug") or "repair",
+            multiplier=int(args.get("multiplier") or 2),
+            upscale=args.get("upscale") or "",
+            progress=progress,
+        )
+    return _place_repair(src, dest, made)
+
+
+def dispatch_repair(src, dest, args, progress):
+    """Route via where/fits/resolve, then submit fix_ref or gen_postproc.
+
+    A pin under a name the box does not have, or a box that does not
+    fit, is refused before submit (T3-23). dest is the actuator's file,
+    never a copy of src."""
+    actuator, key, box = _route_repair(args)
+    args = dict(args or {})
+    args["requires"] = key
+    if box.get("file_here"):
+        args["file_here"] = box["file_here"]
+    if box.get("id") is not None and not args.get("backend"):
+        args["backend"] = box["id"]
+    return _invoke_actuator(actuator, src, dest, args, progress)
 
 
 def produce_repair(src, dest, args, progress):
@@ -231,7 +366,7 @@ def produce_repair(src, dest, args, progress):
 
     The contract is a new file at dest, produced by dispatch_repair. Tests
     replace that seam to prove a silent no-write cannot mark the finding
-    repaired. The default is not a copy."""
+    repaired. The default routes and submits; it is not a copy."""
     if not dest or dest == src:
         raise ValueError("a repair must write a new candidate, not overwrite")
     if not src or not os.path.isfile(src):
@@ -300,6 +435,9 @@ def approve(fid):
                   ON CONFLICT(path) DO UPDATE SET
                     expect_json=excluded.expect_json""",
                dest, orig["expect_json"], time.time())
+    _, key = _repair_actuator_and_key({
+        "kind": row["kind"], "check_name": row["check_name"], "remedy": remedy,
+    })
     jobs.enqueue("repair", {
         "finding_id": int(fid),
         "path": src,
@@ -307,6 +445,7 @@ def approve(fid):
         "remedy": remedy,
         "check_name": row["check_name"],
         "kind": row["kind"],
+        "requires": key,
     })
     db.run("UPDATE findings SET status=? WHERE id=?", APPROVED, int(fid))
     return get(fid)
@@ -424,8 +563,8 @@ def demo():
         landed = get(fid)["repair_path"]
         assert landed in (None, "") or landed != src
         # T3-6 positive: the handler writes dest; naming it on the job is not
-        # producing it. dest != src and the original stays. The default
-        # actuator is unwired, so this self-check injects a writer.
+        # producing it. dest != src and the original stays. This self-check
+        # injects a writer so it does not need a fleet.
         def _demo_write(src, dest, args, progress):
             with open(src, "rb") as f:
                 payload = f.read()
