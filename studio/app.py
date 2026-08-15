@@ -4652,6 +4652,45 @@ def storyboard_form_ctx(song, tier, chat_models=None, best=None, direction=None)
             "models": chat_models if chat_models is not None else [], "best_model": best}
 
 
+def storyboard_generation_payload(song, tier):
+    """T2-17: the generation prompt a client edits before generate.
+
+    Defaulted from the tier when nothing has been stored. A stored prompt
+    (what was actually sent) wins, which is the same prefill the HTML form
+    uses -- one function, both answers.
+    """
+    ctx = storyboard_form_ctx(song, tier)
+    return {
+        "prompt": ctx["direction"],
+        "tier": ctx["tier"],
+        "pinned": ctx["pinned"],
+        "tier_text": ctx["tier_text"],
+        "max_characters": ctx["max_direction"],
+        "pinned_added_at_use": True,
+        "pinned_editable": False,
+    }
+
+
+def enqueue_storyboard(song_id, tier, model="", scene_seconds=4.0, direction=""):
+    """Queue a storyboard generate. Shared by the HTML form and the JSON API."""
+    get_song_or_404(song_id)
+    valid_tier_or_400(tier)
+    direction = check_direction(direction)
+    try:
+        scene_seconds = float(scene_seconds)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "scene_seconds must be a finite number")
+    if not math.isfinite(scene_seconds):
+        raise HTTPException(400, "scene_seconds must be a finite number")
+    scene_seconds = min(max(scene_seconds, 1.0), 60.0)
+    jid = jobs.enqueue("storyboard", {
+        "song_id": song_id, "tier": tier,
+        "model": (model or models.chat_default()) or None,
+        "scene_seconds": scene_seconds, "direction": direction,
+    }, song_id=song_id)
+    return jid, direction
+
+
 def check_direction(direction):
     """Screen the direction box exactly as a custom tier's wording is screened.
 
@@ -4695,19 +4734,36 @@ def storyboard_form(request: Request, id: int, tier: str):
 @app.post("/songs/{id}/storyboard")
 def start_storyboard(id: int, tier: str = Form(...), model: str = Form(""),
                       scene_seconds: float = Form(4.0), direction: str = Form("")):
-    get_song_or_404(id)
-    valid_tier_or_400(tier)
-    direction = check_direction(direction)
-    if not math.isfinite(scene_seconds):
-        raise HTTPException(400, "scene_seconds must be a finite number")
-    scene_seconds = min(max(scene_seconds, 1.0), 60.0)
-    # blank means "use the studio default", which /models sets; blank there too
-    # means grok.best_model() picks the highest available
-    jobs.enqueue("storyboard", {"song_id": id, "tier": tier,
-                                 "model": (model or models.chat_default()) or None,
-                                 "scene_seconds": scene_seconds, "direction": direction},
-                 song_id=id)
+    enqueue_storyboard(id, tier, model, scene_seconds, direction)
     return RedirectResponse(f"/songs/{id}", status_code=303)
+
+
+@app.get("/api/songs/{id}/storyboard/{tier}")
+def api_storyboard_prompt(id: int, tier: str):
+    """T2-17: generation prompt, defaulted from the tier, before generate."""
+    song = get_song_or_404(id)
+    valid_tier_or_400(tier)
+    return JSONResponse(storyboard_generation_payload(song, tier))
+
+
+@app.post("/api/songs/{id}/storyboard/{tier}")
+async def api_start_storyboard(id: int, tier: str, request: Request):
+    """T2-17: the edited prompt is what the generate job is handed."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if body is None:
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(400, "JSON object required")
+    prompt = body.get("prompt", body.get("direction", ""))
+    jid, direction = enqueue_storyboard(
+        id, tier,
+        model=body.get("model") or "",
+        scene_seconds=body.get("scene_seconds", 4.0),
+        direction=prompt)
+    return JSONResponse({"job_id": jid, "tier": tier, "prompt": direction})
 
 
 # Scene fields the storyboard page lets you edit. image_prompt is what the

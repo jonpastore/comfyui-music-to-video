@@ -121,6 +121,11 @@ confirmation is 400, `T2-16`). Same routes, no parallel `/api/*` tree
 `GET/POST /api/songs/{id}/storyboard/{tier}`, `.../scene/{n}`,
 `.../meter`, `.../cast`. The generation prompt and **the limits that apply to it**
 travel in the same response (`T2-18`).
+`GET/POST /api/songs/{id}/storyboard/{tier}` (`T2-17` **built**: GET
+returns `prompt` from `storyboard_generation_payload`, defaulted from the
+tier; POST accepts an edited `prompt`; `T2-18` limits/PINNED travel in
+that same body but are not yet the criterion's check), `.../scene/{n}`,
+`.../meter`, `.../cast`.
 
 **C · QC** — exists. `/api/qc/run`, `/api/qc/findings`, `/{fid}`,
 `/{fid}/remedy`, `/{fid}/dismiss`, `/{fid}/approve`, `/{fid}/recheck`,

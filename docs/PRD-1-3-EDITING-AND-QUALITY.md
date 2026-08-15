@@ -266,6 +266,10 @@ order and take the dependencies from here.
    miss is 400 before clips enqueue; in-tolerance still queues
    (`test_t2_25_scene_time_enqueue.py`). Remaining: §4.2–4.3
    wands (`T2-17`…`T2-19`), `T2-34`, and casting.
+   the time meter (§5.1), casting (§5.3). **`T2-17` built**:
+   `GET /api/songs/{id}/storyboard/{tier}` returns the generation prompt
+   defaulted from the tier (`storyboard_generation_payload`); POST accepts
+   an edit. `T2-18`/`T2-19` still unbuilt.
 7. Per-scene model choice, W2 (`T2-42`…`T2-48`) — last, because `T2-45` needs
    `models.where()`'s three-valued answer respected at enqueue and `T2-48` needs
    per-model ceilings, which is P0 item 1 again. The renderer half of those

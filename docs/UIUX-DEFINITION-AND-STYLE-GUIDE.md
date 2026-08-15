@@ -367,6 +367,10 @@ before clips enqueue (`T2-25`). The live `meter` component is not this.
 The song page **Video model** select is `models.renderable("video")`
 with each option's purpose in the hint (`T2-33`). Adding a catalogue
 entry with a `cli` appears there with no template change.
+The generation prompt itself is API data (`T2-17`):
+`GET /api/songs/{id}/storyboard/{tier}` returns the same defaulted-from-tier
+string the direction box prefills; the HTML is not the only place that
+string lives.
 
 ### 5.3 Space and radius
 
