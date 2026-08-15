@@ -164,7 +164,10 @@ wires `depends_on` per clip; T6-2 `_claim` skips the successor until the
 predecessor is done (`test_t2_11_clip_chain_depends.py`). Under-ceiling
 songs still enqueue one batch `clips` job.
 
-`studio/qc.py` (TRD-3 tier 1 in full; **`T3-4.2-sat` built** — clip
+`studio/qc.py` (TRD-3 tier 1 in full; **`T3-4.1-not_uniform` built** —
+image `not_uniform` / `measure_pixel_std` REJECTs solid flat colour
+(max per-channel spatial std ≤ `UNIFORM_STD_FLOOR`), PASSes testsrc2,
+`test_t3_4_1_not_uniform.py`; **`T3-4.2-sat` built** — clip
 `channel_sat` / `measure_channel_sat` FLAGs solid green garbage (NaN
 encode mode) above `CHANNEL_SAT_LIMIT`, PASSes testsrc2/gray/black,
 `test_t3_4_2_sat.py`; **`T3-4.2-resolution` built** — clip `resolution`

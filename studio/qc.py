@@ -130,6 +130,17 @@ EDGE_SILENCE_LIMIT_S = 0.25
 _EDGE_SILENCE_NOISE_DB = -50
 _EDGE_SILENCE_MIN_S = 0.05
 
+# Image not_uniform (TRD-3 §4.1 / T3-4.1-not_uniform): max per-channel
+# spatial std of RGB. A single flat colour is constant in every channel
+# (std 0) even when R≠G≠B — whole-array std wrongly PASSes solid red
+# because inter-channel spread looks like "variation". Measured 2026-08-15:
+#
+#     solid black / gray / red / blue      max channel std ~ 0
+#     testsrc2 colour bars 256x192         max channel std >> 50
+#
+# 1.0 clears encoder/quantisation noise and still rejects flat fills.
+UNIFORM_STD_FLOOR = 1.0
+
 # T3-9 bands. Brick-wall they are not — 440 Hz leaks into low at -45 —
 # but 80 / 440 / 8000 Hz each light exactly one band as the loudest.
 BANDS = (
@@ -598,6 +609,36 @@ def _stderr_events(path, filt, pattern):
         ["ffmpeg", "-nostdin", "-v", "info", "-i", path, "-vf", filt, "-f", "null", "-"],
         capture_output=True, text=True)
     return re.findall(pattern, r.stderr)
+
+
+def measure_pixel_std(path):
+    """Max per-channel spatial RGB std for not_uniform (TRD-3 §4.1).
+
+    A single flat colour (constant R, G and B across the frame) is 0
+    even when the three channel values differ — whole-array std is not
+    that reading. RAISES when the file cannot be opened as an image —
+    never 0.0 on no data.
+    """
+    import numpy as np
+    from PIL import Image
+    if not path or not os.path.isfile(path):
+        raise RuntimeError(
+            f"pixel_std produced no readings for {path} -- refusing to "
+            "report a measurement that did not happen")
+    try:
+        with Image.open(path) as im:
+            im.load()
+            arr = np.asarray(im.convert("RGB"), dtype="float32")
+    except Exception as e:
+        raise RuntimeError(
+            f"pixel_std produced no readings for {path} -- refusing to "
+            f"report a measurement that did not happen: {e}") from e
+    if arr.size < 1:
+        raise RuntimeError(
+            f"pixel_std produced no readings for {path} -- refusing to "
+            "report a measurement that did not happen")
+    # axis (0,1) = spatial; channel axis left. max of R/G/B spatial std.
+    return float(arr.std(axis=(0, 1)).max())
 
 
 def measure_channel_sat(path):
@@ -1596,11 +1637,13 @@ def check_image(path, expect):
                            f"{got[0]}x{got[1]}", f"{want[0]}x{want[1]}", None,
                            remedy="re-render"))
 
-    std = float(arr.std())
+    # T3-4.1-not_uniform: max per-channel spatial std. Whole-array std
+    # PASSes solid red (R≠G≠B); channel-wise max does not.
+    std = float(arr.std(axis=(0, 1)).max())
     out.append(finding(path, "image", "not_uniform",
-                       PASS if std > 1.0 else REJECT,
+                       PASS if std > UNIFORM_STD_FLOOR else REJECT,
                        f"pixel standard deviation {std:.2f}",
-                       round(std, 2), 1.0, "levels",
+                       round(std, 2), UNIFORM_STD_FLOOR, "levels",
                        remedy="re-render with a different seed"))
     mean = float(arr.mean())
     out.append(finding(path, "image", "not_blank",

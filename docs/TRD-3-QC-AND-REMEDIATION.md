@@ -206,6 +206,14 @@ writes a row naming the check and **keeps the file**.
 opens; resolution as requested; not uniform; not blank; not a single flat colour;
 alpha not fully transparent.
 
+- `T3-4.1-not_uniform` **Uniform / single flat colour REJECTs** —
+  `qc.measure_pixel_std` is the max per-channel spatial RGB std. A solid
+  red/blue/gray/black fill is ~0 even when R≠G≠B (whole-array std wrongly
+  PASSed solid red). Above `UNIFORM_STD_FLOOR` (1.0 levels) PASSes;
+  at or below REJECTs. `measured`/`expected`/`unit` = std / floor /
+  `levels`, remedy class `re-render-seed`. testsrc2 colour bars PASS;
+  solid fills REJECT (`test_t3_4_1_not_uniform.py`). No reading raises,
+  never 0.0 on no data. Distinct from `not_blank` (mean luma floor).
 - `T3-31` **Each generated still is scored by a vision model against
   the operator's base images and the prompt that produced it.** That
   includes generate, reroll, `fix_ref`, `fix_anchor`, artwork, an
@@ -623,7 +631,8 @@ current.
 
 | criterion | state | commit | what was measured |
 |---|---|---|---|
-| **tier 1, §4 entire** | **built** | earlier + `T3-4.2-sat` + `T3-4.2-resolution` + `T3-4.2-frozen` + `T3-4.3-sr` + `T3-4.3-true-peak` + `T3-4.3-ch` + `T3-4.3-clip` + `T3-4.3-dc` + `T3-4.3-edge` + `T3-4.4-av` | `studio/qc.py` — `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise`. Every threshold measured, every `_readings()` raises rather than returning 0.0. Channel saturation was the §4.2 row still missing a red test until `T3-4.2-sat`. Resolution as requested was code-without-a-red-test (and unit `None`) until `T3-4.2-resolution`. Consecutive-frame freeze was demo-only until `T3-4.2-frozen`. Sample rate as requested was code-without-a-finding until `T3-4.3-sr`. True peak vs `LOUDNORM_TP` was code-without-a-red-test until `T3-4.3-true-peak`. §4.3 channel count needed `mixer.probe["channels"]` until `T3-4.3-ch`. Clipped-sample count was the §4.3 row without a red test until `T3-4.3-clip`. DC offset was the §4.3 row still missing a check until `T3-4.3-dc`. Leading/trailing silence was §4.3 text without a red test until `T3-4.3-edge`. Assembled-song av_sync was code-without-a-red-test until `T3-4.4-av` |
+| **tier 1, §4 entire** | **built** | earlier + `T3-4.1-not_uniform` + `T3-4.2-sat` + `T3-4.2-resolution` + `T3-4.2-frozen` + `T3-4.3-sr` + `T3-4.3-true-peak` + `T3-4.3-ch` + `T3-4.3-clip` + `T3-4.3-dc` + `T3-4.3-edge` + `T3-4.4-av` | `studio/qc.py` — `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise`. Every threshold measured, every `_readings()` raises rather than returning 0.0. Image not_uniform was whole-array std (solid red PASSed) and demo-only until `T3-4.1-not_uniform`. Channel saturation was the §4.2 row still missing a red test until `T3-4.2-sat`. Resolution as requested was code-without-a-red-test (and unit `None`) until `T3-4.2-resolution`. Consecutive-frame freeze was demo-only until `T3-4.2-frozen`. Sample rate as requested was code-without-a-finding until `T3-4.3-sr`. True peak vs `LOUDNORM_TP` was code-without-a-red-test until `T3-4.3-true-peak`. §4.3 channel count needed `mixer.probe["channels"]` until `T3-4.3-ch`. Clipped-sample count was the §4.3 row without a red test until `T3-4.3-clip`. DC offset was the §4.3 row still missing a check until `T3-4.3-dc`. Leading/trailing silence was §4.3 text without a red test until `T3-4.3-edge`. Assembled-song av_sync was code-without-a-red-test until `T3-4.4-av` |
+| `T3-4.1-not_uniform` uniform / single flat colour | **built** | this slice | `qc.measure_pixel_std` + `check_image` `not_uniform`: max per-channel spatial RGB std vs `UNIFORM_STD_FLOOR` (1.0); solid red/blue/gray/black REJECT; testsrc2 PASS; measured equals the independent reading (`test_t3_4_1_not_uniform.py`). Whole-array std wrongly PASSed solid red. No image raises, never 0.0 |
 | `T3-4.2-sat` channel saturation (NaN / green garbage) | **built** | this slice | `qc.measure_channel_sat` + `check_video` `channel_sat`: solid green/lime FLAG above `CHANNEL_SAT_LIMIT` (80 levels of green dominance); testsrc2 / gray / black PASS; measured equals the independent reading (`test_t3_4_2_sat.py`). No frames raises, never 0.0 |
 | `T3-4.2-resolution` resolution as requested | **built** | this slice | `mixer.probe` width/height; `check_video` emits `resolution` when `expect.width`+`height` are set: matching WxH PASSes, 160x120 against 320x240 REJECTs, measured equals probe WxH, unit `px`, remedy re-render-pinned; without expect the check emits nothing (`test_t3_4_2_resolution.py`) |
 | `T3-4.2-frozen` consecutive-frame freeze | **built** | this slice | `check_video` `frozen` via freezedetect n=-60dB d=0.5: still solid hold ≥0.5s FLAGs (span count ≥1); moving testsrc2 PASSes (0 spans); measured equals independent freeze_start count, expected 0, unit `spans`, remedy re-render-seed (`test_t3_4_2_frozen.py`). Was only `qc.demo()` until this red test |
