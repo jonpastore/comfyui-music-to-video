@@ -83,6 +83,62 @@ def test_t8_2_picking_one_song_does_not_unpick_another():
     assert db.get_take(b)["picked"] == 1
 
 
+def test_t8_2_use_is_not_the_pick_and_both_takes_stay_listed():
+    """T8-2: pick is a separate act; Use does not write songs.mp3_path.
+
+    Both takes remain listed and playable after a second generation and
+    after the pick. The Use route on an audio_gen asset is not the pick.
+    """
+    import app as appmod
+    from urllib.parse import quote
+
+    from fastapi.testclient import TestClient
+
+    sid = _song(style_text="drums, 128 bpm warehouse", lyrics="[verse]\nmeow",
+                mp3_path="/keep/me.mp3")
+    _gen_audio(sid, seed=42)
+    _gen_audio(sid, seed=43)
+    listed = db.list_takes(sid)
+    assert len(listed) == 2, "expected two takes after a second generation"
+    first, second = listed
+    keep = "/keep/me.mp3"
+
+    gen = db.one("SELECT * FROM assets WHERE song_id=? AND kind='audio_gen' AND path=?",
+                 sid, second["path"])
+    assert gen is not None
+
+    with TestClient(appmod.app) as client:
+        used = client.post(f"/songs/{sid}/audio/{gen['id']}/use")
+        assert used.status_code == 400, used.text
+        assert "pick" in used.text.lower()
+        assert db.one("SELECT mp3_path FROM songs WHERE id=?", sid)["mp3_path"] == keep
+
+        picked = client.post(
+            f"/songs/{sid}/takes/{second['id']}/pick",
+            headers={"Accept": "application/json"})
+        assert picked.status_code == 200, picked.text
+        body = picked.json()
+        assert body["picked"] == second["id"]
+        by_id = {t["id"]: t for t in body["takes"]}
+        assert set(by_id) == {first["id"], second["id"]}
+        assert by_id[first["id"]]["picked"] is False
+        assert by_id[second["id"]]["picked"] is True
+
+        page = client.get(f"/songs/{sid}")
+        assert page.status_code == 200, page.text
+
+    rows = {t["id"]: t for t in db.list_takes(sid)}
+    assert set(rows) == {first["id"], second["id"]}
+    assert rows[first["id"]]["picked"] == 0
+    assert rows[second["id"]]["picked"] == 1
+    assert db.one("SELECT mp3_path FROM songs WHERE id=?", sid)["mp3_path"] == keep
+
+    for take in rows.values():
+        assert os.path.isfile(take["path"])
+        src = "/media/" + quote(os.path.realpath(take["path"]), safe="/")
+        assert src in page.text
+
+
 def test_t8_3_take_records_generated_resynthesised_or_bridged():
     sid = _song()
     g = db.insert_take(sid, "/g.mp3", "generated")

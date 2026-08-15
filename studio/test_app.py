@@ -6848,10 +6848,16 @@ def test_generated_audio_is_kept_and_says_which_path_ran(monkeypatch, tmp_path):
         assert meta["mode"] == "bridged" and meta["bridge_start"] == 5.0
         assert os.path.exists(bridged["path"])
 
-        # a take can be pressed into use through the SAME route an edit uses
+        # Use is not the pick: an audio_gen asset cannot write songs.mp3_path
         r = client.post(f"/songs/{sid}/audio/{rows[0]['id']}/use")
+        assert r.status_code == 400, r.text
+        assert db.one("SELECT mp3_path FROM songs WHERE id=?", sid)["mp3_path"] == mp3
+        take = db.one("SELECT * FROM takes WHERE song_id=? AND path=?",
+                      sid, rows[0]["path"])
+        r = client.post(f"/songs/{sid}/takes/{take['id']}/pick")
         assert r.status_code in (200, 303)
-        assert db.one("SELECT mp3_path FROM songs WHERE id=?", sid)["mp3_path"] == rows[0]["path"]
+        assert db.one("SELECT mp3_path FROM songs WHERE id=?", sid)["mp3_path"] == mp3
+        assert db.get_take(take["id"])["picked"] == 1
 
         # bounds: a form cannot occupy a GPU for an hour, and re-synthesising at
         # denoise 1.0 ignores the source entirely, so it is refused rather than

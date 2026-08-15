@@ -148,8 +148,8 @@
     from the current audio replaces the whole thing, not a span of it, because no
     backend publishes a region or mask node. Trimming and fading stay with
     &ldquo;Edit audio&rdquo; above, which is deterministic ffmpeg and touches nothing else.
-    Takes are kept as candidates; none of them becomes this song&rsquo;s audio until you
-    press Use.</p>
+    Takes are kept as candidates; picking one records the pick and does not
+    write over this song&rsquo;s audio.</p>
   <form id="audio-gen-form" method="post" action="/songs/{{ song.id }}/audio/generate"
         class="stack-form">
     <label>Style tags
@@ -192,31 +192,33 @@
     <button type="submit">Generate take</button>
   </form>
 
-  {% if audio_gens %}
+  {% if takes %}
   <h3>Takes</h3>
   <table class="list">
-    <thead><tr><th>#</th><th>What ran</th><th>Active</th><th></th></tr></thead>
+    <thead><tr><th>#</th><th>What ran</th><th>Picked</th><th></th></tr></thead>
     <tbody>
-    {% for a in audio_gens %}
-      {% set p = jset(a) %}
+    {% for t in takes %}
+      {% set p = jset(t, "params_json") %}
       <tr>
-        <td>{{ a.id }}</td>
+        <td>{{ t.id }}</td>
         <td>
-          {% if p.mode == 'resynthesised' %}
+          {% if t.origin == 'resynthesised' %}
             <strong>re-synthesised</strong> from the then-current audio at denoise
             {{ p.denoise }} &mdash; a whole new track, not a patch
+          {% elif t.origin == 'bridged' %}
+            <strong>bridged</strong>
           {% else %}
             <strong>generated</strong> from tags
           {% endif %}
-          &middot; {{ p.seconds }}s{% if p.seed is not none and p.seed != '' %}, seed {{ p.seed }}{% endif %}
-          <br><span class="muted">{{ p.tags }}{% if p.lyrics %} &middot; with lyrics{% endif %}</span>
+          &middot; {{ t.duration }}s{% if t.seed is not none and t.seed != '' %}, seed {{ t.seed }}{% endif %}
+          <br><span class="muted">{{ t.tags }}{% if t.lyrics %} &middot; with lyrics{% endif %}</span>
         </td>
-        <td>{{ "yes" if song.mp3_path == a.path else "" }}</td>
+        <td>{{ "yes" if t.picked else "" }}</td>
         <td>
-          <audio controls preload="none" src="{{ media_url(a.path) }}"></audio>
-          {% if song.mp3_path != a.path %}
-          <form method="post" action="/songs/{{ song.id }}/audio/{{ a.id }}/use">
-            <button type="submit">Use this take</button>
+          <audio controls preload="none" src="{{ media_url(t.path) }}"></audio>
+          {% if not t.picked %}
+          <form method="post" action="/songs/{{ song.id }}/takes/{{ t.id }}/pick">
+            <button type="submit">Pick this take</button>
           </form>
           {% endif %}
         </td>

@@ -758,7 +758,7 @@ def list_takes(song_id):
 
 def pick_take(take_id):
     """Mark this take as the picked one. Does not delete the others and does
-    not write the take over songs.mp3_path -- that is the Use route's act."""
+    not write the take over songs.mp3_path -- that column is not the pick."""
     take = get_take(take_id)
     if take is None:
         raise ValueError(f"no take {take_id}")

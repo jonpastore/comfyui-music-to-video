@@ -78,10 +78,12 @@ still not shipped (`T8-12`, provisional by absence).
    the ability to prove a change did not break it. Everything else in the
    project renders through it.
 2. **TRD-8's take model.** New generations land as `takes` rows (`T8-1`); pick
-   (`T8-2`) and the three-path origin on every route (`T8-3`) are the remaining
-   half. Takes generated before `T8-1` still cannot say what they were asked for.
-   `T8-10` is the voice-store gate (built); `T8-11` is built — `h_audio` writes
-   which voice produced the take, or that none did.
+   (`T8-2`) is built — picking records `takes.picked` and does not write
+   `songs.mp3_path`; Use on a generated take is refused. The three-path origin
+   on every route (`T8-3`) is the remaining half. Takes generated before `T8-1`
+   still cannot say what they were asked for. `T8-10` is the voice-store gate
+   (built); `T8-11` is built — `h_audio` writes which voice produced the take,
+   or that none did.
 3. **TRD-10's bulk edit.** `T10-6` (one transaction) is built. `T10-3`/`T10-4`/`T10-5`/`T10-7` remain.
 4. **TRD-10's advice rules.** `T10-11` (payload mark) is built. `T10-12`…`T10-15`
    are still labelling and refusals over surfaces that already exist.

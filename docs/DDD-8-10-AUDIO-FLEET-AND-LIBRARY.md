@@ -29,7 +29,10 @@ What shipped at `c01c977` wrote each generated candidate as an `assets` row unde
 `db.DATA/audio/<slug>/`. **Nothing is overwritten**, so `T6-A5` is not violated.
 `h_audio` now also writes a `takes` row via `insert_take` (`T8-1`): tags, lyrics,
 seed, duration and the parameters as sent sit on the take, so a later song edit
-cannot rewrite the ask. `songs.mp3_path` is not a write target.
+cannot rewrite the ask. `songs.mp3_path` is not a write target. Pick is
+`POST /songs/{id}/takes/{id}/pick` via `pick_take` (`T8-2`): it records
+`takes.picked` and leaves the unpicked take listed and playable. Use on an
+`audio_gen` asset is refused so that column cannot become the pick.
 
 ### 2.2 The design, and the one rule it turns on
 
@@ -199,7 +202,7 @@ each caller, or a caller that stops calling it stays green.
     takes/voices schema  ->  h_audio writes takes (T8-1, built)
                          ->  insert_voice refuses missing source/consent (T8-10, built)
                          ->  h_audio records which voice, or none (T8-11, built)
-                         ->  the picked/unpicked distinction (T8-2)
+                         ->  pick is its own record, not Use / mp3_path (T8-2, built)
     bulk edit (T10-6 built)         ->  T10-3, T10-4, T10-5, T10-7
     advice labelling  ->  T10-11..T10-15 over the four live modules
 

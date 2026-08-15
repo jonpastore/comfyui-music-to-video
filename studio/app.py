@@ -1452,8 +1452,8 @@ def h_audio(args, progress):
     are stored on the take so a later song edit cannot rewrite the ask.
     params include voice_id (T8-11): which voice produced the take, or None.
 
-    Never writes over song["mp3_path"]. A take becomes the song's audio only
-    when someone presses Use, which is the same route an edit goes through.
+    Never writes over song["mp3_path"]. Picking a take is a separate act
+    (T8-2) and does not write that column. Use is for edits, not takes.
     """
     sid = args.get("song_id")
     song = db.one("SELECT * FROM songs WHERE id=?", sid) if sid else None
@@ -1935,7 +1935,7 @@ def song_page(request: Request, id: int):
         except Exception:
             pass
     audio_edits = db.q("SELECT * FROM assets WHERE song_id=? AND kind='audio_edit' ORDER BY id DESC", id)
-    audio_gens = db.q("SELECT * FROM assets WHERE song_id=? AND kind='audio_gen' ORDER BY id DESC", id)
+    takes = db.list_takes(id)
     audio_original = db.one("SELECT * FROM assets WHERE song_id=? AND kind='audio_original'", id)
     # anchors belong to the song's ALBUM, not the song -- this is a read-only
     # summary for convenience; management happens on /anchors.
@@ -2001,7 +2001,7 @@ def song_page(request: Request, id: int):
         "renders": renders, "song_jobs": song_jobs, "active_job": active_job,
         "models": chat_models,
         "audio_duration": audio_duration, "audio_edits": audio_edits, "audio_original": audio_original,
-        "audio_gens": audio_gens, "audio_model": models.get(models.default_for("audio")),
+        "takes": takes, "audio_model": models.get(models.default_for("audio")),
         "best_model": best, "render_tiers": render_tiers,
         **storyboard_form_ctx(song, form_tier, chat_models, best),
     })
@@ -5295,10 +5295,9 @@ def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
             raise HTTPException(400, "re-synthesising needs a denoise below 1.0; at 1.0 the "
                                      "source is ignored entirely and it is a plain generation")
         args["source_path"] = song["mp3_path"]
-    # Record the true original before any take can be pressed into use, exactly
-    # as the edit route does. Without this, using a generated take as the song's
-    # audio on a song that had never been EDITED left nothing for revert to
-    # restore -- the upload would still be on disk with nothing pointing at it.
+    # Record the true original the same way the edit route does. Pick does not
+    # write songs.mp3_path (T8-2); this is so revert still has the upload if
+    # an edit is later pressed into use.
     if song["mp3_path"] and not db.one(
             "SELECT id FROM assets WHERE song_id=? AND kind='audio_original'", id):
         db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
@@ -5310,14 +5309,32 @@ def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
 @app.post("/songs/{id}/audio/{asset_id}/use")
 def use_audio_edit(id: int, asset_id: int):
     get_song_or_404(id)
-    # Both kinds, one route. A generated take and an edit are both "an audio
-    # file this song could use", and a second near-identical route is how the
-    # two drift apart -- revert still restores audio_original either way.
+    # Edits only. A generated take is picked on the take, not pressed into
+    # songs.mp3_path through this route -- that is how the pick used to be
+    # recorded, and T8-2 forbids it.
     asset = db.one("SELECT * FROM assets WHERE id=? AND song_id=? "
                    "AND kind IN ('audio_edit','audio_gen')", asset_id, id)
     if not asset:
         raise HTTPException(404, "no such audio edit")
+    if asset["kind"] == "audio_gen":
+        raise HTTPException(400, "a take is picked, not used; songs.mp3_path is not the pick")
     db.run("UPDATE songs SET mp3_path=? WHERE id=?", asset["path"], id)
+    return RedirectResponse(f"/songs/{id}", status_code=303)
+
+
+@app.post("/songs/{id}/takes/{take_id}/pick")
+def pick_song_take(request: Request, id: int, take_id: int):
+    get_song_or_404(id)
+    take = db.get_take(take_id)
+    if not take or take["song_id"] != id:
+        raise HTTPException(404, "no such take")
+    db.pick_take(take_id)
+    listed = db.list_takes(id)
+    if wants_json(request):
+        return JSONResponse({
+            "picked": take_id,
+            "takes": [{"id": t["id"], "picked": bool(t["picked"]), "path": t["path"]}
+                      for t in listed]})
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
