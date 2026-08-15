@@ -231,7 +231,9 @@ order and take the dependencies from here.
    stamps scene `start`/`end` so they tile `[0, duration]`; `validate`
    refuses a gap or overlap (`test_t2_8b.py`). **`T2-5` built**: editing the
    album's arc prompt creates a new version; restore puts the previous text
-   back (`test_t2_5_arc_prompt_restore.py`). **`T2-14`/`T2-15`/`T2-16` built**:
+   back (`test_t2_5_arc_prompt_restore.py`). **`T2-6` built**: delete drops
+   the row and does not renumber survivors
+   (`test_t2_6_delete_does_not_renumber.py`). **`T2-14`/`T2-15`/`T2-16` built**:
    the arc wand refuses an empty theme and runs with a non-empty one; reject
    leaves the previous committed file; accept saves; applying more than one
    song needs confirmation and then writes exactly those songs (`test_t2_14_arc_wand.py`).
