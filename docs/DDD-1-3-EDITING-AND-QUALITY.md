@@ -435,6 +435,13 @@ files. `save_scene` and `_apply_scene_fields` return 400 with
 the reference image; an empty lock renders a stranger in every clip.
 A filled lock still writes. Mutation: dump without the check → writer
 arm red. Mutation: write the scene without the check → save arm red.
+`T2-23` is **built**. `GET /api/songs/{id}/storyboard/{tier}/meter`
+reports `scene_time` (sum of scene `duration_guidance`), `song_length`
+(the song duration), `tolerance` (`SCENE_TIME_TOLERANCE`, 0.15 of song
+length) and `mismatch` when the absolute delta exceeds that.
+In-tolerance is not flagged. Mutation: always report the numbers and
+never set `mismatch` → the miss arm fails. The live `meter` component,
+`T2-24` and `T2-25` are not this.
 
 ### 5.6 Tier 2 is a calibration, not a metric
 

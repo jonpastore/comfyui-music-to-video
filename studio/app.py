@@ -4796,6 +4796,29 @@ def storyboard_scenes(song, sb, tier, anchored=(), scene_seconds=None):
     return rows, nclips
 
 
+# Fraction of song length. T2-23: |scene_time - song_length| beyond this
+# is a miss. coverage.ok still compares intent against rendered clip total.
+SCENE_TIME_TOLERANCE = 0.15
+
+
+def scene_time_report(scene_time, song_length):
+    """Total scene time against song length. T2-23.
+
+    mismatch is True when the absolute delta exceeds SCENE_TIME_TOLERANCE
+    of the song length. Returning the two numbers and never flagging
+    satisfies the presence half only.
+    """
+    scene_time = float(scene_time or 0.0)
+    song_length = float(song_length or 0.0)
+    allowed = song_length * SCENE_TIME_TOLERANCE
+    return {
+        "scene_time": scene_time,
+        "song_length": song_length,
+        "tolerance": SCENE_TIME_TOLERANCE,
+        "mismatch": bool(song_length) and abs(scene_time - song_length) > allowed,
+    }
+
+
 def coverage(rows, nclips, duration, clip_secs=None):
     """How the storyboard's PACING INTENT compares with the track.
 
@@ -5046,6 +5069,7 @@ def api_storyboard_meter(id: int, tier: str):
     payload = _storyboard_payload(get_song_or_404(id), valid_tier_or_400(tier))
     meter = dict(payload["coverage"])
     meter["nclips"] = payload["nclips"]
+    meter.update(scene_time_report(meter.get("intent"), meter.get("duration")))
     return JSONResponse(meter)
 
 

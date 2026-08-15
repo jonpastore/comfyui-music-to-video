@@ -218,8 +218,10 @@ order and take the dependencies from here.
    own permission wording is in the scene text (`rear-entrance_xxx.json`).
    **`T2-22` built**: the generated board's `guardrail` field is
    `compose_guardrail(tier)` verbatim, and save refuses another tier's
-   wording. Remaining: `T2-8c`, §4 wands (`T2-14`…`T2-19`), the
-   meter, and casting.
+   wording. **`T2-23` built**: `GET .../meter` reports total scene time
+   against song length and flags a miss beyond `SCENE_TIME_TOLERANCE`.
+   Remaining: `T2-8c`, §4 wands (`T2-14`…`T2-19`), `T2-24`/`T2-25`, and
+   casting.
 7. Per-scene model choice, W2 (`T2-42`…`T2-48`) — last, because `T2-45` needs
    `models.where()`'s three-valued answer respected at enqueue and `T2-48` needs
    per-model ceilings, which is P0 item 1 again. The renderer half of those
