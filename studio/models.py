@@ -950,6 +950,72 @@ def where(key, backends):
                                        r["stability"] != "stable", str(r["id"])))
 
 
+def video_key(name):
+    """Catalogue key for a scene or job video_model (cli or key).
+
+    Scenes store the renderer value (`s2v`, `ltx25`). where() keys the
+    catalogue (`wan22_s2v`, `ltx25`). Both spellings resolve.
+    """
+    name = (name or "").strip()
+    if not name:
+        return None
+    if name in CATALOG and CATALOG[name]["role"] == "video":
+        return name
+    for key, cli in renderable("video").items():
+        if cli == name:
+            return key
+    return None
+
+
+def named_video_keys(scenes, default=None):
+    """Distinct catalogue keys a clips job will actually run.
+
+    A scene with no video_model takes `default` (the job's --video-model).
+    Unknown names are kept so T2-45 can still refuse them.
+    """
+    keys = []
+    seen = set()
+    fallback = video_key(default)
+    if fallback is None:
+        fallback = (default or "").strip() or None
+    for scene in scenes or []:
+        raw = (scene or {}).get("video_model")
+        key = video_key(raw) if raw not in (None, "") else fallback
+        if raw not in (None, "") and key is None:
+            key = str(raw).strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        keys.append(key)
+    return keys
+
+
+def unavailable_on_reachable(key, backends):
+    """True when every reachable backend answered False for this key.
+
+    where() already drops False and keeps None. An empty where() list
+    plus at least one backend means we asked and nobody has it. An
+    empty fleet is not a refusal — nobody was asked. None is a
+    candidate.
+    """
+    if not backends:
+        return False
+    return not where(key, backends)
+
+
+def mixed_unavailable(scenes, backends, default=None):
+    """Named models a mixed-model song cannot run anywhere reachable.
+
+    Empty → enqueue. Non-empty → refuse those keys before enqueue.
+    A single-model song is not this check: failing at clip 0 is
+    obvious; T2-45 exists to stop failing at clip 31 of 42.
+    """
+    keys = named_video_keys(scenes, default=default)
+    if len(keys) < 2:
+        return []
+    return [k for k in keys if unavailable_on_reachable(k, backends)]
+
+
 def get(key):
     return CATALOG.get(key)
 

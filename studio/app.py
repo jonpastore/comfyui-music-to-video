@@ -5601,6 +5601,19 @@ async def start_clips(id: int, tier: str = Form(...), video_model: str = Form(""
     video_model = video_model or models.default_cli("video")
     if video_model not in allowed:
         raise HTTPException(400, f"video_model must be one of {sorted(allowed)}")
+    # T2-45: a mixed-model song that names a model False on every reachable
+    # backend is refused here, before enqueue. None is a candidate.
+    board = load_storyboard(sb)
+    bad = models.mixed_unavailable(
+        (board or {}).get("scenes") or [],
+        pipeline.swarm_backends(),
+        default=video_model)
+    if bad:
+        raise HTTPException(
+            400,
+            "mixed-model song refused before enqueue: "
+            + ", ".join(bad)
+            + " unavailable on every reachable backend")
     work_dir = os.path.join(db.DATA, "driving", song["slug"])
     stamp = int(time.time() * 1000)
     motion_path = await save_driving_video(ref_motion, work_dir, f"motion_{stamp}")

@@ -289,7 +289,10 @@ order and take the dependencies from here.
    (`test_t2_47_mixed_model.py`). **`T2-48` built**: a 30 s `s2v` scene
    splits on the s2v ceiling and a 30 s `ltx25` scene into 15 s clips,
    each tiling its scene (`test_t2_48_ceilings_compose.py`).
-   `T2-42`…`T2-46` remain.
+   **`T2-45` built**: a mixed-model song is refused before enqueue when
+   any named model is `False` on every reachable backend
+   (`test_t2_45_enqueue_unavailable.py`); `None` stays a candidate.
+   `T2-42`…`T2-44` and `T2-46` remain.
    **`T2-13f` built**: QC judges each of those clips at its native fps, not the song's (`test_t2_13f_native_fps.py`); comparing against the song rate flags the other model.
 
 ### P3 — QC tier 2 and repair

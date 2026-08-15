@@ -443,7 +443,11 @@ length is the divisor, the count is ours.
 4. **`T2-47` built.** `main()` takes `scene.video_model` when present, else
    `--video-model`. One job with a scene marked `s2v` and one left `ltx25`
    writes WAN 77@16.0 and LTX 81@16.8312 (`test_t2_47_mixed_model.py`).
-   Two names on a plan is not this check. **`T2-48` built.**
+   Two names on a plan is not this check. **`T2-45` built.**
+   `start_clips` asks `models.mixed_unavailable` (via `models.where()`)
+   before `jobs.enqueue`: a mixed board that names a model `False` on
+   every reachable backend is 400 and writes no job; `None` is a
+   candidate (`test_t2_45_enqueue_unavailable.py`). **`T2-48` built.**
    `clips_for_scene` / `clips_for_scenes` split a scene on *that scene's*
    model ceiling: 30 s `s2v` → s2v-sized parts (`CHUNK`), 30 s `ltx25`
    → 15 s + 15 s, each chain tiles its scene from 0 (`T2-8b`).
@@ -659,6 +663,7 @@ documents, not a preference.
                                  ->  T2-13c (built), T2-8b (built), T2-8c (built), T2-8, T2-9
                                  ->  T2-13c (built), T2-13e (built), T2-8, T2-9
                                  ->  W2 T2-47 mixed-model native fps (built)
+                                 ->  W2 T2-45 mixed unavailable refused at enqueue (built)
                                  ->  W2 T2-48 per-scene ceilings compose (built)
                                  ->  T2-13d assembly one output fps (built)
                                  ->  T2-13f clip QC uses native fps (built)

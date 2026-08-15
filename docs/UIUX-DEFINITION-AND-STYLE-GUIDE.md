@@ -325,7 +325,10 @@ frames and the audio-trim window follow `clip_seconds`, not a hardcoded
 `LTX25_LEN`/`CHUNK`; a NULL `length_seconds` still renders 81 frames of
 `CHUNK`. A mixed-model job keeps each clip's **native** frames and fps
 (`T2-47`): s2v is 77@16.0, ltx25 is 81@16.8312; the editor must not
-show one fps as if both renderers produced it. Per-scene model and
+show one fps as if both renderers produced it. Starting that job is
+refused before enqueue when any named model is unavailable on every
+reachable backend (`T2-45`); a box that could not be asked (`None`)
+is still a candidate, not a refusal. Per-scene model and
 per-model ceilings compose (`T2-48`): a 30 s scene marked `s2v` splits
 into s2v-sized clips, a 30 s scene on `ltx25` into 15 s ones, and each
 chain tiles that scene. QC compares each clip to that native rate, not the song's output fps (`T2-13f`): using the song rate flags every correct clip of the other model. A single-clip request
