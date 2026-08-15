@@ -1072,6 +1072,15 @@ effects — the warning is data every client carries, not a sentence in
 one template. Gain and pan stay off the list (browser applies them);
 echo, eq, loudnorm and the rest appear only when stored.
 
+### 7b.6 A child mention is not a universal refuse
+
+`T10-18` is built. At `g` and `pg13` the storyboard direction, scene
+prompts, and the video/still builders accept a minor reference — a song
+for a niece is a first-class work. At `r`/`xxx` the same string is still
+refused and the refusal names the term. No new control: the lock is the
+tier already on the form. A refuse that looks like a generic 400 with no
+named term is the old blanket screen leaking back.
+
 ## 8. How this document is verified
 
 A style guide is falsifiable or it is decoration.

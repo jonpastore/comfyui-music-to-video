@@ -671,7 +671,7 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
     return board
 
 
-def validate(sb, exemplar=None, expect_scenes=None):
+def validate(sb, exemplar=None, expect_scenes=None, tier=None):
     """Raises ValueError listing every problem found, or returns None.
 
     exemplar defaults to the real few-shot template (_exemplar()), so callers
@@ -867,9 +867,11 @@ def validate(sb, exemplar=None, expect_scenes=None):
     # had to be removed first or PINNED's own "no minors, no children ..." wording
     # matched the filter and refused every storyboard ever generated.)
     import tiers as _tiers
+    lock = tier or sb.get("version")
     for s in scenes:
         for field in ("image_prompt", "story", "name", "video_motion_prompt"):
-            _tiers.check_text(s.get(field), f"scene {s.get('scene_number','?')} {field}")
+            _tiers.check_text(s.get(field), f"scene {s.get('scene_number','?')} {field}",
+                              tier=lock)
 
     cams = {(s.get("camera") or "").strip().lower() for s in scenes}
     if len(scenes) > 1 and len(cams) <= 1:
@@ -1000,7 +1002,7 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
             direction_text = (direction or "").strip()
             if direction_text:
                 sb["direction"] = direction_text
-            validate(sb, exemplar, expect_scenes=n_scenes)
+            validate(sb, exemplar, expect_scenes=n_scenes, tier=tier)
             return sb
         except tiers.ContentRefused:
             # terminal: never retried, and its message is never fed back to the

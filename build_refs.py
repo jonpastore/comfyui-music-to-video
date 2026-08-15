@@ -237,7 +237,7 @@ def cast_clause(slots):
 
 def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
              guard="", world="", character="", body="", extra_refs=(),
-             settings=None, ref_method=None):
+             settings=None, ref_method=None, tier=None):
     """guard: tier wording. The pinned clause is appended regardless, HERE --
     this is the chokepoint every storyboard reaches on its way to the image
     model, whoever generated it. Storing the clause in the storyboard JSON only
@@ -269,7 +269,8 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
     # after the pinned clause, which is required to come last.
     slots = assign_ref_slots(base, extra_refs)
     pos += cast_clause(slots)
-    pos = guardrail.build_prompt(pos, guard, f"scene {scene.get('scene_number','?')}")
+    pos = guardrail.build_prompt(pos, guard, f"scene {scene.get('scene_number','?')}",
+                                 tier=tier)
     neg = scene.get("negative_prompt", "")
     # How the reference images are folded into the latent -- THE reference-
     # adherence knob for this architecture. Qwen-Image-Edit conditions on
@@ -384,6 +385,7 @@ def main():
     scenes = sb["scenes"]
     world = sb.get("album_world_reference") or sb.get("world_reference", "")
     character = sb.get("character_reference", "")
+    tier = sb.get("version")
     os.makedirs(args.outdir, exist_ok=True)
 
     if args.audio:
@@ -397,7 +399,7 @@ def main():
             wf = workflow(scene, args.anchor, args.base, args.latent,
                           args.width, args.height, 7000 + ci,
                           shot, args.guardrail, world, character, args.body,
-                          extra_refs=scene_cast(scene, cast))
+                          extra_refs=scene_cast(scene, cast), tier=tier)
             wf["18"] = {"class_type": "SaveImage", "inputs": {
                 "images": ["17", 0],
                 "filename_prefix": f"refs_{args.slug}/clip_{ci:03d}"}}
@@ -419,7 +421,7 @@ def main():
         wf = workflow(scene, args.anchor, args.base, args.latent,
                       args.width, args.height, 7000 + num,
                       shot_directive(scene, num), args.guardrail, world, character,
-                      args.body, extra_refs=scene_cast(scene, cast))
+                      args.body, extra_refs=scene_cast(scene, cast), tier=tier)
         wf["18"] = {"class_type": "SaveImage", "inputs": {
             "images": ["17", 0],
             "filename_prefix": f"refs_{args.slug}/scene_{num:02d}"}}

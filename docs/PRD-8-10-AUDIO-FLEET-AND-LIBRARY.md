@@ -55,6 +55,7 @@ The same operator, in the two modes the other documents do not cover:
 | P7 | Four measurement traps that each cost a wrong diagnosis are checks, not folklore | `T9-10`…`T9-13` (`T9-13a`/`T9-13b` built: byte completeness; staging path reads `CATALOG.companions`) |
 | P8 | A bulk edit changes exactly what was shown and asked for, or nothing | `T10-3`…`T10-7` (built) |
 | P9 | A model's words are a proposal, never a verdict and never a gate | `T10-11`…`T10-15` |
+| P10 | A song for a child, and a G-tier video for it, is a first-class thing this studio can make | `T10-18` (built). `T10-18a`…`T10-26` still specification |
 
 **P9 is the one that has no owner anywhere else.** Four modules ask a model for
 words — `vision.py`, `chat.py`, `mixadvice.py`, `lyrics.py` — and the only rule
@@ -69,8 +70,8 @@ uses it as a pass/fail; `T10-14` refuses "does this match?" as a prompt
 shape and accepts "describe what differs" with non-verdict text;
 `T10-15` marks mixadvice as relational (`relative_to` / running `order` —
 quote without neighbours is a different set); `T10-16` keeps the image
-guardrail off audio and still refuses the same child string on every surface
-that reaches an image or video render.
+guardrail off audio and still refuses the same child string on the explicit
+image/video path (`T10-18` is the g/pg13 exception).
 
 **P4 is a requirement, not a feature.** `insert_voice` is the store gate:
 a voice cannot be written without a recorded source and a recorded consent
@@ -98,7 +99,6 @@ still not shipped (`T8-12`, provisional by absence).
    (`GET/POST /api/songs/{id}/editor/duration` and `.../editor/render`).
    **`T8-15` is built** — `GET /api/songs/{id}/preview` is a proxy and lists
    `not_applied` from the editor item's effects (T1-16 on this surface).
-3. **TRD-10's bulk edit.** `T10-6` (one transaction) is built. `T10-3`/`T10-4`/`T10-5`/`T10-7` remain.
 3. **TRD-10's bulk edit.** `T10-3`…`T10-7` are built: blank leaves alone, toggle-all is the shown set, invalid refuses the batch, one transaction, pre-write count equals rows changed.
 3a. **TRD-10's lyrics provenance.** `T10-8` is built: a transcription stores
    which backend produced it and that it is a transcription; supplied text
@@ -112,9 +112,11 @@ still not shipped (`T8-12`, provisional by absence).
    `T10-14` (match-question shape refused; describe-what-differs returns
    non-verdict text), and `T10-15` (mixadvice relational / neighbours named)
    are built. **`T10-16` is built** — the image guardrail stays off the audio
-   path and the same child string is still refused on image/video surfaces
-   (`studio/test_t10_16_image_guardrail.py`). `T10-1` is built (per-call
-   backend).
+   path and the same child string is still refused on the explicit image/video
+   path (`studio/test_t10_16_image_guardrail.py`; `T10-18` is the g/pg13
+   exception). `T10-1` is built (per-call backend).
+5. **TRD-10's minor policy.** `T10-18` is built: `g`/`pg13` may reference and
+   depict. The rest of `T10-18a`…`T10-26` is still specification.
 
 ## 5. Scope
 

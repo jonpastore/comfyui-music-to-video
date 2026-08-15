@@ -76,8 +76,10 @@ workflows, so the network it is bound to is the only thing gating it.
 `pg13` and `r` ship built in, and you can define your own with their own wording.
 A tier controls tone, wardrobe coverage and intensity. `tiers.compose_guardrail()`
 always appends `tiers.PINNED`, which is not user-editable: adults only, no nudity,
-no depicted sex acts. `tiers.check_text()` refuses any input referencing minors, and
-`grok.validate()` applies the same check to model output.
+no depicted sex acts. `tiers.check_text()` refuses a minor reference except at
+`g`/`pg13` (`T10-18`: a child may be referenced and depicted where explicit
+content cannot be reached). Unset tier is treated as `xxx`. `grok.validate()`
+applies the same check to model output.
 
 This matters mechanically, not just as policy: the image pipeline runs at **cfg 1.0**,
 where ComfyUI skips the negative pass entirely — negative prompts are inert on this

@@ -3750,7 +3750,7 @@ async def save_anchor_prompt(request: Request):
         raise HTTPException(400, f"the prompt is {len(text)} characters; keep it under "
                                   f"{MAX_ANCHOR_PROMPT}")
     try:
-        tiers.check_text(text, "anchor prompt")
+        tiers.check_text(text, "anchor prompt", tier=tier)
         tiers.check_override(text)
         # ...and whether it belongs at THIS TIER. The two screens above ask
         # "does this mention a minor" and "is this instructing the model about
@@ -3924,7 +3924,7 @@ def anchor_prompt_preview(album, tier, view, character_id=None, typed="",
     pos = (typed or "").strip() or default_anchor_prompt(album, view, character_id)
     tier_text = tiers.compose_guardrail(tier, album)
     try:
-        final = g.build_prompt(pos, tier_text, "anchor prompt preview")
+        final = g.build_prompt(pos, tier_text, "anchor prompt preview", tier=tier)
         refused = ""
     except Exception as e:
         final, refused = "", str(e)
@@ -4059,7 +4059,7 @@ async def anchor_preflight(request: Request):
             blockers.append(f"The {t.upper()} {ANCHOR_VIEWS.get(v, v)} prompt is {len(text)} "
                             f"characters; keep it under {MAX_ANCHOR_PROMPT}.")
         try:
-            tiers.check_text(text, f"{t.upper()} anchor prompt")
+            tiers.check_text(text, f"{t.upper()} anchor prompt", tier=t)
             tiers.check_override(text)
         except ValueError as e:
             blockers.append(str(e))
@@ -4298,7 +4298,7 @@ def _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
                                       f"{len(text)} characters; keep it under "
                                       f"{MAX_ANCHOR_PROMPT}")
         try:
-            tiers.check_text(text, f"{t.upper()} anchor prompt")
+            tiers.check_text(text, f"{t.upper()} anchor prompt", tier=t)
             tiers.check_override(text)
         except ValueError as e:
             raise HTTPException(400, str(e))
@@ -5187,17 +5187,23 @@ def storyboard_generation_payload(song, tier):
 def enqueue_storyboard(song_id, tier, model="", scene_seconds=None, direction=""):
     """Queue a storyboard generate. Shared by the HTML form and the JSON API."""
     try:
-        direction = storyboard_service.check_direction(direction)
+        direction = storyboard_service.check_direction(direction, tier)
         jid = storyboard_service.enqueue(song_id, tier, model, scene_seconds, direction)
         return jid, direction
     except (LookupError, ValueError, RuntimeError) as e:
         _svc_http(e)
 
 
-def check_direction(direction):
-    """Screen the direction box exactly as a custom tier's wording is screened."""
+def check_direction(direction, tier=None):
+    """Screen the direction box exactly as a custom tier's wording is screened.
+
+    check_text() refuses minor references except at g/pg13 (T10-18), and
+    check_override() refuses text that argues with the pinned clause. The
+    length cap is larger than a tier's 500 because this is a brief for one
+    song, not a reusable rating.
+    """
     try:
-        return storyboard_service.check_direction(direction)
+        return storyboard_service.check_direction(direction, tier)
     except (LookupError, ValueError, RuntimeError) as e:
         _svc_http(e)
 
@@ -5545,7 +5551,7 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
         # text that goes straight into an image prompt, and hand-editing is
         # exactly the path that bypasses the generator's checks.
         try:
-            tiers.check_text(value, f"scene {num} {field}")
+            tiers.check_text(value, f"scene {num} {field}", tier=tier)
         except ValueError as e:
             raise HTTPException(400, str(e))
         if (scene.get(field) or "") != value:
@@ -5685,7 +5691,7 @@ def _apply_scene_fields(song, tier, num, fields):
         if len(value) > MAX_SCENE_FIELD:
             raise HTTPException(400, f"{field} is {len(value)} characters; keep it under {MAX_SCENE_FIELD}")
         try:
-            tiers.check_text(value, f"scene {num} {field}")
+            tiers.check_text(value, f"scene {num} {field}", tier=tier)
         except ValueError as e:
             raise HTTPException(400, str(e))
         if (scene.get(field) or "") != value:

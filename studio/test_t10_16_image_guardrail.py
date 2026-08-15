@@ -1,10 +1,10 @@
 """T10-16: image/video surfaces refuse the child string the audio path accepts.
 
 docs/TRD-10 T10-16 cites T8-4. A lyric or tag mentioning a child is accepted
-on the audio path; a scene description (or any free text that reaches an
-image or video render) mentioning one is not. The one-sided failure is a
-check that stays green if nothing is screened anywhere — the positive half
-requires the image path still refuse the **same** string.
+on the audio path; the **explicit** image path still refuses the same string.
+T10-18 is the g/pg13 exception (depiction permitted where nudity cannot be
+reached). The one-sided failure is a check that stays green if nothing is
+screened anywhere — the positive half requires the explicit path still refuse.
 """
 import os
 import sys
@@ -21,6 +21,9 @@ from test_app import _real_storyboard, _scene, _upload_song
 # Measured phrase that used to come back ContentRefused on the audio path
 # (TRD-8 §3 / 1cac5bb). Same string for both halves.
 CHILD = "nursery rhyme for children"
+
+# Explicit path: T10-18 permits the same string at g/pg13.
+EXPLICIT_TIER = "xxx"
 
 
 def test_t10_16_same_string_audio_accepts_image_and_video_refuse():
@@ -43,13 +46,13 @@ def test_t10_16_same_string_audio_accepts_image_and_video_refuse():
             "SELECT COUNT(*) c FROM jobs WHERE song_id=? AND kind='audio'", sid)["c"]
         assert after == before + 1, "accepted tags never enqueued an audio job"
 
-        # --- image half: storyboard direction reaches image generation ---
+        # --- image half: storyboard direction on the explicit path ---
         sb_before = db.one(
             "SELECT COUNT(*) c FROM jobs WHERE song_id=? AND kind='storyboard'",
             sid)["c"]
         r_img = client.post(
             f"/songs/{sid}/storyboard",
-            data={"tier": "pg13", "direction": CHILD},
+            data={"tier": EXPLICIT_TIER, "direction": CHILD},
         )
         assert r_img.status_code == 400, (
             f"image path accepted the child string as direction: {r_img.text[:300]}")
@@ -61,10 +64,10 @@ def test_t10_16_same_string_audio_accepts_image_and_video_refuse():
         assert sb_after == sb_before, "refused direction still enqueued a storyboard"
 
         # --- scene fields that feed image and video renders ---
-        _real_storyboard(sid, "pg13", song["slug"] or f"t10-16-{sid}", [_scene(1)])
+        _real_storyboard(sid, EXPLICIT_TIER, song["slug"] or f"t10-16-{sid}", [_scene(1)])
         for field in ("image_prompt", "video_motion_prompt"):
             r_sc = client.post(
-                f"/songs/{sid}/storyboard/pg13/scene/1",
+                f"/songs/{sid}/storyboard/{EXPLICIT_TIER}/scene/1",
                 data={field: CHILD},
             )
             assert r_sc.status_code == 400, (

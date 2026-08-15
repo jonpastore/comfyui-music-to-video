@@ -96,9 +96,11 @@ by *"there is no legitimate reason for a tier definition, style note or generate
 scene to reference children"* — **a claim about depiction, which does not carry
 to music.** Jon makes songs for his nieces.
 
-- `T8-4` A lyric or tag mentioning a child is **accepted** on the audio path and
-  **still refused** on the image and video paths. Both halves in one test, or the
-  criterion is satisfied by screening everything or nothing.
+- `T8-4` A lyric or tag mentioning a child is **accepted** on the audio path.
+  The image and video split is now `T10-18` / `T10-22`: `g`/`pg13` may depict,
+  the explicit path still refuses. Both the audio accept and the explicit
+  refuse in one test, or the criterion is satisfied by screening everything
+  or nothing.
 - `T8-5` The audio path still bounds what it accepts (`§2`'s three constants) and
   says which bound refused. A length bound is the screening that belongs here.
 
@@ -184,7 +186,7 @@ overlapping. `docs/reviews/TRD8910-*`.
 |---|---|---|
 | `T8-2` a take is never overwritten | true when nothing generates | **both takes listed and playable** after a second generation |
 | `T8-3` a take records which path produced it | passes if only one path is reachable, or if no take is recorded for some | **generated, resynthesised and bridged each produce a take listed with its path** — all three, or the criterion covers one |
-| `T8-4` the audio path accepts a child mention | passes if nothing is screened anywhere | the **image path still refuses it**, same test |
+| `T8-4` the audio path accepts a child mention | passes if nothing is screened anywhere | the **explicit** image path still refuses it (`T10-22`); `T10-18` is the g/pg13 exception |
 | `T8-5` the path bounds what it accepts and names the bound | passes if it refuses everything with any label | values **just under** each of `MAX_TAGS`, `MAX_LYRICS`, `MAX_AUDIO_SECS` are **accepted**; just over are refused **naming that bound** |
 | `T8-6` an edge span does not delete or lengthen | one edge tested is not "either edge" | **both the start edge and the end edge** splice and preserve length |
 | `T8-7` an out-of-range span is refused | passes with the whole splice path deleted | an **in-range span splices and returns the expected length** |
@@ -246,7 +248,7 @@ current.
 |---|---|---|---|
 | the audio stage itself | **built, before this document** | 2026-08-12 | `make_audio.py`, the `audio` job kind, a route, a form; takes copied into the data dir |
 | `T8-6`…`T8-9` the splice repair path | **built** | `871d820` | the edge-span defect: a 20 s track spliced at 0.1 s came back 20.193 s with audio missing. After: 20.036 s against 20.036 s. `mixer.bridge_seconds` owns the arithmetic |
-| `T8-4` the audio path accepts a child mention | **built** | `1cac5bb` | the image guardrail is off the audio path, measured — "nursery rhyme for children" had been refused |
+| `T8-4` the audio path accepts a child mention | **built** | `1cac5bb` | the image guardrail is off the audio path, measured — "nursery rhyme for children" had been refused. Image refuse half is now `T10-18`/`T10-22`, not a blanket |
 | **`T8-5`** just-under accepted; just-over names the bound | **built** | this slice | `POST /songs/{id}/audio/generate` accepts tags/lyrics/seconds at `MAX_TAGS` / `MAX_LYRICS` / `MAX_AUDIO_SECS` and enqueues; just over each is 400 and the body names that field and bound. Refuse-only loop in `test_app.py` is not enough — positive half lives in `studio/test_t8_5_audio_generate_bounds.py` |
 | **`T8-1`** a take records the ask | **built** | `test_takes.py` | `h_audio` copies tags/lyrics/seed/duration/params onto `takes` via `insert_take`. Changing the song after generate leaves the take's ask. Does not write `songs.mp3_path` |
 | **`T8-2`** pick is a separate act | **built** | `test_takes.py` | `POST /songs/{id}/takes/{id}/pick` records the pick. Both takes stay listed and playable. Use on `audio_gen` is refused so `songs.mp3_path` is not the pick |

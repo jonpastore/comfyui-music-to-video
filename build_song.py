@@ -651,7 +651,8 @@ def chain_seam_matches(prev_clip, next_clip, max_mad=12):
     return (acc / len(a)) <= max_mad
 
 
-def ltx25_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard, with_audio=True):
+def ltx25_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
+                   with_audio=True, tier=None):
     """LTX-2.5, the audio-conditioned path -- same contract as ltx_workflow.
 
     The audio is encoded from the master mp3 and fused as a joint AV latent so
@@ -663,7 +664,7 @@ def ltx25_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard
     motion = scene.get("video_motion_prompt") or scene.get("motion", "")
     pos = (f"{shot_directive(scene, i)} {char_lock} {world_lock} Motion: {motion} "
            f"Camera: {scene.get('camera','')} Lighting: {scene.get('lighting','')}")
-    pos = guardrail.build_prompt(pos, guard, f"scene {i}")
+    pos = guardrail.build_prompt(pos, guard, f"scene {i}", tier=tier)
     # T2-13a: honour clip_seconds / legal_frames, not LTX25_LEN / CHUNK.
     # Missing length_seconds is a pre-T2-12a scene and stays CHUNK (81).
     seconds = clip_seconds(scene.get("length_seconds"))
@@ -735,7 +736,8 @@ def ltx25_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard
     return wf
 
 
-def ltx_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard, with_audio=True):
+def ltx_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
+                 with_audio=True, tier=None):
     """LTX-2.3, the audio-conditioned path.
 
     Audio is fused as a JOINT AV LATENT (LTXVConcatAVLatent) rather than
@@ -749,7 +751,7 @@ def ltx_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard, 
     motion = scene.get("video_motion_prompt") or scene.get("motion", "")
     pos = (f"{shot_directive(scene, i)} {char_lock} {world_lock} Motion: {motion} "
            f"Camera: {scene.get('camera','')} Lighting: {scene.get('lighting','')}")
-    pos = guardrail.build_prompt(pos, guard, f"scene {i}")
+    pos = guardrail.build_prompt(pos, guard, f"scene {i}", tier=tier)
     start = round(i * CHUNK, 4)
 
     wf = {
@@ -945,7 +947,7 @@ def attach_ltxv_guide(wf, image, frame_idx=0, strength=1.0):
 
 def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
              video_model="s2v", ref_motion=None, control_video=None, refine=False,
-             guide_image=None, prev_clip=None):
+             guide_image=None, prev_clip=None, tier=None):
     """Same rule as build_refs.workflow: the pinned clause is attached HERE, at
     the point the prompt is built, not read out of the storyboard JSON.
 
@@ -968,7 +970,7 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
     honour_ceiling(requested_clip_seconds(scene, video_model), video_model)
     motion = scene.get("video_motion_prompt") or scene.get("motion", "")
     pos = f"{shot_directive(scene, i)} {char_lock} {world_lock} Motion: {motion} Camera: {scene.get('camera','')} Lighting: {scene.get('lighting','')}"
-    pos = guardrail.build_prompt(pos, guard, f"scene {i}")
+    pos = guardrail.build_prompt(pos, guard, f"scene {i}", tier=tier)
     neg = scene.get("negative_prompt", "")
     start = round(i * CHUNK, 4)
 
@@ -977,7 +979,8 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
         # 2.5 shares little enough of 2.3's that folding them together would put
         # branches everywhere -- which is how all three end up subtly wrong.
         build = ltx25_workflow if video_model == "ltx25" else ltx_workflow
-        wf = build(i, scene, ref_image, audio_file, char_lock, world_lock, guard)
+        wf = build(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
+                   tier=tier)
         if prev_clip and not guide_image:
             guide_image = chain_first_frame(prev_clip)
         if guide_image:
@@ -1116,6 +1119,9 @@ def main():
         plan_clips = clip_plan(scenes, args.audio)
     refuse_plan_miss(plan_clips, dur)
     nclips = len(plan_clips)
+    # grok._compose stores the rating as version; T10-18 reads it here so a
+    # g/pg13 storyboard depicting a child is not refused at the builder.
+    tier = sb.get("version")
 
     audio_name = args.audio_name or os.path.basename(args.audio)
     char = sb.get("character_reference", "")
@@ -1138,7 +1144,8 @@ def main():
                       video_model=model,
                       ref_motion=scene.get("ref_motion") or args.ref_motion,
                       control_video=scene.get("control_video") or args.control_video,
-                      refine=args.refine)
+                      refine=args.refine,
+                      tier=tier)
         # Attach the save to whichever node actually produces the VIDEO, found by
         # class rather than by a per-family id table. That table was
         # `"21" if video_model == "ltx" else "17"`, so ltx25 silently took the

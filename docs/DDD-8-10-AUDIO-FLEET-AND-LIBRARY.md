@@ -275,8 +275,9 @@ about the set it came from.
 owns the decision; this cites it). Free text that reaches an image or video
 render still runs `check_text` / `screen_prompt_field`; the audio generate
 route and `make_audio` do not. The measurement is one string on both sides:
-`"nursery rhyme for children"` is accepted as tags/lyrics and refused as a
-storyboard direction, scene `image_prompt`, and `video_motion_prompt`.
+`"nursery rhyme for children"` is accepted as tags/lyrics and refused on the
+**explicit** path (`xxx` direction, scene fields). `T10-18` is the g/pg13
+exception.
 
 ### 4.3 One guard, several callers
 
@@ -286,6 +287,16 @@ for one idea sat 39 characters from refusing real saved content.
 
 **Rule 0 applies here too**: assert through `screen_prompt_field`, not through
 each caller, or a caller that stops calling it stays green.
+
+### 4.4 Minor policy (`T10-18`)
+
+`guardrail.check_text(text, where, tier=...)` is the single screen.
+`LOCKED_DEPICT_TIERS = {g, pg13}` skips the refusal; unset / anything else
+is `xxx` (`T10-25`). `build_prompt`, `build_song.workflow`,
+`build_refs.workflow`, scene save and storyboard direction pass the tier.
+The storyboard JSON already carries it as `version`. `PINNED` stays welded;
+`PINNED_AGE_FLOOR = 18` is the documented floor (`T10-18c`). `r` still
+refuses every field — lyrics-only mention at `r` is `T10-18a`, not this.
 
 ## 5. Build order
 

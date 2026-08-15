@@ -20,6 +20,11 @@ import re
 import unicodedata
 
 
+# T10-18c: 18 is the statutory floor. The 21 in PINNED is a margin against the
+# model's output distribution, not a legal minimum. The number may move up
+# with a rendered differential (T4-11's shape). It may never go below this.
+PINNED_AGE_FLOOR = 18
+
 PINNED = (
     "Every character is an adult woman or man of at least 21 years, with fully adult "
     "face, body and proportions. No minors, no children, no infants, no teenagers, no "
@@ -27,6 +32,16 @@ PINNED = (
     "bodies, no school, playground, nursery or juvenile settings, and no school uniforms "
     "or other juvenile costuming. "
 )
+
+# T10-18: at these tiers a minor may be referenced and depicted, because
+# explicit content is structurally impossible (allow_nudity false, no nude
+# view reachable). Unset / anything else is treated as xxx (T10-25).
+LOCKED_DEPICT_TIERS = frozenset({"g", "pg13"})
+
+
+def allows_minor_depiction(tier):
+    """True only at the locked non-explicit tiers named by T10-18."""
+    return (tier or "").strip().lower() in LOCKED_DEPICT_TIERS
 
 # Terms whose presence in USER-SUPPLIED text (a custom tier's guardrail, a style
 # note, a prompt override) is refused outright. This is a hard input filter and
@@ -175,16 +190,15 @@ def _tokens(text):
     return out
 
 
-def check_text(text, where="input"):
-    """Refuse text that references minors. Raises ContentRefused (terminal).
+def check_text(text, where="input", *, tier=None):
+    """Refuse text that references minors, except at g/pg13 (T10-18).
 
-    Deliberately blunt: this is a character generator for adult-themed music
-    videos, so there is no legitimate reason for a tier definition, style note or
-    generated scene to reference children. Refusing on ANY minor reference --
-    rather than only on one co-occurring with a sexual term -- removes the whole
-    category of prompt that a sexualising instruction could hide inside, and
-    costs nothing anyone actually needs.
+    A song for a child, and a video for it, is a first-class thing this
+    studio can make — but only where explicit content cannot be reached.
+    Unset tier is xxx (T10-25). Raises ContentRefused (terminal).
     """
+    if allows_minor_depiction(tier):
+        return text
     raw = (text or "").lower()
     m = _AGE_RE.search(raw)
     if m and int(m.group(1)) < 18:
@@ -257,11 +271,11 @@ def strip(text, also=""):
     return re.sub(r"\s{2,}", " ", text).strip()
 
 
-def build_prompt(text, tier_text="", where="prompt"):
+def build_prompt(text, tier_text="", where="prompt", *, tier=None):
     """THE entry point. Every prompt sent to an image or video model goes through
     this one function, and nothing else needs to know how the guardrail works.
 
-        pos = guardrail.build_prompt(pos, tier_wording)
+        pos = guardrail.build_prompt(pos, tier_wording, tier=tier)
 
     Screens the text first, then attaches the clause -- that order matters,
     because PINNED itself enumerates the forbidden terms ("no minors, no
@@ -269,7 +283,8 @@ def build_prompt(text, tier_text="", where="prompt"):
     every prompt. Attaching is idempotent, so a storyboard that already carries
     the clause does not get it twice.
 
-    Raises ContentRefused (terminal) if the text references a minor.
+    Raises ContentRefused (terminal) if the text references a minor, except at
+    g/pg13 where T10-18 permits depiction.
     """
     # Strip our own clause BEFORE screening. PINNED enumerates the forbidden
     # terms, so any text already carrying it (a storyboard generated before the
@@ -278,7 +293,7 @@ def build_prompt(text, tier_text="", where="prompt"):
     # caller that forgets to normalize is still safe -- reroll_refs.py did exactly
     # that and refused every scene.
     text = strip(text)
-    check_text(text, where)
+    check_text(text, where, tier=tier)
     # stripped comparison, same reason as compose(): a trailing space must not
     # decide whether the clause is attached twice
     return text if PINNED.strip() in text else (text + " " + compose(tier_text)).strip()

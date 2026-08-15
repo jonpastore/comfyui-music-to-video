@@ -119,13 +119,14 @@ def album_arc(album):
         return {}
 
 
-def check_direction(direction):
+def check_direction(direction, tier=None):
+    """Screen direction. Minor refs allowed only at g/pg13 (T10-18)."""
     direction = (direction or "").strip()
     if len(direction) > grok.MAX_DIRECTION:
         raise ValueError(
             f"the direction is {len(direction)} characters; keep it "
             f"under {grok.MAX_DIRECTION}. It is a brief, not a script.")
-    tiers.check_text(direction, "storyboard direction")
+    tiers.check_text(direction, "storyboard direction", tier=tier)
     tiers.check_override(direction)
     return direction
 
@@ -339,7 +340,7 @@ def payload(song_id, tier):
 def enqueue(song_id, tier, model=None, scene_seconds=None, direction=None):
     require_song(song_id)
     require_tier(tier)
-    direction = check_direction(direction or "")
+    direction = check_direction(direction or "", tier)
     scene_seconds = clamp_scene_seconds(scene_seconds)
     return jobs.enqueue("storyboard", {
         "song_id": song_id, "tier": tier,
@@ -366,7 +367,7 @@ def edit_scene(song_id, tier, num, fields):
         if len(value) > MAX_SCENE_FIELD:
             raise ValueError(
                 f"{field} is {len(value)} characters; keep it under {MAX_SCENE_FIELD}")
-        tiers.check_text(value, f"scene {num} {field}")
+        tiers.check_text(value, f"scene {num} {field}", tier=tier)
         if (scene.get(field) or "") != value:
             scene[field] = value
             changed = True

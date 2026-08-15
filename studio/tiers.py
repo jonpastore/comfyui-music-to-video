@@ -18,8 +18,9 @@ import db
 sys.path.insert(0, os.environ.get("STUDIO_SCRIPTS") or
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from guardrail import (  # noqa: E402,F401  (re-exported: callers use tiers.X)
-    PINNED, MINOR_TERMS, ContentRefused, check_text, compose,
+    PINNED, PINNED_AGE_FLOOR, MINOR_TERMS, ContentRefused, check_text, compose,
     _SINGLE, _PHRASES, _ALLOW, _normalize, _tokens,
+    allows_minor_depiction, LOCKED_DEPICT_TIERS,
 )
 
 
