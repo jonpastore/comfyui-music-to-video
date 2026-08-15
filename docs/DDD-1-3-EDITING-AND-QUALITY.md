@@ -293,6 +293,13 @@ own. A true measurement of the wrong thing, sitting in the file the whole time.
 `effects.filter_sweep` already uses — one emitter, one cap, and `sweep` becomes a
 preset that writes points rather than a second automation system.
 
+**`T1-1` is built (2026-08-14).** `t` is item-relative. Reordering a
+set (`POST /sets/{id}/reorder`) or changing an item's `in_secs` /
+`out_secs` / `secs` leaves every stored `(lane, t, value)` unchanged.
+The check reads the rows before and after; it requires a non-empty
+curve first, and asserts the reorder/trim itself landed. T1-2 / T6-10
+only cover delete. (`studio/test_t1_1_reorder_keeps_automation.py`).
+
 **`T1-9b` is built (2026-08-14).** `mixer.rms_per_second` / `mixer.rms_slope`
 are the one RMS/s implementation. A stored `gain_db` ramp −12→0 dB over 6 s
 on a constant 1 kHz sine, rendered through `mix_audio` (not `_audio_chain`),

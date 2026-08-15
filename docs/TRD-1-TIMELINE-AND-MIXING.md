@@ -610,6 +610,7 @@ current.
 
 | criterion | state | commit | what was measured |
 |---|---|---|---|
+| `T1-1` reorder/trim keep automation | **built** | this slice | stored `(lane, t, value)` read before and after `POST /sets/{id}/reorder` and `POST /sets/{id}/items/{item_id}` (`in_secs`/`out_secs`/`secs`). Rows exist before the compare; the reorder/trim itself lands. Empty table is not the check. `studio/test_t1_1_reorder_keeps_automation.py` |
 | `T1-9a`/`T1-9c` automation curves | **built** | earlier | `automation.py`: lanes, RDP decimation, `MAX_POINTS = 64`, `asendcmd` emission through the mechanism `effects.filter_sweep` already used |
 | `T1-9b` a drawn curve survives to output | **built** | this slice | `studio/test_t1_9b_gain_curve.py`: 6 s 1 kHz sine (constant amplitude — RMS is not a proxy on program material), stored `gain_db` ramp −12→0 dB, `mix_audio` RMS/s slope vs drawn 2.0 dB/s within `mixer.GAIN_CURVE_SLOPE_TOLERANCE` (0.5). Per-item loudnorm left on measures ~1.06 dB/s and misses the same bound. Asserted through `mix_audio`, not `_audio_chain`. |
 | `T1-20a`/`T1-20b` master stage | **built** | earlier | `mixer._master_lines`, engaged when an item suppressed its own loudnorm or the set is easy |

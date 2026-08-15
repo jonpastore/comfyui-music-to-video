@@ -154,7 +154,9 @@ longer the phase to defer — `docs/PLAN-TRD-4-7.md` §4 is updated to match.
 `/api/qc/*` including `GET /api/qc/by-host` (`T3-1`) and dismiss/reopen on
 artefact change (`T3-22`), `qc_service.run_song` (`T3-32`: tier 1 over a song
 completes without a GPU, a backend, or the one worker thread), `studio/automation.py` + `db.automation` (TRD-1 §5's curve model,
-decimation and filter emission; `T1-9b` **built** — a stored −12→0 dB
+decimation and filter emission; `T1-1` **built** — reorder or trim
+leaves stored `(lane, t, value)` unchanged, asserted on non-empty
+rows; `T1-9b` **built** — a stored −12→0 dB
 ramp's RMS/s slope survives `mix_audio` within
 `mixer.GAIN_CURVE_SLOPE_TOLERANCE`), `studio/arc.py` + the arc routes (TRD-2 §3.1's
 JSON-canonical arc), `db.artefacts` (tier 0), `prompts.py` (TRD-2 §3.3's
