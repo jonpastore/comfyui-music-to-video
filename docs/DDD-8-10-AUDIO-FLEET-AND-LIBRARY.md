@@ -144,9 +144,11 @@ Each cost a wrong diagnosis once. As criteria they cost nothing again:
 
 - **A cache hit reads as a refusal** through Swarm and as an empty success on the
   comfy path. Any A/B uses different seeds (`T9-10`).
-- **SwarmUI caches each backend's node list at connect time**, so a box that
-  connected while its ComfyUI was booting refuses a node it plainly has
-  (`T9-11`).
+- **SwarmUI caches each backend's node list at connect time** (`T9-11`). On the
+  studio path this is **inert**: submit stays `comfyworkflowraw` +
+  `exactbackendid`, so ComfyUI validates filenames itself and Swarm's list is
+  never the discriminator. Real only for Swarm's own model-based routing.
+  Checked by `test_t9_11_submit_stays_comfyworkflowraw_plus_exactbackendid`.
 - **ComfyUI's `/history` does not record jobs that arrived through SwarmUI**
   (`T9-12`) — it streams over the websocket instead. `/history` at 0 is not
   evidence.

@@ -110,12 +110,14 @@ does not pay again.
   refusal must be distinguishable from a stale list.
 
   **RESCOPED 2026-08-13, and the rescoping is worth more than the original.**
-  This hazard is **inert on the studio's own path**. `pipeline.py:487-489`
-  submits `{"images": 1, "comfyworkflowraw": wf_text}` with `exactbackendid`, so
-  the graph goes to the target box and **ComfyUI validates the filenames
+  This hazard is **inert on the studio's own path**. `_swarm_generate` submits
+  `{"images": 1, "comfyworkflowraw": wf_text}` with `exactbackendid` on every
+  pin, so the graph goes to the target box and **ComfyUI validates the filenames
   itself**; Swarm's cached per-backend list is never consulted. It is real for
   **Swarm's own model-based routing** and for anything that trusts Swarm's view
-  of what a box holds.
+  of what a box holds. The studio-path half is checked by
+  `test_t9_11_submit_stays_comfyworkflowraw_plus_exactbackendid`: drop the raw
+  key or the pin and the cache becomes the discriminator again.
 
   **This was already measured on 2026-08-12** — *"harmless for our raw+pinned
   path, since ComfyUI validates filenames itself, but Swarm's own model-based
@@ -285,7 +287,7 @@ found eight more, six overlapping. `docs/reviews/TRD8910-*`.
 | `T9-5` slow boxes sort to the back, not out | passes if such a box is never considered at all | a plan containing **both** a fitting and a non-fitting box **still includes the slow one, later in the order** — an ordering assertion, not "not excluded in code" |
 | `T9-7` a refusal can bench the next attempt | states a hazard with no visible failure if the walk is deleted | after a refusal, **a subsequent attempt is still made and the sequence is observable** |
 | `T9-10` a cache hit is not a refusal | passes if the A/B is never run | with **different seeds** the same path produces a real output where the byte-identical resubmission does not |
-| `T9-11` a stale node list is distinguishable | passes if neither case ever occurs | **one real unsupported-node case and one stale-list case produce distinguishable records** |
+| `T9-11` studio submit stays raw+pinned (cache inert on our path) | passes if Swarm is never the router because nothing submits | **every GenerateText2Image carries `comfyworkflowraw`; every pin carries `exactbackendid`; a `model=`-only payload is not the studio path** |
 | `T9-12` `/history` is not the authority | passes if nobody checks | a Swarm-routed job leaves `/history` unchanged **while the container log shows it executed** |
 | `T9-13` files discriminate, not nodes | passes if capability checks stop running | **two boxes with identical nodes and different weights are told apart** by file presence |
 | `T9-15` VRAM measured before the render | passes with preflight logging and no successful render | a **render result carries** its pre-render reading |
@@ -325,7 +327,7 @@ production, and almost none of it has a check.** That is the point of writing it
 | `T9-6` vanished requeues, refused does not | **built** | earlier | `pipeline._backend_vanished` |
 | **`T9-13a` a file is not a model** | **built, check can fail** | this tree | `models.weight_available(path, expected_bytes=…)`: enum-only (`path=None`) is False; epoch mtime is False; size short of expected is False; complete file with live mtime and full size is True. `studio/test_trd9_fleet.py::test_t9_13a_truncated_or_enum_only_weight_is_not_available`. Mutation: treat enum presence or a 26% file as available → red |
 | `T9-13c` staging sequence | **written today, untested** | today | transfer → checksums → queues idle → restart → render. **The safety rests on the idle queue, not on Swarm's cache**, which cannot be read back |
-| `T9-11` scope | **rescoped today** | today | inert on `comfyworkflowraw`+`exactbackendid`; real for Swarm's own routing. Retires a hazard two sessions were ready to spend a production restart on |
+| **`T9-11` submit stays `comfyworkflowraw`+`exactbackendid`** | **built, check can fail** | this tree | `studio/test_trd9_fleet.py::test_t9_11_submit_stays_comfyworkflowraw_plus_exactbackendid`: free draw + pin both carry raw workflow; pin carries `exactbackendid`; unit shape of `_swarm_generate` is exact. Mutation: replace raw with `model=` → red. Hazard remains real for Swarm's own routing only |
 | `T9-13a` the 26% enum | **INCIDENT CLOSED, rule kept** | today | all six staged files sha256-verified both ends, zero MISMATCH in the run. The file that was 26% written reads `OK`. The rule stands; the window is shut |
 | `T9-13b` companions | **satisfied in practice, NOT closed** | today | the run staged all four together and they verify — but `~/stage_gamingpc.sh` **hardcodes the list**. The criterion is that the path reads `CATALOG.companions`, and it does not |
 | **gamingpc as a second image box** | **CAPABLE, NOT PROVEN** | today | all six files enumerated under the loader that will load them — `UNETLoader`, `CLIPLoader`, `VAELoader`, `LoraLoaderModelOnly` — and 31.84 GiB total / 30.01 free against a 19.12 GiB UNET plus an 8.7 GiB encoder. **Fits on paper and has never been run.** Written this way so the next session inherits a fact and not a claim |
@@ -333,4 +335,4 @@ production, and almost none of it has a check.** That is the point of writing it
 | `T9-18` fleet ops name their service | **written, not enforced** | today | the lesson from the vDisk incident. A criterion about future operations — the incident it came from is closed |
 | `T9-5` slow boxes sort to the back, not out | **built, check can fail** | this tree | `studio/test_trd9_fleet.py::test_t9_5_nonresident_box_stays_in_the_plan_later`: a fitting 23.42 GiB box and a 10.58 GiB box that holds `wan22_s2v` both stay in `where()`, slow later. Same fleet, `ace_step_v1` (both fit) stays ordered by id — not a card-size sort |
 | `T9-7` a refuse can bench the next walk step | **built, check can fail** | this tree | `studio/test_trd9_fleet.py::test_t9_7_refusal_benches_next_pin_and_walk_still_continues`: free-draw validation refuse, then pin 0 answers the benched "No backends match" headline, pin 1 still runs and succeeds; progress names both misses. Not a timing test |
-| `T9-4`, `T9-8`…`T9-12`, `T9-14`…`T9-17` | **behaviour exists, no checks** | — | including the four measurement traps, each of which cost a wrong diagnosis once |
+| `T9-4`, `T9-8`…`T9-10`, `T9-12`, `T9-14`…`T9-17` | **behaviour exists, no checks** | — | including three of the four measurement traps; `T9-11` now has a check |

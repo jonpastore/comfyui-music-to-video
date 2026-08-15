@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-13a, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-11, T9-13a, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -639,6 +639,126 @@ def test_t9_7_refusal_benches_next_pin_and_walk_still_continues():
     # Mid-walk benched headline must not reclassify the whole walk as vanished
     # before later pins run — T9-6 still owns exhaust-only requeue.
     assert not any("offline or went away" in m for m in said), said
+
+
+# Swarm keys that would consult the connect-time node/model list for routing.
+# Studio submit must not use these as the graph discriminator (T9-11).
+_SWARM_MODEL_ROUTE_KEYS = ("model", "models", "modelname", "loras")
+
+
+def test_t9_11_submit_stays_comfyworkflowraw_plus_exactbackendid():
+    """T9-11: studio submit stays raw+pinned; Swarm's cache is not the discriminator.
+
+    Rescoped 2026-08-13: the connect-time node/model list hazard is inert on
+    our path because every GenerateText2Image carries comfyworkflowraw and
+    every pin carries exactbackendid — ComfyUI on the target validates
+    filenames itself. Swarm's own model-based routing would consult the stale
+    list; that path is not ours.
+
+    Positive half: free draw and a pin both ship the inert shape in one walk.
+    Mutations that must go red:
+      - drop comfyworkflowraw (route by Swarm model name alone)
+      - drop exactbackendid on a pin (let Swarm pick by its cached list)
+      - put model=/models= on the payload without raw workflow as the graph
+    """
+    was = (
+        pipeline.RENDER_BACKEND, pipeline.COMFY_OUTPUT, pipeline._swarm_call,
+        pipeline._stamp, pipeline.gpu.ollama_holding, pipeline.gpu.preflight,
+        pipeline.gpu.release_ollama, urllib.request.urlopen,
+    )
+    payloads = []
+
+    class _Blob:
+        def __init__(self, b):
+            self.b = b
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return self.b
+
+    def fleet_call(path, payload, timeout=30):
+        if path.endswith("ListBackends"):
+            return {
+                "0": {"status": "running", "title": "box0",
+                      "address": "http://10.0.0.0:8188"},
+                "1": {"status": "running", "title": "box1",
+                      "address": "http://10.0.0.1:8188"},
+            }
+        if path.endswith("GenerateText2Image"):
+            payloads.append(dict(payload))
+            # free draw refuses so the walk pins and we see both shapes
+            if len(payloads) == 1:
+                return {"error": VALIDATION_REFUSE}
+            return {"images": ["View/local/raw/2026-08-12/0120001--unknown.png"]}
+        return {}
+
+    with tempfile.TemporaryDirectory() as out, tempfile.TemporaryDirectory() as d:
+        pipeline.RENDER_BACKEND = "swarm"
+        pipeline.COMFY_OUTPUT = out
+        pipeline._swarm_call = fleet_call
+        pipeline._stamp = lambda *a, **k: None
+        pipeline.gpu.ollama_holding = lambda: False
+        pipeline.gpu.preflight = lambda progress=None: None
+        pipeline.gpu.release_ollama = lambda progress=None: None
+        urllib.request.urlopen = lambda url, timeout=None: _Blob(b"PNGDATA")
+        try:
+            json.dump(
+                {"1": {"inputs": {"filename_prefix": "anchor_v2/front_s42"}}},
+                open(os.path.join(d, "wf.json"), "w"),
+            )
+            got = pipeline._submit_and_collect(
+                d, "anchor_v2", "*.png", lambda m: None)
+        finally:
+            (pipeline.RENDER_BACKEND, pipeline.COMFY_OUTPUT, pipeline._swarm_call,
+             pipeline._stamp, pipeline.gpu.ollama_holding, pipeline.gpu.preflight,
+             pipeline.gpu.release_ollama, urllib.request.urlopen) = was
+
+    assert len(payloads) >= 2, f"need free draw + pin to lock both shapes: {payloads}"
+    free, pin = payloads[0], payloads[1]
+
+    # Free draw: raw workflow is the graph; no exact pin (Swarm may load-balance).
+    assert "comfyworkflowraw" in free and free["comfyworkflowraw"], free
+    assert free.get("exactbackendid") is None, free
+    # Pin: raw workflow still the graph; exactbackendid names the box.
+    assert "comfyworkflowraw" in pin and pin["comfyworkflowraw"], pin
+    assert pin.get("exactbackendid") == "0", pin
+
+    for p in payloads:
+        assert "comfyworkflowraw" in p and p["comfyworkflowraw"], (
+            f"GenerateText2Image without comfyworkflowraw consults Swarm's "
+            f"connect-time list: {p}")
+        # Model-route keys alone would make Swarm the discriminator.
+        if any(p.get(k) for k in _SWARM_MODEL_ROUTE_KEYS):
+            assert p.get("comfyworkflowraw"), (
+                f"model-route keys without raw workflow: {p}")
+        # images count is fine; the graph must still be raw.
+        assert "images" in p, p
+
+    # Unit-level: _swarm_generate itself builds the inert shape (not only the
+    # walk). Dropping the key here while the walk still passes would be a
+    # different door into the same defect.
+    unit = []
+    was_call = pipeline._swarm_call
+    pipeline._swarm_call = (
+        lambda path, payload, timeout=30: unit.append(dict(payload))
+        or {"images": ["View/x.png"]})
+    try:
+        pipeline._swarm_generate('{"1":{}}', None, None, None)
+        pipeline._swarm_generate('{"1":{}}', None, None, "2")
+    finally:
+        pipeline._swarm_call = was_call
+    assert unit[0] == {"images": 1, "comfyworkflowraw": '{"1":{}}'}, unit[0]
+    assert unit[1] == {
+        "images": 1,
+        "comfyworkflowraw": '{"1":{}}',
+        "exactbackendid": "2",
+    }, unit[1]
+    assert [os.path.basename(p) for p in got] == ["front_s42_00001_.png"], got
 
 
 def test_t9_13a_truncated_or_enum_only_weight_is_not_available():
