@@ -670,6 +670,12 @@ lead. Mutation: list every unanchored name → extra arm red.
 Mutation: never list → lead arm red. Mutation: fix API only → HTML
 arm red (`test_t2_30_unanchored_leads_only.py`).
 
+**Cast slots** are **built**. `build_refs.scene_cast` returns only leads
+(and bare names as legacy leads) that have a chosen sheet; those occupy
+image2/image3. Extras and background never take those slots even when a
+sheet exists. A scene of only non-leads leaves image2/3 empty.
+`test_app.py::test_cast_slots_only_leads_with_chosen_sheets_take_image2_and_image3`.
+
 `T2-44` is **built**. `models.refuse_unknown_video_model` walks the
 board's scenes and raises when a named `video_model` is absent from
 `models.renderable("video")` as a key *or* a cli value, quoting the

@@ -1626,6 +1626,78 @@ def test_a_duet_still_reaches_the_graph_as_two_named_people():
     assert "another photograph of the same character" not in prompt, prompt
 
 
+def test_cast_slots_only_leads_with_chosen_sheets_take_image2_and_image3():
+    """Named leads with chosen sheets occupy image2/3; extras/background do not.
+
+    image1 stays the protagonist identity lock. Only role=lead (and bare names,
+    which are legacy leads) may fill the remaining two slots. An extra or
+    background figure with a sheet must not steal a slot from a lead or pad the
+    graph when no lead is present. Mutation: attach every named anchored figure
+    → extra/background arm red. Mutation: drop leads from scene_cast → lead arm
+    red.
+    """
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import build_refs
+
+    scene = {
+        "scene_number": 2,
+        "image_prompt": "a alley after the set",
+        "negative_prompt": "",
+        "characters": [
+            {"name": "Nyx", "role": "lead"},
+            {"name": "Dancer", "role": "extra"},
+            {"name": "Crowd", "role": "background"},
+            "Ghost",  # bare name → legacy lead
+        ],
+    }
+    cast = {
+        "Nyx": {"image": "nyx.png", "desc": "a white-furred rival"},
+        "Dancer": {"image": "dancer.png", "desc": "an extra on the floor"},
+        "Crowd": {"image": "crowd.png", "desc": "background bodies"},
+        "Ghost": {"image": "ghost.png", "desc": "a grey tom"},
+    }
+    got = build_refs.scene_cast(scene, cast)
+    assert [n for n, _, _ in got] == ["Nyx", "Ghost"], got
+    assert "Dancer" not in [n for n, _, _ in got], got
+    assert "Crowd" not in [n for n, _, _ in got], got
+
+    # scene_cast feeds workflow: only the two leads reach image2/image3
+    wf = build_refs.workflow(
+        scene, "meowp.png", None, "empty", 1280, 720, 42,
+        extra_refs=got,
+    )
+    enc = wf["11"]["inputs"]
+    assert enc["image1"] == ["8", 0], enc
+    slot_file = {}
+    for slot in ("image2", "image3"):
+        assert slot in enc, (slot, enc)
+        scale_id = enc[slot][0]
+        slot_file[slot] = wf[str(int(scale_id) - 1)]["inputs"]["image"]
+    assert slot_file == {"image2": "nyx.png", "image3": "ghost.png"}, slot_file
+    prompt = enc["prompt"]
+    assert "The character in image 2 is Nyx" in prompt, prompt
+    assert "The character in image 3 is Ghost" in prompt, prompt
+    assert "Dancer" not in prompt, prompt
+    assert "Crowd" not in prompt, prompt
+
+    # extras/background alone never claim a slot, even with chosen sheets
+    only_non_leads = build_refs.scene_cast(
+        {"characters": [
+            {"name": "Dancer", "role": "extra"},
+            {"name": "Crowd", "role": "background"},
+        ]},
+        cast,
+    )
+    assert only_non_leads == [], only_non_leads
+    empty_wf = build_refs.workflow(
+        {"scene_number": 3, "image_prompt": "crowd only", "negative_prompt": ""},
+        "meowp.png", None, "empty", 1280, 720, 7,
+        extra_refs=only_non_leads,
+    )
+    empty_enc = empty_wf["11"]["inputs"]
+    assert "image2" not in empty_enc and "image3" not in empty_enc, empty_enc
+
+
 def _png_bytes(w=8, h=8):
     path = tempfile.mktemp(suffix=".png")
     subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", f"color=c=black:s={w}x{h}",

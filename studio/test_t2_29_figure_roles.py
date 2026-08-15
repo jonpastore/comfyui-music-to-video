@@ -165,7 +165,11 @@ def test_t2_29_cast_api_returns_role_on_every_named_figure():
 
 
 def test_t2_29_scene_cast_still_resolves_named_figures():
-    """Dict figures must still select anchors. String coercion hid this."""
+    """Dict figures must still select anchors. String coercion hid this.
+
+    Cast slots are leads only (see test_cast_slots_*): background must not
+    take image2/3 even when a sheet is present. Bare names stay legacy leads.
+    """
     import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     import build_refs
@@ -181,4 +185,4 @@ def test_t2_29_scene_cast_still_resolves_named_figures():
         "Crowd": {"image": "crowd.png", "desc": "background"},
     }
     got = build_refs.scene_cast(scene, cast)
-    assert [n for n, _, _ in got] == ["Nyx", "Crowd", "Ghost"], got
+    assert [n for n, _, _ in got] == ["Nyx", "Ghost"], got

@@ -164,18 +164,24 @@ DETAIL_SHOTS = ("EXTREME CLOSE-UP", "CLOSE-UP SHOT")
 
 
 def scene_cast(scene, cast):
-    """[(name, image, desc)] for the supporting characters THIS scene names.
+    """[(name, image, desc)] for LEADS this scene names that have a chosen sheet.
 
-    `cast` holds only characters that have a chosen anchor, so a scene naming
-    an extra, a background character, or somebody nobody anchored simply gets
-    nothing attached -- which is the intended behaviour. Only a main actor
-    needs an anchor, and the storyboard is told exactly that.
+    image2/image3 hold supporting identity locks. Only role=lead (and a bare
+    name, which is a legacy lead) may take those slots. An extra or background
+    figure with a sheet must not occupy them: only leads need anchors, and a
+    sheet on a non-lead is not a reason to condition the still on them.
+    `cast` itself is the anchored set; a named lead with no entry is skipped
+    here (T2-28 refuses enqueue when that happens).
     """
     out = []
     for raw in (scene.get("characters") or []):
-        name = raw.get("name") if isinstance(raw, dict) else raw
-        name = str(name or "").strip()
-        if not name:
+        if isinstance(raw, dict):
+            name = str(raw.get("name") or "").strip()
+            role = str(raw.get("role") or "").strip().lower() or "lead"
+        else:
+            name = str(raw or "").strip()
+            role = "lead"
+        if not name or role != "lead":
             continue
         entry = cast.get(name)
         if entry and entry.get("image"):

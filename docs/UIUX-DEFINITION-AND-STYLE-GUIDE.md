@@ -443,6 +443,8 @@ Every named scene figure carries `lead` / `extra` / `background`
 row shows it. The unanchored-lead warning (`T2-30`) is **built**:
 the page banner and scene-row `warn-tag` / "no anchor" fire only for
 leads without a chosen anchor; extras and background are silent.
+Ref generation attaches only leads with chosen sheets as image2/image3;
+extras and background never fill those slots.
 
 ### 5.3 Space and radius
 
