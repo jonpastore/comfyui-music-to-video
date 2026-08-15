@@ -379,6 +379,10 @@ MIGRATIONS = [
     # them. docs/TRD-7 T7-14, T7-15.
     "ALTER TABLE playlists ADD COLUMN backdrop TEXT",
     "ALTER TABLE playlists ADD COLUMN composite TEXT",
+    # T1-18 / T1-20: easy | normal | advanced. Default normal so every set
+    # that predates audiences keeps today's controls and today's mix.
+    # Switching this column must not rewrite set_items or automation.
+    "ALTER TABLE sets ADD COLUMN mode_audience TEXT DEFAULT 'normal'",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and

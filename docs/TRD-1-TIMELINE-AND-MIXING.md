@@ -612,13 +612,15 @@ current.
 |---|---|---|---|
 | `T1-9a`/`T1-9c` automation curves | **built** | earlier | `automation.py`: lanes, RDP decimation, `MAX_POINTS = 64`, `asendcmd` emission through the mechanism `effects.filter_sweep` already used |
 | `T1-9b` a drawn curve survives to output | **NOT MEASURED** | — | the RMS-per-second differential has never been run. The curve reaches the graph; nothing has confirmed it reaches the audio |
-| `T1-20a`/`T1-20b` master stage | **built** | earlier | `mixer._master_lines`, engaged only when an item suppressed its own loudnorm |
+| `T1-20a`/`T1-20b` master stage | **built** | earlier | `mixer._master_lines`, engaged when an item suppressed its own loudnorm or the set is easy |
 | `T1-20d` exactly one loudnorm per path | **built** | `2f8e559` | mixed set measured `per-item=[0,0] master=1` → worst path **1**, was **2**. Reproduced independently by both sessions. Fix is `master_engaged` + `item_chains`, one application point |
 | `T1-7` predicted length = rendered (echo+black+beatmatch+trim) | **built** | this tree | `studio/test_t1_7_set_duration.py`: mix_audio gap 0.032 s, render_set gap 0.027 s, both ≤ `mixer.SET_DURATION_TOLERANCE` (0.05). Each named feature moves the prediction. Arithmetic and the constant were not changed. |
 | `T1-8` displayed length is `set_duration()` | **not measured** | — | UI offset-stub differential has not been run |
 | `T1-27`/`T1-28` interstitial card | **not built** | — | folded in today from `ALBUM_ARC_AND_STAGING_PLAN` §3; nothing implements it |
 | `T1-13`/`T1-14` peaks as data | **built** | this slice | `mixer.peaks(samples, z)` returns ≤2048 min/max pairs, ≥1 when audio exists; per-bucket min/max equals the full-resolution span. `studio/test_timeline.py` |
 | `T1-15`…`T1-17` empty reason, preview | **not built** | — | `mixer.waveform_png()` is still the picture; no explicit empty-reason, no proxy preview |
-| `T1-18`…`T1-20` audiences | **not built** | — | no `sets.mode_audience` column |
+| `T1-18` easy changes output | **built** | this slice | same items, defaults cleared: easy mix lands within 1.0 LU of `effects.LOUDNORM_I`; easy-off does not. Graph half: easy engages `master_engaged` / `_master_lines`, one loudnorm. `studio/test_t1_18_audience.py` |
+| `T1-19` recorded one-button chain | **not built** | — | easy reuses `_master_lines` (T1-20c graph identity); no versioned chain recorded on the render |
+| `T1-20` switch does not mutate | **built** | this slice | `sets.mode_audience` persists; easy→advanced→easy leaves `set_items` and `automation` unchanged; `audience_affordances("easy") != audience_affordances("advanced")`; easy HTML omits gain/effects controls |
 | `T1-21`…`T1-23` `duck`/`layer` | **built (ledger was stale)** | mixer joins | `_duck_join` / `_layer_join` render. `T1-23` "refused" is no longer the tree |
 | the timeline itself | **not built** | — | `set_edit.html` is a stack of forms; `.timeline`/`.tl-block` is a proportional strip with no time axis |

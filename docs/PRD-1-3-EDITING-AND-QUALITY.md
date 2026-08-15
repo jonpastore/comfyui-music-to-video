@@ -164,8 +164,13 @@ order and take the dependencies from here.
 4. The master stage (`T1-20a`…`T1-20d`). It is a prerequisite for automation
    being *usable*, not an enhancement: without it, per-item `loudnorm` flattens
    every curve `automation.py` can already store and render.
-5. Audiences (`T1-18`…`T1-20`), which need the master because easy mode's
-   one-button master **is** that chain (`T1-20c`).
+5. Audiences (`T1-18`…`T1-20`). **`T1-18` and `T1-20` built**: `sets.mode_audience`
+   persists; switching easy→advanced→easy does not rewrite `set_items` or
+   automation; easy and advanced return different affordance sets; easy
+   engages the existing master (`mixer.master_engaged`) so a set with
+   per-item defaults cleared lands within 1.0 LU of `effects.LOUDNORM_I`
+   and the same set with easy off does not. **`T1-19` still open** — the
+   chain that ran is not yet a named, versioned record on the render.
 
 ### P2 — the arc through to the storyboard
 

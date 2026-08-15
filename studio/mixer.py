@@ -716,7 +716,16 @@ def master_engaged(items):
         one curved, one not  per-item=[0, 1]  master=1   worst path = 2   <-- bug
 
     One reading, both callers, so the two cannot disagree again.
+
+    Easy mode is the other reason the master exists (docs/TRD-1 T1-18,
+    T1-20c, T1-20d). It is a feature set, not a CSS class: the same
+    master_engaged reading turns the one-button master on, which strips
+    per-item loudnorm from every item so easy-on cannot put two in series.
+    mode_audience travels on the item dict the same way automation does --
+    mixer still does not touch the database.
     """
+    if any(it.get("mode_audience") == "easy" for it in items):
+        return True
     return any((it.get("automation") or {}).get("suppress_loudnorm") for it in items)
 
 
@@ -740,9 +749,10 @@ def item_chains(items):
 def _master_lines(items, lines, running):
     """THE MASTER STAGE. docs/TRD-1 8a.
 
-    One loudnorm, after every item and every join, and ONLY when some item had
-    its own suppressed for a gain curve -- otherwise a set that draws no curve
-    renders exactly as it did before automation existed.
+    One loudnorm, after every item and every join, when some item had its
+    own suppressed for a gain curve OR the set is in easy mode (T1-18) --
+    otherwise a set that draws no curve and is not easy renders exactly as
+    it did before automation and audiences existed.
 
     Its own function so it can be asserted without rendering: a master stage
     that quietly stopped being added is a set losing its level precisely where
@@ -1697,6 +1707,16 @@ def demo():
         # "neither curved" 2-in-series, which is worse than the bug on the path
         # that is currently correct. Hence one set-level reading, both callers.
         assert not master_engaged([{"automation": {"suppress_loudnorm": False}}])
+        # T1-18: easy engages the same master, and T1-20d still holds --
+        # default items lose their own loudnorm rather than stacking one.
+        easy_its = [{"mode_audience": "easy"}, {"mode_audience": "easy"}]
+        assert master_engaged(easy_its)
+        easy_per = [c.count("loudnorm") for c in item_chains(easy_its)]
+        easy_ml, _ = _master_lines(easy_its, [], "a0")
+        easy_n = sum(l.count("loudnorm") for l in easy_ml)
+        assert easy_n == 1 and max(p + easy_n for p in easy_per) == 1, (easy_per, easy_n)
+        assert not master_engaged([{"mode_audience": "normal"}])
+        assert not master_engaged([{"mode_audience": "advanced"}])
 
         # aecho APPENDS its delay, and _item_duration is otherwise pure trim
         # arithmetic -- the editor was short by exactly the delay, up to 2s.

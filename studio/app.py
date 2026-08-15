@@ -83,6 +83,36 @@ BlankInt = CharacterId  # same blank-string -> None coercion, for any optional-i
 # mixer owns this: it is the only module that knows what it can render.
 SET_TRANSITIONS = mixer.TRANSITIONS
 
+# docs/TRD-1 §7. Audiences, not densities. One data model; three affordance
+# sets. Easy is a feature set (auto-level / auto-fade / one-button master),
+# not a CSS class -- mixer.master_engaged reads mode_audience == "easy".
+AUDIENCES = ("easy", "normal", "advanced")
+_AFFORDANCES = {
+    "easy": frozenset({
+        "auto_level", "auto_fade", "one_button_master",
+        "trim", "transition", "mix_direction",
+    }),
+    "normal": frozenset({
+        "trim", "gain", "transition", "hold", "beatmatch", "branded",
+        "mix_direction", "effects", "automation_lanes", "defaults_visible",
+    }),
+    "advanced": frozenset({
+        "trim", "gain", "transition", "hold", "beatmatch", "branded",
+        "mix_direction", "effects", "automation_lanes", "defaults_visible",
+        "mastering_chain", "unrounded_numbers",
+    }),
+}
+
+
+def audience_affordances(mode):
+    """Controls this audience may operate. Unknown / missing -> normal."""
+    return _AFFORDANCES[mode if mode in _AFFORDANCES else "normal"]
+
+
+def _set_audience(row):
+    mode = row["mode_audience"] if "mode_audience" in row.keys() else None
+    return mode if mode in AUDIENCES else "normal"
+
 # Anything servable over /media must resolve inside one of these -- reuses
 # pipeline's own ComfyUI paths rather than inventing a parallel config knob.
 MEDIA_ROOTS = [os.path.realpath(db.DATA), os.path.realpath(pipeline.COMFY_INPUT),
@@ -6136,11 +6166,17 @@ def set_detail(row):
         # a floor so a very short item is still clickable rather than a hairline
         t["pct"] = max(8.0, 100.0 * t["secs"] / longest) if longest else 100.0
 
+    audience = _set_audience(row)
     return {"set": row, "items": items, "count": len(items), "total_secs": total,
             "timeline": timeline,
             "duration_error": duration_error, "missing_video": missing_video, "renders": renders,
             "beatmatch_plan": beatmatch_plan, "suggested_order": suggested_order,
-            "suggested_order_ids": suggested_order_ids}
+            "suggested_order_ids": suggested_order_ids,
+            "audiences": AUDIENCES, "affordances": audience_affordances(audience),
+            "mode_audience": audience,
+            "loudnorm_i": effects.LOUDNORM_I,
+            "loudnorm_tp": effects.LOUDNORM_TP,
+            "loudnorm_lra": effects.LOUDNORM_LRA}
 
 
 @app.get("/sets", response_class=HTMLResponse)
@@ -6329,8 +6365,9 @@ async def suggest_set_item(request: Request, id: int, item_id: int):
 
 
 @app.post("/sets/{id}")
-def update_set(id: int, name: str = Form(...), mode: str = Form("video"), tier: str = Form("")):
-    get_set_or_404(id)
+def update_set(id: int, name: str = Form(...), mode: str = Form("video"),
+               tier: str = Form(""), mode_audience: str = Form(None)):
+    row = get_set_or_404(id)
     name = (name or "").strip()
     if not name:
         raise HTTPException(400, "name required")
@@ -6344,8 +6381,15 @@ def update_set(id: int, name: str = Form(...), mode: str = Form("video"), tier: 
     tier = (tier or "").strip() or None
     if tier:
         valid_tier_or_400(tier)
-    db.run("UPDATE sets SET name=?, mode=?, tier=?, updated=? WHERE id=?",
-           name, mode, tier, time.time(), id)
+    # Absent field keeps the stored audience so a name/tier save cannot
+    # silently reset it. Present-but-invalid is a 400, not a coerce: a typo
+    # that became "normal" would make T1-20's read-back lie.
+    if mode_audience is None or mode_audience == "":
+        mode_audience = _set_audience(row)
+    elif mode_audience not in AUDIENCES:
+        raise HTTPException(400, f"mode_audience must be one of {', '.join(AUDIENCES)}")
+    db.run("UPDATE sets SET name=?, mode=?, tier=?, mode_audience=?, updated=? WHERE id=?",
+           name, mode, tier, mode_audience, time.time(), id)
     return RedirectResponse(f"/sets/{id}", status_code=303)
 
 
@@ -6511,6 +6555,7 @@ def render_set_route(id: int):
         missing = [songs[it["song_id"]]["title"] for it in items if not songs[it["song_id"]]["mp3_path"]]
         if missing:
             raise HTTPException(400, f"no audio for: {', '.join(missing)}")
+        audience = _set_audience(row)
         for it in items:
             build.append({"audio": songs[it["song_id"]]["mp3_path"], "transition": it["transition"],
                           "secs": it["secs"], "in_secs": it["in_secs"], "out_secs": it["out_secs"],
@@ -6519,10 +6564,15 @@ def render_set_route(id: int):
                           # the item's drawn curves, as plain data: the fragments and
                           # whether per-item loudnorm comes off for a gain curve
                           "automation": automation.item_audio(it["id"]),
+                          # T1-18: easy is a set-level fact mixer reads off the
+                          # item dict, same shape as automation. Not stamping
+                          # this leaves master_engaged blind and easy a no-op.
+                          "mode_audience": audience,
                           **_beatmatch_fields(it, songs[it["song_id"]])})
     else:
         if not row["tier"]:
             raise HTTPException(400, "pick a tier before rendering video")
+        audience = _set_audience(row)
         missing = []
         for it in items:
             r = db.one("""SELECT * FROM renders WHERE song_id=? AND tier=?
@@ -6537,6 +6587,7 @@ def render_set_route(id: int):
                               # the item's drawn curves, as plain data: the fragments and
                               # whether per-item loudnorm comes off for a gain curve
                               "automation": automation.item_audio(it["id"]),
+                              "mode_audience": audience,
                               **_beatmatch_fields(it, songs[it["song_id"]])})
         if missing:
             raise HTTPException(400, f"tier '{row['tier']}' has no video for: {', '.join(missing)}")

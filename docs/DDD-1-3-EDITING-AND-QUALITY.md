@@ -27,7 +27,7 @@ is named.
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning, reused by `T3-20` | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
 | `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow` | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5 |
-| `studio/db.py` | 559 | schema | `automation`, `findings`, `artefacts` landed; two `sets` columns did not, §4 |
+| `studio/db.py` | 559 | schema | `automation`, `findings`, `artefacts`, `sets.mode_audience` landed; `sets.out_fps` did not, §4 |
 | `studio/vision.py` | 516 | VLM calls, local-first | **not** tier 2, §5.6 |
 
 Deliberately absent, verified by `grep -rn` over `studio/*.py` and the root
@@ -94,12 +94,15 @@ wrong one, and day 8's rule is that the warnings do not move.
 
 ## 4. Schema deltas still required
 
-Landed already: `automation`, `findings`, `artefacts`, and `storyboards.scene_seconds`.
+Landed already: `automation`, `findings`, `artefacts`, `storyboards.scene_seconds`,
+and `sets.mode_audience` (`easy|normal|advanced`, default `normal`). Switching
+audience writes only that column (`T1-20`). Easy is `mixer.master_engaged`
+reading `mode_audience == "easy"` on the item dict — the same application point
+as a gain curve (`T1-18`, `T1-20c`, `T1-20d`).
 
 Still needed, and no more than this:
 
     ALTER TABLE sets ADD COLUMN out_fps REAL;                        -- NULL = derive from items
-    ALTER TABLE sets ADD COLUMN mode_audience TEXT DEFAULT 'normal'; -- easy|normal|advanced
 
     -- Tier 2 cannot store a threshold without the calibration that earned it (T3-14).
     CREATE TABLE IF NOT EXISTS calibrations (
@@ -161,6 +164,14 @@ engaging the master strips per-item `loudnorm` from every item, the mixed case
 drops to 1 and the other two rows do not move — so the measurement responds to
 that rule and to nothing else. **Reproduced independently by session B at HEAD,
 same three rows.**
+
+**Easy mode, 2026-08-14.** `sets.mode_audience` is the set-level fact.
+`render_set_route` stamps it onto every item dict; `master_engaged` reads
+`mode_audience == "easy"` at the same point a gain curve does, so easy
+is that chain (`T1-20c`) and still one loudnorm (`T1-20d`). `app.audience_affordances`
+is the affordance set `set_edit.html` consults — easy and advanced
+differ as data, not as a stylesheet. `T1-19` (named versioned record of
+the chain on the render) is not this slice.
 
 **FIXED 2026-08-13 by session B, on Jon's decision, and the estimate this
 document gave was wrong twice on the way — which is the part worth keeping.**
