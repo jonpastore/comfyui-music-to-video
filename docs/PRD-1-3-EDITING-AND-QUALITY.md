@@ -270,6 +270,11 @@ order and take the dependencies from here.
    `GET /api/songs/{id}/storyboard/{tier}` returns the generation prompt
    defaulted from the tier (`storyboard_generation_payload`); POST accepts
    an edit. `T2-18`/`T2-19` still unbuilt.
+   song yield two lengths. **`T2-26` built**: `GET .../storyboard/{tier}`
+   returns the album's chosen anchor images grouped per character
+   (`anchors[].character` / `images[]` with `path` and `url`), so a
+   client can show the strip without the HTML page. Remaining: `T2-8c`,
+   §4 wands (`T2-14`…`T2-19`), `T2-25`, `T2-27` scene refs, and casting.
 7. Per-scene model choice, W2 (`T2-42`…`T2-48`) — last, because `T2-45` needs
    `models.where()`'s three-valued answer respected at enqueue and `T2-48` needs
    per-model ceilings, which is P0 item 1 again. The renderer half of those

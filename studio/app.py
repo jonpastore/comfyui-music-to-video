@@ -529,6 +529,45 @@ def cast_anchors(album, tier):
     return out
 
 
+def album_chosen_anchors(album, tier):
+    """Chosen album sheets at this tier: protagonist first, then cast by name.
+
+    Same rows the storyboard page already showed at the top. T2-26 puts them
+    on the JSON so a client that is not that page can show them too.
+    """
+    return db.q("""SELECT a.*, c.name AS character_name
+                   FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
+                   WHERE a.scope_kind='album' AND a.scope_value=? AND a.tier=? AND a.chosen=1
+                   ORDER BY (a.character_id IS NOT NULL), c.name, a.view, a.id""",
+                album or "", tier)
+
+
+def anchors_by_character(album, tier):
+    """T2-26: chosen album anchors grouped per character.
+
+    A flat list of images is not this: a client has to know which sheet is
+    whose without another query. Unchosen candidates and other albums/tiers
+    stay out.
+    """
+    groups, index = [], {}
+    for row in album_chosen_anchors(album, tier):
+        key = row["character_id"]
+        if key not in index:
+            index[key] = len(groups)
+            groups.append({
+                "character": row["character_name"] or "protagonist",
+                "character_id": row["character_id"],
+                "images": [],
+            })
+        groups[index[key]]["images"].append({
+            "id": row["id"],
+            "view": row["view"],
+            "path": row["path"],
+            "url": media_url(row["path"]),
+        })
+    return groups
+
+
 def get_character_or_404(cid):
     row = db.one("SELECT * FROM characters WHERE id=?", cid)
     if not row:
@@ -4981,10 +5020,7 @@ def view_storyboard(request: Request, id: int, tier: str):
     # the anchors this tier will actually render from, at the top, because a
     # storyboard is read against the character it is for. The protagonist's
     # (character_id IS NULL) first, then the cast.
-    anchors = db.q("""SELECT a.*, c.name AS character_name
-                      FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
-                      WHERE a.scope_kind='album' AND a.scope_value=? AND a.tier=? AND a.chosen=1
-                      ORDER BY (a.character_id IS NOT NULL), c.name, a.view, a.id""", album, tier)
+    anchors = album_chosen_anchors(album, tier)
     return templates.TemplateResponse(request, "storyboard.html", {
         "song": song, "tier": tier, "row": row, "md": md, "sb": sb,
         # the page shows THIS song's clip length, not the old constant
@@ -5099,6 +5135,7 @@ def _storyboard_payload(song, tier):
         "unanchored": unanchored,
         "scene_seconds": sb_secs,
         "nclips": nclips,
+        "anchors": anchors_by_character(song["album"] or "", tier),
     }
 
 

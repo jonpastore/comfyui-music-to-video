@@ -119,7 +119,11 @@ confirmation is 400, `T2-16`). Same routes, no parallel `/api/*` tree
 `.../arc/propose` (proposal is not saved until accepted, `T2-15`),
 `.../arc/reject` (previous file on disk is left untouched),
 `GET/POST /api/songs/{id}/storyboard/{tier}`, `.../scene/{n}`,
-`.../meter`, `.../cast`. The generation prompt and **the limits that apply to it**
+`.../meter`, `.../cast`. The GET payload carries `anchors` — chosen album
+sheets grouped per character (`character`, `character_id`, `images` with
+`path`/`url`/`view`; protagonist first) so a client can draw the strip
+(`T2-26`). Per-scene reference images are still HTML-only (`T2-27`).
+The generation prompt and **the limits that apply to it**
 travel in the same response (`T2-18`).
 `GET/POST /api/songs/{id}/storyboard/{tier}` (`T2-17` **built**: GET
 returns `prompt` from `storyboard_generation_payload`, defaulted from the
@@ -534,6 +538,16 @@ purpose appear with no template change
 discard it, or post-filter to a stale list → the probe is absent.
 `T2-34` (unavailable shown as unavailable, with an available model
 still offered) is not this.
+
+`T2-26` is **built**. `GET /api/songs/{id}/storyboard/{tier}` includes
+`anchors`: one group per character with `character`, `character_id` and
+`images` (`id`, `view`, `path`, `url` via `media_url`). Protagonist
+(`character_id` NULL, name `"protagonist"`) first, then cast by name.
+`album_chosen_anchors` is the one query; the HTML page and the JSON
+share it. Chosen sheets only. Mutation: omit the key → red. Mutation:
+flat images with no character grouping → red. Mutation: drop a cast
+member's chosen sheet → red. `T2-27` (each scene's reference image)
+is not on `_scene_json` yet.
 
 ### 5.6 Tier 2 is a calibration, not a metric
 

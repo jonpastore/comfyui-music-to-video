@@ -252,6 +252,14 @@ and still queues an in-tolerance board.
 remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-20`,
 `T3-27`; dismiss stays off this row until the file bytes change,
 `T3-22`. A set finding
+two `scene_seconds` yields two clip lengths.
+`GET /api/songs/{id}/storyboard/{tier}` returns `anchors` grouped per
+character (`character`, `images[].path` / `url` / `view`) so a client
+that is not the HTML page can still put the strip at the top (`T2-26`).
+Chosen sheets only; protagonist first. Per-scene reference stills stay
+on the HTML scene row until `T2-27`. `finding-row` (measured / expected / unit /
+remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-20`, `T3-27`; dismiss
+stays off this row until the file bytes change, `T3-22`). A set finding
 `transition_lands` (`T3-12`) is measurement only — `actionable` is false,
 same as `duration_matches_prediction`. The
 JSON already carries `remedy_class` and `actionable` (`GET /api/qc/findings`,
