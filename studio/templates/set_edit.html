@@ -95,14 +95,24 @@
 {# The timeline: one block per song, width proportional to how long it actually
    plays after trim, with the handover to the next shown between them. Drag a
    block to reorder; click one to jump to its controls below. The ruler is
-   server-owned seconds from set_duration() — ticks are in the HTML, not
-   painted from pixel positions. data-axis="x" below is the reorder axis,
-   not this ruler. #}
+   server-owned seconds from set_duration() — ticks, joins and the playhead
+   are in the HTML, not painted from pixel positions. data-axis="x" below is
+   the reorder axis, not this ruler. #}
 <h3>Timeline</h3>
 {% if axis %}
-<div class="tl-axis" data-duration="{{ total_secs }}">
+<div class="tl-axis" data-duration="{{ total_secs }}" data-set="{{ set.id }}">
   {% for tick in axis %}
   <span class="tl-tick" data-t="{{ tick.t }}" style="left: {{ tick.pct }}%">{{ tick.t | hms }}</span>
+  {% endfor %}
+  {% if playhead %}
+  <span class="tl-playhead" data-t="{{ playhead.t }}" style="left: {{ playhead.pct }}%"></span>
+  {% endif %}
+  {% for j in joins %}
+  <span class="tl-join" draggable="true"
+        data-item="{{ j.item_id }}" data-t="{{ j.t }}" data-secs="{{ j.secs }}"
+        data-end="{{ j.end }}" data-transition="{{ j.transition }}"
+        style="left: {{ j.pct }}%"
+        title="{{ j.transition }} {{ j.secs }}s"></span>
   {% endfor %}
 </div>
 {% endif %}
@@ -127,7 +137,24 @@
   </div>
   {% endfor %}
 </div>
-<p class="muted">Drag a block to reorder. Click one to jump to its mixing controls.
+{% if "automation_lanes" in affordances %}
+<div class="tl-lanes" data-duration="{{ total_secs }}" data-set="{{ set.id }}"
+     data-items='{{ lane_items | tojson }}'>
+  {% for lane in lanes %}
+  <div class="tl-lane" data-lane="{{ lane.name }}"
+       data-lo="{{ lane.lo }}" data-hi="{{ lane.hi }}">
+    <span class="tl-lane-label">{{ lane.name }}</span>
+    {% for p in lane.points %}
+    <span class="tl-lane-pt" data-item="{{ p.item_id }}" data-t="{{ p.t }}"
+          data-value="{{ p.value }}"
+          style="left: {{ p.pct }}%; bottom: {{ p.ypct }}%"></span>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+<p class="muted">Drag a block to reorder. Drag a join to change the overlap.
+  Click the ruler for the playhead. Click a block to jump to its mixing controls.
   <span class="tl-key">♪</span> means the handover is snapped to the beat.</p>
 
 <h3>Running order</h3>

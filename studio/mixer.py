@@ -216,6 +216,135 @@ def timeline_axis(duration_s, max_ticks=8):
     return ticks
 
 
+def _axis_duration(duration_s):
+    if duration_s is None:
+        return None
+    try:
+        duration_s = float(duration_s)
+    except (TypeError, ValueError):
+        return None
+    if duration_s <= 0:
+        return None
+    return duration_s
+
+
+def timeline_item_starts(items):
+    """Set-relative start of each item, walked with the same overlap as
+    set_duration. items[i]['duration'] is play length; items[i]['secs']
+    is the handover overlap."""
+    if not items:
+        return []
+    starts = [0.0]
+    running = float(items[0]["duration"])
+    for i, it in enumerate(items[:-1]):
+        nxt = float(items[i + 1]["duration"])
+        running += _advance(it, nxt)
+        starts.append(running - nxt)
+    return starts
+
+
+def timeline_joins(items, duration_s):
+    """Handover handles on the set axis, in canonical seconds.
+
+    One join per consecutive pair. t is the start of the overlap (or
+    the cut). duration_s is set_duration()'s return, used only for pct
+    — join times come from the item walk, not from a second clock.
+    """
+    duration_s = _axis_duration(duration_s)
+    if duration_s is None or not items or len(items) < 2:
+        return []
+    starts = timeline_item_starts(items)
+    joins = []
+    for i, it in enumerate(items[:-1]):
+        kind = it.get("transition") or "cut"
+        overlap = 0.0 if kind == "cut" else float(it.get("secs") or 0.0)
+        if kind == BLACK:
+            fade, _hold = _black_plan(it)
+            t = starts[i] + float(it["duration"]) - fade
+            overlap = float(it.get("secs") or 0.0)
+        else:
+            t = starts[i + 1]
+        joins.append({
+            "item_id": it.get("id"),
+            "t": t,
+            "pct": 100.0 * t / duration_s,
+            "secs": overlap,
+            "transition": kind,
+            "end": starts[i] + float(it["duration"]),
+        })
+    return joins
+
+
+def timeline_playhead(at, duration_s):
+    """Playhead on the set axis. None when there is no clock. Off-axis
+    times clamp; they are not wrapped and they do not invent length."""
+    duration_s = _axis_duration(duration_s)
+    if duration_s is None:
+        return None
+    if at is None:
+        at = 0.0
+    try:
+        at = float(at)
+    except (TypeError, ValueError):
+        at = 0.0
+    if at < 0.0:
+        at = 0.0
+    elif at > duration_s:
+        at = duration_s
+    return {"t": at, "pct": 100.0 * at / duration_s}
+
+
+def timeline_lanes(items, duration_s, curves, ranges=None, lane_order=None):
+    """Automation points placed on the set axis.
+
+    curves is {item_id: {lane: [(t, value), ...]}} with t item-relative
+    (docs/TRD-1 §4.1). The returned t is set-relative so a point cannot
+    silently describe the wrong item after a reorder. ranges is
+    {lane: (lo, hi)} for ypct; omitted lanes still emit when named in
+    lane_order or ranges so an empty canvas is distinct from no lanes.
+    """
+    duration_s = _axis_duration(duration_s)
+    if duration_s is None:
+        return []
+    ranges = dict(ranges or {})
+    names = list(lane_order) if lane_order else []
+    for name in ranges:
+        if name not in names:
+            names.append(name)
+    for spec in (curves or {}).values():
+        for name in spec:
+            if name not in names:
+                names.append(name)
+    starts_by_id = {}
+    for it, start in zip(items or (), timeline_item_starts(items or ())):
+        if it.get("id") is not None:
+            starts_by_id[it["id"]] = start
+    out = []
+    for name in names:
+        lo, hi = ranges.get(name, (0.0, 1.0))
+        span = float(hi) - float(lo)
+        points = []
+        for item_id, spec in (curves or {}).items():
+            if name not in spec:
+                continue
+            start = starts_by_id.get(item_id, 0.0)
+            for t, value in spec[name]:
+                t_set = start + float(t)
+                value = float(value)
+                ypct = 50.0 if span == 0 else 100.0 * (value - float(lo)) / span
+                points.append({
+                    "item_id": item_id,
+                    "t": t_set,
+                    "value": value,
+                    "pct": 100.0 * t_set / duration_s,
+                    "ypct": ypct,
+                })
+        points.sort(key=lambda p: (p["t"], p["item_id"]))
+        out.append({"name": name, "points": points,
+                    "lo": float(lo), "hi": float(hi)})
+    return out
+
+
 # Browser preview applies gain and position (docs/TRD-1 §6.2). Every other
 # key that would run at render is listed in not_applied. A static catalogue
 # of every effect would stay green when nothing is on the item.

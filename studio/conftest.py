@@ -469,6 +469,26 @@ _stub("mixer",
                      if _real_module("mixer") is not None
                      and hasattr(_real_module("mixer"), "timeline_axis")
                      else (lambda duration_s, max_ticks=8: [])),
+      # Joins / playhead / lanes are pure. A fake that always returned
+      # [] would hide a missing set_detail wire the same way a blank
+      # axis would (docs/TRD-1 §1).
+      timeline_item_starts=(_real_module("mixer").timeline_item_starts
+                            if _real_module("mixer") is not None
+                            and hasattr(_real_module("mixer"), "timeline_item_starts")
+                            else (lambda items: [0.0] * len(items or ()))),
+      timeline_joins=(_real_module("mixer").timeline_joins
+                      if _real_module("mixer") is not None
+                      and hasattr(_real_module("mixer"), "timeline_joins")
+                      else (lambda items, duration_s: [])),
+      timeline_playhead=(_real_module("mixer").timeline_playhead
+                         if _real_module("mixer") is not None
+                         and hasattr(_real_module("mixer"), "timeline_playhead")
+                         else (lambda at, duration_s: None)),
+      timeline_lanes=(_real_module("mixer").timeline_lanes
+                      if _real_module("mixer") is not None
+                      and hasattr(_real_module("mixer"), "timeline_lanes")
+                      else (lambda items, duration_s, curves, ranges=None,
+                                   lane_order=None: [])),
       # T1-16: preview_proxy is pure (no ffmpeg). The stub must serve the
       # real one so adding an effect lists it; a fake static list would
       # stay green.

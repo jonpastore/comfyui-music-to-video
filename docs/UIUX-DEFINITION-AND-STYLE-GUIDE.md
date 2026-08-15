@@ -196,10 +196,12 @@ A rendered set is QC'd against that same number (`T3-11`): `qc.check_set`
 PASSes when `ffprobe` duration sits within `mixer.SET_DURATION_TOLERANCE`,
 REJECTs when it does not. Measurement, not a new widget — the finding is
 the existing QC row (`measured` / `expected` / `s`).
-Still open: draggable joins, automation lanes and a playhead.
+Joins, playhead and lanes are the same view: `.tl-join[data-t]` (drag POSTs
+`secs` only), `.tl-playhead` (`?at=`), `.tl-lane-pt` (stored curve, set-relative
+`t`). Easy omits the lane strip. Waveform is still a PNG. Forms remain.
 A stored `gain_db` ramp does reach the rendered file (`T1-9b`, RMS/s
 slope on `mix_audio`); a fully-populated lane's filter text stays under
-8 KB and still renders (`T1-10`); the lanes to *draw* it are not in the UI yet.
+8 KB and still renders (`T1-10`).
 Dragging the running order or a trim (`in_secs`/`out_secs`/`secs`)
 must leave every stored point's `(lane, t, value)` put (`T1-1`):
 `t` is from the start of the item, not the set, so the curve does

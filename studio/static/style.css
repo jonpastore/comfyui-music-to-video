@@ -993,6 +993,71 @@ dialog.video-modal video { max-width: 100%; max-height: 70vh; display: block; }
 }
 .tl-tick:first-child { transform: none; }
 .tl-tick:last-child { transform: translateX(-100%); }
+.tl-playhead {
+  position: absolute;
+  top: 0;
+  bottom: -0.15rem;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 2;
+}
+.tl-join {
+  position: absolute;
+  top: 0;
+  width: 10px;
+  height: 1.15rem;
+  margin-left: -5px;
+  cursor: ew-resize;
+  z-index: 3;
+  background: transparent;
+}
+.tl-join::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 0.15rem;
+  bottom: 0;
+  width: 2px;
+  background: var(--warn, #e0af68);
+}
+.tl-lanes {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0.15rem 0 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.tl-lane {
+  position: relative;
+  height: 2.25rem;
+  background: var(--panel);
+}
+.tl-lane-label {
+  position: absolute;
+  left: 0.35rem;
+  top: 0.15rem;
+  font-size: 0.66rem;
+  color: var(--muted);
+  pointer-events: none;
+  z-index: 1;
+}
+.tl-lane-pt {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  margin-bottom: -4px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 1px solid var(--bg);
+  z-index: 2;
+}
 .timeline {
   display: flex;
   gap: 2px;

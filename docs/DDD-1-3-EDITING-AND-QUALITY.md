@@ -382,8 +382,14 @@ picture.
 `set_detail` passes that duration through — no second length arithmetic.
 The HTML is a view: `.tl-axis` / `.tl-tick[data-t]`. A TestClient GET (no JS)
 must carry the ticks, and a stub offset must move the last one
-(`studio/test_t1_timeline.py`). Draggable joins, lanes and playhead are not
-this slice.
+(`studio/test_t1_timeline.py`).
+
+Joins, playhead and lanes sit on the same clock. `mixer.timeline_joins`
+walks items with `_advance` so a fade's handle is the overlap start;
+`POST /sets/{id}/items/{iid}/join` writes only `secs`. `mixer.timeline_playhead`
+clamps `?at=` to `set_duration()`. `mixer.timeline_lanes` lifts item-relative
+automation `t` onto the set axis; the HTML is `.tl-lane-pt[data-t][data-value]`.
+Easy omits `.tl-lanes` (affordance, not CSS) and does not delete the rows.
 
 ### 5.5 Clip length: one blocked chain, and the order it unblocks in
 

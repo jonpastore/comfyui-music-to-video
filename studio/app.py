@@ -6741,13 +6741,14 @@ def _beatmatch_plan(items, songs, mode):
     return plan
 
 
-def set_detail(row):
+def set_detail(row, at=0.0):
     """Editor context for one set: its items in order, the predicted running
     length, whether it is ready to render video, the beat-matching plan for
     any item that asked for it, a suggested Camelot-adjacency running order,
     and every file ever rendered from it (newest first, so re-rendering
     never hides what you are comparing against -- the same shape as an
-    anchor's candidates).
+    anchor's candidates). at is the playhead in seconds; the page is a
+    view of it, not a second clock.
     """
     items = db.q("""SELECT si.*, s.title AS song_title, s.mp3_path AS mp3_path,
                            s.bpm AS song_bpm, s.key AS song_key,
@@ -6840,13 +6841,37 @@ def set_detail(row):
         t["pct"] = max(8.0, 100.0 * t["secs"] / longest) if longest else 100.0
 
     audience = _set_audience(row)
+    affordances = audience_affordances(audience)
+    blocks = [{"id": t["id"], "duration": t["secs"],
+               "transition": t["transition"], "secs": t["trans_secs"],
+               "hold": t["hold"]} for t in timeline]
+    joins = mixer.timeline_joins(blocks, total)
+    playhead = mixer.timeline_playhead(at, total)
+    if "automation_lanes" in affordances:
+        curves = {}
+        for t in timeline:
+            for lane in automation.LANES:
+                pts = automation.read(t["id"], lane)
+                if pts:
+                    curves.setdefault(t["id"], {})[lane] = pts
+        ranges = {n: (s["lo"], s["hi"]) for n, s in automation.LANES.items()}
+        lanes = mixer.timeline_lanes(
+            blocks, total, curves, ranges=ranges,
+            lane_order=tuple(automation.LANES))
+        lane_items = [
+            {"id": b["id"], "start": start, "duration": b["duration"]}
+            for b, start in zip(blocks, mixer.timeline_item_starts(blocks))]
+    else:
+        lanes, lane_items = [], []
     return {"set": row, "items": items, "count": len(items), "total_secs": total,
             "timeline": timeline,
             "axis": mixer.timeline_axis(total),
+            "joins": joins, "playhead": playhead, "lanes": lanes,
+            "lane_items": lane_items,
             "duration_error": duration_error, "missing_video": missing_video, "renders": renders,
             "beatmatch_plan": beatmatch_plan, "suggested_order": suggested_order,
             "suggested_order_ids": suggested_order_ids,
-            "audiences": AUDIENCES, "affordances": audience_affordances(audience),
+            "audiences": AUDIENCES, "affordances": affordances,
             "mode_audience": audience,
             "loudnorm_i": effects.LOUDNORM_I,
             "loudnorm_tp": effects.LOUDNORM_TP,
@@ -6969,10 +6994,10 @@ def create_set(name: str = Form(...), mode: str = Form("video"), tier: str = For
 
 
 @app.get("/sets/{id}", response_class=HTMLResponse)
-def set_edit_page(request: Request, id: int):
+def set_edit_page(request: Request, id: int, at: float = 0.0):
     row = get_set_or_404(id)
     songs = db.q("SELECT id, title FROM songs ORDER BY title")
-    ctx = {**set_detail(row), "songs": songs, "all_tiers": tiers.all_tiers(),
+    ctx = {**set_detail(row, at=at), "songs": songs, "all_tiers": tiers.all_tiers(),
            "transitions": SET_TRANSITIONS}
     return templates.TemplateResponse(request, "set_edit.html", ctx)
 
@@ -7245,6 +7270,25 @@ def edit_set_item(id: int, item_id: int, in_secs: BlankFloat = Form(None),
               WHERE id=?""",
            in_secs, out_secs, gain_db, transition, secs, int(beatmatch), effects_json,
            mix_direction or None, hold, int(branded), item_id)
+    db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
+    return RedirectResponse(f"/sets/{id}", status_code=303)
+
+
+@app.post("/sets/{id}/items/{item_id}/join")
+def edit_set_join(id: int, item_id: int, secs: float = Form(...)):
+    """A dragged join writes the same secs column the item form writes."""
+    get_set_or_404(id)
+    row = db.one("SELECT * FROM set_items WHERE id=? AND set_id=?", item_id, id)
+    if not row:
+        raise HTTPException(404, "no such item")
+    if not math.isfinite(secs) or secs < 0:
+        raise HTTPException(400, "secs must be a finite number >= 0")
+    _refuse_if_unrenderable(_mix_items_for_set(id, overrides={
+        item_id: {"transition": row["transition"], "secs": secs,
+                  "hold": _hold_of(row), "in_secs": row["in_secs"],
+                  "out_secs": row["out_secs"],
+                  "beatmatch": row["beatmatch"]}}))
+    db.run("UPDATE set_items SET secs=? WHERE id=?", secs, item_id)
     db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
     return RedirectResponse(f"/sets/{id}", status_code=303)
 

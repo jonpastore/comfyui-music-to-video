@@ -31,11 +31,13 @@ function watchJob(jobId, targetId) {
 // and a POST. DOM order is the source of truth; on drop the new order of ids is
 // posted and the server renumbers positions.
 //
-// The set-editor ruler (.tl-axis / .tl-tick) is server HTML from
-// mixer.timeline_axis(set_duration()). Do not paint ticks from pixel
-// positions: TestClient has no DOM, and a JS ruler would be a second
-// clock (docs/TRD-1 §1 / T1-8). .tl-axis is a sibling of .timeline so
-// this handler never sees the ticks.
+// The set-editor ruler (.tl-axis / .tl-tick / .tl-join / .tl-playhead)
+// is server HTML from mixer.timeline_axis / timeline_joins /
+// timeline_playhead. Do not paint ticks from pixel positions:
+// TestClient has no DOM, and a JS ruler would be a second clock
+// (docs/TRD-1 §1 / T1-8). .tl-axis is a sibling of .timeline so this
+// handler never sees the ticks. Pointer handlers below write the same
+// stored secs / automation / ?at= the server already owns.
 document.addEventListener("DOMContentLoaded", function () {
   document.querySelectorAll("[data-reorder-url]").forEach(function (root) {
     // a table reorders its rows, anything else reorders its own children
@@ -83,6 +85,112 @@ document.addEventListener("DOMContentLoaded", function () {
       if (root.dataset.reload !== undefined) post.then(function () { location.reload(); });
     });
   });
+});
+
+function tlSecondsAt(el, clientX) {
+  var dur = parseFloat(el.dataset.duration);
+  if (!(dur > 0)) return 0;
+  var rect = el.getBoundingClientRect();
+  var t = ((clientX - rect.left) / rect.width) * dur;
+  if (t < 0) return 0;
+  if (t > dur) return dur;
+  return t;
+}
+
+document.addEventListener("dragstart", function (e) {
+  if (e.target.closest(".tl-join")) e.preventDefault();
+});
+
+document.addEventListener("click", function (e) {
+  if (e.target.closest(".tl-join")) return;
+  var axis = e.target.closest(".tl-axis");
+  if (!axis) return;
+  var t = tlSecondsAt(axis, e.clientX);
+  var dur = parseFloat(axis.dataset.duration);
+  var head = axis.querySelector(".tl-playhead");
+  if (head && dur > 0) {
+    head.setAttribute("data-t", String(t));
+    head.style.left = (100 * t / dur) + "%";
+  }
+  try {
+    var url = new URL(location.href);
+    url.searchParams.set("at", String(t));
+    history.replaceState(null, "", url);
+  } catch (err) { /* ignore */ }
+});
+
+(function () {
+  var drag = null;
+  document.addEventListener("pointerdown", function (e) {
+    var join = e.target.closest(".tl-join");
+    if (!join) return;
+    var axis = join.closest(".tl-axis");
+    if (!axis) return;
+    e.preventDefault();
+    drag = {join: join, axis: axis};
+    join.setPointerCapture && join.setPointerCapture(e.pointerId);
+  });
+  document.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    var dur = parseFloat(drag.axis.dataset.duration);
+    if (!(dur > 0)) return;
+    var t = tlSecondsAt(drag.axis, e.clientX);
+    drag.join.setAttribute("data-t", String(t));
+    drag.join.style.left = (100 * t / dur) + "%";
+  });
+  document.addEventListener("pointerup", function (e) {
+    if (!drag) return;
+    var join = drag.join;
+    var axis = drag.axis;
+    drag = null;
+    var t = tlSecondsAt(axis, e.clientX);
+    var end = parseFloat(join.dataset.end);
+    var secs = isFinite(end) ? Math.max(0, end - t) : parseFloat(join.dataset.secs);
+    var form = new FormData();
+    form.append("secs", String(secs));
+    var setId = axis.dataset.set;
+    var itemId = join.dataset.item;
+    if (!setId || !itemId) return;
+    fetch("/sets/" + setId + "/items/" + itemId + "/join", {method: "POST", body: form})
+      .then(function () { location.reload(); });
+  });
+})();
+
+document.addEventListener("pointerup", function (e) {
+  var lane = e.target.closest(".tl-lane");
+  if (!lane || e.target.closest(".tl-join")) return;
+  var root = lane.closest(".tl-lanes");
+  if (!root) return;
+  var items;
+  try { items = JSON.parse(root.dataset.items || "[]"); }
+  catch (err) { return; }
+  var t = tlSecondsAt(root, e.clientX);
+  var item = null;
+  items.forEach(function (it) {
+    if (t >= it.start && t <= it.start + it.duration) item = it;
+  });
+  if (!item) return;
+  var rect = lane.getBoundingClientRect();
+  var ypct = rect.height ? 1 - ((e.clientY - rect.top) / rect.height) : 0.5;
+  if (ypct < 0) ypct = 0;
+  if (ypct > 1) ypct = 1;
+  var lo = parseFloat(lane.dataset.lo);
+  var hi = parseFloat(lane.dataset.hi);
+  if (!isFinite(lo) || !isFinite(hi)) { lo = 0; hi = 1; }
+  var value = lo + ypct * (hi - lo);
+  var localT = t - item.start;
+  var points = [];
+  lane.querySelectorAll(".tl-lane-pt").forEach(function (pt) {
+    if (String(pt.dataset.item) !== String(item.id)) return;
+    points.push([parseFloat(pt.dataset.t) - item.start, parseFloat(pt.dataset.value)]);
+  });
+  points.push([localT, value]);
+  fetch("/api/sets/" + root.dataset.set + "/items/" + item.id +
+        "/automation/" + encodeURIComponent(lane.dataset.lane), {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({points: points, curve: "linear"})
+  }).then(function (r) { if (r.ok) location.reload(); });
 });
 
 // Clicking a timeline block reveals the DJ controls for that item: the controls
