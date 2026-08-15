@@ -589,7 +589,10 @@ re-render-seed remedy — not a silent pass on an invisible RGBA still.
 `T3-4.1-not_uniform`:
 a still that is a single flat colour REJECTs `not_uniform` with measured
 pixel std at or below the floor and a re-render-seed remedy — not a
-silent pass on solid red (whole-array std used to). `T3-4.2-black_frames`: partial black frames while mean luma PASSes FLAG `black_frames` with a re-render-seed remedy — not a silent pass on a dead-sampler span. `T3-4.2-size_floor`: a clip under the byte floor REJECTs `size_floor` with measured bytes — not a silent pass on an empty container. `T3-4.3-duration`: a take at the wrong length REJECTs `duration` with measured/expected seconds. `T3-4.3-loudness`: a take off target FLAGs `loudness` with measured LUFS from `effects.measure_loudness`. `T3-4.2-sat`: a
+silent pass on solid red (whole-array std used to). `T3-4.2-luma`: a
+solid black clip REJECTs `luma` with measured mean Y below the floor
+and a re-render-seed remedy — not a silent pass on a dead-sampler
+black take. `T3-4.2-black_frames`: partial black frames while mean luma PASSes FLAG `black_frames` with a re-render-seed remedy — not a silent pass on a dead-sampler span. `T3-4.2-size_floor`: a clip under the byte floor REJECTs `size_floor` with measured bytes — not a silent pass on an empty container. `T3-4.2-luma`: a black clip REJECTs `luma` below `LUMA_FLOOR` with measured Y — not a silent pass on a dead sampler. `T3-4.3-duration`: a take at the wrong length REJECTs `duration` with measured/expected seconds. `T3-4.3-loudness`: a take off target FLAGs `loudness` with measured LUFS from `effects.measure_loudness`. `T3-4.2-sat`: a
 `channel_sat` FLAG names green garbage (NaN encode mode) with measured
 green dominance above the limit and a re-render-seed remedy — not a
 silent pass on a solid green clip. `T3-4.2-resolution`: a clip at the

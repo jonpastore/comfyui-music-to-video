@@ -618,6 +618,24 @@ def _stderr_events(path, filt, pattern):
     return re.findall(pattern, r.stderr)
 
 
+def measure_luma(path):
+    """Mean YAVG over frames via signalstats. RAISES if no readings.
+
+    TRD-3 §4.2 mean luma. Limited-range black sits near Y=16, below
+    LUMA_FLOOR (24). Real neon-noir content sits above. Never 0.0 on
+    no data — a missing reading raises.
+    """
+    vals = _readings(path, "signalstats", "lavfi.signalstats.YAVG")
+    mean = sum(vals) / len(vals)
+    dark = sum(1 for v in vals if v < LUMA_FLOOR)
+    return {
+        "mean": mean,
+        "n_frames": len(vals),
+        "n_dark": dark,
+        "min": min(vals),
+    }
+
+
 def measure_pixel_std(path):
     """Max per-channel spatial RGB std for not_uniform (TRD-3 §4.1).
 
@@ -1112,23 +1130,24 @@ def check_video(path, expect, kind="clip"):
                                    f"{av['audio']:.3f}s",
                                    round(gap, 3), 0.0, "s", remedy="re-assemble"))
 
-    # ---- pixels
+    # ---- pixels (T3-4.2-luma: mean YAVG above LUMA_FLOOR)
     try:
-        luma = _readings(path, "signalstats", "lavfi.signalstats.YAVG")
+        luma = measure_luma(path)
     except RuntimeError as e:
         out.append(finding(path, kind, "luma", FLAG, str(e).split("\n")[0]))
     else:
-        mean = sum(luma) / len(luma)
-        dark = sum(1 for v in luma if v < LUMA_FLOOR)
+        mean = luma["mean"]
+        dark = luma["n_dark"]
+        n = luma["n_frames"]
         out.append(finding(path, kind, "luma",
                            PASS if mean >= LUMA_FLOOR else REJECT,
-                           f"mean luma {mean:.1f} over {len(luma)} frames, "
+                           f"mean luma {mean:.1f} over {n} frames, "
                            f"{dark} of them below {LUMA_FLOOR}",
                            round(mean, 2), LUMA_FLOOR, "Y",
                            remedy="re-render with a different seed"))
         if dark and mean >= LUMA_FLOOR:
             out.append(finding(path, kind, "black_frames", FLAG,
-                               f"{dark} of {len(luma)} frames are below the black floor",
+                               f"{dark} of {n} frames are below the black floor",
                                dark, 0, "frames",
                                remedy="re-render with a different seed"))
 
