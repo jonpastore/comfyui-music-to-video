@@ -956,25 +956,35 @@ def h_transcribe(args, progress):
     if not lyrics.may_replace_lyrics(song, force=force):
         progress("keeping edited lyrics; re-transcribe explicitly to replace")
         return {"chars": len(song["lyrics"] or ""), "kept_edit": True}
-    ok, msg = lyrics.available()
-    if not ok:
-        raise RuntimeError(msg)
-    # ComfyUI and whisper share one 24 GB card and ComfyUI keeps its models
-    # resident, so a transcription that follows a render OOMs. Ask it to let go
-    # first; lyrics.transcribe falls back to CPU if that was not enough.
-    pipeline.free_vram(progress)
-    result = lyrics.transcribe(song["mp3_path"], progress)
+    try:
+        ok, msg = lyrics.available()
+        if not ok:
+            raise RuntimeError(msg)
+        # ComfyUI and whisper share one 24 GB card and ComfyUI keeps its models
+        # resident, so a transcription that follows a render OOMs. Ask it to let go
+        # first; lyrics.transcribe falls back to CPU if that was not enough.
+        pipeline.free_vram(progress)
+        result = lyrics.transcribe(song["mp3_path"], progress)
+    except Exception:
+        # T10-10: fetch failed is stored on the song so T2-8c can tell it
+        # from a genuine empty result. The job still fails. Content screens
+        # after a successful fetch are not fetch_failed.
+        db.store_lyrics(song["id"], "", source="transcription",
+                        status="fetch_failed")
+        raise
     text = lyrics.to_sections(result)
     # T10-18b: transcription into an xxx work is still a lyrics write.
     if db.one("SELECT id FROM storyboards WHERE song_id=? AND tier=?",
               song["id"], "xxx"):
         lyrics.screen(text, tier="xxx")
+    # T10-10: empty is a stored state, not a bare empty string.
+    status = lyrics.result_status(text)
     # T10-8: which backend produced it, and that it is a transcription.
     # store_lyrics also clears lyrics_edited (T10-9).
     db.store_lyrics(song["id"], text, source="transcription",
-                    backend=result.get("backend"))
+                    backend=result.get("backend"), status=status)
     return {"chars": len(text), "backend": result.get("backend"),
-            "replaced": force, "kept_edit": False}
+            "status": status, "replaced": force, "kept_edit": False}
 
 
 @jobs.handler("analyse")

@@ -254,6 +254,33 @@ def _screen_lyrics(text, *, tier=None, where="lyrics"):
     return guardrail.check_text(text, where, tier="xxx")
 
 
+# T10-10: result_status / section_state name empty vs fetch_failed. The
+# stub mirrors lyrics.py so h_transcribe can call them without the real
+# module.
+def _lyrics_result_status(text, *, failed=False):
+    if failed:
+        return "fetch_failed"
+    if not (text or "").strip():
+        return "empty"
+    return "ok"
+
+
+def _lyrics_section_state(song):
+    if song is None:
+        return None
+    try:
+        status = song["lyrics_status"] if "lyrics_status" in song.keys() else None
+    except (TypeError, AttributeError, KeyError):
+        status = song.get("lyrics_status") if hasattr(song, "get") else None
+    if status in ("ok", "empty", "fetch_failed"):
+        return status
+    try:
+        text = song["lyrics"] if "lyrics" in song.keys() else ""
+    except (TypeError, AttributeError, KeyError):
+        text = song.get("lyrics", "") if hasattr(song, "get") else ""
+    return _lyrics_result_status(text or "")
+
+
 _stub("lyrics",
       available=lambda: (True, "stub ready"),
       # backend is T10-8 provenance; h_transcribe stores it via db.store_lyrics.
@@ -268,6 +295,10 @@ _stub("lyrics",
       estimate_duration=lambda mp3: 12.3,
       may_replace_lyrics=_may_replace_lyrics,
       screen=_screen_lyrics,
+      result_status=_lyrics_result_status,
+      section_state=_lyrics_section_state,
+      OK="ok", EMPTY="empty", FETCH_FAILED="fetch_failed",
+      LYRICS_STATUSES=("ok", "empty", "fetch_failed"),
       REPLACE_WARNING=(
           "Re-transcribe replaces the current lyrics, including any edits."))
 

@@ -416,6 +416,10 @@ MIGRATIONS = [
     # T10-9: operator edit of transcribed lyrics. A re-fetch must not discard
     # the correction; only an explicit re-transcribe (force) clears this.
     "ALTER TABLE songs ADD COLUMN lyrics_edited INTEGER DEFAULT 0",
+    # T10-10: empty vs fetch_failed are stored states, not a bare empty
+    # string. T2-8c's section coverage cannot tell them apart otherwise.
+    # Values: ok | empty | fetch_failed. NULL on every row that predates this.
+    "ALTER TABLE songs ADD COLUMN lyrics_status TEXT",
     # T2-7: which model was asked when this version was produced.
     "ALTER TABLE prompt_versions ADD COLUMN model TEXT",
 ]
@@ -768,29 +772,42 @@ def upsert_song(slug, **f):
 # transcription | supplied — a free-text source would let T10-8 pass for a
 # row that recorded something else.
 LYRICS_SOURCES = ("transcription", "supplied")
+# T10-10: empty outcomes are named. A free-text status would let the
+# criterion pass for a row that recorded something else.
+LYRICS_STATUSES = ("ok", "empty", "fetch_failed")
 
 
-def store_lyrics(song_id, text, *, source, backend=None):
-    """Persist lyrics with provenance (T10-8) and edit flag (T10-9).
+def store_lyrics(song_id, text, *, source, backend=None, status=None):
+    """Persist lyrics with provenance (T10-8), edit flag (T10-9), status (T10-10).
 
-    A transcription must name the backend that produced it. Supplied text
-    clears lyrics_backend so the two remain distinguishable on the stored row.
-    Supplied text is a human edit (lyrics_edited=1); a transcription clears
-    that flag so a later re-fetch may overwrite until the operator edits again.
+    A transcription must name the backend that produced it, except when
+    status is fetch_failed (the backend may have exploded before naming
+    itself). Supplied text clears lyrics_backend so the two remain
+    distinguishable on the stored row. Supplied text is a human edit
+    (lyrics_edited=1); a transcription clears that flag so a later re-fetch
+    may overwrite until the operator edits again. status defaults from the
+    text: blank → empty, non-blank → ok. fetch_failed is never inferred —
+    it must be passed explicitly.
     """
     if source not in LYRICS_SOURCES:
         raise ValueError(f"unknown lyrics source: {source!r}")
+    if status is None:
+        status = "empty" if not (text or "").strip() else "ok"
+    if status not in LYRICS_STATUSES:
+        raise ValueError(f"unknown lyrics status: {status!r}")
     if source == "transcription":
-        if not backend:
+        if not backend and status != "fetch_failed":
             raise ValueError("transcription requires a backend")
         backend_val = backend
         edited = 0
     else:
         backend_val = None
         edited = 1
+    if status == "fetch_failed":
+        text = ""
     run("UPDATE songs SET lyrics=?, lyrics_source=?, lyrics_backend=?, "
-        "lyrics_edited=? WHERE id=?",
-        text, source, backend_val, edited, song_id)
+        "lyrics_edited=?, lyrics_status=? WHERE id=?",
+        text, source, backend_val, edited, status, song_id)
 
 
 def jset(row, key="meta_json"):

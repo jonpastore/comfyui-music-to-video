@@ -1032,6 +1032,16 @@ text ("Re-transcribe replaces the current lyrics, including any edits") and
 a confirm before the POST, so the destructive half is named before it runs —
 same *what this will do* shape as §7b.2, not a silent second save.
 
+### 7b.4c Empty lyrics is not one blank box (`T10-10`)
+
+`T10-10` is built. An empty lyrics box is not one state: `lyrics_status=empty`
+means the fetch finished and found nothing; `lyrics_status=fetch_failed`
+means the fetch failed. Both can show a blank textarea — the status chip
+(or equivalent) reads `lyrics_status` / `lyrics.section_state`, not whether
+the string is empty. A failed job still fails; the song row keeps the
+reason so storyboard section coverage does not treat "instrumental" and
+"ASR died" as the same blank.
+
 ### 7b.5 Model-authored text has to be visually distinct, everywhere
 
 `T10-11` marks it in the payload; this is what the payload is for. **One

@@ -107,7 +107,10 @@ still not shipped (`T8-12`, provisional by absence).
    is stored as supplied with no backend, and the two remain distinguishable.
    **`T10-9` is built** — a saved lyric edit survives a re-fetch;
    `POST /songs/{id}/retranscribe` is the explicit replace path and says it
-   will replace. `T10-10` (empty is explicit) remains.
+   will replace. **`T10-10` is built** — empty lyrics and fetch-failed are
+   two stored statuses (`lyrics_status`), not a bare empty string;
+   `lyrics.section_state` is what T2-8c's section coverage reads
+   (`studio/test_t10_10_empty_lyrics.py`).
 4. **TRD-10's advice rules.** `T10-2` (paid fallback marked in the record),
    `T10-11` (payload mark), `T10-12` (accept writes, records the model),
    `T10-13` (`classify_sheet` text on a finding, never a pass/fail),

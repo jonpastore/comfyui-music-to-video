@@ -226,6 +226,38 @@ def interface_payload(result):
     }
 
 
+# T10-10: empty outcomes are named. T2-8c's section coverage cannot tell
+# "no lyrics" from "fetch failed" if both are a bare empty string.
+OK = "ok"
+EMPTY = "empty"
+FETCH_FAILED = "fetch_failed"
+LYRICS_STATUSES = (OK, EMPTY, FETCH_FAILED)
+
+
+def result_status(text, *, failed=False):
+    """Classify a lyrics outcome for storage (T10-10)."""
+    if failed:
+        return FETCH_FAILED
+    if not (text or "").strip():
+        return EMPTY
+    return OK
+
+
+def section_state(song):
+    """What T2-8c / section coverage sees for a song row (T10-10).
+
+    empty and fetch_failed stay distinct even when lyrics text is blank.
+    """
+    if song is None:
+        return None
+    keys = song.keys() if hasattr(song, "keys") else song
+    status = song["lyrics_status"] if "lyrics_status" in keys else None
+    if status in LYRICS_STATUSES:
+        return status
+    text = song["lyrics"] if "lyrics" in keys else None
+    return result_status(text or "")
+
+
 # T10-9: a human edit of a Whisper draft must not be discarded by a later
 # re-fetch. Explicit re-transcribe (force=True) is the only replace path, and
 # the surface that offers it must carry this wording.

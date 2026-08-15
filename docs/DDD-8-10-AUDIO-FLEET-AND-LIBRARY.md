@@ -248,6 +248,20 @@ transcription `store_lyrics`, and writes the new draft. The song page shows
 including any edits") next to the control so the act says what it will do
 before it runs.
 
+### 4.2a2 Empty vs fetch-failed (T10-10)
+
+An empty result is a stored status, not a bare empty string. A song with
+no lyrics (`lyrics_status=empty`) and a song whose fetch failed
+(`lyrics_status=fetch_failed`) are different rows even when `lyrics` is
+blank — T2-8c's section coverage cannot tell them apart otherwise.
+`lyrics.result_status` classifies failed / blank / present;
+`lyrics.section_state` is the shared read over a song row.
+`db.store_lyrics` takes `status` (`LYRICS_STATUSES`: `ok` | `empty` |
+`fetch_failed`); `fetch_failed` is never inferred from blank text.
+`h_transcribe` writes `empty` on a silent transcription and
+`fetch_failed` on exception (job still fails). A free-text status would
+let the criterion pass for a row that recorded something else.
+
 ### 4.2b The advice rules are a payload contract, not UI copy
 
 `T10-11` marks model-authored strings **in the payload**, the same shape as
@@ -389,7 +403,8 @@ fields refuse it on the HTTP surface
                          ->  the picked/unpicked distinction (T8-2)
     bulk edit (T10-3…T10-7 built)
     vision provider record (T10-2 built)
-    lyrics provenance (T10-8 built) ->  T10-9 (edit survives re-fetch, built)
+    lyrics provenance (T10-8 built) ->  T10-10 empty vs fetch-failed (built)
+                                    ->  T10-9 (edit survives re-fetch, built)
     advice labelling (T10-11..T10-15 built) over the four live modules
     image/audio guard split (T10-16 built; cites T8-4)
 
