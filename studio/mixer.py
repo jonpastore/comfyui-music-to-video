@@ -40,6 +40,8 @@ def probe(path):
         "has_video": vstream is not None,
         # TRD-3 §4.3 T3-4.3-sr: rate as requested. 0 when no audio stream.
         "sample_rate": int(astream["sample_rate"]) if astream and astream.get("sample_rate") else 0,
+        # T3-4.3-ch: channel count as requested. Always present; 0 when no audio.
+        "channels": int(astream["channels"]) if astream and astream.get("channels") is not None else 0,
     }
 
 

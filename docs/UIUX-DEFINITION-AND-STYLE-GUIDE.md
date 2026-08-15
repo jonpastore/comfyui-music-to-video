@@ -575,7 +575,10 @@ green dominance above the limit and a re-render-seed remedy — not a
 silent pass on a solid green clip. `T3-4.3-sr`: a take at the wrong
 sample rate REJECTs `sample_rate` with measured/expected Hz and a
 re-render remedy — not a silent pass when the request was 48000 and
-the file is 44100. `T3-4.4-av`: an assembled song whose
+the file is 44100. `T3-4.3-ch`: a take whose channel
+count misses the request REJECTs `channels` with measured/expected in
+`ch` and a re-render remedy — not a silent pass on mono-when-stereo-was-
+asked. `T3-4.4-av`: an assembled song whose
 audio and video stream durations disagree FLAGs `av_sync` with measured
 gap in seconds and a re-assemble remedy — not a silent pass when the
 tracks drift. `T3-20`: the wording

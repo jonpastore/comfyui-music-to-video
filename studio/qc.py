@@ -238,6 +238,7 @@ CHECK_REMEDY_CLASS = {
     "true_peak": REMEDY_LOUDNORM,
     "sample_rate": REMEDY_RERENDER,
     "silence": REMEDY_RERENDER,
+    "channels": REMEDY_RERENDER,
     "not_uniform": REMEDY_RERENDER_SEED,
     "not_blank": REMEDY_RERENDER_SEED,
     IDENTITY_LOOK: REMEDY_EDIT_TEXT,
@@ -1068,6 +1069,15 @@ def check_audio(path, expect):
                                PASS if got == want else REJECT,
                                f"{got} Hz against {want} Hz requested",
                                got, want, "Hz", remedy="re-render"))
+
+    # T3-4.3-ch: channel count as requested. Probe owns the reading.
+    if expect.get("channels") is not None:
+        got = int(info["channels"])
+        want = int(expect["channels"])
+        out.append(finding(path, "audio", "channels",
+                           PASS if got == want else REJECT,
+                           f"{got} channel(s) against {want} requested",
+                           got, want, "ch", remedy="re-render"))
 
     # Loudness through effects.py -- the ONE implementation. TRD-1 T1-25.
     try:

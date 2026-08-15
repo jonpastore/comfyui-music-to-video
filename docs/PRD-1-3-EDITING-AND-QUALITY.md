@@ -163,7 +163,10 @@ longer the phase to defer — `docs/PLAN-TRD-4-7.md` §4 is updated to match.
 encode mode) above `CHANNEL_SAT_LIMIT`, PASSes testsrc2/gray/black,
 `test_t3_4_2_sat.py`; **`T3-4.3-sr` built** — `check_audio` sample
 rate as requested via `mixer.probe`: matching Hz PASSes, mismatch
-REJECTs, no expect emits nothing, `test_t3_4_3_sr.py`; **`T3-4.4-av` built** — assembled-song
+REJECTs, no expect emits nothing, `test_t3_4_3_sr.py`; **`T3-4.3-ch` built** — `mixer.probe` exposes
+`channels`; `check_audio` `channels` when `expect.channels` is set
+(stereo vs 2 PASS, mono vs 2 REJECT, unit `ch`), `test_t3_4_3_ch.py`;
+**`T3-4.4-av` built** — assembled-song
 `av_sync` / `measure_av_durations`: matching A/V streams PASS within
 `DURATION_TOL_S`, a 1s gap FLAGs, clips without `want_audio` skip,
 `test_t3_4_4_av.py`; **`T3-8` built** — `expect_interpolated`
