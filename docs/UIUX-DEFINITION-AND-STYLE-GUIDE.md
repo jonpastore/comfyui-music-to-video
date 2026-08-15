@@ -506,7 +506,9 @@ plus a disabled “override” checkbox was a status light pretending to be a
 control (2026-08-14). Nothing is pre-ticked: G used to be the opening rating
 because it is first alphabetically, and front used to stand in for an empty
 view list (`T4-3`). Each ticked cell has its own prompt row so an edit on
-front cannot land on back (`T7-19`). Clipboard paste and drop add base
+front cannot land on back (`T7-19`). Two views of one rating share identity,
+body and wardrobe; only the framing sentence differs, plus the nude swap on
+a nude cell (`T7-4`). Clipboard paste and drop add base
 photographs; they do not invent bases.
 
 **Rendered sheets and the prompt editor share one shape.** Tier tabs, then a

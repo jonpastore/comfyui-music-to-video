@@ -79,6 +79,13 @@ head-and-shoulders `portrait`. **A view must be able to override a backdrop
 clause, not only add to it** — which is why `T7-5` and `T7-14` (backdrop becomes
 a versioned prompt) belong in the same phase.
 
+**`T7-4` is the compose-diff on that table.** Two views of one clothing family
+that share a backdrop omit must compose to the same remainder once each
+framing sentence is stripped; a nude pair of that family uses the wardrobe
+swap instead of the album outfit. The check is `studio/test_t7_4_framing.py`,
+through `prompt_for` and `default_anchor_prompt`. A view-only extra clause
+makes the remainders diverge. Portrait/seated omit is `T7-5`, not this.
+
 ## 3. The four new prompt types
 
 `prompts.py` carries 9 types today and its docstring states the extension rule —

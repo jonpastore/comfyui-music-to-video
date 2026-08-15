@@ -271,7 +271,7 @@ been seen red is a claim about a check, not about the code. Commits are on
 | `T7-1` one view table | **partial** | — | `NUDE_VIEWS` is derived via `make_anchor.is_nude_view()`, one source. `ANCHOR_VIEWS` (labels) and `DEFAULT_VIEWS` (framing) are still two places, so adding a view is still two edits |
 | `T7-2` nudity gating derived | **partial** | — | derivation exists; `prompt_for` still tests `view in NUDE_VIEWS`, which is enumerated from `DEFAULT_VIEWS`, so a profile-supplied nude view is not swapped. Live gap |
 | `T7-3` new views | **not built** | — | §9.1 |
-| `T7-4` framing is the only difference | **not built** | — | needs the view table |
+| `T7-4` framing is the only difference | **built** | — | compose two views of one tier via `prompt_for` / `default_anchor_prompt`; remainders match after stripping the framing clause. Nude pair uses the wardrobe swap. Mutation: extra clause on `back` only → `test_t7_4_framing.py` red |
 | `T7-5` `portrait` overrides head-to-toe | **not built** | — | §9.1 |
 | `T7-6` anchor usable as reference | **built** | `d315c6f` | with the reference ticked, `gen_anchor`'s images list is exactly `[the anchor's path]`. Mutations: borrowed-row guard dropped → the anchor's image deleted; cascade skipped → reference left pointing at a deleted file |
 | `T7-7` identity held across views | **NOT MEASURED** | — | the image differential this asks for has never been run. Needs `T7-3` and a GPU render. **The single largest unproven claim in this document** |

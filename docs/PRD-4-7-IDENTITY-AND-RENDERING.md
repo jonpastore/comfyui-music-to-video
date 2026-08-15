@@ -161,8 +161,9 @@ coordinator (TRD-6 §7).
    each do.
 3. **Prompt surface area grows faster than the checks on it.** Four new types ×
    ten views is a lot of composed text, and every combination is a chance at
-   §3.3's contradiction. `T7-4` is the check that keeps it honest and it was
-   unscheduled until review.
+   §3.3's contradiction. `T7-4` is the check that keeps it honest: two views of
+   one tier compose to the same remainder but for the framing clause (and the
+   nude wardrobe swap). The compose-diff is `studio/test_t7_4_framing.py`.
 4. **Two sessions in one tree.** B holds every anchor source file. The plan is a
    recommendation to whoever holds the file, and `SESSIONS.md` settles a
    disagreement *before* an edit.
