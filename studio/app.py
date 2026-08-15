@@ -2093,6 +2093,64 @@ async def api_song_automation_write(id: int, lane: str, request: Request):
     return JSONResponse(_song_lane_payload(item, lane, stored, curve))
 
 
+def _song_editor_mix_items(song_id):
+    """One-item list for the song editor in mix_audio / set_duration shape.
+
+    T8-14: same fields _set_render_items stamps on a set item (audio path,
+    trim, effects_json, automation fragments) so prediction and render walk
+    the same document. No editor row yet is still one plain track.
+    """
+    song = get_song_or_404(song_id)
+    mp3 = song["mp3_path"]
+    if not mp3 or not os.path.isfile(mp3):
+        raise HTTPException(400, "no audio on this song")
+    item_id = automation.editor_item(song_id, create=False)
+    if item_id is None:
+        return [{"audio": mp3, "transition": "cut", "secs": 0.0, "hold": 0.0,
+                 "in_secs": None, "out_secs": None, "gain_db": 0.0,
+                 "effects_json": None,
+                 "automation": {"frags": [], "suppress_loudnorm": False}}]
+    row = db.one("SELECT * FROM set_items WHERE id=?", item_id)
+    return [{"audio": mp3, "transition": row["transition"] or "cut",
+             "secs": row["secs"] or 0.0, "hold": _hold_of(row),
+             "in_secs": row["in_secs"], "out_secs": row["out_secs"],
+             "gain_db": row["gain_db"] or 0.0,
+             "effects_json": row["effects_json"],
+             "automation": automation.item_audio(item_id)}]
+
+
+@app.get("/api/songs/{id}/editor/duration")
+def api_song_editor_duration(id: int):
+    """T8-14: predicted length for the song editor, via mixer.set_duration."""
+    items = _song_editor_mix_items(id)
+    try:
+        predicted = mixer.set_duration(items, key="audio")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return JSONResponse({"song_id": id, "predicted": predicted})
+
+
+@app.post("/api/songs/{id}/editor/render")
+def api_song_editor_render(id: int):
+    """T8-14: emit prediction first, then mix_audio. Predicted length is
+    the rendered length to mixer.SET_DURATION_TOLERANCE (imported by the
+    criterion's check, never restated here)."""
+    song = get_song_or_404(id)
+    items = _song_editor_mix_items(id)
+    try:
+        predicted = mixer.set_duration(items, key="audio")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    outdir = os.path.join(db.DATA, "audio", song["slug"])
+    os.makedirs(outdir, exist_ok=True)
+    out = os.path.join(outdir, f"editor_{int(time.time() * 1000)}.mp3")
+    mixer.mix_audio(items, out)
+    duration = mixer.probe(out)["duration"]
+    return JSONResponse({
+        "song_id": id, "predicted": predicted, "duration": duration, "path": out,
+    })
+
+
 @app.get("/songs/{id}", response_class=HTMLResponse)
 def song_page(request: Request, id: int):
     song = get_song_or_404(id)

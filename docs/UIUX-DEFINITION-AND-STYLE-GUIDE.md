@@ -952,6 +952,13 @@ The browser is a view. Drawing the lane still belongs on the set timeline
 (§5: still open); this surface is how a song-level edit reaches the same
 rows. The one-item `song_editor` set is not on the shelf.
 
+`T8-14`: predicted length is `mixer.set_duration` on that one-item document
+(`GET /api/songs/{id}/editor/duration`). A render (`POST
+/api/songs/{id}/editor/render`) emits `predicted` first, then the file;
+the probed length matches within `mixer.SET_DURATION_TOLERANCE`. Same
+number the set editor already shows as running length — not a second
+arithmetic path.
+
 ## 8. How this document is verified
 
 A style guide is falsifiable or it is decoration.

@@ -90,7 +90,10 @@ still not shipped (`T8-12`, provisional by absence).
    (built); `T8-11` is built — `h_audio` writes which voice produced the take,
    or that none did. **`T8-13` is built** — the song editor reads and writes
    `automation` through `automation.save` / `item_audio` (`GET/POST
-   /api/songs/{id}/automation/{lane}`); `T8-14` / `T8-15` remain.
+   /api/songs/{id}/automation/{lane}`). **`T8-14` is built** — predicted
+   length equals rendered length within `mixer.SET_DURATION_TOLERANCE`
+   (`GET/POST /api/songs/{id}/editor/duration` and `.../editor/render`);
+   `T8-15` remains.
 3. **TRD-10's bulk edit.** `T10-6` (one transaction) is built. `T10-3`/`T10-4`/`T10-5`/`T10-7` remain.
 3. **TRD-10's bulk edit.** `T10-3`…`T10-7` are built: blank leaves alone, toggle-all is the shown set, invalid refuses the batch, one transaction, pre-write count equals rows changed.
 4. **TRD-10's advice rules.** `T10-11` (payload mark), `T10-12` (accept writes,

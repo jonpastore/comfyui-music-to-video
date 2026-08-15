@@ -97,6 +97,9 @@ items, automation, predicted duration, rounding deltas), `/api/sets/{id}/items`,
 decimated** curve — the client re-reads what was kept, §5.3),
 `GET/POST /api/songs/{id}/automation/{lane}` (T8-13: same `automation.save` /
 `item_audio` path, one-item `song_editor` set, not a second curve model),
+`GET /api/songs/{id}/editor/duration` and `POST /api/songs/{id}/editor/render`
+(T8-14: `mixer.set_duration` then `mixer.mix_audio`; predicted equals
+rendered within `mixer.SET_DURATION_TOLERANCE`),
 `/api/songs/{id}/peaks?z=` (`pairs` plus `reason` when empty, `T1-15`),
 `/api/sets/{id}/peaks?z=`, `/api/sets/{id}/preview` (returns `is_proxy` and
 `not_applied`), `/api/sets/{id}/preview/render?at=&secs=`
