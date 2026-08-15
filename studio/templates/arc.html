@@ -26,8 +26,8 @@
     Set one on the <a href="/config">Config page</a> first.</p>
   {% endif %}
   <form method="post" action="/playlists/{{ playlist.id }}/arc" class="stack-form">
-    <label>Direction &mdash; optional, plain language
-      <textarea name="direction" rows="2"
+    <label>Theme &mdash; required, what this record is about
+      <textarea name="theme" rows="2" required
         placeholder="it should end somewhere colder than it started">{{ row.prompt if row else "" }}</textarea>
     </label>
     <div class="field-row">
@@ -53,14 +53,29 @@
         </select>
       </label>
       <button type="submit" {% if not backends %}disabled{% endif %}>
-        {{ "Rewrite the arc" if arc else "Write the arc" }}</button>
+        {{ "Propose a rewrite" if arc else "Propose the arc" }}</button>
     </div>
-    {% if arc %}
-    <p class="hint">Rewriting REPLACES the stored arc &mdash; one story per album, because
-      thirty-one storyboards need one answer.</p>
-    {% endif %}
+    <p class="hint">The wand writes a proposal. Accept saves it; reject leaves the
+      previous arc on disk. Applying per-song summaries to more than one song
+      needs confirmation.</p>
   </form>
 </section>
+
+{% if proposal and proposal.premise %}
+<section class="card model-authored">
+  <h2>Proposal</h2>
+  <p class="hint"><span class="tag">model</span> Not saved until you accept.</p>
+  <p>{{ proposal.premise }}</p>
+  <div class="field-row">
+    <form method="post" action="/playlists/{{ playlist.id }}/arc/accept">
+      <button type="submit">Accept</button>
+    </form>
+    <form method="post" action="/playlists/{{ playlist.id }}/arc/reject">
+      <button type="submit">Reject</button>
+    </form>
+  </div>
+</section>
+{% endif %}
 
 {% if arc %}
 <section class="card">
@@ -103,6 +118,23 @@
   {% endif %}
 </section>
 {% endfor %}
+{% if titles %}
+<section class="card">
+  <h2>Apply per-song summaries</h2>
+  <p class="hint">Writes each named song's beat into the album's
+    <code>applied/</code> folder. More than one song needs the confirmation
+    box &mdash; the wand does not rewrite an album unasked.</p>
+  <form method="post" action="/playlists/{{ playlist.id }}/arc/apply" class="stack-form">
+    <label>Song ids
+      <input type="text" name="song_ids"
+        value="{% for sid in titles %}{{ sid }}{% if not loop.last %},{% endif %}{% endfor %}">
+    </label>
+    <label><input type="checkbox" name="confirm" value="1">
+      Confirm writing every named song</label>
+    <button type="submit">Apply</button>
+  </form>
+</section>
+{% endif %}
 {% else %}
 <p class="empty">No arc yet.</p>
 {% endif %}

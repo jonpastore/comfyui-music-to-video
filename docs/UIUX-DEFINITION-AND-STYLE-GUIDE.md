@@ -323,6 +323,11 @@ states track length and requires scene durations to sum to it (`T2-14c`).
 Generated scenes tile the song (`T2-8b`): starts ascend, each end is the
 next start, first is 0, last is duration ± 0.05 s; a gap or overlap is
 refused at `validate`.
+The album arc page requires a **theme** before the wand runs (`T2-14`).
+What comes back is a **proposal** (`--muted` plus a `model` tag, §7b.5),
+not a saved story: Accept writes the committed pair, Reject leaves the
+previous file on disk (`T2-15`). Applying per-song summaries to more
+than one song is a confirmation checkbox, not a default (`T2-16`).
 A generated storyboard carries a distinctive string from the album arc
 when one exists, and does not when the arc is absent (`T2-20`).
 At `xxx`, no scene `image_prompt` or `video_motion_prompt` carries the

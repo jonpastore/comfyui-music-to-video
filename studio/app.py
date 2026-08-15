@@ -1062,16 +1062,14 @@ def h_arc(args, progress):
     data, used = arc.generate(pl["name"], songs, direction=args.get("direction", ""),
                               backend=args.get("backend"), model=args.get("model"),
                               progress=progress, transitions=mixer.TRANSITIONS)
-    outdir = os.path.join(db.DATA, "arcs", safe_name(pl["name"]))
+    outdir, slug = album_arc_dir(pl)
     titles = {s["id"]: s["title"] for s in songs}
-    json_path, md_path = arc.write(data, outdir, safe_name(pl["name"]), titles)
-    db.run("""INSERT INTO arcs (playlist_id, json_path, md_path, model, prompt, created)
-              VALUES (?,?,?,?,?,?)
-              ON CONFLICT(playlist_id) DO UPDATE SET json_path=excluded.json_path,
-              md_path=excluded.md_path, model=excluded.model, prompt=excluded.prompt,
-              created=excluded.created""",
-           pl["id"], json_path, md_path, used, args.get("direction", ""), time.time())
-    return {"songs": len(data["songs"]), "acts": len(data["acts"]), "model": used}
+    data["_used"] = used
+    data["_titles"] = titles
+    # T2-15: the job writes a proposal. Accept is what lands the committed pair.
+    path = arc.write_proposal(data, outdir, slug)
+    return {"songs": len(data["songs"]), "acts": len(data["acts"]),
+            "model": used, "proposal": path}
 
 
 def album_arc(album):
@@ -6187,13 +6185,19 @@ def reorder_playlist(id: int, order: str = Form(...)):
     return RedirectResponse("/playlists", status_code=303)
 
 
+def album_arc_dir(pl):
+    slug = safe_name(pl["name"])
+    return os.path.join(db.DATA, "arcs", slug), slug
+
+
 @app.post("/playlists/{id}/arc")
-def start_arc(id: int, direction: str = Form(""), backend: str = Form(""),
-              model: str = Form("")):
-    """Queue the album's story arc. One job, one request, every track."""
+@app.post("/playlists/{id}/arc/propose")
+def start_arc(id: int, theme: str = Form(""), direction: str = Form(""),
+              backend: str = Form(""), model: str = Form("")):
+    """Queue a proposal for the album's story arc. Not saved until accepted."""
     pl = get_playlist_or_404(id)
     try:
-        direction = arc.check_direction(direction)
+        direction = arc.require_theme(theme or direction)
     except ValueError as e:
         raise HTTPException(400, str(e))
     if not db.one("SELECT 1 FROM playlist_items WHERE playlist_id=?", id):
@@ -6230,6 +6234,8 @@ def view_arc(request: Request, id: int):
             data = json.load(f)
     if row and row["md_path"] and os.path.isfile(row["md_path"]):
         md = open(row["md_path"]).read()
+    outdir, slug = album_arc_dir(pl)
+    proposal = arc.load_proposal(outdir, slug) or {}
     titles = {r["id"]: r["title"] for r in db.q(
         """SELECT s.id, s.title FROM playlist_items pi JOIN songs s ON s.id = pi.song_id
            WHERE pi.playlist_id=? ORDER BY pi.position""", id)}
@@ -6247,7 +6253,63 @@ def view_arc(request: Request, id: int):
             defaults[b] = ""
     return templates.TemplateResponse(request, "arc.html", {
         "playlist": pl, "arc": data, "row": row, "md": md, "titles": titles,
-        "backends": have, "models": models, "defaults": defaults})
+        "proposal": proposal, "backends": have, "models": models, "defaults": defaults})
+
+
+@app.post("/playlists/{id}/arc/accept")
+def accept_arc(id: int):
+    """T2-15: accepting is the write. The proposal is discarded after."""
+    pl = get_playlist_or_404(id)
+    outdir, slug = album_arc_dir(pl)
+    data = arc.load_proposal(outdir, slug)
+    if not data:
+        raise HTTPException(400, "there is no arc proposal to accept")
+    used = data.pop("_used", "")
+    titles = data.pop("_titles", None) or {
+        r["id"]: r["title"] for r in db.q(
+            """SELECT s.id, s.title FROM playlist_items pi JOIN songs s ON s.id = pi.song_id
+               WHERE pi.playlist_id=? ORDER BY pi.position""", id)}
+    json_path, md_path = arc.commit_proposal(data, outdir, slug, titles)
+    db.run("""INSERT INTO arcs (playlist_id, json_path, md_path, model, prompt, created)
+              VALUES (?,?,?,?,?,?)
+              ON CONFLICT(playlist_id) DO UPDATE SET json_path=excluded.json_path,
+              md_path=excluded.md_path, model=excluded.model, prompt=excluded.prompt,
+              created=excluded.created""",
+           pl["id"], json_path, md_path, used, data.get("direction", ""), time.time())
+    arc.discard_proposal(outdir, slug)
+    return RedirectResponse(f"/playlists/{id}/arc", status_code=303)
+
+
+@app.post("/playlists/{id}/arc/reject")
+def reject_arc(id: int):
+    """T2-15: reject deletes the proposal and does not touch the committed files."""
+    pl = get_playlist_or_404(id)
+    outdir, slug = album_arc_dir(pl)
+    if arc.load_proposal(outdir, slug) is None:
+        raise HTTPException(400, "there is no arc proposal to reject")
+    arc.discard_proposal(outdir, slug)
+    return RedirectResponse(f"/playlists/{id}/arc", status_code=303)
+
+
+@app.post("/playlists/{id}/arc/apply")
+def apply_arc(id: int, song_ids: str = Form(""), confirm: str = Form("")):
+    """T2-16: more than one song is a confirmation, not a default."""
+    pl = get_playlist_or_404(id)
+    row = db.one("SELECT * FROM arcs WHERE playlist_id=?", id)
+    if not row or not row["json_path"] or not os.path.isfile(row["json_path"]):
+        raise HTTPException(400, "accept an arc before applying it to songs")
+    with open(row["json_path"]) as f:
+        data = json.load(f)
+    ids = [int(x) for x in song_ids.replace(" ", "").split(",") if x.strip().isdigit()]
+    if not ids:
+        raise HTTPException(400, "name the songs to write")
+    outdir, _slug = album_arc_dir(pl)
+    try:
+        arc.apply_summaries(data, outdir, ids,
+                            confirm=confirm.lower() in ("1", "true", "yes", "on"))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return RedirectResponse(f"/playlists/{id}/arc", status_code=303)
 
 
 def _playlist_tracks(pid):

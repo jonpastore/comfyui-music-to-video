@@ -224,7 +224,11 @@ order and take the dependencies from here.
 6. `T2-8b`/`T2-8c` tiling and section coverage, then the wand flows (§4.1–4.3),
    the time meter (§5.1), casting (§5.3). **`T2-8b` built**: `_compose`
    stamps scene `start`/`end` so they tile `[0, duration]`; `validate`
-   refuses a gap or overlap (`test_t2_8b.py`). **`T2-20` built**: a distinctive
+   refuses a gap or overlap (`test_t2_8b.py`). **`T2-14`/`T2-15`/`T2-16` built**:
+   the arc wand refuses an empty theme and runs with a non-empty one; reject
+   leaves the previous committed file; accept saves; applying more than one
+   song needs confirmation and then writes exactly those songs (`test_t2_14_arc_wand.py`).
+   **`T2-20` built**: a distinctive
    arc string appears in the generated board and is absent when the arc is.
    **`T2-21` built**: at `xxx`, no scene `image_prompt` or
    `video_motion_prompt` carries the mainstream lock, and the tier's
@@ -235,7 +239,7 @@ order and take the dependencies from here.
    against song length and flags a miss beyond `SCENE_TIME_TOLERANCE`.
    **`T2-24` built**: the same meter reports this song's `clip_seconds`
    from `build_song.clip_seconds(scene_seconds)`; 15 s and 30 s on one
-   song yield two lengths. Remaining: `T2-8c`, §4 wands (`T2-14`…`T2-19`),
+   song yield two lengths. Remaining: `T2-8c`, §4.2–4.3 wands (`T2-17`…`T2-19`),
    `T2-25`, and casting.
 7. Per-scene model choice, W2 (`T2-42`…`T2-48`) — last, because `T2-45` needs
    `models.where()`'s three-valued answer respected at enqueue and `T2-48` needs

@@ -96,6 +96,19 @@ def check_direction(direction):
     return text
 
 
+def require_theme(theme):
+    """T2-14: the wand will not run without a theme.
+
+    check_direction still allows empty so a stored arc can be re-read; the
+    wand is the one that must ask first. A blank or whitespace theme is
+    the generic arc the criterion exists to stop.
+    """
+    text = check_direction(theme)
+    if not text:
+        raise ValueError("the arc wand needs a theme — empty produces a generic arc")
+    return text
+
+
 def validate(raw, song_ids, transitions):
     """Shape, membership and screening. Returns a CLEAN arc, or raises.
 
@@ -173,7 +186,7 @@ def validate(raw, song_ids, transitions):
 def generate(album, songs, direction="", backend=None, model=None, progress=None,
              transitions=("fade", "dissolve", "wipe", "cut", "black")):
     """Ask a model for the arc, screen it, return (arc, "backend/model")."""
-    direction = check_direction(direction)
+    direction = require_theme(direction)
     if not songs:
         raise ValueError("this album has no songs to write an arc for")
     progress = progress or (lambda m: None)
@@ -225,6 +238,61 @@ def write(arc, outdir, slug, titles=None):
     with open(md_path, "w") as f:
         f.write(to_md(arc, titles))
     return json_path, md_path
+
+
+def proposal_json_path(outdir, slug):
+    return os.path.join(outdir, f"{slug}_arc.proposal.json")
+
+
+def write_proposal(arc, outdir, slug):
+    """T2-15: a proposal lives beside the committed files and is not them."""
+    os.makedirs(outdir, exist_ok=True)
+    path = proposal_json_path(outdir, slug)
+    with open(path, "w") as f:
+        json.dump(arc, f, indent=2)
+    return path
+
+
+def load_proposal(outdir, slug):
+    path = proposal_json_path(outdir, slug)
+    if not os.path.isfile(path):
+        return None
+    with open(path) as f:
+        return json.load(f)
+
+
+def discard_proposal(outdir, slug):
+    path = proposal_json_path(outdir, slug)
+    if os.path.isfile(path):
+        os.remove(path)
+    return path
+
+
+def commit_proposal(arc, outdir, slug, titles=None):
+    """Accept: write the committed pair. Does not write per-song files."""
+    return write(arc, outdir, slug, titles)
+
+
+def apply_summaries(arc, dest_dir, song_ids, confirm=False):
+    """T2-16: more than one song is a confirmation, not a default.
+
+    Writes the per-song storyboard summary under dest_dir/applied/<id>.json.
+    Accepting the album arc must not do this.
+    """
+    ids = [int(s) for s in song_ids]
+    if len(ids) > 1 and not confirm:
+        raise ValueError("writing the arc to more than one song needs confirmation")
+    written = []
+    applied = os.path.join(dest_dir, "applied")
+    os.makedirs(applied, exist_ok=True)
+    for sid in ids:
+        summary = for_song(arc, sid)
+        if not summary:
+            raise ValueError(f"song {sid} is not in this arc")
+        with open(os.path.join(applied, f"{sid}.json"), "w") as f:
+            json.dump(summary, f, indent=2)
+        written.append(sid)
+    return written
 
 
 def for_song(arc, song_id):
@@ -313,6 +381,13 @@ def demo():
     assert two["next_opens"] == ""
     assert for_song(arc, 999) == {}
     assert two["continuity"] == ["the collar is always brass"]
+
+    try:
+        require_theme("")
+        raise AssertionError("an empty theme was accepted")
+    except ValueError:
+        pass
+    assert require_theme("colder than it started") == "colder than it started"
 
     # --- markdown and the round trip ---
     d = tempfile.mkdtemp()
