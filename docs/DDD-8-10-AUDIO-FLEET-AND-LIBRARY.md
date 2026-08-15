@@ -173,6 +173,12 @@ host up/down still advances so T9-8's once-per-edge holds).
 `T9-17` is the one worth defending: **an alerting path whose failure mode is
 quiet is worse than none**, because it is trusted.
 
+`T9-18` is the operational-scope gate, not a new scheduler: a fleet op that
+needs a stop names the unit via `fleet_watch.name_stop(op, services)` and
+refuses a broader blast radius (the 2026-08-12 vDisk lesson — docker only, not
+the array). It does not execute stops; it is the check a runbook step must
+pass.
+
 ## 4. TRD-10 — one feature and a set of rules
 
 ### 4.1 Bulk edit

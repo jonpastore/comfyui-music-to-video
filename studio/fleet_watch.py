@@ -63,6 +63,52 @@ TIMEOUT = float(os.environ.get("FLEET_WATCH_TIMEOUT", 8))
 # recorded state change, never to silence (T9-17).
 ALERT_KEY = "_alert"
 
+# T9-18. Ops that require a stop list the units they may take down — never a
+# broader blast radius. Measured 2026-08-12: resizing a Docker vDisk needed
+# only docker; stopping the Unraid array instead cost hours (syslog: umount
+# /mnt/cache busy → rc.6 tore down eth0). A free-form "stop the box" step is
+# the same class as a migration that rewrites more rows than it meant to.
+FLEET_STOP_OPS = {
+    "resize_docker_vdisk": frozenset({"docker"}),
+    "restart_swarmui": frozenset({"swarmui"}),
+    "restart_comfyui": frozenset({"comfyui"}),
+}
+
+
+def name_stop(op, services):
+    """T9-18: a fleet op that needs a stop names which service, and never more.
+
+    Returns the frozenset of services that will be stopped. Refuses an unknown
+    op, an empty/unnamed stop, and any service outside the op's allowed set.
+    Does not execute a stop — it is the scope gate a runbook step must pass.
+    """
+    if op not in FLEET_STOP_OPS:
+        raise ValueError(f"unknown fleet op {op!r}: cannot name a stop scope")
+    allowed = FLEET_STOP_OPS[op]
+    if services is None:
+        raise ValueError(f"{op} requires stopping a service; name which")
+    if isinstance(services, str):
+        named = frozenset({services.strip()} if services.strip() else ())
+    else:
+        try:
+            named = frozenset(
+                s.strip() if isinstance(s, str) else s
+                for s in services
+                if s is not None and (not isinstance(s, str) or s.strip())
+            )
+        except TypeError as e:
+            raise ValueError(
+                f"{op} requires stopping a service; name which"
+            ) from e
+    if not named:
+        raise ValueError(f"{op} requires stopping a service; name which")
+    extra = named - allowed
+    if extra:
+        raise ValueError(
+            f"{op} may stop only {sorted(allowed)}; refusing extra {sorted(extra)}"
+        )
+    return named
+
 
 def probe(hostport, timeout=TIMEOUT):
     """(up, detail). `features` is what SwarmUI's own idle monitor calls, so a
@@ -256,6 +302,14 @@ def demo():
     up, detail = probe("127.0.0.1:1", timeout=0.4)
     assert up is False and "Error" in detail, (up, detail)
     assert busy("127.0.0.1:1", timeout=0.4) == (None, None)
+
+    # T9-18: stop scope is named and minimal
+    assert name_stop("resize_docker_vdisk", "docker") == frozenset({"docker"})
+    try:
+        name_stop("resize_docker_vdisk", "array")
+        raise AssertionError("over-scope stop was accepted")
+    except ValueError:
+        pass
     print("fleet_watch.py OK")
 
 

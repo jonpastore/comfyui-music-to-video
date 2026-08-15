@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-11, T9-13a, T9-14, T9-16, T9-17, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-11, T9-13a, T9-14, T9-16, T9-17, T9-18, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -1192,3 +1192,66 @@ def test_t9_17_unreachable_transport_records_state_change_reachable_arrives():
                 f"successful delivery was not recorded: {saved}")
     finally:
         fleet_watch.scan, fleet_watch.notify = was_scan, was_notify
+# T9-18. A fleet op that needs a stop must name the unit and refuse a broader
+# blast radius. The 2026-08-12 vDisk incident is the fixture: resize needed
+# docker; stopping the array cost hours. Without a check, a runbook that stops
+# "the box" still looks green.
+
+
+def test_t9_18_fleet_ops_name_their_service_and_never_more():
+    """T9-18: a fleet operation that requires stopping a service names which.
+
+    And never more. Positive half: a correctly named stop returns that service
+    only. Mutations that must go red: empty/unnamed stop accepted; stopping a
+    unit outside the op's allowed set (array for a docker-only resize);
+    stopping allowed+extra as a silent widen of blast radius.
+    """
+    assert callable(getattr(fleet_watch, "name_stop", None)), (
+        "fleet_watch.name_stop is the stop-scope gate; a free-form runbook "
+        "step is not T9-18")
+
+    # Positive: resize docker vdisk names docker only
+    got = fleet_watch.name_stop("resize_docker_vdisk", "docker")
+    assert got == frozenset({"docker"}), got
+    got = fleet_watch.name_stop("resize_docker_vdisk", ["docker"])
+    assert got == frozenset({"docker"}), got
+
+    # Positive: swarm restart names swarmui only
+    got = fleet_watch.name_stop("restart_swarmui", "swarmui")
+    assert got == frozenset({"swarmui"}), got
+
+    # Unnamed / empty: refuse
+    for empty in (None, "", [], (), set()):
+        try:
+            fleet_watch.name_stop("resize_docker_vdisk", empty)
+        except ValueError as e:
+            assert "name which" in str(e).lower() or "service" in str(e).lower(), e
+        else:
+            raise AssertionError(
+                f"unnamed stop {empty!r} was accepted — the vDisk defect shape")
+
+    # Wrong service / broader blast radius: refuse
+    try:
+        fleet_watch.name_stop("resize_docker_vdisk", "array")
+    except ValueError as e:
+        msg = str(e).lower()
+        assert "array" in msg or "docker" in msg, e
+    else:
+        raise AssertionError(
+            "stopping the array for a docker-only op was accepted")
+
+    try:
+        fleet_watch.name_stop("resize_docker_vdisk", ["docker", "array"])
+    except ValueError as e:
+        assert "array" in str(e).lower() or "extra" in str(e).lower(), e
+    else:
+        raise AssertionError(
+            "docker+array was accepted — never more means no silent widen")
+
+    # Unknown op has no stop scope to name
+    try:
+        fleet_watch.name_stop("reboot_the_rack", "everything")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unknown op invented a stop scope")
