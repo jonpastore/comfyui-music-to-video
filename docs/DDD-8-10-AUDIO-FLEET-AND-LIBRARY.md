@@ -182,7 +182,19 @@ plus invalid `genre2` writes none). The two rules that destroy data if inverted:
 write's `changed` matches it, and `#bulk-count` is that number — the 12-vs-9
 case. A confirmation that overstates teaches the operator to stop reading it.
 
-### 4.2 The advice rules are a payload contract, not UI copy
+### 4.2 Lyrics provenance (T10-8)
+
+A transcription and supplied text are not the same evidence — storyboard
+generation reads lyrics, and a hallucinated line becomes a scene.
+`lyrics.transcribe` returns which whisper package produced the text
+(`backend`). `db.store_lyrics` is the write gate: a transcription requires
+a backend and lands `songs.lyrics_source=transcription` plus
+`songs.lyrics_backend`; supplied text lands `lyrics_source=supplied` and
+clears `lyrics_backend`. Both paths are the job handler and
+`POST /songs/{id}/lyrics`. A free-text source would let the criterion pass
+for a row that recorded something else — `LYRICS_SOURCES` is the closed set.
+
+### 4.2a The advice rules are a payload contract, not UI copy
 
 `T10-11` marks model-authored strings **in the payload**, the same shape as
 `T2-36`'s warnings-versus-notes. A client that cannot separate advice from
@@ -257,6 +269,7 @@ each caller, or a caller that stops calling it stays green.
     advice labelling  ->  T10-11..T10-15 over the four live modules
                          ->  the picked/unpicked distinction (T8-2)
     bulk edit (T10-3…T10-7 built)
+    lyrics provenance (T10-8 built) ->  T10-9 (edit survives re-fetch)
     advice labelling (T10-11..T10-15 built) over the four live modules
     image/audio guard split (T10-16 built; cites T8-4)
 

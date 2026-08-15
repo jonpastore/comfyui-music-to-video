@@ -909,8 +909,10 @@ def h_transcribe(args, progress):
     pipeline.free_vram(progress)
     result = lyrics.transcribe(song["mp3_path"], progress)
     text = lyrics.to_sections(result)
-    db.run("UPDATE songs SET lyrics=? WHERE id=?", text, song["id"])
-    return {"chars": len(text)}
+    # T10-8: which backend produced it, and that it is a transcription.
+    db.store_lyrics(song["id"], text, source="transcription",
+                    backend=result.get("backend"))
+    return {"chars": len(text), "backend": result.get("backend")}
 
 
 @jobs.handler("analyse")
@@ -2469,7 +2471,8 @@ def toggle_explicit(id: int):
 @app.post("/songs/{id}/lyrics")
 def save_lyrics(id: int, lyrics_text: str = Form(...)):
     get_song_or_404(id)
-    db.run("UPDATE songs SET lyrics=? WHERE id=?", lyrics_text, id)
+    # T10-8: supplied text is not a transcription; clear any prior backend.
+    db.store_lyrics(id, lyrics_text, source="supplied")
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 

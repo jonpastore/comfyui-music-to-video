@@ -98,6 +98,10 @@ still not shipped (`T8-12`, provisional by absence).
    `T8-15` remains.
 3. **TRD-10's bulk edit.** `T10-6` (one transaction) is built. `T10-3`/`T10-4`/`T10-5`/`T10-7` remain.
 3. **TRD-10's bulk edit.** `T10-3`…`T10-7` are built: blank leaves alone, toggle-all is the shown set, invalid refuses the batch, one transaction, pre-write count equals rows changed.
+3a. **TRD-10's lyrics provenance.** `T10-8` is built: a transcription stores
+   which backend produced it and that it is a transcription; supplied text
+   is stored as supplied with no backend, and the two remain distinguishable.
+   `T10-9` (edit survives re-fetch) and `T10-10` (empty is explicit) remain.
 4. **TRD-10's advice rules.** `T10-11` (payload mark), `T10-12` (accept writes,
    records the model), `T10-13` (`classify_sheet` text on a finding, never a
    pass/fail), `T10-14` (match-question shape refused; describe-what-differs

@@ -168,6 +168,7 @@ def _transcribe_on(mp3_path, backend, size, device, note):
         "language": language,
         "model": size,
         "device": device,
+        "backend": backend,
     }
 
 

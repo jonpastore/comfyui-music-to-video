@@ -406,6 +406,13 @@ MIGRATIONS = [
     # T3-27: the class approve() runs. Distinct from remedy (the editable
     # prompt). NULL on every row that predates the class.
     "ALTER TABLE findings ADD COLUMN remedy_class TEXT",
+    # T10-8: lyrics provenance. transcription vs supplied text are not the
+    # same evidence — storyboard generation reads lyrics, and a hallucinated
+    # line becomes a scene. lyrics_backend is the whisper package that
+    # produced a transcription; NULL on supplied text and on every row that
+    # predates this.
+    "ALTER TABLE songs ADD COLUMN lyrics_source TEXT",
+    "ALTER TABLE songs ADD COLUMN lyrics_backend TEXT",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and
@@ -750,6 +757,29 @@ def upsert_song(slug, **f):
     f["slug"], f["created"] = slug, time.time()
     cols = ", ".join(f)
     return run(f"INSERT INTO songs ({cols}) VALUES ({', '.join('?' * len(f))})", *f.values())
+
+
+# transcription | supplied — a free-text source would let T10-8 pass for a
+# row that recorded something else.
+LYRICS_SOURCES = ("transcription", "supplied")
+
+
+def store_lyrics(song_id, text, *, source, backend=None):
+    """Persist lyrics with provenance (T10-8).
+
+    A transcription must name the backend that produced it. Supplied text
+    clears lyrics_backend so the two remain distinguishable on the stored row.
+    """
+    if source not in LYRICS_SOURCES:
+        raise ValueError(f"unknown lyrics source: {source!r}")
+    if source == "transcription":
+        if not backend:
+            raise ValueError("transcription requires a backend")
+        backend_val = backend
+    else:
+        backend_val = None
+    run("UPDATE songs SET lyrics=?, lyrics_source=?, lyrics_backend=? WHERE id=?",
+        text, source, backend_val, song_id)
 
 
 def jset(row, key="meta_json"):

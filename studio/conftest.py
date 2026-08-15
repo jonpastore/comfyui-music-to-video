@@ -233,7 +233,14 @@ _stub("grok",
 # ---- lyrics ------------------------------------------------------------
 _stub("lyrics",
       available=lambda: (True, "stub ready"),
-      transcribe=lambda mp3, progress=None: {"segments": [{"start": 0, "end": 1, "text": "hi"}]},
+      # backend is T10-8 provenance; h_transcribe stores it via db.store_lyrics.
+      transcribe=lambda mp3, progress=None: {
+          "segments": [{"start": 0, "end": 1, "text": "hi"}],
+          "text": "hi",
+          "backend": "faster-whisper",
+          "model": "medium",
+          "device": "cpu",
+      },
       to_sections=lambda result, gap=3.0: "[Section 1]\nhi\n",
       estimate_duration=lambda mp3: 12.3)
 

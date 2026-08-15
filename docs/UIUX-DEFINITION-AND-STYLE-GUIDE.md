@@ -904,6 +904,15 @@ both are *interface* failures before they are code failures:
   `changed` — the 12-vs-9 case. A confirmation that overstates once is a
   confirmation nobody reads again.
 
+### 7b.4a Lyrics provenance is on the song row, not inferred
+
+`T10-8` is built. A transcription stores `lyrics_source=transcription` and
+the whisper backend that produced it; text the operator typed or pasted is
+`lyrics_source=supplied` with no backend. The song page does not invent the
+source from whether a job ran — the stored columns are the record. When a
+source chip or badge is shown, it reads those columns; a row that predates
+them stays blank rather than guessing.
+
 ### 7b.5 Model-authored text has to be visually distinct, everywhere
 
 `T10-11` marks it in the payload; this is what the payload is for. **One
