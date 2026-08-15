@@ -707,7 +707,8 @@ four more page-scoped sections, which is §2.3 happening again in real time.
 
 One `versioned-field`: label, the wand, the hint, the control, a version picker,
 and the usage count — which counts **renders, not loads**, because a wording you
-looked at and rejected is not a wording you used. `T7-13`'s `view:<key>` types
+looked at and rejected is not a wording you used. Deleting a version leaves a
+gap; remaining numbers do not compact (`T2-6`). `T7-13`'s `view:<key>` types
 are generated from the view table, so the UI iterates types rather than listing
 them; a type added to `PROMPT_TYPES` appears with no template change. That is the
 same rule `T2-33` sets for the model picker.

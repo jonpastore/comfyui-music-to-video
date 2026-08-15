@@ -319,10 +319,13 @@ def demo():
     except ValueError:
         pass
 
-    # deleting leaves a GAP rather than renumbering: the number is how a render
-    # is referred to afterwards, and closing the gap would repoint an old note
+    # T2-6: deleting leaves a GAP rather than renumbering. Row count must
+    # drop first — a no-op delete renumbers nothing and would pass otherwise.
+    before = versions("Street Cats", "body")
     delete(a["id"])
-    assert [r["version_number"] for r in versions("Street Cats", "body")] == [2]
+    after = versions("Street Cats", "body")
+    assert len(after) == len(before) - 1, "delete was a no-op"
+    assert [r["version_number"] for r in after] == [2]
     try:
         running(a["id"])
         raise AssertionError("a deleted version still ran")
