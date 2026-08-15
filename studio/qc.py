@@ -145,15 +145,98 @@ LIGHTING_CAST_LIMIT = 12.0
 T4_13_REAL_SHEET_PATH = None
 T4_13_REAL_SHEET_MEASURED = False
 
+# docs/TRD-3 T3-27 / §6.2. The class is what approve() runs. A check with
+# NONE says so and offers no button.
+REMEDY_NONE = "none"
+REMEDY_RERENDER = "re-render"
+REMEDY_RERENDER_SEED = "re-render-seed"
+REMEDY_RERENDER_PINNED = "re-render-pinned"
+REMEDY_REASSEMBLE = "re-assemble"
+REMEDY_LOUDNORM = "loudnorm"
+REMEDY_UPSCALE = "upscale"
+REMEDY_EDIT_TEXT = "edit-text"
+
+CHECK_REMEDY_CLASS = {
+    "opens": REMEDY_RERENDER,
+    "size_floor": REMEDY_RERENDER,
+    "duration": REMEDY_RERENDER,
+    "frame_count": REMEDY_RERENDER,
+    "latent_8n1": REMEDY_RERENDER,
+    "fps": REMEDY_RERENDER_PINNED,
+    "resolution": REMEDY_RERENDER_PINNED,
+    "has_audio": REMEDY_REASSEMBLE,
+    "av_sync": REMEDY_REASSEMBLE,
+    "luma": REMEDY_RERENDER_SEED,
+    "black_frames": REMEDY_RERENDER_SEED,
+    "frozen": REMEDY_RERENDER_SEED,
+    "loudness": REMEDY_LOUDNORM,
+    "true_peak": REMEDY_LOUDNORM,
+    "silence": REMEDY_RERENDER,
+    "not_uniform": REMEDY_RERENDER_SEED,
+    "not_blank": REMEDY_RERENDER_SEED,
+    IDENTITY_LOOK: REMEDY_EDIT_TEXT,
+    LIGHTING_LOCK: REMEDY_RERENDER,
+    IDENTITY_WRONG: REMEDY_EDIT_TEXT,
+    "duration_matches_prediction": REMEDY_NONE,
+    REFINER_HELP_CHECK: REMEDY_NONE,
+}
+
+_DEFAULT_REMEDY = {
+    REMEDY_NONE: "this check has no remedy — it cannot be approved",
+    REMEDY_RERENDER: "re-render",
+    REMEDY_RERENDER_SEED: "re-render with a different seed",
+    REMEDY_RERENDER_PINNED: "re-render pinned to a box that honours it",
+    REMEDY_REASSEMBLE: "re-assemble",
+    REMEDY_LOUDNORM: "re-run loudnorm",
+    REMEDY_UPSCALE: "upscale pass",
+    REMEDY_EDIT_TEXT: "edit the text, then re-render",
+}
+
+
+def is_actionable(remedy_class):
+    """True when approve() has something to run. NONE is a named refusal.
+
+    A missing class is not a refusal: finding() already rejects an
+    unknown check. Legacy rows without a stored class still approve
+    and fall back to kind + wording.
+    """
+    return remedy_class != REMEDY_NONE
+
+
+def actuator_for(remedy_class, kind=None):
+    """What approving this class would submit. None when there is no repair."""
+    if not is_actionable(remedy_class):
+        return None
+    kind = (kind or "").lower()
+    if remedy_class == REMEDY_UPSCALE:
+        return "gen_postproc", "ltx25_latent_upscaler"
+    if remedy_class == REMEDY_EDIT_TEXT:
+        return "fix_ref", "qwen_image_edit_2511"
+    if remedy_class in (REMEDY_LOUDNORM, REMEDY_REASSEMBLE):
+        return "gen_postproc", "ltx25_latent_upscaler"
+    if kind == "image":
+        return "fix_ref", "qwen_image_edit_2511"
+    return "gen_postproc", "ltx25_latent_upscaler"
+
 
 def finding(path, kind, check, verdict, detail, measured=None, expected=None,
-            unit=None, remedy=None):
+            unit=None, remedy=None, remedy_class=None):
     """One row of docs/TRD-3 3. measured/expected/unit are carried on every
     check that has them, because a finding that says only "failed" cannot be
-    argued with and cannot be re-checked after a repair."""
+    argued with and cannot be re-checked after a repair.
+
+    remedy_class is required (T3-27). An unknown check raises rather than
+    handing the reviewer a button that does nothing.
+    """
+    cls = remedy_class or CHECK_REMEDY_CLASS.get(check)
+    if not cls:
+        raise ValueError(f"check {check!r} has no remedy class (T3-27)")
+    if remedy is None:
+        remedy = _DEFAULT_REMEDY.get(cls)
     return {"path": path, "kind": kind, "tier": 1, "check": check,
             "verdict": verdict, "measured": measured, "expected": expected,
-            "unit": unit, "detail": detail, "remedy": remedy}
+            "unit": unit, "detail": detail, "remedy": remedy,
+            "remedy_class": cls}
 
 
 # ------------------------------------------------------------ measurement --
@@ -817,8 +900,9 @@ def check_set(path, items):
                        PASS if gap <= mixer.SET_DURATION_TOLERANCE else REJECT,
                        f"rendered {actual:.3f}s against a predicted {predicted:.3f}s",
                        round(actual, 3), round(predicted, 3), "s",
-                       remedy="NOT a re-render -- a divergence between the stored "
-                              "model and the filter graph"))
+                       remedy="no remedy — a divergence between the stored "
+                              "model and the filter graph; never fixed by "
+                              "re-rendering"))
     return out
 
 

@@ -21,13 +21,13 @@ is named.
 | `studio/mixer.py` | 2116 | set duration, both filter graphs, overlap arithmetic, beatmatch, ramps, splice, song-assembly geometry (`T5-7`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `export_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` **and** `T3-9`/§4.3 |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `fragment`, `item_audio`, `wants_master_loudnorm` | built |
-| `studio/qc.py` | 642 | TRD-3 tier 1 in full; T3-13 `score_zimage_sweep`; T3-15 histogram `identity_embed`; T3-16 `identity_verdict`; T3-26 `measure_refiner_help` (fail-closed labelled set, not opportunistic); T3-28 `check_identity_wrong` / `identity_wrong_remedy` | built |
-| `studio/qc_service.py` | 308 | findings, queue, `by_host` (`T3-1`), remedy edit, dismiss, reopen; `artefact_hash` keeps a dismissal on the same bytes and reopens the same check when the file changes (`T3-22`); `approve()` enqueues dest ≠ source; `pair()` lists original and repair, both scored (`T3-21`); the version that RUNS is `findings.remedy_prompt_id` looked up at execute (`T3-20`); `dispatch_repair` asks `where()`/`fits()`/`resolve()` then submits `fix_ref` / `gen_postproc`; real `fits()` routes the refiner by resident cost (`T3-24`); `can_move_output` gates remote repair (`T3-25`); `run_zimage_calibration` writes the T3-13 row; `set_threshold` writes a value only on a stored separated row (`T3-14`/`T3-16`); `build_identity_gate` never builds; T3-28 refuses a swap-the-reference identity-wrong remedy; `record_refiner_help` persists the T3-26 finding | built |
+| `studio/qc.py` | 642 | TRD-3 tier 1 in full; T3-13 `score_zimage_sweep`; T3-15 histogram `identity_embed`; T3-16 `identity_verdict`; T3-26 `measure_refiner_help` (fail-closed labelled set, not opportunistic); T3-28 `check_identity_wrong` / `identity_wrong_remedy`; T3-27 `CHECK_REMEDY_CLASS` / `actuator_for` | built |
+| `studio/qc_service.py` | 308 | findings, queue, `by_host` (`T3-1`), remedy edit, dismiss, reopen; `artefact_hash` keeps a dismissal on the same bytes and reopens the same check when the file changes (`T3-22`); `approve()` enqueues dest ≠ source; `pair()` lists original and repair, both scored (`T3-21`); approve uses `remedy_class` (`T3-27`); the version that RUNS is `findings.remedy_prompt_id` looked up at execute (`T3-20`); `dispatch_repair` asks `where()`/`fits()`/`resolve()` then submits `fix_ref` / `gen_postproc`; real `fits()` routes the refiner by resident cost (`T3-24`); `can_move_output` gates remote repair (`T3-25`); `run_zimage_calibration` writes the T3-13 row; `set_threshold` writes a value only on a stored separated row (`T3-14`/`T3-16`); `build_identity_gate` never builds; T3-28 refuses a swap-the-reference identity-wrong remedy; `record_refiner_help` persists the T3-26 finding | built |
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2: JSON-canonical arc, `to_md`, `validate`, `for_song`, screened both directions | built |
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning; `running(vid)` is the row a render RUNS (`T3-20`) | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
 | `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow` | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5; `main()` honours per-scene `video_model` (`T2-47`) |
-| `studio/db.py` | 559 | schema | `automation`, `findings`, `artefacts`, `sets.mode_audience`, `calibrations` landed; `sets.out_fps` did not, §4 |
+| `studio/db.py` | 559 | schema | `automation`, `findings` (`artefact_hash`, `remedy_class`), `artefacts`, `sets.mode_audience`, `calibrations` landed; `sets.out_fps` did not, §4 |
 | `studio/vision.py` | 516 | VLM calls, local-first | **not** tier 2, §5.6 |
 
 Deliberately absent, verified by `grep -rn` over `studio/*.py` and the root
@@ -109,9 +109,12 @@ travel in the same response (`T2-18`).
 **C · QC** — exists. `/api/qc/run`, `/api/qc/findings`, `/{fid}`,
 `/{fid}/remedy`, `/{fid}/dismiss`, `/{fid}/approve`, `/{fid}/recheck`,
 `/api/qc/by-host` (`T3-1`: groups by `host`, NULL host is the
-`unattributed` bucket). Dismiss needs a reason and leaves the open queue;
-re-running QC on the same bytes keeps it dismissed; rewriting the file
-reopens that `(path, check)` row (`T3-22`).
+`unattributed` bucket). Each finding carries `remedy_class` and
+`actionable` (`T3-27`): approve uses the class, and a false `actionable`
+is a named refusal, not a button that does nothing. Dismiss needs a
+reason and leaves the open queue; re-running QC on the same bytes keeps
+it dismissed; rewriting the file reopens that `(path, check)` row
+(`T3-22`).
 
 **Q · queue** — `GET /queue` answers HTML or JSON from the same `queue_ctx()`
 (`T6-A2`). The JSON body carries `running`, `waiting`, `recent`,
@@ -124,7 +127,7 @@ wrong one, and day 8's rule is that the warnings do not move.
 ## 4. Schema deltas still required
 
 Landed already: `automation`, `findings` (including `artefact_hash` for
-`T3-22`), `artefacts`, `storyboards.scene_seconds`,
+`T3-22` and `remedy_class` for `T3-27`), `artefacts`, `storyboards.scene_seconds`,
 `sets.mode_audience` (`easy|normal|advanced`, default `normal`; `T1-20`),
 `calibrations` (`T3-13`; `T3-14` may write `threshold` only after a
 separated row exists), and the interstitial card
@@ -432,9 +435,11 @@ failure.
 not write dest and it does not run a GPU. `dispatch_repair` now turns that job
 into a real candidate (`T3-23`):
 
-1. **Remedy → action mapping.** Image findings submit `pipeline.fix_ref`;
-   clip / upscale findings submit `pipeline.gen_postproc`. A silent
-   `shutil.copy2` of src is still refused.
+1. **Remedy → action mapping.** The check's `remedy_class` (`T3-27`) picks
+   the actuator: image / `edit-text` submit `pipeline.fix_ref`; clip /
+   `upscale` submit `pipeline.gen_postproc`. A class of `none` is a
+   named refusal, not a button. A silent `shutil.copy2` of src is still
+   refused.
 2. **Routing that asks first.** `models.where()` and `models.fits()` choose the
    box, `models.resolve()` names the file *that box* uses, and a pin under a
    name the box does not have is refused before submit. `T6-A6`'s three values

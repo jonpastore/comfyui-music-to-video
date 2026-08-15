@@ -224,6 +224,8 @@ live loudness-against-target as you mix — the export asset already names
 measured I/TP and the off-target flag, `T1-25`), `finding-row` (measured / expected / unit /
 remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-20`, `T3-27`; dismiss
 stays off this row until the file bytes change, `T3-22`). The
+JSON already carries `remedy_class` and `actionable` (`GET /api/qc/findings`,
+`T3-27`): a false `actionable` is why the button must not exist. The
 per-box QC report is JSON only (`GET /api/qc/by-host`, `T3-1`): groups by
 `host`, NULL host is an explicit `unattributed` bucket. No page; do not
 pre-empt `finding-row` with one. An identity-wrong finding's remedy is
@@ -444,11 +446,13 @@ What need not: drawing an automation curve.
 Disabled without a reason is banned. "Approve" greyed out with no explanation is
 the same defect as a button that does nothing — the operator cannot tell refusal
 from breakage. `T3-18` now distinguishes those: QC enqueues nothing, approve
-enqueues one repair. `T3-20`: the wording that runs is the stored
-`prompts` row — same id on the finding and the job after approval, not
-a stale copy in the form. `T3-23` names a routing refusal (unfittable, or pinned
-under a name the box does not have) instead of looking like a successful copy.
-`T3-25` names `can_move_output` when a remote output cannot be moved back.
+enqueues one repair. `T3-27` names the other: a finding with `actionable`
+false has no remedy, and approve refuses by that name. `T3-20`: the wording
+that runs is the stored `prompts` row — same id on the finding and the job
+after approval, not a stale copy in the form. `T3-23` names a routing
+refusal (unfittable, or pinned under a name the box does not have) instead
+of looking like a successful copy. `T3-25` names `can_move_output` when a
+remote output cannot be moved back.
 `T3-24` names the refiner as too big for a 15.92 GiB card (and for peaches)
 and routes it to a 24 GiB box that holds the file. `T3-26` names a refine
 pass that did not improve the tier-2 score on a labelled set as **not

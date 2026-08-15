@@ -68,7 +68,9 @@ Already satisfied by `qc.py` today: `T3-2` (expectations read from the submitted
 workflow, no hardcoded duration anywhere), `T3-4`'s measured/expected/unit on
 every check that has them, `T3-7` (8n+1 with the interpolated exemption), `T3-11`
 (imports `mixer.SET_DURATION_TOLERANCE` rather than restating it), `T3-27`
-(a remedy on every finding), and `T3-3` both ways. Tier 2's calibration
+(every check names a remedy class; `approve()` uses the class, and a
+check with no remedy refuses rather than offering a button), and `T3-3`
+both ways. Tier 2's calibration
 order is built: `T3-13` writes the calibrations row, `T3-14` is a setter
 (with a stored row a threshold can be set; without one it is refused,
 naming why), `T3-15` ranks the recorded pose pair, and `T3-16` names
@@ -503,7 +505,7 @@ tier 1.
    marked **provisional** and says what it cannot yet distinguish.
 
    One-sided in this document today, listed so nobody has to re-derive it:
-   `T3-4` (fields present but never checked for sense) and `T3-27`. `T3-1` now has the two-host count half. `T3-6` / `T3-14` / `T3-18` / `T3-20` / `T3-21` / `T3-23` / `T3-24` / `T3-25` have their positive halves: dest ≠ source, WITH a stored calibration a threshold CAN be set, the stored prompts id is what RUNS, original and repair are both listed and scored, a correctly-named model on a box that holds it is SUBMITTED, the refiner is routed off a 15.92 GiB card onto a 24 GiB one, and a remote repair with `can_move_output` forced true is SUBMITTED. `T3-22` has both halves: dismissed stays dismissed on the same bytes, and the same check REAPPEARS when the artefact changes.
+   `T3-4` (fields present but never checked for sense). `T3-1` now has the two-host count half. `T3-6` / `T3-14` / `T3-18` / `T3-20` / `T3-21` / `T3-23` / `T3-24` / `T3-25` / `T3-27` have their positive halves: dest ≠ source, WITH a stored calibration a threshold CAN be set, the stored prompts id is what RUNS, original and repair are both listed and scored, a correctly-named model on a box that holds it is SUBMITTED, the refiner is routed off a 15.92 GiB card onto a 24 GiB one, a remote repair with `can_move_output` forced true is SUBMITTED, and the named remedy class is what approve() runs. `T3-22` has both halves: dismissed stays dismissed on the same bytes, and the same check REAPPEARS when the artefact changes.
 
 ### The positive half of each one-sided criterion
 
@@ -556,7 +558,7 @@ current.
 | `T3-14` no threshold without calibration | **built** | `test_t3_14_threshold.py` | `set_threshold` is refused with no calibration row, naming T3-13; WITH a stored row the value is written on that row. A non-T3-13 dataset does not unlock it. Not a UI |
 | `T3-15` pose change is not identity failure | **built** | `test_t3_15_identity.py` | `identity_embed` is a colour histogram; `identity_score` ranks the anchored sheet above the pose-plate look. Pixel distance still inverts that pair |
 | `T3-16` overlap is inconclusive, no gate | **built** | `test_t3_16_overlap_inconclusive.py` | `identity_verdict` names overlap inconclusive; `build_identity_gate` returns built False / threshold NULL; a threshold on that report (or via `set_threshold`) is refused. Separated ranges are not called inconclusive. No UI |
-| **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-20`, `T3-21`, `T3-22`, `T3-23`, `T3-24`, `T3-25` and `T3-26` are their own rows. Remaining in §6: T3-19, T3-27 |
+| **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-20`, `T3-21`, `T3-22`, `T3-23`, `T3-24`, `T3-25`, `T3-26` and `T3-27` are their own rows. Remaining in §6: T3-19 |
 | `T3-23` repair routing | **built** | `160547d` | default `dispatch_repair` asks `where()`/`fits()`/`resolve()`, refuses a pin under a name the box does not have before submit (`test_t3_23_pinned_name_the_box_does_not_have_is_refused_before_submit`), and a correctly-named model on a box that holds it is SUBMITTED (`test_t3_23_correctly_named_model_on_a_box_that_holds_it_is_submitted`). dest is the actuator's file (`fix_ref` / `gen_postproc`), not a copy of src |
 | `T3-24` refiner resident cost | **built** | `a4b7ef9` | real `fits()` (not a stub) routes `wan22_i2v_low` off a 15.92 GiB card onto a 24 GiB one that holds the correct name (`test_t3_24_refiner_routed_off_15_92_to_24_and_submitted`); peaches cannot take the i2v pair (`test_t3_24_peaches_cannot_take_the_pair`) |
 | `T3-25` remote output move | **built** | pending | `can_move_output` is callable; remote repair is refused by that name (`test_t3_25_remote_repair_refused_by_name_until_check_is_true`); forcing the check true SUBMITS (`test_t3_25_forced_true_remote_repair_is_submitted`) |
@@ -566,3 +568,4 @@ current.
 | `T3-22` dismissed stays dismissed | **built** | this slice | same bytes stay dismissed (`test_t3_22_dismissed_stays_dismissed_until_artefact_changes`); rewriting the file reopens the same `(path, check)` row. `findings.artefact_hash` is the change detector |
 | `T3-20` remedy versioned in `prompts` | **built** | `test_t3_20_remedy_runs.py` | the version that RUNS is the stored `prompt_versions` row — same id, read back after approval (`test_t3_20_approve_reads_back_the_same_stored_id`). Mutating the job's copied text still sends the stored wording (`test_t3_20_running_remedy_is_the_stored_row_not_the_job_copy`). A deleted row is refused, not replaced by the copy |
 | `T3-28` identity-wrong never swaps the reference | **built** | `test_t3_28_identity_wrong_remedy.py` | `qc.check_identity_wrong` (also via `qc.run`) proposes "edit the text, then re-render"; `qc.proposes_reference_swap` is the detector. `record` / `set_remedy` / `approve` refuse a swap-the-reference wording and name that identity comes from the text. A legal text-edit remedy is stored. |
+| `T3-27` every check names a remedy class | **built** | `test_t3_27_remedy_class.py` | `qc.CHECK_REMEDY_CLASS` on every named check. `approve()` puts `remedy_class` on the job and `_repair_actuator_and_key` uses the class, not the edited text (`test_t3_27_approve_uses_the_class_not_the_remedy_text`). `duration_matches_prediction` is `none`; `actionable` is false and approve refuses (`test_t3_27_no_remedy_refuses_approve`) |

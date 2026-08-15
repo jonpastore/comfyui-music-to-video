@@ -216,7 +216,8 @@ CREATE TABLE IF NOT EXISTS findings (
   verdict TEXT NOT NULL,              -- pass|flag|reject
   measured TEXT, expected TEXT, unit TEXT,
   detail TEXT,
-  remedy TEXT,                        -- what approving it would RUN
+  remedy TEXT,                        -- editable prompt; what approving it would RUN
+  remedy_class TEXT,                  -- T3-27 class; approve uses this, not the text
   remedy_prompt_id INTEGER,           -- prompt_versions.id; editable, versioned
   status TEXT DEFAULT 'open',         -- open|approved|running|repaired|dismissed
   dismissed_why TEXT,
@@ -399,6 +400,9 @@ MIGRATIONS = [
     "ALTER TABLE set_items ADD COLUMN card_secs REAL",
     # T3-22: dismissed stays dismissed until the artefact bytes change.
     "ALTER TABLE findings ADD COLUMN artefact_hash TEXT",
+    # T3-27: the class approve() runs. Distinct from remedy (the editable
+    # prompt). NULL on every row that predates the class.
+    "ALTER TABLE findings ADD COLUMN remedy_class TEXT",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and

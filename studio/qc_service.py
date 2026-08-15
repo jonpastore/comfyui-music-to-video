@@ -40,6 +40,24 @@ def _txt(v):
     return None if v is None else str(v)
 
 
+def _remedy_class_of(finding):
+    """Named class the check declared, or the catalog default for its name."""
+    d = finding if isinstance(finding, dict) else dict(finding)
+    cls = d.get("remedy_class")
+    if cls:
+        return cls
+    return qc.CHECK_REMEDY_CLASS.get(d.get("check") or d.get("check_name") or "")
+
+
+def _as_finding_row(row):
+    """sqlite row plus whether approve has something to run (T3-27)."""
+    d = dict(row)
+    cls = _remedy_class_of(d)
+    d["remedy_class"] = cls
+    d["actionable"] = qc.is_actionable(cls)
+    return d
+
+
 def artefact_hash(path):
     """sha256 of the file bytes. Empty string when the path is missing.
 
@@ -105,6 +123,7 @@ def record(findings):
         path = jobs.canonical_path(f["path"])
         remedy = _identity_wrong_remedy(f["check"], f.get("remedy"))
         digest = artefact_hash(path)
+        cls = _remedy_class_of(f)
         existing = db.one(
             "SELECT status, artefact_hash FROM findings WHERE path=? AND check_name=?",
             path, f["check"])
@@ -116,20 +135,22 @@ def record(findings):
                 status = OPEN
         db.run("""INSERT INTO findings
                     (path, kind, tier, check_name, verdict, measured, expected,
-                     unit, detail, remedy, status, created, artefact_hash)
-                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     unit, detail, remedy, remedy_class, status, created,
+                     artefact_hash)
+                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                   ON CONFLICT(path, check_name) DO UPDATE SET
                      verdict=excluded.verdict, measured=excluded.measured,
                      expected=excluded.expected, unit=excluded.unit,
                      detail=excluded.detail, created=excluded.created,
                      artefact_hash=excluded.artefact_hash,
+                     remedy_class=excluded.remedy_class,
                      status=excluded.status,
                      resolved=CASE
                        WHEN excluded.status=? AND findings.status=?
                        THEN NULL ELSE findings.resolved END""",
                path, f["kind"], f["tier"], f["check"], f["verdict"],
                _txt(f.get("measured")), _txt(f.get("expected")), f.get("unit"),
-               f.get("detail"), remedy, status, now, digest,
+               f.get("detail"), remedy, cls, status, now, digest,
                OPEN, DISMISSED)
         n += 1
     return n
@@ -177,14 +198,14 @@ def queue(status=OPEN, kind=None, tier=None, include_pass=False):
         sql += " AND verdict != 'pass'"
     # rejects before flags, newest first: the order a person would want to work
     sql += " ORDER BY CASE verdict WHEN 'reject' THEN 0 ELSE 1 END, created DESC, id DESC"
-    return db.q(sql, *args)
+    return [_as_finding_row(r) for r in db.q(sql, *args)]
 
 
 def get(fid):
     row = db.one("SELECT * FROM findings WHERE id=?", int(fid))
     if not row:
         raise ValueError(f"no finding {fid}")
-    return row
+    return _as_finding_row(row)
 
 
 def summary(path=None):
@@ -364,8 +385,19 @@ def _same_bytes(a, b, chunk=1024 * 1024):
 
 
 def _repair_actuator_and_key(args):
-    """fix_ref for images; gen_postproc for clips. Model key is catalogued."""
+    """Actuator from the finding's remedy class (T3-27). Text is not the class.
+
+    Jobs that predate remedy_class fall back to kind + wording so T3-23's
+    existing payloads still route.
+    """
     args = args or {}
+    cls = (args.get("remedy_class") or "").strip()
+    if cls == qc.REMEDY_NONE:
+        raise ValueError("this check has no remedy -- it cannot be approved")
+    mapped = qc.actuator_for(cls, args.get("kind")) if cls else None
+    if mapped:
+        key = args.get("requires") or args.get("model") or mapped[1]
+        return mapped[0], key
     kind = (args.get("kind") or "").lower()
     text = f"{args.get('remedy') or ''} {args.get('check_name') or ''}".lower()
     key = args.get("requires") or args.get("model")
@@ -625,6 +657,9 @@ def approve(fid):
     row = get(fid)
     if row["status"] == DISMISSED:
         raise ValueError("a dismissed finding cannot be approved -- reopen it first")
+    cls = _remedy_class_of(row)
+    if not qc.is_actionable(cls):
+        raise ValueError("this check has no remedy -- it cannot be approved")
     remedy = (row["remedy"] or "").strip()
     if not remedy:
         raise ValueError("approving a finding needs a remedy -- edit one first")
@@ -647,12 +682,14 @@ def approve(fid):
                dest, orig["expect_json"], time.time())
     _, key = _repair_actuator_and_key({
         "kind": row["kind"], "check_name": row["check_name"], "remedy": remedy,
+        "remedy_class": cls,
     })
     payload = {
         "finding_id": int(fid),
         "path": src,
         "repair_path": dest,
         "remedy": remedy,
+        "remedy_class": cls,
         "check_name": row["check_name"],
         "kind": row["kind"],
         "requires": key,
