@@ -3,7 +3,8 @@
 
 T3-13's identity score also lives here (pure; no database). T3-15 is the
 histogram embed; T3-16 is identity_verdict. The threshold setter is not
-in this file.
+in this file. T3-28's identity-wrong remedy lives here too: edit the
+text, never swap the reference image.
 
 ffprobe, ffmpeg's own analysis filters, PIL and numpy. No model, no opinion.
 
@@ -80,6 +81,19 @@ SILENCE_FLOOR_DB = -60.0
 # docs/TRD-7 T7-7: the sheet must be HER, not the pose-plate person. The look
 # itself is human-judged; this is the finding kind for the offline hook.
 IDENTITY_LOOK = "identity_look"
+
+# docs/TRD-3 T3-28: identity wrong from the first frame. The measured
+# fix is edit the text, then re-render. Swapping the reference image
+# does not fix it.
+IDENTITY_WRONG = "identity_wrong"
+IDENTITY_WRONG_REMEDY = (
+    "edit the text, then re-render. Identity comes from the text, "
+    "not the reference image")
+_REFERENCE_SWAP_MARKERS = (
+    "swap", "swapping", "replace", "replacing", "attach", "attaching",
+    "new reference", "different reference", "another reference",
+    "change the reference", "changing the reference",
+)
 
 # docs/TRD-3 T3-13: identity score, not pixel distance. The metric name is
 # stored on the calibrations row so a later extractor is a new row, not a
@@ -691,6 +705,41 @@ def _wants_identity_look(expect):
     return bool(_human_body_hits(_compose_text(expect)))
 
 
+def proposes_reference_swap(text):
+    """True when a remedy tells the operator to swap the reference image."""
+    low = (text or "").lower()
+    if "reference" not in low:
+        return False
+    return any(m in low for m in _REFERENCE_SWAP_MARKERS)
+
+
+def identity_wrong_remedy(text=None):
+    """T3-28: identity-wrong never proposes swapping the reference image."""
+    text = (text or "").strip() or IDENTITY_WRONG_REMEDY
+    if proposes_reference_swap(text):
+        raise ValueError(
+            "identity-wrong remedy cannot propose swapping the reference "
+            "image — identity comes from the text")
+    return text
+
+
+def check_identity_wrong(path, expect, kind="clip"):
+    """Identity wrong from the first frame. Offline: expect-driven.
+
+    T3-30: path + expect, no database. The finding's remedy is edit the
+    text; swapping the reference is refused by identity_wrong_remedy.
+    """
+    expect = expect or {}
+    if not (expect.get("identity_wrong")
+            or expect.get("first_frame_identity") == "wrong"):
+        return []
+    return [finding(
+        path, kind, IDENTITY_WRONG, FLAG,
+        "identity is wrong from the first frame — edit the text, then re-render",
+        expect.get("identity_wrong") or "wrong", "feline", None,
+        identity_wrong_remedy())]
+
+
 def check_image(path, expect):
     out = []
     if not os.path.isfile(path):
@@ -935,15 +984,18 @@ def run(path, kind, expect=None, items=None):
     """Every tier-1 check for one artefact. kind: image|audio|clip|song|set."""
     expect = dict(expect or {})
     if kind == "image":
-        return check_image(path, expect)
-    if kind == "audio":
-        return check_audio(path, expect)
-    if kind == "set":
-        return check_set(path, items or [])
-    if kind == "song":
+        out = check_image(path, expect)
+    elif kind == "audio":
+        out = check_audio(path, expect)
+    elif kind == "set":
+        out = check_set(path, items or [])
+    elif kind == "song":
         expect.setdefault("want_audio", True)
-        return check_video(path, expect, kind="song")
-    return check_video(path, expect, kind="clip")
+        out = check_video(path, expect, kind="song")
+    else:
+        out = check_video(path, expect, kind="clip")
+    out.extend(check_identity_wrong(path, expect, kind=kind))
+    return out
 
 
 def worst(findings):

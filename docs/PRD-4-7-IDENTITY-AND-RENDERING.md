@@ -67,7 +67,10 @@ a one-variable differential: same reference, same seed, same box; the species
 named in the prompt gives a feline throughout, unnamed gives an ordinary human
 woman by the halfway point. This is why `T3-28` forbids "swap the reference
 image" as a remedy and why `T2-32`'s refusal message has to say so — a studio
-that suggests the wrong fix teaches the operator the wrong lesson.
+that suggests the wrong fix teaches the operator the wrong lesson. The QC
+side is `qc.check_identity_wrong`: the proposed remedy is edit the text,
+then re-render, and a swap-the-reference wording is refused on record,
+edit and approve.
 
 **3.3 Two clauses that contradict each other do not average — the model picks.**
 Day 4 measured it: the nude clause asserted bare skin beside "entire body covered

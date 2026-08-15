@@ -216,7 +216,9 @@ remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-20`, `T3-27`; dis
 stays off this row until the file bytes change, `T3-22`). The
 per-box QC report is JSON only (`GET /api/qc/by-host`, `T3-1`): groups by
 `host`, NULL host is an explicit `unattributed` bucket. No page; do not
-pre-empt `finding-row` with one.
+pre-empt `finding-row` with one. An identity-wrong finding's remedy is
+"edit the text, then re-render" (`T3-28`); the queue must not offer
+"swap the reference image".
 
 ## 5. The style guide
 

@@ -74,6 +74,13 @@ def _expect_from_artefacts(path):
         return {}
 
 
+def _identity_wrong_remedy(check, remedy):
+    """T3-28: identity-wrong never proposes swapping the reference image."""
+    if check != qc.IDENTITY_WRONG:
+        return remedy
+    return qc.identity_wrong_remedy(remedy)
+
+
 def record(findings):
     """Persist findings. Returns the number of rows written.
 
@@ -96,6 +103,7 @@ def record(findings):
     n = 0
     for f in findings:
         path = jobs.canonical_path(f["path"])
+        remedy = _identity_wrong_remedy(f["check"], f.get("remedy"))
         digest = artefact_hash(path)
         existing = db.one(
             "SELECT status, artefact_hash FROM findings WHERE path=? AND check_name=?",
@@ -121,7 +129,7 @@ def record(findings):
                        THEN NULL ELSE findings.resolved END""",
                path, f["kind"], f["tier"], f["check"], f["verdict"],
                _txt(f.get("measured")), _txt(f.get("expected")), f.get("unit"),
-               f.get("detail"), f.get("remedy"), status, now, digest,
+               f.get("detail"), remedy, status, now, digest,
                OPEN, DISMISSED)
         n += 1
     return n
@@ -233,6 +241,7 @@ def set_remedy(fid, text, album=None):
     if len(text) > MAX_REMEDY:
         raise ValueError(f"remedy is {len(text)} characters, the limit is {MAX_REMEDY}")
     row = get(fid)
+    text = _identity_wrong_remedy(row["check_name"], text)
     vid = row["remedy_prompt_id"]
     # Once a version exists, further edits stay versioned: the album is
     # the stored row's scope, so we do not invent one. Editing creates
@@ -557,11 +566,13 @@ def approve(fid):
     remedy = (row["remedy"] or "").strip()
     if not remedy:
         raise ValueError("approving a finding needs a remedy -- edit one first")
+    remedy = _identity_wrong_remedy(row["check_name"], remedy)
     vid = row["remedy_prompt_id"]
     if vid:
         stored = prompts.running(vid)
         remedy = stored["text"]
         vid = stored["id"]
+        remedy = _identity_wrong_remedy(row["check_name"], remedy)
     src = jobs.canonical_path(row["path"])
     dest = jobs.canonical_path(_repair_dest(src))
     orig = db.one("SELECT expect_json FROM artefacts WHERE path=?", src)

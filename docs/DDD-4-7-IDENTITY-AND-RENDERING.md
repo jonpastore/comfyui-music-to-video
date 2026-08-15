@@ -118,6 +118,12 @@ whose whole point is not doing that.
 
 ## 4. The identity lock
 
+Identity comes from the text, not from the reference image. When a sheet or
+clip is wrong from the first frame, the QC remedy is edit the text, then
+re-render (`T3-28` / `qc.check_identity_wrong`). Swapping the reference
+image is refused — measured 2026-08-12: same reference, same seed, same
+box; species named or not is the one variable.
+
 `T7-6` shipped (`d315c6f`): "use as reference" on an anchor tile, the row points
 at the sheet's own file with no copy, deleting the ref keeps the file, deleting
 the anchor cascades to its borrowed refs. That is the same mechanism `gen_refs`
