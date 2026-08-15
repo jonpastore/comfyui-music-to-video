@@ -17,7 +17,7 @@ is named.
 
 | module | lines | owns | state against its TRD |
 |---|---|---|---|
-| `studio/app.py` | 7589 | 156 routes, 36 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}/arc`, `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`, `/api/anchors`; song page `video_model` select is `models.renderable("video")` (`T2-33`); `sets_service.py` / `storyboard_service.py` land T6-A3 (`test_t6_a3_*`) |
+| `studio/app.py` | 7589 | 156 routes, 36 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}` (`T2-37` arc when defined), `/api/playlists/{id}/arc`, `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`, `/api/anchors`; song page `video_model` select is `models.renderable("video")` (`T2-33`); `sets_service.py` / `storyboard_service.py` land T6-A3 (`test_t6_a3_*`) |
 | `studio/mixer.py` | 2116 | set duration, `transition_times` (`T3-12` model), both filter graphs, overlap arithmetic, beatmatch, ramps, splice, `spliced_duration` / `SPLICE_DURATION_TOLERANCE` (`T3-10`), song-assembly geometry (`T5-7`) and fps (`T2-13d`), `EXPORT_FORMATS` (`T1-24`), `probe.sample_rate` for **T3-4.3-sr**, `probe["channels"]` (`T3-4.3-ch`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox. Mixed clip fps honours the highest and is asserted on the assembled file. Export encode args are a named row of `EXPORT_FORMATS`; `render_set(..., fmt=)` looks the row up and passes it to ffmpeg (`test_t1_24_export_format_row.py`). Probe always exposes sample rate and channel count (0 when no audio) for QC |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `export_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` and the loudness half of §4.3. `T3-9` silence is **not** here |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `FILTER_EXPR_MAX_BYTES = 8192` (`T1-10`), `fragment`, `item_audio`, `wants_master_loudnorm` | built |
@@ -118,7 +118,10 @@ selectable). `GET /api/qc/lineage?kind=&group=` and `POST /api/qc/lineage/select
 are the same pair for refine, repair and anchor re-roll — `qc_service.listed`
 and `qc_service.select` decide; the route forwards.
 
-**B · arc and storyboard** — `GET/POST /playlists/{id}/arc` (POST is
+**B · arc and storyboard** — `GET /api/playlists/{id}` is the playlist
+card payload: identity fields plus `arc` only when one is defined
+(`T2-37`; omitted when none so always-present cannot pass).
+`GET/POST /playlists/{id}/arc` (POST is
 propose; empty theme is 400, `T2-14`), `POST .../arc/propose` (same
 handler), `POST .../arc/accept`, `POST .../arc/reject` (proposal is not
 saved until accepted; reject re-reads the previous file, `T2-15`),
@@ -127,17 +130,6 @@ confirmation is 400, `T2-16`). Same routes, no parallel `/api/*` tree
 (`wants_json`). `GET/POST /api/songs/{id}/storyboard/{tier}`,
 `.../scene/{n}`, `.../meter`, `.../cast`. The generation prompt and
 **the limits that apply to it** travel in the same response (`T2-18`).
-**B · arc and storyboard** — `GET/POST /api/playlists/{id}/arc`,
-`.../arc/propose` (proposal is not saved until accepted, `T2-15`),
-`.../arc/reject` (previous file on disk is left untouched),
-`GET/POST /api/songs/{id}/storyboard/{tier}`, `.../scene/{n}`,
-`.../meter`, `.../cast`. The GET payload carries `anchors` — chosen album
-sheets grouped per character (`character`, `character_id`, `images` with
-`path`/`url`/`view`; protagonist first) so a client can draw the strip
-(`T2-26`). Each scene object also carries its reference stills
-(`refs` with `path`/`url` next to `image_prompt`, `T2-27`).
-The generation prompt and **the limits that apply to it**
-travel in the same response (`T2-18`).
 `GET/POST /api/songs/{id}/storyboard/{tier}` (`T2-17` **built**: GET
 returns `prompt` from `storyboard_generation_payload`, defaulted from the
 tier; POST accepts an edited `prompt`; `T2-18` **built**: same body carries

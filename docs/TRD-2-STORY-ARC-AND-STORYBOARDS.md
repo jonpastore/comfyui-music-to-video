@@ -671,7 +671,7 @@ timing — `clip_plan` is the one, and every client calls it.
    marked **provisional** and says what it cannot yet distinguish.
 
    One-sided in this document today, listed so nobody has to re-derive it:
-   `T2-6` (a no-op delete renumbers nothing), `T2-18` and `T2-33` (a picker that marks EVERYTHING unavailable passes; it needs the paired positive), `T2-36`/`T2-37` (payload presence with no consumer). `T2-12a`'s stored measurement must also be asserted to MATCH the ceiling the code uses, or the record and the constant drift apart. `T2-34`'s paired positive is now the check.
+   `T2-6` (a no-op delete renumbers nothing), `T2-18` and `T2-33` (a picker that marks EVERYTHING unavailable passes; it needs the paired positive). `T2-12a`'s stored measurement must also be asserted to MATCH the ceiling the code uses, or the record and the constant drift apart. `T2-34`'s paired positive is now the check. `T2-36`/`T2-37` paired halves are built.
 
 ### The positive half of each one-sided criterion
 
@@ -758,5 +758,6 @@ current.
 | **`T2-18` limits in the response** | **built** | this change | `storyboard_generation_payload` / GET carry `max_characters`, `pinned`, `pinned_added_at_use`, `pinned_editable` with the prompt. POST one character over `max_characters` is 400 quoting that number; at the cap still enqueues. Mutation: return a cap the server does not enforce → red. Mutation: enforce a different number than the payload → red. `studio/test_t2_18_storyboard_limits.py` |
 | **`T2-19` edited prompt reaches generation** | **built** | this change | Two different directions against the same recorded model response produce two different storyboards: each board carries its own direction string, and the chat messages sent to the model carry that string too. Mutation: drop `direction` before messages/return → red. Mutation: hardcode one direction → the other arm fails. `studio/test_t2_19_edited_prompt_generates.py` |
 | **`T2-36` help text carried** | **built** | `test_t2_36_help_text.py` | `controls_help_payload()` builds per-control help: notes `kind=note` from `ANCHOR_HELP`, day-8 footguns `kind=warning` from `ANCHOR_WARNINGS`. Empty label/body omitted (not present-and-empty). `GET /api/anchors` carries `help`. Mutation: stamp empty keys → empty arm red. Mutation: mark every string as note → warning arm red. Mutation: drop `help` from the list response → API arm red |
+| **`T2-37` arc in the playlist payload** | **built** | `test_t2_37_playlist_arc.py` | `GET /api/playlists/{id}` carries `arc` (with the stored premise) only when an arc is defined; a playlist without one omits the field. Mutation: always include `arc` → absent arm red. Mutation: drop `arc` when defined → present arm red. Mutation: key present without the stored premise → present arm red. Rendered row is not this |
 | §4 wands (`T2-14`…`T2-16`, `T2-20`…`T2-22`), §5 meter, §5.3 casting | **not built** | — | |
 

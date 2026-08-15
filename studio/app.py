@@ -6649,6 +6649,27 @@ def playlist_detail(p):
             "partial_tiers": sorted(t for t in tiers_with_video if t not in ready)}
 
 
+def _playlist_payload(p):
+    """JSON playlist card. Arc only when one is defined (T2-37)."""
+    out = {
+        "id": p["id"],
+        "name": p["name"],
+        "kind": p["kind"],
+        "image_path": p["image_path"],
+        "created": p["created"],
+    }
+    arc_data = _load_arc(p["id"])
+    if arc_data is not None:
+        out["arc"] = arc_data
+    return out
+
+
+@app.get("/api/playlists/{id}")
+def api_playlist_get(id: int):
+    """Playlist payload a row can show. Arc is present only when defined."""
+    return JSONResponse(_playlist_payload(get_playlist_or_404(id)))
+
+
 @app.get("/playlists", response_class=HTMLResponse)
 def playlists_page(request: Request):
     # 'genre' rows can still exist in the db (a legacy row, or one inserted

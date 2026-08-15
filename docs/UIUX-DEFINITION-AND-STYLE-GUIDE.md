@@ -389,6 +389,10 @@ The album arc wand proposes; Accept and Reject are separate controls
 (`T2-15`). Propose does not replace the stored file. Reject leaves the
 previous arc on disk. Accept is the write. A proposal that was never
 Accepted is still a proposal.
+The playlist card payload (`GET /api/playlists/{id}`) carries the
+album's arc when one is defined and omits the field when none, so a
+row can show it without hardcoding (`T2-37`). Asserted on the payload,
+not on a rendered row.
 A generated storyboard carries a distinctive string from the album arc
 when one exists, and does not when the arc is absent (`T2-20`).
 At `xxx`, no scene `image_prompt` or `video_motion_prompt` carries the
