@@ -3749,7 +3749,7 @@ def _draft_ref_image(album, character_id=None):
     return row["path"] if row else None
 
 
-def _draft_one(album, view, current="", character_id=None):
+def _draft_one(album, view, current="", character_id=None, tier=None):
     if view not in ANCHOR_VIEWS:
         raise HTTPException(400, f"view must be one of {', '.join(ANCHOR_VIEWS)}")
     fields = anchor_profile_fields(album or "", character_id)
@@ -3760,7 +3760,8 @@ def _draft_one(album, view, current="", character_id=None):
         raise HTTPException(502, f"could not draft the {view} prompt: {e}") from None
     if not text:
         raise HTTPException(502, "the draft came back empty")
-    return screen_prompt_field(text, "prompt", f"{view} draft")
+    # Unset tier is xxx (T10-25); a named lock is the T10-18 gate.
+    return screen_prompt_field(text, "prompt", f"{view} draft", tier=tier)
 
 
 @app.post("/anchors/draft")
@@ -3773,7 +3774,7 @@ async def draft_anchor_prompt(request: Request):
     cid = form.get("character_id")
     character_id = int(cid) if cid else None
     current = (form.get("current") or "").strip()
-    text = _draft_one(album, view, current, character_id)
+    text = _draft_one(album, view, current, character_id, tier=tier or None)
     return {"text": text, "view": view, "tier": tier}
 
 
@@ -3791,11 +3792,12 @@ async def draft_related_anchor_prompts(request: Request):
              and view_family(v) == family]
     if not views:
         raise HTTPException(400, "no views in that family are selected")
+    tier = (form.get("tier") or "").strip() or None
     prompts_out = {}
     for v in views:
-        current = (form.get(anchor_prompt_field(form.get("tier") or "", v))
+        current = (form.get(anchor_prompt_field(tier or "", v))
                    or form.get(f"current_{v}") or "")
-        prompts_out[v] = _draft_one(album, v, current, character_id)
+        prompts_out[v] = _draft_one(album, v, current, character_id, tier=tier)
     return {"family": family, "prompts": prompts_out}
 
 
@@ -4644,7 +4646,7 @@ COPYABLE_CHARACTER_FIELDS = ("wardrobe", "body", "nude_wardrobe", "anatomy")
 MAX_PROMPT_FIELD = 2000
 
 
-def screen_prompt_field(value, field, where):
+def screen_prompt_field(value, field, where, tier=None):
     """One guard for prose a form is about to put into an image prompt.
 
     Shared rather than copied per route. `check_character_fields` used to say the
@@ -4653,12 +4655,14 @@ def screen_prompt_field(value, field, where):
     from a form, and had no screening at all: no check_text, no check_override,
     no bound, while every sibling path had all three. One guard, both callers, so
     the next field added to either table cannot land unscreened.
+
+    Unset tier is xxx (T10-25): a draft with no lock fails closed.
     """
     if len(value) > MAX_PROMPT_FIELD:
         raise HTTPException(400, f"{field} is {len(value)} characters; keep it under "
                                  f"{MAX_PROMPT_FIELD}")
     try:
-        tiers.check_text(value, f"{where} {field}")
+        tiers.check_text(value, f"{where} {field}", tier=tier)
         tiers.check_override(value)
     except ValueError as e:
         raise HTTPException(400, str(e))

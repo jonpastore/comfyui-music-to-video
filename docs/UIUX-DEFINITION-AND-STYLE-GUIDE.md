@@ -1156,6 +1156,13 @@ reaches a model is screened after every merge and after `PINNED` is
 welded. A field that looked clean when typed can still refuse at render
 if composition forms a blocked phrase; the refusal still names the term.
 
+`T10-25` is built. A draft with no tier set is treated as `xxx` — the
+most restrictive, not the least. Form prose that has no lock
+(`screen_prompt_field` without a tier, anchor draft with an empty tier
+box) refuses the same child string an `xxx` board would. Naming `g` on
+the draft form is what opens the `T10-18` allowance; leaving the box
+empty never does.
+
 `T10-26` is built and absolute: a minor reference co-occurring with
 lingerie / suggestive / fetish (or explicit) wording is refused at every
 tier, including the g/pg13 depiction path and the r lyrics mention path.

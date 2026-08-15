@@ -325,15 +325,17 @@ for one idea sat 39 characters from refusing real saved content.
 **Rule 0 applies here too**: assert through `screen_prompt_field`, not through
 each caller, or a caller that stops calling it stays green.
 
-### 4.4 Minor policy (`T10-18`, `T10-20`, `T10-21`, `T10-23`)
+### 4.4 Minor policy (`T10-18`, `T10-20`, `T10-21`, `T10-23`, `T10-25`)
 
 `guardrail.check_text(text, where, tier=..., field_kind=...)` is the single
-text screen. `LOCKED_DEPICT_TIERS = {g, pg13}` skips the refusal for depiction;
-unset / anything else is `xxx` (`T10-25`). `build_prompt`,
-`build_song.workflow`, `build_refs.workflow`, scene save and storyboard
-direction pass the tier. The storyboard JSON already carries it as
-`version`. `PINNED` stays welded; `PINNED_AGE_FLOOR = 18` is the documented
-floor (`T10-18c`).
+screen. `policy_tier(tier)` resolves the lock: unset / blank is `xxx`
+(`T10-25`). `LOCKED_DEPICT_TIERS = {g, pg13}` skips the refusal for
+depiction; anything else is screened as `xxx`. `build_prompt`,
+`build_song.workflow`, `build_refs.workflow`, scene save, storyboard
+direction, and `screen_prompt_field` (draft / character / album form prose)
+pass the tier. The storyboard JSON already carries it as `version`.
+`PINNED` stays welded; `PINNED_AGE_FLOOR = 18` is the documented floor
+(`T10-18c`).
 
 `T10-18a`: at `r`, `allows_minor_mention(tier, field_kind=...)` is true only
 for `MENTION_FIELD_KINDS = {lyrics, narrative}`. Render-reaching calls omit

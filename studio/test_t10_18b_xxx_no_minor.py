@@ -56,7 +56,8 @@ def test_t10_18b_check_text_and_lyrics_screen_refuse_at_xxx():
     assert guardrail.refuses_minor_everywhere("xxx")
     assert not guardrail.refuses_minor_everywhere("r")
     assert not guardrail.refuses_minor_everywhere("g")
-    assert not guardrail.refuses_minor_everywhere(None)
+    # T10-25: unset resolves to xxx, so the same refuse-everywhere rule applies.
+    assert guardrail.refuses_minor_everywhere(None)
 
 
 def test_t10_18b_xxx_refuses_minor_everywhere_including_lyrics():

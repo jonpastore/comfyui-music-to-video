@@ -50,9 +50,20 @@ NO_MINOR_MENTION_TIERS = frozenset({"xxx"})
 MENTION_FIELD_KINDS = frozenset({"lyrics", "narrative"})
 
 
+def policy_tier(tier):
+    """Tier used for the minor-policy rule. Unset is xxx (T10-25).
+
+    Write paths call this (or check_text, which does) so a draft with no
+    lock fails closed at the most restrictive rating, not open at g.
+    """
+    t = (tier if isinstance(tier, str) else "") or ""
+    t = t.strip().lower()
+    return t if t else "xxx"
+
+
 def allows_minor_depiction(tier):
     """True only at the locked non-explicit tiers named by T10-18."""
-    return (tier or "").strip().lower() in LOCKED_DEPICT_TIERS
+    return policy_tier(tier) in LOCKED_DEPICT_TIERS
 
 
 def references_minor(text):
@@ -84,7 +95,7 @@ def stamp_minor_lock_attribution(meta, *, tier):
 
 def refuses_minor_everywhere(tier):
     """True at xxx: no field of the work may reference a minor (T10-18b)."""
-    return (tier or "").strip().lower() in NO_MINOR_MENTION_TIERS
+    return policy_tier(tier) in NO_MINOR_MENTION_TIERS
 
 
 def allows_minor_mention(tier, *, field_kind=None):
@@ -94,7 +105,7 @@ def allows_minor_mention(tier, *, field_kind=None):
     work may say a child exists in story text; it may not put that reference
     into any string that reaches a render prompt.
     """
-    t = (tier or "").strip().lower()
+    t = policy_tier(tier)
     kind = (field_kind or "").strip().lower()
     return t == "r" and kind in MENTION_FIELD_KINDS
 
@@ -381,8 +392,10 @@ def check_text(text, where="input", *, tier=None, field_kind=None):
     anatomy/act wording) is refused at every tier, including the allowances
     above.
 
-    Unset tier is xxx (T10-25). Raises ContentRefused (terminal).
+    Unset tier is xxx via policy_tier (T10-25). Raises ContentRefused
+    (terminal).
     """
+    tier = policy_tier(tier)
     minors = _minor_hits(text)
     if minors:
         sex = _sexualisation_hits(text)
