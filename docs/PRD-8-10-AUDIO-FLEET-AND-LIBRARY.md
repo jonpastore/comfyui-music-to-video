@@ -78,8 +78,8 @@ still not shipped (`T8-12`, provisional by absence).
 2. **TRD-8's take model.** New generations land as `takes` rows (`T8-1`); pick
    (`T8-2`) and the three-path origin on every route (`T8-3`) are the remaining
    half. Takes generated before `T8-1` still cannot say what they were asked for.
-   `T8-10` is the voice-store gate (built); `T8-11` (a take records which voice
-   at generate time) is not.
+   `T8-10` is the voice-store gate (built); `T8-11` is built — `h_audio` writes
+   which voice produced the take, or that none did.
 3. **TRD-10's bulk edit**, which is unbuilt and self-contained.
 4. **TRD-10's advice rules**, which are mostly labelling and refusals over
    surfaces that already exist.

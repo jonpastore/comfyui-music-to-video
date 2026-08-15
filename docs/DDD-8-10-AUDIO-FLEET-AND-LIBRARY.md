@@ -73,8 +73,11 @@ NOT NULL in the schema, and `insert_voice` is the gate** — empty or whitespace
 is not a recorded state, and the `ValueError` names which of `source` /
 `consent` is missing (`T8-10`). A row that stores both is readable via
 `get_voice` and assignable on `take_voices`. `take_voices` carries per-region
-parameters so a voice can apply to a span rather than a whole track; generation
-does not yet record a voice on the take (`T8-11`, not built).
+parameters so a voice can apply to a span rather than a whole track.
+`h_audio` records `params_json.voice_id` on every take (`T8-11`): the voice id
+when one was asked, `None` when not, so the absence is a recorded answer
+rather than a missing field. A take generated with a voice also lands the
+whole-track assignment on `take_voices`.
 
 Nothing here ships a cloning path for a real named person. That is `T8-12`,
 still **provisional** — green today by absence, even though `T8-10` now holds.
@@ -185,6 +188,7 @@ each caller, or a caller that stops calling it stays green.
     TRD-9 tests (no new behaviour)  ->  a routing change becomes provable
     takes/voices schema  ->  h_audio writes takes (T8-1, built)
                          ->  insert_voice refuses missing source/consent (T8-10, built)
+                         ->  h_audio records which voice, or none (T8-11, built)
                          ->  the picked/unpicked distinction (T8-2)
     bulk edit (self-contained)      ->  T10-3..T10-7
     advice labelling  ->  T10-11..T10-15 over the four live modules

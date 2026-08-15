@@ -642,7 +642,9 @@ shows a waveform and a duration is showing metadata; the operator has to press
 play. So the take tile's primary action is **playback**, and comparison is the
 layout's job: takes for one song sit in a row that can be played in turn without
 leaving the page, because *"picked by ear"* is the actual workflow and a
-navigation between two takes destroys the comparison.
+navigation between two takes destroys the comparison. The tile also reads
+`params_json.voice_id` (`T8-11`): which voice produced the take, or that none
+did. A take that cannot say is a take that cannot be compared on that axis.
 
 ### 7b.2 The consent field is a gate, and gates look different from fields
 

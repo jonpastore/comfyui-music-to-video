@@ -1427,6 +1427,7 @@ def h_audio(args, progress):
     again. Each take is copied into the studio's own data dir and given an
     assets row plus a takes row (T8-1): tags/lyrics/seed/duration/params
     are stored on the take so a later song edit cannot rewrite the ask.
+    params include voice_id (T8-11): which voice produced the take, or None.
 
     Never writes over song["mp3_path"]. A take becomes the song's audio only
     when someone presses Use, which is the same route an edit goes through.
@@ -1468,6 +1469,14 @@ def h_audio(args, progress):
         # region node on any backend -- so "resynthesised" means all of it.
         origin = ("bridged" if span else
                   "resynthesised" if args.get("source_path") else "generated")
+        # T8-11: which voice produced the take is part of the ask. Missing
+        # and blank are recorded as None so a take generated without a
+        # voice is not the same row as one that never considered the field.
+        voice_id = args.get("voice_id")
+        if voice_id == "" or voice_id is None:
+            voice_id = None
+        else:
+            voice_id = int(voice_id)
         meta = {
             "mode": origin,
             "tags": args["tags"], "lyrics": args.get("lyrics", ""),
@@ -1476,18 +1485,23 @@ def h_audio(args, progress):
             "source_path": args.get("source_path") or "",
             "bridge_start": (span or {}).get("start"),
             "bridge_end": (span or {}).get("end"),
-            "model": models.default_for("audio")}
+            "model": models.default_for("audio"),
+            "voice_id": voice_id}
         db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
                sid, "audio_gen", out, json.dumps(meta), time.time())
         # T8-1: the ask is copied onto the take. insert_take never writes
         # songs.mp3_path -- picking is a separate act (T8-2).
         if sid:
-            db.insert_take(
+            tid = db.insert_take(
                 sid, out, origin,
                 tags=args["tags"], lyrics=args.get("lyrics", ""),
                 seed=args.get("seed"), duration=args["seconds"],
                 params={k: meta[k] for k in (
-                    "denoise", "source_path", "bridge_start", "bridge_end", "model")})
+                    "denoise", "source_path", "bridge_start", "bridge_end",
+                    "model", "voice_id")})
+            if voice_id is not None:
+                db.assign_take_voice(tid, voice_id, start_secs=0,
+                                     end_secs=args["seconds"])
         kept.append(out)
     progress(f"{len(kept)} take(s) kept in {outdir}")
     return {"path": kept[0], "takes": len(kept)}

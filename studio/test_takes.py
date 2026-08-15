@@ -1,10 +1,12 @@
-"""T8-1, T8-2, T8-3, T8-2a, T8-10: a take records the ask; a voice records consent.
+"""T8-1, T8-2, T8-3, T8-2a, T8-10, T8-11: a take records the ask and the voice.
 
 insert_take / pick live here. The audio job's land path is asserted in
 test_t8_1_gen_audio_lands_as_take_and_keeps_the_ask -- a take that only
 exists as an assets row cannot say what it was asked for after the song
 moves. T8-10 is insert_voice: no row without a recorded source and a
-recorded consent state, and the refusal names which is missing.
+recorded consent state, and the refusal names which is missing. T8-11 is
+h_audio: a take generated with a voice records which, and one generated
+without records that too.
 """
 import os
 import time
@@ -197,3 +199,47 @@ def test_t8_1_gen_audio_lands_as_take_and_keeps_the_ask():
     assert song["style_text"] == "CHANGED tags"
     assert song["lyrics"] == "CHANGED lyrics"
     assert song["mp3_path"] == "/keep/me.mp3"
+
+
+def _gen_audio(sid, *, seed, voice_id=None):
+    import app as appmod
+
+    args = {
+        "song_id": sid,
+        "tags": "drums, 128 bpm warehouse",
+        "lyrics": "[verse]\nmeow",
+        "seconds": 12.0,
+        "n": 1,
+        "seed": seed,
+        "denoise": 0.7,
+    }
+    if voice_id is not None:
+        args["voice_id"] = voice_id
+    appmod.h_audio(args, lambda _m: None)
+
+
+def test_t8_11_generation_records_which_voice():
+    """T8-11: generation writes which voice produced the take.
+
+    One take with a voice and one without, both generated, both recording
+    the distinction. An absent take_voices row is not enough: that is also
+    how a take that never considered a voice looks. The take itself must
+    say which voice, or that there was none.
+    """
+    sid = _song(style_text="drums, 128 bpm warehouse", lyrics="[verse]\nmeow",
+                mp3_path="/keep/me.mp3")
+    vid = db.insert_voice(f"lead-{time.time_ns()}", "local",
+                          source="own recording", consent="own")
+    _gen_audio(sid, seed=42, voice_id=vid)
+    _gen_audio(sid, seed=43)
+
+    listed = db.list_takes(sid)
+    assert len(listed) == 2, "expected one take with a voice and one without"
+    with_voice, without = listed
+    assert db.jset(with_voice, "params_json")["voice_id"] == vid
+    assigned = db.list_take_voices(with_voice["id"])
+    assert [row["voice_id"] for row in assigned] == [vid]
+    params = db.jset(without, "params_json")
+    assert "voice_id" in params, "a take generated without a voice must record that"
+    assert params["voice_id"] is None
+    assert db.list_take_voices(without["id"]) == []
