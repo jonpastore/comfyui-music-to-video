@@ -346,9 +346,7 @@ order and take the dependencies from here.
    (`test_t2_25_scene_time_enqueue.py`). **`T2-34` built**: the
    clip-pass picker marks a model `where()` says False on every
    reachable backend as unavailable and still offers a confirmed one
-   (`test_t2_34_unavailable_shown.py`). Remaining: §4.2–4.3
-   wands (`T2-17`…`T2-19`), and casting.
-   the time meter (§5.1), casting (§5.3). **`T2-17` built**:
+   (`test_t2_34_unavailable_shown.py`). **`T2-17` built**:
    `GET /api/songs/{id}/storyboard/{tier}` returns the generation prompt
    defaulted from the tier (`storyboard_generation_payload`); POST accepts
    an edit. **`T2-18` built**: the same response carries the enforced
@@ -363,14 +361,14 @@ order and take the dependencies from here.
    **`T2-27` built**: each `scenes[]` object on
    `GET .../storyboard/{tier}` carries `refs` (`path` / `url` per clip)
    next to the editable description. Another scene's still is not this.
-   Remaining: `T2-8c`, §4 wands (`T2-14`…`T2-19`), `T2-25`, and casting.
-   song yield two lengths. **`T2-29` built**: every named scene figure
+   **`T2-29` built**: every named scene figure
    carries `lead` / `extra` / `background`; `GET .../cast` returns
    `role`; save/write refuses an unclassified or free-text role.
    **`T2-30` built**: unanchored warning lists only leads
    (`test_t2_30_unanchored_leads_only.py`); extras/background without
-   an anchor are silent. Remaining: `T2-8c`, §4 wands
-   (`T2-14`…`T2-19`), `T2-25` where not already built.
+   an anchor are silent.
+   **`T2-28` remaining**: `POST /songs/{id}/refs` must refuse when a
+   named lead has no chosen sheet, not only paint the banner.
 7. Per-scene model choice, W2 (`T2-42`…`T2-48`) — last, because `T2-45` needs
    `models.where()`'s three-valued answer respected at enqueue and `T2-48` needs
    per-model ceilings, which is P0 item 1 again. The renderer half of those

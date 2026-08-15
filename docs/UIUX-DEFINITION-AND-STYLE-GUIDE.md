@@ -410,6 +410,11 @@ The storyboard meter API reports total scene time against song length
 and flags a miss beyond a stated tolerance (`T2-23`); it reports this
 song's `clip_seconds`, not a constant (`T2-24`). A miss is refused
 before clips enqueue (`T2-25`). The live `meter` component is not this.
+`GET/POST /api/songs/{id}/storyboard/{tier}` is the generation prompt
+(`T2-17`–`T2-19`) and, when a board file exists, the scenes/anchors/refs
+payload (`T2-26`, `T2-27`). Unanchored **leads** only (`T2-30`).
+`POST /songs/{id}/refs` still only requires the album protagonist sheet
+(`T2-28` remaining).
 The song page **Video model** select is `models.renderable("video")`
 with each option's purpose in the hint (`T2-33`). Adding a catalogue
 entry with a `cli` appears there with no template change. A model

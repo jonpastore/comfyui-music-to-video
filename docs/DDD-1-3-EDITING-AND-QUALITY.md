@@ -5,8 +5,8 @@ Status: written 2026-08-13. Product framing and sequencing:
 `docs/TRD-2-STORY-ARC-AND-STORYBOARDS.md`, `docs/TRD-3-QC-AND-REMEDIATION.md`.
 Rules inherited from `TRD-6 §0` are cited, never restated.
 
-**Every "built" and "not built" below was read off the tree at `f9ca597`, not
-off a document.** TRD-3 §2.1 records what happens otherwise: a "do not rebuild"
+**Every "built" and "not built" below was read off the tree at `7de0aea` (refreshed 2026-08-15), not
+off a document.** The 2026-08-13 snapshot was `f9ca597`. TRD-3 §2.1 records what happens otherwise: a "do not rebuild"
 table that omitted the QC implementation, which is the omission most likely to
 cost a rewrite. Where a claim here is a measurement, the command that produced it
 is named.
@@ -642,6 +642,11 @@ scene save refuse a named figure with no role or a free-text role.
 figure. A bare name is a legacy lead. Mutation: coerce to strings →
 compose arm red. Mutation: dump without the check → writer arm red.
 Mutation: return names without role → API arm red. `T2-30` is not this.
+
+`T2-28` is **partial**. The banner and `GET .../cast` list unanchored
+leads (`T2-30`). `POST /songs/{id}/refs` still only requires a chosen
+protagonist sheet. A miss on a named lead must 400 before a refs job
+is written.
 
 `T2-30` is **built**. `unanchored_leads(rows)` returns names of figures
 with `role == "lead"` and no chosen anchor. Storyboard HTML banner,

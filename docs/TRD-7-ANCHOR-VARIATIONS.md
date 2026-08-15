@@ -288,7 +288,7 @@ been seen red is a claim about a check, not about the code. Commits are on
 | `T7-13` per-view framing versioned | **not built** | — | §9.1 |
 | `T7-14` `backdrop` a versioned type | **built** | `d5526cb` | album override reaches the composed prompt and the constant does not appear beside it |
 | `T7-15` `composite` a versioned type | **built** | `d5526cb` | appears at `n_refs=2`, absent at `n_refs=1`, album wording replaces the constant |
-| `T7-16` `pose` | **not built, deliberately** | — | §9.1 — building it before the view table ships a contradiction |
+| `T7-16` `pose` | **partial** | `T7-20` | Named uploaded poses (`T7-20`, `77e33d7`) are the operator path: a plate is a named photo, not a second standing clause. The album-versioned `pose` prompt type in §9.1 is still not a `prompts` row |
 | `T7-17` composed and previewed | **built** for `T7-14`/`T7-15` | `d5526cb` | the preview runs the real composer, so both appear by construction |
 | `T7-18` screened and walked | **built** for `T7-14`/`T7-15` | `d5526cb` | both go through `screen_prompt_field`; the negation walker now covers the studio's `ANCHOR_PROFILE_FIELDS` defaults, not only `make_anchor`'s constants |
 | `T7-19` per-view prompt box | **built** | `415584d` | an edit reaches only its own view; the sibling view composes its own. Mutation: the back sheet came back holding `"FRONT VIEW character reference sheet of ..."` — the reported symptom |
