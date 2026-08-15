@@ -513,6 +513,10 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
         "character_reference": character_reference or style_note,
         "album_world_reference": world_reference or style_note,
         "global_negative_prompt": out[0].get("negative_prompt", "") if out else "",
+        # T2-22: the declared clause is compose_guardrail(tier), not the
+        # argument and not a scene-prompt bake-in. Render still attaches
+        # the same clause at build time; this field is what save compares.
+        "guardrail": tiers.compose_guardrail(str(tier)),
         "scenes": out,
     }
     mark = _arc_string(arc_ctx)
@@ -628,14 +632,11 @@ def validate(sb, exemplar=None, expect_scenes=None):
 
     # exemplar must guide format only -- its own guardrail/content must not leak in
     ex = exemplar or {}
-    # No global_guardrail field exists any more -- the clause lives in code
-    # (guardrail.py) and is attached by the prompt builders, so a third-party
-    # storyboard needs no such field. The only leak still worth catching is the
-    # exemplar's own wording turning up inside a generated scene.
-    # The exemplar no longer carries a guardrail field -- storyboards hold no
-    # policy text at all now -- so the leak worth catching is its CONTENT: its
-    # concept sentence turning up in a generated scene means the model reused the
-    # template instead of learning its shape from it.
+    # T2-22 stamps a top-level guardrail field (compose_guardrail(tier)).
+    # Scene prompts still must not bake the clause in; the exemplar leak
+    # worth catching is its CONTENT: its concept sentence turning up in a
+    # generated scene means the model reused the template instead of
+    # learning its shape from it.
     ex_concept = (ex.get("concept") or "").strip()
     if len(ex_concept) > 30:
         for s in scenes:

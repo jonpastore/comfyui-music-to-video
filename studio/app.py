@@ -1153,6 +1153,15 @@ def h_storyboard(args, progress):
     sb = grok.generate_storyboard(song["lyrics"] or "", tier, guardrail, style_note,
                                    song_fields, args.get("model"), args.get("scene_seconds"), progress,
                                    direction=direction, cast=cast, arc_ctx=arc_ctx)
+    if isinstance(sb, dict):
+        # T2-22: declared clause is compose_guardrail (album override when
+        # one exists). Stub generate has no field; the real composer stamps
+        # compose_guardrail(tier) and this overwrites with the applied text.
+        sb["guardrail"] = guardrail
+        foreign = foreign_tier_in_storyboard(sb, tier)
+        if foreign:
+            raise ValueError(
+                f"storyboard carries {foreign} wording; this board is {tier}")
     outdir = os.path.join(db.DATA, "storyboards", song["slug"])
     os.makedirs(outdir, exist_ok=True)
     json_path, md_path = grok.write_storyboard(sb, outdir, song["slug"], tier)
@@ -4595,6 +4604,28 @@ EDITABLE_SCENE_FIELDS = ("image_prompt", "video_motion_prompt", "story")
 MAX_SCENE_FIELD = 4000
 
 
+def foreign_tier_in_storyboard(sb, tier):
+    """Other-tier name whose stored wording appears in the board, or None.
+
+    T2-22: a storyboard carrying another tier's clause is refused at save.
+    PINNED is shared, so this matches the tone half (tiers.guardrail), not
+    compose_guardrail(). Clauses shorter than 24 characters are skipped so
+    a one-word custom tier cannot false-positive.
+    """
+    tiers.ensure_builtins()
+    hay = json.dumps(sb, ensure_ascii=False)
+    own = (tiers.tier_text(tier) or "").strip()
+    for row in db.q("SELECT name, guardrail FROM tiers WHERE name != ?", str(tier)):
+        clause = (row["guardrail"] or "").strip()
+        if len(clause) < 24:
+            continue
+        if clause == own or (own and clause in own):
+            continue
+        if clause in hay:
+            return row["name"]
+    return None
+
+
 def load_storyboard(row, normalized=True):
     """The storyboard JSON.
 
@@ -4782,6 +4813,13 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
         if (scene.get(field) or "") != value:
             scene[field] = value
             changed = True
+    # T2-22: refuse after the proposed values are patched so an edit that
+    # introduces another tier's clause cannot land. Whole board, not just
+    # the field that changed — the criterion is about the storyboard.
+    foreign = foreign_tier_in_storyboard(sb, tier)
+    if foreign:
+        raise HTTPException(
+            400, f"storyboard carries {foreign} wording; this board is {tier}")
     if changed:
         # stamp the edit so frames rendered before it can be shown as stale.
         # An unknown key in a scene is ignored by every builder (they read named

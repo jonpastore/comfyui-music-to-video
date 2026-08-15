@@ -287,6 +287,9 @@ so two plannings produce two TIMING statements (`T2-14b`). TIMING still
 states track length and requires scene durations to sum to it (`T2-14c`).
 A generated storyboard carries a distinctive string from the album arc
 when one exists, and does not when the arc is absent (`T2-20`).
+The board's declared `guardrail` is this tier's `compose_guardrail`
+clause; saving a board that carries another tier's wording is refused
+(`T2-22`).
 
 ### 5.3 Space and radius
 

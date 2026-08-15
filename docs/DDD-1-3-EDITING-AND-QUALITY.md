@@ -354,6 +354,14 @@ continuity onto the generated board; no arc leaves the field off. Same
 recorded model response both arms — two fixtures differing is not the
 check. Mutation: drop `arc_ctx` from `_compose` → red.
 
+`T2-22` is **built**. `_compose` stamps `guardrail` from
+`tiers.compose_guardrail(tier)`, not the `guardrail` argument — a
+passed-in dummy is discarded. `app.foreign_tier_in_storyboard` matches
+another row's stored tone half (PINNED is shared, so composed text
+would false-positive) and `save_scene` / `h_storyboard` refuse it.
+A clean scene edit still writes. Mutation: drop the stamp → generation
+arm red. Mutation: write without the check → save arm red.
+
 ### 5.6 Tier 2 is a calibration, not a metric
 
 `vision.py` is a VLM caller and is **not** the tier-2 path. TRD-3 §10 forbids a
