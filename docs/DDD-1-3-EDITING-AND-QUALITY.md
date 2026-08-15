@@ -502,6 +502,12 @@ length is the divisor, the count is ours.
    `validate` refuses a gap or overlap. `main()` expands an over-ceiling
    scene into that chain instead of handing 30 s to `workflow`.
    Mutation: ignore `video_model` → both scenes take 15 s.
+   **`T2-11` built.** `clip_chain_plan` sets `depends_on` on same-scene
+   successors. `app.enqueue_clips` (called from `start_clips`) enqueues
+   one job per chain clip with `jobs.enqueue(..., depends_on=pred)`;
+   under-ceiling songs stay one batch job. `_claim` (T6-2) will not
+   pull a successor until the predecessor is `done`
+   (`test_t2_11_clip_chain_depends.py`).
    **`T2-42` / `T2-43` built.** `_scene_json` returns `video_model`
    beside `camera`; an unmarked scene stays empty and
    `clips_for_scene` / `main()` take `--video-model`.

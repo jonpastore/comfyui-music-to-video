@@ -516,6 +516,9 @@ The six job states are the ones `jobs.py` already writes — **queued, running,
 cancelling, cancelled, done, failed** — and one vocabulary serves buttons, rows,
 chips and summaries. The consultation suggested deleting synonyms; checked, and
 there are none: `error` is a *column* on the jobs row, not a seventh state.
+A chained clip successor (TRD-2 `T2-11`) stays **queued** until its
+predecessor is **done** — ready is not a seventh chip; the queue already
+skips it (T6-2).
 
 Rules that apply at every level:
 

@@ -158,6 +158,12 @@ longer the phase to defer — `docs/PLAN-TRD-4-7.md` §4 is updated to match.
 
 ### Already built and deployed (do not rebuild)
 
+**`T2-11` built** — a chained clip (T2-48 over-ceiling scene split) is not
+ready until its predecessor has landed: `start_clips` → `enqueue_clips`
+wires `depends_on` per clip; T6-2 `_claim` skips the successor until the
+predecessor is done (`test_t2_11_clip_chain_depends.py`). Under-ceiling
+songs still enqueue one batch `clips` job.
+
 `studio/qc.py` (TRD-3 tier 1 in full; **`T3-4.2-sat` built** — clip
 `channel_sat` / `measure_channel_sat` FLAGs solid green garbage (NaN
 encode mode) above `CHANNEL_SAT_LIMIT`, PASSes testsrc2/gray/black,

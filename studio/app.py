@@ -1443,11 +1443,17 @@ def h_clips(args, progress):
         progress("i2v: prompt-driven only -- this render has no beat sync or mouth movement")
     if args.get("refine"):
         progress("refiner pass ON: roughly double the render time, and unproven on s2v output")
+    # T2-11: a chain successor is its own job with clip_idx set; only render that
+    # clip. A batch job (no clip_idx) still renders the whole song.
+    only = None
+    if "clip_idx" in args and args["clip_idx"] is not None:
+        only = [int(args["clip_idx"])]
     results = pipeline.gen_clips(song["slug"], tier, sb["json_path"], song["mp3_path"], ref_paths,
                                   progress, video_model=video_model,
                                   ref_motion=args.get("ref_motion"),
                                   control_video=args.get("control_video"),
-                                  refine=bool(args.get("refine")))
+                                  refine=bool(args.get("refine")),
+                                  only=only)
     for r in results:
         db.run("""INSERT INTO clips (song_id, tier, clip_idx, path, status) VALUES (?,?,?,?,'done')
                   ON CONFLICT(song_id, tier, clip_idx) DO UPDATE SET path=excluded.path, status='done'""",
@@ -5908,10 +5914,43 @@ async def start_clips(id: int, tier: str = Form(...), video_model: str = Form(""
         raise HTTPException(400, "ref_motion and control_video are s2v inputs -- i2v has "
                                   "neither. Switch to s2v or remove the clips.")
     refuse_if_scene_time_mismatch(song, tier)
-    jobs.enqueue("clips", {"song_id": id, "tier": tier, "video_model": video_model,
-                            "refine": bool(refine), "ref_motion": motion_path,
-                            "control_video": control_path}, song_id=id)
+    enqueue_clips(id, tier, video_model, refine=bool(refine),
+                  ref_motion=motion_path, control_video=control_path,
+                  scenes=(board or {}).get("scenes") or [])
     return RedirectResponse(f"/songs/{id}", status_code=303)
+
+
+def enqueue_clips(song_id, tier, video_model, refine=False, ref_motion=None,
+                  control_video=None, scenes=None):
+    """Enqueue clip render job(s). T2-11 wires depends_on for scene chains.
+
+    No chain → one batch job (unchanged). A T2-48 over-ceiling scene is a
+    chain: one job per clip, successor depends_on predecessor so _claim
+    (T6-2) will not pull it until the predecessor is done.
+    """
+    base = {"song_id": song_id, "tier": tier, "video_model": video_model,
+            "refine": bool(refine), "ref_motion": ref_motion,
+            "control_video": control_video}
+    plan = build_song.clip_chain_plan(scenes or [], video_model)
+    if not any(p.get("depends_on") is not None for p in plan):
+        return [jobs.enqueue("clips", base, song_id=song_id)]
+    # Chain refs are per split clip, not the pre-split n_clips_for count.
+    need = {p["clip_idx"] for p in plan}
+    approved = {r["clip_idx"] for r in
+                db.q("SELECT clip_idx FROM refs WHERE song_id=? AND tier=? AND approved=1",
+                     song_id, tier)}
+    missing = sorted(need - approved)
+    if missing:
+        raise HTTPException(400, f"clips missing an approved reference: {missing}")
+    jids = {}
+    out = []
+    for p in plan:
+        dep = jids[p["depends_on"]] if p.get("depends_on") is not None else None
+        args = dict(base, clip_idx=p["clip_idx"])
+        jid = jobs.enqueue("clips", args, song_id=song_id, depends_on=dep)
+        jids[p["clip_idx"]] = jid
+        out.append(jid)
+    return out
 
 
 @app.post("/songs/{id}/render")

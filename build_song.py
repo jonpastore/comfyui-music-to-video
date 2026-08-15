@@ -524,6 +524,27 @@ def clips_for_scenes(scenes, default_model="ltx25"):
     return plan
 
 
+def clip_chain_plan(scenes, default_model="ltx25"):
+    """[{clip_idx, depends_on, ...}] for the render plan. T2-11 / T2-48.
+
+    Consecutive clips that share a scene_number form a chain: clip N+1 needs
+    clip N's last frame, so depends_on is the predecessor's clip_idx. The first
+    clip of each scene, and every under-ceiling single-clip scene, has
+    depends_on=None so independent scenes stay parallel.
+    """
+    parts = clips_for_scenes(scenes, default_model)
+    out = []
+    for i, rec in enumerate(parts):
+        dep = None
+        if i > 0 and parts[i - 1].get("scene_number") == rec.get("scene_number"):
+            dep = i - 1
+        item = dict(rec)
+        item["clip_idx"] = i
+        item["depends_on"] = dep
+        out.append(item)
+    return out
+
+
 def scene_over_ceiling(scene, default_model="ltx25"):
     """True when this scene is longer than its model's clip ceiling."""
     model = scene.get("video_model") or default_model

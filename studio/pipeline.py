@@ -1240,12 +1240,17 @@ def stage_refs(slug, tier, ref_paths):
 
 
 def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None, limit=None,
-              video_model=None, ref_motion=None, control_video=None, refine=False):
+              video_model=None, ref_motion=None, control_video=None, refine=False,
+              only=None):
     """video_model: a renderer value from models.renderable("video") --
     'ltx25' (default) and 'ltx' are the audio-conditioned LTX paths, 's2v' is
     WAN's, and 'i2v' is prompt-driven with no audio at all. None means "ask the
     catalogue", so this default cannot drift from the one the song page offers.
-    See studio/models.py for what each is designed for."""
+    See studio/models.py for what each is designed for.
+
+    only: optional iterable of clip_idx values. T2-11 chain successors are
+    separate jobs; each renders just its own workflow, not the whole song.
+    """
     video_model = video_model or models.default_cli("video")
     # ref_paths must be staged before build_song.py runs -- it references
     # them by name inside the workflow, it doesn't take them as CLI input.
@@ -1264,7 +1269,15 @@ def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None, l
         args.append("--refine")
     with tempfile.TemporaryDirectory() as wf_dir:
         _run_script("build_song.py", [*args, "--outdir", wf_dir], progress)
-        if limit:
+        if only is not None:
+            keep_idx = {int(i) for i in only}
+            for f in list(os.listdir(wf_dir)):
+                m = re.match(r"clip_(\d+)\.(json|expect\.json)$", f)
+                if m and int(m.group(1)) not in keep_idx:
+                    os.remove(os.path.join(wf_dir, f))
+            if progress:
+                progress(f"chain clip only: {sorted(keep_idx)}")
+        elif limit:
             # a full song is 40-80 clips at ~90s each on one GPU; limit lets you
             # confirm the chain end to end before committing an hour to it
             keep = sorted(f for f in os.listdir(wf_dir) if f.endswith(".json"))[:int(limit)]
