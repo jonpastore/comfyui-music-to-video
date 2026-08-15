@@ -170,7 +170,9 @@ reason this section was written by reading the stylesheet rather than the TRDs.
 component behind `_clip_tile.html`, the anchor grid, the approve grid and the
 refs grid, which are four re-specifications of it today); `section-head` (title
 + its own actions); `modal` (on `<dialog>`); `queue-strip` (§5.5);
-`field-with-wand` (label + AI action + hint + control, the album-profile shape).
+`field-with-wand` (label + AI action + hint + control, the album-profile shape);
+`finding-row` (`_finding_row.html` on `GET /qc` and the song QC card:
+measured / expected / unit / editable remedy / approve, `T3-19`).
 
 **`plan-panel` is the most under-used component in the studio.** `.plan-panel` /
 `.plan-line` / `.plan-blocker` / `.plan-note` plus `button.blocked` already
@@ -239,9 +241,13 @@ names measured I/TP and the off-target flag, `T1-25`).
 against `song_length` and `mismatch` beyond `SCENE_TIME_TOLERANCE`
 (`T2-23`). It reports this song's `clip_seconds` from
 `build_song.clip_seconds(scene_seconds)` (`T2-24`): the same song at
-two `scene_seconds` yields two clip lengths. `finding-row` (measured / expected / unit /
-remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-20`, `T3-27`; dismiss
-stays off this row until the file bytes change, `T3-22`). A set finding
+two `scene_seconds` yields two clip lengths.
+
+`finding-row` **built** (`GET /qc`, `_finding_row.html`,
+`test_t3_19_finding_row.py`): measured / expected / unit / editable
+remedy / approve — the QC queue's atom, `T3-4`, `T3-19`, `T3-20`,
+`T3-27`; dismiss stays off this row until the file bytes change,
+`T3-22`. A set finding
 `transition_lands` (`T3-12`) is measurement only — `actionable` is false,
 same as `duration_matches_prediction`. The
 JSON already carries `remedy_class` and `actionable` (`GET /api/qc/findings`,

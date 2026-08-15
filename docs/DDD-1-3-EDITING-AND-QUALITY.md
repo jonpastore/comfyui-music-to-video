@@ -119,9 +119,12 @@ confirmation is 400, `T2-16`). Same routes, no parallel `/api/*` tree
 **C · QC** — exists. `/api/qc/run`, `/api/qc/findings`, `/{fid}`,
 `/{fid}/remedy`, `/{fid}/dismiss`, `/{fid}/approve`, `/{fid}/recheck`,
 `/api/qc/by-host` (`T3-1`: groups by `host`, NULL host is the
-`unattributed` bucket). Each finding carries `remedy_class` and
+`unattributed` bucket). `GET /qc` is the finding-row page (`T3-19`):
+measured / expected / unit, editable remedy, approve. `POST
+/qc/findings/{fid}/approve` stores the edited text then `approve()`.
+Each finding carries `remedy_class` and
 `actionable` (`T3-27`): approve uses the class, and a false `actionable`
-is a named refusal, not a button that does nothing. Dismiss needs a
+is why the button is absent, not a button that does nothing. Dismiss needs a
 reason and leaves the open queue; re-running QC on the same bytes keeps
 it dismissed; rewriting the file reopens that `(path, check)` row
 (`T3-22`). `POST /songs/{id}/qc` calls `qc_service.run_song` in-process

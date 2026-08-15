@@ -2062,6 +2062,17 @@ def song_page(request: Request, id: int):
     all_tiers = tiers.all_tiers()
     form_tier = next(iter(storyboards), None) or (all_tiers[0]["name"] if all_tiers else "")
     beat_count = len(json.loads(song["beat_grid_json"])) if song["beat_grid_json"] else 0
+    song_paths = set()
+    for row in renders:
+        if row["path"]:
+            song_paths.add(jobs.canonical_path(row["path"]))
+    for row in db.q("SELECT path FROM clips WHERE song_id=?", id):
+        if row["path"]:
+            song_paths.add(jobs.canonical_path(row["path"]))
+    for row in db.q("SELECT path FROM refs WHERE song_id=?", id):
+        if row["path"]:
+            song_paths.add(jobs.canonical_path(row["path"]))
+    findings = [f for f in qc_service.queue() if f["path"] in song_paths]
     return templates.TemplateResponse(request, "song.html", {
         "song": song, "tiers": all_tiers, "storyboards": storyboards, "beat_count": beat_count,
         "approved_tiers": approved_tiers, "reviews": reviews,
@@ -2073,6 +2084,7 @@ def song_page(request: Request, id: int):
         "audio_duration": audio_duration, "audio_edits": audio_edits, "audio_original": audio_original,
         "takes": takes, "audio_model": models.get(models.default_for("audio")),
         "best_model": best, "render_tiers": render_tiers,
+        "findings": findings,
         **storyboard_form_ctx(song, form_tier, chat_models, best),
     })
 
@@ -2084,8 +2096,9 @@ def song_page(request: Request, id: int):
 # arithmetic, no defaulting, no decision. If a route handler decided something,
 # a mobile client could not.
 #
-# JSON ONLY, deliberately: a review-queue PAGE is a UI, and the UI/UX pass that
-# produces the style guide has not run. Building a page now would pre-empt it.
+# JSON stays the contract (T6-A1). GET /qc is the finding-row page (T3-19):
+# measured / expected / unit, editable remedy, approve. The template
+# interpolates queue() rows; it does not compute (T6-A4).
 
 
 def _clip_expect(path):
@@ -2122,6 +2135,28 @@ def start_qc(id: int, tier: str = Form("")):
     get_song_or_404(id)
     qc_service.run_song(id, tier)
     return RedirectResponse(f"/songs/{id}", status_code=303)
+
+
+@app.get("/qc", response_class=HTMLResponse)
+def qc_queue_page(request: Request):
+    """The review queue as finding-rows (T3-4 / T3-19 / T3-27)."""
+    return templates.TemplateResponse(request, "qc.html", {
+        "findings": qc_service.queue(),
+    })
+
+
+@app.post("/qc/findings/{fid}/approve")
+def qc_approve_form(fid: int, text: str = Form("")):
+    """HTML sign-off: store the edited remedy, then approve (T3-19)."""
+    try:
+        if (text or "").strip():
+            qc_service.set_remedy(fid, text)
+        qc_service.approve(fid)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except KeyError:
+        raise HTTPException(404, f"no finding {fid}")
+    return RedirectResponse("/qc", status_code=303)
 
 
 @app.get("/api/qc/findings")

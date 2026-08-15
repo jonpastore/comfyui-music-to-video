@@ -1,0 +1,36 @@
+{# QC queue atom: measured / expected / unit, editable remedy, approve.
+   T3-4 / T3-19 / T3-27. The route interpolates; this file does not compute.
+   A false actionable is why the button is absent, not why it does nothing. #}
+<article class="finding-row card" id="finding-{{ f.id }}"
+         data-finding="{{ f.id }}"
+         data-measured="{{ f.measured }}"
+         data-expected="{{ f.expected }}"
+         data-unit="{{ f.unit }}"
+         data-actionable="{{ 'true' if f.actionable else 'false' }}"
+         data-check="{{ f.check_name }}">
+  <header class="section-head">
+    <h3>{{ f.check_name }}</h3>
+    <span class="tag">{{ f.verdict }}</span>
+    <span class="tag">{{ f.remedy_class }}</span>
+  </header>
+  <p class="meta">
+    <span class="num" data-field="measured">{{ f.measured }}</span>
+    <span class="muted">measured</span>
+    vs
+    <span class="num" data-field="expected">{{ f.expected }}</span>
+    <span class="muted">expected</span>
+    <span class="num" data-field="unit">{{ f.unit }}</span>
+  </p>
+  {% if f.detail %}<p class="hint">{{ f.detail }}</p>{% endif %}
+  <p class="muted">{{ f.path }}</p>
+  {% if f.actionable %}
+  <form method="post" action="/qc/findings/{{ f.id }}/approve" class="stack-form">
+    <label>Remedy
+      <textarea name="text" rows="3">{{ f.remedy or "" }}</textarea>
+    </label>
+    <button type="submit">Approve repair</button>
+  </form>
+  {% else %}
+  <p class="hint">This check has no remedy — it cannot be approved.</p>
+  {% endif %}
+</article>

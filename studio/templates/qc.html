@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>QC findings</h1>
+<p class="hint">Measured against what was asked. Nothing repairs itself.</p>
+{% if not findings %}
+<p class="empty">No open findings.</p>
+{% else %}
+{% for f in findings %}
+  {% include "_finding_row.html" %}
+{% endfor %}
+{% endif %}
+{% endblock %}

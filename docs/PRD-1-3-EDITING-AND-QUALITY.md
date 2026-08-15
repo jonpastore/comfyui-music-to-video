@@ -101,7 +101,7 @@ the eight things that must become true; they are not a new contract.
 | P5a | Assembling a song with a 1664×960 clip among 832×480 siblings keeps the ×2 size and does not letterbox; mixed aspect is refused | `T5-7` |
 | P5b | Every clip of one song is normalised to one output fps, asserted on the assembled file | `T2-13d` |
 | P6 | Every rendered artefact is measured against the workflow that asked for it, never against a constant. A mixed-model clip is judged at its native fps, not the song's output fps. A silent or near-silent take is rejected on measured low/mid/high band energy, not peak volume | `T3-2`, `T3-4`, `T3-7`, `T3-9`, `T2-13f` |
-| P7 | A finding arrives actionable — measured, expected, unit, a remedy class, and an editable prompt — and nothing runs without approval. A dismissed finding stays off the queue until the artefact itself changes. The remedy that RUNS is the stored prompts row. Approving produces a new candidate; original and repair are both listed and scored | `T3-18`, `T3-19`, `T3-20`, `T3-21`, `T3-22`, `T3-27` |
+| P7 | A finding arrives actionable — measured, expected, unit, a remedy class, and an editable prompt — and nothing runs without approval. A dismissed finding stays off the queue until the artefact itself changes. The remedy that RUNS is the stored prompts row. Approving produces a new candidate; original and repair are both listed and scored | `T3-18`, `T3-19` **built** (`GET /qc` finding-row + `test_t3_19_finding_row.py`: two HTML approvals submit two jobs), `T3-20`, `T3-21`, `T3-22`, `T3-27` |
 | P8 | Identity failures are attributed to the text, never to the reference image | `T2-31`, `T2-32`, `T3-17`, `T3-28` |
 
 **P8 is the one to defend hardest.** It is measured, not theoretical: same
@@ -154,7 +154,9 @@ longer the phase to defer — `docs/PLAN-TRD-4-7.md` §4 is updated to match.
 `measure_band_energy` low/mid/high mean, not peak `volumedetect`;
 `test_t3_9_silence.py`; **`T3-11` built** — `check_set` / `qc.run(kind="set")` compares the artefact to `mixer.set_duration()` within `mixer.SET_DURATION_TOLERANCE`, `test_t3_11_set_duration.py`), `studio/qc_service.py` + `db.findings` +
 `/api/qc/*` including `GET /api/qc/by-host` (`T3-1`) and dismiss/reopen on
-artefact change (`T3-22`), `qc_service.run_song` (`T3-32`: tier 1 over a song
+artefact change (`T3-22`), `GET /qc` finding-row (`T3-19`: measured /
+expected / unit, editable remedy, approve; `test_t3_19_finding_row.py`),
+`qc_service.run_song` (`T3-32`: tier 1 over a song
 completes without a GPU, a backend, or the one worker thread), `studio/automation.py` + `db.automation` (TRD-1 §5's curve model,
 decimation and filter emission; `T1-1` **built** — reorder or trim
 leaves stored `(lane, t, value)` unchanged, asserted on non-empty

@@ -385,6 +385,20 @@
 </section>
 
 <section class="card">
+  <h2>QC</h2>
+  <form method="post" action="/songs/{{ song.id }}/qc">
+    <button type="submit">Run QC</button>
+  </form>
+  <p class="hint">Measured against what was asked. Nothing repairs itself.
+    <a href="/qc">All open findings</a></p>
+  {% if findings %}
+  {% for f in findings %}
+    {% include "_finding_row.html" %}
+  {% endfor %}
+  {% endif %}
+</section>
+
+<section class="card">
   <h2>Recent jobs for this song</h2>
   {% if not song_jobs %}
   <p class="empty">None yet.</p>
