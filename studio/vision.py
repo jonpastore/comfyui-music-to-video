@@ -310,6 +310,29 @@ def ask_text(system, user_text, progress=None, model=None):
 
 # --------------------------------------------------------------- reviewing --
 
+# T10-14: a model is never asked a question whose answer it cannot be
+# visibly wrong about. "Does this match?" is the shape that produced
+# 41.1-vs-64.7. "describe what differs" is the accepted shape.
+DESCRIBE_DIFFERS = "describe what differs"
+_MATCH_SHAPE = re.compile(
+    r"\bdoes this match\b|\bdo these match\b|\bdoes it match\b|"
+    r"\bmatch the reference\b|\bis this a match\b|\bis it a match\b",
+    re.I,
+)
+
+
+def prompt_shape(question):
+    """Refuse a match question. Return the question otherwise (T10-14)."""
+    q = " ".join((question or "").split())
+    if not q:
+        raise ValueError("empty question is not a prompt shape")
+    if _MATCH_SHAPE.search(q):
+        raise ValueError(
+            "does this match? is refused as a prompt shape (T10-14); "
+            "ask 'describe what differs'")
+    return q
+
+
 REVIEW_SYSTEM = (
     "You are reviewing a contact sheet of AI-generated frames for one music video. "
     "It is a grid of frames, each labelled 'clip N' in the top-left of its cell. "
@@ -335,20 +358,21 @@ REVIEW_SYSTEM = (
 )
 
 
-def classify_sheet(sheet_path, note="", model=None, progress=None):
+def classify_sheet(sheet_path, note="", model=None, progress=None, question=None):
     """Review one contact sheet. {"flagged": [...], "cells_seen": int, "backend": str}.
 
     Advisory. It names clips to look at; it never unapproves or deletes
     anything, because a false positive must not silently drop a third of a song.
     The return is not a pass/fail: attach it with qc_service.attach_sheet_review
-    (T10-13 / TRD-3 §10).
+    (T10-13 / TRD-3 §10). The user prompt is the T10-14 accepted shape.
     """
     where, detail = available()
     if progress:
         progress(f"reviewing with {detail}")
-    out = ask(sheet_path, REVIEW_SYSTEM,
-              "Review this contact sheet." + (f" Context: {note}" if note else ""),
-              progress)
+    user = prompt_shape(question or DESCRIBE_DIFFERS)
+    if note:
+        user = f"{user}. Context: {note}"
+    out = ask(sheet_path, REVIEW_SYSTEM, user, progress)
     obj = json_or_raise(out, "vision review")
     flagged = []
     for f in obj.get("flagged") or []:
@@ -363,6 +387,18 @@ def classify_sheet(sheet_path, note="", model=None, progress=None):
     flagged.sort(key=lambda f: f["clip"])
     return {"flagged": flagged, "cells_seen": int(obj.get("cells_seen") or 0),
             "backend": where}
+
+
+def describe_what_differs(sheet_path, note="", progress=None, question=None):
+    """T10-14 surface: accepted shape in, non-verdict text out.
+
+    Match questions are refused here. describe-what-differs returns the
+    classify_sheet reasons as a sentence, never a pass/fail.
+    """
+    q = question if question is not None else DESCRIBE_DIFFERS
+    prompt_shape(q)
+    review = classify_sheet(sheet_path, note=note, progress=progress, question=q)
+    return review_text(review)
 
 
 def review_text(verdict):
@@ -618,6 +654,13 @@ def demo():
         sys_msg = seen["body"]["messages"][0]["content"]
         assert "CONTINUITY" in sys_msg and "human-toned limbs" in sys_msg
         assert "camera angle" in sys_msg, "must not flag deliberate variation"
+        user_msg = seen["body"]["messages"][1]["content"][0]["text"]
+        assert DESCRIBE_DIFFERS in user_msg.lower()
+        try:
+            prompt_shape("Does this match the reference?")
+            raise AssertionError("match question was accepted")
+        except ValueError as e:
+            assert "describe what differs" in str(e).lower(), e
         img = seen["body"]["messages"][1]["content"][1]["image_url"]["url"]
         assert img.startswith("data:image/jpeg;base64,")
 

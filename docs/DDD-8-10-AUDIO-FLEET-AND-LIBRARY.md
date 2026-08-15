@@ -210,6 +210,9 @@ question whose answer it cannot be visibly wrong about.** "Does this match?" is
 refused as a *prompt shape*; "describe what differs" is not. The recorded
 evidence is the 41.1-versus-64.7 inversion — a plausible number, confidently
 backwards — and a VLM asked the same question would have agreed with it.
+**Built:** `vision.prompt_shape` refuses match questions and names the accepted
+shape; `classify_sheet` asks `DESCRIBE_DIFFERS`; `describe_what_differs` is the
+same surface and returns non-verdict text from `review_text`.
 
 ### 4.3 One guard, several callers
 
@@ -232,7 +235,7 @@ each caller, or a caller that stops calling it stays green.
     advice labelling  ->  T10-11..T10-15 over the four live modules
                          ->  the picked/unpicked distinction (T8-2)
     bulk edit (T10-3…T10-7 built)
-    advice labelling (T10-11, T10-12, T10-13 built) ->  T10-14..T10-15 over the four live modules
+    advice labelling (T10-11..T10-14 built) ->  T10-15 over the four live modules
 
 Nothing here blocks TRD 1-7. TRD-9 is first because it is cheapest and because
 everything else in the project renders through the machinery it pins down.

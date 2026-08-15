@@ -891,11 +891,14 @@ pass/fail chip. `classify_sheet` names clips to look at; the finding verdict
 stays `pass`. The existing "N flagged" line on the song page is that
 description, not a QC gate.
 
-This is the interface half of `T10-14`. If advice and measurement look alike, the
-operator will eventually treat a confident sentence as a reading, which is how
-`41.1 vs 64.7` would have become a gate. The style-guide rule: **model text
-carries the `--muted` role and an explicit marker; measurements carry
-`--text` and a unit.** A number without a unit is a claim, not a measurement.
+`T10-14`: the vision surface never asks "does this match the reference?" —
+that shape is refused by name and the recovery is "describe what differs".
+The accepted shape returns a description sentence, not a pass/fail chip.
+If advice and measurement look alike, the operator will eventually treat a
+confident sentence as a reading, which is how `41.1 vs 64.7` would have become
+a gate. The style-guide rule: **model text carries the `--muted` role and an
+explicit marker; measurements carry `--text` and a unit.** A number without a
+unit is a claim, not a measurement.
 
 `T3-13` is not a screen. Overlap and separation live on the `calibrations`
 row. `T3-14` can write a threshold on a stored separated row (service,
