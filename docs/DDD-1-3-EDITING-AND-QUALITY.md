@@ -130,9 +130,10 @@ The generation prompt and **the limits that apply to it**
 travel in the same response (`T2-18`).
 `GET/POST /api/songs/{id}/storyboard/{tier}` (`T2-17` **built**: GET
 returns `prompt` from `storyboard_generation_payload`, defaulted from the
-tier; POST accepts an edited `prompt`; `T2-18` limits/PINNED travel in
-that same body but are not yet the criterion's check), `.../scene/{n}`,
-`.../meter`, `.../cast`.
+tier; POST accepts an edited `prompt`; `T2-18` **built**: same body carries
+`max_characters`, `pinned`, `pinned_added_at_use`, `pinned_editable`; one
+character over the returned cap is 400 quoting that number),
+`.../scene/{n}`, `.../meter`, `.../cast`.
 
 **C · QC** — exists. `/api/qc/run`, `/api/qc/findings`, `/{fid}`,
 `/{fid}/remedy`, `/{fid}/dismiss`, `/{fid}/approve`, `/{fid}/recheck`,

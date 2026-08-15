@@ -397,7 +397,9 @@ picker applies.
 The generation prompt itself is API data (`T2-17`):
 `GET /api/songs/{id}/storyboard/{tier}` returns the same defaulted-from-tier
 string the direction box prefills; the HTML is not the only place that
-string lives.
+string lives. The same payload carries the limits that apply (`T2-18`):
+`max_characters`, the pinned clause, and that PINNED is added at use and
+not editable; a client must not hardcode the cap.
 song's `clip_seconds`, not a constant (`T2-24`). The live `meter`
 component is not this.
 Every named scene figure carries `lead` / `extra` / `background`

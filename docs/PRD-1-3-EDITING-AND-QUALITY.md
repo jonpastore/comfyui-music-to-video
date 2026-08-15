@@ -275,7 +275,9 @@ order and take the dependencies from here.
    the time meter (§5.1), casting (§5.3). **`T2-17` built**:
    `GET /api/songs/{id}/storyboard/{tier}` returns the generation prompt
    defaulted from the tier (`storyboard_generation_payload`); POST accepts
-   an edit. `T2-18`/`T2-19` still unbuilt.
+   an edit. **`T2-18` built**: the same response carries the enforced
+   `max_characters` and PINNED flags; one character over that cap is 400
+   quoting it (`test_t2_18_storyboard_limits.py`). `T2-19` still unbuilt.
    song yield two lengths. **`T2-26` built**: `GET .../storyboard/{tier}`
    returns the album's chosen anchor images grouped per character
    (`anchors[].character` / `images[]` with `path` and `url`), so a

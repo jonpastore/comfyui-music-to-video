@@ -4769,11 +4769,12 @@ def storyboard_form_ctx(song, tier, chat_models=None, best=None, direction=None)
 
 
 def storyboard_generation_payload(song, tier):
-    """T2-17: the generation prompt a client edits before generate.
+    """T2-17 prompt + T2-18 limits for a client that edits before generate.
 
     Defaulted from the tier when nothing has been stored. A stored prompt
     (what was actually sent) wins, which is the same prefill the HTML form
-    uses -- one function, both answers.
+    uses -- one function, both answers. max_characters is grok.MAX_DIRECTION,
+    the same number check_direction enforces.
     """
     ctx = storyboard_form_ctx(song, tier)
     return {
