@@ -5,16 +5,35 @@ storyboard and assert the set of approved (clip_idx, seed) is identical.
 That is the check that stops a re-plan quietly invalidating a human's
 approvals.
 
+Asserted through h_storyboard — the handler the route enqueues (T6-A10).
+A TestClient wait on the shared worker stays green while another file's
+_isolate leaves that worker on a different DB.
+
 Mutation: h_storyboard deletes or unapproves refs → this fails.
 Mutation: remap clip_idx on re-plan → this fails.
 """
+import os
+import tempfile
 import time
-
-from fastapi.testclient import TestClient
 
 import app as appmod
 import db
-from test_app import _upload_song, wait_job
+import jobs
+
+
+def _isolate():
+    data = tempfile.mkdtemp(prefix="t213b_")
+    was = (db.DATA, db.DB_PATH, jobs.LOGS)
+    db.DATA = data
+    db.DB_PATH = os.path.join(data, "t.db")
+    db._local.__dict__.clear()
+    jobs.LOGS = os.path.join(data, "logs")
+    return data, was
+
+
+def _restore(was):
+    db.DATA, db.DB_PATH, jobs.LOGS = was
+    db._local.__dict__.clear()
 
 
 def _approved_keys(sid, tier):
@@ -24,20 +43,15 @@ def _approved_keys(sid, tier):
 
 
 def test_t2_13b_approved_refs_survive_replan():
-    with TestClient(appmod.app) as client:
-        song = _upload_song(client, "T2-13b Replan Song")
-        sid = song["id"]
-        db.run("UPDATE songs SET duration=? WHERE id=?", 20.0, sid)
-        song = db.one("SELECT * FROM songs WHERE id=?", sid)
-
-        r = client.post(f"/songs/{sid}/storyboard",
-                        data={"tier": "pg13", "scene_seconds": "4.0"})
-        assert r.status_code in (200, 303), r.text
-        first = db.one(
-            "SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC",
-            sid)
-        row = wait_job(first["id"])
-        assert row["status"] == "done", row
+    data, was = _isolate()
+    try:
+        sid = db.run(
+            """INSERT INTO songs (title, album, slug, duration, lyrics, created)
+               VALUES (?,?,?,?,?,?)""",
+            "T2-13b Replan Song", "T213b", "t213b-replan", 20.0,
+            "[A]\none\n[B]\ntwo\n", time.time())
+        args = {"song_id": sid, "tier": "pg13", "scene_seconds": 4.0}
+        appmod.h_storyboard(args, lambda m: None)
 
         now = time.time()
         db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created)
@@ -53,15 +67,9 @@ def test_t2_13b_approved_refs_survive_replan():
         before = _approved_keys(sid, "pg13")
         assert before == {(0, 5151), (1, 129080599)}, before
 
-        r2 = client.post(f"/songs/{sid}/storyboard",
-                         data={"tier": "pg13", "scene_seconds": "4.0"})
-        assert r2.status_code in (200, 303), r2.text
-        second = db.one(
-            "SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC",
-            sid)
-        assert second["id"] != first["id"], "re-plan did not enqueue a new storyboard job"
-        row2 = wait_job(second["id"])
-        assert row2["status"] == "done", row2
+        appmod.h_storyboard(args, lambda m: None)
 
         after = _approved_keys(sid, "pg13")
         assert after == before, (before, after)
+    finally:
+        _restore(was)
