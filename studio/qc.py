@@ -968,13 +968,25 @@ def check_video(path, expect, kind="clip"):
         return [finding(path, kind, "opens", REJECT, "no video stream",
                         remedy="re-render")]
 
-    # ---- what the workflow asked for
+    # ---- what the workflow / source track asked for
     if expect.get("duration"):
         d, want = info["duration"], float(expect["duration"])
-        out.append(finding(path, kind, "duration",
-                           PASS if abs(d - want) <= DURATION_TOL_S else REJECT,
-                           f"{d:.3f}s against the {want:.3f}s the workflow asked for",
-                           round(d, 3), round(want, 3), "s", remedy="re-render"))
+        # T3-4.4-mp3: assembled song expected is songs.duration (source mp3).
+        # Clips still compare to the submitted workflow request (T3-2).
+        if kind == "song":
+            detail = (f"{d:.3f}s against the {want:.3f}s source mp3 "
+                      f"(songs.duration)")
+            out.append(finding(
+                path, kind, "duration",
+                PASS if abs(d - want) <= DURATION_TOL_S else REJECT,
+                detail, round(d, 3), round(want, 3), "s",
+                remedy="re-assemble", remedy_class=REMEDY_REASSEMBLE))
+        else:
+            out.append(finding(
+                path, kind, "duration",
+                PASS if abs(d - want) <= DURATION_TOL_S else REJECT,
+                f"{d:.3f}s against the {want:.3f}s the workflow asked for",
+                round(d, 3), round(want, 3), "s", remedy="re-render"))
 
     frames = _ffprobe_frames(path)
     if frames is not None:

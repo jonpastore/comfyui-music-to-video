@@ -285,7 +285,10 @@ high band energy, not a peak; a take that only clicked is empty. An
 edge-silence finding (`T3-4.3-edge`) shows leading / trailing seconds
 against `EDGE_SILENCE_LIMIT_S`, not whole-file band energy. A
 spliced-track finding (`T3-10`) shows measured vs predicted seconds
-from `mixer.bridge_seconds`, not a restated gap + 2×xfade.
+from `mixer.bridge_seconds`, not a restated gap + 2×xfade. An assembled
+song duration finding (`T3-4.4-mp3`) shows measured vs `songs.duration`
+(source mp3) within `DURATION_TOL_S`; a short or long render is a reject
+with re-assemble, not a clip workflow re-render.
 
 ## 5. The style guide
 

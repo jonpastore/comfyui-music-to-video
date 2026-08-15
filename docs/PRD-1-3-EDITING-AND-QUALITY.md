@@ -186,7 +186,7 @@ PASS on a compensated clip, latent exemption alone is not enough;
 `measure_band_energy` low/mid/high mean, not peak `volumedetect`;
 `test_t3_9_silence.py`; **`T3-10` built** — spliced-track duration vs
 `mixer.spliced_duration` / `bridge_seconds` within
-`mixer.SPLICE_DURATION_TOLERANCE`, `test_t3_10_splice.py`; **`T3-11` built** — `check_set` / `qc.run(kind="set")` compares the artefact to `mixer.set_duration()` within `mixer.SET_DURATION_TOLERANCE`, `test_t3_11_set_duration.py`), `studio/qc_service.py` + `db.findings` +
+`mixer.SPLICE_DURATION_TOLERANCE`, `test_t3_10_splice.py`; **`T3-11` built** — `check_set` / `qc.run(kind="set")` compares the artefact to `mixer.set_duration()` within `mixer.SET_DURATION_TOLERANCE`, `test_t3_11_set_duration.py`; **`T3-4.4-mp3` built** — assembled song duration vs `songs.duration` / source mp3 within `DURATION_TOL_S`; mismatch REJECTs on the media (`test_t3_4_4_mp3.py`)), `studio/qc_service.py` + `db.findings` +
 `/api/qc/*` including `GET /api/qc/by-host` (`T3-1`) and dismiss/reopen on
 artefact change (`T3-22`), `GET /qc` finding-row (`T3-19`: measured /
 expected / unit, editable remedy, approve; `test_t3_19_finding_row.py`),
