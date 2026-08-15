@@ -455,11 +455,12 @@ def h_repair(args, progress):
         os.remove(dest)
         raise RuntimeError("repair wrote no new file — GPU work is still missing")
     expect = _expect_from_artefacts(src) or None
-    jobs.land(dest, expect=expect)
     fid = args.get("finding_id")
-    if fid:
-        db.run("UPDATE findings SET status=?, repair_path=?, resolved=? WHERE id=?",
-               REPAIRED, dest, time.time(), int(fid))
+    with jobs.writes():
+        jobs.land(dest, expect=expect)
+        if fid:
+            db.run("UPDATE findings SET status=?, repair_path=?, resolved=? WHERE id=?",
+                   REPAIRED, dest, time.time(), int(fid))
     return {"finding_id": fid, "repair_path": dest,
             "remedy": args.get("remedy")}
 

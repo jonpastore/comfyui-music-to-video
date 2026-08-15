@@ -98,6 +98,7 @@ the severe one.
 | P7b | Each clip ceiling is labeled measured or chosen; an over-long single-clip request is refused or split, not only annotated | `T5-9` |
 | P8 | Work is pulled, not assigned; "ready" is not "queued"; every artefact's state transition is a row with a time | `T6-1`…`T6-7` |
 | P9 | Every artefact can be joined to what was asked of it, by one canonical path | `T6-8`…`T6-13a` |
+| P10 | A killed worker leaves no half-written job; a long render does not hold the write lock | `T6-14`…`T6-16` |
 
 **P5 is the highest-leverage unbuilt thing in the studio** — and it moved while
 this was being written. `gen_refs` passes a chosen anchor as image1 for every

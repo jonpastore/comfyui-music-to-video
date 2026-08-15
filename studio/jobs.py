@@ -73,6 +73,11 @@ def canonical_path(path):
     return os.path.realpath(os.path.abspath(os.path.expanduser(str(path))))
 
 
+def writes():
+    """T6-14: a handler's land + findings writes are one transaction."""
+    return db.transaction()
+
+
 def land(path, expect=None, backend=None, host=None, via=None):
     """T6-7: a landed artefacts row requires the file on disk.
     T6-8: the stored path is the canonical spelling."""

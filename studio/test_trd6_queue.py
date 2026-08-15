@@ -562,3 +562,89 @@ def test_t6_16_web_query_succeeds_during_long_handler():
     assert not worker.is_alive()
     assert not err, err
     assert jobs.get(jid)["status"] == "done"
+
+
+# ----------------------------------------------------------------- T6-14 --
+
+def _repair_args(data, name="broken.png"):
+    """A finding plus an approved repair job. dest artefacts come only from land()."""
+    src = os.path.join(data, name)
+    _png(src)
+    qc_service.record([{
+        "path": src, "kind": "image", "tier": 1, "check": "resolution",
+        "verdict": "reject", "measured": "64x64", "expected": "100x100",
+        "unit": "px", "detail": "small", "remedy": "re-render",
+    }])
+    fid = db.one(
+        "SELECT id FROM findings WHERE path=?", jobs.canonical_path(src))["id"]
+    qc_service.approve(fid)
+    args = json.loads(
+        db.one("SELECT args_json FROM jobs WHERE kind='repair' ORDER BY id DESC")[
+            "args_json"])
+    return fid, src, args
+
+
+def _write_repaired(src, dest, args, progress):
+    with open(src, "rb") as f:
+        payload = f.read()
+    parent = os.path.dirname(dest)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(dest, "wb") as f:
+        f.write(payload + b"-repaired")
+    return dest
+
+
+def test_t6_14_successful_handler_writes_land_and_findings():
+    """Positive half: a finished handler lands the dest and stamps the finding.
+    The kill-rollback half stays green if nothing is ever written."""
+    data = _isolate()
+    fid, src, args = _repair_args(data)
+    dest = jobs.canonical_path(args["repair_path"])
+    orig = qc_service.dispatch_repair
+    try:
+        qc_service.dispatch_repair = _write_repaired
+        qc_service.h_repair(args, lambda m: None)
+    finally:
+        qc_service.dispatch_repair = orig
+
+    landed = db.one("SELECT * FROM artefacts WHERE path=?", dest)
+    assert landed is not None and landed["status"] == "landed", landed
+    row = qc_service.get(fid)
+    assert row["status"] == qc_service.REPAIRED
+    assert row["repair_path"] == dest
+    assert os.path.isfile(src)
+
+
+def test_t6_14_kill_mid_handler_leaves_no_half_write():
+    """T6-14: land + findings update are one transaction. Kill after land
+    and neither write is visible. A committed land with an unstamped
+    finding is the half-write this exists to catch."""
+    data = _isolate()
+    fid, src, args = _repair_args(data)
+    dest = jobs.canonical_path(args["repair_path"])
+    real_land = jobs.land
+
+    def _land_then_die(*a, **k):
+        real_land(*a, **k)
+        raise RuntimeError("killed mid-handler")
+
+    orig = qc_service.dispatch_repair
+    jobs.land = _land_then_die
+    try:
+        qc_service.dispatch_repair = _write_repaired
+        qc_service.h_repair(args, lambda m: None)
+    except RuntimeError as e:
+        assert "killed mid-handler" in str(e)
+    else:
+        raise AssertionError("handler was not killed after land")
+    finally:
+        jobs.land = real_land
+        qc_service.dispatch_repair = orig
+
+    landed = db.one("SELECT * FROM artefacts WHERE path=?", dest)
+    assert landed is None or landed["status"] != "landed", (
+        f"kill after land left a landed artefacts row: {landed}")
+    row = qc_service.get(fid)
+    assert row["status"] != qc_service.REPAIRED, row["status"]
+    assert row["repair_path"] in (None, ""), row["repair_path"]

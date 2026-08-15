@@ -616,6 +616,9 @@ landed. **Which box, always** matters more here than anywhere — cerberus,
 peaches and ethan render the same sheet at very different speeds, and `T6-4`'s
 distinction between a box that went away and a workflow a box *refused* is the
 one the operator has to see, because only the first is worth waiting for.
+A repair never shows a landed dest beside a finding that is still only
+approved (`T6-14`): land and the findings stamp commit together, so a killed
+worker cannot paint half a job.
 
 ## 7b. The surfaces TRD 8-10 adds
 

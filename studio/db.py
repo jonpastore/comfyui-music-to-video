@@ -4,6 +4,7 @@ Schema is created on import. Adding a column later means adding an ALTER to
 MIGRATIONS; sqlite tolerates the duplicate-column error which is checked for.
 """
 import json, os, sqlite3, threading, time
+from contextlib import contextmanager
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("STUDIO_DATA", os.path.join(ROOT, "data"))
@@ -623,10 +624,30 @@ def one(sql, *args):
     return conn().execute(sql, args).fetchone()
 
 
+_tx = threading.local()
+
+
+@contextmanager
+def transaction():
+    """T6-14: run() statements commit together, or not at all."""
+    c = conn()
+    c.execute("BEGIN IMMEDIATE")
+    _tx.active = True
+    try:
+        yield c
+        c.commit()
+    except BaseException:
+        c.rollback()
+        raise
+    finally:
+        _tx.active = False
+
+
 def run(sql, *args):
     c = conn()
     cur = c.execute(sql, args)
-    c.commit()
+    if not getattr(_tx, "active", False):
+        c.commit()
     return cur.lastrowid
 
 

@@ -229,7 +229,9 @@ under the same "No backends match" headline (`T6-4`); WAL on, and the
 `MIGRATIONS` convention that every added column works NULL on existing rows
 (`T6-17`); the `findings` upsert idempotent under re-run (`T6-15`);
 `jobs.canonical_path` at write time so `findings.path` joins `artefacts.path`
-and two spellings of one file are one row (`T6-8`).
+and two spellings of one file are one row (`T6-8`); a job handler's land +
+findings writes are one transaction (`T6-14`, `jobs.writes()`), and `_run_one`
+still drops the write lock before a long handler (`T6-16`).
 
 **The shape of what is not:**
 
