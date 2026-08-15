@@ -3809,6 +3809,66 @@ def test_branding_mark_is_per_set_with_a_per_handover_tick():
                                 cleared) == ""
 
 
+def test_t1_28_card_is_a_set_items_row_with_null_song_id():
+    """T1-28 / T1-27: posting a card writes a set_items row (song_id NULL)
+    and the editor prices it. A comment in set_edit.html cannot do this."""
+    from conftest import mix_audio_calls
+    with TestClient(appmod.app) as client:
+        a = _upload_song(client, "Card Song A")
+        b = _upload_song(client, "Card Song B")
+        client.post("/sets/new", data={"name": "Card Set", "mode": "audio"})
+        sid = db.one("SELECT id FROM sets WHERE name='Card Set'")["id"]
+        client.post(f"/sets/{sid}/items",
+                    data={"song_id": a["id"], "transition": "cut", "secs": "0"})
+        client.post(f"/sets/{sid}/items",
+                    data={"song_id": b["id"], "transition": "cut", "secs": "0"})
+        before = list(db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", sid))
+        assert all(it["song_id"] is not None for it in before)
+
+        r = client.post(f"/sets/{sid}/cards",
+                        data={"duration": "3"},
+                        files={"image": ("meowp.png", _png_bytes(), "image/png")},
+                        follow_redirects=False)
+        assert r.status_code == 303, r.text
+        items = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", sid)
+        assert len(items) == 3, [dict(it) for it in items]
+        card = items[-1]
+        assert card["song_id"] is None, dict(card)
+        assert abs(float(card["card_secs"]) - 3.0) < 1e-6, dict(card)
+        assert card["card_path"] and os.path.isfile(card["card_path"])
+
+        client.post(f"/sets/{sid}/reorder",
+                    data={"order": f"{card['id']},{items[0]['id']},{items[1]['id']}"})
+        client.post(f"/sets/{sid}/reorder",
+                    data={"order": f"{items[0]['id']},{items[1]['id']},{card['id']}"})
+        client.post(f"/sets/{sid}/reorder",
+                    data={"order": f"{items[0]['id']},{card['id']},{items[1]['id']}"})
+        mid = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", sid)
+        assert [it["id"] for it in mid] == [items[0]["id"], card["id"], items[1]["id"]]
+        assert mid[1]["song_id"] is None
+
+        page = client.get(f"/sets/{sid}").text
+        assert f'data-item="{card["id"]}"' in page
+        assert "MEOW P" in page
+        assert "{#" not in page.split(f'data-item="{card["id"]}"')[0][-40:]
+
+        r = client.post(f"/sets/{sid}/items/{items[0]['id']}",
+                        data={"in_secs": "0.5", "transition": "cut", "secs": "0",
+                              "gain_db": "0"})
+        assert r.status_code in (200, 303), r.text
+        before_mix = len(mix_audio_calls)
+        r = client.post(f"/sets/{sid}/render")
+        assert r.status_code in (200, 303), r.text
+        job = db.one("SELECT * FROM jobs WHERE kind='render_set' ORDER BY id DESC")
+        jrow = wait_job(job["id"])
+        assert jrow["status"] == "done", jrow
+        assert len(mix_audio_calls) == before_mix + 1
+        sent = mix_audio_calls[-1]
+        cards = [it for it in sent if it.get("kind") == "card" or it.get("card")]
+        assert len(cards) == 1, sent
+        assert abs(float(cards[0]["duration"]) - 3.0) < 1e-6
+
+
 def test_set_item_effects_json_validated_screened_and_rendered():
     """effects_json is free text (JSON) -- screened exactly like the anchor
     prompt and tier wording, then checked structurally against effects.py/

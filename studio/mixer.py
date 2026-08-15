@@ -445,6 +445,48 @@ _XFADE_NAMES = {"fade": "fade", "dissolve": "dissolve", "wipe": "wipeleft"}  # x
 # this rather than keeping their own list to drift out of step with it.
 TRANSITIONS = ("fade", "dissolve", "wipe", "cut", "black")
 
+# A title/branding card is a first-class item, not an overlay
+# (docs/TRD-1 §8b). An overlay changes no duration; this one does, so it
+# walks the same set_duration / render_set / mix_audio path as a song.
+CARD = "card"
+
+
+def is_card(it):
+    """True for an interstitial card item. kind='card' is the stored flag;
+    a 'card' image path is accepted so a render dict does not have to
+    repeat the kind."""
+    return (it or {}).get("kind") == CARD or bool((it or {}).get("card"))
+
+
+def _card_probe(it):
+    """Stand-in for ffprobe on a card: duration is stored, not on disk."""
+    return {"duration": max(0.0, float(it.get("duration") or 0.0)),
+            "width": 0, "height": 0, "fps": 0.0,
+            "has_audio": False, "has_video": True}
+
+
+def _set_geometry(infos):
+    """First real video's size; cards have none. 832x480 is assemble_song's
+    clip size, used only when every item is a card."""
+    for i in infos:
+        if i.get("width") and i.get("height"):
+            return i["width"], i["height"], i.get("fps") or 30
+    return 832, 480, 30
+
+
+def _card_video_input(it):
+    path = it.get("card")
+    if not path or not os.path.isfile(path):
+        raise ValueError(f"card image not found: {path}")
+    dur = _item_duration({}, it)
+    return ["-loop", "1", "-t", f"{dur:.3f}", "-i", path]
+
+
+def _card_audio_input(it):
+    dur = _item_duration({}, it)
+    return ["-f", "lavfi", "-t", f"{dur:.3f}",
+            "-i", "anullsrc=r=48000:cl=stereo"]
+
 
 def _item_duration(info, it):
     """An item's playing length after in_secs/out_secs trim, clamped to the
@@ -460,6 +502,8 @@ def _item_duration(info, it):
     # echo tail on a ramped item was silently dropped and the mix came out
     # longer than predicted by exactly the delay. Both paths add it.
     extra = effects.duration_delta(it.get("effects_json"))
+    if is_card(it):
+        return max(0.0, float(it.get("duration") or 0.0)) + extra
     ramp = it.get("_ramp")
     if ramp:
         rl = ramped_duration(ramp["bar_times"], ramp["ratios"])
@@ -1155,7 +1199,7 @@ def render_set(items, out_path, progress=None):
         raise ValueError("items is empty")
     items = _apply_beatmatch(items)
     progress(f"probing {len(items)} items")
-    infos = [probe(it["video"]) for it in items]
+    infos = [_card_probe(it) if is_card(it) else probe(it["video"]) for it in items]
     if any(not i["has_video"] for i in infos):
         raise RuntimeError("one or more items have no video stream")
     durations = [_item_duration(info, it) for info, it in zip(infos, items)]
@@ -1163,14 +1207,18 @@ def render_set(items, out_path, progress=None):
     # Items may differ in resolution/fps (finished videos from different
     # songs) -- normalize every input to the first item's geometry/fps with
     # scale+pad+fps before joining. Lazy default: revisit if a mismatched
-    # hero clip should drive dimensions instead.
-    w, h, fps = infos[0]["width"], infos[0]["height"], infos[0]["fps"] or 30
+    # hero clip should drive dimensions instead. A card has no geometry, so
+    # the first real video wins; an all-card set falls back to 832x480.
+    w, h, fps = _set_geometry(infos)
     lines, out_v, out_a, predicted_dur, brands = _build_render_set_filter(
         infos, durations, items, w, h, fps)
 
     inputs = []
     for it in items:
-        inputs += _trim_input_args(it) + ["-i", it["video"]]
+        if is_card(it):
+            inputs += _card_video_input(it)
+        else:
+            inputs += _trim_input_args(it) + ["-i", it["video"]]
 
     # Branding stills, chained onto the FINISHED video. Each is a looped image
     # input bounded by -t: without the loop it is one frame at t=0 and the
@@ -1242,8 +1290,9 @@ def mix_audio(items, out_path, progress=None):
         ramped.append(nit)
     items = ramped
     progress(f"probing {len(items)} tracks")
-    infos = [probe(it["audio"]) for it in items]
-    missing = [it["audio"] for it, i in zip(items, infos) if not i["has_audio"]]
+    infos = [_card_probe(it) if is_card(it) else probe(it["audio"]) for it in items]
+    missing = [it.get("audio") for it, i in zip(items, infos)
+               if not is_card(it) and not i["has_audio"]]
     if missing:
         raise RuntimeError(f"no audio stream in: {missing[0]}")
     durations = [_item_duration(info, it) for info, it in zip(infos, items)]
@@ -1288,7 +1337,10 @@ def mix_audio(items, out_path, progress=None):
     tmp = _atomic_out(out_path)
     inputs = []
     for it in items:
-        inputs += _trim_input_args(it) + ["-i", it["audio"]]
+        if is_card(it):
+            inputs += _card_audio_input(it)
+        else:
+            inputs += _trim_input_args(it) + ["-i", it["audio"]]
     try:
         args = inputs + ["-filter_complex", ";\n".join(lines), "-map", f"[{running}]",
                           "-c:a", "libmp3lame", "-b:a", "320k", tmp]
@@ -1326,7 +1378,8 @@ def set_duration(items, key="video"):
     # ramp only when pricing the AUDIO mix -- mix_audio renders ramps, render_set
     # does not, so pricing one for video would predict a length nothing produces
     items = _apply_beatmatch(items, ramp=(key == "audio"))
-    durations = [_item_duration(probe(it[key]), it) for it in items]
+    durations = [_item_duration({} if is_card(it) else probe(it[key]), it)
+                 for it in items]
     running_dur = durations[0]
     for i in range(len(items) - 1):
         it = items[i]

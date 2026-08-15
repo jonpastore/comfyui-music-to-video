@@ -102,11 +102,13 @@ wrong one, and day 8's rule is that the warnings do not move.
 ## 4. Schema deltas still required
 
 Landed already: `automation`, `findings`, `artefacts`, `storyboards.scene_seconds`,
-and `sets.mode_audience` (`easy|normal|advanced`, default `normal`). Switching
-audience writes only that column (`T1-20`). Easy is `mixer.master_engaged`
-reading `mode_audience == "easy"` on the item dict — the same application point
-as a gain curve (`T1-18`, `T1-20c`, `T1-20d`). `calibrations` landed for
-`T3-13` (`threshold` stays NULL).
+`sets.mode_audience` (`easy|normal|advanced`, default `normal`; `T1-20`),
+`calibrations` (`T3-13`, `threshold` stays NULL), and the interstitial card
+(`set_items.song_id` nullable, `card_path`, `card_secs`; `mixer.is_card` /
+`set_duration` prices it; `POST /sets/{id}/cards`). Switching audience writes
+only that column. Easy is `mixer.master_engaged` reading `mode_audience ==
+"easy"` on the item dict — the same application point as a gain curve
+(`T1-18`, `T1-20c`, `T1-20d`).
 
 Still needed, and no more than this:
 

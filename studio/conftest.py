@@ -283,12 +283,19 @@ def _stub_plan_tempo_ramp(beat_grid, downbeat_offset, out_point, out_bpm, in_bpm
     return bar_times, ratios
 
 
+def _is_card(it):
+    return bool(it) and (it.get("kind") == "card" or bool(it.get("card")))
+
+
 def _render_set(items, out, progress=None):
     # real mixer.render_set: raises on empty input, and every item must
-    # carry "video" -- a past bug passed "path" instead.
+    # carry "video" -- a past bug passed "path" instead. A card is the
+    # exception: it is a still, not a song render.
     if not items:
         raise ValueError("items is empty")
     for it in items:
+        if _is_card(it):
+            continue
         assert "video" in it, f"render_set item missing 'video' key: {it}"
     render_set_calls.append(items)
     open(out, "w").close()
@@ -298,15 +305,25 @@ def _mix_audio(items, out, progress=None):
     if not items:
         raise ValueError("items is empty")
     for it in items:
+        if _is_card(it):
+            continue
         assert "audio" in it, f"mix_audio item missing 'audio' key: {it}"
     mix_audio_calls.append(items)
     open(out, "w").close()
+
+
+def _item_len(it):
+    if _is_card(it):
+        return max(0.0, float(it.get("duration") or 0.0))
+    return _STUB_ITEM_DUR
 
 
 def _item_duration(info, it):
     """Mirrors the real mixer._item_duration. app.set_detail reads it to size the
     timeline blocks, so a stub without it silently produced a zero-width
     timeline -- the missing-from-the-stub trap, again."""
+    if _is_card(it):
+        return max(0.0, float(it.get("duration") or 0.0))
     full = info["duration"]
     in_s = float(it.get("in_secs") or 0.0)
     out_s = it.get("out_secs")
@@ -324,8 +341,9 @@ def _set_duration(items, key="video"):
     # wires items -> a number (or a refusal), which is all app.py needs.
     if not items:
         return 0.0
-    running_dur = _STUB_ITEM_DUR
-    for it in items[:-1]:
+    running_dur = _item_len(items[0])
+    for i, it in enumerate(items[:-1]):
+        nxt = _item_len(items[i + 1])
         # a black handover overlaps nothing and ADDS its hold -- the one
         # transition that makes a set longer (mixer._advance)
         if it.get("transition") == "black":
@@ -333,12 +351,12 @@ def _set_duration(items, key="video"):
             if fade > running_dur:
                 raise ValueError(
                     f"transition secs={fade} longer than preceding duration={running_dur}")
-            running_dur += _STUB_ITEM_DUR + float(it.get("hold") or 0.0)
+            running_dur += nxt + float(it.get("hold") or 0.0)
             continue
         secs = 0.0 if it.get("transition") == "cut" else float(it.get("secs", 0.0))
         if secs > running_dur:
             raise ValueError(f"transition secs={secs} longer than preceding duration={running_dur}")
-        running_dur += _STUB_ITEM_DUR - secs
+        running_dur += nxt - secs
     return max(0.0, running_dur)
 
 
@@ -406,6 +424,8 @@ _stub("mixer",
       render_set=_render_set,
       mix_audio=_mix_audio,
       set_duration=_set_duration,
+      is_card=_is_card,
+      CARD="card",
       MAX_TEMPO_STRETCH=_STUB_MAX_TEMPO_STRETCH,
       snap_transition=_stub_snap_transition,
       nearest_downbeat=lambda beat_grid, downbeat_offset, t: (

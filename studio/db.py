@@ -127,10 +127,13 @@ CREATE TABLE IF NOT EXISTS sets (
   tier TEXT, mode TEXT DEFAULT 'video',
   created REAL, updated REAL);
 
--- One song, in order, with the trim/transition/gain that gets it there.
+-- One song or interstitial card, in order, with the trim/transition/gain
+-- that gets it there. song_id is NULL on a card (docs/TRD-1 §8b): a
+-- parallel "things between songs" list would be a second place that
+-- computes set length.
 -- effects_json is carried but unused until phase 4 fills it in.
 CREATE TABLE IF NOT EXISTS set_items (
-  id INTEGER PRIMARY KEY, set_id INTEGER NOT NULL, song_id INTEGER NOT NULL,
+  id INTEGER PRIMARY KEY, set_id INTEGER NOT NULL, song_id INTEGER,
   position INTEGER NOT NULL,
   in_secs REAL, out_secs REAL,
   transition TEXT DEFAULT 'fade', secs REAL DEFAULT 2.0,
@@ -388,6 +391,11 @@ MIGRATIONS = [
     # T3-31 on every generated still, not only anchors. Advisory.
     "ALTER TABLE refs ADD COLUMN qc_json TEXT",
     "ALTER TABLE assets ADD COLUMN qc_json TEXT",
+    # Interstitial title/branding card (docs/TRD-1 §8b, T1-27/T1-28).
+    # song_id stays NULL; card_secs is the item's own duration, priced by
+    # mixer.set_duration. An overlay (brand_path) changes no length; this does.
+    "ALTER TABLE set_items ADD COLUMN card_path TEXT",
+    "ALTER TABLE set_items ADD COLUMN card_secs REAL",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and
@@ -578,6 +586,30 @@ CREATE TABLE IF NOT EXISTS calibrations (
 """
 
 
+def _nullable_set_item_song_id(c):
+    """T1-28: a card is a set_items row with song_id NULL. CREATE TABLE IF
+    NOT EXISTS does not drop NOT NULL on a live table, so rebuild once."""
+    cols = c.execute("PRAGMA table_info(set_items)").fetchall()
+    if not cols:
+        return
+    song = next((r for r in cols if r[1] == "song_id"), None)
+    if song is None or not song[3]:
+        return
+    row = c.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='set_items'"
+    ).fetchone()
+    if not row or not row[0]:
+        return
+    sql = row[0].replace("song_id INTEGER NOT NULL", "song_id INTEGER", 1)
+    if sql == row[0]:
+        return
+    c.execute("ALTER TABLE set_items RENAME TO set_items__old")
+    c.execute(sql)
+    c.execute("INSERT INTO set_items SELECT * FROM set_items__old")
+    c.execute("DROP TABLE set_items__old")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_set_items ON set_items(set_id, position)")
+
+
 def _migrate(c):
     for stmt in MIGRATIONS:
         try:
@@ -590,6 +622,7 @@ def _migrate(c):
             msg = str(e).lower()
             if "duplicate column" not in msg and "no such column" not in msg:
                 raise
+    _nullable_set_item_song_id(c)
     c.commit()
 
 

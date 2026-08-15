@@ -178,9 +178,11 @@ gets one (§5.5).
 are built and used by `set_edit.html`, and the good part is already right:
 blocks are flex-sized by how long each item actually **plays after trim**, so
 the picture matches the render rather than being decorative, and the handover
-marker sits on the trailing edge where the overlap really happens. What TRD-1
-adds is a **time axis** (today the strip is proportional but has no ruler),
-draggable joins, automation lanes and a playhead.
+marker sits on the trailing edge where the overlap really happens. A title
+card is a block like any other (`T1-27`/`T1-28`): it is labelled MEOW P, sized
+by `card_secs`, and it is a `set_items` row, not a comment on the strip.
+What TRD-1 still adds is a **time axis** (today the strip is proportional but
+has no ruler), draggable joins, automation lanes and a playhead.
 
 **Three audiences, one editor.** `set_edit.html` now carries a
 `mode_audience` select (`easy|normal|advanced`). These are affordance

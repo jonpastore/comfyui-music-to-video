@@ -726,6 +726,25 @@ def clamp_hold(hold, transition):
 _UNSUPPORTED_EFFECT_KEYS = effects.UNSUPPORTED_KEYS
 
 
+def _is_card_row(row):
+    """T1-28: a card is a set_items row whose song_id is NULL."""
+    try:
+        return row["song_id"] is None
+    except (KeyError, IndexError, TypeError):
+        return False
+
+
+def _card_mix_item(row):
+    """mixer.set_duration / mix_audio / render_set shape for one card."""
+    return {"kind": mixer.CARD, "card": row["card_path"] or "",
+            "duration": float(row["card_secs"] or 0.0),
+            "transition": row["transition"] or "cut",
+            "secs": row["secs"] or 0.0, "hold": _hold_of(row),
+            "in_secs": None, "out_secs": None,
+            "beatmatch": False, "bpm": None, "beat_grid": [],
+            "downbeat_offset": 0}
+
+
 def clamp_set_item_effects(effects_json):
     """Validate and screen a set_item's effects_json before it is stored.
     Free text a user typed in -- screened exactly like the anchor prompt and
@@ -785,23 +804,27 @@ def _mix_items_for_set(id, overrides=None, extra_item=None):
     {item_id: {field: value}}, applied over the stored row so a pending edit
     not yet written to the db is checked before it exists there. A song
     whose mp3 is missing from disk is skipped, same tolerance set_detail
-    already has for a deleted/moved file.
+    already has for a deleted/moved file. A card has no song; it is priced
+    by card_secs.
 
     Also pulls beatmatch/beat_grid/downbeat_offset (via _beatmatch_fields, the
     same helper render_set_route uses) so mixer.set_duration's own
     _apply_beatmatch actually snaps here too -- without these, a beatmatch=1
     item validates its raw, un-snapped secs/out_secs and an edit that beat-
     snapping later makes impossible would slip past this guard."""
-    rows = db.q("""SELECT si.id, si.transition, si.secs, si.in_secs, si.out_secs,
-                          si.beatmatch, s.mp3_path, s.bpm, s.beat_grid_json, s.downbeat_offset
-                   FROM set_items si JOIN songs s ON s.id = si.song_id
+    rows = db.q("""SELECT si.id, si.song_id, si.transition, si.secs, si.in_secs, si.out_secs,
+                          si.beatmatch, si.card_path, si.card_secs, si.hold,
+                          s.mp3_path, s.bpm, s.beat_grid_json, s.downbeat_offset
+                   FROM set_items si LEFT JOIN songs s ON s.id = si.song_id
                    WHERE si.set_id=? ORDER BY si.position""", id)
     overrides = overrides or {}
     items = []
     for r in rows:
         row = dict(r)
         row.update(overrides.get(row["id"], {}))
-        if row["mp3_path"] and os.path.isfile(row["mp3_path"]):
+        if _is_card_row(row):
+            items.append(_card_mix_item(row))
+        elif row["mp3_path"] and os.path.isfile(row["mp3_path"]):
             items.append({"audio": row["mp3_path"], "transition": row["transition"],
                           "secs": row["secs"], "in_secs": row["in_secs"], "out_secs": row["out_secs"],
                           "hold": _hold_of(row),
@@ -6218,7 +6241,7 @@ def set_detail(row):
                            s.bpm AS song_bpm, s.key AS song_key,
                            s.beat_grid_json AS song_beat_grid_json,
                            s.downbeat_offset AS song_downbeat_offset
-                    FROM set_items si JOIN songs s ON s.id = si.song_id
+                    FROM set_items si LEFT JOIN songs s ON s.id = si.song_id
                     WHERE si.set_id=? ORDER BY si.position""", row["id"])
     # Length is always predicted off the song's own AUDIO: build_song.py cuts
     # every clip to match the track exactly, so the mp3 duration is the set's
@@ -6226,13 +6249,19 @@ def set_detail(row):
     # whose mp3 is missing from disk (deleted, moved, or swapped by the
     # audio-edit undo/original-swap feature) -- same guard _set_render_row
     # already applies to its own probe, so a missing file degrades the total
-    # instead of 500ing the page the Remove button lives on.
-    mix_items = [{"audio": it["mp3_path"], "transition": it["transition"], "secs": it["secs"],
-                 "in_secs": it["in_secs"], "out_secs": it["out_secs"], "hold": _hold_of(it),
-                 **_beatmatch_fields(it, {"bpm": it["song_bpm"],
-                                          "beat_grid_json": it["song_beat_grid_json"],
-                                          "downbeat_offset": it["song_downbeat_offset"]})}
-                 for it in items if it["mp3_path"] and os.path.isfile(it["mp3_path"])]
+    # instead of 500ing the page the Remove button lives on. A card has no
+    # mp3; mixer.set_duration prices card_secs instead.
+    mix_items = []
+    for it in items:
+        if _is_card_row(it):
+            mix_items.append(_card_mix_item(it))
+        elif it["mp3_path"] and os.path.isfile(it["mp3_path"]):
+            mix_items.append({"audio": it["mp3_path"], "transition": it["transition"],
+                              "secs": it["secs"], "in_secs": it["in_secs"],
+                              "out_secs": it["out_secs"], "hold": _hold_of(it),
+                              **_beatmatch_fields(it, {"bpm": it["song_bpm"],
+                                                       "beat_grid_json": it["song_beat_grid_json"],
+                                                       "downbeat_offset": it["song_downbeat_offset"]})})
     # A set edited before this guard existed (or whose file lengths changed
     # since) can already be in an impossible state -- set_duration now
     # raises rather than lying about a length that can't be rendered. Show
@@ -6245,6 +6274,8 @@ def set_detail(row):
     missing_video = []
     if row["mode"] == "video" and row["tier"]:
         for it in items:
+            if _is_card_row(it):
+                continue
             if not db.one("""SELECT id FROM renders WHERE song_id=? AND tier=?
                              ORDER BY id DESC LIMIT 1""", it["song_id"], row["tier"]):
                 missing_video.append(it["song_title"])
@@ -6253,12 +6284,12 @@ def set_detail(row):
 
     songs_by_id = {it["song_id"]: {"bpm": it["song_bpm"], "beat_grid_json": it["song_beat_grid_json"],
                                     "downbeat_offset": it["song_downbeat_offset"], "mp3_path": it["mp3_path"]}
-                   for it in items}
+                   for it in items if it["song_id"] is not None}
     beatmatch_plan = _beatmatch_plan(items, songs_by_id, row["mode"]) if len(items) > 1 else {}
 
     suggested_order = mixer.suggest_running_order(
         [{"id": it["id"], "title": it["song_title"], "key": it["song_key"], "bpm": it["song_bpm"]}
-         for it in items]) if len(items) > 1 else []
+         for it in items if it["song_id"] is not None]) if len(items) > 1 else []
     suggested_order_ids = ",".join(str(o["song"]["id"]) for o in suggested_order)
 
     # Timeline widths come from mixer._item_duration, the SAME helper
@@ -6268,27 +6299,30 @@ def set_detail(row):
     timeline, longest = [], 0.0
     for it in items:
         secs = 0.0
-        try:
-            # OSError/RuntimeError only: a file that is missing or unreadable is
-            # a real condition and zero is the honest width for it. A broad
-            # except swallowed an AttributeError once and rendered every block
-            # at zero width, which looked like a layout bug rather than a
-            # missing helper.
-            info = mixer.probe(it["mp3_path"]) if it["mp3_path"] else None
-            if info:
-                secs = mixer._item_duration(info, dict(it))
-        except (OSError, RuntimeError, KeyError):
-            secs = 0.0
+        if _is_card_row(it):
+            secs = float(it["card_secs"] or 0.0)
+            title, bpm, key, wave = "MEOW P", None, None, None
+        else:
+            try:
+                # OSError/RuntimeError only: a file that is missing or unreadable is
+                # a real condition and zero is the honest width for it. A broad
+                # except swallowed an AttributeError once and rendered every block
+                # at zero width, which looked like a layout bug rather than a
+                # missing helper.
+                info = mixer.probe(it["mp3_path"]) if it["mp3_path"] else None
+                if info:
+                    secs = mixer._item_duration(info, dict(it))
+            except (OSError, RuntimeError, KeyError):
+                secs = 0.0
+            title, bpm, key = it["song_title"], it["song_bpm"], it["song_key"]
+            wave = song_waveform(it["song_id"])
         longest = max(longest, secs)
-        timeline.append({"id": it["id"], "title": it["song_title"], "secs": secs,
-                          "bpm": it["song_bpm"], "key": it["song_key"],
+        timeline.append({"id": it["id"], "title": title, "secs": secs,
+                          "bpm": bpm, "key": key,
                           "transition": it["transition"], "trans_secs": it["secs"],
                           "hold": _hold_of(it), "beatmatch": it["beatmatch"],
                           "branded": bool(_brand_of(it, row)),
-                          # None until the song has been analysed. The block
-                          # says which it is rather than drawing an empty box
-                          # that could equally mean "silent".
-                          "waveform": song_waveform(it["song_id"])})
+                          "waveform": wave})
     for t in timeline:
         # a floor so a very short item is still clickable rather than a hairline
         t["pct"] = max(8.0, 100.0 * t["secs"] / longest) if longest else 100.0
@@ -6448,7 +6482,7 @@ def _suggest_items(id):
     return [dict(r) for r in db.q(
         """SELECT si.id, s.title, s.bpm, s.key, s.energy
            FROM set_items si JOIN songs s ON s.id = si.song_id
-           WHERE si.set_id=? ORDER BY si.position""", id)]
+           WHERE si.set_id=? AND si.song_id IS NOT NULL ORDER BY si.position""", id)]
 
 
 @app.post("/sets/{id}/suggest", response_class=HTMLResponse)
@@ -6541,6 +6575,26 @@ def add_set_item(id: int, song_id: int = Form(...), transition: str = Form("fade
     pos_row = db.one("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM set_items WHERE set_id=?", id)
     db.run("""INSERT INTO set_items (set_id, song_id, position, transition, secs, beatmatch)
               VALUES (?,?,?,?,?,?)""", id, song_id, pos_row["p"], transition, secs, int(beatmatch))
+    db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
+    return RedirectResponse(f"/sets/{id}", status_code=303)
+
+
+@app.post("/sets/{id}/cards")
+async def add_set_card(id: int, duration: float = Form(3.0), image: UploadFile = File(...)):
+    """T1-27 / T1-28: a title card is a set_items row with song_id NULL."""
+    get_set_or_404(id)
+    if not math.isfinite(duration) or duration <= 0:
+        raise HTTPException(400, "duration must be a finite number greater than 0")
+    dest = await save_upload(image, MAX_IMAGE, os.path.join(db.DATA, "sets", str(id)),
+                              "image", prefix="card")
+    extra = _card_mix_item({"song_id": None, "card_path": dest, "card_secs": duration,
+                            "transition": "cut", "secs": 0.0, "hold": 0.0})
+    _refuse_if_unrenderable(_mix_items_for_set(id, extra_item=extra))
+    pos_row = db.one("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM set_items WHERE set_id=?", id)
+    db.run("""INSERT INTO set_items (set_id, song_id, position, transition, secs,
+                                     card_path, card_secs)
+              VALUES (?,?,?,?,?,?,?)""",
+           id, None, pos_row["p"], "cut", 0.0, dest, duration)
     db.run("UPDATE sets SET updated=? WHERE id=?", time.time(), id)
     return RedirectResponse(f"/sets/{id}", status_code=303)
 
@@ -6639,14 +6693,22 @@ def reorder_set(id: int, order: str = Form(...)):
     # _mix_items_for_set orders by the STORED position -- reordering needs the
     # PROPOSED one, so fetch keyed by id and walk `ids` instead.
     rows = {r["id"]: r for r in db.q(
-        """SELECT si.id, si.transition, si.secs, si.in_secs, si.out_secs, si.beatmatch, s.bpm,
-                  s.mp3_path, s.beat_grid_json, s.downbeat_offset
-           FROM set_items si JOIN songs s ON s.id = si.song_id WHERE si.set_id=?""", id)}
-    reordered = [{"audio": rows[i]["mp3_path"], "transition": rows[i]["transition"],
-                 "secs": rows[i]["secs"], "in_secs": rows[i]["in_secs"], "out_secs": rows[i]["out_secs"],
-                 **_beatmatch_fields(rows[i], rows[i])}
-                for i in ids if i in rows
-                and rows[i]["mp3_path"] and os.path.isfile(rows[i]["mp3_path"])]
+        """SELECT si.id, si.song_id, si.transition, si.secs, si.in_secs, si.out_secs,
+                  si.beatmatch, si.card_path, si.card_secs, si.hold,
+                  s.bpm, s.mp3_path, s.beat_grid_json, s.downbeat_offset
+           FROM set_items si LEFT JOIN songs s ON s.id = si.song_id WHERE si.set_id=?""", id)}
+    reordered = []
+    for i in ids:
+        if i not in rows:
+            continue
+        row = rows[i]
+        if _is_card_row(row):
+            reordered.append(_card_mix_item(row))
+        elif row["mp3_path"] and os.path.isfile(row["mp3_path"]):
+            reordered.append({"audio": row["mp3_path"], "transition": row["transition"],
+                              "secs": row["secs"], "in_secs": row["in_secs"],
+                              "out_secs": row["out_secs"],
+                              **_beatmatch_fields(row, row)})
     _refuse_if_unrenderable(reordered)
     for pos, item_id in enumerate(ids):
         db.run("UPDATE set_items SET position=? WHERE id=? AND set_id=?", pos, item_id, id)
@@ -6676,16 +6738,23 @@ def render_set_route(id: int):
     row = get_set_or_404(id)
     items = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", id)
     if not items:
-        raise HTTPException(400, "this set has no songs yet -- add one first")
-    songs = {it["song_id"]: get_song_or_404(it["song_id"]) for it in items}
+        raise HTTPException(400, "this set has no items yet -- add one first")
+    songs = {it["song_id"]: get_song_or_404(it["song_id"])
+             for it in items if it["song_id"] is not None}
 
     build = []
     if row["mode"] == "audio":
-        missing = [songs[it["song_id"]]["title"] for it in items if not songs[it["song_id"]]["mp3_path"]]
+        missing = [songs[it["song_id"]]["title"] for it in items
+                   if it["song_id"] is not None and not songs[it["song_id"]]["mp3_path"]]
         if missing:
             raise HTTPException(400, f"no audio for: {', '.join(missing)}")
         audience = _set_audience(row)
         for it in items:
+            if _is_card_row(it):
+                build.append({**_card_mix_item(it),
+                              "automation": automation.item_audio(it["id"]),
+                              "mode_audience": audience})
+                continue
             build.append({"audio": songs[it["song_id"]]["mp3_path"], "transition": it["transition"],
                           "secs": it["secs"], "in_secs": it["in_secs"], "out_secs": it["out_secs"],
                           "hold": _hold_of(it),
@@ -6704,6 +6773,11 @@ def render_set_route(id: int):
         audience = _set_audience(row)
         missing = []
         for it in items:
+            if _is_card_row(it):
+                build.append({**_card_mix_item(it),
+                              "automation": automation.item_audio(it["id"]),
+                              "mode_audience": audience})
+                continue
             r = db.one("""SELECT * FROM renders WHERE song_id=? AND tier=?
                          ORDER BY id DESC LIMIT 1""", it["song_id"], row["tier"])
             if not r:

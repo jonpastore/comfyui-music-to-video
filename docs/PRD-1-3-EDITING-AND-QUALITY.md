@@ -64,9 +64,11 @@ plausible metric ranked the wrong image first.
 Stated as journeys because `T6-A1` requires each one to be drivable over JSON
 with no HTML involved, and it names these three as the loops to prove it with.
 
-**A · Build a set and render it.** Add songs, drag the joins, draw a level
-curve, hear a proxy, render a real 20-second preview of one join, render the
-whole thing — and the length shown while editing is the length of the file.
+**A · Build a set and render it.** Add songs, insert a title card as its own
+item (`T1-27`/`T1-28`: `[song A][ MEOW P — 3s ][song B]`), drag the joins,
+draw a level curve, hear a proxy, render a real 20-second preview of one join,
+render the whole thing — and the length shown while editing is the length of
+the file. A card is a beat in the running order, not a decoration on one.
 
 **B · Give the album a story and storyboard against it.** Write or generate an
 arc, accept it, generate each song's storyboard as a scene *of that arc*, edit a
@@ -84,7 +86,7 @@ the eight things that must become true; they are not a new contract.
 
 | # | outcome | proven by |
 |---|---|---|
-| P1 | The number on the screen is the number in the file — set length, to 0.05 s, with echo, hold, beatmatch and trim all in play | `T1-7`, `T1-8`, `T3-11` |
+| P1 | The number on the screen is the number in the file — set length, to 0.05 s, with echo, hold, beatmatch, trim and an interstitial card all in play | `T1-7`, `T1-8`, `T1-27`, `T3-11` |
 | P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b`, `T1-12`, `T1-20d` |
 | P3 | Every surface is drivable with no browser, and the page and the JSON agree | `T6-A1`…`T6-A4`, `T1-3`, `T2-41` |
 | P4 | An album's songs are scenes of one story, demonstrably — arc content appears in the storyboard and is absent when the arc is | `T2-20`, `T2-21`, `T2-22` |
