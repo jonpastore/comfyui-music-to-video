@@ -55,6 +55,33 @@ def allows_minor_depiction(tier):
     return (tier or "").strip().lower() in LOCKED_DEPICT_TIERS
 
 
+def references_minor(text):
+    """True if text would be refused at non-locked tiers (the tripwire).
+
+    Used by T10-21 unlock screening: an empty result means no field trips this.
+    """
+    try:
+        check_text(text, "probe", tier="xxx")
+        return False
+    except ContentRefused:
+        return True
+
+
+# Sticky provenance on renders made while a work was minor-locked (T10-21).
+# Survives an explicit unlock; never rewritten by unlock.
+MINOR_LOCK_ATTRIBUTION_KEY = "minor_lock_attribution"
+
+
+def stamp_minor_lock_attribution(meta, *, tier):
+    """Mark a render made under a minor-locked (child-permitting) work."""
+    out = dict(meta or {})
+    out[MINOR_LOCK_ATTRIBUTION_KEY] = {
+        "locked_depict": True,
+        "tier": (tier or "").strip().lower() or None,
+    }
+    return out
+
+
 def refuses_minor_everywhere(tier):
     """True at xxx: no field of the work may reference a minor (T10-18b)."""
     return (tier or "").strip().lower() in NO_MINOR_MENTION_TIERS

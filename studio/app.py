@@ -2601,6 +2601,16 @@ def retranscribe_lyrics(id: int):
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
+@app.post("/songs/{id}/unlock-minor")
+def unlock_minor_route(id: int):
+    """T10-21: explicit unlock on an empty re-screen. Never silent."""
+    get_song_or_404(id)
+    try:
+        return JSONResponse(unlock_minor(id))
+    except tiers.ContentRefused as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @app.post("/songs/{id}/style-text")
 def save_style_text(id: int, style_text: str = Form(...)):
     """The prompt the TRACK was generated from. Stored, shown and editable --
@@ -5353,6 +5363,89 @@ EDITABLE_SCENE_FIELDS = ("image_prompt", "video_motion_prompt", "story",
                          "video_model")
 MAX_SCENE_FIELD = 4000
 
+# Fields re-screened on T10-21 unlock. Lyrics may mention a child at r
+# (T10-18a); for unlock-to-explicit the work must be empty of minor
+# references in every stored field that can feed a prompt or narrative.
+_UNLOCK_SCENE_FIELDS = ("image_prompt", "video_motion_prompt", "story",
+                        "camera", "motion", "lighting", "location", "name",
+                        "cue")
+
+
+def note_minor_reference(song_id, text, tier):
+    """T10-21: accepting a minor reference under g/pg13 locks the work.
+
+    Clearing the wording later does not unlock; only unlock_minor does.
+    """
+    if not text or not tiers.allows_minor_depiction(tier):
+        return
+    if tiers.references_minor(text):
+        db.set_minor_locked(song_id, True)
+
+
+def attributed_meta_for_song(song_id, tier, meta=None):
+    """Stamp sticky minor-lock attribution when the work is locked (T10-21)."""
+    meta = dict(meta or {})
+    if db.is_minor_locked(song_id):
+        return tiers.stamp_minor_lock_attribution(meta, tier=tier)
+    return meta
+
+
+def work_text_fields(song_id):
+    """(where, text) pairs re-screened for T10-21 unlock."""
+    song = db.one("SELECT * FROM songs WHERE id=?", song_id)
+    if not song:
+        return []
+    out = []
+    for col in ("lyrics", "style_text", "title"):
+        val = (song[col] if col in song.keys() else None) or ""
+        if str(val).strip():
+            out.append((col, str(val)))
+    for row in db.q(
+            "SELECT tier, json_path FROM storyboards WHERE song_id=?",
+            song_id):
+        path = row["json_path"]
+        if not path or not os.path.isfile(path):
+            continue
+        try:
+            with open(path) as f:
+                sb = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        tier = row["tier"]
+        for key in ("character_reference", "album_world_reference",
+                    "audio_lyrics", "direction", "prompt"):
+            val = sb.get(key) or ""
+            if str(val).strip():
+                out.append((f"storyboard {tier} {key}", str(val)))
+        for scene in sb.get("scenes") or []:
+            num = scene.get("scene_number")
+            for field in _UNLOCK_SCENE_FIELDS:
+                val = scene.get(field) or ""
+                if str(val).strip():
+                    out.append(
+                        (f"storyboard {tier} scene {num} {field}", str(val)))
+    return out
+
+
+def unlock_minor(song_id):
+    """T10-21: explicit unlock only when the re-screen is empty.
+
+    Does not rewrite asset meta — prior renders keep their attribution.
+    """
+    if not db.is_minor_locked(song_id):
+        return {"unlocked": False, "was_locked": False}
+    hits = []
+    for where, text in work_text_fields(song_id):
+        if tiers.references_minor(text):
+            hits.append(where)
+    if hits:
+        raise tiers.ContentRefused(
+            "Cannot unlock: minor reference still present in "
+            f"{', '.join(hits[:8])}. Remove every reference, then unlock "
+            "explicitly.")
+    db.set_minor_locked(song_id, False)
+    return {"unlocked": True, "was_locked": True}
+
 
 def foreign_tier_in_storyboard(sb, tier):
     """Other-tier name whose stored wording appears in the board, or None.
@@ -5650,6 +5743,8 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
             tiers.check_text(value, f"scene {num} {field}", tier=tier)
         except ValueError as e:
             raise HTTPException(400, str(e))
+        # T10-21: accepting a minor ref under g/pg13 locks; clear does not unlock.
+        note_minor_reference(id, value, tier)
         if (scene.get(field) or "") != value:
             scene[field] = value
             changed = True
@@ -5790,6 +5885,7 @@ def _apply_scene_fields(song, tier, num, fields):
             tiers.check_text(value, f"scene {num} {field}", tier=tier)
         except ValueError as e:
             raise HTTPException(400, str(e))
+        note_minor_reference(song["id"], value, tier)
         if (scene.get(field) or "") != value:
             scene[field] = value
             changed = True

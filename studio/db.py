@@ -420,6 +420,10 @@ MIGRATIONS = [
     # string. T2-8c's section coverage cannot tell them apart otherwise.
     # Values: ok | empty | fetch_failed. NULL on every row that predates this.
     "ALTER TABLE songs ADD COLUMN lyrics_status TEXT",
+    # T10-21: work locked after a minor reference was accepted under g/pg13.
+    # Clearing the wording does not clear this; only explicit unlock on an
+    # empty re-screen does. Prior renders keep attribution in asset meta.
+    "ALTER TABLE songs ADD COLUMN minor_locked INTEGER DEFAULT 0",
     # T2-7: which model was asked when this version was produced.
     "ALTER TABLE prompt_versions ADD COLUMN model TEXT",
 ]
@@ -808,6 +812,18 @@ def store_lyrics(song_id, text, *, source, backend=None, status=None):
     run("UPDATE songs SET lyrics=?, lyrics_source=?, lyrics_backend=?, "
         "lyrics_edited=?, lyrics_status=? WHERE id=?",
         text, source, backend_val, edited, status, song_id)
+
+
+def is_minor_locked(song_id):
+    """T10-21: True while the work is locked after a minor reference."""
+    row = one("SELECT minor_locked FROM songs WHERE id=?", song_id)
+    return bool(row and int(row["minor_locked"] or 0))
+
+
+def set_minor_locked(song_id, locked=True):
+    """Set or clear the T10-21 work lock. Unlock must go through unlock_minor."""
+    run("UPDATE songs SET minor_locked=? WHERE id=?",
+        1 if locked else 0, song_id)
 
 
 def jset(row, key="meta_json"):

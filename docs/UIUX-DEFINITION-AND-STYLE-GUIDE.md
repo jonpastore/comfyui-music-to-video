@@ -1144,6 +1144,13 @@ that lifts a minor-reference refusal when a work moves toward an
 explicit tier. Album `tier_overrides` still edit tone on a clean work;
 they do not soft-open a locked one.
 
+`T10-21` is built. Accepting a minor reference under g/pg13 sets a work
+lock that clearing the field does **not** remove. Unlock is an explicit
+act: `POST /songs/{id}/unlock-minor`, only when a re-screen of the work
+is empty; a leftover reference is a 400 that names the field. Prior
+renders keep `minor_lock_attribution` in asset meta after unlock — the
+UI must not imply that unlock rewrote history.
+
 `T10-24` is built on the send path, not as a second form control: what
 reaches a model is screened after every merge and after `PINNED` is
 welded. A field that looked clean when typed can still refuse at render

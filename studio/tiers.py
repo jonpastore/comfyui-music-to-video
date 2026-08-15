@@ -26,6 +26,7 @@ from guardrail import (  # noqa: E402,F401  (re-exported: callers use tiers.X)
     MENTION_FIELD_KINDS, refuses_minor_everywhere, NO_MINOR_MENTION_TIERS,
     check_escalation, ESCALATION_OVERRIDE_CHANNELS,
     field_allows_minor_mention, screen_escalation,
+    references_minor, MINOR_LOCK_ATTRIBUTION_KEY, stamp_minor_lock_attribution,
 )
 
 

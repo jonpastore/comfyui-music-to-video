@@ -325,7 +325,7 @@ for one idea sat 39 characters from refusing real saved content.
 **Rule 0 applies here too**: assert through `screen_prompt_field`, not through
 each caller, or a caller that stops calling it stays green.
 
-### 4.4 Minor policy (`T10-18`, `T10-20`)
+### 4.4 Minor policy (`T10-18`, `T10-20`, `T10-21`)
 
 `guardrail.check_text(text, where, tier=..., field_kind=...)` is the single
 screen. `LOCKED_DEPICT_TIERS = {g, pg13}` skips the refusal for depiction;
@@ -362,6 +362,15 @@ re-screen with override kwargs accepted and discarded (`T10-20`: `confirm`,
 `ESCALATION_OVERRIDE_CHANNELS`). No channel lifts a `ContentRefused`.
 Per-album `set_override` still applies tone wording on a clean (non-locked)
 album.
+
+**`T10-21` work lock.** Accepting a minor reference under g/pg13 sets
+`songs.minor_locked` via `note_minor_reference` on scene save. Editing the
+field to remove the wording does **not** clear the flag. `unlock_minor` /
+`POST /songs/{id}/unlock-minor` re-screens every stored work field
+(`work_text_fields`); it succeeds only when `references_minor` is empty, and
+never rewrites asset meta. Renders made while locked stamp sticky
+`meta_json.minor_lock_attribution` via `attributed_meta_for_song` /
+`stamp_minor_lock_attribution`.
 
 `T10-24`: the **send** screen runs on the final composed string after every
 merge and after `PINNED` is welded — not on the field as typed.
