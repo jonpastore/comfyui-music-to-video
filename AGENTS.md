@@ -11,6 +11,15 @@ When work shows the product or the code has drifted from a written
 requirement, update the TRD, PRD, DDD, **and** UI/UX docs in the same
 change. Do not leave the docs describing the old world.
 
+**Every landed worktree updates the ledgers in the same change.** When a
+slice is cherry-picked or merged to main, the lander (or the main
+thread) writes the TRD *Status against the tree* row to **built** (or
+**partial** / **not built** if that is the truth), with the test that
+can go red. If PRD, DDD, or UI/UX still describe the old world, fix
+those in the same commit. A worktree that only has code is unfinished.
+Progress and completion ratio are those status tables, not Jarvis and
+not a grind agent's "landed" list.
+
 **Pipeline:** operator **base photographs** (`assets` kind `anchor_ref`)
 → generate **candidates** (`anchors`) → pick one → that sheet feeds
 storyboard **refs** → clips. Do not upload plates or generated sheets
@@ -63,7 +72,8 @@ On session start: `jarvis-memory__sync`, then this project's
   next product slice.
 - Grind / autopilot: main thread orchestrates. Max 3 parallel worktree
   agents unless asked. Product order below beats a random task. Never
-  deploy mid-render. You stay on pictures and decisions.
+  deploy mid-render. You stay on pictures and decisions. Landers update
+  TRD/PRD/DDD/UIUX in the same commit as the code (see above).
 - Models: this session plans and reasons on **grok-4.6**. Execution
   subagents (`explore`, `general-purpose`, implementers) use **grok-4.5**
   unless a task needs 4.6 judgment. Pass `model=grok-4.5` on executor
