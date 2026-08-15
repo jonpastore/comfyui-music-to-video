@@ -146,7 +146,11 @@ backends match"* after a validation failure.
 Each cost a wrong diagnosis once. As criteria they cost nothing again:
 
 - **A cache hit reads as a refusal** through Swarm and as an empty success on the
-  comfy path. Any A/B uses different seeds (`T9-10`).
+  comfy path. Any A/B uses different seeds (`T9-10`). Built:
+  `pipeline.empty_render_kind` classifies byte-identical empty as `cache_hit`
+  (model/node misses stay `refusal`); `ab_paths_use_distinct_seeds` refuses
+  same-seed A/B. Checked by
+  `test_t9_10_cache_hit_is_not_a_refusal_and_ab_uses_different_seeds`.
 - **SwarmUI caches each backend's node list at connect time** (`T9-11`). On the
   studio path this is **inert**: submit stays `comfyworkflowraw` +
   `exactbackendid`, so ComfyUI validates filenames itself and Swarm's list is

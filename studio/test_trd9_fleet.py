@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-11, T9-13a, T9-14, T9-16, T9-17, T9-18, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-10, T9-11, T9-13a, T9-14, T9-16, T9-17, T9-18, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -1255,3 +1255,63 @@ def test_t9_18_fleet_ops_name_their_service_and_never_more():
         pass
     else:
         raise AssertionError("unknown op invented a stop scope")
+# T9-10. Measured 2026-08-12: re-submit a byte-identical workflow and ComfyUI
+# executes nothing / writes no file. Through Swarm that reads as
+# "No images were generated (all refused, or failed)"; on the comfy path as a
+# job that succeeded with an empty result. Classifying either as a refusal is
+# the wrong diagnosis. A/B of two paths must use different seeds or it
+# measures the cache (positive half: different seeds are not a cache hit).
+SWARM_CACHE_EMPTY = "No images were generated (all refused, or failed)"
+
+
+def _seeded_wf(seed):
+    """Minimal graph whose bytes change with the sampler seed (cache key)."""
+    return json.dumps({
+        "1": {"class_type": "KSampler", "inputs": {"seed": int(seed)}},
+        "99": {"inputs": {"filename_prefix": f"anchor_v2/front_s{seed}"}},
+    }, separators=(",", ":"))
+
+
+def test_t9_10_cache_hit_is_not_a_refusal_and_ab_uses_different_seeds():
+    """T9-10: byte-identical resubmit empty is a cache hit, not a refusal.
+
+    One-sided trap (TRD-9 §9): classifying every empty as a refusal stays
+    green if A/B is never run. Positive half: with different seeds the same
+    path is not a cache hit — the resubmission that would re-execute is the
+    one that can produce a real output where the byte-identical one does not.
+    """
+    wf_a = _seeded_wf(42)
+    wf_b = _seeded_wf(43)
+    assert wf_a != wf_b, "fixture seeds must change the workflow bytes"
+
+    # Swarm surface of a cache hit (the string that cost a wrong diagnosis).
+    assert pipeline.empty_render_kind(
+        SWARM_CACHE_EMPTY, prior_wf=wf_a, wf=wf_a) == "cache_hit", (
+        "byte-identical resubmit empty through Swarm was not a cache hit")
+    # Comfy surface: job succeeds, no files.
+    assert pipeline.empty_render_kind(
+        [], prior_wf=wf_a, wf=wf_a) == "cache_hit", (
+        "byte-identical resubmit empty on the comfy path was not a cache hit")
+
+    # Real refusals stay refusals even when the graph text matches a prior.
+    assert pipeline.empty_render_kind(
+        "Model in folder 'vae' with filename 'qwen_image_vae.safetensors' "
+        "not found.",
+        prior_wf=wf_a, wf=wf_a) == "refusal"
+    assert pipeline.empty_render_kind(
+        "The custom workflow contains an unsupported node type 'EmptyImage'.",
+        prior_wf=wf_a, wf=wf_a) == "refusal"
+
+    # Positive half: different seeds → not measuring the cache.
+    assert pipeline.empty_render_kind(
+        SWARM_CACHE_EMPTY, prior_wf=wf_a, wf=wf_b) != "cache_hit", (
+        "a different-seed submission was classified as a cache hit")
+    assert pipeline.empty_render_kind(
+        [], prior_wf=wf_a, wf=wf_b) != "cache_hit", (
+        "a different-seed empty was classified as a cache hit")
+    assert pipeline.ab_paths_use_distinct_seeds(42, 43), (
+        "A/B with different seeds was refused")
+    assert not pipeline.ab_paths_use_distinct_seeds(42, 42), (
+        "A/B with the same seed was accepted — that measures the cache")
+    assert not pipeline.ab_paths_use_distinct_seeds(None, 43)
+    assert not pipeline.ab_paths_use_distinct_seeds(42, None)

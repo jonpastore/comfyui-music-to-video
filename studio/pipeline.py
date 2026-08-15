@@ -866,6 +866,54 @@ def _backend_vanished(msg):
     return any(t in m for t in _BACKEND_GONE)
 
 
+# T9-10. Measured 2026-08-12: re-submit a byte-identical workflow and ComfyUI
+# executes nothing and writes no file. Through Swarm that reads as
+# "No images were generated (all refused, or failed)"; on the comfy path as a
+# job that succeeded with an empty result. Either is a CACHE HIT, not a refusal
+# and not a vanished box. Real model/node refusals keep their own wording and
+# stay refusals even when the graph text matches a prior submission. Any A/B of
+# two paths must use different seeds or it measures the cache.
+_CACHE_HIT_EMPTY = ("no images were generated", "all refused, or failed")
+
+
+def empty_render_kind(outcome, *, prior_wf, wf):
+    """Classify an empty or error-shaped render outcome (T9-10).
+
+    Returns "cache_hit", "refusal", or "empty".
+    "cache_hit" only when the workflow bytes match a prior submission: that is
+    the execution-cache case. Different seeds change the bytes, so the same
+    empty surface on a different-seed path is not a cache hit — it is the half
+    of the A/B that can produce a real output.
+    """
+    same = prior_wf is not None and wf is not None and prior_wf == wf
+    if isinstance(outcome, (list, tuple)):
+        if outcome:
+            return "ok"
+        return "cache_hit" if same else "empty"
+    msg = str(outcome or "").lower()
+    if "unsupported node" in msg or "not found" in msg or "invalid" in msg:
+        return "refusal"
+    if any(t in msg for t in _CACHE_HIT_EMPTY):
+        return "cache_hit" if same else "refusal"
+    if not msg.strip():
+        return "cache_hit" if same else "empty"
+    return "refusal"
+
+
+def ab_paths_use_distinct_seeds(seed_a, seed_b):
+    """True only when both A/B seeds are set and differ (T9-10).
+
+    Same seed on both paths is the measurement trap: the second submit is
+    byte-identical and ComfyUI's execution cache answers instead of the path.
+    """
+    if seed_a is None or seed_b is None:
+        return False
+    try:
+        return int(seed_a) != int(seed_b)
+    except (TypeError, ValueError):
+        return seed_a != seed_b
+
+
 def submit_swarm(wf_dir, prefix_dir, pattern, progress=None):
     """submit_dir + collect for RENDER_BACKEND=swarm, and they cannot be split.
 
