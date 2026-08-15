@@ -248,6 +248,13 @@ alpha not fully transparent.
   `qc.measure_channel_sat` owns the reading and raises on no frames;
   `check_video` emits `channel_sat` with measured/expected/unit and
   `re-render-seed`. Gray and black are not green garbage.
+- `T3-4.2-resolution` **Resolution as requested** — when `expect.width` and
+  `expect.height` are set, `check_video` measures the artefact via
+  `mixer.probe` and compares exactly (no soft tolerance). Matching PASSes;
+  160×120 against 320×240 REJECTs with `measured`/`expected`/`unit` =
+  file WxH / requested / `px`, remedy class `re-render-pinned`. Without a
+  request the check emits nothing (as requested only). Catches a box that
+  quietly downscaled (`test_t3_4_2_resolution.py`).
 - `T3-7` The frame-count check enforces **the MODEL'S OWN latent step** and
   reports the nearest legal value when it fails. **Not a universal 8n+1**, and
   this criterion said 8n+1 until a review caught what that meant:
@@ -604,8 +611,9 @@ current.
 
 | criterion | state | commit | what was measured |
 |---|---|---|---|
-| **tier 1, §4 entire** | **built** | earlier + `T3-4.2-sat` + `T3-4.3-sr` + `T3-4.3-ch` + `T3-4.3-clip` + `T3-4.3-dc` + `T3-4.3-edge` + `T3-4.4-av` | `studio/qc.py` — `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise`. Every threshold measured, every `_readings()` raises rather than returning 0.0. Channel saturation was the §4.2 row still missing a red test until `T3-4.2-sat`. Sample rate as requested was code-without-a-finding until `T3-4.3-sr`. §4.3 channel count needed `mixer.probe["channels"]` until `T3-4.3-ch`. Clipped-sample count was the §4.3 row without a red test until `T3-4.3-clip`. DC offset was the §4.3 row still missing a check until `T3-4.3-dc`. Leading/trailing silence was §4.3 text without a red test until `T3-4.3-edge`. Assembled-song av_sync was code-without-a-red-test until `T3-4.4-av` |
+| **tier 1, §4 entire** | **built** | earlier + `T3-4.2-sat` + `T3-4.2-resolution` + `T3-4.3-sr` + `T3-4.3-ch` + `T3-4.3-clip` + `T3-4.3-dc` + `T3-4.3-edge` + `T3-4.4-av` | `studio/qc.py` — `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise`. Every threshold measured, every `_readings()` raises rather than returning 0.0. Channel saturation was the §4.2 row still missing a red test until `T3-4.2-sat`. Resolution as requested was code-without-a-red-test (and unit `None`) until `T3-4.2-resolution`. Sample rate as requested was code-without-a-finding until `T3-4.3-sr`. §4.3 channel count needed `mixer.probe["channels"]` until `T3-4.3-ch`. Clipped-sample count was the §4.3 row without a red test until `T3-4.3-clip`. DC offset was the §4.3 row still missing a check until `T3-4.3-dc`. Leading/trailing silence was §4.3 text without a red test until `T3-4.3-edge`. Assembled-song av_sync was code-without-a-red-test until `T3-4.4-av` |
 | `T3-4.2-sat` channel saturation (NaN / green garbage) | **built** | this slice | `qc.measure_channel_sat` + `check_video` `channel_sat`: solid green/lime FLAG above `CHANNEL_SAT_LIMIT` (80 levels of green dominance); testsrc2 / gray / black PASS; measured equals the independent reading (`test_t3_4_2_sat.py`). No frames raises, never 0.0 |
+| `T3-4.2-resolution` resolution as requested | **built** | this slice | `mixer.probe` width/height; `check_video` emits `resolution` when `expect.width`+`height` are set: matching WxH PASSes, 160x120 against 320x240 REJECTs, measured equals probe WxH, unit `px`, remedy re-render-pinned; without expect the check emits nothing (`test_t3_4_2_resolution.py`) |
 | `T3-4.3-sr` sample rate as requested | **built** | this slice | `mixer.probe` returns `sample_rate`; `check_audio` emits `sample_rate` when `expect.sample_rate` is set: matching Hz PASSes, 44100 against 48000 REJECTs, measured equals probe, unit `Hz`, remedy re-render; without expect the check emits nothing (`test_t3_4_3_sr.py`). No reading REJECTs, never a silent skip |
 | `T3-4.3-ch` channel count as requested | **built** | this slice | `mixer.probe` exposes `channels` (0 when no audio). `check_audio` emits `channels` when `expect.channels` is set: stereo vs 2 PASSes, mono vs 2 REJECTs; measured/expected/unit `ch`, remedy re-render; without expect the check is silent; measured equals the independent probe reading (`test_t3_4_3_ch.py`) |
 | `T3-4.3-clip` clipped-sample count | **built** | this slice | `qc.measure_clipped_samples` + `check_audio` `clipped_samples`: s16 rails ≤−32767/≥32767; clean sine@−14dB PASSes 0; volume=+20dB and `2*sin` aevalsrc FLAG with measured = independent count, expected `CLIPPED_SAMPLES_LIMIT` (0), unit `samples`, remedy loudnorm (`test_t3_4_3_clip.py`). No audio raises, never 0 on no data. Not Peak_count / not true-peak alone |

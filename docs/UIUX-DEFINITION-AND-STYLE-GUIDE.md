@@ -582,7 +582,11 @@ tier 1 over a song is not a jobs row and does not wait on the GPU
 worker — `POST /songs/{id}/qc` measures and returns. `T3-4.2-sat`: a
 `channel_sat` FLAG names green garbage (NaN encode mode) with measured
 green dominance above the limit and a re-render-seed remedy — not a
-silent pass on a solid green clip. `T3-4.3-sr`: a take at the wrong
+silent pass on a solid green clip. `T3-4.2-resolution`: a clip at the
+wrong width×height REJECTs `resolution` with measured/expected WxH,
+unit `px`, and a re-render-pinned remedy — not a silent pass when the
+workflow asked for 320×240 and the box quietly wrote 160×120.
+`T3-4.3-sr`: a take at the wrong
 sample rate REJECTs `sample_rate` with measured/expected Hz and a
 re-render remedy — not a silent pass when the request was 48000 and
 the file is 44100. `T3-4.3-ch`: a take whose channel

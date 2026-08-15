@@ -167,7 +167,10 @@ songs still enqueue one batch `clips` job.
 `studio/qc.py` (TRD-3 tier 1 in full; **`T3-4.2-sat` built** — clip
 `channel_sat` / `measure_channel_sat` FLAGs solid green garbage (NaN
 encode mode) above `CHANNEL_SAT_LIMIT`, PASSes testsrc2/gray/black,
-`test_t3_4_2_sat.py`; **`T3-4.3-sr` built** — `check_audio` sample
+`test_t3_4_2_sat.py`; **`T3-4.2-resolution` built** — clip `resolution`
+vs workflow width/height via `mixer.probe`: matching WxH PASSes,
+downscaled REJECTs with unit `px`, no expect emits nothing,
+`test_t3_4_2_resolution.py`; **`T3-4.3-sr` built** — `check_audio` sample
 rate as requested via `mixer.probe`: matching Hz PASSes, mismatch
 REJECTs, no expect emits nothing, `test_t3_4_3_sr.py`; **`T3-4.3-ch` built** — `mixer.probe` exposes
 `channels`; `check_audio` `channels` when `expect.channels` is set
