@@ -983,7 +983,10 @@ Two additions specific to TRD-9:
   move.
 - **An empty registered backend is marked as a hazard, not as healthy** (`T9-9`).
   It is "running" by every measure Swarm reports and it will refuse real work.
-  Green here would be the interface agreeing with the wrong signal.
+  Green here would be the interface agreeing with the wrong signal. The fleet
+  panel uses the `hazard` card class and a `hazard: empty` warn-tag when
+  `by_backend` sets `empty` / `hazard="empty"`; healthy stocked rows stay free
+  of that mark. Registration of an empty box is refused by `accept_backend`.
 - **Staging is catalogue-driven, not a remembered file list** (`T9-13b`). The
   operator path that puts a model on a box stages the primary weight and every
   `CATALOG.companions` entry together; a UI or script that only names the UNET

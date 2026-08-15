@@ -931,6 +931,34 @@ def backend_stability(address):
     return BACKEND_STABILITY.get(canonical_host(address), UNKNOWN_BACKEND)
 
 
+def backend_empty(row):
+    """True when a reachable backend holds none of the catalogue (T9-9).
+
+    Measured 2026-08-12: a box listed running with models/ at 8 KB refused a
+    real workflow in 0.6s. Unreachable is a different signal -- unknown is not
+    empty. Confirmed presence of any catalogued model is stocked.
+    """
+    if not row.get("reachable"):
+        return False
+    return not any(e.get("available") is True for e in row.get("models") or [])
+
+
+def accept_backend(row):
+    """Refuse registering a backend that holds no catalogued models (T9-9).
+
+    Staging weights is a prerequisite. An empty box is a hazard Swarm's free
+    draw would hand real jobs; curation only routes around it after a refusal.
+    Returns the row when stocked (or not-yet-asked). Raises ValueError when
+    empty.
+    """
+    if backend_empty(row):
+        label = row.get("title") or row.get("id") or "?"
+        raise ValueError(
+            f"backend {label!r} holds no catalogued models; "
+            "stage weights before registering")
+    return row
+
+
 def by_backend(backends, role=None):
     """The catalogue answered separately for every backend.
 
@@ -938,11 +966,12 @@ def by_backend(backends, role=None):
     address}] -- and is passed IN rather than fetched, because pipeline imports
     this module and the cycle would be real. app.py holds both and wires them.
 
-    Returns [{id, title, status, address, stability, why, reachable, models}],
-    where models is the catalog() list for that box. `reachable` distinguishes
-    "Swarm says running but its ComfyUI would not answer us" from "answered" --
-    a backend can be registered, listed as running, and hold nothing, which is
-    exactly what backend 1 did on 2026-08-12.
+    Returns [{id, title, status, address, stability, why, reachable, empty,
+    hazard, models}], where models is the catalog() list for that box.
+    `reachable` distinguishes "Swarm says running but its ComfyUI would not
+    answer us" from "answered". `empty` / `hazard="empty"` flag a reachable
+    box that holds none of the catalogue -- registered, listed as running, and
+    useless, which is exactly what backend 1 did on 2026-08-12 (T9-9).
     """
     out = []
     for b in (backends or []):
@@ -957,10 +986,14 @@ def by_backend(backends, role=None):
             # wan22 file, but even if it did, a 15.27 GiB UNET does not go on
             # a 10.58 GiB 2080 Ti.
             e["fits"] = fits(e["key"], stats.get("vram_gib"))
-        out.append(dict(b, stability=stability, stability_why=why,
-                        reachable=info is not None,
-                        vram_gib=stats.get("vram_gib"), gpu=stats.get("gpu", ""),
-                        models=entries))
+        row = dict(b, stability=stability, stability_why=why,
+                   reachable=info is not None,
+                   vram_gib=stats.get("vram_gib"), gpu=stats.get("gpu", ""),
+                   models=entries)
+        empty = backend_empty(row)
+        row["empty"] = empty
+        row["hazard"] = "empty" if empty else None
+        out.append(row)
     return out
 
 

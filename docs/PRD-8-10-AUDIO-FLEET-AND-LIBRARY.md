@@ -149,11 +149,11 @@ model, no second loudness implementation, no image guardrail on the audio path
 3. **P9 is a rule about restraint**, and restraint decays. The pressure to let a
    model's confident answer become a gate grows with every hour a human spends
    judging renders by hand.
-4. **Most `T9-*` cannot be tested against a mock.** A benched backend and a
-   silently empty box are only the live fleet. The studio-path half of `T9-11`
-   is the exception: submit shape (`comfyworkflowraw` + `exactbackendid`) is
-   hermetic — Swarm's connect-time cache is inert on that path and real only
-   for Swarm's own routing.
+4. **Most `T9-*` cannot be tested against a mock.** A benched backend is only
+   the live fleet. Hermetic exceptions: the studio-path half of `T9-11`
+   (submit shape `comfyworkflowraw` + `exactbackendid`) and `T9-9` (empty
+   backend refused / stocked accepted via stubbed `/object_info` —
+   `test_t9_9_empty_backend_refused_stocked_registers_and_renders`).
 
 ## 7. Open, and needing Jon
 

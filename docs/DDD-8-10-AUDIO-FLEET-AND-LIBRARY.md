@@ -168,14 +168,18 @@ Each cost a wrong diagnosis once. As criteria they cost nothing again:
 
 ### 3.4 What TRD-9 adds rather than documents
 
-Only three things were genuinely new work against the fleet machinery that was
-already live: `T9-9` (registering an empty backend is refused or flagged — ethan
-joined with `models/` at 8 KB and would have been handed real jobs), `T9-14`
+`T9-9` is built with a check: `models.by_backend` sets `empty` /
+`hazard="empty"` on a reachable box holding none of the catalogue, and
+`accept_backend` raises; a stocked box is accepted and remains a `where()`
+render candidate
+(`test_t9_9_empty_backend_refused_stocked_registers_and_renders`). Also built:
+`T9-14`
 (built: a render refused because the *other tenant* holds the card, naming the
 tenant — `gpu.preflight` keeps who held at start so unload clearing `/api/ps`
 cannot strip the name; check in `test_trd9_fleet.py`), and `T9-17` (built: `fleet_watch.once` writes
 `_alert` on the state file with `delivered` True/False and the alert lines;
 host up/down still advances so T9-8's once-per-edge holds).
+
 `T9-17` is the one worth defending: **an alerting path whose failure mode is
 quiet is worse than none**, because it is trusted.
 

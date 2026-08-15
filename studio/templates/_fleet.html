@@ -20,7 +20,7 @@
     is somebody&rsquo;s desktop.</p>
 
   {% for b in fleet %}
-  <article class="model-card {% if not b.reachable %}unavailable{% endif %}">
+  <article class="model-card {% if not b.reachable %}unavailable{% elif b.empty %}hazard{% endif %}">
     <header class="model-head">
       <strong>[{{ b.id }}] {{ b.title }}</strong>
       {% if b.stability == 'stable' %}
@@ -30,6 +30,7 @@
       {% endif %}
       <span class="tag">swarm says {{ b.status }}</span>
       {% if not b.reachable %}<span class="tag warn-tag">did not answer us</span>{% endif %}
+      {% if b.empty %}<span class="tag warn-tag">hazard: empty</span>{% endif %}
     </header>
     <p class="meta"><code>{{ b.address }}</code>
       {% if b.vram_gib %}&middot; {{ b.gpu }}, {{ b.vram_gib }} GiB{% endif %}
@@ -38,12 +39,12 @@
     {% if not b.reachable %}
       <p class="warn">Its ComfyUI did not answer, so nothing below is known about this box
         either way. Swarm listing it as {{ b.status }} is not the same claim.</p>
+    {% elif b.empty %}
+      <p class="warn">Answered, and holds <strong>none</strong> of the catalogued models.
+        A registered empty backend is a hazard, not healthy &mdash; work pinned here
+        fails in about a second. Stage weights before treating it as a capability.</p>
     {% else %}
       {% set runnable = b.models | selectattr('available') | list %}
-      {% if not runnable %}
-        <p class="warn">Answered, and holds <strong>none</strong> of the catalogued models.
-          Work pinned here fails in about a second.</p>
-      {% else %}
       <ul class="model-notes">
         {% for m in runnable %}
         <li>
@@ -66,7 +67,6 @@
         </li>
         {% endfor %}
       </ul>
-      {% endif %}
     {% endif %}
   </article>
   {% endfor %}

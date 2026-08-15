@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-10, T9-11, T9-12, T9-13a, T9-14, T9-16, T9-17, T9-18, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-9, T9-10, T9-11, T9-12, T9-13a, T9-14, T9-16, T9-17, T9-18, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -1364,3 +1364,109 @@ def test_t9_12_history_is_not_authority_for_swarm_jobs():
     assert pipeline.container_log_shows_execution(SWARM_RAN_LOG) is True
     assert pipeline.container_log_shows_execution("") is False
     assert pipeline.container_log_shows_execution("server started") is False
+# T9-9. ethan joined with models/ at 8 KB: Swarm listed it running and the free
+# draw handed it jobs it must refuse. Empty = answered and holds none of the
+# catalogue. Ghost (unreachable) is a different signal, not this hazard.
+# Positive half (TRD-9 §9): a stocked box is accepted and remains a render
+# candidate. One-sided trap: a gate that refuses every backend stays green on
+# empty alone.
+T9_9_EMPTY = {
+    "id": "3", "title": "ethan-empty", "status": "running",
+    "address": "http://10.0.0.15:8188",
+}
+T9_9_STOCKED = {
+    "id": "0", "title": "cerberus", "status": "running",
+    "address": "http://10.0.0.16:8188",
+}
+T9_9_GHOST = {
+    "id": "9", "title": "ghost", "status": "running",
+    "address": "http://10.0.0.99:8188",
+}
+T9_9_EMPTY_INFO = {
+    "UNETLoader": {"input": {"required": {"unet_name": [[]]}}},
+    "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [[]]}}},
+    "VAELoader": {"input": {"required": {"vae_name": [[]]}}},
+}
+T9_9_STOCKED_INFO = {
+    "UNETLoader": {"input": {"required": {"unet_name": [
+        ["qwen_image_edit_2511_fp8mixed.safetensors"]]}}},
+    "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [
+        ["ace_step_v1_3.5b.safetensors"]]}}},
+    "VAELoader": {"input": {"required": {"vae_name": [
+        ["ae.safetensors", "qwen_image_vae.safetensors"]]}}},
+}
+T9_9_INFO = {
+    "http://10.0.0.15:8188": T9_9_EMPTY_INFO,
+    "http://10.0.0.16:8188": T9_9_STOCKED_INFO,
+}
+T9_9_STATS = {
+    "http://10.0.0.15:8188": {"vram_gib": 15.5, "gpu": "RTX 5080"},
+    "http://10.0.0.16:8188": {"vram_gib": 23.42, "gpu": "RTX 5090 Laptop"},
+}
+
+
+def test_t9_9_empty_backend_refused_stocked_registers_and_renders():
+    """T9-9: empty registered backend refused; stocked registers and renders.
+
+    Measured: ethan with models/ at 8 KB was listed running and refused real
+    work in ~0.6s. Staging weights is a prerequisite for registering. Empty is
+    refused (accept_backend raises) and flagged hazard=empty; stocked
+    accept_backend returns the row and where() still offers it for a model it
+    holds. Unreachable is not this hazard. Dropping accept_backend or
+    always-True empty goes red on the stocked half; never setting empty goes
+    red on the empty half.
+    """
+    assert callable(getattr(models, "accept_backend", None)), (
+        "models.accept_backend is the register gate; missing is the defect")
+    assert callable(getattr(models, "backend_empty", None)), (
+        "models.backend_empty is the empty predicate")
+
+    was_info, was_stats = models._object_info, models._system_stats
+    models._object_info = lambda url=None: T9_9_INFO.get(url)
+    models._system_stats = lambda url=None: T9_9_STATS.get(url)
+    try:
+        fleet = models.by_backend([T9_9_EMPTY, T9_9_STOCKED, T9_9_GHOST])
+        empty = next(r for r in fleet if r["id"] == "3")
+        stocked = next(r for r in fleet if r["id"] == "0")
+        ghost = next(r for r in fleet if r["id"] == "9")
+
+        assert empty["reachable"] is True
+        assert empty["empty"] is True, (
+            f"a box holding none of the catalogue was not flagged empty: {empty}")
+        assert empty.get("hazard") == "empty", (
+            f"empty backend was not marked as a hazard: {empty}")
+        try:
+            models.accept_backend(empty)
+        except ValueError as e:
+            assert "catalogued" in str(e).lower() or "empty" in str(e).lower(), e
+        else:
+            raise AssertionError(
+                "registering a backend that holds no catalogued models was allowed")
+
+        assert stocked["reachable"] is True
+        assert stocked["empty"] is False, (
+            f"a stocked box was flagged empty: {stocked}")
+        assert stocked.get("hazard") is None, (
+            f"a stocked box was marked a hazard: {stocked}")
+        assert models.accept_backend(stocked) is stocked, (
+            "a stocked backend was refused")
+        assert any(e["available"] is True for e in stocked["models"]), (
+            "stocked fixture holds no confirmed model — positive half is hollow")
+        # Stocked remains a render candidate for a model it holds (offline
+        # stand-in for "registers and renders"). Empty must not.
+        stocked_where = models.where(
+            "qwen_image_edit_2511", [T9_9_STOCKED])
+        assert any(r["id"] == "0" and r["confirmed"] for r in stocked_where), (
+            f"stocked backend did not remain a render candidate: {stocked_where}")
+        empty_where = models.where("qwen_image_edit_2511", [T9_9_EMPTY])
+        assert empty_where == [], (
+            f"empty backend was offered as a render candidate: {empty_where}")
+
+        assert ghost["reachable"] is False
+        assert ghost["empty"] is False, (
+            "an unreachable box was conflated with the empty-backend hazard")
+        assert ghost.get("hazard") is None
+        assert models.accept_backend(ghost) is ghost, (
+            "unreachable was refused as empty — different signal")
+    finally:
+        models._object_info, models._system_stats = was_info, was_stats
