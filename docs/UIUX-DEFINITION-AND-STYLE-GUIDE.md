@@ -284,10 +284,13 @@ frames and the audio-trim window follow `clip_seconds`, not a hardcoded
 `LTX25_LEN`/`CHUNK`; a NULL `length_seconds` still renders 81 frames of
 `CHUNK`. A mixed-model job keeps each clip's **native** frames and fps
 (`T2-47`): s2v is 77@16.0, ltx25 is 81@16.8312; the editor must not
-show one fps as if both renderers produced it. A single-clip request
+show one fps as if both renderers produced it. Per-scene model and
+per-model ceilings compose (`T2-48`): a 30 s scene marked `s2v` splits
+into s2v-sized clips, a 30 s scene on `ltx25` into 15 s ones, and each
+chain tiles that scene. A single-clip request
 over the model's ceiling (`T5-9`) is a
 named refusal (measured vs chosen), not a quiet annotation; split is
-`split_to_ceiling`. Re-generating a storyboard keeps every approved reference
+`split_to_ceiling` / `clips_for_scene`. Re-generating a storyboard keeps every approved reference
 (`T2-13b`); the approve grid still shows the same `(clip_idx, seed)` picks.
 The grid lists every duration-owned clip even when the storyboard has
 fewer scenes (`T2-13c`); a 20-scene board on a 41-clip song still

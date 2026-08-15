@@ -23,7 +23,7 @@ sys.path.insert(0, _REPO_ROOT)
 from build_storyboard import parse_sections, to_md, energy  # noqa: E402
 from build_song import (  # noqa: E402
     SHOT_RULES, LTX_FPS, legal_frames, guidance_seconds, n_clips_for,
-    clip_seconds)
+    clip_seconds, clips_for_scene)
 
 import tiers  # noqa: E402  (ContentRefused must be catchable by type)
 
@@ -517,6 +517,9 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
         frames = legal_frames(planned, LTX_FPS)
         s["frames"] = frames
         s["length_seconds"] = round(frames / LTX_FPS, 4)
+        # T2-48: stamp the per-model split of the planned scene length so
+        # 30 s s2v is s2v-sized and 30 s ltx25 is 15 s, each tiling the scene.
+        s["clips"] = clips_for_scene(dict(s, length_seconds=float(planned)))
         out.append(s)
 
     for s, (start, end) in zip(out, _tile_spans(len(out), dur)):
@@ -591,6 +594,24 @@ def validate(sb, exemplar=None, expect_scenes=None):
                 problems.append(
                     f"scene {s.get('scene_number', '?')} length {frames} frames is not 8n+1 "
                     f"(nearest {near})")
+        clips = s.get("clips")
+        if clips:
+            num = s.get("scene_number", "?")
+            try:
+                first = float(clips[0]["start_s"])
+            except (KeyError, TypeError, ValueError, IndexError):
+                problems.append(f"scene {num} clips do not tile the scene")
+            else:
+                if abs(first - 0.0) > 1e-6:
+                    problems.append(f"scene {num} clips do not tile the scene")
+                for a, b in zip(clips, clips[1:]):
+                    try:
+                        gap = abs(float(a["end_s"]) - float(b["start_s"]))
+                    except (KeyError, TypeError, ValueError):
+                        gap = 1.0
+                    if gap > 1e-6:
+                        problems.append(f"scene {num} clips do not tile the scene")
+                        break
 
     nums = [s.get("scene_number") for s in scenes]
     if nums != list(range(1, len(scenes) + 1)):

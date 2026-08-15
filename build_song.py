@@ -469,6 +469,45 @@ def requested_clip_seconds(scene, video_model="ltx25"):
     return CHUNK
 
 
+def clips_for_scene(scene, default_model="ltx25", origin=0.0):
+    """Split one scene on its model's ceiling. Clips tile the scene (T2-48 / T2-8b)."""
+    model = scene.get("video_model") or default_model
+    seconds = requested_clip_seconds(scene, model)
+    parts = split_to_ceiling(seconds, model)
+    fps = LTX_FPS if model in ("ltx", "ltx25") else FPS
+    out = []
+    t = float(origin)
+    for part in parts:
+        out.append({
+            "start_s": t,
+            "end_s": t + part,
+            "duration_s": part,
+            "model": model,
+            "frames": legal_frames(part, fps),
+            "fps": fps,
+        })
+        t += part
+    return out
+
+
+def clips_for_scenes(scenes, default_model="ltx25"):
+    """T2-48: each scene splits on its own model ceiling and tiles itself."""
+    plan = []
+    for scene in scenes:
+        for rec in clips_for_scene(scene, default_model, origin=0.0):
+            item = dict(rec)
+            item["scene_number"] = scene.get("scene_number")
+            plan.append(item)
+    return plan
+
+
+def scene_over_ceiling(scene, default_model="ltx25"):
+    """True when this scene is longer than its model's clip ceiling."""
+    model = scene.get("video_model") or default_model
+    seconds = requested_clip_seconds(scene, model)
+    return seconds > clip_ceiling(model)["seconds"] + 1e-9
+
+
 def ltx25_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard, with_audio=True):
     """LTX-2.5, the audio-conditioned path -- same contract as ltx_workflow.
 
@@ -827,7 +866,20 @@ def main():
     sb = normalize(json.load(open(args.storyboard)))
     scenes = sb["scenes"]
     dur = audio_duration(args.audio)
-    plan_clips = clip_plan(scenes, args.audio)
+    # T2-48: a scene over its own model ceiling becomes a chain of
+    # model-sized clips. Absent that, clip_plan still maps the song.
+    if any(scene_over_ceiling(s, args.video_model) for s in scenes):
+        plan_clips = []
+        for rec in clips_for_scenes(scenes, default_model=args.video_model):
+            scene = next(s for s in scenes if s["scene_number"] == rec["scene_number"])
+            clip_scene = dict(scene)
+            clip_scene["length_seconds"] = rec["duration_s"]
+            clip_scene["frames"] = rec["frames"]
+            clip_scene["video_model"] = rec["model"]
+            i = len(plan_clips)
+            plan_clips.append((i, clip_scene, shot_directive(clip_scene, i)))
+    else:
+        plan_clips = clip_plan(scenes, args.audio)
     nclips = len(plan_clips)
 
     audio_name = args.audio_name or os.path.basename(args.audio)
@@ -957,6 +1009,12 @@ def demo():
         assert "measured" in str(e)
     parts = split_to_ceiling(30.0, "ltx25")
     assert len(parts) >= 2 and abs(sum(parts) - 30.0) < 1e-9
+    # T2-48: per-scene model picks the ceiling. Same 30s, two models.
+    s2v30 = clips_for_scene({"length_seconds": 30.0, "video_model": "s2v"})
+    ltx30 = clips_for_scene({"length_seconds": 30.0, "video_model": "ltx25"})
+    assert len(s2v30) == math.ceil(30.0 / CHUNK) and len(ltx30) == 2
+    assert all(c["duration_s"] <= CHUNK + 1e-9 for c in s2v30)
+    assert [round(c["duration_s"], 6) for c in ltx30] == [15.0, 15.0]
 
     # T5-1: --refine on ltx25 adds a second pass. Restoring the early return
     # that skipped refine leaves these two graphs identical and this fails.
