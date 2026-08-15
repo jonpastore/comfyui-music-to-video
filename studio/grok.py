@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+from collections import Counter
 
 import httpx
 
@@ -508,6 +509,32 @@ def _tile_spans(n, duration):
     return spans
 
 
+def _section_tags(lyrics):
+    return [s["tag"] for s in parse_sections(lyrics or "")]
+
+
+def _partition_sections(tags, n_scenes):
+    """Contiguous partition of lyric section tags onto n_scenes groups.
+
+    Extra scenes (more scenes than tags) get []. Extra tags go to earlier
+    scenes via largest remainder so every tag lands on exactly one scene.
+    """
+    n = int(n_scenes or 0)
+    if n <= 0:
+        return []
+    tags = list(tags or [])
+    if not tags:
+        return [[] for _ in range(n)]
+    base, extra = divmod(len(tags), n)
+    out = []
+    i = 0
+    for k in range(n):
+        take = base + (1 if k < extra else 0)
+        out.append(list(tags[i:i + take]))
+        i += take
+    return out
+
+
 def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_seconds,
              character_reference=None, world_reference=None, arc_ctx=None):
     out = []
@@ -556,6 +583,11 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
     for s, (start, end) in zip(out, _tile_spans(len(out), dur)):
         s["start"] = start
         s["end"] = end
+
+    # T2-8c: each scene names the lyric sections it spans. Partition is
+    # ours (like start/end), not the model's singular cue.
+    for s, names in zip(out, _partition_sections(_section_tags(lyrics), len(out))):
+        s["lyric_sections"] = names
 
     board = {
         "project": "Grok Storyboard",
@@ -689,6 +721,35 @@ def validate(sb, exemplar=None, expect_scenes=None):
                 problems.append(
                     f"overlap: last scene ends at {spans[-1][1]}, "
                     f"past song duration {dur}")
+
+    # T2-8c: every scene names the lyric sections it spans; every section
+    # is named by exactly one scene. Identity is the parsed tag multiset
+    # (repeated [Verse] tags stay distinct counts).
+    expected = _section_tags(sb.get("audio_lyrics", ""))
+    named = []
+    for s in scenes:
+        num = s.get("scene_number", "?")
+        raw = s.get("lyric_sections")
+        if not isinstance(raw, list):
+            problems.append(f"scene {num} missing lyric_sections")
+            continue
+        for item in raw:
+            tag = str(item).strip() if item is not None else ""
+            if not tag:
+                problems.append(f"scene {num} names an empty lyric section")
+            else:
+                named.append(tag)
+    got = Counter(named)
+    want = Counter(expected)
+    for tag, n in want.items():
+        g = got.get(tag, 0)
+        if g == 0 or g < n:
+            problems.append(f"section {tag} is not named")
+        elif g > n:
+            problems.append(f"section {tag} is named by more than one scene")
+    for tag, g in got.items():
+        if tag not in want:
+            problems.append(f"section {tag} is named by more than one scene")
 
     # No "the guardrail must appear in image_prompt" check any more. The clause is
     # applied downstream by the prompt builders, so asserting it here would only

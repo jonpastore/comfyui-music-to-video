@@ -706,6 +706,7 @@ current.
 | `T2-1`…`T2-4` the arc | **built** | earlier | `studio/arc.py`, JSON canonical, `to_md`, screened both directions |
 | `T2-8a` the section floor is gone | **built** | `881d7cf` | both live sites moved together; the `validate()` site was the one that would have regenerated 25 scenes and made the formula fix look inert |
 | `T2-8b` scenes tile the song | **built** | `validate` | `_compose` stamps `start`/`end` covering `[0, duration]`; `validate` refuses a gap or overlap. 195.792 s / 7 scenes: first 0, adjacent end==next start, last end ± 0.05 s. Mutation: drop the check → gap/overlap accepted |
+| `T2-8c` every scene names the lyric sections it spans | **built** | `test_t2_8c.py` | `_compose` stamps `lyric_sections` as a partition of `parse_sections(audio_lyrics)`; 25 sections / 7 scenes yields four-section scenes; `validate` refuses a missing field, an unnamed section, or a section named twice. Mutation: drop the check → unnamed/double-named accepted |
 | `T2-35` every enumerated file catalogued | **built** | earlier | measured live: cerberus enumerates 36 files across seven loaders, 14 were unaccounted, now zero |
 | `T2-41` scene timing has one implementation | **built** | earlier | `app.storyboard_scenes` no longer computes `idx * CHUNK` inline |
 | **`T2-12a` legal frame count** | **built (divisor)** | `clip_seconds` | `legal_frames` rounds to 8n+1; `clip_seconds(scene_seconds)` returns that length so `n_clips_for` is `ceil(duration / legal)`. `None` stays `CHUNK` — old storyboards do not re-time |
