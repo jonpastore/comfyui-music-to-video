@@ -149,7 +149,9 @@ Six, and they are the tie-breakers when two rules below disagree.
    `GET /api/sets/{id}/preview/render?at=&secs=` returns `{is_proxy: false}`
    and is not the waveform picture), an estimated length says it is
    estimated, and a control that cannot act is absent or
-   disabled-with-a-reason, never present and inert.
+   disabled-with-a-reason, never present and inert. Pressing Render
+   and `POST /api/sets/{id}/render` produce the same ffmpeg argv
+   (`T1-3`); a value that lives only in the form is not in the export.
 6. **Nothing in the presentation may be load-bearing.** If deleting the
    stylesheet loses information, the information was in the wrong place.
 

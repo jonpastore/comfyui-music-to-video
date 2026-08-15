@@ -99,7 +99,8 @@ decimated** curve — the client re-reads what was kept, §5.3),
 `/api/sets/{id}/peaks?z=`, `/api/sets/{id}/preview` (returns `is_proxy` and
 `not_applied`), `/api/sets/{id}/preview/render?at=&secs=`
 (`is_proxy: false`, the accurate span),
-`/api/sets/{id}/render`, `/api/sets/{id}/renders` (every candidate, `T1-26`,
+`/api/sets/{id}/render` (`T1-3`: same ffmpeg argv as `POST /sets/{id}/render`),
+`/api/sets/{id}/renders` (every candidate, `T1-26`,
 `T6-A5`) and `POST /api/sets/{id}/renders/pick` (either listed render is
 selectable). `GET /api/qc/lineage?kind=&group=` and `POST /api/qc/lineage/select`
 are the same pair for refine, repair and anchor re-roll — `qc_service.listed`
@@ -225,6 +226,16 @@ writes it to `assets.meta_json.loudness`. The render card shows the
 numbers and "off target" when flagged. The live `meter` component is
 still not this.
 (`studio/test_t1_25_export_loudness.py`).
+
+**`T1-3`, 2026-08-14.** The stored model is the export. `POST /sets/{id}/render`
+(UI) and `POST /api/sets/{id}/render` (JSON, no browser) both call
+`_enqueue_set_render` → `_set_render_items`. `mixer.render_set_argv(items,
+out)` is the ffmpeg command those items determine — the same list
+`_run_ffmpeg` receives plus `ffmpeg -y -v error -stats`. T1-3 compares that
+command, not file bytes (`creation_time`). Extra form fields on the UI POST
+are not in the model and do not reach argv. Two encodes of the same items
+agree on duration (`SET_DURATION_TOLERANCE`), frame count and integrated
+loudness (`studio/test_t1_3_json_export_argv.py`).
 
 **FIXED 2026-08-13 by session B, on Jon's decision, and the estimate this
 document gave was wrong twice on the way — which is the part worth keeping.**

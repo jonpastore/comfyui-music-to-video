@@ -1438,7 +1438,11 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
     return lines, running_v, running_a, running_dur, brands
 
 
-def render_set(items, out_path, progress=None):
+def _render_set_args(items, out_path, progress=None):
+    """Tail args `_run_ffmpeg` receives for this set, plus predicted duration.
+
+    No encode. Branding stills are included when the model asks for them.
+    """
     progress = progress or _NOOP
     if not items:
         raise ValueError("items is empty")
@@ -1481,12 +1485,26 @@ def render_set(items, out_path, progress=None):
         lines += _brand_lines(idx, out_v, nxt, path, st, en, w, h)
         out_v = nxt
 
+    args = inputs + ["-filter_complex", ";\n".join(lines),
+                      "-map", f"[{out_v}]", "-map", f"[{out_a}]",
+                      "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+                      "-c:a", "aac", "-b:a", "192k", out_path]
+    return args, predicted_dur
+
+
+def render_set_argv(items, out_path, progress=None):
+    """Full ffmpeg argv for this set. T1-3 compares this, not file bytes."""
+    args, _dur = _render_set_args(items, out_path, progress)
+    return ["ffmpeg", "-y", "-v", "error", "-stats"] + args
+
+
+def render_set(items, out_path, progress=None):
+    progress = progress or _NOOP
+    if not items:
+        raise ValueError("items is empty")
     tmp = _atomic_out(out_path)
     try:
-        args = inputs + ["-filter_complex", ";\n".join(lines),
-                          "-map", f"[{out_v}]", "-map", f"[{out_a}]",
-                          "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
-                          "-c:a", "aac", "-b:a", "192k", tmp]
+        args, predicted_dur = _render_set_args(items, tmp, progress)
         progress("rendering set")
         _run_ffmpeg(args, progress, total_duration=predicted_dur, stage="render_set")
         os.replace(tmp, out_path)
