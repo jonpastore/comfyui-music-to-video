@@ -64,6 +64,10 @@ On session start: `jarvis-memory__sync`, then this project's
 - Grind / autopilot: main thread orchestrates. Max 3 parallel worktree
   agents unless asked. Product order below beats a random task. Never
   deploy mid-render. You stay on pictures and decisions.
+- Models: this session plans and reasons on **grok-4.6**. Execution
+  subagents (`explore`, `general-purpose`, implementers) use **grok-4.5**
+  unless a task needs 4.6 judgment. Pass `model=grok-4.5` on executor
+  spawns so custom types do not inherit 4.6.
 
 Operator guide (Grok vs Claude, compaction, UI): 
 `~/.grok/docs/GROK-OPERATOR-GUIDE.pdf`.
