@@ -924,37 +924,39 @@ table.sortcols th.sort-desc::after { content: " \2193"; color: var(--accent); }
   z-index: 1;
 }
 
-/* Saved base images: a picker, so the thumbnail IS the checkbox target. */
-/* One row that scrolls sideways rather than wrapping into a wall of thumbnails:
-   an album accumulates base images, and a wrapped grid pushes the prompt below
-   the fold as it grows. */
-.ref-gallery {
-  display: flex;
-  flex-wrap: nowrap;
+/* Saved base images: same card as generated candidates, no render-tag. */
+.ref-gallery.candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
   gap: 0.75rem;
   margin-top: 0.4rem;
-  overflow-x: auto;
-  padding-bottom: 0.35rem;
+  overflow: visible;
 }
-.ref-thumb {
-  position: relative;             /* .ref-pick anchors to this, like .candidate */
-  flex: 0 0 auto;
-  display: flex; flex-direction: column; gap: 0.3rem; align-items: center;
+.ref-thumb.candidate {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: stretch;
+  padding: 0.4rem;
 }
-/* same corner pick as .candidate-pick: the image is the zoom target now, not
-   the checkbox's label, so the tick needs its own small hit area */
 .ref-pick { position: absolute; top: 0.4rem; left: 0.4rem; z-index: 1; }
 .ref-pick input { width: 1.1rem; height: 1.1rem; cursor: pointer; }
 .ref-gallery img.thumb {
-  width: 108px;
-  height: 108px;
-  object-fit: cover;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 4;
+  object-fit: contain;
+  background: var(--panel);
   border-radius: 6px;
   border: 2px solid var(--border);
   cursor: zoom-in;
 }
-/* a ticked image reads as ticked at a glance, not only by the small corner box */
 .ref-thumb:has(.ref-pick input:checked) img { border-color: var(--accent); }
+.ref-thumb .pose-name,
+.ref-thumb .pose-tier { font-size: 0.8rem; display: flex; flex-direction: column; gap: 0.15rem; }
+.ref-thumb .pose-name input,
+.ref-thumb .pose-tier select { width: 100%; }
 
 /* what each ticked tier will actually render, one line per tier */
 .plan-list { list-style: none; padding: 0; margin: 0.5rem 0 0; }

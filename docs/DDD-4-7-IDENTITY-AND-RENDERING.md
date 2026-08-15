@@ -40,7 +40,10 @@ ControlNet.
 photographs (`assets` kind `anchor_ref`) → generate *candidates*
 (`anchors` rows) → pick `chosen=1` → that sheet feeds storyboard
 *reference frames* → clips. A pose plate is not a base image unless the
-operator put it there. That is also `T6-A1`'s named JSON loop for TRD-4/TRD-7:
+operator put it there. A named pose on an `anchor_ref` (`meta_json.pose_name`,
+optional `pose_tier`, `role=pose`) is a plate: generate uses identity
+photos as image1 and that file as image2 (`T7-20`). Assign writes an
+`anchors` row whose path *is* the upload. That is also `T6-A1`'s named JSON loop for TRD-4/TRD-7:
 `GET/POST /api/anchors`, `/api/anchors/refs`, `/api/anchors/{id}/pick`,
 `/api/anchors/{id}/use-as-ref` (`test_t6_a1_anchor_loop_over_json`).
 

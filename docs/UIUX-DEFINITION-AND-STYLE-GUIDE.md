@@ -185,7 +185,10 @@ exist — *"what the form will do, before you press it"* — and they are used b
 whole application needs: *"the Generate button is MARKED, never disabled — a
 control that cannot apply still has to say why, and the reason is in the panel
 above it."* Principle 2 is this component. Every control that spends GPU time
-gets one (§5.5).
+gets one (§5.5). Base photographs use the same candidate card (contain, not
+cover; no render-tag). Each card names the pose, picks a tier, and either
+generates a sheet or assigns the upload as the chosen sheet (`T7-20`). The
+corner tick is identity lock only; *Generate this pose* is a second tick.
 
 **The timeline exists and is not yet the DAW.** `.timeline` / `.tl-block`
 are built and used by `set_edit.html`, and the good part is already right:

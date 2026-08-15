@@ -38,7 +38,7 @@ def test_score_candidate_uses_bases_and_prompt(monkeypatch, tmp_path):
     assert seen["paths"][0] == str(cand)
     assert str(base) in seen["paths"]
     assert "FRONT VIEW of Meow P" in seen["user"]
-    assert got["confidence"] == 72
+    assert got["confidence"] == 70
     assert got["backend"]
 
 

@@ -146,9 +146,18 @@ def ask_images(paths, system, user_text, progress=None, prefer_local=True):
 SCORE_SYSTEM = (
     "You compare one generated character sheet (first image) to the operator's "
     "base photographs (the remaining images) and to the prompt that was asked. "
-    "Judge identity (same individual: face, hair, species, body colour) and "
-    "whether the sheet follows the prompt (view, pose, wardrobe or nudity, "
-    "backdrop). Do not invent a PASS/FAIL. Answer JSON only: "
+    "Score identity and prompt independently. Then set confidence to the "
+    "MINIMUM of those two numbers. Do not average. A sheet that matches "
+    "composition but is the wrong species is identity <= 25 and confidence <= 25. "
+    "identity (0-100): same individual as the photographs — face, ears, hair, "
+    "fur colour, species. Human skin or a human face on a feline character is "
+    "<= 20. A second tail, a missing tail, or a melted/extra limb is <= 30. "
+    "prompt (0-100): asked view and pose. Seated must be sitting, not standing. "
+    "Portrait must be head-and-shoulders, not a full-body figure in a tall frame. "
+    "On all fours must be on hands and knees. Standing views must stand. "
+    "notes: one short sentence naming the worst defect (species, tail count, "
+    "pose, crop, limbs). If none, say what matches. "
+    "Do not invent a PASS/FAIL. Answer JSON only: "
     '{"confidence": <0-100>, "identity": <0-100>, "prompt": <0-100>, '
     '"notes": "<one short sentence>"}.'
 )
@@ -162,9 +171,19 @@ def parse_score(obj):
         except (TypeError, ValueError):
             return None
         return max(0, min(100, v))
-    return {"confidence": _n("confidence"), "identity": _n("identity"),
-            "prompt": _n("prompt"),
-            "notes": " ".join(str(obj.get("notes") or "").split())[:200]}
+    got = {"confidence": _n("confidence"), "identity": _n("identity"),
+           "prompt": _n("prompt"),
+           "notes": " ".join(str(obj.get("notes") or "").split())[:200]}
+    def _in_range(key):
+        try:
+            v = float(obj.get(key))
+        except (TypeError, ValueError):
+            return False
+        return 0 <= v <= 100
+    if (got["confidence"] is not None and _in_range("identity")
+            and _in_range("prompt")):
+        got["confidence"] = min(got["confidence"], got["identity"], got["prompt"])
+    return got
 
 
 def _backend_from_error(err, where):

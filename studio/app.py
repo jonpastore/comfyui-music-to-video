@@ -162,7 +162,32 @@ templates.env.filters["tiername"] = lambda t: (t or "").upper()
 # docs/TRD-7 T7-1.
 ANCHOR_VIEWS = {k: v["label"] for k, v in make_anchor.VIEWS.items()}
 NUDE_VIEWS = frozenset(v for v in ANCHOR_VIEWS if make_anchor.is_nude_view(v))
-templates.env.filters["viewname"] = lambda v: ANCHOR_VIEWS.get(v, v or "")
+def pose_asset_id(view):
+    """asset id encoded in pose_<id> / pose_<id>_nude, else None."""
+    m = re.match(r"^pose_(\d+)(?:_nude)?$", str(view or ""))
+    return int(m.group(1)) if m else None
+
+
+def pose_view_key(asset_id, nude=False):
+    return f"pose_{int(asset_id)}_nude" if nude else f"pose_{int(asset_id)}"
+
+
+def known_anchor_view(view):
+    return view in ANCHOR_VIEWS or pose_asset_id(view) is not None
+
+
+def view_label(view):
+    if view in ANCHOR_VIEWS:
+        return ANCHOR_VIEWS[view]
+    aid = pose_asset_id(view)
+    if aid:
+        row = db.one("SELECT meta_json FROM assets WHERE id=? AND kind='anchor_ref'", aid)
+        name = (db.jset(row).get("pose_name") if row else "") or f"pose {aid}"
+        return f"{name}, {'nude' if str(view).endswith('_nude') else 'clothed'}"
+    return view or ""
+
+
+templates.env.filters["viewname"] = lambda v: view_label(v)
 
 
 def view_base(view):
@@ -307,7 +332,14 @@ def qc_tag(row):
         if backend and backend.lower() not in short.lower():
             short = f"{backend} {short}".strip()
         return f"vision: {short[:48]}"
-    return f"{int(n)}% match"
+    ident, prompt = s.get("identity"), s.get("prompt")
+    tag = f"{int(n)}% match"
+    if ident is not None and prompt is not None and (ident != n or prompt != n):
+        tag += f" · id {int(ident)}% · pose {int(prompt)}%"
+    notes = (s.get("notes") or "").strip()
+    if notes:
+        tag += f" — {notes[:80]}"
+    return tag
 
 
 templates.env.filters["qctag"] = qc_tag
@@ -2611,7 +2643,7 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = ""):
         failed_jobs=fresh, active_jobs=active))
 
 
-MAX_ANCHOR_UPLOADS = 8
+MAX_ANCHOR_UPLOADS = 24
 
 
 def form_files(form, field):
@@ -2649,8 +2681,33 @@ def anchor_refs(album, character_id=None):
             continue
         if (meta.get("character_id") or None) != (character_id or None):
             continue
-        out.append(a)
+        out.append(ref_fields(a))
     return out
+
+
+def ref_fields(row):
+    """Base-image row plus named-pose fields stored in meta_json."""
+    meta = db.jset(row)
+    d = dict(row)
+    d["pose_name"] = " ".join(str(meta.get("pose_name") or "").split())[:80]
+    d["pose_tier"] = (meta.get("pose_tier") or "").strip()
+    d["role"] = (meta.get("role") or "identity").strip() or "identity"
+    d["pose_nude"] = bool(meta.get("pose_nude"))
+    return d
+
+
+def update_ref_meta(asset_id, **fields):
+    row = db.one("SELECT * FROM assets WHERE id=? AND kind='anchor_ref'", asset_id)
+    if not row:
+        raise HTTPException(404, "no such base image")
+    meta = db.jset(row)
+    for k, v in fields.items():
+        if v is None:
+            meta.pop(k, None)
+        else:
+            meta[k] = v
+    db.run("UPDATE assets SET meta_json=? WHERE id=?", json.dumps(meta), asset_id)
+    return db.one("SELECT * FROM assets WHERE id=?", asset_id)
 
 
 async def _save_anchor_refs(album, character_id, uploads):
@@ -2715,6 +2772,71 @@ async def add_anchor_refs(request: Request, album: str = Form(...),
         return templates.TemplateResponse(
             request, "_anchor_form.html",
             _anchor_ctx_from_form(await request.form(), album, character_id))
+    return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
+
+
+@app.post("/anchors/refs/{asset_id}/meta")
+async def save_anchor_ref_meta(request: Request, asset_id: int):
+    """Name a pose, assign a tier, mark identity vs pose plate."""
+    form = await request.form()
+    name = " ".join((form.get("pose_name") or "").split())[:80]
+    if name:
+        try:
+            tiers.check_text(name, "pose name")
+            tiers.check_override(name)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+    tier = (form.get("pose_tier") or "").strip()
+    if tier:
+        valid_tier_or_400(tier)
+    role = (form.get("role") or "identity").strip()
+    if role not in ("identity", "pose"):
+        raise HTTPException(400, "role must be identity or pose")
+    nude = str(form.get("pose_nude") or "") in ("1", "on", "true", "yes")
+    if name and role == "identity":
+        role = "pose"
+    update_ref_meta(asset_id, pose_name=name, pose_tier=tier or None,
+                    role=role, pose_nude=nude)
+    return JSONResponse({"ok": True, "id": asset_id, "pose_name": name,
+                         "pose_tier": tier, "role": role, "pose_nude": nude})
+
+
+@app.post("/anchors/refs/{asset_id}/assign")
+async def assign_anchor_ref_as_sheet(request: Request, asset_id: int):
+    """Use the uploaded photo itself as the chosen sheet for a named pose + tier."""
+    row = db.one("SELECT * FROM assets WHERE id=? AND kind='anchor_ref'", asset_id)
+    if not row:
+        raise HTTPException(404, "no such base image")
+    form = await request.form()
+    fields = ref_fields(row)
+    album = db.jset(row).get("scope_value") or (form.get("album") or "").strip()
+    if not album:
+        raise HTTPException(400, "this base image has no album")
+    name = fields["pose_name"] or " ".join((form.get("pose_name") or "").split())[:80]
+    if not name:
+        raise HTTPException(400, "name the pose before assigning it as a sheet")
+    tier = fields["pose_tier"] or (form.get("pose_tier") or form.get("tier") or "").strip()
+    if not tier:
+        raise HTTPException(400, "pick a tier for this pose, or tick one on the form")
+    valid_tier_or_400(tier)
+    nude = fields["pose_nude"] or str(form.get("pose_nude") or "") in ("1", "on")
+    if nude and not tiers.allows_nudity(tier):
+        raise HTTPException(400, f"{tier.upper()} does not permit a nude sheet")
+    view = pose_view_key(asset_id, nude)
+    cid = db.jset(row).get("character_id")
+    now = time.time()
+    db.run("""UPDATE anchors SET chosen=0 WHERE scope_kind='album' AND scope_value=?
+              AND tier=? AND view=? AND (? IS NULL AND character_id IS NULL
+                   OR character_id=?)""",
+           album, tier, view, cid, cid)
+    db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen,
+                                    created, character_id, render_json)
+              VALUES ('album',?,?,?,?,1,?,?,?)""",
+           album, tier, view, row["path"], now, cid,
+           json.dumps({"source": "upload", "asset_id": asset_id, "pose_name": name}))
+    update_ref_meta(asset_id, pose_name=name, pose_tier=tier, role="pose", pose_nude=nude)
+    if request.headers.get("HX-Request"):
+        return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 
@@ -4012,6 +4134,41 @@ class _JsonForm:
         return key in self._d
 
 
+def _named_pose_views(album, character_id, pose_ids):
+    """Tick boxes on named base images become pose_<id>[_nude] views."""
+    views = []
+    for raw in pose_ids:
+        try:
+            aid = int(raw)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "a named pose id is not a number")
+        row = db.one("SELECT * FROM assets WHERE id=? AND kind='anchor_ref'", aid)
+        if not row:
+            raise HTTPException(400, "a named pose you ticked no longer exists")
+        fields = ref_fields(row)
+        meta = db.jset(row)
+        if meta.get("scope_value") != album or (meta.get("character_id") or None) != (character_id or None):
+            raise HTTPException(400, "a named pose you ticked belongs to another album "
+                                      "or character")
+        if not fields["pose_name"]:
+            raise HTTPException(400, "name every pose you tick before generating")
+        views.append(pose_view_key(aid, fields["pose_nude"]))
+    return views
+
+
+def _paths_for_view(view, identity_paths):
+    """A named pose conditions on identity photos plus that one plate."""
+    aid = pose_asset_id(view)
+    if not aid:
+        return identity_paths
+    row = db.one("SELECT path FROM assets WHERE id=? AND kind='anchor_ref'", aid)
+    if not row:
+        raise HTTPException(400, "a named pose image is missing")
+    pose_path = row["path"]
+    id_paths = [p for p in identity_paths if os.path.abspath(p) != os.path.abspath(pose_path)][:2]
+    return (id_paths + [pose_path])[:pipeline.MAX_ANCHOR_REFS]
+
+
 def _validate_anchor_request(album, tiers_sel, views_sel):
     """Shared by the HTML form and the T6-A1 JSON loop."""
     album = (album or "").strip()
@@ -4029,8 +4186,9 @@ def _validate_anchor_request(album, tiers_sel, views_sel):
     for t in selected_tiers:
         valid_tier_or_400(t)
     for v in selected_views:
-        if v not in ANCHOR_VIEWS:
-            raise HTTPException(400, f"view must be one of {', '.join(ANCHOR_VIEWS)}")
+        if not known_anchor_view(v):
+            raise HTTPException(400, f"view must be one of {', '.join(ANCHOR_VIEWS)} "
+                                      f"or a named pose")
     plan = anchor_plan(selected_tiers, selected_views)
     combos = [(p["tier"], v) for p in plan for v in p["views"]]
     if not combos:
@@ -4094,7 +4252,12 @@ def _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
             tiers.check_override(text)
         except ValueError as e:
             raise HTTPException(400, str(e))
-        composed = (default_anchor_prompt(album, v, character_id, pose=form_pose or None)
+        pose_text = form_pose
+        aid = pose_asset_id(v)
+        if aid:
+            prow = db.one("SELECT * FROM assets WHERE id=? AND kind='anchor_ref'", aid)
+            pose_text = (ref_fields(prow)["pose_name"] if prow else "") or pose_text
+        composed = (default_anchor_prompt(album, v, character_id, pose=pose_text or None)
                     or "").strip()
         if text and text == composed:
             text = ""
@@ -4120,13 +4283,16 @@ def _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
                    [(combos[0][0], combos[0][1], c) for c in sweep["cfgs"]])
     for t, v, cfg in plan_points:
         text = view_prompts[(t, v)]
-        this_render = render if cfg is None else dict(render, cfg=cfg, seed=sweep["seed"])
+        this_render = dict(render if cfg is None else dict(render, cfg=cfg, seed=sweep["seed"]))
+        if str(v).startswith("portrait") and this_render.get("size") in (None, "", "896x1216"):
+            this_render["size"] = "1024x1024"
         this_n = n if cfg is None else sweep["n"]
+        this_paths = _paths_for_view(v, paths)
         run_id = create_anchor_run(album, t, v, character_id, this_n, text, this_render,
-                                    paths, tiers.compose_guardrail(t, album),
+                                    this_paths, tiers.compose_guardrail(t, album),
                                     chosen=render)
         jid = jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": album, "tier": t,
-                                       "view": v, "images": paths, "n": this_n,
+                                       "view": v, "images": this_paths, "n": this_n,
                                        "character_id": character_id, "prompt": text,
                                        "render": this_render, "run_id": run_id})
         queued.append({"id": jid, "tier": t, "view": v, "prompt": text, "cfg": cfg,
@@ -4263,6 +4429,8 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     whole request meant a single restrictive tier in the selection blocked work
     that was perfectly legal for the others.
     """
+    form = await request.form()
+    view = list(view) + _named_pose_views(album, character_id, form.getlist("pose_id"))
     album, selected_tiers, selected_views, combos = _validate_anchor_request(
         album, tier, view)
     if character_id is not None:
@@ -4270,13 +4438,16 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
         if char["scope_value"] != album:
             raise HTTPException(400, f"character {char['name']!r} belongs to album "
                                       f"{char['scope_value']!r}, not to {album!r}")
-    form = await request.form()
     uploads = form_files(form, "images")
     if len(uploads) > MAX_ANCHOR_UPLOADS:
         raise HTTPException(400, f"that is {len(uploads)} reference images; {MAX_ANCHOR_UPLOADS} "
                                   f"is the most this form accepts")
     extra = [a["path"] for a in await _save_anchor_refs(album, character_id, uploads)]
-    paths = _collect_anchor_ref_paths(album, character_id, form.getlist("ref_id"),
+    ref_ids = form.getlist("ref_id")
+    if not ref_ids:
+        ref_ids = [str(r["id"]) for r in anchor_refs(album, character_id)
+                   if r.get("role") == "identity"][:2]
+    paths = _collect_anchor_ref_paths(album, character_id, ref_ids,
                                       extra_paths=extra)
     payload = _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
                                    character_id, form, paths)
@@ -4513,7 +4684,7 @@ def anchor_plan(selected_tiers, selected_views):
     plan = []
     for t in selected_tiers:
         ok = tiers.allows_nudity(t)
-        keep = [v for v in selected_views if ok or v not in NUDE_VIEWS]
+        keep = [v for v in selected_views if ok or not make_anchor.is_nude_view(v)]
         plan.append({"tier": t, "views": keep,
                      "skipped": [v for v in selected_views if v not in keep]})
     return plan

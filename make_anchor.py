@@ -253,8 +253,32 @@ VIEWS = {
 DEFAULT_VIEWS = {k: v["framing"] for k, v in VIEWS.items()}
 
 
+def view_entry(view):
+    """Shipped VIEWS row, or a named custom pose (pose_<id> / pose_<id>_nude)."""
+    if view in VIEWS:
+        return VIEWS[view]
+    key = str(view or "")
+    nude = key.endswith("_nude")
+    raw = key[:-5] if nude else key
+    if raw.startswith("pose_"):
+        name = raw[5:].replace("_", " ").strip() or "custom pose"
+    else:
+        name = raw.replace("_", " ").strip() or "custom pose"
+    kind = "nude " if nude else ""
+    return {
+        "label": f"{name}, {'nude' if nude else 'clothed'}",
+        "framing": (
+            f"{name.upper()} {kind}character reference sheet of a single adult character, "
+            f"{name}, head to toe fully in frame. "),
+        "pose": f"{name}, ",
+        "camera": f"{name.upper()} {kind}character reference sheet of a single adult character, ",
+        "backdrop_omit": ("stance",),
+        "custom": True,
+    }
+
+
 def _omit(view):
-    return (VIEWS.get(view) or {}).get("backdrop_omit") or ()
+    return view_entry(view).get("backdrop_omit") or ()
 
 
 def _pose_clause(text):
@@ -273,7 +297,7 @@ def apply_pose(view, framing, pose):
     clause = _pose_clause(pose)
     if not clause or not framing:
         return framing
-    spec = VIEWS.get(view) or {}
+    spec = view_entry(view)
     default = spec.get("pose") or ""
     if default and default in framing:
         return framing.replace(default, clause, 1)
@@ -475,7 +499,7 @@ def prompt_for(view, anchor=None, n_refs=1):
     # body part is exactly as load-bearing here as anywhere else.
     nude = is_nude_view(view)
     wardrobe = a.get("nude_wardrobe", NUDE_WARDROBE) if nude else a["wardrobe"]
-    framing = (a.get("views") or {}).get(view) or (VIEWS.get(view) or {}).get("framing") or ""
+    framing = (a.get("views") or {}).get(view) or view_entry(view).get("framing") or ""
     framing = apply_pose(view, framing, a.get("pose"))
     parts = [framing, wardrobe, a["body"], a["identity"]]
     # The anatomy clause applies to nude views only, and goes AFTER the body

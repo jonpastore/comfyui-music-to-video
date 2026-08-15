@@ -292,6 +292,7 @@ been seen red is a claim about a check, not about the code. Commits are on
 | `T7-17` composed and previewed | **built** for `T7-14`/`T7-15` | `d5526cb` | the preview runs the real composer, so both appear by construction |
 | `T7-18` screened and walked | **built** for `T7-14`/`T7-15` | `d5526cb` | both go through `screen_prompt_field`; the negation walker now covers the studio's `ANCHOR_PROFILE_FIELDS` defaults, not only `make_anchor`'s constants |
 | `T7-19` per-view prompt box | **built** | `415584d` | an edit reaches only its own view; the sibling view composes its own. Mutation: the back sheet came back holding `"FRONT VIEW character reference sheet of ..."` — the reported symptom |
+| `T7-20` named uploaded poses | **built** | this change | An operator names a base image, optionally assigns a tier, and either generates a sheet for that pose (identity photos + that plate) or assigns the upload itself as the chosen sheet. Upload cap is 24. Custom `pose_<id>` views omit the standing backdrop clause. Mutation: 95/20/40 score stores 20; assign creates a chosen `anchors` row from the file |
 
 Suite at the last clean measurement: **241 passed, 194 `def test_`**,
 `check_integration.py` / `tiers.py` / `models.py` / `prompts.py` OK. Baseline

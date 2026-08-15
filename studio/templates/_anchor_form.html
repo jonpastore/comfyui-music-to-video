@@ -149,34 +149,66 @@
   {% if saved_refs %}
   <fieldset>
     <legend>Base images{{ help("refs") }}</legend>
-    <p class="hint">Tick up to {{ max_refs }}.</p>
-    <div class="ref-gallery">
+    <p class="hint">Identity lock: tick up to {{ max_refs }} photographs of her.
+      Named poses are separate — name the pose, tick <em>Generate this pose</em>,
+      and the sheet uses those identity photos plus this plate. Or assign the
+      upload itself as the chosen sheet for a tier. No render settings on
+      these; they are supplied images.</p>
+    <div class="ref-gallery candidate-grid">
       {% for r in saved_refs %}
-      {# data-ref, plus the img carrying .thumb/data-full/tabindex, are the same
-         hooks .candidate/.candidate-grid give the anchor lightbox below --
-         initAnchors() in app.js widens its row/item selectors to find both, so
-         one lightbox and one keyboard handler serve both galleries. The
-         checkbox moved out of the image's label into its own small corner
-         pick (.ref-pick, styled like .candidate-pick) because a label wrapping
-         the image would tick the box on every click meant to open the modal. #}
-      <div class="ref-thumb" data-ref="{{ r.id }}">
-        <label class="ref-pick">
+      {# Same card + lightbox hooks as generated candidates, without a render-tag. #}
+      <div class="ref-thumb candidate" data-ref="{{ r.id }}">
+        <label class="ref-pick candidate-pick" title="use as identity lock">
           <input type="checkbox" name="ref_id" value="{{ r.id }}"
-                 {% if loop.index <= max_refs %}checked{% endif %}
-                 aria-label="use this base image">
+                 {% if r.role == "identity" %}checked{% endif %}
+                 aria-label="use this as an identity photograph">
         </label>
-        <img class="thumb" src="{{ media_url(r.path) }}" alt="reference image" loading="lazy"
-             data-full="{{ media_url(r.path) }}" tabindex="0" role="button"
+        <img class="thumb" src="{{ media_url(r.path) }}" alt="{{ r.pose_name or 'base image' }}"
+             loading="lazy" data-full="{{ media_url(r.path) }}" tabindex="0" role="button"
              title="Click to view full size">
+        <label class="pose-name">Pose name
+          <input type="text" name="pose_name" value="{{ r.pose_name }}" maxlength="80"
+                 placeholder="e.g. seated, leaning, portrait"
+                 hx-post="/anchors/refs/{{ r.id }}/meta" hx-trigger="change delay:400ms"
+                 hx-include="closest .ref-thumb" hx-swap="none">
+        </label>
+        <label class="pose-tier">Tier
+          <select name="pose_tier"
+                  hx-post="/anchors/refs/{{ r.id }}/meta" hx-trigger="change"
+                  hx-include="closest .ref-thumb" hx-swap="none">
+            <option value="">any ticked tier</option>
+            {% for t in tiers %}
+            <option value="{{ t.name }}" {% if r.pose_tier == t.name %}selected{% endif %}>
+              {{ t.name | tiername }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="check">
+          <input type="checkbox" name="pose_nude" value="1"
+                 {% if r.pose_nude %}checked{% endif %}
+                 hx-post="/anchors/refs/{{ r.id }}/meta" hx-trigger="change"
+                 hx-include="closest .ref-thumb" hx-swap="none">
+          Nude sheet
+        </label>
+        <input type="hidden" name="role" value="{{ r.role }}">
+        <label class="check">
+          <input type="checkbox" name="pose_id" value="{{ r.id }}"
+                 {% if r.role == "pose" and r.pose_name %}checked{% endif %}
+                 aria-label="generate this named pose">
+          Generate this pose
+        </label>
+        <div class="candidate-actions">
+          <button type="submit" formnovalidate
+                  formaction="/anchors/refs/{{ r.id }}/assign"
+                  title="Use this photo as the chosen sheet for the named pose and tier">
+            Assign as sheet</button>
+          <button type="submit" class="thumb-btn-danger delete-ref" formnovalidate
+                  formaction="/anchors/refs/{{ r.id }}/delete"
+                  hx-post="/anchors/refs/{{ r.id }}/delete" hx-target="#anchor-form"
+                  hx-swap="outerHTML" hx-include="#anchor-form">Delete</button>
+        </div>
         <time class="local-time muted" datetime="{{ r.created | isotime }}">
           {{ r.created | isotime }}</time>
-        {# formaction, not a nested <form>: a form inside this form is invalid
-           HTML and browsers drop it. formnovalidate so deleting never trips the
-           generate form's own required fields. #}
-        <button type="submit" class="thumb-btn-danger delete-ref" formnovalidate
-                formaction="/anchors/refs/{{ r.id }}/delete"
-                hx-post="/anchors/refs/{{ r.id }}/delete" hx-target="#anchor-form"
-                hx-swap="outerHTML" hx-include="#anchor-form">Delete</button>
       </div>
       {% endfor %}
     </div>
