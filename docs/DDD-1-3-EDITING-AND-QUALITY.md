@@ -115,6 +115,12 @@ confirmation is 400, `T2-16`). Same routes, no parallel `/api/*` tree
 (`wants_json`). `GET/POST /api/songs/{id}/storyboard/{tier}`,
 `.../scene/{n}`, `.../meter`, `.../cast`. The generation prompt and
 **the limits that apply to it** travel in the same response (`T2-18`).
+**B · arc and storyboard** — `GET/POST /api/playlists/{id}/arc`,
+`.../arc/propose` (proposal is not saved until accepted, `T2-15`),
+`.../arc/reject` (previous file on disk is left untouched),
+`GET/POST /api/songs/{id}/storyboard/{tier}`, `.../scene/{n}`,
+`.../meter`, `.../cast`. The generation prompt and **the limits that apply to it**
+travel in the same response (`T2-18`).
 
 **C · QC** — exists. `/api/qc/run`, `/api/qc/findings`, `/{fid}`,
 `/{fid}/remedy`, `/{fid}/dismiss`, `/{fid}/approve`, `/{fid}/recheck`,

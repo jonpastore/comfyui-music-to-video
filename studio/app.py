@@ -6453,6 +6453,13 @@ async def api_arc_accept(id: int, request: Request):
     return JSONResponse({"arc": data})
 
 
+@app.post("/api/playlists/{id}/arc/reject")
+def api_arc_reject(id: int):
+    """T2-15: reject writes nothing. The previous file stays on disk."""
+    get_playlist_or_404(id)
+    return JSONResponse({"arc": _load_arc(id)})
+
+
 @app.post("/playlists/{id}/render")
 def render_playlist(id: int, include_videos: bool = Form(False), tier: List[str] = Form([])):
     """Render the set.

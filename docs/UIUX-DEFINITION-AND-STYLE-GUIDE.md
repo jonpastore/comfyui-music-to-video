@@ -346,6 +346,10 @@ What comes back is a **proposal** (`--muted` plus a `model` tag, §7b.5),
 not a saved story: Accept writes the committed pair, Reject leaves the
 previous file on disk (`T2-15`). Applying per-song summaries to more
 than one song is a confirmation checkbox, not a default (`T2-16`).
+The album arc wand proposes; Accept and Reject are separate controls
+(`T2-15`). Propose does not replace the stored file. Reject leaves the
+previous arc on disk. Accept is the write. A proposal that was never
+Accepted is still a proposal.
 A generated storyboard carries a distinctive string from the album arc
 when one exists, and does not when the arc is absent (`T2-20`).
 At `xxx`, no scene `image_prompt` or `video_motion_prompt` carries the

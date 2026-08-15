@@ -78,9 +78,10 @@ render the whole thing — and the length shown while editing is the length of
 the file. A card is a beat in the running order, not a decoration on one.
 
 **B · Give the album a story and storyboard against it.** Write or generate an
-arc, accept it, generate each song's storyboard as a scene *of that arc*, edit a
-scene, read a time meter that agrees with the song, and see which leads still
-have no anchor.
+arc; a proposal is not on disk until accepted, and rejecting leaves the previous
+arc (`T2-15`). Accept it, generate each song's storyboard as a scene *of that
+arc*, edit a scene, read a time meter that agrees with the song, and see which
+leads still have no anchor.
 
 **C · Find out what came back wrong.** After renders land, a queue of findings,
 each carrying what was measured against what was asked for, an editable remedy
