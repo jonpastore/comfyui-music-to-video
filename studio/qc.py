@@ -863,8 +863,15 @@ def check_video(path, expect, kind="clip"):
                                "no audio stream on an assembled video",
                                remedy="re-assemble"))
         else:
-            av = _av_durations(path)
-            if av:
+            # T3-4.4-av: stream durations must agree. No reading is a FLAG,
+            # not a silent skip (same rule as channel_sat / band energy).
+            try:
+                av = measure_av_durations(path)
+            except RuntimeError as e:
+                out.append(finding(path, kind, "av_sync", FLAG,
+                                   str(e).split("\n")[0],
+                                   remedy="re-assemble"))
+            else:
                 gap = abs(av["video"] - av["audio"])
                 out.append(finding(path, kind, "av_sync",
                                    PASS if gap <= DURATION_TOL_S else FLAG,
@@ -930,17 +937,27 @@ def check_video(path, expect, kind="clip"):
     return out
 
 
-def _av_durations(path):
+def measure_av_durations(path):
+    """T3-4.4-av: per-stream video and audio durations from ffprobe.
+
+    Returns ``{"video": float, "audio": float}``. Raises when either
+    stream duration is missing — never a silent empty dict or 0.0.
+    """
     r = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,duration",
          "-print_format", "json", path], capture_output=True, text=True)
     if r.returncode != 0:
-        return None
+        raise RuntimeError(
+            f"av durations not measured: ffprobe failed on {path}")
     out = {}
     for s in json.loads(r.stdout or "{}").get("streams", []):
         if s.get("duration") not in (None, "", "N/A"):
             out[s["codec_type"]] = float(s["duration"])
-    return out if "video" in out and "audio" in out else None
+    if "video" not in out or "audio" not in out:
+        raise RuntimeError(
+            f"av durations not measured: need video and audio stream "
+            f"durations on {path}, got {sorted(out)}")
+    return out
 
 
 # ------------------------------------------------------------------ audio --
