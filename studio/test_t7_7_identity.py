@@ -8,7 +8,9 @@ stays a human look.
 
 docs/TRD-4 T4-14: a nude compose that asserts a human body ("human form" in
 nude_wardrobe — the measured live-studio collapse) is the same defect as
-losing her. The hook flags that compose without rendering.
+losing her. The hook flags that compose through check_image / qc.run on the
+composer output (`composed` or the studio `prompt` key), not the raw field.
+A missing identity_path must not hide the human-body reason. No GPU.
 """
 import os
 import sys
@@ -107,7 +109,7 @@ HARNESS = "A black leather harness and platform boots."
 
 
 def _sheet(tmp_path):
-    """Real image so the hook is asserted through check_image, not its wrap."""
+    """Real image so the hook is asserted through check_image / qc.run."""
     from PIL import Image
     path = tmp_path / "sheet.png"
     Image.new("RGB", (32, 32), (80, 80, 80)).save(path)
@@ -125,6 +127,15 @@ def _compose_nude(nude_wardrobe, body=None, wardrobe=None):
     return make_anchor.prompt_for("front_nude", anchor)
 
 
+def _human_body_hit(found):
+    """The FLAG reason is the human-body compose, not a missing identity_path."""
+    hit = _by_check(found, qc.IDENTITY_LOOK)
+    assert hit and hit[0]["verdict"] == qc.FLAG, found
+    blob = f"{hit[0].get('detail')} {hit[0].get('measured')}".lower()
+    assert "human form" in blob, hit[0]
+    return hit[0]
+
+
 def test_t7_7_human_body_compose_flags(tmp_path):
     """T4-14 / T7-7: nude_wardrobe 'human form' is the measured identity collapse.
 
@@ -140,12 +151,7 @@ def test_t7_7_human_body_compose_flags(tmp_path):
         "plate_path": POSE_PLATE,
         "composed": composed,
     })
-    hit = _by_check(found, qc.IDENTITY_LOOK)
-    assert hit and hit[0]["verdict"] == qc.FLAG, found
-    detail = (hit[0]["detail"] or "").lower()
-    assert "human" in detail, hit[0]
-    measured = str(hit[0].get("measured") or "").lower()
-    assert "human form" in measured or "human form" in detail, hit[0]
+    _human_body_hit(found)
 
 
 def test_t7_7_human_body_prompt_key_flags(tmp_path):
@@ -157,10 +163,28 @@ def test_t7_7_human_body_prompt_key_flags(tmp_path):
         "plate_path": POSE_PLATE,
         "prompt": composed,
     })
-    hit = _by_check(found, qc.IDENTITY_LOOK)
-    assert hit and hit[0]["verdict"] == qc.FLAG, found
-    blob = f"{hit[0].get('detail')} {hit[0].get('measured')}".lower()
-    assert "human form" in blob, hit[0]
+    _human_body_hit(found)
+
+
+def test_t7_7_human_body_compose_flags_without_identity_path(tmp_path):
+    """The compose is the defect. Missing identity_path must not hide it.
+
+    Ordinary image QC with no keys stays silent (test above). A composed
+    human-form prompt is not ordinary QC — it must FLAG as human form,
+    not as a missing identity_path and not as no finding at all.
+    """
+    composed = _compose_nude(HUMAN_FORM_NUDE)
+    assert "human form" in composed.lower(), composed
+    found = qc.check_image(_sheet(tmp_path), {"composed": composed})
+    _human_body_hit(found)
+
+
+def test_t7_7_human_body_compose_flags_through_run(tmp_path):
+    """Studio QC entry is qc.run. Same compose, same FLAG, no identity_path."""
+    composed = _compose_nude(HUMAN_FORM_NUDE)
+    assert "human form" in composed.lower(), composed
+    found = qc.run(_sheet(tmp_path), "image", {"composed": composed})
+    _human_body_hit(found)
 
 
 def test_t7_7_furred_nude_compose_is_not_a_human_body(tmp_path):

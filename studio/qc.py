@@ -424,21 +424,14 @@ def check_identity_look(path, expect, kind="image"):
     passes the prerequisite; the picture stays a human look.
 
     A compose that asserts a human body (T4-14: nude_wardrobe "human form"
-    in composed/prompt) flags even when the identity path is the chosen ref.
+    in composed/prompt) flags even when the identity path is missing or is
+    the chosen ref. Missing identity_path must not hide that reason.
     """
     expect = expect or {}
     identity = _norm_ref(expect.get("identity_path"))
     plate = _norm_ref(expect.get("plate_path"))
     remedy = ("condition the sheet on the chosen identity ref "
               "(UI pair / meowp_ui_front.png), not the pose plate")
-    if not identity:
-        return [finding(path, kind, IDENTITY_LOOK, FLAG,
-                        "T7-7 identity look needs a named identity reference; none was given",
-                        None, "identity_path", None, remedy)]
-    if plate and identity == plate:
-        return [finding(path, kind, IDENTITY_LOOK, FLAG,
-                        "identity_path is the pose plate; T7-7 requires the chosen identity ref",
-                        identity, "identity_path != plate_path", None, remedy)]
     hits = _human_body_hits(_compose_text(expect))
     if hits:
         return [finding(path, kind, IDENTITY_LOOK, FLAG,
@@ -447,13 +440,26 @@ def check_identity_look(path, expect, kind="image"):
                         hits[0], "not a human-body compose", None,
                         "drop human-body wording from nude_wardrobe; "
                         "surface comes from the body clause")]
+    if not identity:
+        return [finding(path, kind, IDENTITY_LOOK, FLAG,
+                        "T7-7 identity look needs a named identity reference; none was given",
+                        None, "identity_path", None, remedy)]
+    if plate and identity == plate:
+        return [finding(path, kind, IDENTITY_LOOK, FLAG,
+                        "identity_path is the pose plate; T7-7 requires the chosen identity ref",
+                        identity, "identity_path != plate_path", None, remedy)]
     return [finding(path, kind, IDENTITY_LOOK, PASS,
                     f"identity ref {os.path.basename(identity)}; T7-7 look remains human-judged",
                     identity, identity, None)]
 
 
 def _wants_identity_look(expect):
-    return bool(expect.get("identity_look")) or "identity_path" in expect or "plate_path" in expect
+    expect = expect or {}
+    if (bool(expect.get("identity_look"))
+            or "identity_path" in expect
+            or "plate_path" in expect):
+        return True
+    return bool(_human_body_hits(_compose_text(expect)))
 
 
 def check_image(path, expect):
