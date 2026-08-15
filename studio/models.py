@@ -1042,6 +1042,34 @@ def mixed_unavailable(scenes, backends, default=None):
     return [k for k in keys if unavailable_on_reachable(k, backends)]
 
 
+def scene_requests_driving(scene):
+    """True when a scene asked for ref_motion or control_video.
+
+    T2-46: those inputs load through LoadVideosFromFolder (kjnodes),
+    present on cerberus and absent on gamingpc.
+    """
+    if not isinstance(scene, dict):
+        return False
+    return any(str(scene.get(k) or "").strip()
+               for k in ("ref_motion", "control_video"))
+
+
+def cerberus_backend_id(backends):
+    """Swarm backend id for cerberus, or None if the fleet did not name it.
+
+    Ids renumber. Title `cerberus` and SELF_HOST (loopback) are the
+    durable names. gamingpc is never this answer.
+    """
+    for b in backends or []:
+        if not isinstance(b, dict) or b.get("id") is None:
+            continue
+        title = (b.get("title") or "").strip().lower()
+        host = canonical_host(b.get("address"))
+        if title == "cerberus" or host == SELF_HOST:
+            return str(b["id"])
+    return None
+
+
 def get(key):
     return CATALOG.get(key)
 

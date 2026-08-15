@@ -540,7 +540,20 @@ def _wf_prefix(wf):
     return ""
 
 
-def _attempt_plan():
+def _wf_requests_driving(wf):
+    """True when the graph loads ref_motion / control_video.
+
+    LoadVideosFromFolder is kjnodes, present on cerberus and absent on
+    gamingpc. T2-46 pins that graph; a graph without the node still
+    walks the fleet.
+    """
+    if not isinstance(wf, dict):
+        return False
+    return any(isinstance(n, dict) and n.get("class_type") == "LoadVideosFromFolder"
+               for n in wf.values())
+
+
+def _attempt_plan(wf=None):
     """Which backend to ask, in order: None (SwarmUI's own choice) then each
     running backend pinned, until one of them can run the workflow.
 
@@ -569,7 +582,19 @@ def _attempt_plan():
     5090s load-balance exactly as before -- this only changes the degraded case.
     The list call replaces the old lazy fetch; against a 40 s render it is noise,
     and it is the same call the walk needed anyway the moment anything failed.
+
+    T2-46: a graph that loads ref_motion / control_video skips the free
+    draw and does not walk gamingpc. kjnodes is on cerberus only.
     """
+    if wf is not None and _wf_requests_driving(wf):
+        backends = swarm_backends()
+        if backends is None:
+            yield None
+            return
+        pin = models.cerberus_backend_id(backends)
+        if pin is not None:
+            yield pin
+        return
     backends = swarm_backends()
     if backends is None:
         # SwarmUI itself did not answer. Yield the free draw so the render
@@ -856,10 +881,11 @@ def submit_swarm(wf_dir, prefix_dir, pattern, progress=None):
             progress(f"cancelled -- not submitting {os.path.splitext(name)[0]}")
             raise RuntimeError(f"cancelled while rendering {name}")
         text = open(os.path.join(wf_dir, name)).read()
-        prefix = _wf_prefix(json.loads(text)) or os.path.splitext(name)[0]
+        wf = json.loads(text)
+        prefix = _wf_prefix(wf) or os.path.splitext(name)[0]
         start = time.time()
         entries, last = None, None
-        for pin in _attempt_plan():
+        for pin in _attempt_plan(wf):
             try:
                 entries = _swarm_generate(_retarget(text, pin, progress),
                                           progress, cancelled, pin)

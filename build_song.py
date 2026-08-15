@@ -921,9 +921,13 @@ def main():
         # T2-42 / T2-47: a scene may name its renderer; absent, the job's
         # --video-model. One job can therefore emit s2v and ltx25 graphs.
         model = scene.get("video_model") or args.video_model
+        # T2-46: a scene field is the request. Job-level --ref-motion is
+        # the fallback so a whole-song upload still fills s2v clips.
         wf = workflow(i, scene, ref, audio_name, char, world, guard,
-                      video_model=model, ref_motion=args.ref_motion,
-                      control_video=args.control_video, refine=args.refine)
+                      video_model=model,
+                      ref_motion=scene.get("ref_motion") or args.ref_motion,
+                      control_video=scene.get("control_video") or args.control_video,
+                      refine=args.refine)
         # Attach the save to whichever node actually produces the VIDEO, found by
         # class rather than by a per-family id table. That table was
         # `"21" if video_model == "ltx" else "17"`, so ltx25 silently took the

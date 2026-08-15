@@ -308,7 +308,10 @@ order and take the dependencies from here.
    **`T2-44` built**: a scene naming a model absent from
    `models.renderable("video")` is refused at save, naming the scene
    and the value (`test_t2_44_unknown_model.py`); not defaulted, not
-   deferred to render. `T2-46` remains.
+   deferred to render.
+   **`T2-46` built**: a scene requesting `ref_motion` or `control_video`
+   pins that clip to cerberus (`LoadVideosFromFolder` / kjnodes); the
+   rest of the song still free-draws (`test_t2_46_driving_pins_cerberus.py`).
    **`T2-13f` built**: QC judges each of those clips at its native fps, not the song's (`test_t2_13f_native_fps.py`); comparing against the song rate flags the other model.
 
 ### P3 — QC tier 2 and repair

@@ -120,7 +120,9 @@ box; the fleet answers with four backends:
 
 `_retarget` rewrites loader filenames to the spellings a box publishes,
 **per loader**, before a pinned attempt goes out. `_attempt_plan` walks one free
-draw then each box in turn.
+draw then each box in turn, except a graph that loads `ref_motion` /
+`control_video` (`LoadVideosFromFolder`) pins to cerberus (`T2-46`) — kjnodes
+is absent on gamingpc.
 
 **The free draw must go out byte-identical** (`T9-3`) so ComfyUI's execution
 cache still hits — and that criterion was already rewritten once after a mutation

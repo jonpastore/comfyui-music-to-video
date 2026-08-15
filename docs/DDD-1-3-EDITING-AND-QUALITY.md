@@ -26,7 +26,7 @@ is named.
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2 JSON-canonical arc; §3.3 `save_prompt`/`restore_prompt` (`T2-5`); §4.1 wand (`require_theme`, proposal files, `apply_summaries`) | built (`T2-5`/`T2-14`/`T2-15`/`T2-16`) |
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning; `restore(vid)` puts previous text back as a new version (`T2-5`); `delete` drops a row and does not renumber survivors (`T2-6`); `running(vid)` is the row a render RUNS (`T3-20`) | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
-| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow`, `clips_for_scene` | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5; `main()` honours per-scene `video_model` (`T2-47`) and per-model ceilings (`T2-48`) |
+| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow`, `clips_for_scene` | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5; `main()` honours per-scene `video_model` (`T2-47`), per-model ceilings (`T2-48`), and per-scene `ref_motion` / `control_video` (`T2-46`) |
 | `studio/db.py` | 559 | schema | `automation`, `findings` (`artefact_hash`, `remedy_class`), `artefacts`, `sets.mode_audience`, `calibrations` landed; `sets.out_fps` did not, §4 |
 | `studio/vision.py` | 516 | VLM calls, local-first | **not** tier 2, §5.6 |
 
@@ -457,7 +457,11 @@ length is the divisor, the count is ours.
    `start_clips` asks `models.mixed_unavailable` (via `models.where()`)
    before `jobs.enqueue`: a mixed board that names a model `False` on
    every reachable backend is 400 and writes no job; `None` is a
-   candidate (`test_t2_45_enqueue_unavailable.py`). **`T2-48` built.**
+   candidate (`test_t2_45_enqueue_unavailable.py`). **`T2-46` built.**
+   A scene with `ref_motion` / `control_video` writes
+   `LoadVideosFromFolder` on that clip only; `_attempt_plan` pins it
+   to cerberus and the rest of the song still free-draws
+   (`test_t2_46_driving_pins_cerberus.py`). **`T2-48` built.**
    `clips_for_scene` / `clips_for_scenes` split a scene on *that scene's*
    model ceiling: 30 s `s2v` → s2v-sized parts (`CHUNK`), 30 s `ltx25`
    → 15 s + 15 s, each chain tiles its scene from 0 (`T2-8b`).
@@ -472,7 +476,8 @@ length is the divisor, the count is ours.
    shows it beside camera (`test_t2_42_scene_video_model.py`).
    **`T2-44` built.** `models.refuse_unknown_video_model` refuses a
    named model absent from `renderable("video")` at save.
-   `T2-46` pin-to-cerberus is not.
+   **`T2-46` built.** A scene requesting `ref_motion` or `control_video`
+   pins that clip to cerberus; the rest of the song still free-draws.
    **`T2-13d` built:** `assemble_song` normalises those native rates to
    one output fps (highest) on the assembled file. Concat first-clip-wins
    is not that check.
@@ -699,6 +704,7 @@ documents, not a preference.
                                  ->  T2-13c (built), T2-13e (built), T2-8, T2-9
                                  ->  W2 T2-47 mixed-model native fps (built)
                                  ->  W2 T2-45 mixed unavailable refused at enqueue (built)
+                                 ->  W2 T2-46 driving scene pins to cerberus (built)
                                  ->  W2 T2-48 per-scene ceilings compose (built)
                                  ->  T2-13d assembly one output fps (built)
                                  ->  T2-13f clip QC uses native fps (built)
