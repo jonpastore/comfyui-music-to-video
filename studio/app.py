@@ -1311,22 +1311,29 @@ def h_artwork(args, progress):
                                   source_path=args.get("source_path"), guard=guard)
     if not paths:
         raise RuntimeError("the artwork render produced no image")
-    cover = paths[0]
+    landed = list(paths)
     if args.get("refine", True):
-        try:
-            cover = refine_generated_still(paths[0], progress, {"slug": safe_name(p["name"])})
-            paths = [cover] + paths
-        except Exception as e:
-            progress(f"refine skipped: {e}")
+        for src in list(paths):
+            try:
+                dest = refine_generated_still(src, progress, {"slug": safe_name(p["name"])})
+                landed.append(dest)
+            except Exception as e:
+                progress(f"refine skipped: {e}")
     bases = [args.get("anchor_path") or args.get("source_path")]
-    qc = score_generated_still(cover, [b for b in bases if b], prompt, progress)
-    db.run("INSERT INTO assets (song_id, kind, path, meta_json, created, qc_json) VALUES (?,?,?,?,?,?)",
-           None, "artwork", cover,
-           json.dumps({"playlist_id": args["playlist_id"], "model": args.get("model"),
-                       "prompt": prompt}), time.time(), qc)
-    progress(f"{len(paths)} cover candidate(s); using the first")
-    db.run("UPDATE playlists SET image_path=? WHERE id=?", paths[0], args["playlist_id"])
-    return {"path": paths[0]}
+    now = time.time()
+    n_gen = len(paths)
+    for i, cover in enumerate(landed):
+        qc = score_generated_still(cover, [b for b in bases if b], prompt, progress)
+        db.run("INSERT INTO assets (song_id, kind, path, meta_json, created, qc_json) VALUES (?,?,?,?,?,?)",
+               None, "artwork", cover,
+               json.dumps({"playlist_id": args["playlist_id"], "model": args.get("model"),
+                           "prompt": prompt,
+                           "origin": "refine" if i >= n_gen else "gen"}),
+               now, qc)
+    shown = landed[-1] if len(landed) > n_gen else landed[0]
+    progress(f"{len(landed)} cover candidate(s); using the first")
+    db.run("UPDATE playlists SET image_path=? WHERE id=?", shown, args["playlist_id"])
+    return {"path": shown}
 
 
 @jobs.handler("fix_ref")

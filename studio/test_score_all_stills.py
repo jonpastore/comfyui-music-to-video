@@ -143,6 +143,50 @@ def test_h_artwork_stores_qc_json(monkeypatch, tmp_path):
     assert json.loads(row["qc_json"])["confidence"] == 61
 
 
+def test_h_artwork_refine_scores_generate_and_sibling(monkeypatch, tmp_path):
+    """Default refine must not drop the generate: both covers are scored assets."""
+    cover = _png(str(tmp_path / "cover.png"))
+    scored = []
+
+    def fake_score(path, bases, prompt="", progress=None):
+        scored.append(path)
+        return {"confidence": 50, "identity": 50, "prompt": 50,
+                "notes": "ok", "backend": "stub"}
+
+    def _fix_ref(*a, **kw):
+        image_path = kw.get("image_path") or a[4]
+        out = image_path + ".fixed"
+        with open(image_path, "rb") as f:
+            payload = f.read()
+        with open(out, "wb") as f:
+            f.write(payload + b"-fixed")
+        return [{"path": out, "clip_idx": 0, "seed": 1}]
+
+    monkeypatch.setattr(appmod.vision, "score_candidate", fake_score)
+    monkeypatch.setattr(appmod.pipeline, "gen_artwork", lambda *a, **k: [cover])
+    monkeypatch.setattr(appmod.pipeline, "fix_ref", _fix_ref)
+    monkeypatch.setattr(appmod.qc_service, "dispatch_repair",
+                        lambda src, dest, args, progress:
+                        appmod.qc_service._invoke_actuator(
+                            "fix_ref", src, dest, args, progress))
+    pid = db.run(
+        "INSERT INTO playlists (name, kind, created) VALUES (?,'playlist',?)",
+        f"QC Art Refine {time.time_ns()}", time.time())
+    appmod.h_artwork({"playlist_id": pid, "refine": True}, lambda m: None)
+    rows = [r for r in db.q("SELECT * FROM assets WHERE kind='artwork' ORDER BY id")
+            if json.loads(r["meta_json"] or "{}").get("playlist_id") == pid]
+    assert len(rows) == 2, [r["path"] for r in rows]
+    paths = [r["path"] for r in rows]
+    assert cover in paths, "generate is not a scored assets row"
+    assert any(p != cover for p in paths)
+    assert os.path.isfile(cover)
+    assert all(os.path.isfile(r["path"]) for r in rows)
+    with open(rows[0]["path"], "rb") as f, open(rows[1]["path"], "rb") as g:
+        assert f.read() != g.read()
+    assert all(json.loads(r["qc_json"])["confidence"] == 50 for r in rows)
+    assert cover in scored
+
+
 def test_h_anchor_refine_writes_sibling_not_overwrite(monkeypatch, tmp_path):
     sheet = _png(str(tmp_path / "sheet.png"))
     scored = []

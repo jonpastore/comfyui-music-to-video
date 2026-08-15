@@ -398,8 +398,10 @@ arm red. Mutation: write without the check → save arm red.
 `vision.py` is a VLM caller and is **not** the tier-2 path. TRD-3 §10 forbids a
 VLM verdict by name — asked "does this match?", a model answers yes — though it
 may write a *description* attached to a finding. `app.score_generated_still`
-stores that advisory `qc_json` on every landed still (anchors, refs, artwork,
-and the sibling `h_fix_anchor` writes). `refine_generated_still` writes a
+stores that advisory `qc_json` on every landed still (anchors, refs, artwork
+generate and its refine sibling, and the sibling `h_fix_anchor` writes).
+`h_artwork` inserts one scored `assets` row per landed cover; it does not
+drop the generate when refine succeeds. `refine_generated_still` writes a
 sibling via `qc_service.produce_repair`; it never overwrites the generate.
 `h_fix_anchor` is the operator-started repair; it scores the new file and
 does not overwrite or auto-heal.

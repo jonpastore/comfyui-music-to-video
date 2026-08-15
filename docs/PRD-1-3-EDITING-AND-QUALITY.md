@@ -246,10 +246,11 @@ order and take the dependencies from here.
    class, `approve()` uses that class (not the edited wording), and a
    check with no remedy refuses rather than offering a button.
 10. Every generated still is vision-scored into `qc_json` (`T3-31`),
-    including a `fix_anchor` sibling. A refine pass writes a new
-    candidate beside the generate; it is not a silent overwrite and not
-    a VLM gate. `fix_anchor` itself is the operator-approved repair
-    (`T3-18`); it does not auto-heal.
+    including a `fix_anchor` sibling and the artwork generate (not only
+    the refined cover). A refine pass writes a new candidate beside the
+    generate; it is not a silent overwrite and not a VLM gate.
+    `fix_anchor` itself is the operator-approved repair (`T3-18`); it
+    does not auto-heal.
 
 ### Deferred to another document, on purpose
 
