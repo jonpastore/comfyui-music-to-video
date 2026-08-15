@@ -15,7 +15,11 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 | `studio/qc_service.py`, `studio/qc.py`, new `studio/test_qc_approve.py` | A2 qc-approve | T3-18: approve() stops raising; one explicit approval enqueues one repair; T3-6 repair_path != path. TDD. | 2026-08-14 |
 | `studio/grok.py`, `build_song.py`, their self-checks / related tests | A3 length+refine | T2-12a legal 8n+1 rounding owned by TRD-2; T5-1 `--refine` on ltx/ltx25 adds a pass or raises. TDD. | 2026-08-14 |
 | `studio/db.py`, new `studio/test_takes.py` | A4 takes-schema — **released** | `takes`/`voices`/`take_voices` + insert/pick queries. 8 tests green. Uncommitted. | 2026-08-14 |
-| **cerberus meowp-studio deploy** + jobs 240/241 | Grok — **held, watching** | deployed `6c45658`. 240 running back_nude, 241 queued front_nude. Will look at sheets when done. | 2026-08-14 |
+| **cerberus meowp-studio deploy** + jobs 240/241 | Grok — **released, stale** | 240/241 from 2026-08-14. Studio queue idle 2026-08-15. | 2026-08-14 |
+| **cerberus ComfyUI** (`:8188`) + `config.nude-r5.json` + `anchor5/nude-r5/` | Grok — **released** | r5 empty-latent no-plate = two-person trash. Stopped after 2 looking-back seeds. | 2026-08-15 |
+| **cerberus ComfyUI** (`:8188`) + `config.nude-i01.json` + `anchor5/nude-i0*/` | Grok — **released** | Overnight loop 10/10 done. Winner: i08 looking-back same-pose nude. GPU idle. | 2026-08-15 |
+| **cerberus ComfyUI** (`:8188`) + `anchor5/nude-qc/` | Grok — **released** | Stopped mid kneeling. Keepers: looking-back_s843168023, tense_s843167886. | 2026-08-15 |
+| **cerberus ComfyUI** (`:8188`) + `anchor5/refs-kit/` + inpaint | Grok — **held** | Stage 2: inpaint anatomy on tense_s843167886 (quality 50/cfg2). Then make_anchor new poses from her nudes. | 2026-08-15 |
 | `make_anchor.py`, `studio/app.py`, `templates/_anchor_form.html`, `studio/test_app.py`, `studio/prompts.py` | Grok — **released 2026-08-14** | view table + 8 new views + auto-pick + CFG 2.0/50 first-visit defaults. 246 tests. Not deployed. | 2026-08-14 |
 | **identity plates from UI refs** — local files only, no GPU | Grok — **released** | Imagine nude edit of the UI pair was content-moderated. Not retried. | 2026-08-14 |
 | **gamingpc ComfyUI** (`100.107.235.105:8188`) — exposing pair, denoise 0.75, tail aside | Grok — **released 2026-08-14** | 0.75=0.55 pose lock. Empty front knelt and raised the tail (her). Back 0.90 still standing, peach cleft only. Queue idle. | 2026-08-14 |
@@ -2196,3 +2200,7 @@ Append dated one-liners. Newest at the bottom.
   code, isolating nude-vs-clothed. **That is the single most informative render
   left and it has not been run.** Jobs 236/237 (Street Cats nude, new code) are
   queued and test the prediction from the other direction.
+
+- 2026-08-15 (Grok) **GPU: cerberus ComfyUI claimed for r5 nude batch.** Empty latent, CFG 2.0/50, no extra refs. All-fours + on-back + tense. Direct comfy, not swarm `--pin 1`. Outdir `anchor5/nude-r5`.
+
+- 2026-08-15 (Grok) **A2 / QC workstream — finding remedies must name a prompt or graph fix, not just "re-render".** Measured overnight: extra person = empty latent vs contradictory source pose; ghost = image-latent asked to kneel a standing encode; not-her = "human body/anatomy" in the positive or a stranger pose plate as image2; leftover clothes = denoise≤0.95 or seed 129080599; extra tails = do not raise CFG. T3-28 already says identity-wrong edits the text. The rest of `qc.check_image` / vision score still emit "re-render with a different seed" and never say what to change in the prompt. **Ask: each FLAG/REJECT finding's `remedy` should be the next prompt rewrite (or "pose wording must match the encoded source", or "drop human-body phrases").** `qc.py` / `qc_service.py` are still in your claim row — I did not touch them. Prototype of the mapping is in repo-root `qc_stills.py` (`PROMPT_FIXES`). Jarvis task `meowp:qc-prompt-remedies`. Specs (TRD-3 / PRD / DDD / UIUX) need the same sentence if you take this — drift rule.

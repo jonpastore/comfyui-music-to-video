@@ -1,0 +1,38 @@
+{
+  "_readme": [
+    "Iteration 10 of 10. ONE variable vs i09: seed 843167749 (the seed that undressed looking-back in i08) instead of 129080599.",
+    "i09 kept the leather harness. 129080599 holds identity and also tends to hold wardrobe. 843167749 stripped looking-back; apply it to tense."
+  ],
+  "env": {
+    "RENDER_BACKEND": "comfy",
+    "SWARM_URL": "http://127.0.0.1:7801",
+    "COMFY_URL": "http://127.0.0.1:8188",
+    "COMFY_INPUT": "/home/jon/ComfyUI/input",
+    "COMFY_OUTPUT": "/home/jon/ComfyUI/output",
+    "RENDER_ATTEMPTS": "1"
+  },
+  "defaults": {
+    "refs": [],
+    "outdir": "anchor5/nude-i10",
+    "tier": "xxx",
+    "n": 1,
+    "seed": 843167749,
+    "latent": "image",
+    "mode": "quality",
+    "cfg": 2.0,
+    "steps": 50,
+    "sampler_name": "dpmpp_2m",
+    "scheduler": "karras",
+    "lora_strength": 0.0,
+    "ref_method": "index_timestep_zero",
+    "backend": "comfy",
+    "prompt": "{pose} She is fully nude and barefoot, gold hoop earrings and gold jewelry from image 1 still on her. Her whole body continues in the same jet-black skin as her face, shoulders and midriff in image 1: same hue, same undertone, same matte finish. Human-shaped adult female anatomy on that body: full breasts, nipples and areolae, a defined human vulva with inner and outer labia, and a visible anus. Areolae and labia are a darker shade of that same skin, clearly drawn. Everything else is the same woman as image 1 -- same feline head, face, ears and yellow-green eyes, same long wavy black hair with purple highlights, same tail, same body colour, same illustration style, same lighting. Plain flat uniform neutral grey studio backdrop, seamless and empty.",
+    "negative": "clothing, bikini, thong, briefs, harness, boots, shoes, gloves, pink skin, peach skin, tan skin, extra tails, extra person, featureless crotch"
+  },
+  "jobs": [
+    {
+      "input": "anchor5/tense.jpg",
+      "pose": "Full-body standing wide-stance crouch facing the camera, legs planted far apart, knees bent, both arms held low and out to the sides with clawed hands spread, in exactly the same pose, camera angle, framing and crop as image 1."
+    }
+  ]
+}

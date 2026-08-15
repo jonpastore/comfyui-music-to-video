@@ -1,0 +1,45 @@
+{
+  "_readme": [
+    "Three inputs Jon supplied, named per-pose directives restored (the one element every held-pose run has had), Jon's change clause plus an explicit bare-hips sentence for the leftover-bottoms problem.",
+    "Paired with its no-refs twin: identical but for the reference images, to settle whether the clothed refs are what leaves clothing on the output.",
+    "cfg 2.0: at cfg 1.0 ComfyUI skips the negative pass entirely, so every negative in this project has been inert. Above 1.0 it applies, which is why a clothing negative appears here and nowhere earlier. Raising cfg forces lora_strength 0 (build_refs.sampler_settings), hence mode quality for the step count."
+  ],
+  "env": {
+    "RENDER_BACKEND": "swarm",
+    "SWARM_URL": "http://127.0.0.1:7801",
+    "COMFY_URL": "http://127.0.0.1:8188",
+    "COMFY_INPUT": "/home/jon/ComfyUI/input",
+    "COMFY_OUTPUT": "/home/jon/ComfyUI/output",
+    "SWARM_INPUT_DIRS": "jon@100.107.235.105:/home/jon/comfy-backend/input,root@100.95.184.29:/mnt/user/appdata/comfyui-swarm/mnt/ComfyUI/input",
+    "_RENDER_ATTEMPTS": "Backends 0 and 1 ONLY. Verified 2026-08-15 by reading /object_info off each box: cerberus and gamingpc both hold qwen_image_edit_2511_fp8mixed + the 2511 Lightning 4-step LoRA, same filenames. peaches (backend 2) holds NEITHER and can only refuse these workflows; ethan (3) is unreachable. pipeline._attempt_plan walks running backends in id order, so capping the attempts at 2 stops the walk before it ever reaches peaches.",
+    "RENDER_ATTEMPTS": "2"
+  },
+  "defaults": {
+    "refs": [
+      "anchor5/cleaning-kneeling.jpg",
+      "anchor5/standing.jpg"
+    ],
+    "outdir": "anchor5/nude-r4-refs",
+    "tier": "r",
+    "n": 1,
+    "latent": "image",
+    "prompt": "{pose} Remove every piece of clothing, harness, straps, gloves, boots and accessories. Render the figure fully nude with accurate human female anatomy. Her hips, groin, buttocks and inner thighs are bare skin with nothing on them, the skin there unbroken and continuous with her stomach and legs. All newly revealed skin \u2014 breasts, nipples, areolae, abdomen, vulva, labia, anus, buttocks and inner thighs \u2014 must continue the exact same skin color, undertone, saturation, sheen and any subtle discoloration or markings already present on the visible body in image 1. Do not lighten, warm, cool, or shift the tone. Everything else is exactly as in image 1 -- same woman, same face, same hair, same exact skin tone and markings across the entire body, same tail, same pose, same body position, same camera angle, same framing, same lighting, same overall color grade and illustration style. The body is fully nude with continuous, uninterrupted skin of the identical tone shown in the reference. The background is a plain flat uniform neutral grey studio backdrop, seamless and completely empty: no scenery, no props, no furniture, no floor line, no horizon, no visible ground plane, no cast shadow and no vignette.",
+    "mode": "quality",
+    "cfg": 2.0,
+    "negative": "clothing, bikini bottom, thong, briefs, shorts, leather straps, harness, belt, chains, boots, gloves, thigh straps"
+  },
+  "jobs": [
+    {
+      "input": "anchor5/looking-back_s843167749_00001_.png",
+      "pose": "Kneeling upright on both knees, seen from behind in three-quarter rear view, torso turned and her head looking back over her shoulder at the camera, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/tense.jpg",
+      "pose": "Full-body standing wide-stance crouch facing the camera, legs planted far apart, knees bent, both arms held low and out to the sides with clawed hands spread, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/tense_s1961801208_00001_.png",
+      "pose": "Kneeling on both knees, seen from behind in three-quarter rear view, looking back over her shoulder at the camera with one hand raised to her mouth, in exactly the same pose, camera angle, framing and crop as image 1."
+    }
+  ]
+}

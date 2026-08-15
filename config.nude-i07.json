@@ -1,0 +1,39 @@
+{
+  "_readme": [
+    "Iteration 7 of 10. ONE variable vs i06: denoise 0.90 on the i03 nude (i06 was 0.70 and kept the baked-in ghost).",
+    "0.70 was too low to dissolve a ghost that is now in the source pixels. 0.90 should eat the double without dropping back to a clothed encode."
+  ],
+  "env": {
+    "RENDER_BACKEND": "comfy",
+    "SWARM_URL": "http://127.0.0.1:7801",
+    "COMFY_URL": "http://127.0.0.1:8188",
+    "COMFY_INPUT": "/home/jon/ComfyUI/input",
+    "COMFY_OUTPUT": "/home/jon/ComfyUI/output",
+    "RENDER_ATTEMPTS": "1"
+  },
+  "defaults": {
+    "refs": [],
+    "outdir": "anchor5/nude-i07",
+    "tier": "xxx",
+    "n": 1,
+    "seed": 843167749,
+    "latent": "image",
+    "denoise": 0.9,
+    "mode": "quality",
+    "cfg": 2.0,
+    "steps": 50,
+    "sampler_name": "dpmpp_2m",
+    "scheduler": "karras",
+    "lora_strength": 0.0,
+    "ref_method": "index_timestep_zero",
+    "backend": "comfy",
+    "prompt": "{pose} She is fully nude and barefoot, gold hoop earrings from image 1 still on her. One woman only, a single solid figure, no ghost, no double exposure, no second body. Her whole body continues in the same jet-black skin as image 1. Human-shaped adult female anatomy on that body: breasts, nipples and areolae, a defined human vulva with inner and outer labia, and a visible anus. Areolae and labia are a darker shade of that same skin, clearly drawn. Same woman as image 1 -- same feline head, face, ears, yellow-green eyes, long wavy black hair with purple highlights, tail, body colour, illustration style, lighting. Plain flat uniform neutral grey studio backdrop, seamless and empty.",
+    "negative": "ghost, double exposure, extra person, clothing, bikini, thong, harness, boots, shoes, gloves, pink skin, peach skin, tan skin, extra tails, featureless crotch"
+  },
+  "jobs": [
+    {
+      "input": "anchor5/i03_lookingback_nude.png",
+      "pose": "Kneeling upright, seen from behind in three-quarter rear view, torso turned and her head looking back over her shoulder at the camera, tail lifted up and aside, knees apart."
+    }
+  ]
+}
