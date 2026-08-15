@@ -1131,6 +1131,13 @@ reaches a model is screened after every merge and after `PINNED` is
 welded. A field that looked clean when typed can still refuse at render
 if composition forms a blocked phrase; the refusal still names the term.
 
+`T10-26` is built and absolute: a minor reference co-occurring with
+lingerie / suggestive / fetish (or explicit) wording is refused at every
+tier, including the g/pg13 depiction path and the r lyrics mention path.
+The refusal names both the minor hit and the sexualisation hit. Clean
+child text at g/pg13 and adult sexualisation at r/xxx still save and
+render — this is not a blanket ban on either half alone.
+
 ## 8. How this document is verified
 
 A style guide is falsifiable or it is decoration.

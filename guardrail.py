@@ -60,6 +60,34 @@ def allows_minor_mention(tier, *, field_kind=None):
     kind = (field_kind or "").strip().lower()
     return t == "r" and kind in MENTION_FIELD_KINDS
 
+# T10-26: non-nude sexualisation co-occurring with a minor reference is refused
+# at every tier, including g/pg13 where a clean depiction is otherwise allowed.
+# Suggestive framing, lingerie-adjacent costume, fetish camera language, and
+# explicit anatomy/act wording — the list is a tripwire, not a classifier.
+SEXUALISATION_TERMS = (
+    # lingerie-adjacent costume
+    "lingerie", "bra", "panties", "thong", "garter", "corset", "stockings",
+    "fishnet", "bustier", "teddy", "underwear", "undergarment", "bikini",
+    "microkini", "bodystocking",
+    # suggestive framing / body emphasis
+    "seductive", "erotic", "sensual", "sexy", "sexual", "sexually",
+    "aroused", "arousing", "cleavage", "come hither", "bedroom eyes",
+    "moaning", "orgasmic", "suggestive", "sultry", "provocative",
+    "titillat", "lewd", "nsfw", "striptease", "stripping", "pole dance",
+    "lap dance", "fondl", "groping",
+    # fetish / camera language
+    "upskirt", "downblouse", "cameltoe", "crotch", "between her legs",
+    "between his legs", "ass shot", "breast close", "breast zoom",
+    # explicit (still co-refused with a minor — stronger than non-nude alone)
+    "nude", "nudity", "naked", "topless", "bottomless", "undressed",
+    "genital", "vulva", "vagina", "penis", "nipple", "labia", "anus",
+    "penetration", "intercourse", "masturbat", "orgasm", "fellatio",
+    "cunnilingus",
+)
+
+_SEX_SINGLE = tuple(t for t in SEXUALISATION_TERMS if " " not in t)
+_SEX_PHRASES = tuple(t for t in SEXUALISATION_TERMS if " " in t)
+
 # Terms whose presence in USER-SUPPLIED text (a custom tier's guardrail, a style
 # note, a prompt override) is refused outright. This is a hard input filter and
 # is deliberately separate from PINNED: PINNED steers the model, this rejects the
@@ -207,6 +235,35 @@ def _tokens(text):
     return out
 
 
+def _minor_hits(text):
+    """Blocked minor terms / under-18 ages present in text (empty if none)."""
+    raw = (text or "").lower()
+    hits = []
+    m = _AGE_RE.search(raw)
+    if m and int(m.group(1)) < 18:
+        hits.append(m.group(0).strip())
+    toks = [t for t in _tokens(text) if t not in _ALLOW]
+    # PREFIX, not substring: a term must start the word. That is what separates
+    # "teenage" from "eighteen"/"canteen"/"protein", "shota" from "shot",
+    # "tween" from "between", "loli" from "halo", "minors" from "minor",
+    # "girlish" from "girl". Suffixes are what morphology adds ("child's",
+    # "childlike", "underaged", "lolicon"), so a prefix test still catches those.
+    found = {t for t in _SINGLE for tok in toks if tok.startswith(t)}
+    joined = " ".join(toks)
+    found |= {p for p in _PHRASES if re.search(r"\b" + p.replace(" ", r"\s+"), joined)}
+    hits.extend(sorted(found))
+    return hits
+
+
+def _sexualisation_hits(text):
+    """T10-26 tripwire terms (lingerie / suggestive / fetish / explicit)."""
+    toks = [t for t in _tokens(text) if t not in _ALLOW]
+    joined = " ".join(toks)
+    hits = {t for t in _SEX_SINGLE for tok in toks if tok.startswith(t)}
+    hits |= {p for p in _SEX_PHRASES if re.search(r"\b" + p.replace(" ", r"\s+"), joined)}
+    return sorted(hits)
+
+
 def check_text(text, where="input", *, tier=None, field_kind=None):
     """Refuse text that references minors, except:
 
@@ -214,35 +271,39 @@ def check_text(text, where="input", *, tier=None, field_kind=None):
     - at r with field_kind in lyrics/narrative (T10-18a): mention only;
       the reference must never reach a render prompt
 
+    T10-26 is absolute: a minor reference co-occurring with sexualisation
+    (lingerie, suggestive framing, fetish camera language, or explicit
+    anatomy/act wording) is refused at every tier, including the allowances
+    above.
+
     Unset tier is xxx (T10-25). Raises ContentRefused (terminal).
     """
+    minors = _minor_hits(text)
+    if minors:
+        sex = _sexualisation_hits(text)
+        if sex:
+            raise ContentRefused(
+                f"This text sexualises a minor and cannot be used in {where}: "
+                f"minor={', '.join(minors)}; sexualisation={', '.join(sex)}. "
+                "Non-nude sexualisation of a depicted minor is refused at every "
+                "tier; remove the sexualisation or the minor reference.")
     if allows_minor_depiction(tier):
         return text
     if allows_minor_mention(tier, field_kind=field_kind):
         return text
+    if not minors:
+        return text
+    # Prefer the age-specific message when that is the only hit.
     raw = (text or "").lower()
     m = _AGE_RE.search(raw)
-    if m and int(m.group(1)) < 18:
+    if m and int(m.group(1)) < 18 and len(minors) == 1 and minors[0] == m.group(0).strip():
         raise ContentRefused(
             f"This text specifies an age under 18 ({m.group(0).strip()}) in {where}. "
             "Every character in this pipeline is an adult; remove it and try again.")
-
-    toks = [t for t in _tokens(text) if t not in _ALLOW]
-    # PREFIX, not substring: a term must start the word. That is what separates
-    # "teenage" from "eighteen"/"canteen"/"protein", "shota" from "shot",
-    # "tween" from "between", "loli" from "halo", "minors" from "minor",
-    # "girlish" from "girl". Suffixes are what morphology adds ("child's",
-    # "childlike", "underaged", "lolicon"), so a prefix test still catches those.
-    hits = {t for t in _SINGLE for tok in toks if tok.startswith(t)}
-    joined = " ".join(toks)
-    hits |= {p for p in _PHRASES if re.search(r"\b" + p.replace(" ", r"\s+"), joined)}
-    hits = sorted(hits)
-    if hits:
-        raise ContentRefused(
-            f"This text refers to minors and cannot be used in {where}: "
-            f"{', '.join(hits)}. Every character in this pipeline is an adult; "
-            "remove the reference and try again.")
-    return text
+    raise ContentRefused(
+        f"This text refers to minors and cannot be used in {where}: "
+        f"{', '.join(minors)}. Every character in this pipeline is an adult; "
+        "remove the reference and try again.")
 
 
 # T10-20: channels that must never short-circuit escalation (T10-19). Accepted

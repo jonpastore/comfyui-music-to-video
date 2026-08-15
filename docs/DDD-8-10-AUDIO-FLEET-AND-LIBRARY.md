@@ -346,6 +346,13 @@ merge and after `PINNED` is welded — not on the field as typed.
 `build_prompt` composes (user text + tier wording + `PINNED`), peels the
 welded guard (longest clause first so xxx tier wording cannot self-trip),
 then `check_text` on the remainder. Field entry screens remain; both run.
+
+`T10-26`: before either allowance, `check_text` refuses when a minor hit
+co-occurs with a `SEXUALISATION_TERMS` hit (lingerie-adjacent costume,
+suggestive framing, fetish camera language, and explicit anatomy/act
+wording). The co-occurrence is absolute — g/pg13 depiction and r
+lyrics/narrative mention do not open it. Clean child text at g/pg13 and
+adult sexualisation at r/xxx still pass.
 ## 5. Build order
 
     TRD-9 tests (no new behaviour)  ->  a routing change becomes provable
