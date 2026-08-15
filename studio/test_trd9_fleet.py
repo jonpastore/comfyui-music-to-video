@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-9, T9-10, T9-11, T9-12, T9-13a, T9-14, T9-16, T9-17, T9-18, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-9, T9-10, T9-11, T9-12, T9-13a, T9-13b, T9-13c, T9-14, T9-16, T9-17, T9-18, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -1470,3 +1470,69 @@ def test_t9_9_empty_backend_refused_stocked_registers_and_renders():
             "unreachable was refused as empty — different signal")
     finally:
         models._object_info, models._system_stats = was_info, was_stats
+def test_t9_13c_staging_sequence_is_transfer_checksums_idle_restart_render():
+    """T9-13c: staging order is not a preference.
+
+    Observed 2026-08-13: gamingpc's UNETLoader listed a 26%-written weight
+    under its real name. Restarting SwarmUI mid-transfer would publish that
+    truncated file to the router. Safety rests on the idle queue, not Swarm's
+    connect-time cache (ListBackends cannot read the cache back).
+
+    Sequence (TRD-9):
+      transfer → checksums → queues_idle → restart_swarm → render
+
+    Mutation: allow restart_swarm before checksums → red.
+    Mutation: allow restart_swarm with checksums but queues still busy → red.
+    Mutation: reorder STAGING_SEQUENCE so restart precedes checksums → red.
+    One variable: the gate reads STAGING_SEQUENCE order.
+    """
+    expected = (
+        "transfer",
+        "checksums",
+        "queues_idle",
+        "restart_swarm",
+        "render",
+    )
+    assert getattr(models, "STAGING_SEQUENCE", None) == expected, (
+        f"STAGING_SEQUENCE must be {expected}; got "
+        f"{getattr(models, 'STAGING_SEQUENCE', None)!r}")
+    assert callable(getattr(models, "staging_allows", None)), (
+        "models.staging_allows is the T9-13c gate; a comment is not a check")
+
+    # First step has no prerequisites.
+    assert models.staging_allows("transfer", done=()) is True
+
+    # Checksums require transfer complete.
+    assert models.staging_allows("checksums", done=()) is False, (
+        "checksums allowed before transfer completed")
+    assert models.staging_allows("checksums", done=("transfer",)) is True
+
+    # Restart is the hazard: mid-transfer or pre-idle must refuse.
+    assert models.staging_allows("restart_swarm", done=()) is False
+    assert models.staging_allows(
+        "restart_swarm", done=("transfer",)) is False, (
+        "restart allowed after transfer alone — checksums not yet passed")
+    assert models.staging_allows(
+        "restart_swarm", done=("transfer", "checksums")) is False, (
+        "restart allowed while queues are not idle — safety is the idle queue")
+    assert models.staging_allows(
+        "restart_swarm",
+        done=("transfer", "checksums", "queues_idle"),
+    ) is True, (
+        "restart refused after transfer + checksums + both queues idle")
+
+    # Render is last; restart is a prior step when Swarm's own list must refresh.
+    assert models.staging_allows(
+        "render",
+        done=("transfer", "checksums", "queues_idle"),
+    ) is False, "render allowed before restart_swarm"
+    assert models.staging_allows(
+        "render",
+        done=("transfer", "checksums", "queues_idle", "restart_swarm"),
+    ) is True
+
+    # Order of `done` must not matter — only membership of prior steps.
+    assert models.staging_allows(
+        "restart_swarm",
+        done=("queues_idle", "checksums", "transfer"),
+    ) is True

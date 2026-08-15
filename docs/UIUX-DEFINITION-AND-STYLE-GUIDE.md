@@ -991,6 +991,10 @@ Two additions specific to TRD-9:
   operator path that puts a model on a box stages the primary weight and every
   `CATALOG.companions` entry together; a UI or script that only names the UNET
   reintroduces the available-but-fails-at-load chip.
+- **Staging a model is not a fleet-page green light until checksums pass and
+  both queues are idle** (`T9-13c`). Enumerating a filename mid-transfer is the
+  trap; the operator sequence is transfer → checksums → idle → restart SwarmUI
+  → render. A backend row that lists a weight is not proof the bytes are whole.
 
 ### 7b.4 Bulk edit is the highest-risk form in the studio
 

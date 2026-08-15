@@ -797,6 +797,33 @@ def staging_files(key):
     return files
 
 
+# T9-13c — restart mid-transfer publishes a truncated model. Order is not optional.
+# Safety rests on the idle queue, not Swarm's connect-time cache (unreadable).
+STAGING_SEQUENCE = (
+    "transfer",
+    "checksums",
+    "queues_idle",
+    "restart_swarm",
+    "render",
+)
+
+
+def staging_allows(step, done=()):
+    """True only when every prior STAGING_SEQUENCE step is in done (T9-13c).
+
+    transfer → checksums → queues_idle → restart_swarm → render.
+
+    Restarting SwarmUI before checksums pass publishes a partial weight at a
+    real filename to the router. The idle queue is the verified protection;
+    Swarm's cached model list cannot be read back via ListBackends.
+    """
+    if step not in STAGING_SEQUENCE:
+        raise ValueError(f"unknown staging step: {step!r}")
+    need = STAGING_SEQUENCE[:STAGING_SEQUENCE.index(step)]
+    have = set(done)
+    return all(s in have for s in need)
+
+
 def spellings(name):
     """Every filename these same weights are known by. Canonical name first.
 

@@ -164,7 +164,12 @@ Each cost a wrong diagnosis once. As criteria they cost nothing again:
 - **Nodes are never the discriminator; files are** (`T9-13`). Every node is on
   every box. **Staging a model stages its companions from `CATALOG.companions`
   in the same act** (`T9-13b`, built: `models.staging_files`); a hardcoded shell
-  file list is not the path.
+  file list is not the path. A truncated weight at a real filename is not a
+  model (`T9-13a`: `weight_available`). Staging order is fixed (`T9-13c`):
+  transfer → checksums → both queues idle → restart SwarmUI → render.
+  `models.staging_allows` refuses restart until checksums pass and queues are
+  idle — the safety is the idle queue, not Swarm's connect-time cache (which
+  cannot be read back).
 
 ### 3.4 What TRD-9 adds rather than documents
 
