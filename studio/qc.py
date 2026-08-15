@@ -103,6 +103,19 @@ SILENCE_FLOOR_DB = -60.0
 # clean sine still has a Peak_count > 0).
 CLIPPED_SAMPLES_LIMIT = 0
 
+# DC offset (TRD-3 §4.3 / T3-4.3-dc): abs mean sample as a fraction of
+# full scale. Calibrated 2026-08-15 on lavfi fixtures (f32le decode):
+#
+#     clean 440 Hz at -14 dB                 ~ 3e-7
+#     digital silence                        0.0
+#     constant aevalsrc=0.05                 ~ 0.05
+#     sine + dcshift=0.15                    ~ 0.15
+#
+# Real takes sit near 0. 0.02 clears residual encoder bias and still
+# catches a constant bias that would thump a speaker on stop/start.
+# Re-measure before moving it.
+DC_OFFSET_LIMIT = 0.02
+
 # T3-9 bands. Brick-wall they are not — 440 Hz leaks into low at -45 —
 # but 80 / 440 / 8000 Hz each light exactly one band as the loudest.
 BANDS = (
@@ -247,6 +260,7 @@ CHECK_REMEDY_CLASS = {
     "clipped_samples": REMEDY_LOUDNORM,
     "silence": REMEDY_RERENDER,
     "channels": REMEDY_RERENDER,
+    "dc_offset": REMEDY_RERENDER,
     "not_uniform": REMEDY_RERENDER_SEED,
     "not_blank": REMEDY_RERENDER_SEED,
     IDENTITY_LOOK: REMEDY_EDIT_TEXT,
@@ -456,6 +470,40 @@ def measure_clipped_samples(path):
             f"clipped samples not measured: empty pcm from {path}")
     # s16 full scale is ±32767; lavfi hard-clips also land on -32768.
     return sum(1 for s in samples if s <= -32767 or s >= 32767)
+
+
+def measure_dc_offset(path):
+    """Abs mean sample as a fraction of full scale (0..1 FS).
+
+    T3-4.3-dc / TRD-3 §4.3. Decodes every sample as f32le — not
+    `astats=metadata=1,metadata=print`, which once failed to initialise
+    and reported nothing on good and bad files alike. RAISES when no
+    sample can be read — never 0.0 on no data.
+    """
+    import numpy as np
+    if not path or not os.path.isfile(path):
+        raise RuntimeError(
+            f"dc_offset produced no readings for {path} -- refusing to "
+            "report a measurement that did not happen")
+    r = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-i", path,
+         "-f", "f32le", "-acodec", "pcm_f32le", "-"],
+        capture_output=True)
+    raw = r.stdout or b""
+    n = len(raw) // 4
+    if n < 1:
+        raise RuntimeError(
+            f"dc_offset produced no sample readings for {path} -- refusing "
+            "to report a measurement that did not happen:\n"
+            + "\n".join((r.stderr or b"").decode("utf-8", "replace").splitlines()[-15:]))
+    samples = np.frombuffer(raw[: n * 4], dtype=np.float32)
+    # Drop non-finite; if nothing remains the file was not measured.
+    samples = samples[np.isfinite(samples)]
+    if samples.size < 1:
+        raise RuntimeError(
+            f"dc_offset produced no finite sample readings for {path} -- "
+            "refusing to report a measurement that did not happen")
+    return float(abs(samples.mean()))
 
 
 def _stderr_events(path, filt, pattern):
@@ -1169,6 +1217,18 @@ def check_audio(path, expect):
             f"low {bands['low']:.1f} / mid {bands['mid']:.1f} / high "
             f"{bands['high']:.1f} dB (loudest {loudest:.1f})",
             measured, SILENCE_FLOOR_DB, "dB", remedy="re-render"))
+
+    # T3-4.3-dc. Abs mean sample vs DC_OFFSET_LIMIT (full-scale fraction).
+    try:
+        dc = measure_dc_offset(path)
+    except RuntimeError as e:
+        out.append(finding(path, "audio", "dc_offset", FLAG, str(e).split("\n")[0]))
+    else:
+        out.append(finding(
+            path, "audio", "dc_offset",
+            FLAG if dc > DC_OFFSET_LIMIT else PASS,
+            f"DC offset {dc:.4f} FS against {DC_OFFSET_LIMIT:.2f} limit",
+            round(dc, 6), DC_OFFSET_LIMIT, "FS", remedy="re-render"))
     out.extend(check_splice(path, expect))
     return out
 

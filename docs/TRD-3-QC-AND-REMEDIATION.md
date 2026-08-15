@@ -171,9 +171,9 @@ places for a finding to exist in different states.
   returning `None` from every check made every check one that "does not have
   them" while the criterion stayed green. The checks that MUST carry all three
   are named — duration, frame_count, fps, luma, silence, loudness, true_peak,
-  resolution, duration_matches_prediction — and a `None` in any of them for
-  those checks fails. A finding that says only "failed" cannot be argued with, and
-  cannot be re-checked after a repair.
+  resolution, duration_matches_prediction, dc_offset — and a `None` in any of
+  them for those checks fails. A finding that says only "failed" cannot be
+  argued with, and cannot be re-checked after a repair.
 - `T3-5` Running QC twice over an unchanged artefact produces one finding per
   check, not two. Re-running is the normal case after a repair. **The fixture is
   an artefact known to FAIL at least one check**, asserted before the second run:
@@ -309,6 +309,12 @@ which is how a measurement said to be taken once ends up taken twice.
   `aspectralstats` emits nothing without a metadata printer, and a check built
   on it returned 0.0 for both sides of a comparison and passed on no data,
   behind an `if` that made it a no-op (2026-08-12).
+- `T3-4.3-dc` **DC offset stays in range** — abs mean sample as a fraction of
+  full scale, decoded as f32le (not `astats=metadata=1,metadata=print`, which
+  once failed to initialise and reported nothing on good and bad files alike).
+  A clean tone PASSes under `DC_OFFSET_LIMIT` (0.02 FS). A take with
+  `dcshift=0.15` or a constant bias FLAGs. `measured` equals
+  `measure_dc_offset`, unit `FS`, remedy re-render. No reading raises, never 0.0.
 - `T3-10` A spliced track's duration is checked against `mixer.bridge_seconds()`'
   own arithmetic. A span within a crossfade of either edge once deleted audio and
   **lengthened** the song — 20 s spliced at 0.1 s came back 20.193 s — and that
@@ -590,11 +596,12 @@ current.
 
 | criterion | state | commit | what was measured |
 |---|---|---|---|
-| **tier 1, §4 entire** | **built** | earlier + `T3-4.2-sat` + `T3-4.3-sr` + `T3-4.3-ch` + `T3-4.3-clip` + `T3-4.4-av` | `studio/qc.py` — `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise`. Every threshold measured, every `_readings()` raises rather than returning 0.0. Channel saturation was the §4.2 row still missing a red test until `T3-4.2-sat`. Sample rate as requested was code-without-a-finding until `T3-4.3-sr`. §4.3 channel count needed `mixer.probe["channels"]` until `T3-4.3-ch`. Clipped-sample count was the §4.3 row without a red test until `T3-4.3-clip`. Assembled-song av_sync was code-without-a-red-test until `T3-4.4-av` |
+| **tier 1, §4 entire** | **built** | earlier + `T3-4.2-sat` + `T3-4.3-sr` + `T3-4.3-ch` + `T3-4.3-clip` + `T3-4.3-dc` + `T3-4.4-av` | `studio/qc.py` — `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise`. Every threshold measured, every `_readings()` raises rather than returning 0.0. Channel saturation was the §4.2 row still missing a red test until `T3-4.2-sat`. Sample rate as requested was code-without-a-finding until `T3-4.3-sr`. §4.3 channel count needed `mixer.probe["channels"]` until `T3-4.3-ch`. Clipped-sample count was the §4.3 row without a red test until `T3-4.3-clip`. DC offset was the §4.3 row still missing a check until `T3-4.3-dc`. Assembled-song av_sync was code-without-a-red-test until `T3-4.4-av` |
 | `T3-4.2-sat` channel saturation (NaN / green garbage) | **built** | this slice | `qc.measure_channel_sat` + `check_video` `channel_sat`: solid green/lime FLAG above `CHANNEL_SAT_LIMIT` (80 levels of green dominance); testsrc2 / gray / black PASS; measured equals the independent reading (`test_t3_4_2_sat.py`). No frames raises, never 0.0 |
 | `T3-4.3-sr` sample rate as requested | **built** | this slice | `mixer.probe` returns `sample_rate`; `check_audio` emits `sample_rate` when `expect.sample_rate` is set: matching Hz PASSes, 44100 against 48000 REJECTs, measured equals probe, unit `Hz`, remedy re-render; without expect the check emits nothing (`test_t3_4_3_sr.py`). No reading REJECTs, never a silent skip |
 | `T3-4.3-ch` channel count as requested | **built** | this slice | `mixer.probe` exposes `channels` (0 when no audio). `check_audio` emits `channels` when `expect.channels` is set: stereo vs 2 PASSes, mono vs 2 REJECTs; measured/expected/unit `ch`, remedy re-render; without expect the check is silent; measured equals the independent probe reading (`test_t3_4_3_ch.py`) |
 | `T3-4.3-clip` clipped-sample count | **built** | this slice | `qc.measure_clipped_samples` + `check_audio` `clipped_samples`: s16 rails ≤−32767/≥32767; clean sine@−14dB PASSes 0; volume=+20dB and `2*sin` aevalsrc FLAG with measured = independent count, expected `CLIPPED_SAMPLES_LIMIT` (0), unit `samples`, remedy loudnorm (`test_t3_4_3_clip.py`). No audio raises, never 0 on no data. Not Peak_count / not true-peak alone |
+| `T3-4.3-dc` DC offset stays in range | **built** | this slice | `qc.measure_dc_offset` + `check_audio` `dc_offset`: abs mean sample as FS fraction; clean 440 Hz PASS under `DC_OFFSET_LIMIT` (0.02); `dcshift=0.15` / pure constant bias FLAG; measured equals the independent reading (`test_t3_4_3_dc.py`). f32le decode, not broken `astats=metadata` print. No samples raises, never 0.0 |
 | `T3-4.4-av` assembled song A/V stream durations agree | **built** | this slice | `qc.measure_av_durations` + `check_video` `av_sync` when `want_audio` (song defaults it): matching streams PASS within `DURATION_TOL_S`; video 2s / audio 3s FLAGs gap 1.0s; measured is abs gap, expected 0.0, unit `s`, remedy re-assemble (`test_t3_4_4_av.py`). No reading FLAGs / raises, never silent skip. Clips without `want_audio` do not emit `av_sync` |
 | `T3-2` no hardcoded expectation | **built** | earlier | expectations read from the submitted workflow via `build_song.expect_from_workflow` |
 | `T3-7` the model's own latent step | **built** | `d4a39c2` | asserted both ways on one 77-frame file: passes at step 4, flags at step 8 naming 81 |

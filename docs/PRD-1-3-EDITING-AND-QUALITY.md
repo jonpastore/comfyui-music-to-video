@@ -108,7 +108,7 @@ the eight things that must become true; they are not a new contract.
 | P5a | Assembling a song with a 1664×960 clip among 832×480 siblings keeps the ×2 size and does not letterbox; mixed aspect is refused | `T5-7` |
 | P5b | Every clip of one song is normalised to one output fps, asserted on the assembled file | `T2-13d` |
 | P5c | A scene longer than the 15 s LTX ceiling becomes a clip chain; clip N+1 starts on clip N's last frame | `T2-10` |
-| P6 | Every rendered artefact is measured against the workflow that asked for it, never against a constant. A mixed-model clip is judged at its native fps, not the song's output fps. An interpolated clip is judged at RIFE `(n-1)*m+1` frames and `make_postproc.out_fps`, not `n*m` / `fps*m`. A silent or near-silent take is rejected on measured low/mid/high band energy, not peak volume | `T3-2`, `T3-4`, `T3-7`, `T3-8`, `T3-9`, `T2-13f` |
+| P6 | Every rendered artefact is measured against the workflow that asked for it, never against a constant. A mixed-model clip is judged at its native fps, not the song's output fps. An interpolated clip is judged at RIFE `(n-1)*m+1` frames and `make_postproc.out_fps`, not `n*m` / `fps*m`. A silent or near-silent take is rejected on measured low/mid/high band energy, not peak volume. A take with DC offset above `DC_OFFSET_LIMIT` is flagged | `T3-2`, `T3-4`, `T3-7`, `T3-8`, `T3-9`, `T3-4.3-dc`, `T2-13f` |
 | P7 | A finding arrives actionable — measured, expected, unit, a remedy class, and an editable prompt — and nothing runs without approval. A dismissed finding stays off the queue until the artefact itself changes. The remedy that RUNS is the stored prompts row. Approving produces a new candidate; original and repair are both listed and scored | `T3-18`, `T3-19` **built** (`GET /qc` finding-row + `test_t3_19_finding_row.py`: two HTML approvals submit two jobs), `T3-20`, `T3-21`, `T3-22`, `T3-27` |
 | P8 | Identity failures are attributed to the text, never to the reference image | `T2-31`, `T2-32`, `T3-17`, `T3-28` |
 
@@ -169,6 +169,9 @@ REJECTs, no expect emits nothing, `test_t3_4_3_sr.py`; **`T3-4.3-ch` built** —
 **`T3-4.3-clip` built** — audio
 `clipped_samples` / `measure_clipped_samples` counts s16 rails; clean
 sine PASSes 0, hard-clipped takes FLAG, `test_t3_4_3_clip.py`;
+**`T3-4.3-dc` built** — audio `dc_offset` /
+`measure_dc_offset` FLAGs abs mean sample above `DC_OFFSET_LIMIT`
+(0.02 FS), PASSes a clean tone, `test_t3_4_3_dc.py`;
 **`T3-4.4-av` built** — assembled-song
 `av_sync` / `measure_av_durations`: matching A/V streams PASS within
 `DURATION_TOL_S`, a 1s gap FLAGs, clips without `want_audio` skip,
