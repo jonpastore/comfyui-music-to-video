@@ -92,7 +92,13 @@ _ZIMAGE_SEED_RE = re.compile(r"_s(\d+)_")
 
 # docs/TRD-4 T4-14: a nude compose that asserts a human body is the measured
 # identity collapse (cat head on a human form). Offline, no pixels.
-HUMAN_BODY_PHRASES = ("human form", "human body", "human skin", "bare skin")
+# "human form" is nude_wardrobe; the live-studio body clause said
+# "Human woman's body" / "human anatomy" without those four strings.
+HUMAN_BODY_PHRASES = (
+    "human form", "human body", "human skin", "bare skin",
+    "human woman's body", "human anatomy", "human musculature",
+    "human proportions",
+)
 
 # docs/TRD-5 T5-2: the renderer assigns decoded (plain, refined) uint8/float
 # arrays here after a same-seed pair lands. None is NOT MEASURED. skip is
@@ -547,7 +553,7 @@ def _norm_ref(value):
 
 def _compose_text(expect):
     return " ".join(str(expect.get(k) or "") for k in
-                    ("composed", "prompt", "nude_wardrobe"))
+                    ("composed", "prompt", "nude_wardrobe", "body"))
 
 
 def _human_body_hits(text):
@@ -561,8 +567,8 @@ def check_identity_look(path, expect, kind="image"):
     passes the prerequisite; the picture stays a human look.
 
     A compose that asserts a human body (T4-14: nude_wardrobe "human form"
-    in composed/prompt) flags even when the identity path is missing or is
-    the chosen ref. Missing identity_path must not hide that reason.
+    in composed/prompt/body) flags even when the identity path is missing
+    or is the chosen ref. Missing identity_path must not hide that reason.
     """
     expect = expect or {}
     identity = _norm_ref(expect.get("identity_path"))
