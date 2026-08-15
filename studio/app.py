@@ -6166,6 +6166,22 @@ def set_preview(id: int):
     return mixer.preview_proxy(items)
 
 
+@app.get("/api/sets/{id}/preview/render")
+def set_preview_render(id: int, at: float = 0.0, secs: Optional[float] = None):
+    """T1-17: real ffmpeg render of a bounded span. Not a proxy."""
+    row = get_set_or_404(id)
+    build = _set_render_items(row)
+    key = "audio" if row["mode"] == "audio" else "video"
+    ext = "mp3" if key == "audio" else "mp4"
+    outdir = os.path.join(db.DATA, "sets", str(id))
+    os.makedirs(outdir, exist_ok=True)
+    out = os.path.join(outdir, f"preview.{ext}")
+    try:
+        return mixer.render_preview(build, out, at=at, secs=secs, key=key)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 def _set_render_row(a):
     """One rendered asset (kind='set'), formatted for display -- shared by the
     shelf (legacy renders with no set of their own) and the editor (renders
@@ -6801,10 +6817,13 @@ def _beatmatch_fields(it, song):
             "downbeat_offset": song["downbeat_offset"] or 0}
 
 
-@app.post("/sets/{id}/render")
-def render_set_route(id: int):
-    row = get_set_or_404(id)
-    items = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", id)
+def _set_render_items(row):
+    """Items in the shape mix_audio/render_set consume.
+
+    Shared by POST /sets/{id}/render and GET /api/sets/{id}/preview/render
+    so the preview cannot build a different document (T1-17).
+    """
+    items = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", row["id"])
     if not items:
         raise HTTPException(400, "this set has no items yet -- add one first")
     songs = {it["song_id"]: get_song_or_404(it["song_id"])
@@ -6862,7 +6881,13 @@ def render_set_route(id: int):
                               **_beatmatch_fields(it, songs[it["song_id"]])})
         if missing:
             raise HTTPException(400, f"tier '{row['tier']}' has no video for: {', '.join(missing)}")
+    return build
 
+
+@app.post("/sets/{id}/render")
+def render_set_route(id: int):
+    row = get_set_or_404(id)
+    build = _set_render_items(row)
     jobs.enqueue("render_set", {"set_id": id, "playlist_id": row["playlist_id"],
                                 "mode": row["mode"], "tier": row["tier"], "items": build})
     return RedirectResponse(f"/sets/{id}", status_code=303)

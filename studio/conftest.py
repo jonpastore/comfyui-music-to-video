@@ -312,6 +312,34 @@ def _mix_audio(items, out, progress=None):
     open(out, "w").close()
 
 
+render_preview_calls = []
+
+
+def _render_preview(items, out_path, at=0.0, secs=None, key="audio", progress=None):
+    # T1-17: the real one shells out to ffmpeg. The stub writes a file
+    # so the route can return a path that exists, and records the
+    # window so a test can see at/secs reached the call.
+    if not items:
+        raise ValueError("items is empty")
+    span_s = 20.0 if secs is None else float(secs)
+    render_preview_calls.append({
+        "items": items, "out_path": out_path, "at": at, "secs": secs, "key": key})
+    parent = os.path.dirname(os.path.abspath(out_path))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    open(out_path, "wb").write(b"ID3" + b"\0" * 64)
+    start = max(0.0, float(at or 0.0) - span_s / 2.0)
+    return {
+        "path": out_path,
+        "is_proxy": False,
+        "at": 0.0 if at is None else float(at),
+        "secs": span_s,
+        "start": start,
+        "end": start + span_s,
+        "duration": span_s,
+    }
+
+
 def _item_len(it):
     if _is_card(it):
         return max(0.0, float(it.get("duration") or 0.0))
@@ -418,6 +446,11 @@ _stub("mixer",
       preview_proxy=(_real_module("mixer").preview_proxy
                      if _real_module("mixer") is not None
                      else (lambda items: {"is_proxy": True, "not_applied": []})),
+      # T1-17: preview_window is pure. render_preview is ffmpeg.
+      preview_window=(_real_module("mixer").preview_window
+                      if _real_module("mixer") is not None
+                      else (lambda at, total, secs=None: (0.0, 20.0))),
+      render_preview=_render_preview,
       # T1-19: applied_master_chain is pure (no ffmpeg). The stub must
       # serve the real one so h_render_set records the same chain
       # _master_lines applies, not a parallel default.

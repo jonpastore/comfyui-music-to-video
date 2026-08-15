@@ -94,7 +94,8 @@ items, automation, predicted duration, rounding deltas), `/api/sets/{id}/items`,
 decimated** curve — the client re-reads what was kept, §5.3),
 `/api/songs/{id}/peaks?z=` (`pairs` plus `reason` when empty, `T1-15`),
 `/api/sets/{id}/peaks?z=`, `/api/sets/{id}/preview` (returns `is_proxy` and
-`not_applied`), `/api/sets/{id}/preview/render?at=&secs=`,
+`not_applied`), `/api/sets/{id}/preview/render?at=&secs=`
+(`is_proxy: false`, the accurate span),
 `/api/sets/{id}/render`, `/api/sets/{id}/renders` (every candidate, `T1-26`,
 `T6-A5`).
 
@@ -296,8 +297,12 @@ second DSP engine in Web Audio.** The proxy declaration is data —
 `{"is_proxy": true, "not_applied": [...]}` — computed from the item's actual
 effects by `mixer.preview_proxy` and served at `GET /api/sets/{id}/preview`,
 so `T1-16`'s test (add an effect, see it appear in `not_applied`) fails
-a static list. "Render preview" (`T1-17`) goes through the *same* code path as a
-full render, bounded to a span, and is the only preview that claims accuracy.
+a static list. "Render preview" (`T1-17`) is `mixer.render_preview`: the
+*same* `mix_audio`/`render_set` path as a full render, then a cut of
+`PREVIEW_SPAN` (20 s) around the playhead, served at
+`GET /api/sets/{id}/preview/render?at=&secs=` as `{is_proxy: false, ...}`.
+It is the only preview that claims accuracy. `waveform_png` stays the
+picture.
 
 ### 5.5 Clip length: one blocked chain, and the order it unblocks in
 

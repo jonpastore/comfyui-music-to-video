@@ -244,6 +244,94 @@ def preview_proxy(items):
     return {"is_proxy": True, "not_applied": seen}
 
 
+# Bounded ffmpeg preview of a span (docs/TRD-1 T1-17). waveform_png stays
+# the static picture; this is the only preview that claims to be accurate.
+PREVIEW_SPAN = 20.0
+
+
+def preview_window(at, total, secs=None):
+    """[start, end] seconds of a span around the playhead.
+
+    Default length is PREVIEW_SPAN. Clamped to [0, total] and shifted
+    inward so a playhead near either edge still yields `secs` when the
+    set is long enough, or the whole set when it is not.
+    """
+    total = float(total)
+    if total < 0:
+        raise ValueError("total must be >= 0")
+    span = PREVIEW_SPAN if secs is None else float(secs)
+    if span <= 0:
+        raise ValueError("secs must be > 0")
+    at = 0.0 if at is None else float(at)
+    if total <= 0:
+        return 0.0, 0.0
+    span = min(span, total)
+    start = at - span / 2.0
+    end = start + span
+    if start < 0.0:
+        start, end = 0.0, span
+    if end > total:
+        end = total
+        start = total - span
+    return start, end
+
+
+def render_preview(items, out_path, at=0.0, secs=None, key="audio", progress=None):
+    """T1-17: real ffmpeg render of a bounded span.
+
+    Same path as the full render (mix_audio / render_set), then a cut of
+    the window around the playhead. is_proxy is False — this is the only
+    preview that claims to be accurate. waveform_png stays the picture.
+    """
+    progress = progress or _NOOP
+    if not items:
+        raise ValueError("items is empty")
+    span_s = PREVIEW_SPAN if secs is None else float(secs)
+    if span_s <= 0:
+        raise ValueError("secs must be > 0")
+    key = "audio" if key == "audio" else "video"
+    total = set_duration(items, key=key)
+    start, end = preview_window(at, total, secs=span_s)
+    span = end - start
+    if span <= 0:
+        raise ValueError("set has no duration")
+    ext = ".mp3" if key == "audio" else ".mp4"
+    fd, tmp_full = tempfile.mkstemp(suffix=ext)
+    os.close(fd)
+    try:
+        if key == "audio":
+            mix_audio(items, tmp_full, progress=progress)
+        else:
+            render_set(items, tmp_full, progress=progress)
+        tmp = _atomic_out(out_path)
+        try:
+            args = ["-i", tmp_full, "-ss", f"{start:.6f}", "-t", f"{span:.6f}"]
+            if key == "audio":
+                args += ["-c:a", "libmp3lame", "-b:a", "320k", tmp]
+            else:
+                args += ["-c:v", "libx264", "-preset", "medium", "-crf", "18",
+                         "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", tmp]
+            progress("cutting preview span")
+            _run_ffmpeg(args, progress, total_duration=span, stage="preview")
+            os.replace(tmp, out_path)
+        except BaseException:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+            raise
+    finally:
+        if os.path.exists(tmp_full):
+            os.remove(tmp_full)
+    return {
+        "path": out_path,
+        "is_proxy": False,
+        "at": 0.0 if at is None else float(at),
+        "secs": span_s,
+        "start": start,
+        "end": end,
+        "duration": probe(out_path)["duration"],
+    }
+
+
 def _write_concat_list(paths):
     fd, list_path = tempfile.mkstemp(suffix=".txt")
     with os.fdopen(fd, "w") as f:
@@ -1623,6 +1711,9 @@ def demo():
         "echo_out": {"decay": 0.5, "delay": 200}, "loudnorm": False})}])
     assert _px["is_proxy"] is True and "echo_out" in _px["not_applied"]
     assert "eq_kill" not in _px["not_applied"]
+    assert PREVIEW_SPAN == 20.0
+    assert preview_window(50, 100) == (40.0, 60.0)
+    assert preview_window(0, 100) == (0.0, 20.0)
     tmpdir = tempfile.mkdtemp(prefix="mixer_demo_")
     try:
         clip_a = os.path.join(tmpdir, "clip a.mp4")   # space in path, deliberately
