@@ -92,7 +92,7 @@ the eight things that must become true; they are not a new contract.
 | # | outcome | proven by |
 |---|---|---|
 | P1 | The number on the screen is the number in the file — set length, to 0.05 s, with echo, hold, beatmatch, trim and an interstitial card all in play | `T1-7`, `T1-8`, `T1-27`, `T3-11` |
-| P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b`, `T1-12`, `T1-20d` |
+| P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b` **built** (`mix_audio` RMS/s slope on a constant sine), `T1-12`, `T1-20d` |
 | P3 | Every surface is drivable with no browser, and the page and the JSON agree | `T6-A1`…`T6-A4`, `T1-3`, `T2-41` |
 | P4 | An album's songs are scenes of one story, demonstrably — arc content appears in the storyboard and is absent when the arc is; the board's guardrail field is this tier's clause and save refuses another tier's wording | `T2-20`, `T2-21`, `T2-22` |
 | P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every clip, a re-plan leaving approved `(clip_idx, seed)` unchanged, the planner prompt not naming a fixed 4.8125 s quantum, its clip-length text derived from planning, and TIMING still stating track length and sum-to-track | `T2-8`, `T2-12a`, `T2-13a`, `T2-13b`, `T2-13c`, `T2-14a`, `T2-14b`, `T2-14c` |
@@ -146,7 +146,9 @@ longer the phase to defer — `docs/PLAN-TRD-4-7.md` §4 is updated to match.
 `studio/qc.py` (TRD-3 tier 1 in full), `studio/qc_service.py` + `db.findings` +
 `/api/qc/*` including `GET /api/qc/by-host` (`T3-1`) and dismiss/reopen on
 artefact change (`T3-22`), `studio/automation.py` + `db.automation` (TRD-1 §5's curve model,
-decimation and filter emission), `studio/arc.py` + the arc routes (TRD-2 §3.1's
+decimation and filter emission; `T1-9b` **built** — a stored −12→0 dB
+ramp's RMS/s slope survives `mix_audio` within
+`mixer.GAIN_CURVE_SLOPE_TOLERANCE`), `studio/arc.py` + the arc routes (TRD-2 §3.1's
 JSON-canonical arc), `db.artefacts` (tier 0), `prompts.py` (TRD-2 §3.3's
 versioning, reused by `T3-20`). TRD-3 §2.1 is explicit that §4 and §6 "read as
 unbuilt work and are not" — the ledger with line counts is DDD §1.

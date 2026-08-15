@@ -189,6 +189,8 @@ by `card_secs`, and it is a `set_items` row, not a comment on the strip.
 The **time axis** is server-rendered: `mixer.timeline_axis(set_duration())`
 emits `.tl-tick[data-t]` seconds in the HTML (T1-8's stub-offset shape).
 Still open: draggable joins, automation lanes and a playhead.
+A stored `gain_db` ramp does reach the rendered file (`T1-9b`, RMS/s
+slope on `mix_audio`); the lanes to *draw* it are not in the UI yet.
 
 **Three audiences, one editor.** `set_edit.html` now carries a
 `mode_audience` select (`easy|normal|advanced`). These are affordance

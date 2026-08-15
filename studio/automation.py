@@ -30,6 +30,10 @@ mixer._audio_chain applies it, so a curve drawn on a set item now reaches the
 rendered audio. mixer still imports neither this module nor db -- the curve
 travels as a value, exactly as effects_json does.
 
+T1-9b (2026-08-14) measures that reach on the file, not the graph:
+`mixer.rms_per_second` / `mixer.rms_slope` of a `mix_audio` render of a
+stored `gain_db` ramp. T1-9a is the graph half.
+
     python3 automation.py        # self-check
 """
 import os

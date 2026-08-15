@@ -260,18 +260,26 @@ claiming *"exactly ONE loudnorm in the graph"* **was already false when it was
 written**: it counted the master line only, while a plain item still carried its
 own. A true measurement of the wrong thing, sitting in the file the whole time.
 
-### 5.3 Automation — built; what remains is reach
+### 5.3 Automation — built; what remains is the other lanes
 
 `automation.py` owns the model, decimates on write with RDP plus a hard
 `MAX_POINTS = 64`, and emits through `asendcmd`, which is the mechanism
 `effects.filter_sweep` already uses — one emitter, one cap, and `sweep` becomes a
 preset that writes points rather than a second automation system.
 
-What is left is the criteria that prove the lanes **reach the render**: `T1-12`
-per lane, as a differential (`gain_db` by RMS/s, `pan` by L/R energy ratio, the
-filter lanes by band energy). This is the criterion that catches a lane wired
-into the UI and not into the graph, which is how `_apply_beatmatch` was
-unreachable for a whole session.
+**`T1-9b` is built (2026-08-14).** `mixer.rms_per_second` / `mixer.rms_slope`
+are the one RMS/s implementation. A stored `gain_db` ramp −12→0 dB over 6 s
+on a constant 1 kHz sine, rendered through `mix_audio` (not `_audio_chain`),
+has measured slope within `GAIN_CURVE_SLOPE_TOLERANCE` (0.5 dB/s) of drawn
+2.0. The same fragment with `suppress_loudnorm` forced off misses that
+bound — that is the 5.0(c) mutation. The fixture is a constant sine
+because RMS slope on program material is not a proxy for gain.
+
+What is left is `T1-12` per remaining lane, as a differential (`pan` by L/R
+energy ratio, the filter lanes by band energy). `gain_db` RMS/s is T1-9b.
+This is the criterion that catches a lane wired into the UI and not into
+the graph, which is how `_apply_beatmatch` was unreachable for a whole
+session.
 
 ### 5.4 Peaks and preview
 

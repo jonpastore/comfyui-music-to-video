@@ -11,7 +11,7 @@ Every ffmpeg call is explicit-arg-list (no shell=True), checked for return
 code, and writes to a temp file that's os.replace()'d into out_path so a
 failed render never clobbers a good one.
 """
-import json, os, re, subprocess, tempfile, shutil
+import json, math, os, re, struct, subprocess, tempfile, shutil
 
 import beatmatch
 import effects
@@ -1555,6 +1555,67 @@ def mix_audio(items, out_path, progress=None):
 # this rather than restating it.
 SET_DURATION_TOLERANCE = 0.05
 
+# dB/s. docs/TRD-1 T1-9b: measured RMS-per-second slope vs the drawn gain
+# curve. One named constant. Master loudnorm after a -12→0 dB / 6 s ramp on
+# a constant sine sits ~0.3 dB/s off drawn 2.0; per-item loudnorm left on
+# sits ~0.9 dB/s off and misses this bound.
+GAIN_CURVE_SLOPE_TOLERANCE = 0.5
+
+
+def rms_per_second(path):
+    """Whole-second RMS of a rendered file, in dBFS. docs/TRD-1 T1-9b.
+
+    One value per complete second, decoded mono at 48 kHz. A partial tail
+    is dropped, not treated as a short bucket — a 0.05 s leftover is not
+    a second of programme. Raises if ffmpeg produced no complete second,
+    so an empty list cannot pass a slope check by construction.
+
+    THIS IS THE ONE IMPLEMENTATION. T1-9b (gain curve) and T1-21 (duck)
+    both want RMS per second; two decoders would eventually disagree
+    about the same file.
+    """
+    r = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-i", path,
+         "-ac", "1", "-ar", "48000", "-f", "f32le", "-"],
+        capture_output=True)
+    if r.returncode != 0:
+        err = (r.stderr or b"").decode("utf-8", "replace")
+        raise RuntimeError("ffmpeg failed decoding %s for RMS:\n%s"
+                           % (path, "\n".join(err.splitlines()[-15:])))
+    n = len(r.stdout) // 4
+    if n < 48000:
+        raise RuntimeError(
+            "no complete second of audio in %s (%d samples) — refusing "
+            "an empty RMS series that would make any slope check pass"
+            % (path, n))
+    samples = struct.unpack("<%df" % n, r.stdout)
+    out = []
+    for i in range(n // 48000):
+        chunk = samples[i * 48000:(i + 1) * 48000]
+        ms = sum(x * x for x in chunk) / 48000
+        out.append(-120.0 if ms <= 1e-20 else 10.0 * math.log10(ms))
+    return out
+
+
+def rms_slope(values):
+    """Least-squares dB/s through per-second RMS, on bucket centres.
+
+    A two-point rise (last - first) ignores the shape in the middle.
+    T1-9b asks for the slope of the curve, so this is a fit, not a chord.
+    """
+    n = len(values)
+    if n < 2:
+        raise RuntimeError(
+            "rms_slope needs at least two seconds, got %d" % n)
+    xs = [i + 0.5 for i in range(n)]
+    mx = sum(xs) / n
+    my = sum(values) / n
+    num = sum((x - mx) * (y - my) for x, y in zip(xs, values))
+    den = sum((x - mx) ** 2 for x in xs)
+    if den == 0:
+        raise RuntimeError("rms_slope denominator is 0")
+    return num / den
+
 
 def set_duration(items, key="video"):
     """Predicted set length: item durations (after in_secs/out_secs trim and
@@ -2639,6 +2700,8 @@ def demo():
                 pass
 
         assert logs, "progress callback never fired"
+        # T1-9b slope helper is a fit, not a chord of first/last.
+        assert abs(rms_slope([-12.0, -10.0, -8.0, -6.0]) - 2.0) < 1e-9
         print(f"mixer.py OK  assemble={info1['duration']:.2f}s fade={info2['duration']:.2f}s "
               f"set2={actual2:.2f}s set5={actual5:.2f}s cut={actual_cut:.2f}s audio={adur:.2f}s "
               f"ramp={ramped_dur:.2f}s")

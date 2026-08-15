@@ -611,7 +611,7 @@ current.
 | criterion | state | commit | what was measured |
 |---|---|---|---|
 | `T1-9a`/`T1-9c` automation curves | **built** | earlier | `automation.py`: lanes, RDP decimation, `MAX_POINTS = 64`, `asendcmd` emission through the mechanism `effects.filter_sweep` already used |
-| `T1-9b` a drawn curve survives to output | **NOT MEASURED** | — | the RMS-per-second differential has never been run. The curve reaches the graph; nothing has confirmed it reaches the audio |
+| `T1-9b` a drawn curve survives to output | **built** | this slice | `studio/test_t1_9b_gain_curve.py`: 6 s 1 kHz sine (constant amplitude — RMS is not a proxy on program material), stored `gain_db` ramp −12→0 dB, `mix_audio` RMS/s slope vs drawn 2.0 dB/s within `mixer.GAIN_CURVE_SLOPE_TOLERANCE` (0.5). Per-item loudnorm left on measures ~1.06 dB/s and misses the same bound. Asserted through `mix_audio`, not `_audio_chain`. |
 | `T1-20a`/`T1-20b` master stage | **built** | earlier | `mixer._master_lines`, engaged when an item suppressed its own loudnorm or the set is easy |
 | `T1-20d` exactly one loudnorm per path | **built** | `2f8e559` | mixed set measured `per-item=[0,0] master=1` → worst path **1**, was **2**. Reproduced independently by both sessions. Fix is `master_engaged` + `item_chains`, one application point |
 | `T1-7` predicted length = rendered (echo+black+beatmatch+trim) | **built** | this tree | `studio/test_t1_7_set_duration.py`: mix_audio gap 0.032 s, render_set gap 0.027 s, both ≤ `mixer.SET_DURATION_TOLERANCE` (0.05). Each named feature moves the prediction. Arithmetic and the constant were not changed. |
