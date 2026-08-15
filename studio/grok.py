@@ -22,7 +22,8 @@ _REPO_ROOT = os.environ.get("STUDIO_SCRIPTS") or os.path.dirname(
 sys.path.insert(0, _REPO_ROOT)
 from build_storyboard import parse_sections, to_md, energy  # noqa: E402
 from build_song import (  # noqa: E402
-    SHOT_RULES, LTX_FPS, legal_frames, guidance_seconds, n_clips_for)
+    SHOT_RULES, LTX_FPS, legal_frames, guidance_seconds, n_clips_for,
+    clip_seconds)
 
 import tiers  # noqa: E402  (ContentRefused must be catchable by type)
 
@@ -398,21 +399,28 @@ def _system_prompt(tier_text, style_note, n_scenes, scene_seconds, min_scenes=1,
     )
 
 
-def _user_prompt(lyrics, song, tier, n_scenes):
+def _user_prompt(lyrics, song, tier, n_scenes, scene_seconds=None):
     """The model needs the song's real length.
 
     Without the duration it invents scene times that do not add up to the track.
-    Clip length is per song; a fixed quantum here would tell the model to plan
-    for a length the renderer is no longer bound to.
+    Clip length is per song and comes from planning (clip_seconds), not a
+    constant. A fixed quantum here would tell the model to plan for a length
+    the renderer is no longer bound to.
     """
     dur = float(song.get("duration") or 0.0)
-    total_clips = n_clips_for(dur)
+    total_clips = n_clips_for(dur, scene_seconds)
     mins, secs = divmod(int(dur), 60)
+    clip_line = ""
+    if scene_seconds:
+        clip_s = clip_seconds(scene_seconds)
+        frames = legal_frames(scene_seconds, LTX_FPS)
+        clip_line = f"- Planned clip length is {clip_s:.4f} s ({frames} frames).\n"
     return (
         f"Song: \"{song.get('title', '')}\" from the album \"{song.get('album', '')}\" "
         f"({song.get('genre', '')}). Content tier: {tier}.\n\n"
         f"TIMING (hard constraints from the renderer):\n"
         f"- Track length: {dur:.1f} seconds ({mins}:{secs:02d}).\n"
+        f"{clip_line}"
         f"- The whole track is {total_clips} clips.\n"
         f"- The scene durations must add up to roughly {dur:.0f} seconds. Spend more "
         f"clips on choruses, drops and instrumental passages; fewer on short spoken lines.\n\n"
@@ -698,7 +706,8 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
         messages.append({"role": "user", "content": _direction_prompt(direction.strip())})
     # the concluding "generate N scenes" instruction stays LAST, so the direction
     # reads as context for it rather than as an afterthought to it
-    messages.append({"role": "user", "content": _user_prompt(lyrics, song, tier, n_scenes)})
+    messages.append({"role": "user", "content":
+                     _user_prompt(lyrics, song, tier, n_scenes, scene_seconds)})
 
     errors = None
     for attempt in range(3):

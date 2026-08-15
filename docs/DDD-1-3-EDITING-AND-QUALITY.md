@@ -304,8 +304,10 @@ length is the divisor, the count is ours.
 `grok._user_prompt` no longer names a fixed 4.8125 s quantum, does not say
 nothing shorter or longer can be produced, and does not tell the model to
 round `duration_guidance` to multiples of a constant. `_system_prompt` no
-longer names 4.8125 s either. `T2-14b` (clip-length text derived from
-planning) and `T2-14c` (TIMING purpose asserted) remain. The function is
+longer names 4.8125 s either. `T2-14b` is **built**: the TIMING clip-length
+line is `clip_seconds(scene_seconds)`, so one song at two `scene_seconds`
+produces two statements — a new constant 15.0 would keep the sentence shape
+and fail this. `T2-14c` (TIMING purpose asserted) remains. The function is
 pure; assert on its return value, never by grepping the source.
 
 ### 5.6 Tier 2 is a calibration, not a metric

@@ -713,6 +713,7 @@ current.
 | **`T2-13a` renderer honours `clip_seconds`** | **built** | `test_clip_length.py` | `EmptyLTXVLatentVideo.length` and `TrimAudioDuration` follow the legal 8n+1 count, not `LTX25_LEN`/`CHUNK`. 8.0 s (under the T5-9 15 s ceiling) is 137 frames; `start_index` is `i * legal`. Missing `length_seconds` stays 81 / `CHUNK`. Mutation: restore the constants → red |
 | `T2-13c` approve grid | **not built** | — | a song whose storyboard has fewer scenes than clips must still show every clip |
 | **`T2-14a` no fixed clip quantum in the planner prompt** | **built** | `_user_prompt` | return value has no `CHUNK` formatting, no "Nothing shorter or longer can be produced", no `duration_guidance`-to-multiples instruction. Mutation: restore any one → red. `_system_prompt` no longer names 4.8125 s either |
-| `T2-14b`…`T2-14c` derived clip-length + TIMING purpose | **not built** | — | clip-length text is not yet derived from planning (`T2-14b`); TIMING still states track length and sum-to-track but is not asserted (`T2-14c`) |
+| **`T2-14b` clip-length text derived from planning** | **built** | `_user_prompt` | TIMING clip-length line is `clip_seconds(scene_seconds)`, not a new constant. Same song at 15 s and 30 s yields two statements. Mutation: swap 4.8125 for 15.0 and keep the sentence shape → `T2-14a` passes and this fails |
+| `T2-14c` TIMING purpose | **not built** | — | TIMING still states track length and sum-to-track but is not asserted |
 | §4 wands, §5 meter, §5.3 casting | **not built** | — | |
 | `T2-42`…`T2-48` per-scene model (W2) | **not built** | — | |
