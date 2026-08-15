@@ -647,6 +647,15 @@ figure. A bare name is a legacy lead. Mutation: coerce to strings →
 compose arm red. Mutation: dump without the check → writer arm red.
 Mutation: return names without role → API arm red. `T2-30` is not this.
 
+`T2-30` is **built**. `unanchored_leads(rows)` returns names of figures
+with `role == "lead"` and no chosen anchor. Storyboard HTML banner,
+`_storyboard_payload` / `GET .../cast` / storyboard JSON share that
+list. Scene-row chips put `warn-tag` and "no anchor" only on unanchored
+leads; extras and background stay neutral. A bare name is a legacy
+lead. Mutation: list every unanchored name → extra arm red.
+Mutation: never list → lead arm red. Mutation: fix API only → HTML
+arm red (`test_t2_30_unanchored_leads_only.py`).
+
 `T2-44` is **built**. `models.refuse_unknown_video_model` walks the
 board's scenes and raises when a named `video_model` is absent from
 `models.renderable("video")` as a key *or* a cli value, quoting the

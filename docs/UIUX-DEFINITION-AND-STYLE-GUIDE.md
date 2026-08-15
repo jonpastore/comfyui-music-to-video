@@ -428,7 +428,9 @@ song's `clip_seconds`, not a constant (`T2-24`). The live `meter`
 component is not this.
 Every named scene figure carries `lead` / `extra` / `background`
 (`T2-29`). `GET .../cast` returns `role` on each figure; the scene
-row shows it. The unanchored-lead warning (`T2-30`) is not this.
+row shows it. The unanchored-lead warning (`T2-30`) is **built**:
+the page banner and scene-row `warn-tag` / "no anchor" fire only for
+leads without a chosen anchor; extras and background are silent.
 
 ### 5.3 Space and radius
 

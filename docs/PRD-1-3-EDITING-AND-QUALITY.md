@@ -349,7 +349,10 @@ order and take the dependencies from here.
    song yield two lengths. **`T2-29` built**: every named scene figure
    carries `lead` / `extra` / `background`; `GET .../cast` returns
    `role`; save/write refuses an unclassified or free-text role.
-   Remaining: `T2-8c`, §4 wands (`T2-14`…`T2-19`), `T2-25`, and `T2-30`.
+   **`T2-30` built**: unanchored warning lists only leads
+   (`test_t2_30_unanchored_leads_only.py`); extras/background without
+   an anchor are silent. Remaining: `T2-8c`, §4 wands
+   (`T2-14`…`T2-19`), `T2-25` where not already built.
 7. Per-scene model choice, W2 (`T2-42`…`T2-48`) — last, because `T2-45` needs
    `models.where()`'s three-valued answer respected at enqueue and `T2-48` needs
    per-model ceilings, which is P0 item 1 again. The renderer half of those

@@ -30,11 +30,15 @@
   <p class="cast-chips">
     <span class="muted">main actors:</span>
     {% for c in r.cast %}
-    <span class="tag {{ 'done' if c.anchored else 'warn-tag' }}"
+    {# T2-30: only leads need anchors; extras/background without one are fine. #}
+    {% set needs_anchor = c.role == 'lead' and not c.anchored %}
+    <span class="tag {{ 'warn-tag' if needs_anchor else ('done' if c.anchored else '') }}"
           title="{{ 'anchored -- attached to this scene as a reference image'
                     if c.anchored else
-                    'no anchor at this tier -- rendered from scene text alone' }}">
-      {{ c.name }}{% if c.role %} &middot; {{ c.role }}{% endif %}{% if not c.anchored %} &middot; no anchor{% endif %}
+                    ('no anchor at this tier -- rendered from scene text alone'
+                     if needs_anchor else
+                     (c.role ~ ' -- anchor not required')) }}">
+      {{ c.name }}{% if c.role %} &middot; {{ c.role }}{% endif %}{% if needs_anchor %} &middot; no anchor{% endif %}
     </span>
     {% endfor %}
   </p>

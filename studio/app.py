@@ -5304,6 +5304,12 @@ def _scene_figure(entry, anchored):
     return {"name": name, "role": role, "anchored": name in anchored}
 
 
+def unanchored_leads(rows):
+    """Lead names with no chosen anchor. T2-30: extras/background do not warn."""
+    return sorted({n["name"] for r in rows for n in r["cast"]
+                   if not n["anchored"] and n.get("role") == "lead"})
+
+
 def storyboard_scenes(song, sb, tier, anchored=(), scene_seconds=None):
     """Per-scene timing, prompts and reference frames for the storyboard page.
 
@@ -5474,7 +5480,7 @@ def view_storyboard(request: Request, id: int, tier: str):
         "song": song, "tier": tier, "row": row, "md": md, "sb": sb,
         # the page shows THIS song's clip length, not the old constant
         "scene_rows": rows, "anchors": anchors, "chunk": build_song.clip_seconds(sb_secs),
-        "unanchored": sorted({n["name"] for r in rows for n in r["cast"] if not n["anchored"]}),
+        "unanchored": unanchored_leads(rows),
         "coverage": coverage(rows, nclips, song["duration"], sb_secs),
         "fields": EDITABLE_SCENE_FIELDS,
     })
@@ -5616,13 +5622,12 @@ def _storyboard_payload(song, tier):
     rows, nclips = storyboard_scenes(song, sb, tier, {c["name"] for c, _a in cast},
                                      scene_seconds=sb_secs)
     cov = coverage(rows, nclips, song["duration"], sb_secs)
-    unanchored = sorted({n["name"] for r in rows for n in r["cast"] if not n["anchored"]})
     return {
         "song_id": song["id"],
         "tier": tier,
         "scenes": [_scene_json(r) for r in rows],
         "coverage": cov,
-        "unanchored": unanchored,
+        "unanchored": unanchored_leads(rows),
         "scene_seconds": sb_secs,
         "nclips": nclips,
         "anchors": anchors_by_character(song["album"] or "", tier),
