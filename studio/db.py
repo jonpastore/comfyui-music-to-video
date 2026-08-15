@@ -413,6 +413,8 @@ MIGRATIONS = [
     # predates this.
     "ALTER TABLE songs ADD COLUMN lyrics_source TEXT",
     "ALTER TABLE songs ADD COLUMN lyrics_backend TEXT",
+    # T2-7: which model was asked when this version was produced.
+    "ALTER TABLE prompt_versions ADD COLUMN model TEXT",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and
@@ -462,6 +464,7 @@ CREATE TABLE IF NOT EXISTS prompt_versions (
   version_number INTEGER NOT NULL,
   label TEXT,
   text TEXT NOT NULL,
+  model TEXT,                         -- T2-7: model that was asked; empty if operator-written
   created REAL NOT NULL,
   updated REAL,
   usage_count INTEGER DEFAULT 0,

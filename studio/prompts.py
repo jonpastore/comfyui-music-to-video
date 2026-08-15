@@ -144,8 +144,12 @@ def check(text, label):
     return text, label
 
 
-def save(album, prompt_type, text, label, tier="", character_id=None):
-    """A NEW version, numbered from the last one for this exact scope."""
+def save(album, prompt_type, text, label, tier="", character_id=None, model=None):
+    """A NEW version, numbered from the last one for this exact scope.
+
+    model is the name that was ASKED for (docs/TRD-2 T2-7). Empty when the
+    operator wrote the text. created is stamped here, during the call.
+    """
     if not album:
         raise ValueError("an album is needed to save a prompt")
     tier, character_id = _norm(prompt_type, tier, character_id)
@@ -162,10 +166,11 @@ def save(album, prompt_type, text, label, tier="", character_id=None):
     number = (row["n"] or 0) + 1
     now = time.time()
     vid = db.run("""INSERT INTO prompt_versions (scope_value, tier, character_id, prompt_type,
-                                                  version_number, label, text, created, updated,
-                                                  usage_count)
-                    VALUES (?,?,?,?,?,?,?,?,?,0)""",
-                 album, tier, character_id, prompt_type, number, label, text, now, now)
+                                                  version_number, label, text, model, created,
+                                                  updated, usage_count)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,0)""",
+                 album, tier, character_id, prompt_type, number, label, text,
+                 model or "", now, now)
     return get(vid)
 
 

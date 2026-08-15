@@ -217,6 +217,10 @@ def generate(album, songs, direction="", backend=None, model=None, progress=None
     arc = validate(raw, [s["id"] for s in songs], transitions)
     arc["album"] = album
     arc["direction"] = direction
+    # T2-7: the version records the model that was ASKED for, stamped
+    # during this call. used can be a different resolved name.
+    prompts.save(album, ARC_PROMPT, direction, label="generated",
+                 model=model if model is not None else used)
     progress(f"arc accepted: {len(arc['songs'])} tracks, {len(arc['acts'])} acts, "
              f"{len(arc['continuity'])} continuity notes")
     return arc, used

@@ -671,7 +671,7 @@ timing — `clip_plan` is the one, and every client calls it.
    marked **provisional** and says what it cannot yet distinguish.
 
    One-sided in this document today, listed so nobody has to re-derive it:
-   `T2-6` (a no-op delete renumbers nothing), `T2-7` (provenance fields can hold anything), `T2-18` and `T2-33` (a picker that marks EVERYTHING unavailable passes; it needs the paired positive), `T2-36`/`T2-37` (payload presence with no consumer). `T2-12a`'s stored measurement must also be asserted to MATCH the ceiling the code uses, or the record and the constant drift apart. `T2-34`'s paired positive is now the check.
+   `T2-6` (a no-op delete renumbers nothing), `T2-18` and `T2-33` (a picker that marks EVERYTHING unavailable passes; it needs the paired positive), `T2-36`/`T2-37` (payload presence with no consumer). `T2-12a`'s stored measurement must also be asserted to MATCH the ceiling the code uses, or the record and the constant drift apart. `T2-34`'s paired positive is now the check.
 
 ### The positive half of each one-sided criterion
 
@@ -724,6 +724,7 @@ current.
 | **`T2-14c` TIMING purpose** | **built** | `_user_prompt` | TIMING still states track length and sum-to-track. Mutation: delete the TIMING block wholesale → `T2-14a` passes and this fails |
 | **`T2-5` arc prompt restore** | **built** | `restore_prompt` | edit saves a new `arc` version; previous row stays readable; restore puts that text back as current (`test_t2_5_arc_prompt_restore.py`). Mutation: delete restore → current stays the edit. Mutation: overwrite on edit → previous id is gone |
 | **`T2-6` delete does not renumber** | **built** | `test_t2_6_delete_does_not_renumber.py` | delete drops the row; survivors keep their version numbers (3,1 after deleting v2); the next save is v4, not a reused 2. Mutation: no-op delete → row-count arm red. Mutation: compact remaining numbers → survivors-arm red |
+| **`T2-7` provenance recorded** | **built** | `test_t2_7_provenance.py` | generate with an asked model writes an `arc` version whose `model` equals the asked name (not the resolved `used` string) and whose `created` lies between call start and end. Mutation: store a dummy/static model or timestamp → red |
 | **`T2-14` arc wand needs a theme** | **built** | `require_theme` / `generate` | empty or whitespace theme raises; a non-empty theme produces an arc (`test_t2_14_arc_wand.py`). Mutation: drop `require_theme` → empty generate is green and this fails |
 | **`T2-15` proposal until accept** | **built** | `write_proposal` / `discard_proposal` / `commit_proposal` | generate writes `*_arc.proposal.json` only. Reject re-reads the previous committed file byte-identical. Accept writes the pair and the `arcs` row. Mutation: land the proposal in `arcs/` on generate → reject no longer leaves the previous file |
 | **`T2-16` multi-song apply** | **built** | `apply_summaries` | two song ids without `confirm` raise; with `confirm` writes exactly those files under `applied/`. Accept does not write `applied/`. Mutation: apply two songs with `confirm=False` → red |

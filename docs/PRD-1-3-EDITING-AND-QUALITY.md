@@ -313,7 +313,9 @@ order and take the dependencies from here.
    album's arc prompt creates a new version; restore puts the previous text
    back (`test_t2_5_arc_prompt_restore.py`). **`T2-6` built**: delete drops
    the row and does not renumber survivors
-   (`test_t2_6_delete_does_not_renumber.py`). **`T2-14`/`T2-15`/`T2-16` built**:
+   (`test_t2_6_delete_does_not_renumber.py`). **`T2-7` built**: a generated
+   arc version records the model that was asked and a timestamp between the
+   call's start and end (`test_t2_7_provenance.py`). **`T2-14`/`T2-15`/`T2-16` built**:
    the arc wand refuses an empty theme and runs with a non-empty one; reject
    leaves the previous committed file; accept saves; applying more than one
    song needs confirmation and then writes exactly those songs (`test_t2_14_arc_wand.py`).
