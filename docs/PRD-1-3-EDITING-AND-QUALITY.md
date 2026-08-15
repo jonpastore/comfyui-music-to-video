@@ -214,6 +214,9 @@ order and take the dependencies from here.
    per-model ceilings, which is P0 item 1 again. The renderer half of those
    ceilings is `T5-9`: labeled measured vs chosen, and an over-long single
    clip is refused or split. The planner divisor is unchanged.
+   **`T2-47` built**: one clips job with a scene marked `s2v` and one left
+   `ltx25` writes each model's own frames/fps
+   (`test_t2_47_mixed_model.py`). `T2-42`…`T2-46` and `T2-48` remain.
 
 ### P3 — QC tier 2 and repair
 

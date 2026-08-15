@@ -280,7 +280,10 @@ A row whose `scene_seconds` is NULL (generated before the column) still reads
 as `CHUNK`. The renderer emits that same legal length (`T2-13a`): latent
 frames and the audio-trim window follow `clip_seconds`, not a hardcoded
 `LTX25_LEN`/`CHUNK`; a NULL `length_seconds` still renders 81 frames of
-`CHUNK`. A single-clip request over the model's ceiling (`T5-9`) is a
+`CHUNK`. A mixed-model job keeps each clip's **native** frames and fps
+(`T2-47`): s2v is 77@16.0, ltx25 is 81@16.8312; the editor must not
+show one fps as if both renderers produced it. A single-clip request
+over the model's ceiling (`T5-9`) is a
 named refusal (measured vs chosen), not a quiet annotation; split is
 `split_to_ceiling`. Re-generating a storyboard keeps every approved reference
 (`T2-13b`); the approve grid still shows the same `(clip_idx, seed)` picks.

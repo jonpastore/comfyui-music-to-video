@@ -26,7 +26,7 @@ is named.
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2: JSON-canonical arc, `to_md`, `validate`, `for_song`, screened both directions | built |
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning; `running(vid)` is the row a render RUNS (`T3-20`) | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
-| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow` | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5 |
+| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow` | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5; `main()` honours per-scene `video_model` (`T2-47`) |
 | `studio/db.py` | 559 | schema | `automation`, `findings`, `artefacts`, `sets.mode_audience`, `calibrations` landed; `sets.out_fps` did not, §4 |
 | `studio/vision.py` | 516 | VLM calls, local-first | **not** tier 2, §5.6 |
 
@@ -355,6 +355,11 @@ length is the divisor, the count is ours.
    `refs`, so re-planning leaves the approved `(clip_idx, seed)` set
    identical (`T2-13b`); `approve_context` enumerates `clip_count`, so a
    20-scene storyboard on a 41-clip song still lists every clip (`T2-13c`).
+4. **`T2-47` built.** `main()` takes `scene.video_model` when present, else
+   `--video-model`. One job with a scene marked `s2v` and one left `ltx25`
+   writes WAN 77@16.0 and LTX 81@16.8312 (`test_t2_47_mixed_model.py`).
+   Two names on a plan is not this check. `T2-48` (ceilings compose) is
+   still the next W2 node.
 
 `W1-4` sits alongside and is a **prompt**, not code. `T2-14a` is **built**:
 `grok._user_prompt` no longer names a fixed 4.8125 s quantum, does not say
@@ -466,6 +471,7 @@ documents, not a preference.
     T6-13a (songs.duration)  ->  T2-12a (legal frame count + clip_seconds honours it)
                                  ->  T2-13a (renderer honours that length)
                                  ->  T2-13c (built), T2-8, T2-9
+                                 ->  W2 T2-47 mixed-model native fps (built)
                                  ->  W2 per-scene models (T2-48)
 
     qc_service pattern  ->  sets_service     ->  clock/rounding, peaks, preview

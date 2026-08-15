@@ -842,8 +842,11 @@ def main():
         # one reference per clip (build_refs.py --audio), so consecutive clips in
         # a scene are different compositions rather than the same still
         ref = f"{args.slug}_clip_{i:03d}.png"
+        # T2-42 / T2-47: a scene may name its renderer; absent, the job's
+        # --video-model. One job can therefore emit s2v and ltx25 graphs.
+        model = scene.get("video_model") or args.video_model
         wf = workflow(i, scene, ref, audio_name, char, world, guard,
-                      video_model=args.video_model, ref_motion=args.ref_motion,
+                      video_model=model, ref_motion=args.ref_motion,
                       control_video=args.control_video, refine=args.refine)
         # Attach the save to whichever node actually produces the VIDEO, found by
         # class rather than by a per-family id table. That table was

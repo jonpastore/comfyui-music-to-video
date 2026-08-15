@@ -718,4 +718,5 @@ current.
 | **`T2-20` distinctive arc string in the generated board** | **built** | `album_arc` | same recorded response with and without `arc_ctx`; beat/continuity token present only when the arc is. Mutation: drop `arc_ctx` from `_compose` → red. Mutation: always stamp the token → the absent-arc arm fails |
 | **`T2-22` own clause on the board; foreign wording refused at save** | **built** | `guardrail` | `_compose` stamps `guardrail` as `tiers.compose_guardrail(tier)` (not the passed argument). `save_scene` / `h_storyboard` refuse when another tier's stored wording appears. Mutation: drop the stamp → generation arm red. Mutation: copy the argument → red when the argument is not the clause. Mutation: write without the check → save arm red |
 | §4 remaining wands (`T2-14`…`T2-19`), §5 meter, §5.3 casting | **not built** | — | |
-| `T2-42`…`T2-48` per-scene model (W2) | **not built** | — | |
+| `T2-42`…`T2-46`, `T2-48` per-scene model (W2) | **not built** | — | |
+| `T2-47` mixed-model native frames/fps | **built** | `test_t2_47_mixed_model.py` | one `build_song.main` job, scene 1 marked `s2v` and scene 2 left `ltx25`: clip_000 is WAN 77@16.0, clip_001 is LTX 81@16.8312. Mutation: `main()` ignores `scene.video_model` → both graphs match `--video-model` |
