@@ -281,7 +281,9 @@ per-box QC report is JSON only (`GET /api/qc/by-host`, `T3-1`): groups by
 pre-empt `finding-row` with one. An identity-wrong finding's remedy is
 "edit the text, then re-render" (`T3-28`); the queue must not offer
 "swap the reference image". A silence finding (`T3-9`) shows low / mid /
-high band energy, not a peak; a take that only clicked is empty. A
+high band energy, not a peak; a take that only clicked is empty. An
+edge-silence finding (`T3-4.3-edge`) shows leading / trailing seconds
+against `EDGE_SILENCE_LIMIT_S`, not whole-file band energy. A
 spliced-track finding (`T3-10`) shows measured vs predicted seconds
 from `mixer.bridge_seconds`, not a restated gap + 2×xfade.
 

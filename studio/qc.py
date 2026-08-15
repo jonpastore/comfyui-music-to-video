@@ -116,6 +116,20 @@ CLIPPED_SAMPLES_LIMIT = 0
 # Re-measure before moving it.
 DC_OFFSET_LIMIT = 0.02
 
+# T3-4.3-edge: max leading or trailing silence before FLAG. Measured
+# 2026-08-15 on lavfi fixtures (silencedetect noise=-50dB:d=0.05):
+#
+#     clean sine -14 dB 2s              leading 0, trailing 0
+#     0.5s null + 1s tone + 0.5s        leading 0.5, trailing 0.5
+#     0.15s null on each edge           leading 0.15, trailing 0.15
+#
+# Sub-50 ms encoder/container pad is common; 0.25 clears that and still
+# catches a half-second dead pad on a take. Whole-file band energy is
+# T3-9, not this check.
+EDGE_SILENCE_LIMIT_S = 0.25
+_EDGE_SILENCE_NOISE_DB = -50
+_EDGE_SILENCE_MIN_S = 0.05
+
 # T3-9 bands. Brick-wall they are not — 440 Hz leaks into low at -45 —
 # but 80 / 440 / 8000 Hz each light exactly one band as the loudest.
 BANDS = (
@@ -261,6 +275,7 @@ CHECK_REMEDY_CLASS = {
     "silence": REMEDY_RERENDER,
     "channels": REMEDY_RERENDER,
     "dc_offset": REMEDY_RERENDER,
+    "edge_silence": REMEDY_RERENDER,
     "not_uniform": REMEDY_RERENDER_SEED,
     "not_blank": REMEDY_RERENDER_SEED,
     IDENTITY_LOOK: REMEDY_EDIT_TEXT,
@@ -504,6 +519,73 @@ def measure_dc_offset(path):
             f"dc_offset produced no finite sample readings for {path} -- "
             "refusing to report a measurement that did not happen")
     return float(abs(samples.mean()))
+
+
+def measure_edge_silence(path):
+    """Leading and trailing silence in seconds via silencedetect.
+
+    T3-4.3-edge / TRD-3 §4.3. Not whole-file band energy (T3-9). Zero
+    on both edges is a real reading (a continuous tone). RAISES when
+    audio cannot be read — never 0.0 on no data.
+    """
+    if not path or not os.path.isfile(path):
+        raise RuntimeError(
+            f"edge_silence produced no readings for {path} -- refusing to "
+            "report a measurement that did not happen")
+    try:
+        info = mixer.probe(path)
+    except Exception as e:
+        raise RuntimeError(
+            f"edge_silence produced no readings for {path} -- refusing to "
+            f"report a measurement that did not happen: {e}") from e
+    if not info.get("has_audio"):
+        raise RuntimeError(
+            f"edge_silence produced no audio readings for {path} -- refusing "
+            "to report a measurement that did not happen")
+    duration = float(info.get("duration") or 0.0)
+    if duration <= 0:
+        raise RuntimeError(
+            f"edge_silence produced no duration for {path} -- refusing to "
+            "report a measurement that did not happen")
+    filt = (f"silencedetect=noise={_EDGE_SILENCE_NOISE_DB}dB:"
+            f"d={_EDGE_SILENCE_MIN_S}")
+    r = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "info", "-i", path,
+         "-af", filt, "-f", "null", "-"],
+        capture_output=True, text=True)
+    if r.returncode not in (0, None) and not (r.stderr or ""):
+        raise RuntimeError(
+            f"edge_silence produced no readings for {path} -- refusing to "
+            "report a measurement that did not happen")
+    text = r.stderr or ""
+    starts = [float(m.group(1)) for m in
+              re.finditer(r"silence_start:\s*(-?(?:\d+(?:\.\d+)?|inf))", text)]
+    ends = [float(m.group(1)) for m in
+            re.finditer(r"silence_end:\s*(-?(?:\d+(?:\.\d+)?|inf))", text)]
+    # Pair starts with ends; a trailing pad may omit silence_end at EOF on
+    # some builds — treat file duration as the end then.
+    spans = []
+    for i, start in enumerate(starts):
+        if i < len(ends):
+            end = ends[i]
+        else:
+            end = duration
+        if end < start:
+            continue
+        spans.append((start, end, end - start))
+    leading = 0.0
+    trailing = 0.0
+    # Leading: a span that begins at the start of the file.
+    for start, end, length in spans:
+        if start <= _EDGE_SILENCE_MIN_S:
+            leading = max(leading, min(length, duration))
+            break
+    # Trailing: a span that reaches the end of the file.
+    for start, end, length in reversed(spans):
+        if end >= duration - _EDGE_SILENCE_MIN_S:
+            trailing = max(trailing, min(length, duration))
+            break
+    return {"leading": leading, "trailing": trailing}
 
 
 def _stderr_events(path, filt, pattern):
@@ -1229,6 +1311,22 @@ def check_audio(path, expect):
             FLAG if dc > DC_OFFSET_LIMIT else PASS,
             f"DC offset {dc:.4f} FS against {DC_OFFSET_LIMIT:.2f} limit",
             round(dc, 6), DC_OFFSET_LIMIT, "FS", remedy="re-render"))
+
+    # T3-4.3-edge. Leading/trailing pad, not whole-file band energy.
+    try:
+        edges = measure_edge_silence(path)
+    except RuntimeError as e:
+        out.append(finding(path, "audio", "edge_silence", FLAG,
+                           str(e).split("\n")[0]))
+    else:
+        worst = max(edges["leading"], edges["trailing"])
+        measured = {k: round(edges[k], 3) for k in ("leading", "trailing")}
+        out.append(finding(
+            path, "audio", "edge_silence",
+            FLAG if worst > EDGE_SILENCE_LIMIT_S else PASS,
+            f"leading {edges['leading']:.3f}s / trailing "
+            f"{edges['trailing']:.3f}s (limit {EDGE_SILENCE_LIMIT_S:.2f}s)",
+            measured, EDGE_SILENCE_LIMIT_S, "s", remedy="re-render"))
     out.extend(check_splice(path, expect))
     return out
 

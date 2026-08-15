@@ -172,6 +172,10 @@ sine PASSes 0, hard-clipped takes FLAG, `test_t3_4_3_clip.py`;
 **`T3-4.3-dc` built** — audio `dc_offset` /
 `measure_dc_offset` FLAGs abs mean sample above `DC_OFFSET_LIMIT`
 (0.02 FS), PASSes a clean tone, `test_t3_4_3_dc.py`;
+**`T3-4.3-edge` built** — `edge_silence` /
+`measure_edge_silence` FLAGs leading or trailing null pad above
+`EDGE_SILENCE_LIMIT_S` (0.25 s), PASSes a clean tone and a 0.15 s pad,
+distinct from T3-9 whole-file band energy, `test_t3_4_3_edge.py`;
 **`T3-4.4-av` built** — assembled-song
 `av_sync` / `measure_av_durations`: matching A/V streams PASS within
 `DURATION_TOL_S`, a 1s gap FLAGs, clips without `want_audio` skip,
