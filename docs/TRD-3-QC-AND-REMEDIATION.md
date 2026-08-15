@@ -324,7 +324,9 @@ which is how a measurement said to be taken once ends up taken twice.
 
 Everything in 4.2, plus: audio and video stream durations agree; the assembled
 duration matches the source mp3 within tolerance; the clip count matches
-`clip_plan`; no black gap at a join.
+`clip_plan`; no black gap at a join (`T3-4.4-gap`: black spans that cover a
+planned join from `joins` / `clip_durations` reject; a hard cut with no black
+span passes; without a plan the check does not run).
 
 ### 4.5 Sets
 
@@ -633,4 +635,5 @@ current.
 | `T3-9` silent take on band energy | **built** | `test_t3_9_silence.py` | `qc.measure_band_energy` returns low/mid/high mean dB. Digital silence and a −70 dB tone reject. A 440 Hz tone passes on the live mid band. A 1-sample click with peak −20 dB still rejects — peak `volumedetect` would pass it. A file with no audio raises, never 0.0 |
 | `T3-10` spliced-track duration vs `bridge_seconds` | **built** | `test_t3_10_splice.py` | `qc.check_splice` / `check_audio` compare the artefact to `mixer.spliced_duration` (which asks `bridge_seconds`) within `mixer.SPLICE_DURATION_TOLERANCE`. A correctly sized edge splice PASSes; 20 s spliced at 0.1 s coming back 20.193 s REJECTs. A change to `bridge_seconds` moves the expected. Tolerance is imported, not restated |
 | `T3-12` each transition lands within half a frame | **built** | `test_t3_12_transition_lands.py` | `qc.check_transition_lands` / `qc.measure_transition_lands` read the rendered file; expected times are `mixer.transition_times` (same walk as `set_duration`). A 2 s red→blue cut passes at 2.0 s; a 3 s join against a 2 s model rejects. Two cuts each produce a land. Tolerance is `0.5 / file fps`. Measurement only — `remedy_class` is none |
+| `T3-4.4-gap` no black gap at an assembled song join | **built** | this slice | `qc.check_join_black_gap` / `qc.measure_join_black_gap` on kind `song`: black spans (Y < `LUMA_FLOOR`, ≥2 frames) that cover a planned join from `joins` / `clip_durations` REJECT; a hard cut with no black span PASSes; no plan → check does not run. `measured` is the hit count, `expected` 0, `unit` spans, `remedy_class` re-assemble (`test_t3_4_4_gap.py`). Not T3-12, not whole-file `black_frames` |
 | `T3-31` vision badge names backend failure | **built** | `80575de` | `qc_tag` shows `vision: xAI …` / `vision: local …`; `score_candidate` stores the backend that actually failed after local-then-xAI fallback, not `available()`'s hope. `test_anchor_qc.py` asserts neither badge nor stored error says "unknown" |

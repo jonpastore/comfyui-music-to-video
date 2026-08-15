@@ -266,6 +266,7 @@ CHECK_REMEDY_CLASS = {
     "av_sync": REMEDY_REASSEMBLE,
     "luma": REMEDY_RERENDER_SEED,
     "black_frames": REMEDY_RERENDER_SEED,
+    "join_black_gap": REMEDY_REASSEMBLE,
     "frozen": REMEDY_RERENDER_SEED,
     "channel_sat": REMEDY_RERENDER_SEED,
     "loudness": REMEDY_LOUDNORM,
@@ -1115,6 +1116,8 @@ def check_video(path, expect, kind="clip"):
                            measured, CHANNEL_SAT_LIMIT, "levels",
                            remedy="re-render with a different seed"))
 
+    if kind == "song":
+        out.extend(check_join_black_gap(path, expect, kind=kind))
     out.extend(check_refine_differential(path, expect, kind=kind))
     return out
 
@@ -1140,6 +1143,118 @@ def measure_av_durations(path):
             f"av durations not measured: need video and audio stream "
             f"durations on {path}, got {sorted(out)}")
     return out
+
+
+# ---------------------------------------------------- song join black gap --
+# docs/TRD-3 §4.4: no black gap at an assembled song join. Whole-file
+# black_frames is a different check; this one only counts black spans that
+# sit on a planned join from the assembly (joins / clip_durations).
+
+# Consecutive frames below LUMA_FLOOR that form a gap, not a one-frame glitch.
+_JOIN_BLACK_MIN_FRAMES = 2
+
+
+def join_times_from_expect(expect):
+    """Planned join seconds from the assembly plan, or None if absent.
+
+    `joins` is explicit. `clip_durations` becomes cumulative boundaries
+    (every seam except the last clip's end). No plan → the check does
+    not run; an empty list would make "no joins" look like a clean pass.
+    """
+    expect = expect or {}
+    joins = expect.get("joins")
+    if joins is not None:
+        out = [float(t) for t in joins]
+        return out if out else None
+    durs = expect.get("clip_durations")
+    if not durs or len(durs) < 2:
+        return None
+    t, out = 0.0, []
+    for d in durs[:-1]:
+        t += float(d)
+        out.append(round(t, 4))
+    return out if out else None
+
+
+def measure_black_spans(path, min_frames=_JOIN_BLACK_MIN_FRAMES):
+    """Black runs as (start_s, end_s, n_frames). RAISES if no frames.
+
+    A frame is black when mean Y < LUMA_FLOOR (same floor as black_frames).
+    min_frames keeps a single encoder glitch from becoming a gap.
+    """
+    info = mixer.probe(path)
+    fps = float(info.get("fps") or 0.0)
+    if fps <= 0:
+        raise RuntimeError(f"no fps on {path} — refusing a black-span measure")
+    luma = _readings(path, "signalstats", "lavfi.signalstats.YAVG")
+    if not luma:
+        raise RuntimeError(f"no luma readings for {path}")
+    spans = []
+    i = 0
+    n = len(luma)
+    while i < n:
+        if luma[i] < LUMA_FLOOR:
+            j = i
+            while j < n and luma[j] < LUMA_FLOOR:
+                j += 1
+            if j - i >= min_frames:
+                spans.append((i / fps, j / fps, j - i))
+            i = j
+        else:
+            i += 1
+    return spans
+
+
+def measure_join_black_gap(path, joins):
+    """Join times that fall inside a black span. docs/TRD-3 §4.4.
+
+    Half-frame slop so a join on the first black frame still hits.
+    RAISES when joins is empty or frames cannot be read.
+    """
+    if not joins:
+        raise RuntimeError("no joins — refusing a join-black-gap measure")
+    info = mixer.probe(path)
+    fps = float(info.get("fps") or 0.0)
+    if fps <= 0:
+        raise RuntimeError(f"no fps on {path} — refusing a join-black-gap measure")
+    spans = measure_black_spans(path)
+    half = 0.5 / fps
+    hits = []
+    for j in joins:
+        jt = float(j)
+        for start, end, _n in spans:
+            if start - half <= jt <= end + half:
+                hits.append(round(jt, 4))
+                break
+    return hits
+
+
+def check_join_black_gap(path, expect, kind="song"):
+    """T3-4.4-gap: no black gap at an assembled song join.
+
+    Without joins / clip_durations the check does not run. measured is
+    the count of planned joins that sit inside a black span; expected
+    is always 0. Remedy is re-assemble.
+    """
+    joins = join_times_from_expect(expect)
+    if joins is None:
+        return []
+    try:
+        hits = measure_join_black_gap(path, joins)
+    except Exception as e:
+        return [finding(path, kind, "join_black_gap", REJECT,
+                        str(e).split("\n")[0],
+                        remedy="re-assemble")]
+    n = len(hits)
+    if n == 0:
+        detail = f"no black gap at {len(joins)} planned join(s)"
+    else:
+        detail = (f"{n} black gap(s) at planned join(s) {hits} "
+                  f"(of {len(joins)} join(s))")
+    return [finding(path, kind, "join_black_gap",
+                    PASS if n == 0 else REJECT, detail,
+                    n, 0, "spans",
+                    remedy="re-assemble")]
 
 
 # ------------------------------------------------------------------ audio --
