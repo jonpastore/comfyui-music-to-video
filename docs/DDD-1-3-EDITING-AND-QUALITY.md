@@ -189,17 +189,16 @@ silent -6 dB (mixer.py `_audio_chain`'s own docstring).
 
 ### 5.1 The clock, and one place that rounds
 
-`T1-5`/`T1-6` need nearest-frame rounding on video, exact seconds on audio, and
-the delta **reported**. One function in `mixer.py` beside `set_duration`:
-
-    frame_round(t, fps) -> (t_rounded, delta)
-
-Every join asks it; nothing else rounds. `GET /api/sets/{id}` carries the
-per-join delta and the summed |delta|, so `T1-6`'s bound is checkable from the
-model without rendering. Truncation is the mutation that must break it: the
-losses all share a sign and accumulate at 0.0594 s per join at 16.8312 fps, which
-is the RIFE one-frame bug's shape — it plays, it looks fine, it is the wrong
-length.
+`T1-5` still needs the video cut on the nearest frame and the audio
+crossfade at the exact second. `T1-6` is **built**: `mixer.frame_round(t, fps)
+-> (t_rounded, delta)` is the one place that rounds (nearest, not
+truncation); `mixer.rounding_report` walks the same joins as
+`timeline_joins` and reports per-join delta plus `abs_delta_sum`.
+`GET /api/sets/{id}` carries that object, so the half-frame-per-join
+bound is checkable from the model without rendering. Truncation is the
+mutation that must break it: the losses all share a sign and accumulate
+at 0.0594 s per join at 16.8312 fps, which is the RIFE one-frame bug's
+shape — it plays, it looks fine, it is the wrong length.
 
 ### 5.2 The master stage — built, with one measured gap
 

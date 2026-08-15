@@ -487,6 +487,18 @@ _stub("mixer",
                       if _real_module("mixer") is not None
                       and hasattr(_real_module("mixer"), "timeline_joins")
                       else (lambda items, duration_s: [])),
+      # T1-6: nearest-frame rounding is pure. The stub must serve the
+      # real functions or GET /api/sets/{id} cannot report the bound.
+      frame_round=(_real_module("mixer").frame_round
+                   if _real_module("mixer") is not None
+                   and hasattr(_real_module("mixer"), "frame_round")
+                   else (lambda t, fps: (float(t), 0.0))),
+      rounding_report=(_real_module("mixer").rounding_report
+                       if _real_module("mixer") is not None
+                       and hasattr(_real_module("mixer"), "rounding_report")
+                       else (lambda items, fps: {
+                           "joins": [], "abs_delta_sum": 0.0,
+                           "bound": 0.0, "fps": float(fps)})),
       timeline_playhead=(_real_module("mixer").timeline_playhead
                          if _real_module("mixer") is not None
                          and hasattr(_real_module("mixer"), "timeline_playhead")

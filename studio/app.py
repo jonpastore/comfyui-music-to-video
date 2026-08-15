@@ -7114,6 +7114,14 @@ def set_detail(row, at=0.0):
                "transition": t["transition"], "secs": t["trans_secs"],
                "hold": t["hold"]} for t in timeline]
     joins = mixer.timeline_joins(blocks, total)
+    fps = mixer.DEFAULT_OUT_FPS
+    try:
+        stored_fps = row["out_fps"]
+    except (KeyError, IndexError):
+        stored_fps = None
+    if stored_fps not in (None, ""):
+        fps = float(stored_fps)
+    rounding = mixer.rounding_report(blocks, fps)
     playhead = mixer.timeline_playhead(at, total)
     if "automation_lanes" in affordances:
         curves = {}
@@ -7134,7 +7142,7 @@ def set_detail(row, at=0.0):
     return {"set": row, "items": items, "count": len(items), "total_secs": total,
             "timeline": timeline,
             "axis": mixer.timeline_axis(total),
-            "joins": joins, "playhead": playhead, "lanes": lanes,
+            "joins": joins, "rounding": rounding, "playhead": playhead, "lanes": lanes,
             "lane_items": lane_items,
             "duration_error": duration_error, "missing_video": missing_video, "renders": renders,
             "beatmatch_plan": beatmatch_plan, "suggested_order": suggested_order,
@@ -7174,6 +7182,7 @@ def _set_payload(row):
         "renders": _set_renders(row),
         "mode_audience": detail["mode_audience"],
         "duration_error": detail["duration_error"],
+        "rounding": detail["rounding"],
     }
 
 

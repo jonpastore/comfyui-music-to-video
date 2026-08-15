@@ -1847,6 +1847,63 @@ def rms_slope(values):
     return num / den
 
 
+# Fallback when sets.out_fps is unset. Same number _set_geometry uses
+# for an all-card set; T1-6's bound is half of 1/this per join.
+DEFAULT_OUT_FPS = 30.0
+
+
+def frame_round(t, fps):
+    """Nearest whole frame at fps. Returns (t_rounded, delta).
+
+    docs/TRD-1 §4.3: seconds stay canonical; video rounds nearest, not
+    truncated. delta = t_rounded - t. |delta| is at most half a frame.
+    Half-up so a time sitting exactly between frames does not depend
+    on Python 3's banker's round.
+    """
+    fps = float(fps)
+    if fps <= 0:
+        raise ValueError(f"fps must be positive, got {fps}")
+    t = float(t)
+    t_rounded = math.floor(t * fps + 0.5) / fps
+    return t_rounded, t_rounded - t
+
+
+def rounding_report(items, fps):
+    """Per-join nearest-frame delta and the set's summed |delta|.
+
+    docs/TRD-1 T1-6: the sum is reported and bounded by half a frame
+    per join. Joins are the same walk as timeline_joins. Truncation
+    of an off-grid set exceeds the bound; nearest does not.
+    """
+    fps = float(fps)
+    if fps <= 0:
+        raise ValueError(f"fps must be positive, got {fps}")
+    empty = {"joins": [], "abs_delta_sum": 0.0, "bound": 0.0, "fps": fps}
+    if not items or len(items) < 2:
+        return empty
+    starts = timeline_item_starts(items)
+    duration_s = starts[-1] + float(items[-1]["duration"])
+    joins = timeline_joins(items, duration_s)
+    half = 0.5 / fps
+    rows = []
+    abs_sum = 0.0
+    for j in joins:
+        rounded, delta = frame_round(j["t"], fps)
+        rows.append({
+            "item_id": j.get("item_id"),
+            "t": j["t"],
+            "t_rounded": rounded,
+            "delta": delta,
+        })
+        abs_sum += abs(delta)
+    return {
+        "joins": rows,
+        "abs_delta_sum": abs_sum,
+        "bound": len(rows) * half,
+        "fps": fps,
+    }
+
+
 def set_duration(items, key="video"):
     """Predicted set length: item durations (after in_secs/out_secs trim and
     any beatmatch snap) minus each transition's overlap, walked the same way

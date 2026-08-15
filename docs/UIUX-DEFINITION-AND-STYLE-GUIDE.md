@@ -200,7 +200,10 @@ REJECTs when it does not. Measurement, not a new widget — the finding is
 the existing QC row (`measured` / `expected` / `s`).
 Joins, playhead and lanes are the same view: `.tl-join[data-t]` (drag POSTs
 `secs` only), `.tl-playhead` (`?at=`), `.tl-lane-pt` (stored curve, set-relative
-`t`). Easy omits the lane strip. Waveform is still a PNG. Forms remain.
+`t`). `GET /api/sets/{id}` reports each join's nearest-frame `delta` and
+the set's `rounding.abs_delta_sum`, bounded by half a frame per join
+(`T1-6`); the page does not invent a second clock. Easy omits the lane
+strip. Waveform is still a PNG. Forms remain.
 A stored `gain_db` ramp does reach the rendered file (`T1-9b`, RMS/s
 slope on `mix_audio`); a fully-populated lane's filter text stays under
 8 KB and still renders (`T1-10`).
