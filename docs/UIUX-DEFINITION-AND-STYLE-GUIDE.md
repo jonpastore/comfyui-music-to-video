@@ -418,9 +418,11 @@ before clips enqueue (`T2-25`). The live `meter` component is not this.
 `GET/POST /api/songs/{id}/storyboard/{tier}` is the generation prompt
 (`T2-17`–`T2-19`) and, when a board file exists, the scenes/anchors/refs
 payload (`T2-26`, `T2-27`). Unanchored **leads** only (`T2-30`).
-`POST /songs/{id}/refs` refuses when any named lead lacks a chosen
-sheet, not only the album protagonist (`T2-28` built); extras and
-background do not block. Reference-image generate uses the chosen sheet
+The storyboard page **Generate refs** control uses `plan-panel`: when a
+named lead has no chosen sheet the button is `blocked` (not disabled)
+and `.plan-blocker` names that lead (`T2-28`); extras/background do not
+block. `POST /songs/{id}/refs` refuses the same reason before enqueue.
+Reference-image generate uses the chosen sheet
 as image1 (identity), not a standing plate (`test_t2_refs_identity.py`).
 The song page **Video model** select is `models.renderable("video")`
 with each option's purpose in the hint (`T2-33`). Adding a catalogue
@@ -447,6 +449,10 @@ Every named scene figure carries `lead` / `extra` / `background`
 row shows it. The unanchored-lead warning (`T2-30`) is **built**:
 the page banner and scene-row `warn-tag` / "no anchor" fire only for
 leads without a chosen anchor; extras and background are silent.
+`T2-28` is **built** on the storyboard page: Generate refs is marked
+via `button.blocked` and the plan panel names the unanchored lead;
+`POST /songs/{id}/refs` 400s before a refs job is written
+(`test_t2_28_html.py`).
 Ref generation attaches only leads with chosen sheets as image2/image3;
 extras and background never fill those slots.
 

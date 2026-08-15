@@ -652,14 +652,14 @@ figure. A bare name is a legacy lead. Mutation: coerce to strings →
 compose arm red. Mutation: dump without the check → writer arm red.
 Mutation: return names without role → API arm red. `T2-30` is not this.
 
-`T2-28` is **built**. The banner and `GET .../cast` list unanchored
-leads (`T2-30`). `POST /songs/{id}/refs` also refuses: after the
-protagonist chosen-sheet check, `start_refs` loads the board, runs
-`unanchored_leads(rows)`, and 400s naming the missing lead(s) before
-any refs job is written. Anchored leads with unanchored extras or
-background still enqueue. Mutation: enqueue with banner only → miss
-arm red. Mutation: always refuse → match arm red
-(`test_t2_28_refs_unanchored_leads.py`).
+`T2-28` is **built**. `refs_plan_blockers(song, tier, rows)` lists the
+missing album protagonist sheet and each unanchored lead (extras /
+background never). The storyboard page plan-panel paints those as
+`.plan-blocker` and marks Generate refs with `button.blocked` (never
+`disabled`). `start_refs` / `POST /songs/{id}/refs` raises 400 with
+the same lead name and writes no refs job. Mutation: disable the
+button → HTML arm red. Mutation: enqueue without the check → post arm
+red (`test_t2_28_html.py`, `test_t2_28_refs_unanchored_leads.py`).
 
 **refs-identity is built.** `start_refs` resolves `chosen_anchor` and
 freezes its path into the refs job. `h_refs` stages that path via

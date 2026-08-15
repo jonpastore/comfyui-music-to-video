@@ -87,6 +87,29 @@
   {% endfor %}
 </section>
 
+{# ---- Generate refs: MARKED when blocked, never disabled (T2-28 / UIUX §7a.3).
+       The plan panel names the unanchored lead; the server refuses the same
+       reason on POST. Extras/background do not block. ---- #}
+<section class="card">
+  <h2>Reference images</h2>
+  <form method="post" action="/songs/{{ song.id }}/refs">
+    <input type="hidden" name="tier" value="{{ tier }}">
+    <div class="plan-panel" id="refs-plan" aria-live="polite">
+      {% if refs_blockers %}
+        {% for b in refs_blockers %}
+        <p class="plan-blocker">{{ b }}</p>
+        {% endfor %}
+      {% else %}
+        <p class="plan-line">Generate reference stills for {{ tier | tiername }}
+          from this storyboard and the chosen anchor.</p>
+      {% endif %}
+    </div>
+    <label>Limit (0 = all) <input type="number" name="limit" value="0" min="0"></label>
+    <button type="submit" id="refs-generate"
+            class="{% if refs_blockers %}blocked{% endif %}">Generate refs</button>
+  </form>
+</section>
+
 <section class="card">
   <details>
     <summary>Markdown</summary>

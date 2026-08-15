@@ -5361,6 +5361,25 @@ def unanchored_leads(rows):
                    if not n["anchored"] and n.get("role") == "lead"})
 
 
+def refs_plan_blockers(song, tier, rows):
+    """What would stop Generate refs for this tier (T2-28 plan-panel).
+
+    Same reasons start_refs refuses. Named unanchored leads are listed
+    individually; extras/background never block. The button is marked
+    when this is non-empty, never disabled (UIUX §7a.3).
+    """
+    blockers = []
+    if not chosen_anchor("album", song["album"] or "", tier):
+        blockers.append(
+            f"no chosen anchor for tier '{tier}' on this album — "
+            "generate and pick one on /anchors first")
+    for name in unanchored_leads(rows):
+        blockers.append(
+            f"{name} has no chosen anchor at this tier — "
+            "anchor them, or stop naming them as a lead")
+    return blockers
+
+
 def storyboard_scenes(song, sb, tier, anchored=(), scene_seconds=None):
     """Per-scene timing, prompts and reference frames for the storyboard page.
 
@@ -5527,11 +5546,14 @@ def view_storyboard(request: Request, id: int, tier: str):
     # storyboard is read against the character it is for. The protagonist's
     # (character_id IS NULL) first, then the cast.
     anchors = album_chosen_anchors(album, tier)
+    unanchored = unanchored_leads(rows)
     return templates.TemplateResponse(request, "storyboard.html", {
         "song": song, "tier": tier, "row": row, "md": md, "sb": sb,
         # the page shows THIS song's clip length, not the old constant
         "scene_rows": rows, "anchors": anchors, "chunk": build_song.clip_seconds(sb_secs),
-        "unanchored": unanchored_leads(rows),
+        "unanchored": unanchored,
+        # T2-28-html: plan-panel reasons for Generate refs (marked, not disabled)
+        "refs_blockers": refs_plan_blockers(song, tier, rows),
         "coverage": coverage(rows, nclips, song["duration"], sb_secs),
         "fields": EDITABLE_SCENE_FIELDS,
     })
