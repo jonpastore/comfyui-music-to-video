@@ -831,6 +831,45 @@ def produce_repair(src, dest, args, progress):
     return dest
 
 
+_STILL_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
+
+
+def _is_still(path, kind=None):
+    """Vision T3-31 scores stills, not clips or audio."""
+    k = (kind or "").strip().lower()
+    if k == "image":
+        return True
+    if k in ("clip", "audio", "song", "set", "video"):
+        return False
+    return os.path.splitext(path or "")[1].lower() in _STILL_EXT
+
+
+def persist_still_qc(path, src=None, prompt="", bases=None, progress=None,
+                     kind=None):
+    """Advisory T3-31 score on a landed dest still. Never a gate.
+
+    Named landers already write qc_json on their candidate row. h_repair
+    dest and standalone refine land as artefacts; those dests still get
+    a score. A clip dest is left alone. Scoring never overwrites src and
+    never heals (T3-18)."""
+    if not path or not os.path.isfile(path):
+        return None
+    if not _is_still(path, kind):
+        return None
+    path = jobs.canonical_path(path)
+    bases = [b for b in (bases or []) if b]
+    if src and os.path.isfile(src) and src not in bases:
+        bases.append(src)
+    import app as appmod
+    qc = appmod.score_generated_still(path, bases, prompt or "", progress)
+    for table in ("anchors", "refs", "assets"):
+        db.run(f"UPDATE {table} SET qc_json=? WHERE path=?", qc, path)
+    if db.one("SELECT path FROM artefacts WHERE path=?", path) is None:
+        jobs.land(path)
+    db.run("UPDATE artefacts SET qc_json=? WHERE path=?", qc, path)
+    return qc
+
+
 @jobs.handler("repair")
 def h_repair(args, progress):
     """Queued by approve(). Writes a new candidate at repair_path (T3-6).
@@ -839,7 +878,8 @@ def h_repair(args, progress):
     evidence. Success requires dest on disk from dispatch_repair; a writer
     that produces nothing — including a silent copy of src — fails rather
     than flipping status. The original is landed beside dest (T3-21)
-    so pair() can list both."""
+    so pair() can list both. A dest still gets an advisory T3-31 score;
+    dest is never src."""
     src = jobs.canonical_path(args.get("path")) if args.get("path") else args.get("path")
     dest = (jobs.canonical_path(args.get("repair_path"))
             if args.get("repair_path") else args.get("repair_path"))
@@ -868,6 +908,8 @@ def h_repair(args, progress):
                    REPAIRED, dest, time.time(), int(fid))
     if src:
         record_pair("repair", src, dest, finding_id=fid)
+    persist_still_qc(dest, src=src, prompt=args.get("remedy") or "",
+                     progress=progress, kind=args.get("kind"))
     remedy, vid = _running_remedy(args)
     return {"finding_id": fid, "repair_path": dest,
             "remedy": remedy, "remedy_prompt_id": vid}

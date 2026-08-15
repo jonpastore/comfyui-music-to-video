@@ -696,7 +696,8 @@ earn a screen.
 
 `T3-31` / `T4-19`. Each generated still — anchors, refs, rerolls,
 `fix_ref` results, `fix_anchor` siblings, artwork generate and its
-refine sibling — stores `qc_json`. The artwork generate is a scored
+refine sibling, an `h_repair` dest still, and a standalone refine dest —
+stores `qc_json`. The artwork generate is a scored
 `assets` row even when a refined cover is what the playlist card shows.
 Anchor tiles in `_anchor_group.html` show `confidence` (0–100) against
 the **base photographs and the prompt**, or the named xAI/local failure

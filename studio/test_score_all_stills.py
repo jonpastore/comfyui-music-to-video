@@ -39,9 +39,7 @@ def test_score_generated_still_json_and_failure(monkeypatch, tmp_path):
     assert "no local vision model" in failed["error"]
 
 
-def test_refine_generated_still_is_new_bytes(monkeypatch, tmp_path):
-    src = _png(str(tmp_path / "src.png"))
-
+def _stub_fix_ref(monkeypatch, src=None):
     def _fix_ref(*a, **kw):
         image_path = kw.get("image_path") or (a[4] if len(a) > 4 else src)
         out = image_path + ".fixed"
@@ -56,11 +54,93 @@ def test_refine_generated_still_is_new_bytes(monkeypatch, tmp_path):
                         lambda src, dest, args, progress:
                         appmod.qc_service._invoke_actuator(
                             "fix_ref", src, dest, args, progress))
+
+
+def _dest_qc(path):
+    """T3-31 score stored on the landed dest, if any."""
+    import jobs
+    canon = jobs.canonical_path(path)
+    for table in ("anchors", "refs", "assets", "artefacts"):
+        row = db.one(f"SELECT qc_json FROM {table} WHERE path=?", canon)
+        if row is None and canon != path:
+            row = db.one(f"SELECT qc_json FROM {table} WHERE path=?", path)
+        if row and row["qc_json"]:
+            return json.loads(row["qc_json"])
+    return None
+
+
+def test_refine_generated_still_is_new_bytes(monkeypatch, tmp_path):
+    src = _png(str(tmp_path / "src.png"))
+    _stub_fix_ref(monkeypatch, src)
     dest = appmod.refine_generated_still(src, lambda m: None)
     assert dest != src
     assert os.path.isfile(dest)
     with open(src, "rb") as f, open(dest, "rb") as g:
         assert f.read() != g.read()
+
+
+def test_refine_generated_still_stores_qc_json(monkeypatch, tmp_path):
+    """Standalone refine dest is a scored still (T3-31). Named landers
+    already persist their own dest row; this path must not land NULL."""
+    src = _png(str(tmp_path / "src.png"))
+    monkeypatch.setattr(appmod.vision, "score_candidate", _score)
+    _stub_fix_ref(monkeypatch, src)
+    dest = appmod.refine_generated_still(src, lambda m: None)
+    assert dest != src
+    assert os.path.isfile(dest)
+    with open(src, "rb") as f, open(dest, "rb") as g:
+        assert f.read() != g.read()
+    got = _dest_qc(dest)
+    assert got, "standalone refine_generated_still dest landed with no qc_json"
+    assert got["confidence"] == 61
+
+
+def test_h_repair_dest_stores_qc_json(monkeypatch, tmp_path):
+    """h_repair dest is a scored still (T3-31). QC does not auto-heal
+    (T3-18): dest exists only after approve() queued the repair."""
+    import jobs
+    import qc_service
+
+    src = _png(str(tmp_path / "broken.png"))
+    monkeypatch.setattr(appmod.vision, "score_candidate", _score)
+
+    def _write_candidate(s, dest, args, progress):
+        with open(s, "rb") as f:
+            payload = f.read()
+        with open(dest, "wb") as f:
+            f.write(payload + b"-repaired")
+        return dest
+
+    monkeypatch.setattr(qc_service, "dispatch_repair", _write_candidate)
+    qc_service.record([{
+        "path": src, "kind": "image", "tier": 1, "check": "resolution",
+        "verdict": "reject", "measured": "64x64", "expected": "896x1216",
+        "unit": "px", "detail": "too small", "remedy": "re-render",
+    }])
+    fid = db.one("SELECT id FROM findings WHERE path=?", src)["id"]
+    before = {r["id"] for r in db.q("SELECT id FROM jobs")}
+    qc_service.approve(fid)
+    jobs_for = []
+    for row in db.q("SELECT * FROM jobs ORDER BY id"):
+        try:
+            args = json.loads(row["args_json"] or "{}")
+        except ValueError:
+            continue
+        if args.get("finding_id") == fid:
+            jobs_for.append((row["id"], args))
+    assert {jid for jid, _ in jobs_for}.isdisjoint(before)
+    assert len(jobs_for) == 1, "approve must enqueue one repair, QC must not"
+    args = jobs_for[-1][1]
+    dest = args["repair_path"]
+    assert dest and dest != src
+    assert not os.path.isfile(dest)
+    qc_service.h_repair(args, lambda m: None)
+    assert os.path.isfile(src)
+    assert os.path.isfile(dest)
+    assert jobs.canonical_path(dest) != jobs.canonical_path(src)
+    got = _dest_qc(dest)
+    assert got, "h_repair dest landed with no qc_json"
+    assert got["confidence"] == 61
 
 
 def test_h_refs_stores_qc_json(monkeypatch, tmp_path):

@@ -280,6 +280,9 @@ def refine_generated_still(src, progress=None, extra=None):
     dest = qc_service.produce_repair(src, dest, args, progress)
     qc_service.record_pair("refine", src, dest,
                            group=qc_service.lineage_group("refine", src))
+    qc_service.persist_still_qc(
+        dest, src=src, prompt=args.get("remedy") or "",
+        progress=progress, kind="image")
     return dest
 
 

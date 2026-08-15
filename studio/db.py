@@ -393,6 +393,9 @@ MIGRATIONS = [
     # T3-31 on every generated still, not only anchors. Advisory.
     "ALTER TABLE refs ADD COLUMN qc_json TEXT",
     "ALTER TABLE assets ADD COLUMN qc_json TEXT",
+    # h_repair dest and standalone refine land here, not only as named
+    # candidate rows. NULL on every artefact that predates scoring.
+    "ALTER TABLE artefacts ADD COLUMN qc_json TEXT",
     # Interstitial title/branding card (docs/TRD-1 §8b, T1-27/T1-28).
     # song_id stays NULL; card_secs is the item's own duration, priced by
     # mixer.set_duration. An overlay (brand_path) changes no length; this does.
