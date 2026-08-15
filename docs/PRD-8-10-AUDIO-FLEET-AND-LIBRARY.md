@@ -57,7 +57,7 @@ The same operator, in the two modes the other documents do not cover:
 | P7 | Four measurement traps that each cost a wrong diagnosis are checks, not folklore | `T9-10`…`T9-13` (`T9-10` built: cache-hit empty ≠ refusal, A/B needs distinct seeds; `T9-11` built: raw+pin; `T9-12` built: `/history` is not Swarm authority, container log is; `T9-13a`/`T9-13b` built: byte completeness; staging path reads `CATALOG.companions`) |
 | P8 | A bulk edit changes exactly what was shown and asked for, or nothing | `T10-3`…`T10-7` (built) |
 | P9 | A model's words are a proposal, never a verdict and never a gate | `T10-11`…`T10-15` |
-| P10 | A song for a child, and a G-tier video for it, is a first-class thing this studio can make | `T10-18` (built). `T10-18a` (built: `r` may mention in lyrics/narrative only). `T10-18b`…`T10-26` still specification |
+| P10 | A song for a child, and a G-tier video for it, is a first-class thing this studio can make | `T10-18` (built). `T10-18a` (built: `r` may mention in lyrics/narrative only). `T10-19a` (built: named-field list at the prompt boundary). `T10-18b`/`T10-19`/`T10-20`…`T10-26` still specification |
 
 **P9 is the one that has no owner anywhere else.** Four modules ask a model for
 words — `vision.py`, `chat.py`, `mixadvice.py`, `lyrics.py` — and the only rule
@@ -120,7 +120,10 @@ still not shipped (`T8-12`, provisional by absence).
 5. **TRD-10's minor policy.** `T10-18` is built: `g`/`pg13` may reference and
    depict. `T10-18a` is built: at `r`, lyrics/narrative may mention a minor;
    that mention never reaches a render prompt, and the work still generates
-   and renders. The rest of `T10-18b`…`T10-26` is still specification.
+   and renders. `T10-19a` is built: at `r` the allowance is the named list
+   `R_ALLOWANCE_FIELDS` (`lyrics`, `narrative`) at the prompt boundary, not
+   an inverse of prompt fields. The rest of `T10-18b`/`T10-19`/`T10-20`…`T10-26`
+   is still specification.
 
 ## 5. Scope
 

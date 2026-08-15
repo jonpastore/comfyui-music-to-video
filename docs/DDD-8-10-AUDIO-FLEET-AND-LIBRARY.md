@@ -326,6 +326,13 @@ for `MENTION_FIELD_KINDS = {lyrics, narrative}`. Render-reaching calls omit
 `field_kind` (or pass a non-mention kind) and still refuse. `build_prompt`
 is always a render path and never takes the mention allowance.
 
+`T10-19a`: the form-field inventory lives in `studio/tiers.py` as
+`R_ALLOWANCE_FIELDS = {lyrics, narrative}` — a positive named list at the
+prompt boundary, not "whatever is not a prompt". `field_kind_for(field)`
+maps only those names onto `MENTION_FIELD_KINDS`; unknown or missing field
+returns `None` so `r` screens like `xxx`. A field added later is outside
+until deliberately listed.
+
 ## 5. Build order
 
     TRD-9 tests (no new behaviour)  ->  a routing change becomes provable

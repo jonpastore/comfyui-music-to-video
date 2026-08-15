@@ -25,6 +25,30 @@ from guardrail import (  # noqa: E402,F401  (re-exported: callers use tiers.X)
 )
 
 
+# T10-19a: form-field inventory at the prompt boundary. Only these named
+# fields carry the r mention allowance — a positive list, not "whatever is
+# not a prompt". Kinds live in guardrail.MENTION_FIELD_KINDS; this is the
+# inventory of form field names that map onto those kinds. A field added
+# later is outside until deliberately listed here.
+R_ALLOWANCE_FIELDS = frozenset({"lyrics", "narrative"})
+
+
+def field_carries_r_allowance(field):
+    """True only for fields on R_ALLOWANCE_FIELDS (T10-19a)."""
+    return (field or "").strip().lower() in R_ALLOWANCE_FIELDS
+
+
+def field_kind_for(field):
+    """Map a form field name to check_text field_kind (T10-19a).
+
+    Only R_ALLOWANCE_FIELDS resolve to a mention kind. Unknown or missing
+    field returns None so r screening fails closed (same as xxx).
+    """
+    name = (field or "").strip().lower()
+    if name in R_ALLOWANCE_FIELDS and name in MENTION_FIELD_KINDS:
+        return name
+    return None
+
 
 MAX_TIER_GUARDRAIL = 500
 

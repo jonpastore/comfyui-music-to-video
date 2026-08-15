@@ -19,6 +19,7 @@ import build_refs
 import build_song
 import db
 import guardrail
+import tiers
 from test_app import _real_storyboard, _scene, _upload_song, wait_job
 
 
@@ -216,3 +217,88 @@ def test_t10_18a_r_work_generates_and_renders_without_child_in_prompt():
                 0, dict(scene, video_motion_prompt=NIECE_MOTION),
                 "c.png", "song.mp3", "c", "w", "",
                 video_model="ltx25", tier="r")
+
+
+# T10-19a: the r allowance is a named-field list at the prompt boundary.
+# Positive inventory in tiers — not "whatever is not a prompt". A field not
+# on the list fails closed. Mutation: drop R_ALLOWANCE_FIELDS or grant a
+# prompt-boundary field the allowance and these go red.
+
+PROMPT_BOUNDARY_FIELDS = (
+    "image_prompt",
+    "video_motion_prompt",
+    "identity",
+    "wardrobe",
+    "body",
+    "prompt",
+    "storyboard_direction",
+    "scene",
+    "character",
+)
+
+
+def test_t10_19a_allowance_is_a_named_list():
+    """The set is a deliberate list, not an inverse of prompt fields."""
+    names = tiers.R_ALLOWANCE_FIELDS
+    assert isinstance(names, frozenset)
+    assert names == frozenset({"lyrics", "narrative"})
+    # Inventory maps onto kinds; kinds stay in guardrail (T10-18a).
+    assert names <= guardrail.MENTION_FIELD_KINDS
+    for blocked in PROMPT_BOUNDARY_FIELDS:
+        assert blocked not in names, f"{blocked} must not carry the r allowance"
+        assert not tiers.field_carries_r_allowance(blocked)
+        assert tiers.field_kind_for(blocked) is None
+
+
+def test_t10_19a_lyric_field_does_scene_field_does_not():
+    """Per-field positive check: lyrics carry it, scene fields do not."""
+    for field in ("lyrics", "narrative"):
+        assert field in tiers.R_ALLOWANCE_FIELDS
+        assert tiers.field_carries_r_allowance(field)
+        kind = tiers.field_kind_for(field)
+        assert kind == field
+        assert guardrail.check_text(
+            NIECE_LYRICS if field == "lyrics" else NIECE_NARRATIVE,
+            field, tier="r", field_kind=kind) == (
+            NIECE_LYRICS if field == "lyrics" else NIECE_NARRATIVE)
+
+    for field in PROMPT_BOUNDARY_FIELDS:
+        kind = tiers.field_kind_for(field)
+        assert kind is None
+        with pytest.raises(guardrail.ContentRefused):
+            guardrail.check_text(NIECE_STILL, field, tier="r", field_kind=kind)
+        with pytest.raises(guardrail.ContentRefused):
+            guardrail.check_text(NIECE_STILL, field, tier="xxx", field_kind=kind)
+
+
+def test_t10_19a_unknown_and_missing_field_fail_closed():
+    """A field added later is outside until deliberately listed."""
+    unknown = "future_blurb_not_on_list"
+    assert unknown not in tiers.R_ALLOWANCE_FIELDS
+    assert not tiers.field_carries_r_allowance(unknown)
+    assert tiers.field_kind_for(unknown) is None
+    assert tiers.field_kind_for(None) is None
+    assert tiers.field_kind_for("") is None
+    with pytest.raises(guardrail.ContentRefused):
+        guardrail.check_text(
+            NIECE_STILL, unknown, tier="r",
+            field_kind=tiers.field_kind_for(unknown))
+    with pytest.raises(guardrail.ContentRefused):
+        guardrail.check_text(NIECE_STILL, "input", tier="r", field_kind=None)
+
+
+def test_t10_19a_xxx_refuses_even_listed_fields():
+    """The r list does not extend to xxx (T10-18b)."""
+    for field in tiers.R_ALLOWANCE_FIELDS:
+        with pytest.raises(guardrail.ContentRefused):
+            guardrail.check_text(
+                NIECE_LYRICS, field, tier="xxx",
+                field_kind=tiers.field_kind_for(field))
+
+
+def test_t10_19a_build_prompt_never_gets_r_allowance():
+    """Composed positive prompt is the boundary; listed fields are entry-only."""
+    with pytest.raises(guardrail.ContentRefused):
+        guardrail.build_prompt(NIECE_STILL, tier="r")
+    with pytest.raises(guardrail.ContentRefused):
+        guardrail.build_prompt(NIECE_STILL, tier="xxx")
