@@ -262,7 +262,7 @@ or an idempotency check that can fail.
 
 ---
 
-## Status against the tree, 2026-08-13
+## Status against the tree, 2026-08-15
 
 Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
 not folded into the criteria above — *a criterion edited to describe what was
@@ -279,11 +279,13 @@ current.
 | `T6-4` vanished vs refused | **built** | earlier | `pipeline._backend_vanished()`; both arrive under one headline so the REASON line is the discriminator |
 | `T6-15` the findings upsert is idempotent | **built** | earlier | |
 | `T6-17` migrations keep old rows working | **convention, held** | earlier | every column added this week works NULL |
-| `T6-A7`…`T6-A10` verification rules | **new today** | today | consolidated here from all ten documents, which had already drifted. `T6-A10` is session B's: assert through the shared entry point |
 | `T6-8` canonical identity | **built** | this change | HOST: `models.canonical_host()`. PATH: `jobs.canonical_path()` at write time (`jobs.land`, `qc_service.record` / `run_artefact`). Symlink vs dotted path lands as one artefacts row; findings join that path. `studio/test_trd6_queue.py` |
 | `T6-13` absent expectation means skip | **built** | this change | `qc.run` with `{}` emits no duration/frame_count; `_stamp_expect` with no sidecar writes no `expect_json`. Present expect still compares. `studio/test_trd6_queue.py` |
 | **`T6-13a` one duration authority** | **built** | this change | `app.clip_count`, `grok.generate_storyboard` and `qc_service.run_song` all read `songs.duration`; a re-ffprobe on those paths fails `test_t6_13a_songs_duration_is_the_authority_and_nothing_reprobes`. Asserted at 195.792 |
 | `T6-2`/`T6-3`/`T6-5`/`T6-6`/`T6-7`/`T6-9`/`T6-10`/`T6-12` | **built** | `test_trd6_queue.py` | claim/land/transitions/cascade/repair dest is a new path, copies `expect_json`. **T6-1** is still one studio thread plus Swarm assign — do not add a second pull queue. **T2-11** consumers wire `depends_on` at enqueue (`app.enqueue_clips` / `test_t2_11_clip_chain_depends.py`); the primitive stays `_claim` + `_predecessor_landed` |
+| `T6-1` one studio worker | **built** | unit + `jobs` | systemd unit is one uvicorn; `_run_one` is the only pull. Do not add a second pull queue |
+| `T6-A6` `where()` is three-valued | **built** | `test_trd9_fleet.py` | `test_t9_4_where_is_three_valued_and_none_is_offered`: True / False / None; a None box is still a candidate. Collapsing None to False is the T6-A6 bug |
+| `T6-A7`…`T6-A10` verification rules | **held** | this document | methodology, not product slices. T6-A10 is asserted wherever tests call the shared entry (`sets_service`, `storyboard_service`, `qc_service.listed`) |
 | `T6-14` handler writes are one transaction | **built** | this change | `test_t6_14_kill_mid_handler_leaves_no_half_write`: kill after `land` leaves dest unlanded and the finding unstamped. Success writes both. `jobs.writes()` / `db.transaction()`; `_run_one` still commits before the handler (`T6-16`). |
 | `T6-16` no write lock across a long handler | **built** | this change | `test_t6_16_web_query_succeeds_during_long_handler`: concurrent `jobs.recent`/`queue_ctx` and BEGIN IMMEDIATE succeed while a fake handler is blocked. `_run_one` commits before the handler. |
 | `T6-A2` HTML and JSON report the same numbers | **built** | this change | Queue: `test_t6_a2_html_and_json_report_the_same_queue_numbers` — `/queue` HTML and `Accept: application/json` report the same 1 running / 2 waiting / 58s / 15s / 5s; same `queue_ctx()`. Review: `test_t6_a2_html_and_json_report_the_same_review_queue_numbers` — `/qc` HTML and `/api/qc/findings` report the same 2 open findings (4.8/30.0 s, 896/1024 px); same `qc_service.queue()`; pass rows stay out. **`T6-A2-set` built**: `test_t6_a2_html_and_json_report_the_same_set_numbers` — HTML `/sets/{id}` and JSON `/api/sets/{id}` report the same 3 items / 137s / item ids; same `set_detail()`. Distinctive numbers so two empty answers cannot pass. Storyboard still writes its own T6-A2 as that loop moves. |

@@ -708,6 +708,10 @@ current.
 | criterion | state | commit | what was measured |
 |---|---|---|---|
 | `T2-1`…`T2-4` the arc | **built** | earlier | `studio/arc.py`, JSON canonical, `to_md`, screened both directions |
+| `T2-2` Markdown is generated | **built** | `arc.to_md` | re-render overwrites a hand-edit of the `.md`; JSON is canonical. Covered by the T2-1…T2-4 pair |
+| `T2-3` every album song appears once | **built** | `arc.generate` | missing song fails loudly rather than a partial arc |
+| `T2-8` scene count | **built** | T2-8a/b/c | section floor gone; scenes tile the song; every scene names the lyric sections it spans |
+| `T2-12` legal length | **built** | T2-12a | `clip_seconds` / `legal_frames` 8n+1; parent id is the divisor, not a second implementation |
 | `T2-8a` the section floor is gone | **built** | `881d7cf` | both live sites moved together; the `validate()` site was the one that would have regenerated 25 scenes and made the formula fix look inert |
 | `T2-8b` scenes tile the song | **built** | `validate` | `_compose` stamps `start`/`end` covering `[0, duration]`; `validate` refuses a gap or overlap. 195.792 s / 7 scenes: first 0, adjacent end==next start, last end ± 0.05 s. Mutation: drop the check → gap/overlap accepted |
 | `T2-8c` every scene names the lyric sections it spans | **built** | `test_t2_8c.py` | `_compose` stamps `lyric_sections` as a partition of `parse_sections(audio_lyrics)`; 25 sections / 7 scenes yields four-section scenes; `validate` refuses a missing field, an unnamed section, or a section named twice. Mutation: drop the check → unnamed/double-named accepted |

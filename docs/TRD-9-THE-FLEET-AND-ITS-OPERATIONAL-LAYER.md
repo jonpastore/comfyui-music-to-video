@@ -301,7 +301,7 @@ found eight more, six overlapping. `docs/reviews/TRD8910-*`.
 
 ---
 
-## Status against the tree, 2026-08-13
+## Status against the tree, 2026-08-15
 
 Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
 not folded into the criteria above — *a criterion edited to describe what was
@@ -332,4 +332,5 @@ production, and almost none of it has a check.** That is the point of writing it
 | `T9-5` slow boxes sort to the back, not out | **built, check can fail** | this tree | `studio/test_trd9_fleet.py::test_t9_5_nonresident_box_stays_in_the_plan_later`: a fitting 23.42 GiB box and a 10.58 GiB box that holds `wan22_s2v` both stay in `where()`, slow later. Same fleet, `ace_step_v1` (both fit) stays ordered by id — not a card-size sort |
 | `T9-7` a refuse can bench the next walk step | **built, check can fail** | this tree | `studio/test_trd9_fleet.py::test_t9_7_refusal_benches_next_pin_and_walk_still_continues`: free-draw validation refuse, then pin 0 answers the benched "No backends match" headline, pin 1 still runs and succeeds; progress names both misses. Not a timing test |
 | `T9-8` a state change alerts once per transition | **built, check can fail** | this tree | `studio/test_trd9_fleet.py::test_t9_8_state_change_alerts_once_per_transition_not_per_poll`: flapping box → one alert per edge by count; 20 down-polls → 1; once() notify path seed+down×3+up×2 → 2 alerts |
-| `T9-4`, `T9-9`, `T9-10`, `T9-12`, `T9-14`…`T9-17` | **behaviour exists, no checks** | — | including three of the four measurement traps; `T9-11` now has a check |
+| `T9-4` three-valued `where()` | **built, check can fail** | `test_trd9_fleet.py` | `test_t9_4_where_is_three_valued_and_none_is_offered`. Same fact as T6-A6 |
+| `T9-9`, `T9-10`, `T9-12`, `T9-14`…`T9-17` | **behaviour exists, no red checks on HEAD** | — | worktrees exist; closeout grind is landing these. `T9-11` / `T9-13a` / `T9-13b` already have checks |

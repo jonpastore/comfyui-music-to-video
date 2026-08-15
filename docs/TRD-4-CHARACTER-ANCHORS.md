@@ -281,7 +281,7 @@ character."* — the capability loss stated in full.
 
 ---
 
-## 9. Status against the tree, 2026-08-13
+## 9. Status against the tree, 2026-08-15
 
 A ledger, not an edit to the criteria above: a criterion rewritten to describe
 what was built stops being a criterion. Commits are on `main`; `667debc` is
@@ -291,8 +291,8 @@ deployed and live on cerberus.
 |---|---|---|---|
 | `T4-1`..`T4-4` no silent defaults | **built** | prior session | zero views and zero tiers are each refused, each naming its own control |
 | `T4-5`..`T4-7` tier policy on save | **built** | prior session | `tiers.check_tier_policy`: explicit wording refused at `g`/`pg13`, accepted at `r`/`xxx`. Both directions |
-| `T4-8` screen the STORED text | unverified here | — | not re-measured this session; stated rather than assumed |
-| `T4-9` tier wording gets the same | unverified here | — | as above |
+| `T4-8` screen the STORED text | **built** | `test_trd4_unverified.py` | `test_t4_8_tier_policy_is_re_screened_on_the_stored_row`: policy runs on the stored row, not only the submitted box |
+| `T4-9` tier wording gets the same | **built** | `test_trd4_unverified.py` | `test_t4_9_tier_wording_route_gets_the_same_tier_policy`: `/anchors/tier-wording` is the same `check_tier_policy` |
 | `T4-10` `_NEGATION_ALLOWED` empty | **built** | prior session + `4032aba` | the walker now covers the studio's `ANCHOR_PROFILE_FIELDS` defaults as well as `make_anchor`'s constants — see below, that widening is what caught the live defect |
 | `T4-11` body clause names the parts | **built, and it did not reach a render until `4032aba`** | `4032aba` | see §9.1 |
 | `T4-12` references named by slot | **built** | `7836d6f` | the refusal half (a third photograph stops asserting a second person) predates this; the POSITIVE half is the commit — two cast members reach the graph as `image2`→`nyx.png`, `image3`→`ghost.png`, each named by the slot its own file is on. **Rescoped to the CAST path**: the anchor path deliberately does NOT name a slot "the wardrobe reference" — see §9.2 |
@@ -301,7 +301,6 @@ deployed and live on cerberus.
 | `T4-15` profile still overrides the five fields | **built, and now two more** | `d5526cb` | `backdrop` and `composite` joined `identity`/`wardrobe`/`body`/`nude_wardrobe`/`anatomy` as album-owned, versioned, screened text |
 | `T4-16`/`T4-17` the negative does not move | **holds** | — | nothing moved out of the negative; the fast-mode drop is still stated on the form |
 | `T4-18` compose a front-nude XXX sheet and assert six things | **built** | `a5527b1` | six independent tests on the real composer (`test_t4_18_*` in `studio/test_trd4_unverified.py`): no negation, body parts, both slots named, no wardrobe, no "bare skin", `tiers.PINNED` last. Deleting PINNED or adding a negation each fails only its own test |
-| `T4-18` compose a front-nude XXX sheet and assert six things | **partial** | `4032aba` | negation-free and the part list are asserted on the real composer; the full six-assertion composition test is not written |
 | `T4-19` tile shows confidence or named xAI/local failure | **built** | `80575de` | `test_anchor_qc.py`: `qc_tag` and the candidate tile name the backend; generate still does not write extra `anchor_ref` rows |
 
 ### 9.1 `T4-11` was true in the constant and false in every render
