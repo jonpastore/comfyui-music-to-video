@@ -13,6 +13,9 @@ is the reason this document exists.
 
 Rules inherited from `TRD-6 §0` (`T6-A1`…`T6-A6`) apply throughout and are cited,
 never repeated. Prohibitions live in TRD-1 §12, TRD-2 §9 and TRD-3 §10.
+`T6-A2` compares the HTML queue panel and JSON `/queue` in one test
+(`test_t6_a2_html_and_json_report_the_same_queue_numbers`); set, storyboard
+and review still write theirs as those loops move.
 
 ---
 

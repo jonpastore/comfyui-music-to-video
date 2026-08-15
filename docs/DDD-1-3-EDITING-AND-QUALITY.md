@@ -46,8 +46,9 @@ absent.
 
 ## 2. The structural problem, and the pattern that already solves it
 
-`app.py` is 6331 lines and 113 routes, of which **five return JSON** —
-`/api/qc/findings*`. Everything else is a route handler that reads rows, decides,
+`app.py` is 6331 lines and 113 routes, of which **five were `/api/qc/*` JSON**
+and `/queue` now answers JSON from the same `queue_ctx()` as the fragment
+(`T6-A2`). Everything else is a route handler that reads rows, decides,
 formats and returns HTML. `render_set_route` is TRD-1 §10's named example: it
 reads the items, joins the songs, chooses the audio-or-video path, builds every
 item dict and enqueues, all inside the handler and all unreachable from a client
@@ -73,6 +74,10 @@ this prevents, and `T2-41` records that it was real and is now fixed.
 Migration is per-loop, not per-file. Move one journey (PRD §4) at a time, and
 `T6-A2` is the check that the move was faithful: the HTML page and the JSON
 endpoint report the same numbers, asserted by comparing them in one test.
+The first object is the queue panel: `GET /queue` HTML and
+`Accept: application/json` share `queue_ctx()`
+(`test_t6_a2_html_and_json_report_the_same_queue_numbers`). Set, storyboard
+and review still write theirs as those loops move.
 
 ## 3. API surface
 
@@ -100,6 +105,10 @@ travel in the same response (`T2-18`).
 `host`, NULL host is the `unattributed` bucket). Dismiss needs a reason
 and leaves the open queue; re-running QC on the same bytes keeps it
 dismissed; rewriting the file reopens that `(path, check)` row (`T3-22`).
+
+**Q · queue** — `GET /queue` answers HTML or JSON from the same `queue_ctx()`
+(`T6-A2`). The JSON body carries `running`, `waiting`, `recent`,
+`refresh_secs` and the job ids/elapsed the fragment prints.
 
 Every list response carries help text per control, with warnings marked
 distinctly from notes (`T2-36`) — a client that cannot tell them apart hides the
@@ -452,7 +461,7 @@ replace opening the picture; it decides which pictures to open.
 
 - **The service split stalls half-done**, leaving two ways to reach the same
   logic. `T6-A2` is the guard and it must be written per loop as the loop moves,
-  not at the end.
+  not at the end. The queue panel is written; set, storyboard and review are not.
 - **Peaks get used as a quality signal.** They are a 22050 Hz mono envelope.
   Anything about clipping needs the second decode, stated in §5.4 so it is a
   decision rather than a discovery.

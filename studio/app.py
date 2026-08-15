@@ -7036,6 +7036,32 @@ def queue_ctx():
             "queue_refresh_secs": QUEUE_REFRESH_SECS if (active or waiting) else 0}
 
 
+def queue_payload(ctx=None):
+    """The numbers _queue.html prints, as JSON. Same ctx so two answers
+    cannot silently diverge (T6-A2)."""
+    ctx = queue_ctx() if ctx is None else ctx
+
+    def entry(e):
+        job = dict(e["job"])
+        return {
+            "id": job["id"],
+            "status": job["status"],
+            "kind": job.get("kind"),
+            "desc": e["desc"],
+            "elapsed": e["elapsed"],
+        }
+
+    return {
+        "running": len(ctx["queue_active"]),
+        "waiting": len(ctx["queue_waiting"]),
+        "recent": len(ctx["queue_recent"]),
+        "refresh_secs": ctx["queue_refresh_secs"],
+        "active": [entry(e) for e in ctx["queue_active"]],
+        "waiting_jobs": [entry(e) for e in ctx["queue_waiting"]],
+        "recent_jobs": [entry(e) for e in ctx["queue_recent"]],
+    }
+
+
 @app.get("/queue", response_class=HTMLResponse)
 def queue_panel(request: Request):
     """The queue panel, as the same fragment every page embeds.
@@ -7043,8 +7069,14 @@ def queue_panel(request: Request):
     One route and one template, included wherever work is started, rather than
     a mini job list per page -- five copies of this markup would be five copies
     to keep in step with what a job row can say.
+
+    Accept: application/json returns the same numbers the fragment prints
+    (T6-A2). One ctx, both answers.
     """
-    return templates.TemplateResponse(request, "_queue.html", queue_ctx())
+    ctx = queue_ctx()
+    if wants_json(request):
+        return JSONResponse(queue_payload(ctx))
+    return templates.TemplateResponse(request, "_queue.html", ctx)
 
 
 @app.post("/jobs/{id}/retry")

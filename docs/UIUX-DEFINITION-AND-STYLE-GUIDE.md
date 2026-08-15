@@ -43,7 +43,7 @@ Three facts about the domain decide almost every rule below:
 | `static/style.css` | 1247 lines |
 | `static/app.js` | 1589 lines, hand-written, 55 `addEventListener` |
 | `templates/` | 29 files, 3481 lines |
-| routes | 113, of which **5** return JSON |
+| routes | 113, of which **5** were `/api/qc/*` JSON; `/queue` now answers JSON with the same numbers the fragment prints (`T6-A2`) |
 
 ### 2.2 The root finding: tokens exist for colour, and for nothing else
 
@@ -755,8 +755,10 @@ A style guide is falsifiable or it is decoration.
   elements and asserts each resolves a `:focus-visible` style. Deleting the rule
   must turn it red.
 - **The nav matches the agreed order**, asserted against one list that both
-  `base.html` and the API read (`T6-A2`: the page and the JSON report the same
-  thing).
+  `base.html` and the API read. `T6-A2`'s first object is the queue panel:
+  `/queue` HTML and JSON report the same numbers
+  (`test_t6_a2_html_and_json_report_the_same_queue_numbers`). Nav is still
+  this guide's own list check.
 - **No template computes.** `T6-A4`, asserted by a differential: stub the service
   to return known values and assert the page shows them unmodified.
 - **The measurements in §2 are re-runnable.** Each is a one-line count, and a

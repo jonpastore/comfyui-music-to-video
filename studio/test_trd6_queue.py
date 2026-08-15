@@ -8,6 +8,7 @@ import inspect
 import json
 import math
 import os
+import re
 import sqlite3
 import tempfile
 import threading
@@ -648,3 +649,69 @@ def test_t6_14_kill_mid_handler_leaves_no_half_write():
     row = qc_service.get(fid)
     assert row["status"] != qc_service.REPAIRED, row["status"]
     assert row["repair_path"] in (None, ""), row["repair_path"]
+
+
+# ----------------------------------------------------------------- T6-A2 --
+
+_T6_A2_NOW = 1_700_000_100.0
+_T6_A2_RUNNING_ELAPSED = 58
+_T6_A2_RECENT_ELAPSED = 15
+
+
+def test_t6_a2_html_and_json_report_the_same_queue_numbers(monkeypatch):
+    """T6-A2: HTML /queue and JSON /queue report the same numbers for the
+    same jobs. Distinctive 1/2/58/15/5 so two empty answers cannot pass."""
+    import app as appmod
+    from fastapi.testclient import TestClient
+
+    _isolate()
+    monkeypatch.setattr(appmod.time, "time", lambda: _T6_A2_NOW)
+    monkeypatch.setattr(jobs, "start", lambda: None)
+    jobs._capability_where = lambda key, backends: []
+
+    running = jobs.enqueue("t6", {"who": "running"})
+    wait_a = jobs.enqueue("t6", {"who": "wait-a", "requires": "wan22_s2v"})
+    wait_b = jobs.enqueue("t6", {"who": "wait-b", "requires": "wan22_s2v"})
+    claimed = jobs._claim()
+    assert claimed["id"] == running
+    db.run("UPDATE jobs SET started=? WHERE id=?",
+           _T6_A2_NOW - _T6_A2_RUNNING_ELAPSED, running)
+
+    done = jobs.enqueue("t6", {"who": "done"})
+    db.run("UPDATE jobs SET status='done', started=?, finished=? WHERE id=?",
+           _T6_A2_NOW - 20, _T6_A2_NOW - 5, done)
+
+    with TestClient(appmod.app) as client:
+        html = client.get("/queue")
+        js = client.get("/queue", headers={"Accept": "application/json"})
+
+    assert html.status_code == 200, html.text
+    page = html.text
+    ctype = (js.headers.get("content-type") or "").split(";")[0].strip()
+    assert js.status_code == 200, js.text
+    assert ctype == "application/json", (
+        f"/queue Accept:json returned {ctype or 'no content-type'}, not JSON: "
+        f"{js.text[:200]}")
+    assert "<html" not in js.text.lower(), js.text[:200]
+    body = js.json()
+
+    html_running = int(re.search(r"(\d+) running", page).group(1))
+    html_waiting = int(re.search(r"(\d+) waiting", page).group(1))
+    html_refresh = int(re.search(r"refreshing every (\d+)s", page).group(1))
+    html_elapsed = [int(n) for n in re.findall(r'class="num">(\d+)s', page)]
+    html_ids = [int(n) for n in re.findall(r"/jobs/(\d+)/log", page)]
+
+    json_ids = [e["id"] for e in
+                body["active"] + body["waiting_jobs"] + body["recent_jobs"]]
+    json_elapsed = [round(e["elapsed"]) for e in
+                    body["active"] + body["recent_jobs"]
+                    if e.get("elapsed") is not None]
+
+    assert html_running == body["running"] == 1, (html_running, body)
+    assert html_waiting == body["waiting"] == 2, (html_waiting, body)
+    assert html_refresh == body["refresh_secs"] == 5, (html_refresh, body)
+    assert body["recent"] == 1, body
+    assert html_elapsed == json_elapsed == [
+        _T6_A2_RUNNING_ELAPSED, _T6_A2_RECENT_ELAPSED], (html_elapsed, json_elapsed)
+    assert html_ids == json_ids == [running, wait_a, wait_b, done], (
+        html_ids, json_ids)
