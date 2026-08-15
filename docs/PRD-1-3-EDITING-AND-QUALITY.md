@@ -54,7 +54,7 @@ one instance of it:
 
 | surface | the problem today | source |
 |---|---|---|
-| set timeline | a set is a stack of forms; the only picture of the result is a number, and no time axis, waveform or automation exists | TRD-1 §1 |
+| set timeline | forms remain; a server-rendered `.tl-axis` tracks `set_duration()`; waveform is still a PNG (`mixer.waveform_png`); automation lanes and draggable joins are not in the UI | TRD-1 §1 |
 | arc & storyboards | songs are storyboarded independently, so an album is twelve unrelated stories that share a character; `scene_seconds` could not lengthen a scene and nothing in the UI revealed it | TRD-2 §1 |
 | QC | nothing checks output. The identity collapse, the world that never rendered and the LoRA that did nothing all passed every deterministic check and were found by opening the picture | TRD-3 §1 |
 
@@ -269,8 +269,8 @@ Each is a thing this project has already done once, not a hypothetical.
   number copied instead of counted is the defect these documents are about.)
   This is the whole remaining project. If a smaller shippable scope is wanted,
   §6's P0 and P1 are the smallest cut that produces something usable — the
-  timeline is the one surface where the current experience is "a stack of forms
-  and a number".
+  timeline is the one surface that still lacks joins, lanes and a playhead
+  (the ruler now tracks `set_duration()`; the rest is still forms and a number).
 - **`duck` and `layer`.** Refused everywhere today and honestly so (`T1-23`).
   They stay refused until measured, and that is a decision to schedule, not a
   bug to fix.

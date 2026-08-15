@@ -94,8 +94,18 @@
 {% endif %}
 {# The timeline: one block per song, width proportional to how long it actually
    plays after trim, with the handover to the next shown between them. Drag a
-   block to reorder; click one to jump to its controls below. #}
+   block to reorder; click one to jump to its controls below. The ruler is
+   server-owned seconds from set_duration() — ticks are in the HTML, not
+   painted from pixel positions. data-axis="x" below is the reorder axis,
+   not this ruler. #}
 <h3>Timeline</h3>
+{% if axis %}
+<div class="tl-axis" data-duration="{{ total_secs }}">
+  {% for tick in axis %}
+  <span class="tl-tick" data-t="{{ tick.t }}" style="left: {{ tick.pct }}%">{{ tick.t | hms }}</span>
+  {% endfor %}
+</div>
+{% endif %}
 <div class="timeline" data-reorder-url="/sets/{{ set.id }}/reorder" data-axis="x" data-reload>
   {% for t in timeline %}
   {# The waveform behind the block. A background-image, not an <img>: it has to

@@ -30,6 +30,12 @@ function watchJob(jobId, targetId) {
 // and drop -- a sortable library would be a dependency for one dragover handler
 // and a POST. DOM order is the source of truth; on drop the new order of ids is
 // posted and the server renumbers positions.
+//
+// The set-editor ruler (.tl-axis / .tl-tick) is server HTML from
+// mixer.timeline_axis(set_duration()). Do not paint ticks from pixel
+// positions: TestClient has no DOM, and a JS ruler would be a second
+// clock (docs/TRD-1 §1 / T1-8). .tl-axis is a sibling of .timeline so
+// this handler never sees the ticks.
 document.addEventListener("DOMContentLoaded", function () {
   document.querySelectorAll("[data-reorder-url]").forEach(function (root) {
     // a table reorders its rows, anything else reorders its own children

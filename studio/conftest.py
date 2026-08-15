@@ -440,6 +440,14 @@ _stub("mixer",
           if audio_path and os.path.isfile(audio_path)
           else {"pairs": [], "reason": ("no_audio" if not audio_path else "missing")}),
       PEAKS_MAX_POINTS=2048,
+      # T1-timeline: axis is pure. The stub must serve the real function
+      # or set_detail AttributeErrors and the HTML test never reaches
+      # .tl-tick. A fake that always returned [] would hide a missing
+      # set_duration wire.
+      timeline_axis=(_real_module("mixer").timeline_axis
+                     if _real_module("mixer") is not None
+                     and hasattr(_real_module("mixer"), "timeline_axis")
+                     else (lambda duration_s, max_ticks=8: [])),
       # T1-16: preview_proxy is pure (no ffmpeg). The stub must serve the
       # real one so adding an effect lists it; a fake static list would
       # stay green.

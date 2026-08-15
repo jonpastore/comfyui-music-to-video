@@ -179,15 +179,16 @@ control that cannot apply still has to say why, and the reason is in the panel
 above it."* Principle 2 is this component. Every control that spends GPU time
 gets one (§5.5).
 
-**The timeline exists and is not what TRD-1 needs.** `.timeline` / `.tl-block`
+**The timeline exists and is not yet the DAW.** `.timeline` / `.tl-block`
 are built and used by `set_edit.html`, and the good part is already right:
 blocks are flex-sized by how long each item actually **plays after trim**, so
 the picture matches the render rather than being decorative, and the handover
 marker sits on the trailing edge where the overlap really happens. A title
 card is a block like any other (`T1-27`/`T1-28`): it is labelled MEOW P, sized
 by `card_secs`, and it is a `set_items` row, not a comment on the strip.
-What TRD-1 still adds is a **time axis** (today the strip is proportional but
-has no ruler), draggable joins, automation lanes and a playhead.
+The **time axis** is server-rendered: `mixer.timeline_axis(set_duration())`
+emits `.tl-tick[data-t]` seconds in the HTML (T1-8's stub-offset shape).
+Still open: draggable joins, automation lanes and a playhead.
 
 **Three audiences, one editor.** `set_edit.html` now carries a
 `mode_audience` select (`easy|normal|advanced`). These are affordance

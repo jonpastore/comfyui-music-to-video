@@ -304,6 +304,15 @@ a static list. "Render preview" (`T1-17`) is `mixer.render_preview`: the
 It is the only preview that claims accuracy. `waveform_png` stays the
 picture.
 
+### 5.4a The time axis — built
+
+`mixer.timeline_axis(duration_s)` turns `mixer.set_duration()` into ruler ticks.
+`set_detail` passes that duration through — no second length arithmetic.
+The HTML is a view: `.tl-axis` / `.tl-tick[data-t]`. A TestClient GET (no JS)
+must carry the ticks, and a stub offset must move the last one
+(`studio/test_t1_timeline.py`). Draggable joins, lanes and playhead are not
+this slice.
+
 ### 5.5 Clip length: one blocked chain, and the order it unblocks in
 
 `build_song.clip_seconds(scene_seconds)` **returns the legal 8n+1 length** at

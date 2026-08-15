@@ -6376,6 +6376,7 @@ def set_detail(row):
     audience = _set_audience(row)
     return {"set": row, "items": items, "count": len(items), "total_secs": total,
             "timeline": timeline,
+            "axis": mixer.timeline_axis(total),
             "duration_error": duration_error, "missing_video": missing_video, "renders": renders,
             "beatmatch_plan": beatmatch_plan, "suggested_order": suggested_order,
             "suggested_order_ids": suggested_order_ids,

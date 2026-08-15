@@ -178,6 +178,44 @@ def peaks_from_path(audio_path, z=0):
     return {"pairs": pairs, "reason": None}
 
 
+# Nice steps for the set-editor ruler. The last tick is always the duration
+# itself (see timeline_axis), so a stub offset moves the end even when the
+# interior steps stay on this grid.
+_AXIS_STEPS = (1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600)
+
+
+def timeline_axis(duration_s, max_ticks=8):
+    """Ruler ticks for the set timeline, in canonical seconds.
+
+    duration_s is set_duration()'s return — the same number T1-8 shows as
+    running length. The last tick is exactly that value so a +17 s stub
+    moves the axis; ending on the last nice step below it would leave
+    125 s and 142 s both labelled 120. Empty / unknown / non-positive
+    duration returns [] rather than a 0:00–0:00 ruler.
+    """
+    if duration_s is None:
+        return []
+    try:
+        duration_s = float(duration_s)
+    except (TypeError, ValueError):
+        return []
+    if duration_s <= 0:
+        return []
+    step = float(_AXIS_STEPS[-1])
+    for candidate in _AXIS_STEPS:
+        if duration_s / candidate <= max_ticks:
+            step = float(candidate)
+            break
+    ticks = []
+    t = 0.0
+    last_interior = duration_s - (step * 0.25)
+    while t < last_interior:
+        ticks.append({"t": t, "pct": 100.0 * t / duration_s})
+        t += step
+    ticks.append({"t": duration_s, "pct": 100.0})
+    return ticks
+
+
 # Browser preview applies gain and position (docs/TRD-1 §6.2). Every other
 # key that would run at render is listed in not_applied. A static catalogue
 # of every effect would stay green when nothing is on the item.
