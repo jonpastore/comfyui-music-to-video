@@ -58,6 +58,10 @@ STATE_PATH = os.environ.get(
                                 os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")),
                  "fleet_watch.json"))
 TIMEOUT = float(os.environ.get("FLEET_WATCH_TIMEOUT", 8))
+# Meta key in the state file (no "up" — transitions() skips it). Holds the
+# last alert delivery outcome so an unreachable transport degrades to a
+# recorded state change, never to silence (T9-17).
+ALERT_KEY = "_alert"
 
 
 def probe(hostport, timeout=TIMEOUT):
@@ -170,6 +174,12 @@ def once(state_path=None, webhook=None, quiet=False):
     if not quiet:
         print(time.strftime("%H:%M:%S"), "fleet:")
         print("\n".join(render(now)))
+    # Host readings always land; ALERT_KEY records whether the transport
+    # delivered. An unreachable transport degrades to that record, never to
+    # silence (T9-17). No-change polls keep the last alert outcome.
+    out = dict(now)
+    if ALERT_KEY in before:
+        out[ALERT_KEY] = before[ALERT_KEY]
     if changed:
         lines = []
         for _hostport, label, up, detail in changed:
@@ -177,13 +187,27 @@ def once(state_path=None, webhook=None, quiet=False):
         lines.append("_meowp-studio fleet_watch_")
         try:
             sent = notify(lines, webhook)
+            if sent:
+                out[ALERT_KEY] = {"delivered": True, "ts": time.time(),
+                                  "lines": lines}
+            else:
+                # No webhook is still not silence: the change is on disk.
+                out[ALERT_KEY] = {"delivered": False, "reason": "no_webhook",
+                                  "ts": time.time(), "lines": lines}
             if not quiet:
                 print("  alert:", "sent" if sent else "NO WEBHOOK CONFIGURED")
         except Exception as e:                  # noqa: BLE001
             # An alert that fails must not stop the watching, and must not be
-            # silent about failing either.
+            # silent about failing either. The undelivered record is the
+            # durable half; stderr is the live half.
+            out[ALERT_KEY] = {
+                "delivered": False,
+                "reason": f"{type(e).__name__}: {e}",
+                "ts": time.time(),
+                "lines": lines,
+            }
             print(f"  alert FAILED: {type(e).__name__}: {e}", file=sys.stderr)
-    save_state(now, state_path)
+    save_state(out, state_path)
     return now, changed
 
 

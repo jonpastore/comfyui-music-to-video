@@ -1,4 +1,4 @@
-"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-11, T9-13a, T9-14, T9-16, and the RENDER_BACKEND seam.
+"""T9-1, T9-2, T9-3, T9-4, T9-5, T9-6, T9-7, T9-8, T9-11, T9-13a, T9-14, T9-16, T9-17, and the RENDER_BACKEND seam.
 
 The fleet machinery is live; these criteria were not independently asserted
 outside pipeline.demo() (slow, and skipped by default). Offline only: the
@@ -9,10 +9,13 @@ conftest stubs pipeline for app tests. This file loads the real module under a
 private name so it cannot hit SwarmUI and cannot inspect the stub.
 """
 import inspect
+import io
 import json
 import os
 import tempfile
+import urllib.error
 import urllib.request
+from contextlib import redirect_stderr
 
 import creds
 import db
@@ -1108,3 +1111,84 @@ def test_t9_14_render_refused_when_other_tenant_holds_card_and_starts_when_free(
         (pipeline.RENDER_BACKEND, pipeline.submit_dir, pipeline.submit_swarm,
          pipeline.submitted_prefixes, pipeline.collect, pipeline._stamp,
          pipeline.gpu._get, pipeline.gpu._post) = was
+# T9-17. once() already catches a dead webhook so watching continues; without
+# a check, deleting the degrade path (or only alerting when notify succeeds)
+# stays green. Unreachable must leave a durable state change and must not be
+# quiet; reachable must deliver the alert lines.
+
+
+def test_t9_17_unreachable_transport_records_state_change_reachable_arrives():
+    """T9-17: unreachable alert transport degrades to a recorded state change.
+
+    Never silence: the transition is written to the state file and the failure
+    is observable. Positive half (TRD-9 §9): with the transport reachable the
+    alert arrives. Mutations that must go red: save state only after a successful
+    notify; swallow the transition with no record; delete the notify path so a
+    reachable transport never delivers.
+    """
+    up = {"h": {"label": "box", "up": True, "detail": "ok",
+                "running": 0, "pending": 0}}
+    down = {"h": {"label": "box", "up": False, "detail": "URLError",
+                  "running": None, "pending": None}}
+
+    was_scan, was_notify = fleet_watch.scan, fleet_watch.notify
+    try:
+        # --- unreachable transport: notify raises, state change still recorded
+        readings = [up, down]
+        idx = {"i": 0}
+
+        def fake_scan(fleet=None):
+            r = readings[min(idx["i"], len(readings) - 1)]
+            idx["i"] += 1
+            return r
+
+        def dead_notify(lines, webhook=None):
+            raise urllib.error.URLError("timed out")
+
+        fleet_watch.scan = fake_scan
+        fleet_watch.notify = dead_notify
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "s.json")
+            err = io.StringIO()
+            with redirect_stderr(err):
+                # seed (first reading is never an alert)
+                fleet_watch.once(
+                    state_path=path, webhook="http://example/hook", quiet=True)
+                now, changed = fleet_watch.once(
+                    state_path=path, webhook="http://example/hook", quiet=True)
+            assert changed and changed[0][2] is False, (
+                f"down edge missing after unreachable transport: {changed}")
+            saved = fleet_watch.load_state(path)
+            assert saved.get("h", {}).get("up") is False, (
+                f"unreachable transport silenced the state change: {saved}")
+            # durable undelivered record — stderr alone is not a recorded state
+            alert = saved.get(fleet_watch.ALERT_KEY)
+            assert isinstance(alert, dict) and alert.get("delivered") is False, (
+                f"unreachable transport left no undelivered record: {saved}")
+            assert alert.get("lines"), (
+                f"undelivered record dropped the alert lines: {alert}")
+            assert any("OFFLINE" in line for line in alert["lines"])
+            assert "alert FAILED" in err.getvalue(), (
+                f"unreachable transport was quiet on stderr: {err.getvalue()!r}")
+
+        # --- reachable transport: the alert arrives
+        alerts = []
+        readings = [up, down]
+        idx["i"] = 0
+        fleet_watch.notify = (
+            lambda lines, webhook=None: alerts.append(list(lines)) or True)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "s.json")
+            fleet_watch.once(
+                state_path=path, webhook="http://example/hook", quiet=True)
+            fleet_watch.once(
+                state_path=path, webhook="http://example/hook", quiet=True)
+            saved = fleet_watch.load_state(path)
+            assert len(alerts) == 1, (
+                f"reachable transport delivered {len(alerts)} alerts, want 1")
+            assert any("OFFLINE" in line for line in alerts[0]), alerts[0]
+            alert = saved.get(fleet_watch.ALERT_KEY)
+            assert isinstance(alert, dict) and alert.get("delivered") is True, (
+                f"successful delivery was not recorded: {saved}")
+    finally:
+        fleet_watch.scan, fleet_watch.notify = was_scan, was_notify

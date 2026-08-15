@@ -167,9 +167,9 @@ already live: `T9-9` (registering an empty backend is refused or flagged — eth
 joined with `models/` at 8 KB and would have been handed real jobs), `T9-14`
 (built: a render refused because the *other tenant* holds the card, naming the
 tenant — `gpu.preflight` keeps who held at start so unload clearing `/api/ps`
-cannot strip the name; check in `test_trd9_fleet.py`), and `T9-17` (an alert
-transport whose failure degrades to a recorded state change, never to silence).
-
+cannot strip the name; check in `test_trd9_fleet.py`), and `T9-17` (built: `fleet_watch.once` writes
+`_alert` on the state file with `delivered` True/False and the alert lines;
+host up/down still advances so T9-8's once-per-edge holds).
 `T9-17` is the one worth defending: **an alerting path whose failure mode is
 quiet is worse than none**, because it is trusted.
 
