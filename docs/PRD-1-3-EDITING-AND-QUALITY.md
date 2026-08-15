@@ -194,7 +194,9 @@ order and take the dependencies from here.
 ### P2 — the arc through to the storyboard
 
 6. `T2-8b`/`T2-8c` tiling and section coverage, then the wand flows (§4.1–4.3),
-   the time meter (§5.1), casting (§5.3).
+   the time meter (§5.1), casting (§5.3). **`T2-20` built**: a distinctive
+   arc string appears in the generated board and is absent when the arc is.
+   Remaining §4 wands (`T2-14`…`T2-19`), the meter, and casting stay.
 7. Per-scene model choice, W2 (`T2-42`…`T2-48`) — last, because `T2-45` needs
    `models.where()`'s three-valued answer respected at enqueue and `T2-48` needs
    per-model ceilings, which is P0 item 1 again. The renderer half of those

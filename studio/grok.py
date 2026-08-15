@@ -326,6 +326,26 @@ def _cast_block(cast):
         "alone.\n\n")
 
 
+def _arc_string(arc_ctx):
+    """Distinctive arc prose the generated board must carry (T2-20).
+
+    Beat first: it is this song's scene in the album. Continuity notes are
+    album-wide facts every scene must honour. Empty when there is no arc,
+    so the absent-arc arm of T2-20 stays empty.
+    """
+    if not arc_ctx:
+        return ""
+    bits = []
+    beat = (arc_ctx.get("beat") or "").strip()
+    if beat:
+        bits.append(beat)
+    for c in (arc_ctx.get("continuity") or []):
+        c = (c or "").strip()
+        if c:
+            bits.append(c)
+    return " ".join(bits)
+
+
 def _arc_block(arc_ctx):
     """Where this song sits in the album's story.
 
@@ -444,7 +464,7 @@ def _parse_response(content):
 
 
 def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_seconds,
-             character_reference=None, world_reference=None):
+             character_reference=None, world_reference=None, arc_ctx=None):
     out = []
     for i, raw in enumerate(scenes, 1):
         s = dict(raw)
@@ -476,7 +496,7 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
         s["length_seconds"] = round(frames / LTX_FPS, 4)
         out.append(s)
 
-    return {
+    board = {
         "project": "Grok Storyboard",
         "album": song.get("album", ""),
         "track_number": 0,
@@ -495,6 +515,10 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
         "global_negative_prompt": out[0].get("negative_prompt", "") if out else "",
         "scenes": out,
     }
+    mark = _arc_string(arc_ctx)
+    if mark:
+        board["album_arc"] = mark
+    return board
 
 
 def validate(sb, exemplar=None, expect_scenes=None):
@@ -722,7 +746,8 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
             obj = _parse_response(content)
             sb = _compose(song, tier, guardrail, style_note, lyrics, obj["scenes"], n_scenes, scene_seconds,
                           character_reference=obj.get("character_reference"),
-                          world_reference=obj.get("world_reference"))
+                          world_reference=obj.get("world_reference"),
+                          arc_ctx=arc_ctx)
             validate(sb, exemplar, expect_scenes=n_scenes)
             return sb
         except tiers.ContentRefused:

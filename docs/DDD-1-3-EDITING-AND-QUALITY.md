@@ -331,6 +331,11 @@ length and requires scene durations to sum to approximately it. Deleting
 the TIMING block wholesale leaves `T2-14a` green and fails this. The
 function is pure; assert on its return value, never by grepping the source.
 
+`T2-20` is **built**. `_compose` stamps `album_arc` from `arc_ctx` beat and
+continuity onto the generated board; no arc leaves the field off. Same
+recorded model response both arms — two fixtures differing is not the
+check. Mutation: drop `arc_ctx` from `_compose` → red.
+
 ### 5.6 Tier 2 is a calibration, not a metric
 
 `vision.py` is a VLM caller and is **not** the tier-2 path. TRD-3 §10 forbids a

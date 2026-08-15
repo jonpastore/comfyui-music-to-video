@@ -715,5 +715,6 @@ current.
 | **`T2-14a` no fixed clip quantum in the planner prompt** | **built** | `_user_prompt` | return value has no `CHUNK` formatting, no "Nothing shorter or longer can be produced", no `duration_guidance`-to-multiples instruction. Mutation: restore any one → red. `_system_prompt` no longer names 4.8125 s either |
 | **`T2-14b` clip-length text derived from planning** | **built** | `_user_prompt` | TIMING clip-length line is `clip_seconds(scene_seconds)`, not a new constant. Same song at 15 s and 30 s yields two statements. Mutation: swap 4.8125 for 15.0 and keep the sentence shape → `T2-14a` passes and this fails |
 | **`T2-14c` TIMING purpose** | **built** | `_user_prompt` | TIMING still states track length and sum-to-track. Mutation: delete the TIMING block wholesale → `T2-14a` passes and this fails |
-| §4 wands, §5 meter, §5.3 casting | **not built** | — | |
+| **`T2-20` distinctive arc string in the generated board** | **built** | `album_arc` | same recorded response with and without `arc_ctx`; beat/continuity token present only when the arc is. Mutation: drop `arc_ctx` from `_compose` → red. Mutation: always stamp the token → the absent-arc arm fails |
+| §4 remaining wands (`T2-14`…`T2-19`), §5 meter, §5.3 casting | **not built** | — | |
 | `T2-42`…`T2-48` per-scene model (W2) | **not built** | — | |

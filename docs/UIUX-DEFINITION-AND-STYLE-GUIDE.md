@@ -281,6 +281,8 @@ The storyboard planner prompt does not tell the model clips are a fixed
 4.8125 s (`T2-14a`). Its clip-length line is `clip_seconds(scene_seconds)`,
 so two plannings produce two TIMING statements (`T2-14b`). TIMING still
 states track length and requires scene durations to sum to it (`T2-14c`).
+A generated storyboard carries a distinctive string from the album arc
+when one exists, and does not when the arc is absent (`T2-20`).
 
 ### 5.3 Space and radius
 
