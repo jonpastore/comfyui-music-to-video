@@ -1666,13 +1666,14 @@ def check_image(path, expect):
         return [finding(path, "image", "opens", REJECT, f"cannot be opened: {e}",
                         remedy="re-render")]
 
+    # T3-4.1-resolution: exact WxH vs the request. unit px (T3-4).
     if expect.get("width") and expect.get("height"):
         want = (int(expect["width"]), int(expect["height"]))
         out.append(finding(path, "image", "resolution",
                            PASS if got == want else REJECT,
                            f"{got[0]}x{got[1]} against {want[0]}x{want[1]} requested",
-                           f"{got[0]}x{got[1]}", f"{want[0]}x{want[1]}", None,
-                           remedy="re-render"))
+                           f"{got[0]}x{got[1]}", f"{want[0]}x{want[1]}", "px",
+                           remedy="re-render pinned to a box that honours it"))
 
     # T3-4.1-not_uniform: max per-channel spatial std. Whole-array std
     # PASSes solid red (R≠G≠B); channel-wise max does not.

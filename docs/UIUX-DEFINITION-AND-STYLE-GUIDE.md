@@ -579,7 +579,11 @@ from breakage. `T3-18` now distinguishes those: QC enqueues nothing, approve
 enqueues one repair. `T3-27` names the other: a finding with `actionable`
 false has no remedy, and approve refuses by that name. `T3-32`: running
 tier 1 over a song is not a jobs row and does not wait on the GPU
-worker — `POST /songs/{id}/qc` measures and returns. `T3-4.1-alpha`: a
+worker — `POST /songs/{id}/qc` measures and returns. `T3-4.1-resolution`:
+a still at the wrong width×height REJECTs `resolution` with
+measured/expected WxH, unit `px` (not blank), and a re-render-pinned
+remedy — not a silent pass when the request was 320×240 and the box
+quietly wrote 160×120. `T3-4.1-alpha`: a
 fully transparent sheet REJECTs `alpha` with max alpha 0 and a
 re-render-seed remedy — not a silent pass on an invisible RGBA still.
 `T3-4.1-not_uniform`:
