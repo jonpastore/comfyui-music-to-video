@@ -98,6 +98,11 @@ the eight things that must become true; they are not a new contract.
 | P3 | Every surface is drivable with no browser, and the page and the JSON agree. A re-render, refine, repair or anchor re-roll leaves predecessor and successor both listed and selectable | `T6-A1`…`T6-A5`, `T1-3` **built** (JSON `POST /api/sets/{id}/render` and UI `POST /sets/{id}/render` emit the same `mixer.render_set_argv`; outputs agree on duration, frames, LUFS), `T2-41` |
 | P4 | An album's songs are scenes of one story, demonstrably — arc content appears in the storyboard and is absent when the arc is; at xxx no scene prompt carries the mainstream lock and the tier's own wording does; the board's guardrail field is this tier's clause and save refuses another tier's wording | `T2-20`, `T2-21`, `T2-22` |
 | P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every clip, a re-plan leaving approved `(clip_idx, seed)` unchanged, the planner prompt not naming a fixed 4.8125 s quantum, its clip-length text derived from planning, TIMING still stating track length and sum-to-track, and generated scenes tiling `[0, duration]` with no gap or overlap | `T2-8`, `T2-8b`, `T2-12a`, `T2-13a`, `T2-13b`, `T2-13c`, `T2-14a`, `T2-14b`, `T2-14c` |
+| P1 | The number on the screen is the number in the file — set length, to 0.05 s, with echo, hold, beatmatch, trim and an interstitial card all in play | `T1-7`, `T1-8`, `T1-27`, `T3-11` |
+| P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b` **built** (`mix_audio` RMS/s slope on a constant sine), `T1-12`, `T1-20d` |
+| P3 | Every surface is drivable with no browser, and the page and the JSON agree | `T6-A1`…`T6-A4`, `T1-3`, `T2-41` |
+| P4 | An album's songs are scenes of one story, demonstrably — arc content appears in the storyboard and is absent when the arc is; the board's guardrail field is this tier's clause and save refuses another tier's wording | `T2-20`, `T2-21`, `T2-22` |
+| P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every clip, a re-plan leaving approved `(clip_idx, seed)` unchanged, a plan that misses the track by more than one clip refused before render, the planner prompt not naming a fixed 4.8125 s quantum, its clip-length text derived from planning, and TIMING still stating track length and sum-to-track | `T2-8`, `T2-12a`, `T2-13a`, `T2-13b`, `T2-13c`, `T2-13e`, `T2-14a`, `T2-14b`, `T2-14c` |
 | P5a | Assembling a song with a 1664×960 clip among 832×480 siblings keeps the ×2 size and does not letterbox; mixed aspect is refused | `T5-7` |
 | P5b | Every clip of one song is normalised to one output fps, asserted on the assembled file | `T2-13d` |
 | P6 | Every rendered artefact is measured against the workflow that asked for it, never against a constant. A mixed-model clip is judged at its native fps, not the song's output fps. A silent or near-silent take is rejected on measured low/mid/high band energy, not peak volume | `T3-2`, `T3-4`, `T3-7`, `T3-9`, `T2-13f` |
@@ -183,7 +188,10 @@ unbuilt work and are not" — the ledger with line counts is DDD §1.
    audio trim follow the legal count, not `LTX25_LEN`/`CHUNK`. `T2-13c`
    is **built**: the approve grid enumerates `clip_count` (duration /
    legal `scene_seconds`), so a 20-scene storyboard on a 41-clip song
-   still lists every clip.
+   still lists every clip. `T2-13e` is **built**: `clip_plan` refuses
+   before render when planned clip durations miss the track by more
+   than one clip; assemble still clamps to the track and no longer
+   treats a 4.8125 s overrun as the norm.
 2. **The service split**, TRD-1 and TRD-2 (`T6-A3`). `qc_service.py` already
    demonstrates it and is the pattern to copy. Doing this after the features
    means writing them twice.

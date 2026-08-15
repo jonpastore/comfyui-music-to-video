@@ -419,6 +419,12 @@ length is the divisor, the count is ours.
    `refs`, so re-planning leaves the approved `(clip_idx, seed)` set
    identical (`T2-13b`); `approve_context` enumerates `clip_count`, so a
    20-scene storyboard on a 41-clip song still lists every clip (`T2-13c`).
+   **`T2-13e` built.** `clip_plan` with an `audio_path` sums
+   `clip_seconds(length_seconds)` (CHUNK when missing) and refuses when
+   that total misses the track by more than one clip. `main()` therefore
+   writes no graphs. nclips-only callers are display and skip the gate.
+   `assemble_song` keeps `-t audio_dur`; its comment no longer says
+   clips are quantised so the video always overruns.
 4. **`T2-47` built.** `main()` takes `scene.video_model` when present, else
    `--video-model`. One job with a scene marked `s2v` and one left `ltx25`
    writes WAN 77@16.0 and LTX 81@16.8312 (`test_t2_47_mixed_model.py`).
@@ -617,6 +623,7 @@ documents, not a preference.
     T6-13a (songs.duration)  ->  T2-12a (legal frame count + clip_seconds honours it)
                                  ->  T2-13a (renderer honours that length)
                                  ->  T2-13c (built), T2-8b (built), T2-8c (built), T2-8, T2-9
+                                 ->  T2-13c (built), T2-13e (built), T2-8, T2-9
                                  ->  W2 T2-47 mixed-model native fps (built)
                                  ->  W2 T2-48 per-scene ceilings compose (built)
                                  ->  T2-13d assembly one output fps (built)

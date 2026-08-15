@@ -328,6 +328,10 @@ named refusal (measured vs chosen), not a quiet annotation; split is
 The grid lists every duration-owned clip even when the storyboard has
 fewer scenes (`T2-13c`); a 20-scene board on a 41-clip song still
 renders tiles 0..40.
+A plan whose clip durations miss the track by more than one clip is
+refused before render (`T2-13e`); the storyboard page still allocates
+from `nclips` alone. Assembly still clamps to the track — an overrun
+is a signal, not the expected leftover of 4.8125 s quantisation.
 The storyboard planner prompt does not tell the model clips are a fixed
 4.8125 s (`T2-14a`). Its clip-length line is `clip_seconds(scene_seconds)`,
 so two plannings produce two TIMING statements (`T2-14b`). TIMING still

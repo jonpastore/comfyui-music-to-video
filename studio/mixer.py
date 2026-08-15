@@ -596,10 +596,10 @@ def assemble_song(clip_paths, mp3_path, out_path, progress=None, fade=0.0):
     if not clip_paths:
         raise ValueError("clip_paths is empty")
     progress(f"probing {len(clip_paths)} clips + audio")
-    # The song is as long as the TRACK. Clips are quantised to 4.8125s so the
-    # video always overruns -- 50 clips of Back Alley Pussy are 240.63s against
-    # a 237.67s song, and the first complete render ended with 3 seconds of
-    # silent picture. -shortest was supposed to prevent exactly that and did
+    # The song is as long as the TRACK. Under variable lengths the clips
+    # should sum to approximately the song -- an overrun is a signal, not
+    # the norm (T2-13e refuses a plan that misses by more than one clip).
+    # -shortest was supposed to prevent leftover silent picture and did
     # not (it is unreliable when the video is re-encoded from a concat
     # demuxer), so the length is stated outright as well.
     audio_dur = probe(mp3_path)["duration"]

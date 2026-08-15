@@ -296,15 +296,29 @@ def clip_plan(scenes, audio_path=None, nclips=None):
     studio's web layer renders this on every page view and has the duration in
     the songs row. It is an ALTERNATIVE INPUT, not a second implementation:
     everything below is still the one allocation.
+
+    T2-13e: when the track length is known (audio_path), a plan whose clip
+    durations miss it by more than one clip is refused here, before render.
+    nclips-only callers have no track; they are display, not this gate.
     """
+    track = audio_duration(audio_path) if audio_path else None
     if nclips is None:
-        nclips = math.ceil(audio_duration(audio_path) / CHUNK)
+        nclips = math.ceil(track / CHUNK)
     counts = allocate(scenes, nclips)
-    plan, i = [], 0
+    plan, i, durs = [], 0, []
     for scene, n in zip(scenes, counts):
+        dur = clip_seconds(scene.get("length_seconds"))
         for _ in range(n):
             plan.append((i, scene, shot_directive(scene, i)))
+            durs.append(dur)
             i += 1
+    if track is not None and durs:
+        planned = sum(durs)
+        quantum = max(durs)
+        if abs(planned - track) > quantum + 1e-9:
+            raise ValueError(
+                f"clip plan {planned:.4f}s misses track {track:.4f}s "
+                f"by more than one clip ({quantum:.4f}s)")
     return plan
 
 
