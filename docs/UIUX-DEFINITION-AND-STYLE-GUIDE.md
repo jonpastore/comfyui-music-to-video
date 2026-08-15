@@ -204,8 +204,9 @@ Joins, playhead and lanes are the same view: `.tl-join[data-t]` (drag POSTs
 `secs` only), `.tl-playhead` (`?at=`), `.tl-lane-pt` (stored curve, set-relative
 `t`). `GET /api/sets/{id}` reports each join's nearest-frame `delta` and
 the set's `rounding.abs_delta_sum`, bounded by half a frame per join
-(`T1-6`); the page does not invent a second clock. Easy omits the lane
-strip. Waveform is still a PNG. Forms remain.
+(`T1-6`); video cuts snap to that frame while audio crossfades stay on
+the stored second (`T1-5`). The page does not invent a second clock.
+Easy omits the lane strip. Waveform is still a PNG. Forms remain.
 A stored `gain_db` ramp does reach the rendered file (`T1-9b`, RMS/s
 slope on `mix_audio`); so do `pan` (L/R energy) and the filter lanes
 (band energy) (`T1-12`). A fully-populated lane's filter text stays under

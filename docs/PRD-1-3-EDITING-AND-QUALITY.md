@@ -210,7 +210,7 @@ it is not deleted — the master stage really is a prerequisite for automation
 being usable, and audiences really do need the master. Follow §6.0's capability
 order and take the dependencies from here.
 
-3. Clock and rounding (`T1-5`; `T1-6` **built** as `mixer.rounding_report` / `GET /api/sets/{id}` `rounding.abs_delta_sum` ≤ half a frame per join); peaks and the waveform data model
+3. Clock and rounding (`T1-5` **built** as video xfade/layer/black offset via `mixer.frame_round`, audio on the stored second, `studio/test_t1_5_off_grid_join.py`; `T1-6` **built** as `mixer.rounding_report` / `GET /api/sets/{id}` `rounding.abs_delta_sum` ≤ half a frame per join); peaks and the waveform data model
    (`T1-13`/`T1-14` **built** as `mixer.peaks`; `T1-15` empty-reason **built**
    as `{pairs, reason}` on `peaks_from_path` / `GET /api/songs/{id}/peaks`);
    the proxy-preview contract (`T1-16` **built** as `mixer.preview_proxy` /

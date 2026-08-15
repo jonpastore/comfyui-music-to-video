@@ -1575,9 +1575,12 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
             # the fade-out lives inside the accumulated chain, so it has to fit
             # there exactly as a crossfade would
             _check_transition_fits(fade, running_dur)
-            st = max(0.0, running_dur - fade)
-            lines += _black_video_lines(running_v, nxt_v, out_v, st, fade, hold, w, h, fps, i)
-            lines += _black_audio_lines(running_a, nxt_a, out_a, st, fade, hold, i)
+            # Video snaps to the nearest output frame; audio stays on the
+            # stored second. docs/TRD-1 T1-5. Brand marks stay on the audio clock.
+            st_a = max(0.0, running_dur - fade)
+            st_v, _delta = frame_round(st_a, fps)
+            lines += _black_video_lines(running_v, nxt_v, out_v, st_v, fade, hold, w, h, fps, i)
+            lines += _black_audio_lines(running_a, nxt_a, out_a, st_a, fade, hold, i)
             # the middle of the black, where a mark has the screen to itself
             _brand_at(brands, items[i], running_dur + hold / 2.0, hold or fade * 2)
             running_dur += _advance(items[i], durations[i + 1])
@@ -1589,19 +1592,22 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
             running_dur += _advance(items[i], durations[i + 1])
         else:
             _check_transition_fits(secs, running_dur)
-            offset = running_dur - secs
+            # Join start t is running_dur - secs (same as timeline_joins).
+            # Video uses the nearest frame of that instant; audio does not.
+            offset_a = running_dur - secs
+            offset_v, _delta = frame_round(offset_a, fps)
             if blend:
                 # layer REPLACES the xfade -- the two are alternative ways of
                 # crossing the same window, and running them both would fade
                 # the footage the blend is made of.
-                lines += _layer_join(running_v, nxt_v, out_v, offset, secs, blend, i)
+                lines += _layer_join(running_v, nxt_v, out_v, offset_v, secs, blend, i)
             else:
                 xf = _XFADE_NAMES.get(transition, "fade")
-                lines.append(f"[{running_v}][{nxt_v}]xfade=transition={xf}:duration={secs:.3f}:offset={offset:.3f}[{out_v}]")
+                lines.append(f"[{running_v}][{nxt_v}]xfade=transition={xf}:duration={secs:.3f}:offset={offset_v:.3f}[{out_v}]")
             # audio crosses the same window either way: layer is video-only
             comp = _duck_fragment(items[i].get("effects_json"))
             if comp:
-                lines += _duck_join(running_a, nxt_a, out_a, offset, secs, comp, i)
+                lines += _duck_join(running_a, nxt_a, out_a, offset_a, secs, comp, i)
             else:
                 lines.append(f"[{running_a}][{nxt_a}]acrossfade=d={secs:.3f}[{out_a}]")
             _brand_at(brands, items[i], running_dur - secs / 2.0, secs)
@@ -1948,10 +1954,11 @@ DEFAULT_OUT_FPS = 30.0
 def frame_round(t, fps):
     """Nearest whole frame at fps. Returns (t_rounded, delta).
 
-    docs/TRD-1 §4.3: seconds stay canonical; video rounds nearest, not
-    truncated. delta = t_rounded - t. |delta| is at most half a frame.
-    Half-up so a time sitting exactly between frames does not depend
-    on Python 3's banker's round.
+    docs/TRD-1 §4.3 / T1-5: seconds stay canonical; video join offsets
+    round nearest, not truncated; audio stays at the stored second.
+    delta = t_rounded - t. |delta| is at most half a frame. Half-up so
+    a time sitting exactly between frames does not depend on Python 3's
+    banker's round.
     """
     fps = float(fps)
     if fps <= 0:

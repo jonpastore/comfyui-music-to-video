@@ -197,10 +197,15 @@ silent -6 dB (mixer.py `_audio_chain`'s own docstring).
 
 ### 5.1 The clock, and one place that rounds
 
-`T1-5` still needs the video cut on the nearest frame and the audio
-crossfade at the exact second. `T1-6` is **built**: `mixer.frame_round(t, fps)
--> (t_rounded, delta)` is the one place that rounds (nearest, not
-truncation); `mixer.rounding_report` walks the same joins as
+**`T1-5` is built.** `mixer.frame_round(t, fps) -> (t_rounded, delta)` is
+the one place that rounds (nearest, not truncation). `_build_render_set_filter`
+uses `t_rounded` for xfade/layer/black video offsets; audio `acrossfade` /
+`afade` / `_duck_join` stay on the stored second. Brand marks stay on the
+audio clock. A 2.02 s item with a 0.5 s fade at 30 fps puts xfade at
+1.533 s (46/30), not exact 1.520 and not truncated 1.500
+(`studio/test_t1_5_off_grid_join.py`).
+
+`T1-6` is **built**: `mixer.rounding_report` walks the same joins as
 `timeline_joins` and reports per-join delta plus `abs_delta_sum`.
 `GET /api/sets/{id}` carries that object, so the half-frame-per-join
 bound is checkable from the model without rendering. Truncation is the
