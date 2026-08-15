@@ -3133,6 +3133,55 @@ ANCHOR_HELP = {
         "different text."]},
 }
 
+# T2-36: kind marks a help note (behind `?`) vs a day-8 warning that must stay
+# visible. A client that cannot tell them apart will hide the wrong one.
+HELP_NOTE = "note"
+HELP_WARNING = "warning"
+
+# Warnings that stay pinned beside the control on the HTML form (day 8). The
+# API carries the same strings so a replacement client does not invent them.
+ANCHOR_WARNINGS = {
+    "negative": "not applied in fast mode — dropped, not sent at CFG 1.0",
+    "denoise": "returns noise below 1.0",
+}
+
+
+def controls_help_payload(help_map=None, warnings=None):
+    """T2-36: help text per control for any client.
+
+    Empty entries are omitted (not present-and-empty). Each help entry is
+    kind=note; day-8 footguns are kind=warning (as entry.warning or the
+    whole entry when there is no note).
+    """
+    help_map = ANCHOR_HELP if help_map is None else help_map
+    warnings = ANCHOR_WARNINGS if warnings is None else warnings
+    out = {}
+    for key, entry in (help_map or {}).items():
+        if not entry:
+            continue
+        if isinstance(entry, dict):
+            label = str(entry.get("label") or "").strip()
+            body = entry.get("body")
+            paras = [p for p in (body or []) if str(p).strip()] if body else []
+            if not label and not paras:
+                continue
+            out[key] = {"kind": HELP_NOTE, "label": label, "body": list(body or [])}
+        else:
+            text = str(entry).strip()
+            if not text:
+                continue
+            out[key] = {"kind": HELP_NOTE, "text": text}
+    for key, text in (warnings or {}).items():
+        text = str(text or "").strip()
+        if not text:
+            continue
+        warn = {"kind": HELP_WARNING, "text": text}
+        if key in out:
+            out[key]["warning"] = warn
+        else:
+            out[key] = warn
+    return out
+
 
 def anchor_render_settings(form):
     """The render knobs off the form, clamped, in the shape pipeline.gen_anchor
@@ -7964,13 +8013,19 @@ async def api_set_render_pick(id: int, request: Request, path: str = Form("")):
 
 @app.get("/api/anchors")
 def api_anchors_list(album: str = "", scope_kind: str = "", scope_value: str = ""):
-    """T6-A1 / TRD-4+TRD-7: list candidates for the named JSON loop."""
+    """T6-A1 / TRD-4+TRD-7: list candidates for the named JSON loop.
+
+    T2-36: the list response carries help text per control (warnings marked
+    distinctly from notes) so any client can put notes behind a `?` without
+    hardcoding them, and cannot confuse a day-8 warning for a help note.
+    """
     scope_value = (scope_value or album or "").strip()
     scope_kind = (scope_kind or ("album" if scope_value else "")).strip()
     return JSONResponse({
         "album": scope_value,
         "groups": _anchor_groups(scope_kind, scope_value),
         "refs": _refs_payload(scope_value) if scope_value else [],
+        "help": controls_help_payload(),
     })
 
 
