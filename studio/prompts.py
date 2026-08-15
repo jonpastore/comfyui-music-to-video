@@ -65,6 +65,9 @@ PROMPT_TYPES = {
     # same history as every other prompt here rather than a bespoke store.
     # Untiered: what is wrong with a render is not a function of its rating.
     "qc_remedy":     {"tiered": False, "label": "QC remedy"},
+    # The album's arc generation prompt (theme / direction). Untiered: the
+    # story does not change because the wardrobe does. docs/TRD-2 T2-5.
+    "arc":           {"tiered": False, "label": "Album arc prompt"},
 }
 # T7-13: one type per view, generated from the view table so T7-1 still holds.
 # Untiered — camera placement is not a function of the rating.
@@ -198,6 +201,20 @@ def delete(vid):
     return row
 
 
+def restore(vid):
+    """A new version carrying this one's text. The old row stays.
+
+    Linear history: restore is not an overwrite and not a pointer swap.
+    Deleting this while leaving get() is the T2-5 mutation.
+    """
+    row = get(vid)
+    if not row:
+        raise ValueError("that version no longer exists")
+    label = f"restored v{row['version_number']}"
+    return save(row["scope_value"], row["prompt_type"], row["text"], label,
+                tier=row["tier"], character_id=row["character_id"])
+
+
 def mark_used(vids):
     """Count a version as USED -- called when a render is queued with it, never
     when it is merely loaded into the form.
@@ -319,6 +336,15 @@ def demo():
         raise AssertionError("an unknown prompt type was accepted")
     except ValueError:
         pass
+
+    # T2-5: restore puts the previous text back as a new version; old rows stay
+    r1 = save("Restore Album", "arc", "first theme.", "first")
+    r2 = save("Restore Album", "arc", "second theme.", "second")
+    put_back = restore(r1["id"])
+    assert put_back["text"] == r1["text"]
+    assert latest("Restore Album", "arc")["text"] == r1["text"]
+    assert get(r1["id"])["text"] == r1["text"]
+    assert get(r2["id"])["text"] == r2["text"]
 
     print("prompts.py OK")
     return True

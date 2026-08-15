@@ -27,7 +27,10 @@ import os
 import time
 
 import chat
+import prompts
 import tiers
+
+ARC_PROMPT = "arc"
 
 MAX_DIRECTION = 1000
 # A field is prose for a human and a prompt fragment for a model; both want it
@@ -107,6 +110,23 @@ def require_theme(theme):
     if not text:
         raise ValueError("the arc wand needs a theme — empty produces a generic arc")
     return text
+
+
+def save_prompt(album, text, label):
+    """Edit the album's arc generation prompt. A new wording is a new version."""
+    return prompts.save(album, ARC_PROMPT, check_direction(text), label)
+
+
+def current_prompt(album):
+    return prompts.latest(album, ARC_PROMPT)
+
+
+def restore_prompt(vid):
+    """Put a previous arc prompt back as the current wording. T2-5."""
+    row = prompts.get(vid)
+    if not row or row["prompt_type"] != ARC_PROMPT:
+        raise ValueError("that is not an arc prompt version")
+    return prompts.restore(vid)
 
 
 def validate(raw, song_ids, transitions):

@@ -331,7 +331,9 @@ states track length and requires scene durations to sum to it (`T2-14c`).
 Generated scenes tile the song (`T2-8b`): starts ascend, each end is the
 next start, first is 0, last is duration ± 0.05 s; a gap or overlap is
 refused at `validate`.
-The album arc page requires a **theme** before the wand runs (`T2-14`).
+Editing the album's arc prompt creates a new version; restore puts the
+previous wording back as the current text (`T2-5`). The album arc page
+requires a **theme** before the wand runs (`T2-14`).
 What comes back is a **proposal** (`--muted` plus a `model` tag, §7b.5),
 not a saved story: Accept writes the committed pair, Reject leaves the
 previous file on disk (`T2-15`). Applying per-song summaries to more

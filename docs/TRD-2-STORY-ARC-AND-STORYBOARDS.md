@@ -671,13 +671,13 @@ timing — `clip_plan` is the one, and every client calls it.
    marked **provisional** and says what it cannot yet distinguish.
 
    One-sided in this document today, listed so nobody has to re-derive it:
-   `T2-5` (restore is named but never exercised), `T2-6` (a no-op delete renumbers nothing), `T2-7` (provenance fields can hold anything), `T2-18` and `T2-33`/`T2-34` (a picker that marks EVERYTHING unavailable passes; it needs the paired positive), `T2-36`/`T2-37` (payload presence with no consumer). `T2-12a`'s stored measurement must also be asserted to MATCH the ceiling the code uses, or the record and the constant drift apart.
+   `T2-6` (a no-op delete renumbers nothing), `T2-7` (provenance fields can hold anything), `T2-18` and `T2-33`/`T2-34` (a picker that marks EVERYTHING unavailable passes; it needs the paired positive), `T2-36`/`T2-37` (payload presence with no consumer). `T2-12a`'s stored measurement must also be asserted to MATCH the ceiling the code uses, or the record and the constant drift apart.
 
 ### The positive half of each one-sided criterion
 
 | criterion | its positive half |
 |---|---|
-| `T2-5` restore | actually RESTORE a version and assert the arc text returns to it. "Retrievable and restorable" was never exercised |
+| `T2-5` restore | actually RESTORE a version and assert the arc text returns to it |
 | `T2-6` delete does not renumber | assert a delete HAPPENED first (row count drops by one), or a no-op delete renumbers nothing and passes |
 | `T2-7` provenance recorded | assert the recorded model equals the model that was ASKED for, and the timestamp lies between the call's start and end. Fields that merely exist can hold anything |
 | `T2-18` limits in the response | assert the returned limit is the one ENFORCED: submit text one character over it and confirm the refusal quotes the same number |
@@ -718,6 +718,7 @@ current.
 | **`T2-14a` no fixed clip quantum in the planner prompt** | **built** | `_user_prompt` | return value has no `CHUNK` formatting, no "Nothing shorter or longer can be produced", no `duration_guidance`-to-multiples instruction. Mutation: restore any one → red. `_system_prompt` no longer names 4.8125 s either |
 | **`T2-14b` clip-length text derived from planning** | **built** | `_user_prompt` | TIMING clip-length line is `clip_seconds(scene_seconds)`, not a new constant. Same song at 15 s and 30 s yields two statements. Mutation: swap 4.8125 for 15.0 and keep the sentence shape → `T2-14a` passes and this fails |
 | **`T2-14c` TIMING purpose** | **built** | `_user_prompt` | TIMING still states track length and sum-to-track. Mutation: delete the TIMING block wholesale → `T2-14a` passes and this fails |
+| **`T2-5` arc prompt restore** | **built** | `restore_prompt` | edit saves a new `arc` version; previous row stays readable; restore puts that text back as current (`test_t2_5_arc_prompt_restore.py`). Mutation: delete restore → current stays the edit. Mutation: overwrite on edit → previous id is gone |
 | **`T2-14` arc wand needs a theme** | **built** | `require_theme` / `generate` | empty or whitespace theme raises; a non-empty theme produces an arc (`test_t2_14_arc_wand.py`). Mutation: drop `require_theme` → empty generate is green and this fails |
 | **`T2-15` proposal until accept** | **built** | `write_proposal` / `discard_proposal` / `commit_proposal` | generate writes `*_arc.proposal.json` only. Reject re-reads the previous committed file byte-identical. Accept writes the pair and the `arcs` row. Mutation: land the proposal in `arcs/` on generate → reject no longer leaves the previous file |
 | **`T2-16` multi-song apply** | **built** | `apply_summaries` | two song ids without `confirm` raise; with `confirm` writes exactly those files under `applied/`. Accept does not write `applied/`. Mutation: apply two songs with `confirm=False` → red |

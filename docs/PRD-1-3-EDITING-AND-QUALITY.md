@@ -167,7 +167,8 @@ lane's `fragment` is ≤ `FILTER_EXPR_MAX_BYTES` (8 KB) and `mix_audio`
 accepts it; `T1-11` **built** — POST of two
 points at the same `t` is 400 and names that `t`), `studio/arc.py` + the arc routes (TRD-2 §3.1's
 JSON-canonical arc), `db.artefacts` (tier 0), `prompts.py` (TRD-2 §3.3's
-versioning, reused by `T3-20`). TRD-3 §2.1 is explicit that §4 and §6 "read as
+versioning, reused by `T3-20`; **`T2-5` built** — edit is a new `arc`
+version and restore puts the previous text back). TRD-3 §2.1 is explicit that §4 and §6 "read as
 unbuilt work and are not" — the ledger with line counts is DDD §1.
 
 ### P0 — unblock, then separate
@@ -226,7 +227,9 @@ order and take the dependencies from here.
 6. `T2-8b`/`T2-8c` tiling and section coverage, then the wand flows (§4.1–4.3),
    the time meter (§5.1), casting (§5.3). **`T2-8b` built**: `_compose`
    stamps scene `start`/`end` so they tile `[0, duration]`; `validate`
-   refuses a gap or overlap (`test_t2_8b.py`). **`T2-14`/`T2-15`/`T2-16` built**:
+   refuses a gap or overlap (`test_t2_8b.py`). **`T2-5` built**: editing the
+   album's arc prompt creates a new version; restore puts the previous text
+   back (`test_t2_5_arc_prompt_restore.py`). **`T2-14`/`T2-15`/`T2-16` built**:
    the arc wand refuses an empty theme and runs with a non-empty one; reject
    leaves the previous committed file; accept saves; applying more than one
    song needs confirmation and then writes exactly those songs (`test_t2_14_arc_wand.py`).
