@@ -1059,6 +1059,9 @@ def check_video(path, expect, kind="clip"):
                 f"{d:.3f}s against the {want:.3f}s the workflow asked for",
                 round(d, 3), round(want, 3), "s", remedy="re-render"))
 
+    # T3-4.2-frame_count: exact frame count vs the workflow request.
+    # measured is _ffprobe_frames (not duration*fps). Mismatch REJECTs.
+    # T3-7 owns latent_8n1 (model step); this is the plain request match.
     frames = _ffprobe_frames(path)
     if frames is not None:
         if expect.get("frames"):

@@ -615,6 +615,10 @@ wrote 24.
 measured/expected seconds (probe vs workflow frames÷fps), unit `s`, and a
 re-render remedy — not a silent pass when the workflow asked for 2.0 s and
 the box quietly wrote a truncated file.
+`T3-4.2-frame_count`: a clip at the wrong frame count REJECTs
+`frame_count` with measured/expected count from ffprobe, unit
+`frames`, and a re-render remedy — not a silent pass when the
+workflow asked for 505 and the file has 81 (not `T3-7` latent step).
 `T3-4.3-sr`: a take at the wrong
 sample rate REJECTs `sample_rate` with measured/expected Hz and a
 re-render remedy — not a silent pass when the request was 48000 and

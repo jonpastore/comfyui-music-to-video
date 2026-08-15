@@ -193,7 +193,10 @@ retimed FLAGs with unit `fps`, no expect emits nothing,
 `duration` vs workflow frames÷fps via `mixer.probe` within `DURATION_TOL_S`:
 matching PASSes, wrong length REJECTs with unit `s`, no expect emits nothing,
 `test_t3_4_2_duration.py` (was demo-only; song mp3 is `T3-4.4-mp3`, audio is
-`T3-4.3-duration`); **`T3-4.3-sr` built** — `check_audio` sample
+`T3-4.3-duration`); **`T3-4.2-frame_count` built** — clip
+`frame_count` vs workflow request via `qc._ffprobe_frames`: matching PASSes,
+81-vs-505 REJECTs with unit `frames`, no expect emits nothing; not `T3-7`
+`latent_8n1`, `test_t3_4_2_frame_count.py` (was demo-only); **`T3-4.3-sr` built** — `check_audio` sample
 rate as requested via `mixer.probe`: matching Hz PASSes, mismatch
 REJECTs, no expect emits nothing, `test_t3_4_3_sr.py`; **`T3-4.3-true-peak` built** — `check_audio` true peak vs `effects.LOUDNORM_TP` (+`TRUE_PEAK_TOLERANCE_DB`) via `effects.measure_loudness`: under PASSes, over FLAGs, missing Peak FLAGs, `test_t3_4_3_true_peak.py`; **`T3-4.3-ch` built** — `mixer.probe` exposes
 `channels`; `check_audio` `channels` when `expect.channels` is set
