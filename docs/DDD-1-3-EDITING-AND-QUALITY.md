@@ -18,7 +18,7 @@ is named.
 | module | lines | owns | state against its TRD |
 |---|---|---|---|
 | `studio/app.py` | 7589 | 156 routes, 36 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}/arc`, `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`, `/api/anchors`; song page `video_model` select is `models.renderable("video")` (`T2-33`); `sets_service.py` / `storyboard_service.py` are still T6-A3 |
-| `studio/mixer.py` | 2116 | set duration, `transition_times` (`T3-12` model), both filter graphs, overlap arithmetic, beatmatch, ramps, splice, `spliced_duration` / `SPLICE_DURATION_TOLERANCE` (`T3-10`), song-assembly geometry (`T5-7`) and fps (`T2-13d`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox. Mixed clip fps honours the highest and is asserted on the assembled file |
+| `studio/mixer.py` | 2116 | set duration, `transition_times` (`T3-12` model), both filter graphs, overlap arithmetic, beatmatch, ramps, splice, `spliced_duration` / `SPLICE_DURATION_TOLERANCE` (`T3-10`), song-assembly geometry (`T5-7`) and fps (`T2-13d`), `EXPORT_FORMATS` (`T1-24`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox. Mixed clip fps honours the highest and is asserted on the assembled file. Export encode args are a named row of `EXPORT_FORMATS`; `render_set(..., fmt=)` looks the row up and passes it to ffmpeg (`test_t1_24_export_format_row.py`) |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `export_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` and the loudness half of §4.3. `T3-9` silence is **not** here |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `FILTER_EXPR_MAX_BYTES = 8192` (`T1-10`), `fragment`, `item_audio`, `wants_master_loudnorm` | built |
 | `studio/qc.py` | 642 | TRD-3 tier 1 in full; **T3-8** `expect_interpolated` (RIFE `(n-1)*m+1` + `make_postproc.out_fps`; duration/fps/frame_count, not latent exemption alone — `test_t3_8_interpolated.py`); T3-9 `measure_band_energy` (low/mid/high mean, not peak); **T3-10** `check_splice` vs `mixer.spliced_duration` / `bridge_seconds` (`test_t3_10_splice.py`); **T3-11** `check_set` / `run(kind="set")` duration vs `mixer.set_duration()` within `mixer.SET_DURATION_TOLERANCE` on the artefact (`test_t3_11_set_duration.py`); T3-12 `transition_lands` (pixels vs `mixer.transition_times`, half-frame, no remedy); T3-13 `score_zimage_sweep`; T3-15 histogram `identity_embed`; T3-16 `identity_verdict`; T3-17 `score_identity_artefact` (per artefact vs chosen anchor); T3-26 `measure_refiner_help` (fail-closed labelled set, not opportunistic); T3-28 `check_identity_wrong` / `identity_wrong_remedy`; T3-27 `CHECK_REMEDY_CLASS` / `actuator_for` | built |
@@ -268,6 +268,14 @@ command, not file bytes (`creation_time`). Extra form fields on the UI POST
 are not in the model and do not reach argv. Two encodes of the same items
 agree on duration (`SET_DURATION_TOLERANCE`), frame count and integrated
 loudness (`studio/test_t1_3_json_export_argv.py`).
+
+**`T1-24`, 2026-08-14.** `mixer.EXPORT_FORMATS` is the table of ffmpeg
+parameter sets. The shipped `mp4` row is the argv `_render_set_args`
+already emitted. `export_format_args(fmt)` looks the row up; a missing
+name is refused. `render_set` / `render_set_argv` take `fmt=` and pass
+the row through to `_run_ffmpeg`. A test-only row is inserted and
+rendered; the file is that codec and that metadata
+(`studio/test_t1_24_export_format_row.py`). No custom encoder or muxer.
 
 **`T1-4`, 2026-08-14.** The filter graph is regenerated from the stored
 model on every render. `mixer.render_set_graph(items)` is the

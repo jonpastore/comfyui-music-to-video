@@ -237,6 +237,10 @@ order and take the dependencies from here.
    `POST /sets/{id}/render` emit the same `mixer.render_set_argv` for
    the stored set; extra form fields on the UI POST are ignored; the
    two encodes agree on duration, frame count and integrated loudness.
+   **`T1-24` built** — an export format is a row of
+   `mixer.EXPORT_FORMATS`; a test-only row is rendered through ffmpeg
+   (`studio/test_t1_24_export_format_row.py`). The table is not
+   display-only.
    **`T1-4` built** — mutate stored `gain_db` and the next
    `mixer.render_set_graph` from `_set_render_items` changes; a cached
    ffmpeg string would stay put.

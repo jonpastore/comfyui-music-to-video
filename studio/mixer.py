@@ -825,6 +825,29 @@ _XFADE_NAMES = {"fade": "fade", "dissolve": "dissolve", "wipe": "wipeleft"}  # x
 # this rather than keeping their own list to drift out of step with it.
 TRANSITIONS = ("fade", "dissolve", "wipe", "cut", "black")
 
+# Export formats are ffmpeg parameter sets. Adding one is a row (T1-24);
+# there is no custom encoder or muxer. Default matches the argv this
+# module already shipped so existing renders stay byte-identical.
+DEFAULT_EXPORT_FORMAT = "mp4"
+EXPORT_FORMATS = {
+    "mp4": (
+        "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k",
+    ),
+}
+
+
+def export_format_args(fmt=None):
+    """Argv fragment for a named row of EXPORT_FORMATS. A missing name
+    is refused so a typo cannot silently fall back to the shipped encode."""
+    name = DEFAULT_EXPORT_FORMAT if fmt is None else fmt
+    try:
+        row = EXPORT_FORMATS[name]
+    except KeyError:
+        raise ValueError(f"unknown export format {name!r}")
+    return list(row)
+
+
 # A title/branding card is a first-class item, not an overlay
 # (docs/TRD-1 §8b). An overlay changes no duration; this one does, so it
 # walks the same set_duration / render_set / mix_audio path as a song.
@@ -1587,10 +1610,11 @@ def _build_render_set_filter(infos, durations, items, w, h, fps):
     return lines, running_v, running_a, running_dur, brands
 
 
-def _render_set_args(items, out_path, progress=None):
+def _render_set_args(items, out_path, progress=None, fmt=None):
     """Tail args `_run_ffmpeg` receives for this set, plus predicted duration.
 
     No encode. Branding stills are included when the model asks for them.
+    fmt= selects a row of EXPORT_FORMATS (T1-24).
     """
     progress = progress or _NOOP
     if not items:
@@ -1636,14 +1660,13 @@ def _render_set_args(items, out_path, progress=None):
 
     args = inputs + ["-filter_complex", ";\n".join(lines),
                       "-map", f"[{out_v}]", "-map", f"[{out_a}]",
-                      "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
-                      "-c:a", "aac", "-b:a", "192k", out_path]
+                      *export_format_args(fmt), out_path]
     return args, predicted_dur
 
 
-def render_set_argv(items, out_path, progress=None):
+def render_set_argv(items, out_path, progress=None, fmt=None):
     """Full ffmpeg argv for this set. T1-3 compares this, not file bytes."""
-    args, _dur = _render_set_args(items, out_path, progress)
+    args, _dur = _render_set_args(items, out_path, progress, fmt=fmt)
     return ["ffmpeg", "-y", "-v", "error", "-stats"] + args
 
 
@@ -1657,13 +1680,13 @@ def render_set_graph(items, out_path=None, progress=None):
     return argv[argv.index("-filter_complex") + 1]
 
 
-def render_set(items, out_path, progress=None):
+def render_set(items, out_path, progress=None, fmt=None):
     progress = progress or _NOOP
     if not items:
         raise ValueError("items is empty")
     tmp = _atomic_out(out_path)
     try:
-        args, predicted_dur = _render_set_args(items, tmp, progress)
+        args, predicted_dur = _render_set_args(items, tmp, progress, fmt=fmt)
         progress("rendering set")
         _run_ffmpeg(args, progress, total_duration=predicted_dur, stage="render_set")
         os.replace(tmp, out_path)

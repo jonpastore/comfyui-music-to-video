@@ -152,6 +152,8 @@ Six, and they are the tie-breakers when two rules below disagree.
    disabled-with-a-reason, never present and inert. Pressing Render
    and `POST /api/sets/{id}/render` produce the same ffmpeg argv
    (`T1-3`); a value that lives only in the form is not in the export.
+   An export format is a row of `mixer.EXPORT_FORMATS` (`T1-24`), not a
+   label on the render card: a test-only row reaches ffmpeg.
    Changing a stored mix value changes the next render graph (`T1-4`);
    the page never reuses a previous ffmpeg string.
 6. **Nothing in the presentation may be load-bearing.** If deleting the
@@ -228,7 +230,9 @@ card shows the named chain that ran (`T1-19`), not a hidden set of
 values. After any render the same card names measured integrated
 loudness and true peak (`T1-25`); an off-target file is marked
 "off target" rather than silently shipped. That is the asset row,
-not the live `meter`.
+not the live `meter`. The encode itself is a named row of
+`mixer.EXPORT_FORMATS` (`T1-24`); adding a format is not a second
+button and not copy in the card.
 
 The waveform is the part that must change rather than grow: today it is
 `mixer.waveform_png()` set as a `background-image` on the block. `mixer.peaks`
