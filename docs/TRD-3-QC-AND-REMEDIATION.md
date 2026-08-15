@@ -240,6 +240,14 @@ alpha not fully transparent.
 | consecutive-frame difference | above a floor | a frozen segment |
 | channel saturation | in range | NaN / green garbage frames |
 
+- `T3-4.2-sat` **Channel saturation stays in range** — whole-frame green
+  dominance `G - (R+B)/2` on a scaled RGB decode, not a presence bit and
+  not hue alone. A dead sampler's NaN frames encode as solid green garbage;
+  those FLAG with `measured` above `CHANNEL_SAT_LIMIT` (80, calibrated
+  2026-08-15: lavfi green ≈127, lime ≈253, testsrc2 ≈−8, gray/black ≈0).
+  `qc.measure_channel_sat` owns the reading and raises on no frames;
+  `check_video` emits `channel_sat` with measured/expected/unit and
+  `re-render-seed`. Gray and black are not green garbage.
 - `T3-7` The frame-count check enforces **the MODEL'S OWN latent step** and
   reports the nearest legal value when it fails. **Not a universal 8n+1**, and
   this criterion said 8n+1 until a review caught what that meant:
@@ -563,7 +571,8 @@ current.
 
 | criterion | state | commit | what was measured |
 |---|---|---|---|
-| **tier 1, §4 entire** | **built** | earlier | `studio/qc.py` — `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise`. Every threshold measured, every `_readings()` raises rather than returning 0.0 |
+| **tier 1, §4 entire** | **built** | earlier + `T3-4.2-sat` | `studio/qc.py` — `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise`. Every threshold measured, every `_readings()` raises rather than returning 0.0. Channel saturation was the §4.2 row still missing a red test until `T3-4.2-sat` |
+| `T3-4.2-sat` channel saturation (NaN / green garbage) | **built** | this slice | `qc.measure_channel_sat` + `check_video` `channel_sat`: solid green/lime FLAG above `CHANNEL_SAT_LIMIT` (80 levels of green dominance); testsrc2 / gray / black PASS; measured equals the independent reading (`test_t3_4_2_sat.py`). No frames raises, never 0.0 |
 | `T3-2` no hardcoded expectation | **built** | earlier | expectations read from the submitted workflow via `build_song.expect_from_workflow` |
 | `T3-7` the model's own latent step | **built** | `d4a39c2` | asserted both ways on one 77-frame file: passes at step 4, flags at step 8 naming 81 |
 | `T3-8` interpolated RIFE length | **built** | this slice | `qc.expect_interpolated` owns `(n-1)*m+1` + `make_postproc.out_fps` (not `n*m` / `fps*m`). Compensated 153-frame file PASSes duration/fps/frame_count and skips `latent_8n1`; naive 32 fps FLAGs fps; `n*m` expect REJECTs the correct file (`test_t3_8_interpolated.py`). Latent exemption alone is not this criterion |

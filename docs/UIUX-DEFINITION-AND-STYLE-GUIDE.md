@@ -563,7 +563,10 @@ from breakage. `T3-18` now distinguishes those: QC enqueues nothing, approve
 enqueues one repair. `T3-27` names the other: a finding with `actionable`
 false has no remedy, and approve refuses by that name. `T3-32`: running
 tier 1 over a song is not a jobs row and does not wait on the GPU
-worker — `POST /songs/{id}/qc` measures and returns. `T3-20`: the wording
+worker — `POST /songs/{id}/qc` measures and returns. `T3-4.2-sat`: a
+`channel_sat` FLAG names green garbage (NaN encode mode) with measured
+green dominance above the limit and a re-render-seed remedy — not a
+silent pass on a solid green clip. `T3-20`: the wording
 that runs is the stored `prompts` row — same id on the finding and the job
 after approval, not a stale copy in the form. `T3-23` names a routing
 refusal (unfittable, or pinned under a name the box does not have) instead

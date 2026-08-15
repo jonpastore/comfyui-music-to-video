@@ -74,6 +74,21 @@ FPS_TOL = 0.01
 # getting darker is a reason to re-run those numbers, not to nudge this one.
 LUMA_FLOOR = 24.0
 
+# Channel saturation (TRD-3 §4.2): whole-frame green dominance
+# G - (R+B)/2. NaN frames from a dead sampler encode as solid green
+# garbage. Measured 2026-08-15 on lavfi fixtures (scale=64:64 RGB):
+#
+#     testsrc2                          max ~ -8
+#     color=gray / black                max ~  0
+#     color=green (lavfi)               max ~127
+#     color=0x00FF00 / geq green        max ~253
+#     half-frame green                  max ~126
+#
+# Real neon-noir content sits near 0. 80 clears a green-heavy scene and
+# still catches solid green garbage. Re-measure before moving it.
+CHANNEL_SAT_LIMIT = 80.0
+_CHANNEL_SAT_SAMPLE = 64
+
 # A take whose loudest of low/mid/high *mean* band energy is under this
 # is empty, not quiet. Peak volumedetect is refused: a 1-sample click
 # reads peak -20.0 dB and still has band means below -70 (measured
@@ -214,6 +229,7 @@ CHECK_REMEDY_CLASS = {
     "luma": REMEDY_RERENDER_SEED,
     "black_frames": REMEDY_RERENDER_SEED,
     "frozen": REMEDY_RERENDER_SEED,
+    "channel_sat": REMEDY_RERENDER_SEED,
     "loudness": REMEDY_LOUDNORM,
     "true_peak": REMEDY_LOUDNORM,
     "silence": REMEDY_RERENDER,
@@ -406,6 +422,60 @@ def _stderr_events(path, filt, pattern):
         ["ffmpeg", "-nostdin", "-v", "info", "-i", path, "-vf", filt, "-f", "null", "-"],
         capture_output=True, text=True)
     return re.findall(pattern, r.stderr)
+
+
+def measure_channel_sat(path):
+    """Per-frame green dominance G-(R+B)/2 on a scaled RGB decode.
+
+    TRD-3 §4.2 channel saturation. Solid green garbage (the encoded form
+    of NaN frames) pushes max well above CHANNEL_SAT_LIMIT. RAISES when
+    no frame could be read — never 0.0 on no data.
+    """
+    import numpy as np
+    if not path or not os.path.isfile(path):
+        raise RuntimeError(
+            f"channel_sat produced no readings for {path} -- refusing to "
+            "report a measurement that did not happen")
+    side = _CHANNEL_SAT_SAMPLE
+    r = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-i", path,
+         "-vf", f"scale={side}:{side}", "-f", "rawvideo", "-pix_fmt", "rgb24",
+         "-"],
+        capture_output=True)
+    raw = r.stdout or b""
+    px = side * side * 3
+    n = len(raw) // px
+    if n < 1:
+        raise RuntimeError(
+            f"channel_sat produced no frame readings for {path} -- refusing "
+            "to report a measurement that did not happen:\n"
+            + "\n".join((r.stderr or b"").decode("utf-8", "replace").splitlines()[-15:]))
+    frames = np.frombuffer(raw[: n * px], dtype=np.uint8).reshape(n, side, side, 3)
+    frames = frames.astype("float64")
+    # NaN cannot survive uint8 encode, but a float path that somehow
+    # handed us non-finite values is the same failure mode.
+    if not np.isfinite(frames).all():
+        nan_frac = float((~np.isfinite(frames)).mean())
+        return {
+            "max": float("inf"),
+            "mean": float("inf"),
+            "n_frames": n,
+            "n_over": n,
+            "nan": True,
+            "nan_frac": nan_frac,
+        }
+    r_m = frames[..., 0].mean(axis=(1, 2))
+    g_m = frames[..., 1].mean(axis=(1, 2))
+    b_m = frames[..., 2].mean(axis=(1, 2))
+    dom = g_m - (r_m + b_m) / 2.0
+    return {
+        "max": float(dom.max()),
+        "mean": float(dom.mean()),
+        "n_frames": n,
+        "n_over": int((dom > CHANNEL_SAT_LIMIT).sum()),
+        "nan": False,
+        "nan_frac": 0.0,
+    }
 
 
 # --------------------------------------------------------------- T5-2 MAD --
@@ -825,6 +895,33 @@ def check_video(path, expect, kind="clip"):
                        else f"{len(frozen)} frozen span(s) of 0.5s or longer",
                        len(frozen), 0, "spans",
                        remedy="re-render with a different seed"))
+
+    # ---- channel saturation: NaN / green garbage (TRD-3 §4.2)
+    try:
+        sat = measure_channel_sat(path)
+    except RuntimeError as e:
+        out.append(finding(path, kind, "channel_sat", FLAG,
+                           str(e).split("\n")[0]))
+    else:
+        measured = round(sat["max"], 2) if sat["max"] != float("inf") else sat["max"]
+        over = sat["n_over"]
+        if sat.get("nan"):
+            detail = (f"NaN channel values on {sat['n_frames']} frames "
+                      f"(green-garbage failure mode)")
+            verdict = FLAG
+        elif over:
+            detail = (f"green dominance max {sat['max']:.1f} over "
+                      f"{sat['n_frames']} frames, {over} above "
+                      f"{CHANNEL_SAT_LIMIT} (green garbage)")
+            verdict = FLAG
+        else:
+            detail = (f"green dominance max {sat['max']:.1f} over "
+                      f"{sat['n_frames']} frames, in range")
+            verdict = PASS
+        out.append(finding(path, kind, "channel_sat", verdict, detail,
+                           measured, CHANNEL_SAT_LIMIT, "levels",
+                           remedy="re-render with a different seed"))
+
     out.extend(check_refine_differential(path, expect, kind=kind))
     return out
 
