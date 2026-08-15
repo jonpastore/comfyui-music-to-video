@@ -308,32 +308,65 @@ def test_t4_13_missing_path_not_measured():
     """No pixels is NOT MEASURED, never cast 0.0."""
     with pytest.raises(ValueError, match="NOT MEASURED"):
         qc.backdrop_channel_means("/no/such/sheet.png")
-    with pytest.raises(ValueError, match="NOT MEASURED"):
-        qc.t4_13_claim()
 
 
-def test_t4_13_real_sheet_not_measured():
-    """T4-13 on a current GPU sheet is NOT MEASURED.
+# Job 257 (2026-08-14): Street Cats xxx front_nude, seed 5151, empty latent,
+# CFG 2.0 / 50 / dpmpp_2m+karras. Live GPU output. BACKDROP is not the proof.
+T4_13_GPU_SHEET = (
+    "/home/jon/ComfyUI/output/anchor_v2/front_nude_s5151_00001_.png")
+# Job 257 sibling, seed 5288. Same prompt, olive wall still FLAGs. The
+# criterion must be able to fail on a current render.
+T4_13_GPU_CAST_SHEET = (
+    "/home/jon/ComfyUI/output/anchor_v2/front_nude_s5288_00001_.png")
 
-    Flip T4_13_REAL_SHEET_MEASURED only after a rendered sheet is pointed at.
-    Mutation: set MEASURED True with an empty hook → this goes red.
-    """
-    assert qc.T4_13_REAL_SHEET_MEASURED is False, (
-        "T4-13 real sheet is NOT MEASURED; flip only after a render")
-    assert qc.t4_13_real_sheet_path() is None
-    with pytest.raises(ValueError, match="NOT MEASURED"):
-        qc.t4_13_claim()
+
+def test_t4_13_real_gpu_sheet_measured():
+    """T4-13 on a current GPU sheet. Mutation: MEASURED False or empty hook → red."""
+    assert qc.T4_13_REAL_SHEET_MEASURED is True, (
+        "T4-13 real sheet is NOT MEASURED; point a GPU render at the hook")
+    path = qc.t4_13_real_sheet_path()
+    assert path == T4_13_GPU_SHEET
+    assert os.path.isfile(path), path
+    assert qc.t4_13_sheet_sha256(path) == qc.T4_13_REAL_SHEET_SHA256
+    found = qc.t4_13_claim()
+    hit = _by_check(found, qc.LIGHTING_LOCK)
+    assert hit and hit[0]["measured"] is not None, found
+    assert float(hit[0]["measured"]) <= qc.LIGHTING_CAST_LIMIT, found
+    assert hit[0]["verdict"] == qc.PASS, found
+
+
+def test_t4_13_current_render_can_still_flag():
+    """The criterion must fail against a current render. Seed 5288 is olive."""
+    assert os.path.isfile(T4_13_GPU_CAST_SHEET), T4_13_GPU_CAST_SHEET
+    found = qc.check_image(T4_13_GPU_CAST_SHEET, {})
+    hit = _by_check(found, qc.LIGHTING_LOCK)
+    assert hit and hit[0]["verdict"] == qc.FLAG, found
+    assert float(hit[0]["measured"]) > qc.LIGHTING_CAST_LIMIT
 
 
 def test_t4_13_measured_true_with_empty_hook_is_a_lie():
     """The flag without a path is the lie the harness exists to catch."""
     prev = qc.T4_13_REAL_SHEET_MEASURED
+    prev_path = qc.T4_13_REAL_SHEET_PATH
     try:
+        qc.T4_13_REAL_SHEET_PATH = None
         qc.T4_13_REAL_SHEET_MEASURED = True
         with pytest.raises(ValueError, match="NOT MEASURED"):
             qc.t4_13_claim()
     finally:
         qc.T4_13_REAL_SHEET_MEASURED = prev
+        qc.T4_13_REAL_SHEET_PATH = prev_path
+
+
+def test_t4_13_wrong_bytes_are_not_the_measured_sheet():
+    """A different file at the hook is NOT MEASURED. Mutation: drop the pin → red."""
+    prev = qc.T4_13_REAL_SHEET_SHA256
+    try:
+        qc.T4_13_REAL_SHEET_SHA256 = "0" * 64
+        with pytest.raises(ValueError, match="NOT MEASURED"):
+            qc.t4_13_claim()
+    finally:
+        qc.T4_13_REAL_SHEET_SHA256 = prev
 
 
 def test_t4_13_through_run(tmp_path):

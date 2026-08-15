@@ -291,7 +291,7 @@ deployed and live on cerberus.
 | `T4-10` `_NEGATION_ALLOWED` empty | **built** | prior session + `4032aba` | the walker now covers the studio's `ANCHOR_PROFILE_FIELDS` defaults as well as `make_anchor`'s constants — see below, that widening is what caught the live defect |
 | `T4-11` body clause names the parts | **built, and it did not reach a render until `4032aba`** | `4032aba` | see §9.1 |
 | `T4-12` references named by slot | **built** | `7836d6f` | the refusal half (a third photograph stops asserting a second person) predates this; the POSITIVE half is the commit — two cast members reach the graph as `image2`→`nyx.png`, `image3`→`ghost.png`, each named by the slot its own file is on. **Rescoped to the CAST path**: the anchor path deliberately does NOT name a slot "the wardrobe reference" — see §9.2 |
-| `T4-13` positive lighting lock | **harness only; real sheet NOT MEASURED** | `qc.py` + `test_trd4_unverified.py` | Channel-balance FLAG on an olive/magenta fixture, PASS on a grey wall; a black figure on an olive wall still FLAGs (whole-image mean is not the metric). `BACKDROP` already contains the lock words and is not the proof. `T4_13_REAL_SHEET_MEASURED` is False. No GPU sheet has been pointed at |
+| `T4-13` positive lighting lock | **measured on job 257 GPU sheet** | this change | Job 257 Street Cats xxx `front_nude` seed 5151 (`front_nude_s5151_00001_.png`, sha256 `ac56dc72…238f1b`, 896×1216). Backdrop olive mag **8.06 PASS** (R=144.6 G=143.5 B=126.3, limit 12). Sibling seed 5288 on the same prompt still **FLAGs 14.76** — the criterion can fail on a current render. `BACKDROP` string is not the proof. `T4_13_REAL_SHEET_MEASURED` is True only for those bytes |
 | `T4-14` nude view drops wardrobe, never says "bare skin" | **built** | prior session | measured on the composed prompt: wardrobe clause present on `front`, absent on `front_nude` |
 | `T4-15` profile still overrides the five fields | **built, and now two more** | `d5526cb` | `backdrop` and `composite` joined `identity`/`wardrobe`/`body`/`nude_wardrobe`/`anatomy` as album-owned, versioned, screened text |
 | `T4-16`/`T4-17` the negative does not move | **holds** | — | nothing moved out of the negative; the fast-mode drop is still stated on the form |
@@ -346,13 +346,13 @@ character"*, which is true on clothed and nude sheets alike.
 
 ### 9.3 What is still unmeasured, and it is the same thing every time
 
-`T4-13`'s channel-balance harness now FLAGs olive/magenta fixtures and PASSes a
-grey wall (`qc.LIGHTING_LOCK`); a current GPU sheet is still **NOT MEASURED**.
+`T4-13`'s channel-balance harness FLAGs olive/magenta fixtures and PASSes a
+grey wall (`qc.LIGHTING_LOCK`). A current GPU sheet is now **MEASURED**: job
+257 `front_nude` seed 5151 PASSes 8.06; sibling seed 5288 still FLAGs 14.76.
 `T7-7` now has a painted-pair ranking harness (`t7_7_identity_differential`);
 the GPU four-image set has not been recorded. The photo-conditioned half
 (Catatonic jobs 244/248) is on disk; the use-as-ref half has not been
-rendered. `T4-13` is still NOT MEASURED on this tree. Neither criterion
-has a live four-image claim. Every other check in this session was on
+rendered. No live four-image claim. Every other check in this session was on
 strings, graphs and schemas.
 
 Jobs 230/231/232 on the production box all finished more than four hours before

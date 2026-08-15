@@ -162,8 +162,14 @@ T5_2_REAL_CLIP_SEED = None
 # mean — a black figure on an olive wall averages toward equal channels.
 LIGHTING_LOCK = "channel_balance"
 LIGHTING_CAST_LIMIT = 12.0
-T4_13_REAL_SHEET_PATH = None
-T4_13_REAL_SHEET_MEASURED = False
+# Job 257 (2026-08-14): Street Cats xxx front_nude seed 5151, empty latent,
+# CFG 2.0 / 50 / dpmpp_2m+karras. Backdrop olive mag=8.06 PASS
+# (R=144.6 G=143.5 B=126.3). Sibling seed 5288 still FLAGs 14.76.
+T4_13_REAL_SHEET_PATH = (
+    "/home/jon/ComfyUI/output/anchor_v2/front_nude_s5151_00001_.png")
+T4_13_REAL_SHEET_SHA256 = (
+    "ac56dc7206b5701bb6dfdf084815376e806085c3899ada2ff66e93a67a238f1b")
+T4_13_REAL_SHEET_MEASURED = True
 
 # docs/TRD-7 T7-7: identity held across views. The ranking is
 # identity(front, three_quarter) from an anchor vs the same pair from
@@ -516,10 +522,23 @@ def t4_13_real_sheet_path():
     return T4_13_REAL_SHEET_PATH
 
 
-def record_t4_13_real_sheet(path):
+def record_t4_13_real_sheet(path, sha256=None):
     """Point T4-13 at a rendered sheet. Does not flip MEASURED."""
-    global T4_13_REAL_SHEET_PATH
+    global T4_13_REAL_SHEET_PATH, T4_13_REAL_SHEET_SHA256
     T4_13_REAL_SHEET_PATH = path
+    if sha256 is not None:
+        T4_13_REAL_SHEET_SHA256 = sha256
+
+
+def t4_13_sheet_sha256(path):
+    import hashlib
+    if not path or not os.path.isfile(path):
+        raise ValueError("T4-13 real sheet channel balance is NOT MEASURED")
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def backdrop_channel_means(path):
@@ -576,6 +595,10 @@ def t4_13_claim():
         raise ValueError("T4-13 real sheet channel balance is NOT MEASURED")
     path = t4_13_real_sheet_path()
     if not path:
+        raise ValueError("T4-13 real sheet channel balance is NOT MEASURED")
+    digest = t4_13_sheet_sha256(path)
+    expect = T4_13_REAL_SHEET_SHA256
+    if not expect or digest != expect:
         raise ValueError("T4-13 real sheet channel balance is NOT MEASURED")
     return check_channel_balance(path)
 

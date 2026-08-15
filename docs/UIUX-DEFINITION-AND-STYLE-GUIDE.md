@@ -769,7 +769,8 @@ not measured. The photo-conditioned half (Catatonic jobs 244/248) is on
 disk and is the collapsed human woman, not her. The use-as-ref half has
 not been rendered.
 `T4-13` is a `channel_balance` FLAG on the sheet's pixels (olive/magenta vs
-grey wall), not a `BACKDROP` string; the real GPU sheet is **NOT MEASURED**. In
+grey wall), not a `BACKDROP` string; job 257 `front_nude` seed 5151 PASSes
+8.06 and sibling seed 5288 still FLAGs 14.76. In
 `media-tile` terms that is one more action on the tile and one more state on it —
 *this sheet is the identity reference for the sheet you are composing*. It earns
 emphasis because it is the studio's largest consistency lever, and it does not

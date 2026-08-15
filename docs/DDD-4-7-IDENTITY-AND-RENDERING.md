@@ -320,4 +320,6 @@ Plus the two this subject is most exposed to:
   `qc.LIGHTING_LOCK` / `check_channel_balance` FLAGs olive and magenta fixtures
   and PASSes a grey wall; whole-image mean is not the metric (a black figure on
   an olive wall still FLAGs). The `BACKDROP` string is not the proof.
-  `T4_13_REAL_SHEET_MEASURED` stays False until a rendered sheet is pointed at.
+  `T4_13_REAL_SHEET_MEASURED` is True for job 257 `front_nude` seed 5151
+  (olive 8.06 PASS, sha256 `ac56dc72…238f1b`). Sibling seed 5288 still FLAGs
+  14.76 on the same prompt.
