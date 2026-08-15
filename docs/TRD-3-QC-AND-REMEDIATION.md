@@ -80,7 +80,11 @@ is the actuator's file. `T3-24` uses the refiner's resident cost (~19.6 GiB),
 not the UNET's 13.31: a 15.92 GiB card is skipped, a 24 GiB box that holds the
 correct name is SUBMITTED, and peaches cannot take the pair. `T3-25` is a
 callable: `can_move_output(host)` — remote repair is refused by that name until
-the check is true, and forcing it true SUBMITS. `approve()` enqueues a dest ≠
+the check is true, and forcing it true SUBMITS. `T3-26` is a fail-closed
+labelled-set measurement (`qc.measure_refiner_help`): a refine pass that
+does not improve the tier-2 score is a finding that says not helping;
+empty set / missing files / missing scores raise NOT MEASURED;
+catalogue `proven: opportunistic` is not the answer. `approve()` enqueues a dest ≠
 source; `h_repair` writes that dest only when `dispatch_repair` produces it, and
 refuses a silent copy of the broken file.
 
@@ -520,6 +524,7 @@ check is true, and forcing the check true SUBMITS.
 | `T3-23` repair routing asks `where()`/`fits()` | paired positive: a correctly-named model on a box that holds it is SUBMITTED. Refusal-only passes with repair deleted |
 | `T3-24` the 20.5 GB arithmetic | assert it decides a real box selection: the refiner must be routed away from a 15.92 GiB card and to a 24 GiB one |
 | `T3-25` remote output move | paired positive: with `can_move_output` forced true, a remote repair is SUBMITTED. Refusal-only stays green forever |
+| `T3-26` whether the refiner helps | paired positive: a labelled set whose refined scores rise reports helping. Always-not-helping stays green forever |
 | `T3-27` every check names a remedy class | assert the class is ACTIONABLE where one exists — the approve path uses it — and that a check with no remedy says so rather than offering a button |
 
 
@@ -548,10 +553,11 @@ current.
 | `T3-14` no threshold without calibration | **built** | `test_t3_14_threshold.py` | `set_threshold` is refused with no calibration row, naming T3-13; WITH a stored row the value is written on that row. A non-T3-13 dataset does not unlock it. Not a UI |
 | `T3-15` pose change is not identity failure | **built** | `test_t3_15_identity.py` | `identity_embed` is a colour histogram; `identity_score` ranks the anchored sheet above the pose-plate look. Pixel distance still inverts that pair |
 | `T3-16` overlap is inconclusive, no gate | **built** | `test_t3_16_overlap_inconclusive.py` | `identity_verdict` names overlap inconclusive; `build_identity_gate` returns built False / threshold NULL; a threshold on that report (or via `set_threshold`) is refused. Separated ranges are not called inconclusive. No UI |
-| **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-20`, `T3-22`, `T3-23`, `T3-24` and `T3-25` are their own rows. Remaining in §6: T3-19, T3-21, T3-26, T3-27 |
+| **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-20`, `T3-22`, `T3-23`, `T3-24`, `T3-25` and `T3-26` are their own rows. Remaining in §6: T3-19, T3-21, T3-27 |
 | `T3-23` repair routing | **built** | `160547d` | default `dispatch_repair` asks `where()`/`fits()`/`resolve()`, refuses a pin under a name the box does not have before submit (`test_t3_23_pinned_name_the_box_does_not_have_is_refused_before_submit`), and a correctly-named model on a box that holds it is SUBMITTED (`test_t3_23_correctly_named_model_on_a_box_that_holds_it_is_submitted`). dest is the actuator's file (`fix_ref` / `gen_postproc`), not a copy of src |
 | `T3-24` refiner resident cost | **built** | `a4b7ef9` | real `fits()` (not a stub) routes `wan22_i2v_low` off a 15.92 GiB card onto a 24 GiB one that holds the correct name (`test_t3_24_refiner_routed_off_15_92_to_24_and_submitted`); peaches cannot take the i2v pair (`test_t3_24_peaches_cannot_take_the_pair`) |
 | `T3-25` remote output move | **built** | pending | `can_move_output` is callable; remote repair is refused by that name (`test_t3_25_remote_repair_refused_by_name_until_check_is_true`); forcing the check true SUBMITS (`test_t3_25_forced_true_remote_repair_is_submitted`) |
+| `T3-26` whether the refiner helps | **built** | this slice | fail-closed labelled-set measurement, not opportunistic: no-op / worse scores produce a finding that says not helping (`test_t3_26_no_improve_finding_says_not_helping`); an improvement reports help (`test_t3_26_improved_labelled_set_reports_help`); empty set, missing file, missing score raise NOT MEASURED; catalogue `proven: opportunistic` is not the answer |
 | `T3-31` vision score on generated stills | **built** | this slice | `score_generated_still` runs on anchors, refs, rerolls, `fix_ref`, `fix_anchor` and artwork. `qc_json` is stored (`test_h_fix_anchor_stores_qc_json`). A refine sibling is a new file (`test_h_anchor_refine_writes_sibling_not_overwrite`). Still advisory — not a gate |
 | `T3-22` dismissed stays dismissed | **built** | this slice | same bytes stay dismissed (`test_t3_22_dismissed_stays_dismissed_until_artefact_changes`); rewriting the file reopens the same `(path, check)` row. `findings.artefact_hash` is the change detector |
 | `T3-20` remedy versioned in `prompts` | **built** | `test_t3_20_remedy_runs.py` | the version that RUNS is the stored `prompt_versions` row — same id, read back after approval (`test_t3_20_approve_reads_back_the_same_stored_id`). Mutating the job's copied text still sends the stored wording (`test_t3_20_running_remedy_is_the_stored_row_not_the_job_copy`). A deleted row is refused, not replaced by the copy |

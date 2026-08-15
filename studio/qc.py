@@ -3,8 +3,8 @@
 
 T3-13's identity score also lives here (pure; no database). T3-15 is the
 histogram embed; T3-16 is identity_verdict. The threshold setter is not
-in this file. T3-28's identity-wrong remedy lives here too: edit the
-text, never swap the reference image.
+in this file. T3-26's labelled-set refiner measurement lives here too.
+T3-28's identity-wrong remedy: edit the text, never swap the reference image.
 
 ffprobe, ffmpeg's own analysis filters, PIL and numpy. No model, no opinion.
 
@@ -99,6 +99,11 @@ _REFERENCE_SWAP_MARKERS = (
 # stored on the calibrations row so a later extractor is a new row, not a
 # silent rewrite of this one.
 IDENTITY_METRIC = "identity_cosine_v1"
+
+# docs/TRD-3 T3-26: whether the refiner helps is measured on a labelled
+# set. Catalogue proven: opportunistic is not that measurement.
+REFINER_HELP_CHECK = "refiner_help"
+REFINER_HELP_METRIC = "tier2_score_delta_v1"
 
 # docs/TRD-3 T3-16: overlap is a decision, not a number the operator
 # has to interpret. "inconclusive" is a success; a threshold is not.
@@ -976,6 +981,114 @@ def score_zimage_sweep(root, reference=None, embed=None, score_fn=None):
         "scores": rows,
         "threshold": None,
     }
+
+
+# --------------------------------------------- T3-26 refiner help --
+# Fail-closed on a labelled set. Opportunistic is not a measurement.
+
+
+def _t326_not_measured(why=""):
+    msg = "T3-26 labelled set is NOT MEASURED"
+    if why:
+        msg = f"{msg}: {why}"
+    raise ValueError(msg)
+
+
+def _t326_score_fn(score_fn, reference, embed):
+    if score_fn is not None:
+        return score_fn
+    if reference is None:
+        _t326_not_measured("no score_fn and no reference")
+    embed = embed or identity_embed
+    try:
+        ref_vec = list(reference)
+        if not ref_vec or isinstance(reference, (str, bytes)):
+            raise TypeError
+    except TypeError:
+        if not os.path.isfile(reference):
+            _t326_not_measured("reference missing")
+        ref_vec = embed(reference)
+    return lambda path, label: identity_score(path, ref_vec, embed=embed)
+
+
+def measure_refiner_help(pairs, score_fn=None, reference=None, embed=None):
+    """T3-26: does refine improve the tier-2 score on a labelled set?
+
+    Empty set, missing files, missing labels, or missing scores raise
+    NOT MEASURED. Equal or worse mean score is not helping. Catalogue
+    `proven: opportunistic` is never returned as the answer.
+    """
+    if not pairs:
+        _t326_not_measured("empty set")
+    scorer = _t326_score_fn(score_fn, reference, embed)
+    rows = []
+    for item in pairs:
+        if not isinstance(item, dict):
+            _t326_not_measured("pair is not a labelled record")
+        label = item.get("label")
+        if not label:
+            _t326_not_measured("unlabelled pair")
+        plain = item.get("plain")
+        refined = item.get("refined")
+        if not plain or not refined:
+            _t326_not_measured("pair missing plain or refined path")
+        if not os.path.isfile(plain) or not os.path.isfile(refined):
+            _t326_not_measured("file missing")
+        off = scorer(plain, label)
+        on = scorer(refined, label)
+        if off is None or on is None:
+            _t326_not_measured("score missing")
+        off = float(off)
+        on = float(on)
+        rows.append({
+            "label": label,
+            "plain": plain,
+            "refined": refined,
+            "plain_score": off,
+            "refined_score": on,
+            "delta": on - off,
+        })
+    plains = [r["plain_score"] for r in rows]
+    refineds = [r["refined_score"] for r in rows]
+    mean_off = sum(plains) / len(plains)
+    mean_on = sum(refineds) / len(refineds)
+    delta = mean_on - mean_off
+    helps = delta > 0
+    return {
+        "metric": REFINER_HELP_METRIC,
+        "dataset": "labelled_refine_set",
+        "n": len(rows),
+        "plain_mean": mean_off,
+        "refined_mean": mean_on,
+        "delta": delta,
+        "helps": helps,
+        "proven": "helps" if helps else "does_not_help",
+        "pairs": rows,
+    }
+
+
+def refiner_help_finding(report, path=None):
+    """Finding whose detail says not helping when the set did not improve."""
+    if not report or report.get("delta") is None or "helps" not in report:
+        _t326_not_measured("no report")
+    if report.get("proven") == "opportunistic":
+        _t326_not_measured("opportunistic is not a measurement")
+    helps = bool(report["helps"])
+    path = path or report.get("dataset") or "labelled_refine_set"
+    if helps:
+        detail = "refine pass improved the tier-2 score on the labelled set"
+        verdict = PASS
+        remedy = None
+    else:
+        detail = ("refine pass not helping: tier-2 score on the labelled "
+                  "set did not improve")
+        verdict = FLAG
+        remedy = "do not treat the refiner as proven; it did not help"
+    row = finding(path, "clip", REFINER_HELP_CHECK, verdict, detail,
+                  measured=report["delta"], expected=0.0, unit="score",
+                  remedy=remedy)
+    row["tier"] = 2
+    return row
 
 
 # ------------------------------------------------------------------- run --

@@ -438,8 +438,11 @@ a stale copy in the form. `T3-23` names a routing refusal (unfittable, or pinned
 under a name the box does not have) instead of looking like a successful copy.
 `T3-25` names `can_move_output` when a remote output cannot be moved back.
 `T3-24` names the refiner as too big for a 15.92 GiB card (and for peaches)
-and routes it to a 24 GiB box that holds the file. A dismissed finding
-does not sit in the open queue until the file itself changes (`T3-22`).
+and routes it to a 24 GiB box that holds the file. `T3-26` names a refine
+pass that did not improve the tier-2 score on a labelled set as **not
+helping** — the opportunistic catalogue tag is not that sentence. A
+dismissed finding does not sit in the open queue until the file itself
+changes (`T3-22`).
 
 ### 5.8 Motion
 
@@ -596,7 +599,9 @@ The studio has two live instances of the same defect and both are UI-visible:
   changed the picture is `T5-2`: decoded-frame MAD and Laplacian variance,
   same seed, on vs off. A graph growing is not that reading. Missing
   frames raise; a skip is not a reading. The real GPU pair is **NOT
-  MEASURED**.
+  MEASURED**. `T3-26` is the labelled-set half: a refine that does not
+  raise the tier-2 score is reported as not helping; missing scores
+  raise, they do not inherit `opportunistic`.
 - **Five of six `DENOISE_CHOICES`** *were* labelled *"on an anchor this returns
   noise"*, correctly, because `latent_mode` was pinned to `"empty"`. **`T7-8`
   shipped 2026-08-13 (`d3f2f6a`) and unpinned it** — corrected after review

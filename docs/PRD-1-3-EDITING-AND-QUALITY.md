@@ -222,7 +222,11 @@ order and take the dependencies from here.
    refiner's resident cost (~19.6 GiB), not the UNET's 13.31, routes it
    off a 15.92 GiB card onto a 24 GiB one; peaches cannot take the pair.
    `T3-25` is built: `can_move_output` refuses remote repair by name
-   until the check is true; forcing it true SUBMITS. `T3-20` is built:
+   until the check is true; forcing it true SUBMITS. `T3-26` is built:
+   whether the refiner helps is a fail-closed labelled-set measurement
+   (`qc.measure_refiner_help`), not the catalogue's `opportunistic` tag;
+   a pass that does not improve the tier-2 score is a finding that says
+   not helping. `T3-20` is built:
    the approved remedy that RUNS is the stored `prompts` row, same id,
    read back after approval — a copied string on the job is not what
    the actuator receives.

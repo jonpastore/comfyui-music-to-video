@@ -688,6 +688,18 @@ def run_zimage_calibration(root, score_fn=None, embed=None, reference=None):
         root, reference=reference, embed=embed, score_fn=score_fn))
 
 
+def record_refiner_help(pairs, score_fn=None, reference=None, embed=None):
+    """T3-26: measure the labelled set and persist the finding.
+
+    Does not flip models.CATALOG proven. Opportunistic is not a measurement.
+    """
+    report = qc.measure_refiner_help(
+        pairs, score_fn=score_fn, reference=reference, embed=embed)
+    found = qc.refiner_help_finding(report)
+    record([found])
+    return report, found
+
+
 def demo():
     """Self-check against a temporary database, so it never touches real rows."""
     import tempfile

@@ -478,7 +478,7 @@ CATALOG = {
     },
     "wan22_i2v_low": {
         "role": "refine",
-        "proven": "opportunistic",   # nothing here has measured whether it helps s2v output
+        "proven": "opportunistic",   # T3-26 measures this; stays opportunistic until a labelled set improves
         "weights_gib": 13.31,   # the UNET alone
         # WHAT IT ACTUALLY COSTS RESIDENT, and fits() uses this instead. The
         # note below has said 20.5 GB in prose since 2026-08-12 while the
