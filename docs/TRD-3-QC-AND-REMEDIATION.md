@@ -67,13 +67,14 @@ workflow, no hardcoded duration anywhere), `T3-4`'s measured/expected/unit on
 every check that has them, `T3-7` (8n+1 with the interpolated exemption), `T3-11`
 (imports `mixer.SET_DURATION_TOLERANCE` rather than restating it), `T3-27`
 (a remedy on every finding), and `T3-3` both ways. What is NOT built is tier 2
-entirely, and `T3-24` / `T3-25` (refiner arithmetic as a box decision, remote
-output move). `T3-23` is wired: `dispatch_repair` asks `models.where()` /
-`models.fits()` / `models.resolve()`, refuses an unfittable or mis-named pin
-before submit, and invokes `pipeline.gen_postproc` or `pipeline.fix_ref` so dest
-is the actuator's file. `approve()` enqueues a dest ≠ source; `h_repair` writes
-that dest only when `dispatch_repair` produces it, and refuses a silent copy of
-the broken file.
+entirely, and `T3-24` (refiner arithmetic as a box decision). `T3-23` is wired:
+`dispatch_repair` asks `models.where()` / `models.fits()` / `models.resolve()`,
+refuses an unfittable or mis-named pin before submit, and invokes
+`pipeline.gen_postproc` or `pipeline.fix_ref` so dest is the actuator's file.
+`T3-25` is a callable: `can_move_output(host)` — remote repair is refused by
+that name until the check is true, and forcing it true SUBMITS. `approve()`
+enqueues a dest ≠ source; `h_repair` writes that dest only when
+`dispatch_repair` produces it, and refuses a silent copy of the broken file.
 
 **Tier 0's two properties that QC must respect**, both from the code that writes
 it: group by `host`, never by `backend` (Swarm renumbers ids when a backend is
@@ -327,8 +328,8 @@ PASS/FAIL because the finding arrives actionable.
   exactly one**. That second half exists: `approve()` enqueues one `repair` job
   and does not write dest itself. `dispatch_repair` now routes via
   `where()`/`fits()`/`resolve()` and submits `fix_ref` / `gen_postproc`
-  (`T3-23`). The remaining gaps are `T3-24` (refiner 19.6 GiB as a box
-  decision) and `T3-25` (remote output move).
+  (`T3-23`). `T3-25` consults `can_move_output` before submit. The remaining
+  gap is `T3-24` (refiner 19.6 GiB as a box decision).
 - `T3-19` The remedy prompt is **editable before approval**, and the edited text
   is what runs. A differential: approve the same finding twice with two different
   remedy texts and confirm two different jobs were submitted — not by checking
@@ -484,14 +485,16 @@ tier 1.
    marked **provisional** and says what it cannot yet distinguish.
 
    One-sided in this document today, listed so nobody has to re-derive it:
-   `T3-4` (fields present but never checked for sense), `T3-14`, `T3-20`, `T3-22`, `T3-24` and `T3-27`. `T3-1` now has the two-host count half. `T3-6` / `T3-18` / `T3-23` have their positive halves: dest ≠ source, and a correctly-named model on a box that holds it is SUBMITTED.
+   `T3-4` (fields present but never checked for sense), `T3-14`, `T3-20`, `T3-22`, `T3-24` and `T3-27`. `T3-1` now has the two-host count half. `T3-6` / `T3-18` / `T3-23` / `T3-25` have their positive halves: dest ≠ source, a correctly-named model on a box that holds it is SUBMITTED, and a remote repair with `can_move_output` forced true is SUBMITTED.
 
 ### The positive half of each one-sided criterion
 
 `T3-6` and `T3-18` have the enqueue + dest≠source halves. `T3-23` has both
 halves: a pin under a name the box does not have is refused before submit, and
 a correctly-named model on a box that holds it is SUBMITTED (dest is the
-actuator's file, not a copy of the input).
+actuator's file, not a copy of the input). `T3-25` has both halves: remote
+repair is refused by the name `can_move_output` until the check is true, and
+forcing the check true SUBMITS.
 
 | criterion | its positive half |
 |---|---|
@@ -502,6 +505,7 @@ actuator's file, not a copy of the input).
 | `T3-22` dismissed stays dismissed | paired positive: a dismissed finding REAPPEARS when the artefact changes. Deleting change detection satisfies the first half forever |
 | `T3-23` repair routing asks `where()`/`fits()` | paired positive: a correctly-named model on a box that holds it is SUBMITTED. Refusal-only passes with repair deleted |
 | `T3-24` the 20.5 GB arithmetic | assert it decides a real box selection: the refiner must be routed away from a 15.92 GiB card and to a 24 GiB one |
+| `T3-25` remote output move | paired positive: with `can_move_output` forced true, a remote repair is SUBMITTED. Refusal-only stays green forever |
 | `T3-27` every check names a remedy class | assert the class is ACTIONABLE where one exists — the approve path uses it — and that a check with no remedy says so rather than offering a button |
 
 
@@ -527,5 +531,6 @@ current.
 | `T3-5` re-running does not duplicate | **built** | earlier | `UNIQUE(path, check_name)`; the mutation audit found the upsert alone was not the guard |
 | `T3-1` group by host | **built** | `test_t3_1_by_host.py` | report over artefacts from two hosts has two groups with the planted counts; NULL host is an explicit unattributed bucket. Host is still canonical (`e20346f`) |
 | **tier 2, §5 entire** | **not built** | — | no calibration, no embedding metric. `T3-13`…`T3-16` are the order and none has run |
-| **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-23` is its own row. Remaining: `T3-24`, `T3-25` |
+| **tier 3, §6 entire** | **partial** | `test_qc_approve.py` | `approve()` enqueues one repair and a dest ≠ source (`T3-6`/`T3-18`). `T3-23` and `T3-25` are their own rows. Remaining: `T3-24` |
 | `T3-23` repair routing | **built** | `160547d` | default `dispatch_repair` asks `where()`/`fits()`/`resolve()`, refuses a pin under a name the box does not have before submit (`test_t3_23_pinned_name_the_box_does_not_have_is_refused_before_submit`), and a correctly-named model on a box that holds it is SUBMITTED (`test_t3_23_correctly_named_model_on_a_box_that_holds_it_is_submitted`). dest is the actuator's file (`fix_ref` / `gen_postproc`), not a copy of src |
+| `T3-25` remote output move | **built** | pending | `can_move_output` is callable; remote repair is refused by that name (`test_t3_25_remote_repair_refused_by_name_until_check_is_true`); forcing the check true SUBMITS (`test_t3_25_forced_true_remote_repair_is_submitted`) |

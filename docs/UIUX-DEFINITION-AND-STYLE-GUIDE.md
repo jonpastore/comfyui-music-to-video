@@ -402,7 +402,8 @@ the same defect as a button that does nothing — the operator cannot tell refus
 from breakage. `T3-18` now distinguishes those: QC enqueues nothing, approve
 enqueues one repair. `T3-23` names a routing refusal (unfittable, or pinned
 under a name the box does not have) instead of looking like a successful copy.
-`T3-24` / `T3-25` are the remaining silences on this lane.
+`T3-25` names `can_move_output` when a remote output cannot be moved back.
+`T3-24` is the remaining silence on this lane.
 
 ### 5.8 Motion
 

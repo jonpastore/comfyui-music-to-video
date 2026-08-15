@@ -22,7 +22,7 @@ is named.
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` **and** `T3-9`/§4.3 |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `fragment`, `item_audio`, `wants_master_loudnorm` | built |
 | `studio/qc.py` | 642 | TRD-3 tier 1 in full: `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise` | built |
-| `studio/qc_service.py` | 308 | findings, queue, `by_host` (`T3-1`), remedy edit, dismiss, reopen; `approve()` enqueues dest ≠ source; `dispatch_repair` asks `where()`/`fits()`/`resolve()` then submits `fix_ref` / `gen_postproc` | built except `T3-24` / `T3-25` |
+| `studio/qc_service.py` | 308 | findings, queue, `by_host` (`T3-1`), remedy edit, dismiss, reopen; `approve()` enqueues dest ≠ source; `dispatch_repair` asks `where()`/`fits()`/`resolve()` then submits `fix_ref` / `gen_postproc`; `can_move_output` gates remote repair (`T3-25`) | built except `T3-24` |
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2: JSON-canonical arc, `to_md`, `validate`, `for_song`, screened both directions | built |
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning, reused by `T3-20` | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
@@ -340,11 +340,11 @@ into a real candidate (`T3-23`):
    resident (`T3-24`) and fits neither peaches (10.58 GiB) nor a 15.92 GiB card,
    so "clean up peaches output" means peaches renders and cerberus refines, and
    the artefact crosses boxes.
-3. **A callable cross-box precondition** (`T3-25`), not a sentence: something
-   answers "can an output be moved back from this host", the refusal quotes it,
-   and when it answers yes the refusal stops. Its positive half must be
-   exercised with the check forced true, or the refusal is green forever and
-   never notices the day the blocker lifts.
+3. **A callable cross-box precondition** (`T3-25`), not a sentence:
+   `can_move_output(host)` answers "can an output be moved back from this
+   host", the refusal quotes that name, and when it answers yes the refusal
+   stops. The flip is exercised: with the check forced true, a remote repair
+   is SUBMITTED.
 
 Every repair writes a **new candidate beside the original** (`T6-A5`), both
 scored, so "did the repair help" is answerable rather than asserted.

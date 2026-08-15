@@ -9,6 +9,7 @@ import os
 import time
 
 import db
+import jobs
 import models
 import pipeline
 import qc_service
@@ -438,3 +439,109 @@ def test_t3_23_clip_finding_submits_make_postproc(monkeypatch):
     with open(src, "rb") as f, open(dest, "rb") as g:
         assert f.read() != g.read()
     assert qc_service.get(fid)["status"] == qc_service.REPAIRED
+
+
+_T325_REMOTE = "100.95.184.29"
+
+
+def _t325_remote_finding(tag):
+    """Peaches output, repair routed to a box that can run it.
+
+    Host lives on the artefacts row — the production path. args.host is
+    left unset so a check that only reads the job payload stays green.
+    """
+    fid, src, args = _finding_with_file(tag)
+    jobs.land(src, host=_T325_REMOTE, backend="2", via="swarm")
+    args = dict(args)
+    args["kind"] = "image"
+    args["backend"] = "0"
+    args["requires"] = "qwen_image_edit_2511"
+    args.pop("host", None)
+    return fid, src, args
+
+
+def test_t3_25_can_move_output_is_callable():
+    """T3-25: the precondition is a callable, not a sentence."""
+    assert callable(qc_service.can_move_output)
+    assert qc_service.can_move_output(_T325_REMOTE) is False
+    assert qc_service.can_move_output(models.SELF_HOST) is True
+    assert qc_service.can_move_output(None) is True
+
+
+def test_t3_25_remote_repair_refused_by_name_until_check_is_true(monkeypatch):
+    """T3-25: remote output is refused by name until can_move_output.
+
+    Default dispatch_repair. Routing is wired so a missing move check
+    would SUBMIT — the refusal must quote can_move_output, not
+    'GPU work is still missing' and not a T3-23 pin/fit miss.
+    """
+    assert callable(qc_service.can_move_output)
+    _t323_route(
+        monkeypatch,
+        where_rows=[{"id": "0", "title": "cerberus",
+                     "address": "http://127.0.0.1:8188",
+                     "fits": True, "file_here": _T323_FILE,
+                     "vram_gib": 23.42, "confirmed": True}],
+        fit=True,
+        resolved=_T323_FILE)
+    submitted = _t323_actuators(monkeypatch)
+    fid, src, args = _t325_remote_finding("t325_refuse")
+    dest = args["repair_path"]
+    try:
+        qc_service.h_repair(args, lambda m: None)
+    except Exception as e:
+        msg = str(e)
+        assert "gpu work is still missing" not in msg.lower(), e
+        assert "can_move_output" in msg, e
+        assert _T325_REMOTE in msg, e
+    else:
+        raise AssertionError(
+            "remote repair was submitted while can_move_output is false")
+    assert submitted == [], "actuator ran before can_move_output refused"
+    assert not os.path.isfile(dest)
+    row = qc_service.get(fid)
+    assert row["repair_path"] in (None, "")
+    assert row["status"] != qc_service.REPAIRED
+
+
+def test_t3_25_forced_true_remote_repair_is_submitted(monkeypatch):
+    """T3-25 positive: force can_move_output true, remote repair SUBMITS.
+
+    The flip is the criterion. A permanently-false check keeps the
+    refusal green forever.
+    """
+    asked = []
+
+    def _yes(host):
+        asked.append(host)
+        return True
+
+    monkeypatch.setattr(qc_service, "can_move_output", _yes)
+    _t323_route(
+        monkeypatch,
+        where_rows=[{"id": "0", "title": "cerberus",
+                     "address": "http://127.0.0.1:8188",
+                     "fits": True, "file_here": _T323_FILE,
+                     "vram_gib": 23.42, "confirmed": True}],
+        fit=True,
+        resolved=_T323_FILE)
+    submitted = _t323_actuators(monkeypatch)
+    fid, src, args = _t325_remote_finding("t325_ok")
+    dest = args["repair_path"]
+
+    qc_service.h_repair(args, lambda m: None)
+
+    assert asked, "dispatch_repair never called can_move_output"
+    assert any(h == _T325_REMOTE or (
+        h and _T325_REMOTE in str(h)) for h in asked), asked
+    assert submitted and submitted[0][0] == "fix_ref", submitted
+    assert os.path.isfile(src)
+    assert os.path.isfile(dest), "forced-true remote repair did not SUBMIT"
+    with open(src, "rb") as f:
+        original = f.read()
+    with open(dest, "rb") as f:
+        written = f.read()
+    assert written != original, "dest is a byte-copy of the broken artefact"
+    row = qc_service.get(fid)
+    assert row["repair_path"] == dest
+    assert row["status"] == qc_service.REPAIRED

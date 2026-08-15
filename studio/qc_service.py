@@ -262,6 +262,31 @@ def _repair_actuator_and_key(args):
     return "gen_postproc", key or "ltx25_latent_upscaler"
 
 
+def can_move_output(host):
+    """T3-25: can an output be moved from this host back for repair.
+
+    Local and unattributed artefacts need no fetch. A remote host stays
+    false until output return is proven — install_input only stages
+    inputs. Tests force True to exercise the flip.
+    """
+    box = models.canonical_host(host) if host else None
+    if not box or box == models.SELF_HOST:
+        return True
+    return False
+
+
+def _repair_source_host(src, args):
+    """Host that produced src: job payload, else the artefacts row."""
+    host = (args or {}).get("host")
+    if host:
+        return models.canonical_host(host)
+    path = jobs.canonical_path(src) if src else None
+    if not path:
+        return None
+    row = db.one("SELECT host FROM artefacts WHERE path=?", path)
+    return models.canonical_host(row["host"]) if row and row["host"] else None
+
+
 def _pin_matches(box, pin):
     if pin is None or pin == "":
         return True
@@ -373,7 +398,13 @@ def dispatch_repair(src, dest, args, progress):
 
     A pin under a name the box does not have, or a box that does not
     fit, is refused before submit (T3-23). dest is the actuator's file,
-    never a copy of src."""
+    never a copy of src. Remote output is refused by name until
+    can_move_output is true (T3-25)."""
+    host = _repair_source_host(src, args)
+    if not can_move_output(host):
+        raise ValueError(
+            f"repair of remote output refused: can_move_output({host!r}) "
+            f"is false")
     actuator, key, box = _route_repair(args)
     args = dict(args or {})
     args["requires"] = key

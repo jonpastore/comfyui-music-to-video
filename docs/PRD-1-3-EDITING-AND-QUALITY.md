@@ -189,9 +189,10 @@ order and take the dependencies from here.
    gate is not built and that is a successful outcome.
 9. Repair routing (`T3-23`) is built: `dispatch_repair` asks `where()` /
    `fits()` / `resolve()`, refuses a mis-named pin before submit, and
-   dest is the `fix_ref` / `gen_postproc` file. Next on this lane:
-   `T3-24` (refiner 19.6 GiB as a box decision) and `T3-25` (remote
-   output move).
+   dest is the `fix_ref` / `gen_postproc` file. `T3-25` is built:
+   `can_move_output` refuses remote repair by name until the check is
+   true; forcing it true SUBMITS. Next on this lane: `T3-24` (refiner
+   19.6 GiB as a box decision).
 
 ### Deferred to another document, on purpose
 
