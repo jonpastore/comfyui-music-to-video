@@ -178,6 +178,50 @@ def run_artefact(path, kind, expect=None, items=None, record_pass=True):
     return found
 
 
+def run_song(song_id, tier="", progress=None):
+    """T3-32: tier 1 over one song's artefacts. No GPU, no backend.
+
+    Completes in this call. It is not a jobs row and does not wait on
+    the one worker thread. Assembled expect is songs.duration (T6-13a);
+    clips read artefacts.expect_json; absent stays absent.
+    """
+    song = db.one("SELECT * FROM songs WHERE id=?", song_id)
+    empty = {"artefacts": 0, "checks": 0,
+             qc.PASS: 0, qc.FLAG: 0, qc.REJECT: 0}
+    if not song:
+        return empty
+    report = progress or (lambda _m: None)
+    found, seen = [], 0
+    tier = tier or ""
+
+    for r in db.q(
+            "SELECT * FROM renders WHERE song_id=? AND tier=? ORDER BY id DESC",
+            song["id"], tier)[:1]:
+        report(f"qc: assembled render {os.path.basename(r['path'])}")
+        expect = {"want_audio": True}
+        if song["duration"]:
+            expect["duration"] = song["duration"]
+        found += run_artefact(r["path"], "song", expect)
+        seen += 1
+
+    for c in db.q("""SELECT * FROM clips WHERE song_id=? AND tier=?
+                     AND path IS NOT NULL ORDER BY clip_idx""",
+                  song["id"], tier):
+        report(f"qc: clip {c['clip_idx']}")
+        found += run_artefact(c["path"], "clip")
+        seen += 1
+
+    for ref in db.q(
+            "SELECT * FROM refs WHERE song_id=? AND tier=? ORDER BY clip_idx",
+            song["id"], tier):
+        found += run_artefact(ref["path"], "image", {})
+        seen += 1
+
+    counts = {v: sum(1 for x in found if x["verdict"] == v)
+              for v in (qc.PASS, qc.FLAG, qc.REJECT)}
+    return {"artefacts": seen, "checks": len(found), **counts}
+
+
 def queue(status=OPEN, kind=None, tier=None, include_pass=False):
     """The review queue IS the findings table filtered. docs/TRD-3 3.
 

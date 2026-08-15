@@ -492,13 +492,15 @@ def test_t6_13a_songs_duration_is_the_authority_and_nothing_reprobes():
     grok = _real_module("grok")
     _assert_no_reprobe(inspect.getsource(appmod.clip_count), "app.clip_count")
     _assert_no_reprobe(inspect.getsource(appmod.h_qc), "app.h_qc")
+    _assert_no_reprobe(inspect.getsource(qc_service.run_song),
+                       "qc_service.run_song")
     _assert_no_reprobe(inspect.getsource(build_song.n_clips_for),
                        "build_song.n_clips_for")
     _assert_no_reprobe(inspect.getsource(grok.generate_storyboard),
                        "grok.generate_storyboard")
     assert 'song["duration"]' in inspect.getsource(grok.generate_storyboard)
     assert 'song["duration"]' in inspect.getsource(appmod.clip_count)
-    assert 'song["duration"]' in inspect.getsource(appmod.h_qc)
+    assert 'song["duration"]' in inspect.getsource(qc_service.run_song)
 
 
 # ----------------------------------------------------------------- T6-16 --

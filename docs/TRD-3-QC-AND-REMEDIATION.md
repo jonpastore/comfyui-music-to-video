@@ -56,7 +56,7 @@ not been shown to separate known-good from known-bad does not gate anything.
 | Per-box capability and fit | `models.where()`, `models.fits()`, `models.resolve()` |
 | Versioned prompts with usage counts and no renumbering after delete | `prompts.py` |
 | **Tier 1 itself — every check in §4** | **`studio/qc.py`**: `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise` |
-| **The findings table, the queue, and the remedy edit** | **`studio/qc_service.py`** + `db.findings`; `/api/qc/*` and the `qc` job kind in `app.py` |
+| **The findings table, the queue, and the remedy edit** | **`studio/qc_service.py`** + `db.findings`; `/api/qc/*`; **T3-32** `run_song` measures in-process (not the GPU worker) |
 | **T3-1** per-box report groups by `host`; NULL host is `unattributed` | **`qc_service.by_host`** + `GET /api/qc/by-host` |
 | **T3-22** dismissed stays dismissed until the artefact changes | **`qc_service.record`** + `findings.artefact_hash`; same check reopens when the file bytes change |
 | **T3-28** identity-wrong never proposes swapping the reference image | **`qc.check_identity_wrong`** / **`qc.identity_wrong_remedy`**; `record` / `set_remedy` / `approve` refuse the swap wording |
@@ -569,3 +569,4 @@ current.
 | `T3-20` remedy versioned in `prompts` | **built** | `test_t3_20_remedy_runs.py` | the version that RUNS is the stored `prompt_versions` row — same id, read back after approval (`test_t3_20_approve_reads_back_the_same_stored_id`). Mutating the job's copied text still sends the stored wording (`test_t3_20_running_remedy_is_the_stored_row_not_the_job_copy`). A deleted row is refused, not replaced by the copy |
 | `T3-28` identity-wrong never swaps the reference | **built** | `test_t3_28_identity_wrong_remedy.py` | `qc.check_identity_wrong` (also via `qc.run`) proposes "edit the text, then re-render"; `qc.proposes_reference_swap` is the detector. `record` / `set_remedy` / `approve` refuse a swap-the-reference wording and name that identity comes from the text. A legal text-edit remedy is stored. |
 | `T3-27` every check names a remedy class | **built** | `test_t3_27_remedy_class.py` | `qc.CHECK_REMEDY_CLASS` on every named check. `approve()` puts `remedy_class` on the job and `_repair_actuator_and_key` uses the class, not the edited text (`test_t3_27_approve_uses_the_class_not_the_remedy_text`). `duration_matches_prediction` is `none`; `actionable` is false and approve refuses (`test_t3_27_no_remedy_refuses_approve`) |
+| `T3-32` tier 1 over a song without GPU/backend | **built** | `test_t3_32_tier1_song.py` | `qc_service.run_song` measures assembled + clips + refs while a render holds the worker; `pipeline`/`gpu`/`models.where` are not called; `POST /songs/{id}/qc` does not `jobs.enqueue` |

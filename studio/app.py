@@ -2074,48 +2074,19 @@ def _clip_expect(path):
 
 @jobs.handler("qc")
 def h_qc(args, progress):
-    """Tier 1 over one song's artefacts at one tier.
+    """Tier 1 over one song's artefacts at one tier. Forwards to run_song.
 
-    Assembled render is checked against songs.duration (T6-13a) and must carry
-    audio. Clips get artefacts.expect_json via _clip_expect; absent stays
-    absent (T6-13) so duration/frame comparisons skip rather than invent a
-    baseline from the file.
+    Assembled expect is songs.duration (T6-13a). T3-32: the operator
+    path is start_qc, which calls run_song in-process and does not
+    enqueue behind the one worker thread.
     """
-    song = db.one("SELECT * FROM songs WHERE id=?", args["song_id"])
-    if not song:
-        return
-    tier = args.get("tier") or ""
-    found, seen = [], 0
-
-    for r in db.q("SELECT * FROM renders WHERE song_id=? AND tier=? ORDER BY id DESC",
-                  song["id"], tier)[:1]:
-        progress(f"qc: assembled render {os.path.basename(r['path'])}")
-        found += qc_service.run_artefact(
-            r["path"], "song",
-            {"duration": song["duration"], "want_audio": True} if song["duration"]
-            else {"want_audio": True})
-        seen += 1
-
-    for c in db.q("""SELECT * FROM clips WHERE song_id=? AND tier=? AND path IS NOT NULL
-                     ORDER BY clip_idx""", song["id"], tier):
-        progress(f"qc: clip {c['clip_idx']}")
-        found += qc_service.run_artefact(c["path"], "clip", _clip_expect(c["path"]))
-        seen += 1
-
-    for f in db.q("SELECT * FROM refs WHERE song_id=? AND tier=? ORDER BY clip_idx",
-                  song["id"], tier):
-        found += qc_service.run_artefact(f["path"], "image", {})
-        seen += 1
-
-    counts = {v: sum(1 for x in found if x["verdict"] == v)
-              for v in (qc.PASS, qc.FLAG, qc.REJECT)}
-    return {"artefacts": seen, "checks": len(found), **counts}
+    return qc_service.run_song(args["song_id"], args.get("tier") or "", progress)
 
 
 @app.post("/songs/{id}/qc")
 def start_qc(id: int, tier: str = Form("")):
     get_song_or_404(id)
-    jobs.enqueue("qc", {"song_id": id, "tier": tier}, song_id=id)
+    qc_service.run_song(id, tier)
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 

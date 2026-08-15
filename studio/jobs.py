@@ -32,6 +32,7 @@ def _is_transient(exc):
     ComfyUI REFUSED is a real error, and retrying it just fails more slowly."""
     return any(t in str(exc).lower() for t in _TRANSIENT)
 _worker = None
+_stop = threading.Event()
 
 
 def handler(kind):
@@ -357,7 +358,7 @@ def _loop():
     (SystemExit, KeyboardInterrupt) passes straight through -- hence the belt
     here as well as the braces there."""
     row = None
-    while True:
+    while not _stop.is_set():
         try:
             row = _claim()
             if row is None:
@@ -383,11 +384,23 @@ def start():
     global _worker
     if _worker and _worker.is_alive():
         return _worker
+    _stop.clear()
     db.run("UPDATE jobs SET status='queued', started=NULL WHERE status='running'")
     db.run("UPDATE jobs SET status='cancelled', finished=? WHERE status='cancelling'", time.time())
     _worker = threading.Thread(target=_loop, daemon=True, name="studio-worker")
     _worker.start()
     return _worker
+
+
+def stop():
+    """Join the worker. Tests only — production never stops it."""
+    global _worker
+    _stop.set()
+    _wake.set()
+    w = _worker
+    _worker = None
+    if w is not None and w.is_alive() and w is not threading.current_thread():
+        w.join(timeout=3)
 
 
 async def stream(jid):

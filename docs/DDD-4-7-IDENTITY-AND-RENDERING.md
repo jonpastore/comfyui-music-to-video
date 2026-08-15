@@ -251,8 +251,9 @@ still drops the write lock before a long handler (`T6-16`).
 
 - **`T6-13a` first, and it does not wait for the rest.** `songs.duration`, written
   once from ffprobe on upload, is the authority. TRD-1 §3.2 (`app.clip_count`),
-  TRD-2 §3.4 (`grok.generate_storyboard`) and TRD-3 §4.4 (`h_qc` assembled expect)
-  all read that column; a re-ffprobe on those paths fails
+  TRD-2 §3.4 (`grok.generate_storyboard`) and TRD-3 §4.4 (`qc_service.run_song`
+  assembled expect; `h_qc` forwards) all read that column; a re-ffprobe on those
+  paths fails
   `test_t6_13a_songs_duration_is_the_authority_and_nothing_reprobes`.
   `DDD-1-3` §6's chain now starts at `T6-13a`.
 - **Identity before lifecycle before queue.** `T6-8`'s path is the join key

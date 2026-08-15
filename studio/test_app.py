@@ -6928,14 +6928,14 @@ def test_qc_review_queue_is_json_and_approve_forwards_to_repair():
 
 
 def test_qc_job_kind_is_registered_and_enqueues_for_a_song():
-    """The route and the handler are separate things and only the pair works --
-    a kind jobs.enqueue does not know raises ValueError rather than queueing."""
+    """T3-32: POST /songs/{id}/qc measures in-process. A leftover qc
+    handler may still exist; the operator path must not enqueue it."""
     with TestClient(appmod.app) as client:
         s = _upload_song(client, "QC Job Song")
         r = client.post(f"/songs/{s['id']}/qc", data={"tier": "pg13"})
         assert r.status_code in (200, 303), r.text
         job = db.one("SELECT * FROM jobs WHERE kind='qc' ORDER BY id DESC LIMIT 1")
-        assert job and json.loads(job["args_json"])["song_id"] == s["id"], job
+        assert job is None, job
 
 
 def test_a_direction_does_not_strip_the_tier_from_the_storyboard_prompt():
