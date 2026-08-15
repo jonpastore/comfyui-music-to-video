@@ -209,10 +209,18 @@ pixels; the siblings are scaled up, not letterboxed. Mixed aspect is a named
 
 **The measurement that decides whether B is possible runs first, not last.** The
 base render already peaks at 23.4 GB of 23.9 on cerberus — 95.8% of the card — at
-832×480. **`T5-6` recorded the finding on the `ltx25` notes: variant B does not
-fit.** 0.5 GB of headroom cannot hold a 4× spatial latent plus the 0.3 GiB
-upscaler on the same graph. `--refine` ships variant A. Silently dropping the
-upsampler and calling A a two-stage is the defect this document is about.
+832×480. **`T5-5` is that measurement for the shipped variant.**
+`pipeline.sample_vram` reads `/system_stats` (via `gpu.vram`);
+`peak_from_samples` takes the max `used_gb`; empty samples raise `NOT MEASURED`.
+`t5_5_claim` is fail-closed: `T5_5_MEASURED` with an empty hook is still
+`NOT MEASURED`. `models.refine_peak` sits beside the 23.4/23.9 figure;
+`origin=measured` without `n_samples`/`host`/`date`, or `same_as_base=True`,
+is a quoted number. A's peak has not been read off the box. **`T5-6` recorded
+the finding on the `ltx25` notes: variant B does not fit.** 0.5 GB of headroom
+cannot hold a 4× spatial latent plus the 0.3 GiB upscaler on the same graph.
+`--refine` ships variant A. Silently dropping the upsampler and calling A a
+two-stage is the defect this document is about. A submit records its
+pre-render reading on `pipeline.LAST_RENDER_VRAM` (T9-15).
 
 **Proof, split after review:** mean absolute pixel difference > 0 is the
 **no-op guard** (`T5-1`), not the quality claim. It passes on noise and on any

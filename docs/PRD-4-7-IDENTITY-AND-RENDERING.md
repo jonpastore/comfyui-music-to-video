@@ -106,6 +106,7 @@ the severe one.
 | P7b | Each clip ceiling is labeled measured or chosen; an over-long single-clip request is refused or split, not only annotated | `T5-9` |
 | P7c | Refine-on vs refine-off is judged on decoded frames (MAD > 0, sharpness up), not graph nodes. Missing measurement fails closed | `T5-2` |
 | P7d | If LTX variant B does not fit, that is a recorded finding on `ltx25` and `--refine` ships A; the upsampler is never dropped silently | `T5-6` |
+| P7e | Peak VRAM of shipped refine variant A is measured on the box, or fail-closed `NOT MEASURED`. Copying the base 23.4/23.9 figure onto `refine_peak` is a quote, not a reading | `T5-5` |
 | P8 | Work is pulled, not assigned; "ready" is not "queued"; every artefact's state transition is a row with a time. A re-render, refine, repair or anchor re-roll lists both candidates and either is selectable | `T6-1`…`T6-7`, `T6-A5` |
 | P9 | Every artefact can be joined to what was asked of it, by one canonical path | `T6-8`…`T6-13a` |
 | P10 | A killed worker leaves no half-written job; a long render does not hold the write lock | `T6-14`…`T6-16` |

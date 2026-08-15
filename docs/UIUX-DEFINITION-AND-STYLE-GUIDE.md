@@ -709,13 +709,16 @@ The studio has two live instances of the same defect and both are UI-visible:
 
 - **`--refine` on `ltx25`** attaches variant A (same-resolution second pass)
   (`T5-1`). Variant B does not fit on cerberus — recorded on the `ltx25`
-  notes (`T5-6`); the upsampler is not silently dropped. Whether A
-  changed the picture is `T5-2`: decoded-frame MAD and Laplacian variance,
-  same seed, on vs off. A graph growing is not that reading. Missing
-  frames raise; a skip is not a reading. The real GPU pair is **NOT
-  MEASURED**. `T3-26` is the labelled-set half: a refine that does not
-  raise the tier-2 score is reported as not helping; missing scores
-  raise, they do not inherit `opportunistic`.
+  notes (`T5-6`); the upsampler is not silently dropped. Peak VRAM of
+  shipped A is `T5-5`: `models.refine_peak` sits beside the 23.4/23.9
+  base figure. A quoted copy of 23.4 is not a reading; missing samples
+  raise. The refine peak is **NOT MEASURED**. Whether A changed the
+  picture is `T5-2`: decoded-frame MAD and Laplacian variance, same seed,
+  on vs off. A graph growing is not that reading. Missing frames raise;
+  a skip is not a reading. The real GPU pair is **NOT MEASURED**.
+  `T3-26` is the labelled-set half: a refine that does not raise the
+  tier-2 score is reported as not helping; missing scores raise, they do
+  not inherit `opportunistic`.
 - **Five of six `DENOISE_CHOICES`** *were* labelled *"on an anchor this returns
   noise"*, correctly, because `latent_mode` was pinned to `"empty"`. **`T7-8`
   shipped 2026-08-13 (`d3f2f6a`) and unpinned it** — corrected after review

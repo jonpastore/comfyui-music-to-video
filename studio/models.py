@@ -365,6 +365,17 @@ CATALOG = {
             "date": "2026-08-13",
         },
         "default": True,
+        "refine_peak": {
+            "variant": "A",
+            "peak_gb": None,
+            "total_gb": None,
+            "host": None,
+            "date": None,
+            "n_samples": None,
+            "origin": "not_measured",
+            "method": "pipeline.sample_vram /system_stats during a refine submit",
+            "resolution": "832x480",
+        },
         "purpose": (
             "The current audio-conditioned path, and the same contract as 2.3: approved "
             "reference frame, scene prompt, and the clip's audio fused as a joint AV latent "
@@ -374,7 +385,9 @@ CATALOG = {
             "own audio), 81 frames at 832x480, 8 steps: gamingpc (32 GB desktop 5090) 34.7s "
             "end to end, 4.9s of that sampling, peak 28.3 GB of 31.8. cerberus (24 GB laptop "
             "5090) 38.0s, peak 23.4 GB of 23.9 -- 95.8% of the card, so nothing else may be "
-            "resident: run pipeline.free_vram() first, as the clip job already does.",
+            "resident: run pipeline.free_vram() first, as the clip job already does. "
+            "T5-5: variant A refine peak is NOT MEASURED on the box -- the 23.4/23.9 "
+            "figure is the base render, not a quoted refine peak.",
             "T5-6 FINDING 2026-08-14: variant B (LTXVLatentUpsampler x2 then re-denoise) "
             "does not fit on cerberus. The measured base already peaks at 23.4 GB of 23.9 "
             "(95.8%) at 832x480, leaving 0.5 GB. The x2 spatial latent is four times the "
@@ -729,6 +742,19 @@ def fits(key, vram_gib):
     # resident once its umt5 text encoder and VAE are counted, and answering
     # from the UNET alone said an unstageable model fits.
     return m.get("resident_gib", m["weights_gib"]) <= vram_gib
+
+
+def refine_peak(model="ltx25"):
+    """Catalogue record for the shipped refine variant's peak VRAM (T5-5).
+
+    Lives on the catalogue row beside the 23.4/23.9 base figure. A quoted
+    number with origin=measured and no samples is not a reading.
+    """
+    rec = CATALOG.get(model)
+    peak = rec.get("refine_peak") if rec else None
+    if not peak:
+        raise ValueError("T5-5 refine peak VRAM is NOT MEASURED")
+    return peak
 
 
 def spellings(name):
@@ -1099,6 +1125,16 @@ def demo():
         "fits() is answering from weights_gib again; the refiner needs 20.5 GiB resident"
     assert fits("wan22_i2v_low", 23.42) is True, "the refiner does fit a 24 GB card"
     assert fits("z_image_turbo", 15.92) is True, "Z-Image is 6.7 GiB and fits ethan"
+
+    # T5-5: a quoted 23.4 with origin=measured is not a reading.
+    peak = refine_peak("ltx25")
+    assert peak["variant"] == "A", peak
+    if peak.get("origin") == "measured":
+        assert peak.get("n_samples", 0) >= 2, peak
+        assert peak.get("host") and peak.get("date"), peak
+        assert peak.get("same_as_base") is not True, peak
+    else:
+        assert peak.get("origin") == "not_measured", peak
 
     # IGNORED is a decision list, not a dumping ground: every entry carries a
     # reason, and nothing is both catalogued and ignored.

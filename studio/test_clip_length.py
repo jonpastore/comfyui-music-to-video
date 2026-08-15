@@ -531,12 +531,19 @@ def test_t5_10_legal_frames_is_one_8n1_rule_for_ltx_and_wan():
 # ------------------------------------------------------------------ TRD-5 T5-5, output length, VRAM, candidate invariants (T6 link) --
 
 def test_t5_5_vram_measurement_is_recorded_before_render_for_refine_decision():
-    """T5-5 / T5-6: pipeline.free_vram() called and peak recorded in models.CATALOG for ltx25.
-    Mutation: remove the free_vram call or the catalogue note → this fails.
-    One variable: VRAM fact for refine variant B."""
-    pipe = _real_module("pipeline")
-    assert hasattr(pipe, "free_vram"), "free_vram must be present for T5-5 measurement"
-    # current catalogue has base 23.4/23.9; test expects refine note (will fail until measured)
+    """T5-5: peak lives in models.refine_peak; a quoted 23.4 fails.
+
+    Full harness is test_t5_5_refine_peak_vram.py. Mutation: drop
+    sample_vram or quote the base figure as measured → that file goes red.
+    """
+    from test_t5_5_refine_peak_vram import (
+        test_t5_5_catalogue_does_not_quote_the_base_figure,
+        test_t5_5_free_vram_and_sample_vram_exist,
+        test_t5_5_notes_sit_beside_23_4_and_do_not_quote_it,
+    )
+    test_t5_5_free_vram_and_sample_vram_exist()
+    test_t5_5_catalogue_does_not_quote_the_base_figure()
+    test_t5_5_notes_sit_beside_23_4_and_do_not_quote_it()
 
 
 def test_output_length_enforcement_matches_expect_from_workflow():

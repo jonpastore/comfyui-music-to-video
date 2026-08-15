@@ -143,6 +143,121 @@ def free_vram(progress=None):
     return True
 
 
+# docs/TRD-5 T5-5: peak VRAM of the shipped refine variant, measured on the
+# box it ran on. None / empty samples is NOT MEASURED. skip is not a reading.
+# Flipping T5_5_MEASURED with an empty hook is the lie the harness catches.
+# The 23.4/23.9 figure in models.py is the BASE render, not a quoted refine peak.
+T5_5_SAMPLES = None
+T5_5_MEASURED = False
+T5_5_META = None
+LAST_RENDER_VRAM = None
+_GB = 1024 ** 3
+
+
+def sample_vram():
+    """One /system_stats reading via gpu.vram(), or None if the box is silent.
+
+    T9-15 / T5-5: read, do not unload. free_vram() is the other direction.
+    """
+    v = gpu.vram()
+    if not v or not v[1]:
+        return None
+    free, total = v
+    used = (total - free) if free is not None else None
+    return {
+        "used_gb": round(used / _GB, 3) if used is not None else None,
+        "free_gb": round(free / _GB, 3) if free is not None else None,
+        "total_gb": round(total / _GB, 3),
+        "host": models.canonical_host(COMFY),
+        "at": time.time(),
+    }
+
+
+def peak_from_samples(samples):
+    """Highest used_gb. Empty or unreadable samples raise NOT MEASURED."""
+    if not samples:
+        raise ValueError("T5-5 refine peak VRAM is NOT MEASURED")
+    usable = [s for s in samples if s and s.get("used_gb") is not None]
+    if not usable:
+        raise ValueError("T5-5 refine peak VRAM is NOT MEASURED")
+    top = max(usable, key=lambda s: s["used_gb"])
+    return {
+        "peak_gb": top["used_gb"],
+        "total_gb": top.get("total_gb"),
+        "host": top.get("host"),
+        "n_samples": len(usable),
+        "origin": "measured",
+    }
+
+
+def record_t5_5_peak(samples, *, variant="A", resolution="832x480", frames=None,
+                     free_vram_before=None):
+    """Renderer / harness populates the sample hook. Does not flip MEASURED."""
+    global T5_5_SAMPLES, T5_5_META
+    T5_5_SAMPLES = list(samples) if samples else None
+    T5_5_META = {
+        "variant": variant,
+        "resolution": resolution,
+        "frames": frames,
+        "free_vram_before": free_vram_before,
+        "date": time.strftime("%Y-%m-%d"),
+    }
+    return t5_5_reading()
+
+
+def t5_5_reading():
+    """Peak from the hook. Empty hook raises NOT MEASURED."""
+    peak = peak_from_samples(T5_5_SAMPLES)
+    if T5_5_META:
+        peak = {**T5_5_META, **peak}
+    return peak
+
+
+def t5_5_claim():
+    """The real-box gate. MEASURED with an empty hook is still NOT MEASURED."""
+    if not T5_5_MEASURED:
+        raise ValueError("T5-5 refine peak VRAM is NOT MEASURED")
+    return t5_5_reading()
+
+
+class VramWatch:
+    """Sample used VRAM on a thread while a submit runs (T9-15 / T5-5)."""
+
+    def __init__(self, interval=1.0):
+        self.interval = interval
+        self.samples = []
+        self._stop = threading.Event()
+        self._t = None
+
+    def start(self):
+        first = sample_vram()
+        if first:
+            self.samples.append(first)
+        self._t = threading.Thread(target=self._loop, daemon=True)
+        self._t.start()
+        return self
+
+    def _loop(self):
+        while not self._stop.wait(self.interval):
+            s = sample_vram()
+            if s:
+                self.samples.append(s)
+
+    def finish(self):
+        self._stop.set()
+        if self._t is not None:
+            self._t.join(timeout=2)
+        last = sample_vram()
+        if last:
+            self.samples.append(last)
+        pre = self.samples[0] if self.samples else None
+        try:
+            peak = peak_from_samples(self.samples)
+        except ValueError:
+            peak = None
+        return {"pre": pre, "peak": peak, "samples": list(self.samples)}
+
+
 def comfy_queue():
     """{"running": n, "pending": n} from ComfyUI's own /queue, or None if it did
     not answer.
@@ -812,6 +927,7 @@ def _submit_and_collect(wf_dir, prefix_dir, pattern, progress):
     run managed to write. This function is also the ONLY place that branches on
     the backend: the seven gen_* wrappers above do not know there is one.
     """
+    global LAST_RENDER_VRAM
     # One guard for all seven gen_* wrappers, not a copy per caller: every one
     # of them reaches a renderer through here, and a starved card fails them all
     # the same way -- an OOM that presents as a job which succeeded and wrote
@@ -830,10 +946,14 @@ def _submit_and_collect(wf_dir, prefix_dir, pattern, progress):
         gpu.preflight(progress)
     mine = submitted_prefixes(wf_dir)
     before = set(collect(prefix_dir, pattern))
+    watch = VramWatch()
+    watch.start()
     try:
         if swarm:
-            return submit_swarm(wf_dir, prefix_dir, pattern, progress)
-        submit_dir(wf_dir, progress)
+            swarm_out = submit_swarm(wf_dir, prefix_dir, pattern, progress)
+        else:
+            submit_dir(wf_dir, progress)
+            swarm_out = None
     except BaseException:
         # Garbage-collect what a cancelled or failed run did manage to write.
         # Only files matching OUR prefixes and newer than our start, so this
@@ -845,6 +965,10 @@ def _submit_and_collect(wf_dir, prefix_dir, pattern, progress):
             except OSError:
                 pass
         raise
+    finally:
+        LAST_RENDER_VRAM = watch.finish()
+    if swarm:
+        return swarm_out
     fresh = [p for p in collect(prefix_dir, pattern) if p not in before]
     if not mine:
         ours = fresh        # no prefix to match on: better than losing the render
@@ -1554,6 +1678,31 @@ def demo():
         assert notes and "could not free" in notes[0], notes
     finally:
         urllib.request.urlopen = real_urlopen
+
+    # --- T5-5: empty samples are NOT MEASURED; peak is the max used_gb ---
+    try:
+        peak_from_samples([])
+        raise AssertionError("empty samples were accepted as a T5-5 reading")
+    except ValueError as e:
+        assert "NOT MEASURED" in str(e), e
+    fake = [
+        {"used_gb": 10.0, "total_gb": 23.9, "host": "cerberus"},
+        {"used_gb": 19.4, "total_gb": 23.9, "host": "cerberus"},
+    ]
+    got = peak_from_samples(fake)
+    assert got["peak_gb"] == 19.4 and got["n_samples"] == 2, got
+    prev_flag, prev_samples = T5_5_MEASURED, T5_5_SAMPLES
+    try:
+        globals()["T5_5_MEASURED"] = True
+        globals()["T5_5_SAMPLES"] = None
+        try:
+            t5_5_claim()
+            raise AssertionError("MEASURED with an empty hook was accepted")
+        except ValueError as e:
+            assert "NOT MEASURED" in str(e), e
+    finally:
+        globals()["T5_5_MEASURED"] = prev_flag
+        globals()["T5_5_SAMPLES"] = prev_samples
 
     # --- collect() natural sort ---
     real_out = COMFY_OUTPUT
