@@ -179,7 +179,9 @@ order and take the dependencies from here.
    the time meter (§5.1), casting (§5.3).
 7. Per-scene model choice, W2 (`T2-42`…`T2-48`) — last, because `T2-45` needs
    `models.where()`'s three-valued answer respected at enqueue and `T2-48` needs
-   per-model ceilings, which is P0 item 1 again.
+   per-model ceilings, which is P0 item 1 again. The renderer half of those
+   ceilings is `T5-9`: labeled measured vs chosen, and an over-long single
+   clip is refused or split. The planner divisor is unchanged.
 
 ### P3 — QC tier 2 and repair
 

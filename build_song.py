@@ -387,6 +387,87 @@ LTX25_VIDEO_CFG = LTX25_AUDIO_CFG = 1.0
 LTX25_LEN = LTX_LEN
 LTX25_FPS = LTX_FPS
 
+# docs/TRD-5 T5-9. Renderer facts; TRD-2 T2-12 owns the criterion.
+# origin is measured or chosen — presenting a choice as a measurement fails.
+_LTX_CEILING_S = 15.0
+_LTX_CEILING = {
+    "seconds": _LTX_CEILING_S,
+    "frames": legal_frames(_LTX_CEILING_S, LTX_FPS),
+    "origin": "measured",
+    "kind": "cost",
+    "card": "cerberus 24GB 5090",
+    "date": "2026-08-13",
+    "evidence": (
+        "505 frames / 30.004s and 1009 / 59.949s both render; "
+        "3.0s compute per finished second at 15s vs 12.4s at 30s"
+    ),
+}
+_S2V_CEILING = {
+    "seconds": CHUNK,
+    "frames": LEN,
+    "origin": "chosen",
+    "kind": "provisional",
+    "evidence": (
+        "LEN=77 is a choice, not a node limit (min: 1); "
+        "coherence past the ~5s training segment is unmeasured"
+    ),
+}
+CLIP_CEILINGS = {
+    "ltx": _LTX_CEILING,
+    "ltx25": _LTX_CEILING,
+    "s2v": _S2V_CEILING,
+    "i2v": _S2V_CEILING,
+}
+
+
+def clip_ceiling(video_model):
+    """The per-model clip ceiling, labeled measured vs chosen (T5-9)."""
+    rec = CLIP_CEILINGS.get(video_model)
+    if rec is None:
+        raise ValueError(f"no clip ceiling for video_model={video_model!r}")
+    return rec
+
+
+def honour_ceiling(seconds, video_model):
+    """Refuse a single-clip request over this model's ceiling (T5-9).
+
+    Split of an over-long scene is split_to_ceiling / T2-10. This is the
+    renderer gate: one clip cannot exceed the ceiling.
+    """
+    if not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
+        raise ValueError(f"seconds must be a finite number > 0, got {seconds!r}")
+    rec = clip_ceiling(video_model)
+    limit = rec["seconds"]
+    if seconds > limit + 1e-9:
+        raise ValueError(
+            f"{video_model} clip {seconds}s exceeds {rec['origin']} ceiling "
+            f"{limit}s; refuse or split")
+    return seconds
+
+
+def split_to_ceiling(seconds, video_model):
+    """Cover `seconds` with parts each at most the model ceiling (T5-9)."""
+    if not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
+        raise ValueError(f"seconds must be a finite number > 0, got {seconds!r}")
+    rec = clip_ceiling(video_model)
+    limit = rec["seconds"]
+    if seconds <= limit + 1e-9:
+        return [seconds]
+    n = math.ceil(seconds / limit)
+    part = seconds / n
+    return [part] * n
+
+
+def requested_clip_seconds(scene, video_model="ltx25"):
+    """Seconds this scene is asking the renderer for, before the ceiling gate."""
+    if scene.get("length_seconds") is not None:
+        return float(scene["length_seconds"])
+    frames = scene.get("frames")
+    if frames is not None:
+        fps = LTX_FPS if video_model in ("ltx", "ltx25") else FPS
+        return int(frames) / fps
+    return CHUNK
+
 
 def ltx25_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard, with_audio=True):
     """LTX-2.5, the audio-conditioned path -- same contract as ltx_workflow.
@@ -611,6 +692,8 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
 
     refine=True adds a low-denoise second pass with the i2v low-noise expert.
     """
+    # T5-9: an over-long single-clip request is refused here, not annotated.
+    honour_ceiling(requested_clip_seconds(scene, video_model), video_model)
     motion = scene.get("video_motion_prompt") or scene.get("motion", "")
     pos = f"{shot_directive(scene, i)} {char_lock} {world_lock} Motion: {motion} Camera: {scene.get('camera','')} Lighting: {scene.get('lighting','')}"
     pos = guardrail.build_prompt(pos, guard, f"scene {i}")
@@ -856,6 +939,17 @@ def demo():
     assert clip_seconds(None) == CHUNK
     assert clip_seconds(30.0) == legal_frames(30.0, LTX_FPS) / LTX_FPS
     assert n_clips_for(195.792, 30.0) == 7
+    # T5-9: ceilings are labeled; over-long is refused. Planner 30s is not this gate.
+    assert clip_ceiling("ltx25")["origin"] == "measured"
+    assert clip_ceiling("s2v")["origin"] == "chosen"
+    assert honour_ceiling(CHUNK, "ltx25") == CHUNK
+    try:
+        honour_ceiling(30.0, "ltx25")
+        raise AssertionError("30s ltx25 must exceed the measured ceiling")
+    except ValueError as e:
+        assert "measured" in str(e)
+    parts = split_to_ceiling(30.0, "ltx25")
+    assert len(parts) >= 2 and abs(sum(parts) - 30.0) < 1e-9
 
     # T5-1: --refine on ltx25 adds a second pass. Restoring the early return
     # that skipped refine leaves these two graphs identical and this fails.

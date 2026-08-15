@@ -281,8 +281,10 @@ length is the divisor, the count is ours.
    rule is that `frames ≡ 1 (mod 8)` serves both models, since every `8n+1` is
    also `4(2n)+1`; the tie-break is half-to-even (77 is equidistant from 73 and
    81, and the code lands on 81). **Built.** `clip_seconds` honours it.
-2. The renderer takes a length. **Not this slice** — graphs still emit
-   `LTX25_LEN`.
+2. The renderer takes a length. Graphs still emit `LTX25_LEN`. `T5-9` is the
+   ceiling **gate** on that request: over the labeled measured/chosen ceiling
+   is refused or split, not annotated. It does not change the planner
+   divisor — `clip_seconds(30)` and `n_clips_for(…, 30)` stay.
 3. Only then `T2-13a`, `T2-13c` (the approve grid must still show every clip),
    `T2-8`/`T2-9`.
 

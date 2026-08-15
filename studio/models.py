@@ -295,6 +295,12 @@ CATALOG = {
         "loader": "UNETLoader",
         # the --video-model value build_song.py accepts
         "cli": "s2v",
+        "ceiling": {
+            "seconds": 4.8125,
+            "frames": 77,
+            "origin": "chosen",
+            "kind": "provisional",
+        },
         "purpose": (
             "Animates an approved reference frame using THE AUDIO. Takes the scene's motion "
             "prompt, the reference image and a wav2vec2 encoding of that clip's 4.8125 "
@@ -321,6 +327,12 @@ CATALOG = {
         "file": "Wan2.2/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
         "loader": "UNETLoader",
         "cli": "i2v",
+        "ceiling": {
+            "seconds": 4.8125,
+            "frames": 77,
+            "origin": "chosen",
+            "kind": "provisional",
+        },
         "purpose": (
             "Animates a still from the prompt alone. Two experts run in sequence: the high-"
             "noise model establishes motion and structure, the low-noise one refines detail "
@@ -345,6 +357,13 @@ CATALOG = {
         "file": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
         "loader": "UNETLoader",
         "cli": "ltx25",
+        "ceiling": {
+            "seconds": 15.0,
+            "origin": "measured",
+            "kind": "cost",
+            "card": "cerberus 24GB 5090",
+            "date": "2026-08-13",
+        },
         "default": True,
         "purpose": (
             "The current audio-conditioned path, and the same contract as 2.3: approved "
@@ -412,6 +431,13 @@ CATALOG = {
         "file": "ltx-2.3-22b-distilled_transformer_only_fp8_scaled.safetensors",
         "loader": "UNETLoader",
         "cli": "ltx",
+        "ceiling": {
+            "seconds": 15.0,
+            "origin": "measured",
+            "kind": "cost",
+            "card": "cerberus 24GB 5090",
+            "date": "2026-08-13",
+        },
         "purpose": (
             "The other audio-driven video path. Like s2v it takes the approved reference "
             "frame, the scene prompt AND the clip's audio -- but it fuses audio as a joint "

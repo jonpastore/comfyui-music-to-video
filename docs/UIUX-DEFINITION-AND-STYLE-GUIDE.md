@@ -254,7 +254,9 @@ approve-grid clip duration is `build_song.clip_seconds(scene_seconds)` — the
 legal 8n+1 length at the clip fps, not a page-local 4.8125. Clip count is
 `build_song.n_clips_for` (`T2-13`), never a page-local `ceil(duration / CHUNK)`.
 A row whose `scene_seconds` is NULL (generated before the column) still reads
-as `CHUNK`.
+as `CHUNK`. A single-clip request over the model's ceiling (`T5-9`) is a
+named refusal (measured vs chosen), not a quiet annotation; split is
+`split_to_ceiling`.
 
 ### 5.3 Space and radius
 

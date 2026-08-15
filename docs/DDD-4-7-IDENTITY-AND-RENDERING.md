@@ -207,6 +207,13 @@ non-semantic perturbation. The quality claim needs a named metric on a fixed
 fixture set moving in a stated direction. `T5-2`'s wording in TRD-5 conflates the
 two and should be split there.
 
+**Ceilings (`T5-9`).** `build_song.CLIP_CEILINGS` (mirrored on the video
+`CATALOG` rows) labels LTX 15 s as a **measured** cost ceiling and s2v
+4.8125 s as **chosen**. `workflow()` calls `honour_ceiling` on the scene's
+requested length: over the ceiling raises, naming the origin. `split_to_ceiling`
+is the split answer. `clip_seconds` / `legal_frames` stay the planner half and
+still accept a 30 s divisor so song length owns clip count.
+
 ## 6. Queue, lifecycle and identity (TRD-6)
 
 25 criteria, and TRD-6 §8 states the design constraint better than a design

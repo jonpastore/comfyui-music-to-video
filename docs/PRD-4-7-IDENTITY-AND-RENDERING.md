@@ -95,6 +95,7 @@ the severe one.
 | P6 | The four things that shape every sheet — view framing, backdrop, composite, pose — are versioned, per-album prompts rather than code constants | `T7-13`…`T7-19` |
 | P7 | `--refine` either refines or refuses, and whether it helps is measured rather than assumed | `T5-1`…`T5-6` |
 | P7a | A ×2 clip among 832×480 siblings assembles at 1664×960 with no silent letterbox; mixed aspect is refused | `T5-7` |
+| P7b | Each clip ceiling is labeled measured or chosen; an over-long single-clip request is refused or split, not only annotated | `T5-9` |
 | P8 | Work is pulled, not assigned; "ready" is not "queued"; every artefact's state transition is a row with a time | `T6-1`…`T6-7` |
 | P9 | Every artefact can be joined to what was asked of it, by one canonical path | `T6-8`…`T6-13a` |
 

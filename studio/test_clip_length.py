@@ -529,3 +529,75 @@ def test_legal_frames_enforces_8n1_for_both_models_t5_10():
         frames = build_song.legal_frames(secs, build_song.LTX_FPS)
         assert (frames - 1) % 8 == 0, f"T5-10 failed for {secs}s: {frames} not 8n+1"
     # current passes; the test name + comment makes the RED phase via planned mutation in TDD
+
+
+# ------------------------------------------------------------------ T5-9 --
+
+def test_t5_9_each_ceiling_states_measured_or_chosen():
+    """T5-9: a ceiling presented as measured when it was chosen fails.
+
+    Mutation: label s2v origin 'measured' → this goes red.
+    Mutation: drop origin from a record → this goes red.
+    """
+    for model in ("ltx", "ltx25", "s2v", "i2v"):
+        rec = build_song.clip_ceiling(model)
+        assert rec["origin"] in ("measured", "chosen"), (model, rec)
+        assert rec["seconds"] > 0, (model, rec)
+    assert build_song.clip_ceiling("ltx")["origin"] == "measured"
+    assert build_song.clip_ceiling("ltx25")["origin"] == "measured"
+    assert build_song.clip_ceiling("s2v")["origin"] == "chosen"
+    assert build_song.clip_ceiling("s2v")["origin"] != "measured"
+    assert build_song.clip_ceiling("s2v")["seconds"] == build_song.CHUNK
+    assert build_song.clip_ceiling("ltx25")["seconds"] == 15.0
+    assert build_song.clip_ceiling("ltx25")["frames"] == build_song.legal_frames(
+        15.0, build_song.LTX_FPS)
+
+
+def test_t5_9_over_long_request_is_refused_or_split():
+    """T5-9 positive half: over-long is refused or split, not annotated.
+
+    Mutation: honour_ceiling returns the request unchanged → this goes red.
+    Mutation: workflow ignores length_seconds=30 and still emits a graph → red.
+    legal_frames / clip_seconds stay the planner half and are not this test.
+    """
+    # in-bound request is accepted
+    assert build_song.honour_ceiling(15.0, "ltx25") == 15.0
+    assert build_song.honour_ceiling(build_song.CHUNK, "s2v") == build_song.CHUNK
+    # over the measured LTX cost ceiling
+    with pytest.raises(ValueError, match="measured"):
+        build_song.honour_ceiling(30.0, "ltx25")
+    # over the chosen s2v ceiling
+    with pytest.raises(ValueError, match="chosen"):
+        build_song.honour_ceiling(10.0, "s2v")
+    # split is the other legal answer: every part is at most the ceiling
+    parts = build_song.split_to_ceiling(30.0, "ltx25")
+    assert len(parts) >= 2
+    assert abs(sum(parts) - 30.0) < 1e-9
+    assert all(p <= 15.0 + 1e-9 for p in parts)
+    # renderer: a scene asking for 30s is refused, not annotated onto LTX25_LEN
+    long_scene = dict(SCENE, length_seconds=30.0)
+    with pytest.raises(ValueError, match="ceiling"):
+        build_song.workflow(
+            0, long_scene, "c.png", "song.mp3", "c", "w", "",
+            video_model="ltx25")
+    # default / in-bound scene still builds
+    wf = build_song.workflow(
+        0, SCENE, "c.png", "song.mp3", "c", "w", "", video_model="ltx25")
+    assert _latent_length(wf) == build_song.LTX25_LEN
+    # planner half is unchanged: 30s still rounds, song length still owns count
+    assert build_song.clip_seconds(30.0) == (
+        build_song.legal_frames(30.0, build_song.LTX_FPS) / build_song.LTX_FPS)
+    assert build_song.n_clips_for(195.792, 30.0) == 7
+
+
+def test_t5_9_catalogue_ceiling_matches_renderer():
+    """One record. Mutation: CATALOG origin disagrees with CLIP_CEILINGS → red."""
+    studio = os.path.dirname(os.path.abspath(__file__))
+    if studio not in sys.path:
+        sys.path.insert(0, studio)
+    import models
+    for cli, key in (("ltx25", "ltx25"), ("ltx", "ltx23"), ("s2v", "wan22_s2v")):
+        rec = build_song.clip_ceiling(cli)
+        cat = models.CATALOG[key]["ceiling"]
+        assert cat["origin"] == rec["origin"], (cli, cat, rec)
+        assert cat["seconds"] == rec["seconds"], (cli, cat, rec)
