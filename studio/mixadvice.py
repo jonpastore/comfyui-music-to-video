@@ -251,12 +251,73 @@ def suggest(items, direction="", only_id=None, model=None, progress=None):
     return clean(raw, {it["id"] for it in items}, only_id)
 
 
+def _neighbour_ref(it):
+    return {"id": int(it["id"]), "title": it.get("title") or "?"}
+
+
+def relative_to(items, iid):
+    """What this item's mix decision is judged against (T10-15).
+
+    from = the previous track in the running order; into = the next.
+    Either side is omitted at an end. Empty when the item is not in the set.
+    """
+    ordered = list(items or [])
+    try:
+        idx = next(i for i, it in enumerate(ordered) if int(it["id"]) == int(iid))
+    except StopIteration:
+        return {}
+    rel = {}
+    if idx > 0:
+        rel["from"] = _neighbour_ref(ordered[idx - 1])
+    if idx + 1 < len(ordered):
+        rel["into"] = _neighbour_ref(ordered[idx + 1])
+    return rel
+
+
+def order_of(items):
+    """The running order that names the set this advice is about."""
+    return [_neighbour_ref(it) for it in (items or [])]
+
+
+def about_set(payload):
+    """The set identity carried by a mixadvice payload: ordered item ids.
+
+    Empty when the quote has no neighbours (T10-15: that is a different set).
+    """
+    order = (payload or {}).get("order") or []
+    out = []
+    for ent in order:
+        try:
+            out.append(int(ent["id"]))
+        except (TypeError, ValueError, KeyError):
+            continue
+    return tuple(out)
+
+
+def quote_without_neighbours(payload):
+    """Strip the relational frame. The result is advice about a different set.
+
+    Form values (transition, secs, why, …) survive; order and relative_to do not.
+    """
+    items = []
+    for rec in (payload or {}).get("items") or []:
+        if not isinstance(rec, dict):
+            continue
+        items.append({k: v for k, v in rec.items() if k != "relative_to"})
+    out = {"items": items}
+    if isinstance(payload, dict) and "direction" in payload:
+        out["direction"] = payload["direction"]
+    return out
+
+
 def interface_payload(suggestions, items, direction=""):
     """Mark model why, operator direction, and measured bpm/energy.
 
     clean() stays a dict of form values. This is the payload a client
     reads: authored sits on each string so advice cannot be shown as a
-    reading (T10-11).
+    reading (T10-11). T10-15: each item names the neighbours it is
+    relative to, and the payload carries the running order — quote either
+    without the other and the advice is about a different set.
     """
     by_id = {int(it["id"]): it for it in items}
     out = []
@@ -272,8 +333,9 @@ def interface_payload(suggestions, items, direction=""):
         for k in ("transition", "secs", "beatmatch", "effects_json"):
             if k in s:
                 rec[k] = s[k]
+        rec["relative_to"] = relative_to(items, iid)
         out.append(rec)
-    payload = {"items": out}
+    payload = {"items": out, "order": order_of(items)}
     if direction:
         payload["direction"] = advice.mark(direction, advice.OPERATOR)
     return payload
@@ -300,6 +362,10 @@ def demo():
     assert marked["items"][0]["why"]["authored"] == advice.MODEL
     assert marked["items"][0]["bpm"]["unit"] == "bpm"
     assert marked["direction"]["authored"] == advice.OPERATOR
+    # T10-15: advice names its neighbours; quote without them is another set
+    assert marked["items"][0]["relative_to"]["into"]["id"] == 2
+    assert about_set(marked) == (1, 2, 3)
+    assert about_set(quote_without_neighbours(marked)) == ()
 
     # every kind of invention is dropped, and dropping one field keeps the rest
     assert clean({"items": [{"id": 1, "transition": "teleport"}]}, ids) == {}

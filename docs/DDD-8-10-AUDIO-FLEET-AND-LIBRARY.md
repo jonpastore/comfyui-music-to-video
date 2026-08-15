@@ -214,6 +214,14 @@ backwards — and a VLM asked the same question would have agreed with it.
 shape; `classify_sheet` asks `DESCRIBE_DIFFERS`; `describe_what_differs` is the
 same surface and returns non-verdict text from `review_text`.
 
+`T10-15` is the mixadvice half of the payload contract. Mixing is relational
+("what happens at item 3 depends on what item 2 did"), so
+`mixadvice.interface_payload` puts `relative_to` (from/into neighbours) on
+each item and the running `order` on the payload. Reordering the set rewrites
+those references. `quote_without_neighbours` drops them; `about_set` then
+names a different set — advice quoted without its neighbours is not advice
+about the set it came from.
+
 ### 4.3 One guard, several callers
 
 `screen_prompt_field` is the single screening implementation and `T10-17` keeps
@@ -235,7 +243,7 @@ each caller, or a caller that stops calling it stays green.
     advice labelling  ->  T10-11..T10-15 over the four live modules
                          ->  the picked/unpicked distinction (T8-2)
     bulk edit (T10-3…T10-7 built)
-    advice labelling (T10-11..T10-14 built) ->  T10-15 over the four live modules
+    advice labelling (T10-11..T10-15 built) over the four live modules
 
 Nothing here blocks TRD 1-7. TRD-9 is first because it is cheapest and because
 everything else in the project renders through the machinery it pins down.

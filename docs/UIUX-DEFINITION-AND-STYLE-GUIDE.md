@@ -895,6 +895,13 @@ description, not a QC gate.
 `T10-14`: the vision surface never asks "does this match the reference?" —
 that shape is refused by name and the recovery is "describe what differs".
 The accepted shape returns a description sentence, not a pass/fail chip.
+
+`T10-15`: mix advice is relational. Each suggestion names the neighbours it
+is relative to (`relative_to.from` / `relative_to.into`) and the payload
+carries the running `order`. Showing a `why` without that frame is showing
+advice about a different set — do not render the sentence alone as if it
+were absolute.
+
 If advice and measurement look alike, the operator will eventually treat a
 confident sentence as a reading, which is how `41.1 vs 64.7` would have become
 a gate. The style-guide rule: **model text carries the `--muted` role and an

@@ -401,6 +401,7 @@ places.
 | `T10-11` model output is marked | a field that is present and never read | a **measurement** in the same payload is marked distinctly, and a client can separate them |
 | `T10-12` advice writes nothing directly | passes with the advice surface deleted | **accepting** a proposal writes, and records the model |
 | `T10-13` vision output is never a verdict | passes if `classify_sheet` is never called | it **is** called and its text **is** attached to a finding |
+| `T10-15` mixadvice is relational | passes if no advice is shown | a set-level response **includes neighbour/context** that **changes when the surrounding set changes**; quote without neighbours is a different set |
 | `T10-16` the image guardrail is off audio | passes if nothing is screened anywhere | the **image path still refuses** the same string |
 
 
@@ -428,7 +429,8 @@ current.
 | `T10-11` model output is marked | **built** | `ec74fb2` | `studio/test_t10_11_advice_marked.py`: `advice.separate` on mixadvice / vision / lyrics / chat payloads; `POST /sets/{id}/suggest` JSON. A measurement in the same payload carries `authored=measurement` and a unit |
 | `T10-12` advice writes nothing directly | **built** | this change | `studio/test_t10_12_advice_writes.py`: `advice.retain` does not apply; `advice.accept` writes and records the model; `mixadvice.propose` leaves `set_items` unchanged; `POST /sets/{id}/suggest` retains a `proposal_id`; `POST /sets/{id}/proposals/{pid}/accept` writes the mix |
 | `T10-13` vision output is never a verdict | **built** | this change | `studio/test_t10_13_classify_sheet_finding.py`: `classify_sheet` is called and its reason text is on a finding; flagged and empty both record `verdict=pass`; `h_classify` attaches the called text |
-| `T10-14` "does this match?" refused; "describe what differs" accepted | **built** | this change | `studio/test_t10_14_prompt_shape.py`: `prompt_shape` refuses match questions naming the accepted shape; `describe_what_differs` returns non-verdict text; `classify_sheet` asks `DESCRIBE_DIFFERS`. `T10-15` still not built |
+| `T10-14` "does this match?" refused; "describe what differs" accepted | **built** | this change | `studio/test_t10_14_prompt_shape.py`: `prompt_shape` refuses match questions naming the accepted shape; `describe_what_differs` returns non-verdict text; `classify_sheet` asks `DESCRIBE_DIFFERS` |
+| `T10-15` mixadvice advice is relational | **built** | this change | `studio/test_t10_15_relational.py`: each item names `relative_to` (from/into neighbours); reordering the set rewrites those references; `quote_without_neighbours` drops `order`/`relative_to` and `about_set` is a different set |
 | `T10-7` pre-write count is the real count | **built** | this change | `preview=true` on POST `/songs/genres` returns `would_change=9` for the 12-vs-9 case and writes nothing; the write's `changed` is 9 (`studio/test_trd10.py`) |
 | `T10-11` model output is marked | **built** | this change | `studio/test_t10_11_advice_marked.py`: `advice.separate` on mixadvice / vision / lyrics / chat payloads; `POST /sets/{id}/suggest` JSON. A measurement in the same payload carries `authored=measurement` and a unit |
 | `T10-17` one shared guard | **built** | earlier | `screen_prompt_field`; `MAX_PROMPT_FIELD` replaced `MAX_CHARACTER_FIELD` |

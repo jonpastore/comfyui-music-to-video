@@ -67,7 +67,8 @@ measurements `authored=measurement` plus a unit) so a client can separate them;
 the model; `T10-13` attaches `classify_sheet` text to a finding and never
 uses it as a pass/fail; `T10-14` refuses "does this match?" as a prompt
 shape and accepts "describe what differs" with non-verdict text;
-`T10-15` is still the rest of the rule.
+`T10-15` marks mixadvice as relational (`relative_to` / running `order` —
+quote without neighbours is a different set).
 
 **P4 is a requirement, not a feature.** `insert_voice` is the store gate:
 a voice cannot be written without a recorded source and a recorded consent
@@ -91,13 +92,12 @@ still not shipped (`T8-12`, provisional by absence).
    `automation` through `automation.save` / `item_audio` (`GET/POST
    /api/songs/{id}/automation/{lane}`); `T8-14` / `T8-15` remain.
 3. **TRD-10's bulk edit.** `T10-6` (one transaction) is built. `T10-3`/`T10-4`/`T10-5`/`T10-7` remain.
+3. **TRD-10's bulk edit.** `T10-3`…`T10-7` are built: blank leaves alone, toggle-all is the shown set, invalid refuses the batch, one transaction, pre-write count equals rows changed.
 4. **TRD-10's advice rules.** `T10-11` (payload mark), `T10-12` (accept writes,
    records the model), `T10-13` (`classify_sheet` text on a finding, never a
-   pass/fail), and `T10-14` (match-question shape refused; describe-what-differs
-   returns non-verdict text) are built. `T10-15` remains.
-3. **TRD-10's bulk edit.** `T10-3`…`T10-7` are built: blank leaves alone, toggle-all is the shown set, invalid refuses the batch, one transaction, pre-write count equals rows changed.
-4. **TRD-10's advice rules.** `T10-11`…`T10-14` are built. `T10-15`
-   (mixadvice relational framing) remains.
+   pass/fail), `T10-14` (match-question shape refused; describe-what-differs
+   returns non-verdict text), and `T10-15` (mixadvice relational / neighbours
+   named) are built.
 
 ## 5. Scope
 
