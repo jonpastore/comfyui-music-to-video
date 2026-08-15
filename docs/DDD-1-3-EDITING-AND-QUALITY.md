@@ -315,8 +315,10 @@ round `duration_guidance` to multiples of a constant. `_system_prompt` no
 longer names 4.8125 s either. `T2-14b` is **built**: the TIMING clip-length
 line is `clip_seconds(scene_seconds)`, so one song at two `scene_seconds`
 produces two statements — a new constant 15.0 would keep the sentence shape
-and fail this. `T2-14c` (TIMING purpose asserted) remains. The function is
-pure; assert on its return value, never by grepping the source.
+and fail this. `T2-14c` is **built**: the return value still states track
+length and requires scene durations to sum to approximately it. Deleting
+the TIMING block wholesale leaves `T2-14a` green and fails this. The
+function is pure; assert on its return value, never by grepping the source.
 
 ### 5.6 Tier 2 is a calibration, not a metric
 

@@ -272,7 +272,8 @@ named refusal (measured vs chosen), not a quiet annotation; split is
 (`T2-13b`); the approve grid still shows the same `(clip_idx, seed)` picks.
 The storyboard planner prompt does not tell the model clips are a fixed
 4.8125 s (`T2-14a`). Its clip-length line is `clip_seconds(scene_seconds)`,
-so two plannings produce two TIMING statements (`T2-14b`).
+so two plannings produce two TIMING statements (`T2-14b`). TIMING still
+states track length and requires scene durations to sum to it (`T2-14c`).
 
 ### 5.3 Space and radius
 
