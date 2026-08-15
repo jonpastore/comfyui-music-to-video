@@ -1582,6 +1582,40 @@ def refiner_help_finding(report, path=None):
 
 # ------------------------------------------------------------------- run --
 
+def expect_interpolated(source_frames, source_fps, multiplier=2, **extra):
+    """T3-8: expect for a RIFE-interpolated clip.
+
+    RIFE returns (n-1)*m+1 frames, not n*m. Playback rate is
+    make_postproc.out_fps so duration stays the source length; fps*m is
+    the silent-drift trap (77→153 at 32 fps is 4.781 s vs 4.8125 s).
+    Latent-rule exemption alone is not this criterion — callers get
+    frames, fps and duration from one place.
+    """
+    n = int(source_frames)
+    m = int(multiplier)
+    if n < 2:
+        raise ValueError(f"source_frames must be >= 2 for RIFE, got {n}")
+    if m < 1:
+        raise ValueError(f"multiplier must be >= 1, got {m}")
+    src_fps = float(source_fps)
+    if src_fps <= 0:
+        raise ValueError(f"source_fps must be > 0, got {src_fps}")
+    frames = (n - 1) * m + 1
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    import make_postproc  # noqa: E402  -- single owner of out_fps arithmetic
+    out_fps = make_postproc.out_fps(src_fps, n, m)
+    exp = {
+        "frames": frames,
+        "fps": out_fps,
+        "duration": n / src_fps,
+        "interpolated": True,
+    }
+    exp.update(extra)
+    return exp
+
+
 def clip_qc_expect(clip_expect, song_fps=None):
     """T2-13f: a clip is judged at its native fps, not the song's.
 

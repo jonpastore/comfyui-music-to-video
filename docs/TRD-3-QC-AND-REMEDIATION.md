@@ -566,6 +566,7 @@ current.
 | **tier 1, §4 entire** | **built** | earlier | `studio/qc.py` — `check_video`, `check_audio`, `check_image`, `check_set`, `run`, `summarise`. Every threshold measured, every `_readings()` raises rather than returning 0.0 |
 | `T3-2` no hardcoded expectation | **built** | earlier | expectations read from the submitted workflow via `build_song.expect_from_workflow` |
 | `T3-7` the model's own latent step | **built** | `d4a39c2` | asserted both ways on one 77-frame file: passes at step 4, flags at step 8 naming 81 |
+| `T3-8` interpolated RIFE length | **built** | this slice | `qc.expect_interpolated` owns `(n-1)*m+1` + `make_postproc.out_fps` (not `n*m` / `fps*m`). Compensated 153-frame file PASSes duration/fps/frame_count and skips `latent_8n1`; naive 32 fps FLAGs fps; `n*m` expect REJECTs the correct file (`test_t3_8_interpolated.py`). Latent exemption alone is not this criterion |
 | `T3-4` measured/expected/unit | **built** | earlier | on every check that has them |
 | `T3-5` re-running does not duplicate | **built** | earlier | `UNIQUE(path, check_name)`; the mutation audit found the upsert alone was not the guard |
 | `T3-1` group by host | **built** | `test_t3_1_by_host.py` | report over artefacts from two hosts has two groups with the planted counts; NULL host is an explicit unattributed bucket. Host is still canonical (`e20346f`) |
