@@ -59,8 +59,9 @@ field, because a field is a thing somebody can forget to set and a derivation
 is not.
 
 `T7-3`'s new views — `three_quarter`, `profile`, `seated`, `portrait`,
-`on_all_fours`, each with a nude parallel — are then entries, and `T7-5`'s
-problem is local to one of them:
+`on_all_fours`, each with a nude parallel — are table entries that compose and
+appear in the anchor form (`test_t7_3_new_views.py`; GPU sheets NOT MEASURED).
+`T7-5`'s problem is local to one of them:
 `BACKDROP` ends *"full body head to toe inside the frame"*, which argues with a
 head-and-shoulders `portrait`. **A view must be able to override a backdrop
 clause, not only add to it** — which is why `T7-5` and `T7-14` (backdrop becomes

@@ -773,9 +773,11 @@ in §4 and §5 applies unchanged. This is only what these four documents ask of 
 
 ### 7a.1 The anchor form is the hardest screen in the studio and is about to get harder
 
-`_anchor_form.html` is the second-largest template. TRD-7 `T7-3` shipped the
-view table (cameras × clothed/nude, including on-all-fours) and `T7-19` made
-the prompt box **per tier AND view**.
+`_anchor_form.html` is the second-largest template. TRD-7 `T7-3` is built for
+compose + UI: the view table (cameras × clothed/nude, including on-all-fours)
+is one `make_anchor.VIEWS` entry each, projected into the form
+(`test_t7_3_new_views.py`). GPU sheets for those cameras remain NOT MEASURED.
+`T7-19` made the prompt box **per tier AND view**.
 
 **Views are a matrix, not two lists.** One row per camera (front, back,
 three-quarter, profile, seated, portrait, on all fours), two columns
