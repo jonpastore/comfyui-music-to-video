@@ -94,9 +94,10 @@ makes the remainders diverge. Portrait/seated omit is `T7-5`, not this.
 **`T7-5` positive half is on the image.** `qc.measure_subject_bottom` /
 `portrait_crop_score` rank a head-and-shoulders fixture above a full-body
 head-to-toe fixture; `check_portrait_crop` FLAGs when `view=portrait` and the
-figure still fills the frame. `make_anchor.size_for("portrait")` defaults the
-sheet to `1024x1024` so the standing `896x1216` frame does not force a distant
-figure. GPU portrait sheet is not pinned.
+figure still fills the frame. `make_anchor.size_for_view` +
+`app.apply_view_default_size` default the empty latent to 1024×1024 for
+portrait so the standing 896×1216 frame does not force a distant figure. GPU
+portrait sheet is not pinned.
 
 ## 3. The four new prompt types
 

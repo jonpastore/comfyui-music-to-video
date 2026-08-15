@@ -129,17 +129,12 @@ def test_t7_5_portrait_prefers_square_size_over_fullbody_frame():
     """896x1216 is a standing full-body frame; portrait defaults to 1024x1024.
 
     A head-and-shoulders framing inside 896x1216 renders a distant figure
-    (docs/TRD-7 T7-5 / T7-12). size_for owns the default so app.py is not a
-    second table.
+    (docs/TRD-7 T7-5 / T7-12). size_for_view owns the default so app.py is not
+    a second table. Studio wiring is test_t7_5_portrait.py.
     """
-    assert make_anchor.size_for("portrait") == "1024x1024"
-    assert make_anchor.size_for("portrait_nude") == "1024x1024"
-    assert make_anchor.size_for("portrait", None) == "1024x1024"
-    assert make_anchor.size_for("portrait", "") == "1024x1024"
-    assert make_anchor.size_for("portrait", "896x1216") == "1024x1024"
-    # Operator-chosen non-default wins
-    assert make_anchor.size_for("portrait", "1216x832") == "1216x832"
-    # Full-body views keep the standing frame
-    assert make_anchor.size_for("front") == "896x1216"
-    assert make_anchor.size_for("front", "896x1216") == "896x1216"
-    assert make_anchor.size_for("seated") == "896x1216"
+    assert make_anchor.size_for_view("portrait") == (1024, 1024)
+    assert make_anchor.size_for_view("portrait_nude") == (1024, 1024)
+    assert make_anchor.size_for_view("front") == make_anchor.DEFAULT_SIZE
+    assert make_anchor.size_for_view("seated") == make_anchor.DEFAULT_SIZE
+    assert make_anchor.DEFAULT_SIZE == (896, 1216)
+    assert make_anchor.size_for_view("portrait") != make_anchor.DEFAULT_SIZE

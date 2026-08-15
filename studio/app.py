@@ -3474,6 +3474,30 @@ def anchor_render_settings(form):
     return out
 
 
+def apply_view_default_size(view, render):
+    """Portrait uses a head-and-shoulders latent by default. docs/TRD-7 T7-5.
+
+    make_anchor.size_for_view is the source of truth. Unset width/height, and
+    the standing full-body form default (896×1216), both become the view's
+    size for portrait. An operator-chosen non-default size wins. Full-body
+    views leave the dict alone so make_anchor's own default still applies when
+    the form sent nothing.
+
+    Must set width/height — a `size` string is dropped by ANCHOR_RENDER_FLAGS
+    and never reaches EmptySD3LatentImage.
+    """
+    out = dict(render or {})
+    want_w, want_h = make_anchor.size_for_view(view)
+    full_w, full_h = make_anchor.DEFAULT_SIZE
+    if (want_w, want_h) == (full_w, full_h):
+        return out
+    w, h = out.get("width"), out.get("height")
+    if (w is None and h is None) or (w, h) == (full_w, full_h):
+        out["width"], out["height"] = want_w, want_h
+    out.pop("size", None)
+    return out
+
+
 def sweep_blockers(form, render, combos):
     """(candidates per point, [every reason this sweep cannot run]).
 
@@ -4351,18 +4375,7 @@ def _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
     for t, v, cfg in plan_points:
         text = view_prompts[(t, v)]
         this_render = dict(render if cfg is None else dict(render, cfg=cfg, seed=sweep["seed"]))
-        # T7-5: portrait prefers 1024x1024 so head-and-shoulders is not a
-        # distant figure in the standing full-body frame. Front stays unset
-        # when the form left size blank (make_anchor's own default applies).
-        # anchor_render_settings stores width/height, not the "size" token.
-        if str(v).startswith("portrait"):
-            asked = (this_render.get("size") or "").strip()
-            if not asked and this_render.get("width") and this_render.get("height"):
-                asked = f"{this_render['width']}x{this_render['height']}"
-            resolved = make_anchor.size_for(v, asked or None)
-            this_render["size"] = resolved
-            w, h = resolved.split("x", 1)
-            this_render["width"], this_render["height"] = int(w), int(h)
+        this_render = apply_view_default_size(v, this_render)
         this_n = n if cfg is None else sweep["n"]
         this_paths = _paths_for_view(v, paths)
         run_id = create_anchor_run(album, t, v, character_id, this_n, text, this_render,
