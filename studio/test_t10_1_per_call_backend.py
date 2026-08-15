@@ -132,8 +132,9 @@ def test_t10_1_vision_switches_after_gateway_comes_up():
                 return _Ok({"data": [{"id": "gpt-oss-120b"}, {"id": "qwen3-vl"}]})
 
             def local_post(url, headers=None, json=None, timeout=None):
+                # `json` is the request body kwarg; do not call json.dumps on it.
                 local_hits.append(json.get("model") if json else None)
-                body = json.dumps({"flagged": [], "cells_seen": 4})
+                body = __import__("json").dumps({"flagged": [], "cells_seen": 4})
                 return _Ok({"choices": [{"message": {"content": body}}]})
 
             httpx.get = gateway_up

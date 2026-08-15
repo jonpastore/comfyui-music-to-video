@@ -185,7 +185,16 @@ plus invalid `genre2` writes none). The two rules that destroy data if inverted:
 write's `changed` matches it, and `#bulk-count` is that number — the 12-vs-9
 case. A confirmation that overstates teaches the operator to stop reading it.
 
-### 4.2 Lyrics provenance (T10-8)
+### 4.2 Provider records (T10-2)
+
+`T10-2` is a call-result contract on the vision path: `ask` / `ask_images`
+return who answered (`provider` / `backend`) and whether the paid path was a
+fallback (`fallback=true` when local was preferred and xAI served).
+`classify_sheet` and `score_candidate` put that on the record so cost is
+attributable after the fact, not inferred from a bill. A success-after-fallback
+must not keep `available()`'s hope.
+
+### 4.2a Lyrics provenance (T10-8)
 
 A transcription and supplied text are not the same evidence — storyboard
 generation reads lyrics, and a hallucinated line becomes a scene.
@@ -197,7 +206,7 @@ clears `lyrics_backend`. Both paths are the job handler and
 `POST /songs/{id}/lyrics`. A free-text source would let the criterion pass
 for a row that recorded something else — `LYRICS_SOURCES` is the closed set.
 
-### 4.2a The advice rules are a payload contract, not UI copy
+### 4.2b The advice rules are a payload contract, not UI copy
 
 `T10-11` marks model-authored strings **in the payload**, the same shape as
 `T2-36`'s warnings-versus-notes. A client that cannot separate advice from
@@ -273,6 +282,7 @@ each caller, or a caller that stops calling it stays green.
     advice labelling  ->  T10-11..T10-15 over the four live modules
                          ->  the picked/unpicked distinction (T8-2)
     bulk edit (T10-3…T10-7 built)
+    vision provider record (T10-2 built)
     lyrics provenance (T10-8 built) ->  T10-9 (edit survives re-fetch)
     advice labelling (T10-11..T10-15 built) over the four live modules
     image/audio guard split (T10-16 built; cites T8-4)

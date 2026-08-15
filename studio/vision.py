@@ -114,8 +114,17 @@ def _image_parts(paths):
     return parts
 
 
+def _provider_record(provider, *, fallback=False):
+    """What a vision call records so cost is attributable (T10-2)."""
+    return {"provider": provider, "backend": provider, "fallback": bool(fallback)}
+
+
 def ask_images(paths, system, user_text, progress=None, prefer_local=True):
-    """Several images + one question -> raw reply. First path is the subject."""
+    """Several images + one question -> (raw reply, provider record).
+
+    First path is the subject. The record names who answered; a paid path
+    taken while local was preferred is marked fallback (T10-2).
+    """
     parts = [{"type": "text", "text": user_text}] + _image_parts(paths)
     messages = ([{"role": "system", "content": system}] if system else []) + \
                [{"role": "user", "content": parts}]
@@ -134,13 +143,15 @@ def ask_images(paths, system, user_text, progress=None, prefer_local=True):
                 if r.status_code >= 400:
                     raise RuntimeError(f"local vision model {model} failed "
                                        f"({r.status_code}): {r.text[:200]}")
-                return r.json()["choices"][0]["message"]["content"] or ""
+                text = r.json()["choices"][0]["message"]["content"] or ""
+                return text, _provider_record("local", fallback=False)
             except Exception as e:
                 if progress:
                     progress(f"vision: local model failed ({e}); falling back to xAI")
     if progress:
         progress("vision: xAI (billed)")
-    return grok._chat(grok._resolve_model(grok.VISION_MODEL), messages, progress)
+    text = grok._chat(grok._resolve_model(grok.VISION_MODEL), messages, progress)
+    return text, _provider_record("xai", fallback=prefer_local)
 
 
 SCORE_SYSTEM = (
@@ -204,35 +215,41 @@ def score_candidate(path, bases, prompt="", progress=None):
     """Advisory match of one candidate to the base photographs and the prompt.
 
     Never a gate. A vision failure is confidence=None, not a reject.
+    Records the provider that actually answered; a paid fallback is marked
+    (T10-2).
     """
     where, detail = available()
     bases = [b for b in (bases or []) if b and os.path.isfile(b)]
     if not path or not os.path.isfile(path):
+        rec = _provider_record(where, fallback=False)
         return {"confidence": None, "identity": None, "prompt": None,
-                "notes": "", "error": "candidate file missing", "backend": where}
+                "notes": "", "error": "candidate file missing", **rec}
     user = ("First image: the generated candidate. Remaining images: the "
             "operator's base photographs. Prompt that was asked:\n"
             + (prompt or "(album default composition)"))
     try:
-        raw = ask_images([path] + bases[:3], SCORE_SYSTEM, user, progress)
+        raw, call = ask_images([path] + bases[:3], SCORE_SYSTEM, user, progress)
         obj = json_or_raise(raw, "anchor score")
     except Exception as e:
         if progress:
             progress(f"vision score failed: {e}")
         err = str(e)[:200]
+        backend = _backend_from_error(err, where)
+        rec = _provider_record(backend, fallback=(backend == "xai" and where == "local"))
         return {"confidence": None, "identity": None, "prompt": None,
-                "notes": "", "error": err, "backend": _backend_from_error(err, where)}
+                "notes": "", "error": err, **rec}
     got = parse_score(obj)
-    got["backend"] = where
+    got.update(call)
     return got
 
 
 def ask(image_path, system, user_text, progress=None, prefer_local=True):
-    """One image + one question -> the model's raw reply text.
+    """One image + one question -> (raw reply text, provider record).
 
     A local failure falls through to xAI rather than failing the job: the local
     gateway is best-effort infrastructure, and a half-loaded model must not cost
-    someone an hour of rendering.
+    someone an hour of rendering. The record names who answered; a paid path
+    taken while local was preferred is marked fallback (T10-2).
     """
     if prefer_local:
         model = local_model()
@@ -240,7 +257,8 @@ def ask(image_path, system, user_text, progress=None, prefer_local=True):
             try:
                 if progress:
                     progress(f"vision: {model} (local)")
-                return _ask_local(model, image_path, system, user_text)
+                text = _ask_local(model, image_path, system, user_text)
+                return text, _provider_record("local", fallback=False)
             except Exception as e:
                 if progress:
                     progress(f"vision: local model failed ({e}); falling back to xAI")
@@ -250,7 +268,8 @@ def ask(image_path, system, user_text, progress=None, prefer_local=True):
                {"type": "image_url", "image_url": {"url": _data_url(image_path), "detail": "high"}}]
     messages = ([{"role": "system", "content": system}] if system else []) + \
                [{"role": "user", "content": content}]
-    return grok._chat(grok._resolve_model(grok.VISION_MODEL), messages, progress)
+    text = grok._chat(grok._resolve_model(grok.VISION_MODEL), messages, progress)
+    return text, _provider_record("xai", fallback=prefer_local)
 
 
 def json_or_raise(out, what):
@@ -378,12 +397,12 @@ REVIEW_SYSTEM = (
 
 
 def classify_sheet(sheet_path, note="", model=None, progress=None, question=None):
-    """Review one contact sheet. {"flagged": [...], "cells_seen": int, "backend": str}.
+    """Review one contact sheet.
 
-    Advisory. It names clips to look at; it never unapproves or deletes
-    anything, because a false positive must not silently drop a third of a song.
-    The return is not a pass/fail: attach it with qc_service.attach_sheet_review
-    (T10-13 / TRD-3 §10). The user prompt is the T10-14 accepted shape.
+    Returns flagged clips, cells_seen, and the provider record (backend /
+    provider / fallback). Advisory: names clips to look at; never unapproves
+    or deletes. Attach with qc_service.attach_sheet_review (T10-13 / TRD-3 §10).
+    The user prompt is the T10-14 accepted shape.
     """
     where, detail = available()
     if progress:
@@ -391,7 +410,7 @@ def classify_sheet(sheet_path, note="", model=None, progress=None, question=None
     user = prompt_shape(question or DESCRIBE_DIFFERS)
     if note:
         user = f"{user}. Context: {note}"
-    out = ask(sheet_path, REVIEW_SYSTEM, user, progress)
+    out, call = ask(sheet_path, REVIEW_SYSTEM, user, progress)
     obj = json_or_raise(out, "vision review")
     flagged = []
     for f in obj.get("flagged") or []:
@@ -405,7 +424,7 @@ def classify_sheet(sheet_path, note="", model=None, progress=None, question=None
                         "reason": str(f.get("reason", ""))[:200]})
     flagged.sort(key=lambda f: f["clip"])
     return {"flagged": flagged, "cells_seen": int(obj.get("cells_seen") or 0),
-            "backend": where}
+            **call}
 
 
 def describe_what_differs(sheet_path, note="", progress=None, question=None):
@@ -444,7 +463,11 @@ def interface_payload(verdict, *, cells=None):
         if f.get("reason"):
             rec["reason"] = advice.mark(f["reason"], advice.MODEL)
         flagged.append(rec)
-    payload = {"flagged": flagged, "backend": (verdict or {}).get("backend")}
+    payload = {"flagged": flagged,
+               "backend": (verdict or {}).get("backend"),
+               "provider": (verdict or {}).get("provider")
+                           or (verdict or {}).get("backend"),
+               "fallback": bool((verdict or {}).get("fallback"))}
     if cells is not None:
         payload["cells"] = advice.mark(cells, advice.MEASUREMENT, unit="cells")
     return payload
@@ -454,7 +477,7 @@ def describe_anchor(image_path, field, model=None, progress=None):
     """Draft one album-profile field by looking at the anchor. See grok._DESCRIBE."""
     if field not in grok._DESCRIBE:
         raise ValueError(f"nothing to describe for {field!r}")
-    out = ask(image_path, None,
+    out, _call = ask(image_path, None,
               grok._DESCRIBE[field] + " This is a character reference sheet for an adult "
               "fictional character in a music video. Answer as ONE plain sentence or two, "
               "present tense, no preamble, no markdown, no bullet points -- the text goes "
@@ -475,7 +498,7 @@ def describe_cover(image_path, field, progress=None):
     """
     if field not in grok._DESCRIBE:
         raise ValueError(f"nothing to describe for {field!r}")
-    out = ask(image_path, None,
+    out, _call = ask(image_path, None,
               grok._DESCRIBE[field] + " You are looking at an ALBUM COVER for an adult "
               "fictional music project. Describe only the main character depicted on it. "
               "Ignore the artwork itself -- no typography, no logos, no borders, no framing "
@@ -519,7 +542,7 @@ def draft_view_prompt(image_path=None, view="front", current="", fields=None,
         "One paragraph. Present tense. No markdown. No storyboard language."
     )
     if image_path and os.path.isfile(image_path):
-        raw = ask(image_path, system, user, progress)
+        raw, _call = ask(image_path, system, user, progress)
     else:
         raw, _used = ask_text(system, user, progress)
     text = json_or_raise(raw, f"draft {view}").get("text", "")
@@ -551,8 +574,9 @@ def propose_character(image_path, progress=None):
     proposal lands in the boxes for editing. Nothing is saved by this -- it is
     the wand for a whole character rather than for one field.
     """
-    out = ask(image_path, CAST_SYSTEM, "Propose one supporting character for this album.",
-              progress)
+    out, _call = ask(image_path, CAST_SYSTEM,
+                     "Propose one supporting character for this album.",
+                     progress)
     obj = json_or_raise(out, "cast proposal")
     keys = ("name", "role", "identity", "wardrobe", "body")
     return {k: " ".join(str(obj.get(k, "") or "").split()).strip()[:1000] for k in keys}

@@ -103,13 +103,15 @@ still not shipped (`T8-12`, provisional by absence).
    which backend produced it and that it is a transcription; supplied text
    is stored as supplied with no backend, and the two remain distinguishable.
    `T10-9` (edit survives re-fetch) and `T10-10` (empty is explicit) remain.
-4. **TRD-10's advice rules.** `T10-11` (payload mark), `T10-12` (accept writes,
-   records the model), `T10-13` (`classify_sheet` text on a finding, never a
-   pass/fail), `T10-14` (match-question shape refused; describe-what-differs
-   returns non-verdict text), and `T10-15` (mixadvice relational / neighbours
-   named) are built. **`T10-16` is built** — the image guardrail stays off the
-   audio path and the same child string is still refused on image/video
-   surfaces (`studio/test_t10_16_image_guardrail.py`).
+4. **TRD-10's advice rules.** `T10-2` (paid fallback marked in the record),
+   `T10-11` (payload mark), `T10-12` (accept writes, records the model),
+   `T10-13` (`classify_sheet` text on a finding, never a pass/fail),
+   `T10-14` (match-question shape refused; describe-what-differs returns
+   non-verdict text), and `T10-15` (mixadvice relational / neighbours named)
+   are built. **`T10-16` is built** — the image guardrail stays off the audio
+   path and the same child string is still refused on image/video surfaces
+   (`studio/test_t10_16_image_guardrail.py`). `T10-1` is built (per-call
+   backend).
 
 ## 5. Scope
 

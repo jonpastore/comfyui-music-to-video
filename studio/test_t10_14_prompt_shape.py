@@ -57,10 +57,11 @@ def test_t10_14_same_surface_returns_non_verdict_text(monkeypatch, tmp_path):
     def fake_ask(path, system, user_text, progress=None, prefer_local=True):
         assert vision.DESCRIBE_DIFFERS in user_text.lower(), user_text
         assert not vision._MATCH_SHAPE.search(user_text), user_text
-        return json.dumps({
+        text = json.dumps({
             "flagged": [{"clip": 1, "issue": "broken", "reason": "two of her"}],
             "cells_seen": 4,
         })
+        return text, {"provider": "local", "backend": "local", "fallback": False}
 
     monkeypatch.setattr(vision, "ask", fake_ask)
     monkeypatch.setattr(vision, "available", lambda: ("local", "stub"))
@@ -88,7 +89,8 @@ def test_t10_14_classify_sheet_asks_describe_what_differs(monkeypatch, tmp_path)
 
     def fake_ask(path, system, user_text, progress=None, prefer_local=True):
         seen["user"] = user_text
-        return json.dumps({"flagged": [], "cells_seen": 2})
+        return (json.dumps({"flagged": [], "cells_seen": 2}),
+                {"provider": "local", "backend": "local", "fallback": False})
 
     monkeypatch.setattr(vision, "ask", fake_ask)
     monkeypatch.setattr(vision, "available", lambda: ("local", "stub"))

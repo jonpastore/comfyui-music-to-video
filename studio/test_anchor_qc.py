@@ -26,8 +26,9 @@ def test_score_candidate_uses_bases_and_prompt(monkeypatch, tmp_path):
     def fake_ask(paths, system, user_text, progress=None):
         seen["paths"] = list(paths)
         seen["user"] = user_text
-        return json.dumps({"confidence": 72, "identity": 70, "prompt": 75,
+        text = json.dumps({"confidence": 72, "identity": 70, "prompt": 75,
                            "notes": "same black cat-woman, standing"})
+        return text, {"provider": "local", "backend": "local", "fallback": False}
 
     monkeypatch.setattr(real, "ask_images", fake_ask)
     cand = tmp_path / "cand.png"
