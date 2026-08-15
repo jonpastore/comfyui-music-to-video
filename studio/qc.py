@@ -197,10 +197,14 @@ T4_13_REAL_SHEET_MEASURED = True
 # reading. T7_7_REAL_PAIR_MEASURED stays False until a GPU four-image
 # set is recorded; flipping it with an empty hook or unpinned bytes is
 # the lie. Do not claim the fleet to populate this.
-# Photo-conditioned half landed: Catatonic jobs 244/248 (front_nude
-# s1002911869 + three_quarter_nude s836704466). Identity-collapsed
-# human woman, not her. Street Cats three_quarter job 262 cancelled,
-# 268 queued. No use-as-ref pair has been rendered.
+# Photo-conditioned halves landed: Catatonic jobs 244/248 (front_nude
+# s1002911869 + three_quarter_nude s836704466; identity-collapsed human
+# woman, not her) and Street Cats jobs 264/268 (front_nude s1943749893 +
+# three_quarter_nude s1096561198; 262 cancelled). Both used base
+# photographs as image1/image2. No use-as-ref pair has been rendered —
+# no job's images list is a generated anchors path. Flip MEASURED only
+# after that four-image set is pinned and t7_7_claim passes on those
+# bytes.
 T7_7_REAL_PAIR = None
 T7_7_REAL_PAIR_SHA256 = None
 T7_7_REAL_PAIR_MEASURED = False

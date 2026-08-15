@@ -9,10 +9,10 @@ The ranking harness (`t7_7_identity_differential`) is the image
 differential: identity(front, three_quarter) from an anchor versus the
 same pair from the raw photographs. No cutoff. The GPU four-image set
 stays NOT MEASURED. `record_t7_7_real_pair` pins four sha256s; unpinned
-bytes are still NOT MEASURED. Catatonic jobs 244/248 are the
-photo-conditioned half only (identity-collapsed human woman, not her).
-The use-as-ref pair has not been rendered. Pixel distance is refused —
-it inverts this pair.
+bytes are still NOT MEASURED. Catatonic jobs 244/248 and Street Cats
+jobs 264/268 are photo-conditioned halves only (base photographs, not
+a chosen anchor). The use-as-ref pair has not been rendered. Pixel
+distance is refused — it inverts this pair.
 
 docs/TRD-4 T4-14: a nude compose that asserts a human body ("human form" in
 nude_wardrobe — the measured live-studio collapse) is the same defect as
@@ -523,8 +523,9 @@ def test_t7_7_wrong_bytes_are_not_the_measured_pair(tmp_path):
 
 # Job 244/248 (2026-08-14): Catatonic xxx front_nude + three_quarter_nude from
 # the raw photographs. Identity-collapsed human woman, not her. This is the
-# photo-conditioned half only. The use-as-ref front/three_quarter pair has
-# never been rendered; Street Cats three_quarter job 262 cancelled, 268 queued.
+# photo-conditioned half only. Street Cats jobs 264/268 are a second
+# photo-conditioned front/three_quarter (also base photographs, not a
+# chosen anchor). Job 262 cancelled. No use-as-ref pair has been rendered.
 # Fleet not claimed. Not the T7-7 four-image set.
 T7_7_GPU_PHOTO_FRONT = (
     "/home/jon/ComfyUI/output/anchor_v2/front_nude_s1002911869_00001_.png")
@@ -534,6 +535,16 @@ T7_7_GPU_PHOTO_FRONT_SHA256 = (
     "38c8aed962f829a50df876c2f0845a5443f6e523c6e7b5f1e35768e4824be4bd")
 T7_7_GPU_PHOTO_TQ_SHA256 = (
     "ca6d3d1623b4bf6b78bcf9b6d84d785059fbbd421858cc4917edffadd482ffe1")
+
+# Street Cats jobs 264/268: second photo-conditioned pair (base photographs).
+T7_7_GPU_STREET_FRONT = (
+    "/home/jon/ComfyUI/output/anchor_v2/front_nude_s1943749893_00001_.png")
+T7_7_GPU_STREET_THREE_QUARTER = (
+    "/home/jon/ComfyUI/output/anchor_v2/three_quarter_nude_s1096561198_00001_.png")
+T7_7_GPU_STREET_FRONT_SHA256 = (
+    "2346be25d0dcae8e064256098d70886a2c0822d4193e815393715bd2f6910b96")
+T7_7_GPU_STREET_TQ_SHA256 = (
+    "d4314cc6eb1eaaf758695c97c4b4885b089bf044f77e24282457ebeda7ac6283")
 
 
 def test_t7_7_gpu_photo_pair_is_a_view_differential():
@@ -552,3 +563,31 @@ def test_t7_7_gpu_photo_pair_is_a_view_differential():
     score = qc._t7_7_view_pair_score(
         T7_7_GPU_PHOTO_FRONT, T7_7_GPU_PHOTO_THREE_QUARTER, qc.identity_embed)
     assert 0.0 < score < 1.0, score
+
+
+def test_t7_7_street_photo_pair_is_not_use_as_ref_claim():
+    """Street Cats 264/268 are on disk from base photographs, not use-as-ref.
+
+    Two photo-conditioned pairs do not make the four-image claim. MEASURED
+    stays False until a job conditions on a chosen anchors path.
+    """
+    assert qc.T7_7_REAL_PAIR_MEASURED is False
+    assert qc.t7_7_real_pair() is None
+    assert os.path.isfile(T7_7_GPU_STREET_FRONT), T7_7_GPU_STREET_FRONT
+    assert os.path.isfile(T7_7_GPU_STREET_THREE_QUARTER), T7_7_GPU_STREET_THREE_QUARTER
+    digest = qc.t7_7_pair_sha256(
+        T7_7_GPU_STREET_FRONT, T7_7_GPU_STREET_THREE_QUARTER,
+        T7_7_GPU_PHOTO_FRONT, T7_7_GPU_PHOTO_THREE_QUARTER)
+    assert digest[0] == T7_7_GPU_STREET_FRONT_SHA256
+    assert digest[1] == T7_7_GPU_STREET_TQ_SHA256
+    assert digest[2] == T7_7_GPU_PHOTO_FRONT_SHA256
+    assert digest[3] == T7_7_GPU_PHOTO_TQ_SHA256
+    # Street as "anchor" does not outrank Catatonic photo pair on the
+    # offline metric — both are photo-conditioned; not the use-as-ref claim.
+    d = qc.t7_7_identity_differential(
+        T7_7_GPU_STREET_FRONT, T7_7_GPU_STREET_THREE_QUARTER,
+        T7_7_GPU_PHOTO_FRONT, T7_7_GPU_PHOTO_THREE_QUARTER)
+    assert d["held"] is False, d
+    import pytest
+    with pytest.raises(ValueError, match="NOT MEASURED"):
+        qc.t7_7_claim()

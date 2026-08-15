@@ -355,10 +355,11 @@ character"*, which is true on clothed and nude sheets alike.
 grey wall (`qc.LIGHTING_LOCK`). A current GPU sheet is now **MEASURED**: job
 257 `front_nude` seed 5151 PASSes 8.06; sibling seed 5288 still FLAGs 14.76.
 `T7-7` now has a painted-pair ranking harness (`t7_7_identity_differential`);
-the GPU four-image set has not been recorded. The photo-conditioned half
-(Catatonic jobs 244/248) is on disk; the use-as-ref half has not been
-rendered. No live four-image claim. Every other check in this session was on
-strings, graphs and schemas.
+the GPU four-image set has not been recorded. Photo-conditioned halves
+(Catatonic jobs 244/248; Street Cats jobs 264/268) are on disk from base
+photographs; the use-as-ref half has not been rendered. No live
+four-image claim. Every other check in this session was on strings,
+graphs and schemas.
 
 Jobs 230/231/232 on the production box all finished more than four hours before
 the 11:11:38 restart, so **no sheet on that box was rendered by this code**. The

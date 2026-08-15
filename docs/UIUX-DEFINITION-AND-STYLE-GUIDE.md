@@ -791,9 +791,10 @@ same rule `T2-33` sets for the model picker.
 human-body nude wording (including the live-studio body clause) so a dirty
 prompt does not reach the tile as a clean candidate. The front /
 three_quarter ranking harness exists offline; the GPU four-image pair is
-not measured. The photo-conditioned half (Catatonic jobs 244/248) is on
-disk and is the collapsed human woman, not her. The use-as-ref half has
-not been rendered.
+not measured. Photo-conditioned halves (Catatonic jobs 244/248; Street
+Cats jobs 264/268) are on disk from base photographs; Catatonic is the
+collapsed human woman, not her. The use-as-ref half has not been
+rendered (no job conditioned on a chosen anchor sheet).
 `T4-13` is a `channel_balance` FLAG on the sheet's pixels (olive/magenta vs
 grey wall), not a `BACKDROP` string; job 257 `front_nude` seed 5151 PASSes
 8.06 and sibling seed 5288 still FLAGs 14.76. In

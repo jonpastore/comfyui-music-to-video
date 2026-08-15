@@ -127,9 +127,11 @@ ranking harness: `t7_7_identity_differential` on a rendered front /
 three_quarter pair versus the same pair from the raw photographs. No
 threshold. The GPU four-image set is still NOT MEASURED. The
 photo-conditioned half is on disk (Catatonic jobs 244/248: a front /
-three_quarter pair of the identity-collapsed human woman, not her). The
-use-as-ref half has never been rendered; Street Cats `three_quarter` job
-262 cancelled and 268 is queued. `t7_7_claim` refuses unpinned bytes.
+three_quarter pair of the identity-collapsed human woman, not her;
+Street Cats jobs 264/268: `front_nude_s1943749893` +
+`three_quarter_nude_s1096561198`; 262 cancelled). Both used base
+photographs, not a chosen anchor as image1. The use-as-ref half has
+never been rendered. `t7_7_claim` refuses unpinned bytes.
 The compose hook FLAGs a human-body nude compose, including the
 live-studio "Human woman's body" clause, through `run_artefact`. That is
 not the picture measurement.
