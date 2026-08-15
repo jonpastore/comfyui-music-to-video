@@ -421,7 +421,8 @@ current.
 |---|---|---|---|
 | the four modules | **built, before this document** | earlier | `lyrics.py` 405, `chat.py` 330, `mixadvice.py` 247, `vision.py` 516 — 1,498 lines that no TRD cited until now |
 | `T10-1` backend chosen per call | **built, unchecked** | earlier | both `lyrics.py` and `vision.py` choose at call time, deliberately; no differential asserts it |
-| `T10-3`…`T10-7` bulk edit | **not built** | — | the whole of `LIBRARY_BULK_EDIT_PLAN`, absorbed here today |
+| `T10-3`…`T10-5`, `T10-7` bulk edit | **not built** | — | blank/toggle/validate/pre-write count still the rest of `LIBRARY_BULK_EDIT_PLAN` |
+| `T10-6` a bulk edit is one transaction | **built** | `c85037f` | POST `/songs/genres` writes all twelve; a BEFORE UPDATE trigger on the seventh song writes none (`studio/test_trd10.py`) |
 | `T10-11` model output is marked | **built** | this change | `studio/test_t10_11_advice_marked.py`: `advice.separate` on mixadvice / vision / lyrics / chat payloads; `POST /sets/{id}/suggest` JSON. A measurement in the same payload carries `authored=measurement` and a unit. `T10-12`…`T10-15` still not built |
 | `T10-17` one shared guard | **built** | earlier | `screen_prompt_field`; `MAX_PROMPT_FIELD` replaced `MAX_CHARACTER_FIELD` |
 | **`T10-18`…`T10-26` the minor policy** | **NOT BUILT — specification only** | today | **the studio today still refuses any minor reference everywhere.** The niece's song works; her video does not until this is built. Adversarially reviewed and four bypasses folded, including `T10-23`, a hole the loosening itself opened |

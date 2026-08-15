@@ -609,7 +609,10 @@ same rule `T2-33` sets for the model picker.
 
 ### 7a.5 "Use as reference" is a tile state, not a new page
 
-`T7-6` shipped: an anchor can now be the identity lock for the next sheet. In
+`T7-6` shipped: an anchor can now be the identity lock for the next sheet. The
+`T7-7` picture look is still human-judged; the compose hook now FLAGs a
+human-body nude wording (including the live-studio body clause) so a dirty
+prompt does not reach the tile as a clean candidate. In
 `media-tile` terms that is one more action on the tile and one more state on it —
 *this sheet is the identity reference for the sheet you are composing*. It earns
 emphasis because it is the studio's largest consistency lever, and it does not
@@ -689,8 +692,9 @@ Two additions specific to TRD-9:
 
 ### 7b.4 Bulk edit is the highest-risk form in the studio
 
-`T10-3` and `T10-4` are data-destruction rules, and both are *interface*
-failures before they are code failures:
+`T10-6` is built: a library bulk write is one transaction. `T10-3` and `T10-4`
+are data-destruction rules, and both are *interface* failures before they are
+code failures:
 
 - **Blank must not read as "clear".** An empty select adjacent to a Save button
   is a control that looks like it will write. The affordance has to say *leave

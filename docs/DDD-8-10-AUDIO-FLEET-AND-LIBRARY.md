@@ -150,9 +150,10 @@ quiet is worse than none**, because it is trusted.
 
 ### 4.1 Bulk edit
 
-Server-side, one route, one transaction (`T10-6`), every value checked against
-`genres.json` before any write (`T10-5`). The two rules that destroy data if
-inverted:
+Server-side, one route, one transaction (`T10-6`, built: twelve-row success
+writes all, a BEFORE UPDATE trigger on the seventh writes none), every value
+checked against `genres.json` before any write (`T10-5`). The two rules that
+destroy data if inverted:
 
 - **Blank means leave alone** (`T10-3`). Clearing needs its own control.
 - **Toggle-all is scoped to the rows currently shown** (`T10-4`), because the
@@ -199,7 +200,7 @@ each caller, or a caller that stops calling it stays green.
                          ->  insert_voice refuses missing source/consent (T8-10, built)
                          ->  h_audio records which voice, or none (T8-11, built)
                          ->  the picked/unpicked distinction (T8-2)
-    bulk edit (self-contained)      ->  T10-3..T10-7
+    bulk edit (T10-6 built)         ->  T10-3, T10-4, T10-5, T10-7
     advice labelling  ->  T10-11..T10-15 over the four live modules
 
 Nothing here blocks TRD 1-7. TRD-9 is first because it is cheapest and because

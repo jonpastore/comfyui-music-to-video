@@ -53,7 +53,7 @@ The same operator, in the two modes the other documents do not cover:
 | P5 | A workflow naming a model reaches the box that holds it, under the name that box uses | `T9-1`…`T9-3` |
 | P6 | A box that went away is told apart from a workflow a box refused | `T9-6`, `T9-7` |
 | P7 | Four measurement traps that each cost a wrong diagnosis are checks, not folklore | `T9-10`…`T9-13` |
-| P8 | A bulk edit changes exactly what was shown and asked for, or nothing | `T10-3`…`T10-7` |
+| P8 | A bulk edit changes exactly what was shown and asked for, or nothing | `T10-3`…`T10-7` (`T10-6` one-transaction is built) |
 | P9 | A model's words are a proposal, never a verdict and never a gate | `T10-11`…`T10-15` |
 
 **P9 is the one that has no owner anywhere else.** Four modules ask a model for
@@ -82,7 +82,7 @@ still not shipped (`T8-12`, provisional by absence).
    half. Takes generated before `T8-1` still cannot say what they were asked for.
    `T8-10` is the voice-store gate (built); `T8-11` is built — `h_audio` writes
    which voice produced the take, or that none did.
-3. **TRD-10's bulk edit**, which is unbuilt and self-contained.
+3. **TRD-10's bulk edit.** `T10-6` (one transaction) is built. `T10-3`/`T10-4`/`T10-5`/`T10-7` remain.
 4. **TRD-10's advice rules.** `T10-11` (payload mark) is built. `T10-12`…`T10-15`
    are still labelling and refusals over surfaces that already exist.
 

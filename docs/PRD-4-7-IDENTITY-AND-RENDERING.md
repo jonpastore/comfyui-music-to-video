@@ -106,8 +106,10 @@ this was being written. `gen_refs` passes a chosen anchor as image1 for every
 scene, which is *why clips stay on-model*; the anchors UI had no such path, so
 sheet 2 was a fresh interpretation of the photographs rather than a variation of
 the sheet that was approved. Session B shipped `T7-6` on 2026-08-13 (`d315c6f`).
-`T7-7` — does it actually hold identity across views — is the measurement that
-has not been made.
+`T7-7` — does it actually hold identity across views — is still the unmeasured
+image differential. The offline hook now FLAGs a compose that asserts a human
+body, including the live-studio "Human woman's body" clause, through
+`run_artefact`. That is not the picture measurement.
 
 ## 5. Priorities
 
