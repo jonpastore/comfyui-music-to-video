@@ -126,8 +126,9 @@ propose; empty theme is 400, `T2-14`), `POST .../arc/propose` (same
 handler), `POST .../arc/accept`, `POST .../arc/reject` (proposal is not
 saved until accepted; reject re-reads the previous file, `T2-15`),
 `POST .../arc/apply` (`song_ids`, `confirm`; more than one song without
-confirmation is 400, `T2-16`). Same routes, no parallel `/api/*` tree
-(`wants_json`). `GET/POST /api/songs/{id}/storyboard/{tier}`,
+confirmation is 400; with confirm writes exactly those songs under
+`applied/`, `T2-16` / `test_t2_16_multi_song_apply.py`). Same routes, no
+parallel `/api/*` tree (`wants_json`). `GET/POST /api/songs/{id}/storyboard/{tier}`,
 `.../scene/{n}`, `.../meter`, `.../cast`. The generation prompt and
 **the limits that apply to it** travel in the same response (`T2-18`).
 `GET/POST /api/songs/{id}/storyboard/{tier}` (`T2-17` **built**: GET

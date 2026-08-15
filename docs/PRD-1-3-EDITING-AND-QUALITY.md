@@ -327,7 +327,8 @@ order and take the dependencies from here.
    call's start and end (`test_t2_7_provenance.py`). **`T2-14`/`T2-15`/`T2-16` built**:
    the arc wand refuses an empty theme and runs with a non-empty one; reject
    leaves the previous committed file; accept saves; applying more than one
-   song needs confirmation and then writes exactly those songs (`test_t2_14_arc_wand.py`).
+   song needs confirmation and then writes exactly those songs
+   (`test_t2_14_arc_wand.py`, `test_t2_16_multi_song_apply.py`).
    **`T2-20` built**: a distinctive
    arc string appears in the generated board and is absent when the arc is.
    **`T2-21` built**: at `xxx`, no scene `image_prompt` or
