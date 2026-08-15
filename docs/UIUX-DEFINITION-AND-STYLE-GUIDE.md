@@ -451,7 +451,9 @@ and routes it to a 24 GiB box that holds the file. `T3-26` names a refine
 pass that did not improve the tier-2 score on a labelled set as **not
 helping** — the opportunistic catalogue tag is not that sentence. A
 dismissed finding does not sit in the open queue until the file itself
-changes (`T3-22`).
+changes (`T3-22`). A repaired finding lists the original and the new
+candidate side by side, both scored (`T3-21` / `qc_service.pair`) —
+dest ≠ src without those scores cannot answer whether the repair helped.
 
 ### 5.8 Motion
 

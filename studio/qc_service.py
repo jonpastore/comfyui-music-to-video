@@ -280,6 +280,65 @@ def reopen(fid):
     return get(fid)
 
 
+def _scored_listing(path, kind=None, expect=None):
+    """One artefact plus its findings. Scores the path if nothing is recorded."""
+    path = jobs.canonical_path(path)
+    if not db.one("SELECT id FROM findings WHERE path=?", path):
+        if kind and path and os.path.isfile(path):
+            run_artefact(path, kind, expect=expect)
+    artefact = db.one("SELECT * FROM artefacts WHERE path=?", path)
+    findings = db.q(
+        "SELECT * FROM findings WHERE path=? ORDER BY check_name, id", path)
+    scored = []
+    for f in findings:
+        scored.append({
+            "path": f["path"],
+            "kind": f["kind"],
+            "tier": f["tier"],
+            "check": f["check_name"],
+            "verdict": f["verdict"],
+            "measured": f["measured"],
+            "expected": f["expected"],
+            "unit": f["unit"],
+        })
+    return {
+        "path": path,
+        "artefact": artefact,
+        "findings": findings,
+        "score": qc.summarise(scored),
+    }
+
+
+def pair(fid):
+    """T3-21: original and repair listed side by side, both scored.
+
+    dest != src is T3-6. This is the comparison: both reachable as
+    artefacts, both with findings, so "did the repair help" is read
+    off rows rather than asserted.
+    """
+    row = get(fid)
+    src = jobs.canonical_path(row["path"])
+    dest = (jobs.canonical_path(row["repair_path"])
+            if row["repair_path"] else None)
+    if not dest:
+        raise ValueError(
+            "no repair candidate yet — approve and let the repair land first")
+    if dest == src:
+        raise ValueError("a repair must write a new candidate, not overwrite")
+    expect = _expect_from_artefacts(src) or _expect_from_artefacts(dest) or None
+    original = _scored_listing(src, kind=row["kind"], expect=expect)
+    repair = _scored_listing(dest, kind=row["kind"], expect=expect)
+    if original["artefact"] is None:
+        raise ValueError(f"original is not listed: {src}")
+    if repair["artefact"] is None:
+        raise ValueError(f"repair is not listed: {dest}")
+    if not original["findings"]:
+        raise ValueError(f"original is not scored: {src}")
+    if not repair["findings"]:
+        raise ValueError(f"repair is not scored: {dest}")
+    return {"original": original, "repair": repair}
+
+
 def _repair_dest(path):
     """A new candidate beside the original. Never the input path (T3-6)."""
     root, ext = os.path.splitext(path)
@@ -520,7 +579,8 @@ def h_repair(args, progress):
     A dest equal to the source is refused so a writer cannot overwrite the
     evidence. Success requires dest on disk from dispatch_repair; a writer
     that produces nothing — including a silent copy of src — fails rather
-    than flipping status."""
+    than flipping status. The original is landed beside dest (T3-21)
+    so pair() can list both."""
     src = jobs.canonical_path(args.get("path")) if args.get("path") else args.get("path")
     dest = (jobs.canonical_path(args.get("repair_path"))
             if args.get("repair_path") else args.get("repair_path"))
@@ -542,6 +602,8 @@ def h_repair(args, progress):
     fid = args.get("finding_id")
     with jobs.writes():
         jobs.land(dest, expect=expect)
+        if src and os.path.isfile(src):
+            jobs.land(src)
         if fid:
             db.run("UPDATE findings SET status=?, repair_path=?, resolved=? WHERE id=?",
                    REPAIRED, dest, time.time(), int(fid))

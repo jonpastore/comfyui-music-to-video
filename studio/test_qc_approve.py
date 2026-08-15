@@ -1,5 +1,6 @@
-"""TDD for docs/TRD-3 T3-18 / T3-6 / T3-19 / T3-22: approve() is the human
-sign-off, and a dismissed finding stays dismissed until the artefact changes.
+"""TDD for docs/TRD-3 T3-18 / T3-6 / T3-19 / T3-21 / T3-22: approve() is the
+human sign-off, a repair is listed beside the original and scored, and a
+dismissed finding stays dismissed until the artefact changes.
 
 The route in app.api_qc_approve calls qc_service.approve and decides nothing
 else (T6-A10). These tests call that same function -- not a helper it wraps,
@@ -102,6 +103,59 @@ def test_t3_18_qc_enqueues_nothing_until_approve():
     assert len(fresh) == 1, fresh
     assert len(_jobs_for(row["id"])) == 1
     assert qc_service.get(row["id"])["status"] == qc_service.APPROVED
+
+
+def test_t3_21_original_and_repair_are_listed_and_scored(monkeypatch):
+    """T3-21: approve produces a new candidate; original and repair are
+    both listed and both scored. dest != src alone is T3-6 and stays
+    green if the comparison is deleted."""
+    monkeypatch.setattr(qc_service, "dispatch_repair", _write_candidate)
+    src = os.path.join(db.DATA, f"qc_approve_t321_{time.time_ns()}.png")
+    with open(src, "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\n" + b"broken-still")
+    qc_service.record([{
+        "path": src, "kind": "image", "tier": 1, "check": "resolution",
+        "verdict": "reject", "measured": "64x64", "expected": "896x1216",
+        "unit": "px", "detail": "too small", "remedy": "re-render",
+    }])
+    fid = db.one("SELECT id FROM findings WHERE path=?", src)["id"]
+    qc_service.approve(fid)
+    _, args = _jobs_for(fid)[-1]
+    dest = args["repair_path"]
+    assert dest and dest != src
+    assert db.one("SELECT * FROM artefacts WHERE path=?", src) is None
+
+    qc_service.h_repair(args, lambda m: None)
+
+    assert os.path.isfile(src), "repair deleted or overwrote the original"
+    assert os.path.isfile(dest), "approve produced no new candidate"
+    assert not os.path.samefile(src, dest)
+    with open(src, "rb") as f:
+        assert f.read() == b"\x89PNG\r\n\x1a\n" + b"broken-still"
+
+    pair = qc_service.pair(fid)
+    orig, repair = pair["original"], pair["repair"]
+    assert orig["path"] == jobs.canonical_path(src)
+    assert repair["path"] == jobs.canonical_path(dest)
+    assert orig["path"] != repair["path"]
+
+    assert orig["artefact"] and orig["artefact"]["status"] == "landed", orig
+    assert repair["artefact"] and repair["artefact"]["status"] == "landed", repair
+    assert db.one("SELECT * FROM artefacts WHERE path=?", orig["path"])
+    assert db.one("SELECT * FROM artefacts WHERE path=?", repair["path"])
+
+    assert orig["findings"], "original is listed but not scored"
+    assert repair["findings"], "repair is listed but not scored"
+    assert all(r["path"] == orig["path"] for r in orig["findings"])
+    assert all(r["path"] == repair["path"] for r in repair["findings"])
+    assert {r["check_name"] for r in orig["findings"]}
+    assert {r["check_name"] for r in repair["findings"]}
+    assert orig["score"]["verdict"] in ("pass", "flag", "reject")
+    assert repair["score"]["verdict"] in ("pass", "flag", "reject")
+    assert orig["score"]["counts"]
+    assert repair["score"]["counts"]
+    orig_checks = {r["check_name"] for r in orig["findings"]}
+    assert "resolution" in orig_checks
 
 
 def test_t3_6_repair_path_is_a_new_candidate():
