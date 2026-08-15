@@ -118,7 +118,9 @@ whose whole point is not doing that.
 
 ## 4. The identity lock
 
-Identity comes from the text, not from the reference image. When a sheet or
+Identity comes from the text, not from the reference image. Saving a
+storyboard whose `character_reference` is empty is refused
+(`T2-31` / `T2-32` / `grok.EMPTY_CHARACTER_REFERENCE`). When a sheet or
 clip is wrong from the first frame, the QC remedy is edit the text, then
 re-render (`T3-28` / `qc.check_identity_wrong`). Swapping the reference
 image is refused — measured 2026-08-12: same reference, same seed, same

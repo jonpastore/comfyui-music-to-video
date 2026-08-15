@@ -1002,7 +1002,21 @@ def describe_anchor(image_path, field, model=None, progress=None):
     return " ".join(str(text).split()).strip()
 
 
+EMPTY_CHARACTER_REFERENCE = (
+    "character_reference is empty; identity comes from the text, "
+    "not the reference image. An empty lock renders a stranger in every clip"
+)
+
+
+def require_character_reference(sb):
+    """T2-31 / T2-32: refuse an empty identity lock before it is written."""
+    text = sb.get("character_reference") if isinstance(sb, dict) else None
+    if not str(text or "").strip():
+        raise ValueError(EMPTY_CHARACTER_REFERENCE)
+
+
 def write_storyboard(sb, outdir, slug, tier):
+    require_character_reference(sb)
     os.makedirs(outdir, exist_ok=True)
     base = os.path.join(outdir, f"{slug}_{tier}")
     json_path, md_path = base + ".json", base + ".md"

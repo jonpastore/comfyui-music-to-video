@@ -309,7 +309,9 @@ mainstream lock (*fully clothed / no explicit gesture*); the tier's
 own permission wording is in the scene text (`T2-21`).
 The board's declared `guardrail` is this tier's `compose_guardrail`
 clause; saving a board that carries another tier's wording is refused
-(`T2-22`).
+(`T2-22`). Saving a board whose `character_reference` is empty is
+refused; the message says identity comes from the text, not the
+reference image (`T2-31`, `T2-32`).
 
 ### 5.3 Space and radius
 

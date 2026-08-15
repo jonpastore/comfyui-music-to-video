@@ -4848,6 +4848,10 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
     if foreign:
         raise HTTPException(
             400, f"storyboard carries {foreign} wording; this board is {tier}")
+    # T2-31 / T2-32: identity lives in the text. An empty lock renders a
+    # stranger; a message that points at the reference image is the wrong lesson.
+    if not str((sb.get("character_reference") or "")).strip():
+        raise HTTPException(400, grok.EMPTY_CHARACTER_REFERENCE)
     if changed:
         # stamp the edit so frames rendered before it can be shown as stale.
         # An unknown key in a scene is ignored by every builder (they read named
@@ -4947,6 +4951,8 @@ def _apply_scene_fields(song, tier, num, fields):
         if (scene.get(field) or "") != value:
             scene[field] = value
             changed = True
+    if not str((sb.get("character_reference") or "")).strip():
+        raise HTTPException(400, grok.EMPTY_CHARACTER_REFERENCE)
     if changed:
         scene["edited"] = time.time()
         outdir = os.path.dirname(row["json_path"])

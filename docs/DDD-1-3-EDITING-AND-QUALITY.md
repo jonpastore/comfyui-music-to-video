@@ -422,6 +422,14 @@ would false-positive) and `save_scene` / `h_storyboard` refuse it.
 A clean scene edit still writes. Mutation: drop the stamp → generation
 arm red. Mutation: write without the check → save arm red.
 
+`T2-31` / `T2-32` are **built**. `grok.write_storyboard` refuses an
+empty, whitespace, or missing `character_reference` before creating
+files. `save_scene` and `_apply_scene_fields` return 400 with
+`grok.EMPTY_CHARACTER_REFERENCE`: identity comes from the text, not
+the reference image; an empty lock renders a stranger in every clip.
+A filled lock still writes. Mutation: dump without the check → writer
+arm red. Mutation: write the scene without the check → save arm red.
+
 ### 5.6 Tier 2 is a calibration, not a metric
 
 `vision.py` is a VLM caller and is **not** the tier-2 path. TRD-3 §10 forbids a

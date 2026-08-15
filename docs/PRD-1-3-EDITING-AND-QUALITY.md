@@ -111,7 +111,9 @@ teaches the operator a false lesson, which is why `T3-28` forbids it by name.
 `qc.check_identity_wrong` (via `qc.run`) proposes "edit the text, then
 re-render"; `record` / `set_remedy` / `approve` refuse a swap-the-reference
 wording. The picture still has to be looked at — this is the remedy, not a
-gate.
+gate. The storyboard-side pair is `T2-31` / `T2-32`: saving an empty
+`character_reference` is refused, and the message says identity comes
+from the text, not the reference image.
 
 ## 6. Sequencing — the part the TRDs do not have
 
