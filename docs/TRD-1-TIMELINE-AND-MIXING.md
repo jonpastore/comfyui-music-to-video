@@ -620,7 +620,7 @@ current.
 | `T1-13`/`T1-14` peaks as data | **built** | this slice | `mixer.peaks(samples, z)` returns ≤2048 min/max pairs, ≥1 when audio exists; per-bucket min/max equals the full-resolution span. `studio/test_timeline.py` |
 | `T1-15`…`T1-17` empty reason, preview | **not built** | — | `mixer.waveform_png()` is still the picture; no explicit empty-reason, no proxy preview |
 | `T1-18` easy changes output | **built** | this slice | same items, defaults cleared: easy mix lands within 1.0 LU of `effects.LOUDNORM_I`; easy-off does not. Graph half: easy engages `master_engaged` / `_master_lines`, one loudnorm. `studio/test_t1_18_audience.py` |
-| `T1-19` recorded one-button chain | **not built** | — | easy reuses `_master_lines` (T1-20c graph identity); no versioned chain recorded on the render |
+| `T1-19` recorded one-button chain | **built** | this slice | `mixer.one_button_master` is `one-button-master` v1; `_master_lines` applies its I/TP/LRA; `h_render_set` writes it to `assets.meta_json` only when the master ran. Changing I from -16 to -23 moves measured LUFS. `studio/test_t1_19_master_chain.py` |
 | `T1-20` switch does not mutate | **built** | this slice | `sets.mode_audience` persists; easy→advanced→easy leaves `set_items` and `automation` unchanged; `audience_affordances("easy") != audience_affordances("advanced")`; easy HTML omits gain/effects controls |
 | `T1-21`…`T1-23` `duck`/`layer` | **built (ledger was stale)** | mixer joins | `_duck_join` / `_layer_join` render. `T1-23` "refused" is no longer the tree |
 | the timeline itself | **not built** | — | `set_edit.html` is a stack of forms; `.timeline`/`.tl-block` is a proportional strip with no time axis |

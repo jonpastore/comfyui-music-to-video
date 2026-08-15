@@ -31,7 +31,9 @@ is named.
 | `studio/vision.py` | 516 | VLM calls, local-first | **not** tier 2, §5.6 |
 
 Deliberately absent, verified by `grep -rn` over `studio/*.py` and the root
-scripts: no master-chain configuration, no peaks store, no threshold, no
+scripts: no *configurable* master chain (T1-19 records the fixed
+`one-button-master` v1 on the render; §8a stays fixed-order, not a
+control surface), no peaks store, no threshold, no
 tier-2 gate or UI. `calibrations` and `qc.score_zimage_sweep` landed for
 `T3-13` (overlap/separation/per-file, `threshold` NULL). `siglip2_naflex`
 is still only a `models.py` catalogue entry; the default embedder is a
@@ -163,8 +165,15 @@ same three rows.**
 `mode_audience == "easy"` at the same point a gain curve does, so easy
 is that chain (`T1-20c`) and still one loudnorm (`T1-20d`). `app.audience_affordances`
 is the affordance set `set_edit.html` consults — easy and advanced
-differ as data, not as a stylesheet. `T1-19` (named versioned record of
-the chain on the render) is not this slice.
+differ as data, not as a stylesheet.
+
+**`T1-19`, 2026-08-14.** `mixer.one_button_master()` is the named
+versioned chain (`one-button-master` v1, I/TP/LRA). `_master_lines`
+applies those params; `h_render_set` writes the same object to
+`assets.meta_json.master_chain` only when `applied_master_chain` is
+not None. The set editor shows name+version+params on the render
+card. Changing I moves measured LUFS
+(`studio/test_t1_19_master_chain.py`).
 
 **FIXED 2026-08-13 by session B, on Jon's decision, and the estimate this
 document gave was wrong twice on the way — which is the part worth keeping.**

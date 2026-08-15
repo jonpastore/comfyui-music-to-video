@@ -1541,6 +1541,12 @@ def h_render_set(args, progress):
     meta = {"playlist_id": args.get("playlist_id"), "mode": args.get("mode", "video"), "tier": tier}
     if set_id:
         meta["set_id"] = set_id
+    # T1-19: the named chain that ran, not a default stamped on every render.
+    # applied_master_chain is None when the master is off, so easy-off with
+    # no curve stays empty — recording a name over a no-op fails the check.
+    chain = mixer.applied_master_chain(args.get("items") or [])
+    if chain:
+        meta["master_chain"] = chain
     db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
            None, "set", out, json.dumps(meta), time.time())
     if set_id:
@@ -6106,7 +6112,8 @@ def _set_render_row(a):
         except Exception:
             pass
     return {"asset": a, "mode": meta.get("mode", "video"), "tier": meta.get("tier"),
-            "missing": missing, "size": size, "duration": duration}
+            "missing": missing, "size": size, "duration": duration,
+            "master_chain": meta.get("master_chain")}
 
 
 def _beatmatch_plan(items, songs, mode):
@@ -6281,7 +6288,9 @@ def set_detail(row):
             "mode_audience": audience,
             "loudnorm_i": effects.LOUDNORM_I,
             "loudnorm_tp": effects.LOUDNORM_TP,
-            "loudnorm_lra": effects.LOUDNORM_LRA}
+            "loudnorm_lra": effects.LOUDNORM_LRA,
+            "one_button_master_name": mixer.ONE_BUTTON_MASTER_NAME,
+            "one_button_master_version": mixer.ONE_BUTTON_MASTER_VERSION}
 
 
 @app.get("/sets", response_class=HTMLResponse)

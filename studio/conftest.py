@@ -390,6 +390,15 @@ _stub("mixer",
       peaks_from_path=lambda audio_path, z=0: (
           [[-0.5, 0.5]] if audio_path else []),
       PEAKS_MAX_POINTS=2048,
+      # T1-19: applied_master_chain is pure (no ffmpeg). The stub must
+      # serve the real one so h_render_set records the same chain
+      # _master_lines applies, not a parallel default.
+      applied_master_chain=(_real_module("mixer").applied_master_chain
+                            if _real_module("mixer") is not None
+                            else (lambda items: None)),
+      one_button_master=(_real_module("mixer").one_button_master
+                         if _real_module("mixer") is not None
+                         else (lambda params=None: None)),
       render_set=_render_set,
       mix_audio=_mix_audio,
       set_duration=_set_duration,

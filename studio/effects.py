@@ -214,12 +214,20 @@ def measure_loudness(path):
     return {"lufs": lufs, "true_peak_db": peak}
 
 
-def loudnorm_filter():
+def loudnorm_filter(I=None, TP=None, LRA=None):
     """Level matching, on by default for every set item (see module
     docstring). -16 LUFS / -1.5dB true peak is the streaming-platform
     target, not broadcast's -23 -- these are Suno tracks headed for the
-    same casual listening as everything else on a feed."""
-    return f"loudnorm=I={LOUDNORM_I:.1f}:TP={LOUDNORM_TP:.1f}:LRA={LOUDNORM_LRA:.1f}"
+    same casual listening as everything else on a feed.
+
+    Optional I/TP/LRA override the module defaults so the one-button
+    master can record the numbers that actually ran (docs/TRD-1 T1-19)
+    without a second loudnorm implementation.
+    """
+    i = LOUDNORM_I if I is None else float(I)
+    tp = LOUDNORM_TP if TP is None else float(TP)
+    lra = LOUDNORM_LRA if LRA is None else float(LRA)
+    return f"loudnorm=I={i:.1f}:TP={tp:.1f}:LRA={lra:.1f}"
 
 
 # What a set_item gets when effects_json is empty. loudnorm on, everything

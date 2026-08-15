@@ -30,7 +30,9 @@
       </label>
     </div>
     {% if "one_button_master" in affordances %}
-    <p class="hint">Easy applies the one-button master: auto-level to
+    <p class="hint">Easy applies the one-button master
+      ({{ one_button_master_name }} v{{ one_button_master_version }}):
+      auto-level to
       {{ loudnorm_i }} LUFS, the same chain a gain curve engages. Switching
       audience does not rewrite stored item values.</p>
     {% endif %}
@@ -340,6 +342,12 @@
       {% if r.duration %}&middot; {{ r.duration | hms }}{% endif %}
       {% if r.size %}&middot; {{ "%.0f"|format(r.size / 1048576) }} MB{% endif %}
     </p>
+    {% if r.master_chain %}
+    <p class="hint">{{ r.master_chain.name }} v{{ r.master_chain.version }}
+      I={{ r.master_chain.params.I }}
+      TP={{ r.master_chain.params.TP }}
+      LRA={{ r.master_chain.params.LRA }}</p>
+    {% endif %}
     {% if not r.missing %}
       {% if r.mode == "audio" %}
       <audio controls preload="none" src="{{ media_url(r.asset.path) }}"></audio>

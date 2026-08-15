@@ -186,10 +186,13 @@ draggable joins, automation lanes and a playhead.
 `mode_audience` select (`easy|normal|advanced`). These are affordance
 sets, not densities: easy *omits* gain, effects JSON and automation
 controls from the HTML (hidden inputs keep stored values so a later
-Save cannot wipe them) and names the one-button master; advanced *adds*
+Save cannot wipe them) and names the one-button master
+(`one-button-master` v1); advanced *adds*
 the mastering-chain numbers and unrounded steps. Switching the select
 writes only `sets.mode_audience`. A CSS class that hid the same fields
-would fail `T1-18` — easy changes the mix.
+would fail `T1-18` — easy changes the mix. After an easy render the
+card shows the named chain that ran (`T1-19`), not a hidden set of
+values.
 
 The waveform is the part that must change rather than grow: today it is
 `mixer.waveform_png()` set as a `background-image` on the block. `mixer.peaks`

@@ -797,6 +797,55 @@ def item_chains(items):
                          it.get("automation"), master=master) for it in items]
 
 
+# docs/TRD-1 T1-19. Easy's one-button master is THIS named chain, not a
+# hidden set of values. Version bumps when the stages or defaults change;
+# a render records the copy that ran so "what did the button do" is readable
+# after the file exists. Params are the loudnorm I/TP/LRA the filter uses.
+ONE_BUTTON_MASTER_NAME = "one-button-master"
+ONE_BUTTON_MASTER_VERSION = 1
+
+
+def one_button_master(params=None):
+    """Named, versioned master chain. docs/TRD-1 T1-19 / T1-20c.
+
+    The same object _master_lines applies and h_render_set records. Changing
+    a param here is what moves the output; a name/version with no effect on
+    the graph is the mutation T1-19 was rewritten to refuse.
+    """
+    p = {
+        "I": float(effects.LOUDNORM_I),
+        "TP": float(effects.LOUDNORM_TP),
+        "LRA": float(effects.LOUDNORM_LRA),
+    }
+    if params:
+        for key in ("I", "TP", "LRA"):
+            if key in params:
+                p[key] = float(params[key])
+    return {
+        "name": ONE_BUTTON_MASTER_NAME,
+        "version": ONE_BUTTON_MASTER_VERSION,
+        "params": p,
+    }
+
+
+def applied_master_chain(items):
+    """The chain this set will run, or None when the master is off.
+
+    None is the interesting answer: a default stamp on every render would
+    make T1-19's "readable afterwards" true of a chain that never ran.
+    master_params on an item is the test (and later advanced) override;
+    it does not live on set_items.
+    """
+    if not master_engaged(items):
+        return None
+    extra = None
+    for it in items:
+        if it.get("master_params"):
+            extra = it["master_params"]
+            break
+    return one_button_master(extra)
+
+
 def _master_lines(items, lines, running):
     """THE MASTER STAGE. docs/TRD-1 8a.
 
@@ -809,9 +858,15 @@ def _master_lines(items, lines, running):
     that quietly stopped being added is a set losing its level precisely where
     somebody drew one, and "the graph has a loudnorm in it" is not something a
     duration check would ever notice.
+
+    The filter numbers come from applied_master_chain, so the recorded
+    chain (T1-19) is the one that ran, not a parallel default.
     """
-    if master_engaged(items):
-        lines = lines + [f"[{running}]{effects.loudnorm_filter()}[master]"]
+    chain = applied_master_chain(items)
+    if chain:
+        p = chain["params"]
+        filt = effects.loudnorm_filter(I=p["I"], TP=p["TP"], LRA=p["LRA"])
+        lines = lines + [f"[{running}]{filt}[master]"]
         running = "master"
     return lines, running
 
