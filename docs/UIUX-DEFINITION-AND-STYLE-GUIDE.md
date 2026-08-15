@@ -655,11 +655,12 @@ same rule `T2-33` sets for the model picker.
 ### 7a.5 "Use as reference" is a tile state, not a new page
 
 `T7-6` shipped: an anchor can now be the identity lock for the next sheet. The
-`T7-7` picture look is still human-judged; the compose hook now FLAGs a
+`T7-7` picture look is still human-judged; the compose hook FLAGs a
 human-body nude wording (including the live-studio body clause) so a dirty
-prompt does not reach the tile as a clean candidate. `T4-13` is a
-`channel_balance` FLAG on the sheet's pixels (olive/magenta vs grey wall),
-not a `BACKDROP` string; the real GPU sheet is **NOT MEASURED**. In
+prompt does not reach the tile as a clean candidate. The front /
+three_quarter ranking harness exists offline; the GPU pair is not measured.
+`T4-13` is a `channel_balance` FLAG on the sheet's pixels (olive/magenta vs
+grey wall), not a `BACKDROP` string; the real GPU sheet is **NOT MEASURED**. In
 `media-tile` terms that is one more action on the tile and one more state on it —
 *this sheet is the identity reference for the sheet you are composing*. It earns
 emphasis because it is the studio's largest consistency lever, and it does not

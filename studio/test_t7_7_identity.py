@@ -1,10 +1,14 @@
-"""T7-7 identity look is human-judged. This file encodes the offline hook only.
+"""T7-7 identity look plus the front / three_quarter image differential.
 
 docs/TRD-7 T7-7 and DDD-4-7 §4: the sheet must be HER (the chosen identity
 ref / UI pair), not the pose-plate person. No threshold, no vision model, no
-GPU. The hook fails when the identity path is missing or is the plate; a
-named, distinct identity path satisfies the prerequisite. The picture itself
-stays a human look.
+GPU claim. The compose hook fails when the identity path is missing or is
+the plate; a named, distinct identity path satisfies the prerequisite.
+
+The ranking harness (`t7_7_identity_differential`) is the image
+differential: identity(front, three_quarter) from an anchor versus the
+same pair from the raw photographs. No cutoff. The GPU four-image set
+stays NOT MEASURED. Pixel distance is refused — it inverts this pair.
 
 docs/TRD-4 T4-14: a nude compose that asserts a human body ("human form" in
 nude_wardrobe — the measured live-studio collapse) is the same defect as
@@ -314,3 +318,176 @@ def test_t7_7_furred_nude_compose_is_not_a_human_body(tmp_path):
     })
     hit = _by_check(found, qc.IDENTITY_LOOK)
     assert hit and hit[0]["verdict"] == qc.PASS, found
+
+
+# ---------------------------------------------------------------------------
+# T7-7 image differential: front vs three_quarter, anchored pair vs photo pair.
+# No threshold. GPU pair stays NOT MEASURED. Pixel distance is refused.
+# ---------------------------------------------------------------------------
+
+BG = (210, 180, 140)
+BLACK = (15, 12, 18)
+TABBY = (180, 110, 55)
+SIZE = 32
+
+
+def _paint(path, colour, standing):
+    """Standing = front; reclining = three_quarter. Shared beige stage."""
+    from PIL import Image
+    img = Image.new("RGB", (SIZE, SIZE), BG)
+    px = img.load()
+    if standing:
+        cols, rows = range(8, 15), range(4, 28)
+    else:
+        cols, rows = range(4, 28), range(18, 26)
+    for y in rows:
+        for x in cols:
+            px[x, y] = colour
+    img.save(path)
+    return str(path)
+
+
+def _four(tmp_path):
+    """Anchored pair holds black identity across views; photo pair drifts."""
+    return (
+        _paint(tmp_path / "anchor_front.png", BLACK, standing=True),
+        _paint(tmp_path / "anchor_three_quarter.png", BLACK, standing=False),
+        _paint(tmp_path / "photo_front.png", BLACK, standing=True),
+        _paint(tmp_path / "photo_three_quarter.png", TABBY, standing=False),
+    )
+
+
+def _pixel_distance(a, b):
+    import numpy as np
+    from PIL import Image
+    xa = np.asarray(Image.open(a).convert("RGB"), dtype="float32")
+    xb = np.asarray(Image.open(b).convert("RGB"), dtype="float32")
+    return float(np.mean(np.sqrt(np.sum((xa - xb) ** 2, axis=2))))
+
+
+def test_t7_7_tests_do_not_skip():
+    src = open(__file__, encoding="utf-8").read()
+    skip_call = "pytest" + ".skip("
+    skip_mark = "pytest" + ".mark.skip"
+    assert skip_call not in src
+    assert skip_mark not in src
+
+
+def test_t7_7_pixel_distance_inverts_the_view_pair(tmp_path):
+    """Pose change costs more pixels than a same-pose colour drift.
+
+    Mutation: if the criterion used pixel distance, this pair is the
+    inversion that would rank the photo pair closer.
+    """
+    af, atq, pf, ptq = _four(tmp_path)
+    photo_same_pose = _paint(tmp_path / "photo_tq_standing.png", TABBY, standing=True)
+    d_anchor = _pixel_distance(af, atq)
+    d_photo = _pixel_distance(pf, photo_same_pose)
+    assert d_photo < d_anchor, (d_photo, d_anchor)
+
+
+def test_t7_7_identity_ranks_anchored_front_three_quarter_above_photo_pair(tmp_path):
+    """The ranking is the differential. No threshold.
+
+    Mutation: swap the pairs, or score with pixel distance → red.
+    """
+    af, atq, pf, ptq = _four(tmp_path)
+    d = qc.t7_7_identity_differential(af, atq, pf, ptq)
+    assert d["metric"] == qc.IDENTITY_METRIC, d
+    assert d["threshold"] is None, d
+    assert d["views"] == ("front", "three_quarter"), d
+    assert d["anchor_pair"] > d["photo_pair"], d
+    assert d["held"] is True, d
+
+
+def test_t7_7_swapped_pairs_do_not_hold(tmp_path):
+    """held is the ranking, not a constant True."""
+    af, atq, pf, ptq = _four(tmp_path)
+    d = qc.t7_7_identity_differential(pf, ptq, af, atq)
+    assert d["held"] is False, d
+    assert d["anchor_pair"] < d["photo_pair"], d
+
+
+def test_t7_7_missing_view_pair_is_not_measured(tmp_path):
+    """Missing images raise NOT MEASURED. Never 0.0, never skip, never held."""
+    import pytest
+    af, atq, pf, _ptq = _four(tmp_path)
+    missing = str(tmp_path / "nope.png")
+    with pytest.raises(ValueError, match="NOT MEASURED"):
+        qc.t7_7_identity_differential(af, atq, pf, missing)
+    with pytest.raises(ValueError, match="NOT MEASURED"):
+        qc.t7_7_identity_differential(None, atq, pf, pf)
+    with pytest.raises(ValueError, match="NOT MEASURED"):
+        qc.t7_7_claim()
+
+
+def test_t7_7_same_file_is_not_a_view_pair(tmp_path):
+    """front == three_quarter is not a differential."""
+    import pytest
+    af, _atq, pf, ptq = _four(tmp_path)
+    with pytest.raises(ValueError, match="front/three_quarter"):
+        qc.t7_7_identity_differential(af, af, pf, ptq)
+
+
+def test_t7_7_byte_identical_copy_is_not_a_view_pair(tmp_path):
+    import shutil
+    import pytest
+    af, _atq, pf, ptq = _four(tmp_path)
+    copy = str(tmp_path / "front_copy.png")
+    shutil.copy2(af, copy)
+    with pytest.raises(ValueError, match="front/three_quarter"):
+        qc.t7_7_identity_differential(af, copy, pf, ptq)
+
+
+def test_t7_7_real_pair_hook_exists():
+    """Renderer populate hook. Mutation: delete the names → red."""
+    assert hasattr(qc, "T7_7_REAL_PAIR")
+    assert hasattr(qc, "T7_7_REAL_PAIR_MEASURED")
+    assert callable(qc.t7_7_real_pair)
+    assert callable(qc.record_t7_7_real_pair)
+    assert callable(qc.t7_7_claim)
+    assert callable(qc.t7_7_identity_differential)
+
+
+def test_t7_7_real_pair_not_measured():
+    """GPU front/three_quarter pair is NOT MEASURED.
+
+    Flip T7_7_REAL_PAIR_MEASURED only after that four-image set is recorded.
+    Do not claim the fleet.
+    """
+    import pytest
+    assert qc.T7_7_REAL_PAIR_MEASURED is False, (
+        "T7-7 real pair is NOT MEASURED; flip only after a GPU set")
+    assert qc.t7_7_real_pair() is None
+    with pytest.raises(ValueError, match="NOT MEASURED"):
+        qc.t7_7_claim()
+
+
+def test_t7_7_measured_true_with_empty_hook_is_a_lie():
+    import pytest
+    prev = qc.T7_7_REAL_PAIR_MEASURED
+    try:
+        qc.T7_7_REAL_PAIR_MEASURED = True
+        with pytest.raises(ValueError, match="NOT MEASURED"):
+            qc.t7_7_claim()
+    finally:
+        qc.T7_7_REAL_PAIR_MEASURED = prev
+
+
+def test_t7_7_record_hook_round_trip(tmp_path):
+    af, atq, pf, ptq = _four(tmp_path)
+    prev_pair = qc.T7_7_REAL_PAIR
+    prev_flag = qc.T7_7_REAL_PAIR_MEASURED
+    try:
+        qc.record_t7_7_real_pair(af, atq, pf, ptq)
+        got = qc.t7_7_real_pair()
+        assert got == (af, atq, pf, ptq)
+        d = qc.t7_7_identity_differential(*got)
+        assert d["held"] is True, d
+        qc.T7_7_REAL_PAIR_MEASURED = True
+        claimed = qc.t7_7_claim()
+        assert claimed["anchor_pair"] == d["anchor_pair"]
+        assert claimed["held"] is True
+    finally:
+        qc.T7_7_REAL_PAIR = prev_pair
+        qc.T7_7_REAL_PAIR_MEASURED = prev_flag

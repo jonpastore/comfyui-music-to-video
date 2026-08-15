@@ -145,6 +145,15 @@ LIGHTING_CAST_LIMIT = 12.0
 T4_13_REAL_SHEET_PATH = None
 T4_13_REAL_SHEET_MEASURED = False
 
+# docs/TRD-7 T7-7: identity held across views. The ranking is
+# identity(front, three_quarter) from an anchor vs the same pair from
+# raw photographs. No threshold. None is NOT MEASURED. skip is not a
+# reading. T7_7_REAL_PAIR_MEASURED stays False until a GPU four-image
+# set is recorded; flipping it with an empty hook is the lie.
+# Do not claim the fleet to populate this.
+T7_7_REAL_PAIR = None
+T7_7_REAL_PAIR_MEASURED = False
+
 # docs/TRD-3 T3-27 / §6.2. The class is what approve() runs. A check with
 # NONE says so and offers no button.
 REMEDY_NONE = "none"
@@ -997,6 +1006,75 @@ def identity_score(path, reference, embed=None):
     embed = embed or identity_embed
     vec = embed(path)
     return _cosine(vec, list(reference))
+
+
+def _t7_7_require(path, slot):
+    if not path or not os.path.isfile(path):
+        raise ValueError(f"T7-7 {slot} is NOT MEASURED")
+    return os.path.normpath(path)
+
+
+def _t7_7_file_digest(path):
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.digest()
+
+
+def _t7_7_view_pair_score(front, three_quarter, embed):
+    if front == three_quarter or _t7_7_file_digest(front) == _t7_7_file_digest(three_quarter):
+        raise ValueError(
+            "T7-7 pair is not a front/three_quarter differential")
+    return identity_score(three_quarter, embed(front), embed=embed)
+
+
+def t7_7_identity_differential(anchor_front, anchor_three_quarter,
+                               photo_front, photo_three_quarter, embed=None):
+    """T7-7 ranking. Missing images raise NOT MEASURED. No threshold.
+
+    identity_embed is the colour histogram (T3-15): pose is not the
+    score. Pixel distance inverts this pair and is refused.
+    """
+    embed = embed or identity_embed
+    af = _t7_7_require(anchor_front, "anchor_front")
+    atq = _t7_7_require(anchor_three_quarter, "anchor_three_quarter")
+    pf = _t7_7_require(photo_front, "photo_front")
+    ptq = _t7_7_require(photo_three_quarter, "photo_three_quarter")
+    anchor_pair = _t7_7_view_pair_score(af, atq, embed)
+    photo_pair = _t7_7_view_pair_score(pf, ptq, embed)
+    return {
+        "metric": IDENTITY_METRIC,
+        "views": ("front", "three_quarter"),
+        "anchor_pair": anchor_pair,
+        "photo_pair": photo_pair,
+        "held": anchor_pair > photo_pair,
+        "threshold": None,
+    }
+
+
+def t7_7_real_pair():
+    """Hook the renderer populates. None until a GPU four-image set lands."""
+    return T7_7_REAL_PAIR
+
+
+def record_t7_7_real_pair(anchor_front, anchor_three_quarter,
+                          photo_front, photo_three_quarter):
+    """Renderer calls this with the four rendered paths. Does not flip MEASURED."""
+    global T7_7_REAL_PAIR
+    T7_7_REAL_PAIR = (
+        anchor_front, anchor_three_quarter, photo_front, photo_three_quarter)
+
+
+def t7_7_claim():
+    """The real-pair gate. MEASURED with an empty hook is still NOT MEASURED."""
+    if not T7_7_REAL_PAIR_MEASURED:
+        raise ValueError("T7-7 real pair is NOT MEASURED")
+    pair = t7_7_real_pair()
+    if pair is None:
+        raise ValueError("T7-7 real pair is NOT MEASURED")
+    return t7_7_identity_differential(*pair)
 
 
 def identity_verdict(overlap):

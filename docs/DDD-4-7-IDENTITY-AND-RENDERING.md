@@ -164,11 +164,12 @@ and a fixed size is what makes a `portrait` view render a distant figure.
 **`T7-7` is the measurement, and it is human-judged on purpose.** Render `front`
 and `three_quarter` from an anchor and from the raw photographs; four images side
 by side; one recorded answer. No threshold is invented — review asked for one and
-a fake number on a judgement call is worse than an honest human step. This is the
-criterion where **looking at the image** is the method. The offline hook
-(`b081030`) FLAGs a compose that asserts a human body — live-studio
-"Human woman's body" included — through `run_artefact`. That does not replace
-the picture look.
+a fake number on a judgement call is worse than an honest human step. The
+offline ranking (`t7_7_identity_differential`) is that comparison: which pair
+holds identity, with no cutoff. `T7_7_REAL_PAIR_MEASURED` stays False until a
+GPU four-image set is recorded. The compose hook (`b081030`) FLAGs a compose
+that asserts a human body — live-studio "Human woman's body" included — through
+`run_artefact`. That does not replace the picture look.
 
 ## 5. Refine on LTX
 
