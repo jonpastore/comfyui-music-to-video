@@ -1094,6 +1094,8 @@ def h_storyboard(args, progress):
     scene_count = len(sb.get("scenes", [])) if isinstance(sb, dict) else None
     # the direction is stored with the result, not just used and forgotten: a
     # storyboard you cannot see the prompt for is one you cannot tune.
+    # T2-13b: upsert the storyboard row only. Approved (clip_idx, seed) stays;
+    # a re-plan must not delete, unapprove, or remap refs.
     db.run("""INSERT INTO storyboards (song_id, tier, json_path, md_path, scene_count,
                                        created, prompt, scene_seconds)
               VALUES (?,?,?,?,?,?,?,?)

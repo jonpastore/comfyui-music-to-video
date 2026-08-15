@@ -286,7 +286,9 @@ length is the divisor, the count is ours.
    is refused or split, not annotated. It does not change the planner
    divisor — `clip_seconds(30)` and `n_clips_for(…, 30)` stay.
 3. Only then `T2-13a`, `T2-13c` (the approve grid must still show every clip),
-   `T2-8`/`T2-9`.
+   `T2-8`/`T2-9`. `T2-13b` is not blocked on the renderer: `h_storyboard`
+   upserts the storyboard row and does not touch `refs`, so re-planning the
+   same storyboard leaves the approved `(clip_idx, seed)` set identical.
 
 `W1-4` sits alongside and is a **prompt**, not code: `grok._user_prompt` still
 tells the model the renderer emits fixed 4.8125 s clips and to round every

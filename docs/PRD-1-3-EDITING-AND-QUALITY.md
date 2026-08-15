@@ -88,7 +88,7 @@ the eight things that must become true; they are not a new contract.
 | P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b`, `T1-12`, `T1-20d` |
 | P3 | Every surface is drivable with no browser, and the page and the JSON agree | `T6-A1`…`T6-A4`, `T1-3`, `T2-41` |
 | P4 | An album's songs are scenes of one story, demonstrably — arc content appears in the storyboard and is absent when the arc is | `T2-20`, `T2-21`, `T2-22` |
-| P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every clip | `T2-8`, `T2-12a`, `T2-13a`, `T2-13c` |
+| P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every clip, and a re-plan leaving approved `(clip_idx, seed)` unchanged | `T2-8`, `T2-12a`, `T2-13a`, `T2-13b`, `T2-13c` |
 | P5a | Assembling a song with a 1664×960 clip among 832×480 siblings keeps the ×2 size and does not letterbox; mixed aspect is refused | `T5-7` |
 | P6 | Every rendered artefact is measured against the workflow that asked for it, never against a constant | `T3-2`, `T3-4`, `T3-7` |
 | P7 | A finding arrives actionable — measured, expected, unit, a remedy class, and an editable prompt — and nothing runs without approval | `T3-18`, `T3-19`, `T3-27` |

@@ -256,7 +256,8 @@ legal 8n+1 length at the clip fps, not a page-local 4.8125. Clip count is
 A row whose `scene_seconds` is NULL (generated before the column) still reads
 as `CHUNK`. A single-clip request over the model's ceiling (`T5-9`) is a
 named refusal (measured vs chosen), not a quiet annotation; split is
-`split_to_ceiling`.
+`split_to_ceiling`. Re-generating a storyboard keeps every approved reference
+(`T2-13b`); the approve grid still shows the same `(clip_idx, seed)` picks.
 
 ### 5.3 Space and radius
 
