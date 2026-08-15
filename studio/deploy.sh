@@ -96,10 +96,10 @@ WorkingDirectory=%h/meowp-studio/app
 Environment=STUDIO_SCRIPTS=%h/meowp-studio/scripts
 Environment=STUDIO_DATA=%h/meowp-studio/data
 Environment=COMFY_URL=http://127.0.0.1:8188
-# Vision: studio/vision.py prefers a local VL model on the litellm
-# gateway and only falls back to xAI when there is none. Set
-# STUDIO_VISION_MODEL to pin one instead of auto-detecting.
+# Vision: pin qwen3-vl so a 503 on GET /models cannot hide a running
+# llama-server on amd-halo :8006 (measured 2026-08-14).
 Environment=LITELLM_BASE=http://127.0.0.1:4000/v1
+Environment=STUDIO_VISION_MODEL=qwen3-vl
 # PIN the text model, do not auto-detect it here. The gateway fronts several
 # machines and auto-detection cannot see which of them shares a GPU with the
 # renderer -- it used to pick qwen3.6-coder, which was ollama on THIS box behind

@@ -660,6 +660,11 @@ button.toggle.off { color: var(--muted); }
    did: a destructive control rendered on top of a different image than the one
    it deletes. Wrapping is the fix; `min-width: 0` lets a button shrink inside
    the row rather than forcing the overflow it was causing. */
+.qc-tag {
+  margin: 0.25rem 0 0;
+  font-weight: 650;
+  color: var(--accent);
+}
 .candidate-actions {
   display: flex;
   flex-wrap: wrap;
