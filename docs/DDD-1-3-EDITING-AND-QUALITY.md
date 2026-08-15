@@ -18,7 +18,7 @@ is named.
 | module | lines | owns | state against its TRD |
 |---|---|---|---|
 | `studio/app.py` | 7589 | 138 routes, 25 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}/arc`, `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`; `sets_service.py` / `storyboard_service.py` are still T6-A3 |
-| `studio/mixer.py` | 2116 | set duration, both filter graphs, overlap arithmetic, beatmatch, ramps, splice, song-assembly geometry (`T5-7`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox |
+| `studio/mixer.py` | 2116 | set duration, both filter graphs, overlap arithmetic, beatmatch, ramps, splice, song-assembly geometry (`T5-7`) and fps (`T2-13d`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox. Mixed clip fps honours the highest and is asserted on the assembled file |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `export_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` **and** `T3-9`/§4.3 |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `fragment`, `item_audio`, `wants_master_loudnorm` | built |
 | `studio/qc.py` | 642 | TRD-3 tier 1 in full; T3-13 `score_zimage_sweep`; T3-15 histogram `identity_embed`; T3-16 `identity_verdict`; T3-26 `measure_refiner_help` (fail-closed labelled set, not opportunistic); T3-28 `check_identity_wrong` / `identity_wrong_remedy`; T3-27 `CHECK_REMEDY_CLASS` / `actuator_for` | built |
@@ -375,6 +375,9 @@ length is the divisor, the count is ours.
    `validate` refuses a gap or overlap. `main()` expands an over-ceiling
    scene into that chain instead of handing 30 s to `workflow`.
    Mutation: ignore `video_model` → both scenes take 15 s.
+   **`T2-13d` built:** `assemble_song` normalises those native rates to
+   one output fps (highest) on the assembled file. Concat first-clip-wins
+   is not that check.
 
 `W1-4` sits alongside and is a **prompt**, not code. `T2-14a` is **built**:
 `grok._user_prompt` no longer names a fixed 4.8125 s quantum, does not say
@@ -496,6 +499,7 @@ documents, not a preference.
                                  ->  T2-13c (built), T2-8b (built), T2-8, T2-9
                                  ->  W2 T2-47 mixed-model native fps (built)
                                  ->  W2 T2-48 per-scene ceilings compose (built)
+                                 ->  T2-13d assembly one output fps (built)
 
     qc_service pattern  ->  sets_service     ->  clock/rounding, peaks, preview
                                              ->  master fix (5.2)  ->  audiences (T1-18..T1-20)

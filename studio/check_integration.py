@@ -553,6 +553,11 @@ if mixer:
         None if ("pad=" not in mixer.assembly_scale_filter(0, 1664, 960)
                  and "force_original_aspect_ratio" not in mixer.assembly_scale_filter(0, 1664, 960))
         else (_ for _ in ()).throw(AssertionError("assembly scale letterboxes"))))
+    check("mixer.assembly_fps", lambda: sig(mixer, "assembly_fps", ["infos"]))
+    check("T2-13d assembly_fps honours 24 among 16", lambda: (
+        None if mixer.assembly_fps([
+            {"fps": 16.0}, {"fps": 24.0}, {"fps": 16.0}]) == 24.0
+        else (_ for _ in ()).throw(AssertionError("24 fps dropped"))))
     check("mixer.render_set", lambda: sig(mixer, "render_set", ["items", "out_path"]))
     check("mixer.mix_audio", lambda: sig(mixer, "mix_audio", ["items", "out_path"]))
     check("mixer.set_duration", lambda: sig(mixer, "set_duration", ["items"]))

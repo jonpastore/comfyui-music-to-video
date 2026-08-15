@@ -420,6 +420,8 @@ Rules that apply at every level:
   step a song is on answers "where is this album" without opening five pages.
   Assemble does not silently letterbox: a ×2 clip among 832×480 siblings
   keeps 1664×960; mixed aspect is a named refusal (`T5-7`), not black bars.
+  Mixed-model clips keep native fps until assembly; the assembled song
+  is one output fps (`T2-13d`), not the first clip's rate.
 
 ### 5.6 Density, layout and breakpoints
 

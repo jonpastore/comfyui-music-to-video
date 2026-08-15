@@ -405,9 +405,44 @@ def assembly_geometry(infos):
     return max(unique, key=lambda s: s[0] * s[1])
 
 
-def assembly_scale_filter(idx, w, h):
-    """Exact scale to (w, h). No decrease+pad — that letterboxes T5-7."""
-    return f"[{idx}:v]scale={w}:{h}:flags=lanczos,setsar=1[v{idx}n]"
+def assembly_fps(infos):
+    """Target fps for assemble_song. docs/TRD-2 T2-13d.
+
+    Mixed rates honour the highest, so an LTX 16.8312 clip among s2v 16.0
+    siblings keeps its rate. First-clip-wins is the concat demuxer path
+    this exists to leave.
+    """
+    rates = []
+    for info in infos:
+        fps = float(info.get("fps") or 0)
+        if fps <= 0:
+            raise ValueError(f"clip has no fps ({fps})")
+        rates.append(fps)
+    if not rates:
+        raise ValueError("no clip fps to assemble")
+    unique = []
+    for r in rates:
+        if not any(abs(r - u) < 1e-3 for u in unique):
+            unique.append(r)
+    if len(unique) == 1:
+        return unique[0]
+    return max(unique)
+
+
+def _fmt_rate(fps):
+    n = float(fps)
+    if abs(n - round(n)) < 1e-6:
+        return str(int(round(n)))
+    return f"{n:.6f}".rstrip("0").rstrip(".")
+
+
+def assembly_scale_filter(idx, w, h, fps=None):
+    """Exact scale to (w, h). No decrease+pad — that letterboxes T5-7.
+    fps= is T2-13d: mixed-rate clips become one output rate."""
+    tail = f"[{idx}:v]scale={w}:{h}:flags=lanczos,setsar=1"
+    if fps:
+        tail += f",fps={_fmt_rate(fps)}"
+    return tail + f"[v{idx}n]"
 
 
 def _crossfade_chain(n, durations, fade, transition="fade", src=None):
@@ -441,16 +476,20 @@ def assemble_song(clip_paths, mp3_path, out_path, progress=None, fade=0.0):
     audio_dur = probe(mp3_path)["duration"]
     clip_infos = [probe(p) for p in clip_paths]
     tw, th = assembly_geometry(clip_infos)
+    tfps = assembly_fps(clip_infos)
     need_scale = any((i["width"], i["height"]) != (tw, th) for i in clip_infos)
+    need_fps = any(abs(float(i["fps"]) - tfps) > 1e-3 for i in clip_infos)
+    need_norm = need_scale or need_fps
 
     tmp = _atomic_out(out_path)
     list_path = None
     try:
         n = len(clip_paths)
-        if fade <= 0 and not need_scale:
+        if fade <= 0 and not need_norm:
             # concat demuxer: fast, and stream-copy-friendly if callers ever
             # want to skip the re-encode -- kept re-encoding here to match
             # assemble.sh's fix for encoder-parameter drift between clips.
+            # Mixed fps is that drift (T2-13d) and takes the filter path.
             list_path = _write_concat_list(clip_paths)
             args = ["-f", "concat", "-safe", "0", "-i", list_path, "-i", mp3_path,
                     "-map", "0:v", "-map", "1:a",
@@ -462,15 +501,15 @@ def assemble_song(clip_paths, mp3_path, out_path, progress=None, fade=0.0):
                 inputs += ["-i", p]
             inputs += ["-i", mp3_path]
             if fade <= 0:
-                lines = [assembly_scale_filter(i, tw, th) for i in range(n)]
+                lines = [assembly_scale_filter(i, tw, th, tfps) for i in range(n)]
                 concat_in = "".join(f"[v{i}n]" for i in range(n))
                 lines.append(f"{concat_in}concat=n={n}:v=1:a=0[vout]")
                 vlabel = "vout"
                 graph = ";".join(lines)
             else:
                 durations = [info["duration"] for info in clip_infos]
-                if need_scale:
-                    pre = [assembly_scale_filter(i, tw, th) for i in range(n)]
+                if need_norm:
+                    pre = [assembly_scale_filter(i, tw, th, tfps) for i in range(n)]
                     xf, vlabel, _ = _crossfade_chain(
                         n, durations, fade, src=lambda i: f"v{i}n")
                     graph = ";\n".join(pre + xf)
