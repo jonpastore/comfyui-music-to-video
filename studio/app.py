@@ -5185,6 +5185,12 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
         grok.require_figure_roles(sb)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    # T2-44: a scene naming a model the catalogue cannot render is refused
+    # here, naming the scene and the value — not later, not defaulted.
+    try:
+        models.refuse_unknown_video_model(sb.get("scenes"))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     if changed:
         # stamp the edit so frames rendered before it can be shown as stale.
         # An unknown key in a scene is ignored by every builder (they read named
@@ -5320,6 +5326,10 @@ def _apply_scene_fields(song, tier, num, fields):
         raise HTTPException(400, grok.EMPTY_CHARACTER_REFERENCE)
     try:
         grok.require_figure_roles(sb)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    try:
+        models.refuse_unknown_video_model(sb.get("scenes"))
     except ValueError as e:
         raise HTTPException(400, str(e))
     if changed:

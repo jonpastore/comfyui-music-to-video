@@ -470,7 +470,9 @@ length is the divisor, the count is ours.
    `clips_for_scene` / `main()` take `--video-model`.
    `EDITABLE_SCENE_FIELDS` includes `video_model`; the scene row
    shows it beside camera (`test_t2_42_scene_video_model.py`).
-   `T2-44` refuse-at-save and `T2-46` pin-to-cerberus are not.
+   **`T2-44` built.** `models.refuse_unknown_video_model` refuses a
+   named model absent from `renderable("video")` at save.
+   `T2-46` pin-to-cerberus is not.
    **`T2-13d` built:** `assemble_song` normalises those native rates to
    one output fps (highest) on the assembled file. Concat first-clip-wins
    is not that check.
@@ -585,6 +587,15 @@ scene save refuse a named figure with no role or a free-text role.
 figure. A bare name is a legacy lead. Mutation: coerce to strings →
 compose arm red. Mutation: dump without the check → writer arm red.
 Mutation: return names without role → API arm red. `T2-30` is not this.
+
+`T2-44` is **built**. `models.refuse_unknown_video_model` walks the
+board's scenes and raises when a named `video_model` is absent from
+`models.renderable("video")` as a key *or* a cli value, quoting the
+scene number and the bad value. `save_scene` and `_apply_scene_fields`
+return 400 and do not write. Absent or whitespace is not a name
+(`T2-42`). A real cli (`s2v`) still saves. Mutation: write without
+the check → save arm red. Mutation: rewrite to `default_cli` → the
+file changes and the named-value assertion fails.
 
 ### 5.6 Tier 2 is a calibration, not a metric
 

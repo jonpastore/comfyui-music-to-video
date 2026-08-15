@@ -376,7 +376,10 @@ The board's declared `guardrail` is this tier's `compose_guardrail`
 clause; saving a board that carries another tier's wording is refused
 (`T2-22`). Saving a board whose `character_reference` is empty is
 refused; the message says identity comes from the text, not the
-reference image (`T2-31`, `T2-32`).
+reference image (`T2-31`, `T2-32`). Saving a scene that names a
+`video_model` absent from `models.renderable("video")` is refused,
+naming the scene number and the bad value (`T2-44`); it is not
+silently defaulted and not deferred to render.
 The storyboard meter API reports total scene time against song length
 and flags a miss beyond a stated tolerance (`T2-23`); it reports this
 song's `clip_seconds`, not a constant (`T2-24`). A miss is refused

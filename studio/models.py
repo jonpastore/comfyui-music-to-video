@@ -1056,6 +1056,32 @@ def renderable(role):
     return {k: m["cli"] for k, m in CATALOG.items() if m["role"] == role and m.get("cli")}
 
 
+def refuse_unknown_video_model(scenes):
+    """T2-44: a scene naming a model absent from renderable("video") is
+    refused at save, naming the scene number and the bad value.
+
+    Absent or blank is not a name (T2-42: the render's --video-model applies).
+    Catalogue keys and cli values both count as present: s2v is what scenes
+    store, wan22_s2v is the catalogue key, and a keys-only check would refuse
+    a real renderer.
+    """
+    wired = renderable("video")
+    allowed = set(wired) | set(wired.values())
+    for scene in scenes or ():
+        if not isinstance(scene, dict):
+            continue
+        named = scene.get("video_model")
+        if named is None:
+            continue
+        named = str(named).strip()
+        if not named:
+            continue
+        if named not in allowed:
+            raise ValueError(
+                f"scene {scene.get('scene_number')} names video_model={named!r} "
+                f"absent from models.renderable(\"video\")")
+
+
 def default_for(role):
     """The remembered choice for a role, else the entry marked default, else the
     first catalogued one. Never returns something absent from the catalogue: a
