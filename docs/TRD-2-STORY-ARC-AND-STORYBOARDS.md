@@ -708,6 +708,7 @@ current.
 | `T2-35` every enumerated file catalogued | **built** | earlier | measured live: cerberus enumerates 36 files across seven loaders, 14 were unaccounted, now zero |
 | `T2-41` scene timing has one implementation | **built** | earlier | `app.storyboard_scenes` no longer computes `idx * CHUNK` inline |
 | **`T2-12a` legal frame count** | **built (divisor)** | `clip_seconds` | `legal_frames` rounds to 8n+1; `clip_seconds(scene_seconds)` returns that length so `n_clips_for` is `ceil(duration / legal)`. `None` stays `CHUNK` — old storyboards do not re-time. Renderer still emits `LTX25_LEN` until `T2-13a` |
+| **`T2-13` `CHUNK` has one clip-count reader** | **built** | `n_clips_for` | `grok._user_prompt` and `build_storyboard` no longer compute `ceil(dur / CHUNK)`. A test asserts no module outside `build_song` does. Prompt still names the 4.8125 s quantum (`T2-14a`) |
 | `T2-13a`/`T2-13c` approve grid | **blocked** | — | on `T2-12a` |
 | `T2-14a`…`T2-14c` grok's prompt quantum | **not built** | — | `_user_prompt` still tells the model clips are fixed at 4.8125 s |
 | §4 wands, §5 meter, §5.3 casting | **not built** | — | |

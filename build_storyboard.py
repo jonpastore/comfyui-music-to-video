@@ -26,7 +26,7 @@ usage:
 import argparse, json, math, os, re, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_song import allocate, audio_duration, CHUNK  # noqa: E402
+from build_song import allocate, audio_duration, CHUNK, n_clips_for  # noqa: E402
 
 TAG = re.compile(r"^\s*\[(.+?)\]\s*$")
 
@@ -210,7 +210,7 @@ def main():
     dur = audio_duration(args.audio)
     target = max(len(sections), math.ceil(dur / args.scene_seconds))
     slug = args.slug or slug_of(args.title)
-    nclips = math.ceil(dur / CHUNK)
+    nclips = n_clips_for(dur)
     os.makedirs(args.outdir, exist_ok=True)
 
     scenes = build_scenes(sections, profile, dur, target)

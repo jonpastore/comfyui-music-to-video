@@ -212,7 +212,7 @@ correct alone*, and the first fix reproduced that exact shape: one decision with
 two places to apply it. So the **design** rule is that any design computing a
 decision in one place and applying it in two should be read against this. That
 shape is already this codebase's most common defect — `NUDE_VIEWS` as two
-hand-kept copies, `CHUNK` with five readers, `DEFAULT_BODY` losing to
+hand-kept copies, `CHUNK` with five clip-count readers (collapsed by `T2-13` to `n_clips_for`), `DEFAULT_BODY` losing to
 `ALBUM_FIELDS["body"]`, gain arriving from a column and a JSON key.
 
 But a design smell is not what catches it, and session B's sharper version is

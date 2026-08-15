@@ -7,7 +7,6 @@ schema is what build_refs.py and build_song.py already consume unmodified.
 """
 import base64
 import json
-import math
 import os
 import re
 import sys
@@ -410,7 +409,7 @@ def _user_prompt(lyrics, song, tier, n_scenes):
     is what keeps the storyboard's timing honest.
     """
     dur = float(song.get("duration") or 0.0)
-    total_clips = math.ceil(dur / CHUNK) if dur else 0
+    total_clips = n_clips_for(dur)
     mins, secs = divmod(int(dur), 60)
     return (
         f"Song: \"{song.get('title', '')}\" from the album \"{song.get('album', '')}\" "

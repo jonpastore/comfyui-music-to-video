@@ -1,4 +1,4 @@
-"""T2-12a legal 8n+1 rounding and T5-1 / T5-3 / T5-4 / T5-10 refine.
+"""T2-12a legal 8n+1 rounding, T2-13 one clip-count reader, and T5-1 / T5-3 / T5-4 / T5-10 refine.
 
 Asserted through the public functions the routes actually call
 (docs/TRD-6 T6-A10): build_song.legal_frames, grok.generate_storyboard /
@@ -8,6 +8,7 @@ never reach.
 import json
 import math
 import os
+import re
 import sys
 
 import httpx
@@ -180,6 +181,37 @@ def test_clip_count_follows_song_length_not_scene_count():
     assert build_song.n_clips_for(195.792, scene_seconds=30.0) == 7
     assert build_song.n_clips_for(195.792, scene_seconds=30.0) != math.ceil(
         195.792 / build_song.CHUNK)
+
+
+def test_t2_13_no_module_outside_build_song_computes_clip_count():
+    """T2-13: clip count has one implementation — n_clips_for.
+
+    Mutation: restore math.ceil(dur / CHUNK) in grok._user_prompt or
+    build_storyboard → this fails.
+    """
+    forbidden = re.compile(r"ceil\s*\([^)\n]*CHUNK")
+    offenders = []
+    for folder in (ROOT, HERE):
+        for name in os.listdir(folder):
+            if not name.endswith(".py") or name.startswith("test_") or name == "build_song.py":
+                continue
+            path = os.path.join(folder, name)
+            if forbidden.search(open(path, encoding="utf-8").read()):
+                offenders.append(os.path.relpath(path, ROOT))
+    assert offenders == []
+
+
+def test_t2_13_user_prompt_clip_count_comes_from_n_clips_for(monkeypatch):
+    """T2-13: _user_prompt does not compute ceil(dur / CHUNK).
+
+    Mutation: restore math.ceil(dur / CHUNK) → 195.792 / CHUNK is 41 and this fails.
+    """
+    grok = _grok()
+    monkeypatch.setattr(grok, "n_clips_for", lambda duration, scene_seconds=None: 7)
+    song = {"title": "T", "album": "A", "duration": 195.792, "genre": "pop"}
+    text = grok._user_prompt("[Verse]\nwords", song, "pg13", 7)
+    assert "7 clips" in text
+    assert "41 clips" not in text
 
 
 def test_generate_storyboard_asks_for_n_clips_for_not_raw_seconds():

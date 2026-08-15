@@ -207,7 +207,7 @@ Each is a thing this project has already done once, not a hypothetical.
    whole feature is deleted. Each TRD now carries a table pairing them with a
    positive half; those tables are requirements, not commentary.
 2. **A second implementation of a number.** Twelve criteria for four facts;
-   `CHUNK` read in five modules; scene timing computed twice; gain in two places
+   `CHUNK` once had five clip-count readers (`T2-13` collapsed them to `n_clips_for`); scene timing computed twice; gain in two places
    before automation would have made three. Every new value gets one owner and
    the others cite it.
 3. **A metric that is confidently backwards.** §3, and it is why tier 2 is
