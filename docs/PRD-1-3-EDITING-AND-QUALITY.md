@@ -95,12 +95,12 @@ the eight things that must become true; they are not a new contract.
 | # | outcome | proven by |
 |---|---|---|
 | P1 | The number on the screen is the number in the file — set length, to 0.05 s, with echo, hold, beatmatch, trim and an interstitial card all in play; each join lands where the model says, within half a frame, measured on the rendered file | `T1-7`, `T1-8`, `T1-27`, `T3-11` **built** (`qc.check_set` on the artefact; `test_t3_11_set_duration.py`), `T3-12` **built** (`test_t3_12_transition_lands.py`) |
-| P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b` **built** (`mix_audio` RMS/s slope on a constant sine), `T1-10` **built** (full-lane `fragment` ≤ 8 KB and renders), `T1-12`, `T1-20d` |
+| P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b` **built** (`mix_audio` RMS/s slope on a constant sine), `T1-10` **built** (full-lane `fragment` ≤ 8 KB and renders), `T1-12` **built** (`pan` by L/R energy, `lowpass_hz`/`highpass_hz` by band energy), `T1-20d` |
 | P3 | Every surface is drivable with no browser, and the page and the JSON agree. A re-render, refine, repair or anchor re-roll leaves predecessor and successor both listed and selectable | `T6-A1`…`T6-A5`, `T1-3` **built** (JSON `POST /api/sets/{id}/render` and UI `POST /sets/{id}/render` emit the same `mixer.render_set_argv`; outputs agree on duration, frames, LUFS), `T1-4` **built** (mutate stored `gain_db`; next `mixer.render_set_graph` changes), `T2-41` |
 | P4 | An album's songs are scenes of one story, demonstrably — arc content appears in the storyboard and is absent when the arc is; at xxx no scene prompt carries the mainstream lock and the tier's own wording does; the board's guardrail field is this tier's clause and save refuses another tier's wording | `T2-20`, `T2-21`, `T2-22` |
 | P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every clip, a re-plan leaving approved `(clip_idx, seed)` unchanged, the planner prompt not naming a fixed 4.8125 s quantum, its clip-length text derived from planning, TIMING still stating track length and sum-to-track, and generated scenes tiling `[0, duration]` with no gap or overlap | `T2-8`, `T2-8b`, `T2-12a`, `T2-13a`, `T2-13b`, `T2-13c`, `T2-14a`, `T2-14b`, `T2-14c` |
 | P1 | The number on the screen is the number in the file — set length, to 0.05 s, with echo, hold, beatmatch, trim and an interstitial card all in play | `T1-7`, `T1-8`, `T1-27`, `T3-11` |
-| P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b` **built** (`mix_audio` RMS/s slope on a constant sine), `T1-12`, `T1-20d` |
+| P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b` **built** (`mix_audio` RMS/s slope on a constant sine), `T1-12` **built** (`pan` by L/R energy, filter lanes by band energy), `T1-20d` |
 | P3 | Every surface is drivable with no browser, and the page and the JSON agree | `T6-A1`…`T6-A4`, `T1-3`, `T2-41` |
 | P4 | An album's songs are scenes of one story, demonstrably — arc content appears in the storyboard and is absent when the arc is; the board's guardrail field is this tier's clause and save refuses another tier's wording | `T2-20`, `T2-21`, `T2-22` |
 | P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every clip, a re-plan leaving approved `(clip_idx, seed)` unchanged, a plan that misses the track by more than one clip refused before render, the planner prompt not naming a fixed 4.8125 s quantum, its clip-length text derived from planning, and TIMING still stating track length and sum-to-track | `T2-8`, `T2-12a`, `T2-13a`, `T2-13b`, `T2-13c`, `T2-13e`, `T2-14a`, `T2-14b`, `T2-14c` |
@@ -176,7 +176,8 @@ ramp's RMS/s slope survives `mix_audio` within
 `mixer.GAIN_CURVE_SLOPE_TOLERANCE`; `T1-10` **built** — a `MAX_POINTS`
 lane's `fragment` is ≤ `FILTER_EXPR_MAX_BYTES` (8 KB) and `mix_audio`
 accepts it; `T1-11` **built** — POST of two
-points at the same `t` is 400 and names that `t`), `studio/arc.py` + the arc routes (TRD-2 §3.1's
+points at the same `t` is 400 and names that `t`; `T1-12` **built** — drawn `pan` / `lowpass_hz` /
+`highpass_hz` change the `mix_audio` file), `studio/arc.py` + the arc routes (TRD-2 §3.1's
 JSON-canonical arc), `db.artefacts` (tier 0), `prompts.py` (TRD-2 §3.3's
 versioning, reused by `T3-20`; **`T2-5` built** — edit is a new `arc`
 version and restore puts the previous text back). TRD-3 §2.1 is explicit that §4 and §6 "read as

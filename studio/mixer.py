@@ -1791,6 +1791,16 @@ SET_DURATION_TOLERANCE = 0.05
 # sits ~0.9 dB/s off and misses this bound.
 GAIN_CURVE_SLOPE_TOLERANCE = 0.5
 
+# docs/TRD-1 T1-12: |L/(L+R) curved − flat|. A 0→+1 balance ramp on
+# dual-mono sits ~0.15 off centre; 0.08 is below that and above mp3
+# joint-stereo leak on a centred sine.
+LR_ENERGY_DELTA = 0.08
+
+# flat_band / curved_band on the attenuated side. A 400 Hz lowpass on
+# an 8 kHz tone is tens of dB; 4× (12 dB) still fails if the lane
+# never reached the graph.
+BAND_ENERGY_RATIO = 4.0
+
 
 def rms_per_second(path):
     """Whole-second RMS of a rendered file, in dBFS. docs/TRD-1 T1-9b.
@@ -1845,6 +1855,66 @@ def rms_slope(values):
     if den == 0:
         raise RuntimeError("rms_slope denominator is 0")
     return num / den
+
+
+def _f32le(path, extra_args):
+    """Decode path to interleaved f32le at 48 kHz. extra_args are ffmpeg
+    args before `-f f32le` (channel count, a filter)."""
+    r = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-i", path]
+        + list(extra_args) + ["-ar", "48000", "-f", "f32le", "-"],
+        capture_output=True)
+    if r.returncode != 0:
+        err = (r.stderr or b"").decode("utf-8", "replace")
+        raise RuntimeError("ffmpeg failed decoding %s:\n%s"
+                           % (path, "\n".join(err.splitlines()[-15:])))
+    n = len(r.stdout) // 4
+    if n < 1:
+        raise RuntimeError("no audio samples in %s" % path)
+    return struct.unpack("<%df" % n, r.stdout)
+
+
+def _linear_rms(samples):
+    if not samples:
+        return 0.0
+    ms = sum(x * x for x in samples) / len(samples)
+    return 0.0 if ms <= 1e-20 else math.sqrt(ms)
+
+
+def lr_energy_ratio(path):
+    """L / (L+R) of a rendered file. docs/TRD-1 T1-12.
+
+    Stereo decode at 48 kHz. 1 is all left, 0 is all right, 0.5 is
+    centre. Raises if both channels are silent so a 0/0 cannot pass
+    a pan differential by construction.
+    """
+    samples = _f32le(path, ["-ac", "2"])
+    left = samples[0::2]
+    right = samples[1::2]
+    l = _linear_rms(left)
+    r = _linear_rms(right)
+    s = l + r
+    if s <= 1e-20:
+        raise RuntimeError(
+            "no channel energy in %s — refusing an L/R ratio that "
+            "would make any pan check pass" % path)
+    return l / s
+
+
+def band_energy(path, lo_hz, hi_hz):
+    """Linear RMS in [lo, hi] Hz. docs/TRD-1 T1-12.
+
+    Mono 48 kHz after a 2-pole highpass+lowpass. The same decode
+    both filter-lane checks use, so they cannot disagree about a file.
+    """
+    lo_hz = float(lo_hz)
+    hi_hz = float(hi_hz)
+    if lo_hz <= 0 or hi_hz <= lo_hz:
+        raise ValueError("band_energy needs 0 < lo < hi, got %s–%s"
+                         % (lo_hz, hi_hz))
+    af = "highpass=f=%.1f,lowpass=f=%.1f" % (lo_hz, hi_hz)
+    samples = _f32le(path, ["-af", af, "-ac", "1"])
+    return _linear_rms(samples)
 
 
 # Fallback when sets.out_fps is unset. Same number _set_geometry uses

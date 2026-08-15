@@ -330,12 +330,15 @@ claiming *"exactly ONE loudnorm in the graph"* **was already false when it was
 written**: it counted the master line only, while a plain item still carried its
 own. A true measurement of the wrong thing, sitting in the file the whole time.
 
-### 5.3 Automation — built; what remains is the other lanes
+### 5.3 Automation — built, including the other lanes
 
 `automation.py` owns the model, decimates on write with RDP plus a hard
 `MAX_POINTS = 64`, and emits through `asendcmd`, which is the mechanism
 `effects.filter_sweep` already uses — one emitter, one cap, and `sweep` becomes a
-preset that writes points rather than a second automation system.
+preset that writes points rather than a second automation system. `pan` cannot
+use that emitter: ffmpeg's `pan` filter takes no runtime command, so the lane
+is one `aeval` applying the same balance law as `effects.pan`
+(`L=min(1,1-p)`, `R=min(1,1+p)`), comma-chained, no join-graph split.
 
 **`T1-1` is built (2026-08-14).** `t` is item-relative. Reordering a
 set (`POST /sets/{id}/reorder`) or changing an item's `in_secs` /
@@ -365,11 +368,13 @@ writes one lane through `automation.save`. Two points at the same `t` are
 400 and the body names that `t`. The module demo already refused; the
 route is what the client posts to.
 
-What is left is `T1-12` per remaining lane, as a differential (`pan` by L/R
-energy ratio, the filter lanes by band energy). `gain_db` RMS/s is T1-9b.
-This is the criterion that catches a lane wired into the UI and not into
-the graph, which is how `_apply_beatmatch` was unreachable for a whole
-session.
+**`T1-12` is built (2026-08-14).** Per remaining lane, `mix_audio` of the
+drawn curve vs flat: `pan` 0→+1 moves `lr_energy_ratio` by at least
+`LR_ENERGY_DELTA` (0.08); `lowpass_hz` 400 Hz / `highpass_hz` 4 kHz drop
+the attenuated band by at least `BAND_ENERGY_RATIO` (4). `gain_db` RMS/s
+stays T1-9b. This is the criterion that catches a lane wired into the UI
+and not into the graph, which is how `_apply_beatmatch` was unreachable
+for a whole session.
 
 ### 5.4 Peaks and preview
 

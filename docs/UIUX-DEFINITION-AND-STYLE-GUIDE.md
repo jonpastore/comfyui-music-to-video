@@ -205,7 +205,8 @@ the set's `rounding.abs_delta_sum`, bounded by half a frame per join
 (`T1-6`); the page does not invent a second clock. Easy omits the lane
 strip. Waveform is still a PNG. Forms remain.
 A stored `gain_db` ramp does reach the rendered file (`T1-9b`, RMS/s
-slope on `mix_audio`); a fully-populated lane's filter text stays under
+slope on `mix_audio`); so do `pan` (L/R energy) and the filter lanes
+(band energy) (`T1-12`). A fully-populated lane's filter text stays under
 8 KB and still renders (`T1-10`).
 Dragging the running order or a trim (`in_secs`/`out_secs`/`secs`)
 must leave every stored point's `(lane, t, value)` put (`T1-1`):

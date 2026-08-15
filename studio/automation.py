@@ -37,6 +37,11 @@ stored `gain_db` ramp. T1-9a is the graph half.
 T1-10 (2026-08-14): a MAX_POINTS lane's fragment is under
 `FILTER_EXPR_MAX_BYTES` (8 KB) and mix_audio accepts it.
 
+T1-12 (2026-08-14) is the remaining lanes as a differential: `pan` by
+L/R energy (aeval, same balance law as effects.pan — ffmpeg's pan
+filter takes no runtime command), `lowpass_hz`/`highpass_hz` by band
+energy. `item_audio` emits all four lanes.
+
     python3 automation.py        # self-check
 """
 import os
@@ -283,7 +288,13 @@ def fragment(lane, points, curve="linear"):
     if not pts:
         return ""
     if lane == "pan":
-        return _pan_fragment(pts)
+        out = _pan_fragment(pts, curve)
+        nbytes = len(out.encode("utf-8"))
+        if nbytes > FILTER_EXPR_MAX_BYTES:
+            raise ValueError(
+                f"{lane} filter expression is {nbytes} bytes; "
+                f"cap is {FILTER_EXPR_MAX_BYTES}")
+        return out
 
     # THE STORED POINTS ARE NOT THE EMITTED COMMANDS, and conflating them
     # renders the wrong curve. asendcmd HOLDS a value until the next command,
@@ -320,21 +331,46 @@ def fragment(lane, points, curve="linear"):
     return out
 
 
-def _pan_fragment(pts):
-    """pan takes no runtime command, so a pan curve is emitted as `volume`
-    commands on each channel would be -- which ffmpeg's pan filter cannot do.
+def _pan_position_expr(pts, curve):
+    """ffmpeg expression for balance position at time t.
 
-    Refused rather than approximated. A pan CURVE is not built; a static pan is
-    (effects.pan, an effects_json key). Emitting something that changes level
-    instead of position would be a control that does not do what it is named
-    for, which is the thing this project keeps catching.
+    Linear between points, hold outside them, `hold` steps. Same
+    interpolation as value_at; written as `if(lt(t,...))` so aeval can
+    evaluate it per sample. ffmpeg's pan filter takes no runtime command
+    (asendcmd cannot drive it), so the curve lives here rather than as a
+    second asendcmd staircase.
     """
-    raise NotImplementedError(
-        "a pan CURVE is not built: ffmpeg's pan filter takes no runtime command, "
-        "so it cannot be driven by asendcmd. Static pan works (effects.pan). "
-        "Building this means splitting the item into per-channel volume "
-        "staircases, which is a change to the join graph -- see docs/TRD-1 8, "
-        "the same shape as duck and layer.")
+    if len(pts) == 1:
+        return f"{pts[0][1]:.4f}"
+    expr = f"{pts[-1][1]:.4f}"
+    for (t0, v0), (t1, v1) in reversed(list(zip(pts, pts[1:]))):
+        if curve == "hold" or abs(t1 - t0) < MIN_DT:
+            seg = f"{v0:.4f}"
+        else:
+            seg = (f"({v0:.4f}+({v1:.4f}-{v0:.4f})"
+                   f"*(t-{t0:.3f})/{(t1 - t0):.3f})")
+        expr = f"if(lt(t,{t1:.3f}),{seg},{expr})"
+    t0, v0 = pts[0]
+    return f"if(lt(t,{t0:.3f}),{v0:.4f},{expr})"
+
+
+def _pan_fragment(pts, curve="linear"):
+    """Time-varying stereo BALANCE, same law as effects.pan.
+
+    L = min(1, 1-p), R = min(1, 1+p). ffmpeg's pan filter cannot be
+    driven by asendcmd, so this is one aeval (comma-chainable, no join
+    graph change) rather than per-channel volume labels.
+
+    aformat first: aeval `val(1)` is 0 on a mono lavfi source, and
+    `c=same` would keep the stream mono so mix_audio's later stereo
+    upmix restores centre. Two explicit exprs so each side is a
+    channel, not one gain applied twice.
+    """
+    p = _pan_position_expr(pts, curve)
+    return (
+        "aformat=channel_layouts=stereo,"
+        f"aeval=exprs='val(0)*min(1,1-({p}))|val(1)*min(1,1+({p}))'"
+    )
 
 
 def item_audio(set_item_id):
@@ -350,7 +386,7 @@ def item_audio(set_item_id):
     loudnorm is dynamic and runs last and would otherwise flatten the curve.
     """
     frags = []
-    for lane in ("gain_db", "lowpass_hz", "highpass_hz"):
+    for lane in ("gain_db", "pan", "lowpass_hz", "highpass_hz"):
         pts = read(set_item_id, lane)
         if pts:
             frags.append(fragment(lane, pts))
@@ -501,13 +537,14 @@ def demo():
     clear(1, "gain_db")
     assert wants_master_loudnorm(1) is False
 
-    # ---- a pan CURVE refuses rather than emitting something that is not a pan
-    try:
-        fragment("pan", [(0.0, -1.0), (1.0, 1.0)])
-    except NotImplementedError as e:
-        assert "no runtime command" in str(e), e
-    else:
-        raise AssertionError("a pan curve emitted a fragment ffmpeg cannot honour")
+    # ---- a pan CURVE is the same balance law as effects.pan, via aeval
+    # (ffmpeg's pan filter takes no runtime command, so asendcmd cannot
+    # drive it). The expression stays under T1-10's 8 KB cap.
+    pfrag = fragment("pan", [(0.0, -1.0), (1.0, 1.0)])
+    assert pfrag.startswith("aformat=channel_layouts=stereo,aeval="), pfrag
+    assert len(pfrag) < 8192, f"pan fragment is {len(pfrag)} bytes"
+    dense_pan = [(i * 0.1, -1.0 + 2.0 * i / 63.0) for i in range(64)]
+    assert len(fragment("pan", dense_pan)) < 8192
 
     print("automation.py OK")
 
