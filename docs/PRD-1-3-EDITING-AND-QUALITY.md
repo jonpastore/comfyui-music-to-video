@@ -177,7 +177,7 @@ image `not_uniform` / `measure_pixel_std` REJECTs solid flat colour
 `test_t3_4_1_not_uniform.py`; **`T3-4.2-sat` built** — clip
 `channel_sat` / `measure_channel_sat` FLAGs solid green garbage (NaN
 encode mode) above `CHANNEL_SAT_LIMIT`, PASSes testsrc2/gray/black,
-`test_t3_4_2_sat.py`; **`T3-4.2-black_frames` built** — partial black while mean PASSes FLAGs `black_frames`, `test_t3_4_2_black_frames.py`; **`T3-4.2-resolution` built** — clip `resolution`
+`test_t3_4_2_sat.py`; **`T3-4.2-black_frames` built** — partial black while mean PASSes FLAGs `black_frames`, `test_t3_4_2_black_frames.py`; **`T3-4.2-size_floor` built** — clip under `MIN_VIDEO_BYTES` REJECTs, `test_t3_4_2_size_floor.py`; **`T3-4.2-resolution` built** — clip `resolution`
 vs workflow width/height via `mixer.probe`: matching WxH PASSes,
 downscaled REJECTs with unit `px`, no expect emits nothing,
 `test_t3_4_2_resolution.py`; **`T3-4.3-sr` built** — `check_audio` sample
