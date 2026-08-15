@@ -589,7 +589,9 @@ workflow asked for 320×240 and the box quietly wrote 160×120.
 `T3-4.3-sr`: a take at the wrong
 sample rate REJECTs `sample_rate` with measured/expected Hz and a
 re-render remedy — not a silent pass when the request was 48000 and
-the file is 44100. `T3-4.3-ch`: a take whose channel
+the file is 44100. `T3-4.3-true-peak`: a take whose true peak sits above
+`LOUDNORM_TP` (+ tolerance) FLAGs `true_peak` with measured dBFS and a
+loudnorm remedy — not a silent pass on a hot export. `T3-4.3-ch`: a take whose channel
 count misses the request REJECTs `channels` with measured/expected in
 `ch` and a re-render remedy — not a silent pass on mono-when-stereo-was-
 asked. `T3-4.3-clip`: a hard-clipped take

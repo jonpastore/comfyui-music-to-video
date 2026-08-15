@@ -1389,8 +1389,15 @@ def check_audio(path, expect):
                            PASS if off <= tol else FLAG,
                            f"{loud['lufs']:.1f} LUFS against a {target:.1f} target",
                            loud["lufs"], target, "LUFS", remedy="re-run loudnorm"))
-        if loud["true_peak_db"] is not None:
-            over = loud["true_peak_db"] > effects.LOUDNORM_TP + 0.5
+        # T3-4.3-true-peak: FLAG/PASS vs LOUDNORM_TP + TRUE_PEAK_TOLERANCE_DB.
+        if loud["true_peak_db"] is None:
+            out.append(finding(path, "audio", "true_peak", FLAG,
+                               "ebur128 printed no true peak",
+                               None, effects.LOUDNORM_TP, "dBFS",
+                               remedy="re-run loudnorm"))
+        else:
+            over = (loud["true_peak_db"]
+                    > effects.LOUDNORM_TP + effects.TRUE_PEAK_TOLERANCE_DB)
             out.append(finding(path, "audio", "true_peak",
                                FLAG if over else PASS,
                                f"{loud['true_peak_db']:.1f} dBFS against "

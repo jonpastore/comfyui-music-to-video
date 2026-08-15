@@ -172,7 +172,7 @@ vs workflow width/height via `mixer.probe`: matching WxH PASSes,
 downscaled REJECTs with unit `px`, no expect emits nothing,
 `test_t3_4_2_resolution.py`; **`T3-4.3-sr` built** — `check_audio` sample
 rate as requested via `mixer.probe`: matching Hz PASSes, mismatch
-REJECTs, no expect emits nothing, `test_t3_4_3_sr.py`; **`T3-4.3-ch` built** — `mixer.probe` exposes
+REJECTs, no expect emits nothing, `test_t3_4_3_sr.py`; **`T3-4.3-true-peak` built** — `check_audio` true peak vs `effects.LOUDNORM_TP` (+`TRUE_PEAK_TOLERANCE_DB`) via `effects.measure_loudness`: under PASSes, over FLAGs, missing Peak FLAGs, `test_t3_4_3_true_peak.py`; **`T3-4.3-ch` built** — `mixer.probe` exposes
 `channels`; `check_audio` `channels` when `expect.channels` is set
 (stereo vs 2 PASS, mono vs 2 REJECT, unit `ch`), `test_t3_4_3_ch.py`;
 **`T3-4.3-clip` built** — audio
