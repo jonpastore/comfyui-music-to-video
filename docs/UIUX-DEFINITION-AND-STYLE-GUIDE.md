@@ -194,7 +194,8 @@ REJECTs when it does not. Measurement, not a new widget — the finding is
 the existing QC row (`measured` / `expected` / `s`).
 Still open: draggable joins, automation lanes and a playhead.
 A stored `gain_db` ramp does reach the rendered file (`T1-9b`, RMS/s
-slope on `mix_audio`); the lanes to *draw* it are not in the UI yet.
+slope on `mix_audio`); a fully-populated lane's filter text stays under
+8 KB and still renders (`T1-10`); the lanes to *draw* it are not in the UI yet.
 Dragging the running order or a trim (`in_secs`/`out_secs`/`secs`)
 must leave every stored point's `(lane, t, value)` put (`T1-1`):
 `t` is from the start of the item, not the set, so the curve does

@@ -20,7 +20,7 @@ is named.
 | `studio/app.py` | 7589 | 138 routes, 25 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}/arc`, `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`; `sets_service.py` / `storyboard_service.py` are still T6-A3 |
 | `studio/mixer.py` | 2116 | set duration, `transition_times` (`T3-12` model), both filter graphs, overlap arithmetic, beatmatch, ramps, splice, song-assembly geometry (`T5-7`) and fps (`T2-13d`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox. Mixed clip fps honours the highest and is asserted on the assembled file |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `export_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` and the loudness half of §4.3. `T3-9` silence is **not** here |
-| `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `fragment`, `item_audio`, `wants_master_loudnorm` | built |
+| `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `FILTER_EXPR_MAX_BYTES = 8192` (`T1-10`), `fragment`, `item_audio`, `wants_master_loudnorm` | built |
 | `studio/qc.py` | 642 | TRD-3 tier 1 in full; T3-9 `measure_band_energy` (low/mid/high mean, not peak); **T3-11** `check_set` / `run(kind="set")` duration vs `mixer.set_duration()` within `mixer.SET_DURATION_TOLERANCE` on the artefact (`test_t3_11_set_duration.py`); T3-12 `transition_lands` (pixels vs `mixer.transition_times`, half-frame, no remedy); T3-13 `score_zimage_sweep`; T3-15 histogram `identity_embed`; T3-16 `identity_verdict`; T3-17 `score_identity_artefact` (per artefact vs chosen anchor); T3-26 `measure_refiner_help` (fail-closed labelled set, not opportunistic); T3-28 `check_identity_wrong` / `identity_wrong_remedy`; T3-27 `CHECK_REMEDY_CLASS` / `actuator_for` | built |
 | `studio/qc_service.py` | 308 | findings, queue, `by_host` (`T3-1`), remedy edit, dismiss, reopen; `artefact_hash` keeps a dismissal on the same bytes and reopens the same check when the file changes (`T3-22`); `approve()` enqueues dest ≠ source; `pair()` lists original and repair, both scored (`T3-21`); approve uses `remedy_class` (`T3-27`); the version that RUNS is `findings.remedy_prompt_id` looked up at execute (`T3-20`); `dispatch_repair` asks `where()`/`fits()`/`resolve()` then submits `fix_ref` / `gen_postproc`; real `fits()` routes the refiner by resident cost (`T3-24`); `can_move_output` gates remote repair (`T3-25`); `run_zimage_calibration` writes the T3-13 row; `set_threshold` writes a value only on a stored separated row (`T3-14`/`T3-16`); `build_identity_gate` never builds; T3-17 `score_identity_artefact` / `run_artefact` records the per-artefact score as a tier-2 measurement, no gate; T3-28 refuses a swap-the-reference identity-wrong remedy; `record_refiner_help` persists the T3-26 finding; `run_song` is tier 1 over a song's artefacts with no GPU and no backend (`T3-32`); `persist_still_qc` writes advisory `qc_json` on an `h_repair` dest still and a standalone refine dest (`T3-31`) | built |
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2: JSON-canonical arc, `to_md`, `validate`, `for_song`, screened both directions | built |
@@ -307,6 +307,14 @@ has measured slope within `GAIN_CURVE_SLOPE_TOLERANCE` (0.5 dB/s) of drawn
 2.0. The same fragment with `suppress_loudnorm` forced off misses that
 bound — that is the 5.0(c) mutation. The fixture is a constant sine
 because RMS slope on program material is not a proxy for gain.
+
+**`T1-10` is built (2026-08-14).** A fully-populated lane (`MAX_POINTS`
+zigzag over 1800 s so linear sampling hits `SWEEP_MAX_STEPS`) emits an
+`asendcmd` string ≤ `FILTER_EXPR_MAX_BYTES` (8 KB) and `mix_audio`
+writes a file from it. `fragment` refuses a longer string in Python
+rather than handing ffmpeg a graph it will reject. Measured on
+`gain_db` / `lowpass_hz` / `highpass_hz` in
+`studio/test_t1_10_filter_expr.py`.
 
 What is left is `T1-12` per remaining lane, as a differential (`pan` by L/R
 energy ratio, the filter lanes by band energy). `gain_db` RMS/s is T1-9b.

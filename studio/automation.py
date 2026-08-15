@@ -34,6 +34,9 @@ T1-9b (2026-08-14) measures that reach on the file, not the graph:
 `mixer.rms_per_second` / `mixer.rms_slope` of a `mix_audio` render of a
 stored `gain_db` ramp. T1-9a is the graph half.
 
+T1-10 (2026-08-14): a MAX_POINTS lane's fragment is under
+`FILTER_EXPR_MAX_BYTES` (8 KB) and mix_audio accepts it.
+
     python3 automation.py        # self-check
 """
 import os
@@ -72,6 +75,11 @@ LANES = {
 # sweep caps at 200 for exactly this reason. 64 is well inside what ffmpeg will
 # take and well past what a hand can draw meaningfully.
 MAX_POINTS = 64
+
+# T1-10: the emitted asendcmd string for one fully-populated lane. MAX_POINTS
+# bounds the MODEL; this bounds the STRING. A cap that produces a graph
+# ffmpeg refuses is not a cap.
+FILTER_EXPR_MAX_BYTES = 8 * 1024
 
 # Points closer together than this are the same instant as far as any renderer
 # is concerned, and two values at one instant have no defined render.
@@ -262,7 +270,13 @@ def fragment(lane, points, curve="linear"):
         f"{t:.3f} {spec['filter']} {spec['param']} {spec['fmt'].format(v)}"
         for t, v in samples)
     first = spec["fmt"].format(samples[0][1])
-    return f"asendcmd=commands='{cmds}',{spec['filter']}={spec['param']}={first}"
+    out = f"asendcmd=commands='{cmds}',{spec['filter']}={spec['param']}={first}"
+    nbytes = len(out.encode("utf-8"))
+    if nbytes > FILTER_EXPR_MAX_BYTES:
+        raise ValueError(
+            f"{lane} filter expression is {nbytes} bytes; "
+            f"cap is {FILTER_EXPR_MAX_BYTES}")
+    return out
 
 
 def _pan_fragment(pts):
