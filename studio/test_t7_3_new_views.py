@@ -9,6 +9,7 @@ Mutation: drop a required key from VIEWS, or hand-keep ANCHOR_VIEWS as a
 second map that omits a VIEWS label → red. Adding a probe row only to VIEWS
 and re-deriving labels is enough for UI + compose (one table entry).
 """
+import hashlib
 import os
 import re
 import sys
@@ -32,6 +33,15 @@ REQUIRED_NEW_VIEWS = (
     "portrait", "portrait_nude",
     "on_all_fours", "on_all_fours_nude",
 )
+
+# §9.1: structural split + new views must not drift the four shipped composes.
+# Frozen sha256 of prompt_for at HEAD 9470045 (n_refs=1, empty profile).
+SHIPPED_FROZEN = {
+    "front": "8b0305d6c56c43eca93722c1abe42f43ad1529bd84fc6db703e2c37047777fff",
+    "back": "32bd0dee9f560e77613f0836a7912e6a7c98e3991fd1ecedc1d01eedfbfcd40d",
+    "front_nude": "a9a659c0ec60fe4e47170237ebf481a1da9deb60d880d422faf12b9bd51c0261",
+    "back_nude": "4f2f556622038721a2d0fa68884e26e8b69f4b22d71c539bf5bfb6c47827b269",
+}
 
 # Camera-relationship tokens the framing must name (case-insensitive).
 FRAMING_MARKERS = {
@@ -168,3 +178,11 @@ def test_t7_3_one_table_entry_reaches_ui_and_compose(patch_stub):
             appmod.ANCHOR_VIEWS.pop(key, None)
         else:
             appmod.ANCHOR_VIEWS[key] = prev_label
+
+
+def test_t7_3_four_shipped_views_remain_byte_identical():
+    """§9.1 sequencing: new views do not change front/back compose digests."""
+    a = make_anchor.anchor_from({})
+    for view, digest in SHIPPED_FROZEN.items():
+        got = hashlib.sha256(make_anchor.prompt_for(view, a).encode()).hexdigest()
+        assert got == digest, f"{view} compose drifted after T7-3 views landed"

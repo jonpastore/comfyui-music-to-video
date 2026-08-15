@@ -275,7 +275,7 @@ been seen red is a claim about a check, not about the code. Commits are on
 |---|---|---|---|
 | `T7-1` one view table | **built** | `make_anchor.VIEWS` | One table. `DEFAULT_VIEWS` is `{k: v["framing"] for k, v in VIEWS.items()}`; `app.ANCHOR_VIEWS` is `{k: v["label"] for k, v in VIEWS.items()}`. Adding a view is one `VIEWS` entry. `test_app.py` / `test_t7_3_new_views.py` assert the two projections stay derived. Mutation: hand-keep a second label map → red |
 | `T7-2` nudity gating derived | **built** | `is_nude_view` | `prompt_for` uses `is_nude_view(view)` (`endswith("_nude")`), not `view in NUDE_VIEWS`. `test_a_profile_supplied_nude_view_still_swaps_wardrobe`: a `kneeling_nude` key absent from `VIEWS` still takes `nude_wardrobe`. `check_integration` / `is_nude_view("three_quarter_nude")`. Mutation: restore `view in NUDE_VIEWS` → profile-supplied nude stays clothed |
-| `T7-3` new views | **built** (compose + UI; GPU sheets NOT MEASURED) | this change | Required cameras `three_quarter` / `profile` / `seated` / `portrait` / `on_all_fours` and each `_nude` parallel are `VIEWS` rows with a single positive framing sentence. Each composes via `prompt_for` with framing exactly once, appears in `/anchors/form` via the `ANCHOR_VIEWS` projection, and a probe row added only to `VIEWS` + re-derived labels reaches form + compose (`test_t7_3_new_views.py`). No GPU new-view sheet pinned. |
+| `T7-3` new views | **built** (compose + UI; GPU sheets NOT MEASURED) | `6c45658` + `test_t7_3_new_views.py` | Required cameras `three_quarter` / `profile` / `seated` / `portrait` / `on_all_fours` and each `_nude` parallel are `VIEWS` rows with camera/pose/framing split and a single positive framing sentence. Each composes via `prompt_for` with framing exactly once, appears in `/anchors/form` via the `ANCHOR_VIEWS` projection, and a probe row added only to `VIEWS` + re-derived labels reaches form + compose. Four shipped views stay byte-identical to frozen sha256 (`test_t7_3_four_shipped_views_remain_byte_identical`). Mutation: drop a required view or double the framing clause → red. No GPU new-view sheet pinned. |
 | `T7-4` framing is the only difference | **built** | `94618db` | compose two views of one tier via `prompt_for` / `default_anchor_prompt`; remainders match after stripping the framing clause. Nude pair uses the wardrobe swap. Mutation: extra clause on `back` only → `test_t7_4_framing.py` red |
 | `T7-5` `portrait` overrides head-to-toe | **built** (harness + string; GPU portrait sheet NOT MEASURED) | this change | String omit: `test_t7_5_portrait.py` + `test_portrait_and_seated_drop_the_standing_fullbody_backdrop`. Size: `size_for_view` / `apply_view_default_size` → portrait latent 1024×1024 (standing 896×1216 upgraded; operator non-default wins). Image half: `qc.measure_subject_bottom` / `portrait_crop_score` / `t7_5_portrait_crop_differential` / `check_portrait_crop` — head-and-shoulders synthetic PASSes, full-body FLAGs, differential holds portrait > fullbody (`test_t7_5_portrait_crop.py`). No GPU portrait sheet pinned. |
 | `T7-6` anchor usable as reference | **built** | `d315c6f` | with the reference ticked, `gen_anchor`'s images list is exactly `[the anchor's path]`. Mutations: borrowed-row guard dropped → the anchor's image deleted; cascade skipped → reference left pointing at a deleted file |
@@ -300,29 +300,24 @@ before this work was 233 / 186.
 
 ### 9.1 What is left, and why it is one unit
 
-`T7-3` (compose + UI half), `T7-5` (portrait crop + size), and `T7-13`
-(`view:<key>` types) are built. GPU new-view / portrait sheets remain NOT
-MEASURED. The album-versioned `pose` row in `T7-16` remains the leftover of
-that unit.
+`T7-3` (new views + structural camera/pose/crop split + four-shipped frozen
+compose), `T7-5` (portrait crop + size), and `T7-13` (`view:<key>` types) are
+built. GPU new-view / portrait sheets remain NOT MEASURED. The leftover is the
+album-versioned `pose` row in `T7-16` (named uploaded poses via `T7-20` are
+the operator path; the `prompts` type is still partial).
 
 Every framing string in `DEFAULT_VIEWS` already contains a POSE — *"standing
 upright, arms relaxed at their sides, feet apart"*. A `pose` field (`T7-16`)
 appended beside it is a contradiction in the positive prompt, which is the
 bare-skin-versus-fur failure in a new place and Day 4 measured what that costs.
-`pose` has to REPLACE that clause, so the view table has to separate camera from
-pose from crop first — and `BACKDROP` needs the same surgery, since it ends
-*"She stands upright and unsupported in an empty studio ... full body head to toe
-inside the frame"*, which contradicts `seated` and contradicts `portrait`.
+`pose` has to REPLACE that clause — and does, via `apply_pose` on the
+camera/pose/crop split. **the VIEW owns camera + pose + crop, the BACKDROP
+owns studio + lighting + focus.**
 
-The decomposition that falls out: **the VIEW owns camera + pose + crop, the
-BACKDROP owns studio + lighting + focus.**
-
-**Sequencing constraint, and it is not optional:** that refactor changes what
-every existing sheet renders. It must land STRUCTURALLY FIRST — the composed
-prompt for `front`, `back`, `front_nude` and `back_nude` asserted byte-identical
-before and after — and only then may views whose framing differs be added, in a
-separate commit. Doing both at once means a sheet that comes back wrong cannot
-be attributed to either half.
+**Sequencing constraint (landed):** the structural split kept
+`front` / `back` / `front_nude` / `back_nude` byte-identical to frozen sha256
+from HEAD 9470045; new views compose without drifting those four
+(`test_t7_3_four_shipped_views_remain_byte_identical`).
 
 ### 9.2 The finding this document did not anticipate
 
