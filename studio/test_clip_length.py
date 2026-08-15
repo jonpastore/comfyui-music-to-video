@@ -271,6 +271,62 @@ def test_generate_storyboard_asks_for_n_clips_for_not_raw_seconds():
     assert len(sb["scenes"]) == want
 
 
+# ------------------------------------------------------------------ T2-13a --
+
+def _audio_trim(wf):
+    for n in wf.values():
+        if n.get("class_type") == "TrimAudioDuration":
+            return n["inputs"]
+    raise AssertionError("no TrimAudioDuration on the graph")
+
+
+def test_t2_13a_latent_and_trim_follow_legal_frames_not_constants():
+    """T2-13a: renderer honours clip_seconds.
+
+    Latent length and audio trim follow the legal 8n+1 frame count, not
+    LTX25_LEN / CHUNK. 8.0s is under the T5-9 15s ceiling so this is not
+    the refuse-or-split gate.
+
+    Mutation: `"length": LTX25_LEN` → red.
+    Mutation: TrimAudioDuration duration stays CHUNK → red.
+    Mutation: start_index stays i * CHUNK → red.
+    Mutation: int(scene_seconds * LTX_FPS) without 8n+1 rounding → red.
+    """
+    scene_seconds = 8.0
+    want_frames = build_song.legal_frames(
+        build_song.clip_seconds(scene_seconds), build_song.LTX_FPS)
+    want_dur = want_frames / build_song.LTX_FPS
+    assert want_frames != build_song.LTX25_LEN
+    assert want_dur != build_song.CHUNK
+    assert (want_frames - 1) % 8 == 0
+
+    i = 2
+    scene = dict(SCENE, length_seconds=scene_seconds)
+    wf = build_song.workflow(
+        i, scene, "c.png", "song.mp3", "c", "w", "", video_model="ltx25")
+
+    assert _latent_length(wf) == want_frames
+    expect = build_song.expect_from_workflow(wf)
+    assert expect["frames"] == want_frames
+
+    trim = _audio_trim(wf)
+    assert trim["duration"] == round(want_dur, 4)
+    assert trim["duration"] != round(build_song.CHUNK, 4)
+    assert trim["start_index"] == round(i * want_dur, 4)
+    assert trim["start_index"] != round(i * build_song.CHUNK, 4)
+
+
+def test_t2_13a_missing_length_stays_chunk():
+    """NULL length_seconds is a pre-T2-12a scene. Do not re-time it."""
+    i = 2
+    wf = build_song.workflow(
+        i, SCENE, "c.png", "song.mp3", "c", "w", "", video_model="ltx25")
+    assert _latent_length(wf) == build_song.LTX25_LEN
+    trim = _audio_trim(wf)
+    assert trim["duration"] == round(build_song.CHUNK, 4)
+    assert trim["start_index"] == round(i * build_song.CHUNK, 4)
+
+
 # ------------------------------------------------------------------ T5-1 --
 
 def _wan_unets(wf):

@@ -147,8 +147,9 @@ unbuilt work and are not" — the ledger with line counts is DDD §1.
    divisor: `clip_seconds(scene_seconds)` is `legal_frames / LTX_FPS`, and
    `n_clips_for` is `ceil(duration / that)`, so song length owns clip count.
    `None` stays `CHUNK` — a storyboard written before the column does not
-   re-time. The renderer still builds every clip at `LTX25_LEN`; `T2-13a` is
-   the remaining unblock for P5.
+   re-time. The renderer honours that length (`T2-13a`): latent frames and
+   audio trim follow the legal count, not `LTX25_LEN`/`CHUNK`. `T2-13c`
+   (approve grid still shows every clip) remains of P5.
 2. **The service split**, TRD-1 and TRD-2 (`T6-A3`). `qc_service.py` already
    demonstrates it and is the pattern to copy. Doing this after the features
    means writing them twice.

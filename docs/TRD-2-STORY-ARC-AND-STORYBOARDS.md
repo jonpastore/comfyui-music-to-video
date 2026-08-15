@@ -707,10 +707,11 @@ current.
 | `T2-8a` the section floor is gone | **built** | `881d7cf` | both live sites moved together; the `validate()` site was the one that would have regenerated 25 scenes and made the formula fix look inert |
 | `T2-35` every enumerated file catalogued | **built** | earlier | measured live: cerberus enumerates 36 files across seven loaders, 14 were unaccounted, now zero |
 | `T2-41` scene timing has one implementation | **built** | earlier | `app.storyboard_scenes` no longer computes `idx * CHUNK` inline |
-| **`T2-12a` legal frame count** | **built (divisor)** | `clip_seconds` | `legal_frames` rounds to 8n+1; `clip_seconds(scene_seconds)` returns that length so `n_clips_for` is `ceil(duration / legal)`. `None` stays `CHUNK` — old storyboards do not re-time. Renderer still emits `LTX25_LEN` until `T2-13a` |
+| **`T2-12a` legal frame count** | **built (divisor)** | `clip_seconds` | `legal_frames` rounds to 8n+1; `clip_seconds(scene_seconds)` returns that length so `n_clips_for` is `ceil(duration / legal)`. `None` stays `CHUNK` — old storyboards do not re-time |
 | **`T2-13` `CHUNK` has one clip-count reader** | **built** | `n_clips_for` | `grok._user_prompt` and `build_storyboard` no longer compute `ceil(dur / CHUNK)`. A test asserts no module outside `build_song` does |
 | **`T2-13b` approved refs survive re-plan** | **built** | `h_storyboard` | re-planning the same storyboard leaves the approved `(clip_idx, seed)` set identical. Mutation: wipe or remap refs in `h_storyboard` → red |
-| `T2-13a`/`T2-13c` approve grid | **blocked** | — | on `T2-12a` |
+| **`T2-13a` renderer honours `clip_seconds`** | **built** | `test_clip_length.py` | `EmptyLTXVLatentVideo.length` and `TrimAudioDuration` follow the legal 8n+1 count, not `LTX25_LEN`/`CHUNK`. 8.0 s (under the T5-9 15 s ceiling) is 137 frames; `start_index` is `i * legal`. Missing `length_seconds` stays 81 / `CHUNK`. Mutation: restore the constants → red |
+| `T2-13c` approve grid | **not built** | — | a song whose storyboard has fewer scenes than clips must still show every clip |
 | **`T2-14a` no fixed clip quantum in the planner prompt** | **built** | `_user_prompt` | return value has no `CHUNK` formatting, no "Nothing shorter or longer can be produced", no `duration_guidance`-to-multiples instruction. Mutation: restore any one → red. `_system_prompt` no longer names 4.8125 s either |
 | `T2-14b`…`T2-14c` derived clip-length + TIMING purpose | **not built** | — | clip-length text is not yet derived from planning (`T2-14b`); TIMING still states track length and sum-to-track but is not asserted (`T2-14c`) |
 | §4 wands, §5 meter, §5.3 casting | **not built** | — | |

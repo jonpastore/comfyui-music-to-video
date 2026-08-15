@@ -289,11 +289,13 @@ length is the divisor, the count is ours.
    rule is that `frames ≡ 1 (mod 8)` serves both models, since every `8n+1` is
    also `4(2n)+1`; the tie-break is half-to-even (77 is equidistant from 73 and
    81, and the code lands on 81). **Built.** `clip_seconds` honours it.
-2. The renderer takes a length. Graphs still emit `LTX25_LEN`. `T5-9` is the
-   ceiling **gate** on that request: over the labeled measured/chosen ceiling
-   is refused or split, not annotated. It does not change the planner
+2. The renderer takes a length. **Built (`T2-13a`).** `EmptyLTXVLatentVideo.length`
+   and `TrimAudioDuration` follow `legal_frames(clip_seconds)`, not
+   `LTX25_LEN`/`CHUNK`. Missing `length_seconds` stays 81 / `CHUNK`. `T5-9` is
+   the ceiling **gate** on that request: over the labeled measured/chosen
+   ceiling is refused or split, not annotated. It does not change the planner
    divisor — `clip_seconds(30)` and `n_clips_for(…, 30)` stay.
-3. Only then `T2-13a`, `T2-13c` (the approve grid must still show every clip),
+3. Then `T2-13c` (the approve grid must still show every clip),
    `T2-8`/`T2-9`. `T2-13b` is not blocked on the renderer: `h_storyboard`
    upserts the storyboard row and does not touch `refs`, so re-planning the
    same storyboard leaves the approved `(clip_idx, seed)` set identical.
@@ -374,8 +376,8 @@ The PRD's §6 in dependency form. An arrow is a hard edge taken from the
 documents, not a preference.
 
     T6-13a (songs.duration)  ->  T2-12a (legal frame count + clip_seconds honours it)
-                                 ->  renderer takes a length
-                                 ->  T2-13a, T2-13c, T2-8, T2-9
+                                 ->  T2-13a (renderer honours that length)
+                                 ->  T2-13c, T2-8, T2-9
                                  ->  W2 per-scene models (T2-48)
 
     qc_service pattern  ->  sets_service     ->  clock/rounding, peaks, preview

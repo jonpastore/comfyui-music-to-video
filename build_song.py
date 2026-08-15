@@ -482,7 +482,11 @@ def ltx25_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard
     pos = (f"{shot_directive(scene, i)} {char_lock} {world_lock} Motion: {motion} "
            f"Camera: {scene.get('camera','')} Lighting: {scene.get('lighting','')}")
     pos = guardrail.build_prompt(pos, guard, f"scene {i}")
-    start = round(i * CHUNK, 4)
+    # T2-13a: honour clip_seconds / legal_frames, not LTX25_LEN / CHUNK.
+    # Missing length_seconds is a pre-T2-12a scene and stays CHUNK (81).
+    seconds = clip_seconds(scene.get("length_seconds"))
+    length = legal_frames(seconds, LTX_FPS)
+    start = round(i * seconds, 4)
 
     wf = {
         "1": {"class_type": "UNETLoader", "inputs": {"unet_name": LTX25_MODEL,
@@ -503,7 +507,7 @@ def ltx25_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard
         "9": {"class_type": "LTXVPreprocess", "inputs": {
             "image": ["8", 0], "img_compression": LTX25_IMG_COMPRESSION}},
         "10": {"class_type": "EmptyLTXVLatentVideo", "inputs": {
-            "width": W, "height": H, "length": LTX25_LEN, "batch_size": 1}},
+            "width": W, "height": H, "length": length, "batch_size": 1}},
         # strength 1.0, not the template's 0.7: that 0.7 belongs to its half-res
         # base pass. Here the approved reference frame IS the first frame, which
         # is the whole mechanism carrying the character into the clip.
@@ -518,7 +522,7 @@ def ltx25_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard
     if with_audio:
         wf["13"] = {"class_type": "LoadAudio", "inputs": {"audio": audio_file}}
         wf["14"] = {"class_type": "TrimAudioDuration", "inputs": {
-            "audio": ["13", 0], "start_index": start, "duration": round(CHUNK, 4)}}
+            "audio": ["13", 0], "start_index": start, "duration": round(seconds, 4)}}
         wf["15"] = {"class_type": "LTXVAudioVAEEncode", "inputs": {
             "audio": ["14", 0], "audio_vae": ["6", 0]}}
         wf["16"] = {"class_type": "LTXVConcatAVLatent", "inputs": {

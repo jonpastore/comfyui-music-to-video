@@ -79,9 +79,9 @@ and it is what the review found missing.
        v
     T2-12a  (one rule: round seconds to a legal 8n+1 frame count)
        |
-       +--> the renderer takes a length --> clip_seconds honours it
+       +--> the renderer takes a length --> clip_seconds honours it (T2-13a)
        |         |
-       |         +--> T2-13a approve grid, T2-8/T2-9 scene counts
+       |         +--> T2-13c approve grid, T2-8/T2-9 scene counts
        |         +--> T2-48 per-scene models, T5-* refine at real lengths
        |
        v
