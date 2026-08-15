@@ -114,6 +114,9 @@ IDENTITY_METRIC = "identity_cosine_v1"
 # docs/TRD-3 T3-17: per-artefact drift against the chosen anchor.
 # N sampled frames; a still is n=1. Not a gate.
 IDENTITY_DRIFT = "identity_drift"
+
+# docs/TRD-10 T10-13: classify_sheet text on a finding. Never a verdict.
+SHEET_REVIEW = "sheet_review"
 IDENTITY_SAMPLE_N = 8
 _IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
@@ -204,6 +207,7 @@ CHECK_REMEDY_CLASS = {
     LIGHTING_LOCK: REMEDY_RERENDER,
     IDENTITY_WRONG: REMEDY_EDIT_TEXT,
     IDENTITY_DRIFT: REMEDY_NONE,
+    SHEET_REVIEW: REMEDY_NONE,
     "duration_matches_prediction": REMEDY_NONE,
     "transition_lands": REMEDY_NONE,
     "splice_duration": REMEDY_RERENDER,
@@ -266,6 +270,23 @@ def finding(path, kind, check, verdict, detail, measured=None, expected=None,
             "verdict": verdict, "measured": measured, "expected": expected,
             "unit": unit, "detail": detail, "remedy": remedy,
             "remedy_class": cls}
+
+
+def sheet_review_detail(verdict):
+    """classify_sheet reasons as one sentence. Not a verdict (T10-13)."""
+    parts = []
+    for f in (verdict or {}).get("flagged") or []:
+        if not isinstance(f, dict):
+            continue
+        bit = f"clip {f.get('clip')}"
+        issue = str(f.get("issue") or "").strip()
+        reason = str(f.get("reason") or "").strip()
+        if issue:
+            bit += f" {issue}"
+        if reason:
+            bit += f": {reason}"
+        parts.append(bit)
+    return "; ".join(parts) if parts else "nothing flagged"
 
 
 # ------------------------------------------------------------ measurement --

@@ -1482,6 +1482,7 @@ def h_classify(args, progress):
     verdict["sheet"] = sheet
     db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
            sid, "review", sheet, json.dumps({"tier": tier, **verdict}), time.time())
+    qc_service.attach_sheet_review(sheet, verdict, kind="image")
     flagged = verdict["flagged"]
     progress(f"reviewed {len(rows)} frames: "
              + (", ".join(f"clip {f['clip']} {f['issue']}" for f in flagged) if flagged

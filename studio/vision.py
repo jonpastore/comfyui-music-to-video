@@ -340,6 +340,8 @@ def classify_sheet(sheet_path, note="", model=None, progress=None):
 
     Advisory. It names clips to look at; it never unapproves or deletes
     anything, because a false positive must not silently drop a third of a song.
+    The return is not a pass/fail: attach it with qc_service.attach_sheet_review
+    (T10-13 / TRD-3 §10).
     """
     where, detail = available()
     if progress:
@@ -361,6 +363,21 @@ def classify_sheet(sheet_path, note="", model=None, progress=None):
     flagged.sort(key=lambda f: f["clip"])
     return {"flagged": flagged, "cells_seen": int(obj.get("cells_seen") or 0),
             "backend": where}
+
+
+def review_text(verdict):
+    """classify_sheet reasons as one sentence. Never a pass/fail (T10-13)."""
+    import qc
+    return qc.sheet_review_detail(verdict)
+
+
+def as_finding(path, verdict, *, kind="image"):
+    """Finding that carries classify_sheet text. Verdict is always PASS."""
+    import qc
+    cells = int((verdict or {}).get("cells_seen") or 0)
+    return qc.finding(
+        path, kind, qc.SHEET_REVIEW, qc.PASS,
+        review_text(verdict), cells, None, "cells")
 
 
 def interface_payload(verdict, *, cells=None):

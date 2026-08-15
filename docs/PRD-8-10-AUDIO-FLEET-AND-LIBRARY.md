@@ -64,7 +64,8 @@ specific and already recorded: a plausible metric ranked the wrong image first,
 it*. `T10-11` now marks those words in the payload (`authored=model`,
 measurements `authored=measurement` plus a unit) so a client can separate them;
 `T10-12` retains a proposal and writes the stored mix only on accept, recording
-the model; `T10-13`…`T10-15` are still the rest of the rule.
+the model; `T10-13` attaches `classify_sheet` text to a finding and never
+uses it as a pass/fail; `T10-14`…`T10-15` are still the rest of the rule.
 
 **P4 is a requirement, not a feature.** `insert_voice` is the store gate:
 a voice cannot be written without a recorded source and a recorded consent
@@ -87,14 +88,17 @@ still not shipped (`T8-12`, provisional by absence).
    or that none did.
 3. **TRD-10's bulk edit.** `T10-6` (one transaction) is built. `T10-3`/`T10-4`/`T10-5`/`T10-7` remain.
 4. **TRD-10's advice rules.** `T10-11` (payload mark) and `T10-12` (accept writes,
-   records the model) are built. `T10-13`…`T10-15` remain.
+   records the model) and `T10-13` (`classify_sheet` text on a finding, never a
+   pass/fail) are built. `T10-14`…`T10-15` remain.
    (`T8-2`) and the three-path origin on every route (`T8-3`) are the remaining
    half. Takes generated before `T8-1` still cannot say what they were asked for.
    `T8-10` is the voice-store gate (built); `T8-11` is built — `h_audio` writes
    which voice produced the take, or that none did.
 3. **TRD-10's bulk edit.** `T10-3`…`T10-7` are built: blank leaves alone, toggle-all is the shown set, invalid refuses the batch, one transaction, pre-write count equals rows changed.
-4. **TRD-10's advice rules.** `T10-11` (payload mark) is built. `T10-12`…`T10-15`
-   are still labelling and refusals over surfaces that already exist.
+4. **TRD-10's advice rules.** `T10-11` (payload mark), `T10-12` (accept writes),
+   and `T10-13` (vision output on a finding, never a verdict) are built.
+   `T10-14`…`T10-15` are still labelling and refusals over surfaces that
+   already exist.
 
 ## 5. Scope
 

@@ -875,6 +875,11 @@ must carry `unit`; `operator` is typed text. The set editor's mix `why` is
 and writes no mix values. Accept writes the mix and names the model that
 proposed it. A filled-in form that was never Accepted is still a proposal.
 
+`T10-13`: the contact-sheet review is a description on a finding, never a
+pass/fail chip. `classify_sheet` names clips to look at; the finding verdict
+stays `pass`. The existing "N flagged" line on the song page is that
+description, not a QC gate.
+
 This is the interface half of `T10-14`. If advice and measurement look alike, the
 operator will eventually treat a confident sentence as a reading, which is how
 `41.1 vs 64.7` would have become a gate. The style-guide rule: **model text

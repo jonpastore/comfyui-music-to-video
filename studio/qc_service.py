@@ -124,6 +124,21 @@ def _identity_drift_finding(path, kind, report):
     return row
 
 
+def attach_sheet_review(path, verdict, *, kind="image"):
+    """T10-13: persist classify_sheet text on a finding. Never a pass/fail.
+
+    The VLM names clips to look at. The finding's verdict is always PASS —
+    flagged vs empty is not a gate (TRD-3 §10).
+    """
+    path = jobs.canonical_path(path)
+    cells = int((verdict or {}).get("cells_seen") or 0)
+    row = qc.finding(
+        path, kind, qc.SHEET_REVIEW, qc.PASS,
+        qc.sheet_review_detail(verdict), cells, None, "cells")
+    record([row])
+    return row
+
+
 def score_identity_artefact(path, anchor=None, expect=None, kind=None):
     """T3-17: score one artefact against the chosen anchor and record it.
 
