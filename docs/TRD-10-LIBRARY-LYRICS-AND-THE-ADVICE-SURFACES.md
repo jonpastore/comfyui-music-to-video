@@ -36,7 +36,8 @@ gate.
 | Relational mix advice over a set | `mixadvice.py` |
 | Image questions: contact-sheet review, anchor description, cast proposal, edit-instruction parsing; local gateway first, xAI as fallback | `vision.py` |
 | Genre vocabulary | `genres.json`, and `songs.genre/subgenre/genre2/subgenre2` |
-| Per-song catalogue fields, sortable headers | the library page |
+| Per-song catalogue fields, sortable headers | the library page (`GET /` and `GET /songs`; JSON `GET /api/songs`) |
+| Library `song_count` shared HTML/JSON | `library_service.numbers()` (`T6-A2-library`) |
 
 **`lyrics.py` and `vision.py` both choose their backend per call, deliberately.**
 `vision.py`'s docstring states the reason and it generalises to both: *"the local
@@ -422,6 +423,7 @@ current.
 | criterion | state | commit | what was measured |
 |---|---|---|---|
 | the four modules | **built, before this document** | earlier | `lyrics.py` 405, `chat.py` 330, `mixadvice.py` 247, `vision.py` 516 — 1,498 lines that no TRD cited until now |
+| `T6-A2-library` HTML and JSON share library `song_count` | **built** | this change | `studio/test_t6_a2_library_numbers.py`: HTML `GET /` / `GET /songs` (`#library` `data-song-count`) and JSON `GET /api/songs` report the same `song_count` from `library_service.numbers()`; fixture 3 songs; stub arm forces `song_count=99` so a template `len` recompute goes red; `GET /songs` is 200 never 405 |
 | `T10-1` backend chosen per call | **built** | this change | `studio/test_t10_1_per_call_backend.py`: gateway absent then present, same process — `vision.classify_sheet` records `xai` then `local` and the paid/local path is actually taken; `lyrics._pick_backend` / `available` switch `openai-whisper` → `faster-whisper` when the preferred package appears; `available()` re-probes after the first answer |
 | `T10-2` a fallback says so in the record | **built** | this change | `studio/test_t10_2_fallback_record.py`: one local `classify_sheet` records `provider=local` / `fallback=false`; one local-then-xAI call records `provider=xai` / `fallback=true`; `score_candidate` success-after-fallback does not keep `available()`'s hope |
 | `T10-3` blank leaves alone | **built** | this change | twelve songs, blank `genre`, set `genre2`; stored primary unchanged, secondary written. Same request writes the non-blank field (`studio/test_trd10.py`) |

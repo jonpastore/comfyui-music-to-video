@@ -45,6 +45,7 @@ import cleanup_service  # T6-19: confirmed clip cleanup — no FastAPI
 import storyboard_service  # TRD-2 / T6-A3: arc, board, meter — no FastAPI
 import arc_service  # TRD-6 T6-A2-arc: playlist arc meter — no FastAPI
 import playlist_service  # TRD-6 T6-A2-playlists: song_count / total_secs — no FastAPI
+import library_service  # TRD-6 T6-A2-library: library song_count — no FastAPI
 import media_service  # TRD-8 T8-16: song media bag — no FastAPI
 import video_fx   # per-item video look effects -- same, pure/no deps
 
@@ -1880,12 +1881,37 @@ def song_entry(s, in_sets=None):
             "sets": in_sets.get(s["id"], [])}
 
 
-@app.get("/", response_class=HTMLResponse)
-def index(request: Request):
+def _library_ctx():
+    """Library page context. song_count from library_service (T6-A2-library)."""
     songs = db.q("SELECT * FROM songs ORDER BY created DESC")
     in_sets = sets_by_song()
     entries = [song_entry(s, in_sets) for s in songs]
-    return templates.TemplateResponse(request, "index.html", {"songs": entries, "genre_data": GENRE_DATA})
+    nums = library_service.numbers()
+    return {
+        "songs": entries,
+        "genre_data": GENRE_DATA,
+        "song_count": nums["song_count"],
+    }
+
+
+@app.get("/", response_class=HTMLResponse)
+@app.get("/songs", response_class=HTMLResponse)
+def index(request: Request):
+    """Library list. GET / and GET /songs share one handler; JSON is GET /api/songs."""
+    return templates.TemplateResponse(request, "index.html", _library_ctx())
+
+
+@app.get("/api/songs")
+def api_songs():
+    """Library list as JSON. song_count from library_service (T6-A2-library)."""
+    nums = library_service.numbers()
+    songs = db.q(
+        "SELECT id, slug, title, album, genre, duration, created FROM songs "
+        "ORDER BY created DESC")
+    return JSONResponse({
+        "song_count": nums["song_count"],
+        "songs": [_json_row(s) for s in songs],
+    })
 
 
 @app.get("/songs/{id}/row", response_class=HTMLResponse)

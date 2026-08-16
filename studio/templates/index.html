@@ -41,6 +41,8 @@
   </form>
 </section>
 
+{# T6-A2-library: song_count from library_service.numbers, not songs | length. #}
+<div id="library" data-song-count="{{ song_count }}">
 {% if not songs %}
 <p class="empty">No songs yet. Upload one above.</p>
 {% else %}
@@ -48,8 +50,6 @@
   <button type="submit" class="secondary">Analyse all un-analysed songs</button>
   <span class="muted">bpm / key / energy, for every song with no bpm yet.</span>
 </form>
-{% endif %}
-{% if songs %}
 {# The bulk bar sits ABOVE the table header, so the thing being changed reads
    below the change. A blank genre means LEAVE ALONE -- see app.bulk_set_genres;
    that is why there is no "clear" option here, which would have to be its own
@@ -83,7 +83,7 @@
   <p class="hint" id="bulk-note"></p>
 </section>
 <div class="table-scroll">
-<table class="list sortcols">
+<table class="list sortcols" data-song-count="{{ song_count }}">
   <thead><tr>
     {# not data-sort: a checkbox column has no order, and the toggle must not
        re-sort the table out from under the click #}
@@ -123,4 +123,5 @@
 </dialog>
 {% endif %}{% endfor %}
 {% endif %}
+</div>
 {% endblock %}

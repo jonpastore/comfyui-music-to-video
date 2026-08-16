@@ -45,7 +45,7 @@ Three facts about the domain decide almost every rule below:
 | `static/style.css` | 1247 lines |
 | `static/app.js` | 1589 lines, hand-written, 55 `addEventListener` |
 | `templates/` | 29 files, 3481 lines |
-| routes | 156+, of which **37+** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue`, `/qc`, set HTML `/sets/{id}`, storyboard HTML `/songs/{id}/storyboard/{tier}`, album arc HTML `/playlists/{id}/arc`, playlist list HTML `/playlists`, and song Media (`/api/songs/{id}/media`) each match their JSON surface on the same numbers (`T6-A2` / `T6-A2-set` / `T6-A2-storyboard` / `T6-A2-arc` / `T6-A2-playlists` / `T8-16`). `sets_service` / `storyboard_service` / `arc_service` / `playlist_service` / `cleanup_service` / `media_service` import nothing from FastAPI (`T6-A3`; `test_t6_a3_*_imports_nothing_from_fastapi`) |
+| routes | 156+, of which **37+** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue`, `/qc`, set HTML `/sets/{id}`, storyboard HTML `/songs/{id}/storyboard/{tier}`, album arc HTML `/playlists/{id}/arc`, playlist list HTML `/playlists`, library HTML `GET /` / `GET /songs` (JSON `GET /api/songs`), and song Media (`/api/songs/{id}/media`) each match their JSON surface on the same numbers (`T6-A2` / `T6-A2-set` / `T6-A2-storyboard` / `T6-A2-arc` / `T6-A2-playlists` / `T6-A2-library` / `T8-16`). `sets_service` / `storyboard_service` / `arc_service` / `playlist_service` / `library_service` / `cleanup_service` / `media_service` import nothing from FastAPI (`T6-A3`; `test_t6_a3_*_imports_nothing_from_fastapi`) |
 
 ### 2.2 The root finding: tokens exist for colour, and for nothing else
 
@@ -276,6 +276,11 @@ HTML `/playlists` (`#playlist-{id}` `data-song-count` / `data-total-secs`) and
 `GET /api/playlists/{id}` report the same `song_count` / `total_secs` from
 `playlist_service.numbers`
 (`test_t6_a2_html_and_json_report_the_same_playlist_numbers`).
+**`T6-A2-library` built**:
+HTML `GET /` / `GET /songs` (`#library` `data-song-count`) and
+`GET /api/songs` report the same `song_count` from `library_service.numbers`
+(`test_t6_a2_html_and_json_report_the_same_library_numbers`); `GET /songs`
+is 200 never 405.
 **`T2-25` built**:
 `POST /songs/{id}/clips` refuses a scene-time miss (400, no job)
 and still queues an in-tolerance board.
@@ -1261,7 +1266,11 @@ A style guide is falsifiable or it is decoration.
   has_proposal from `arc_service.payload`), the playlist card
   (`test_t6_a2_html_and_json_report_the_same_playlist_numbers`,
   `T6-A2-playlists` — `#playlist-{id}` data attrs for song_count /
-  total_secs from `playlist_service.numbers`), and the song media bag
+  total_secs from `playlist_service.numbers`), the library list
+  (`test_t6_a2_html_and_json_report_the_same_library_numbers`,
+  `T6-A2-library` — `#library` `data-song-count` from
+  `library_service.numbers`; HTML on `/` and `/songs`, JSON on
+  `/api/songs`), and the song media bag
   (`test_t6_a2_html_and_json_report_the_same_media_numbers`, `T8-16`).
   Nav is still this guide's own list check.
 - **No template computes.** `T6-A4`, asserted by a differential: stub the service

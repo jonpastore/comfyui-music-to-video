@@ -30,7 +30,11 @@ same `arc_service.payload()` for song_count / act_count / premise /
 has_proposal), and playlist cards
 (`test_t6_a2_html_and_json_report_the_same_playlist_numbers`,
 `T6-A2-playlists` — same `playlist_service.numbers()` for song_count /
-total_secs; `arc` still only when defined, T2-37).
+total_secs; `arc` still only when defined, T2-37), and the library list
+(`test_t6_a2_html_and_json_report_the_same_library_numbers`,
+`T6-A2-library` — same `library_service.numbers()` for song_count on
+HTML `GET /` / `GET /songs` and JSON `GET /api/songs`; `GET /songs` is
+200 never 405).
 `T6-A4` is proven for the queue panel
 (`test_t6_a4_queue_page_shows_stubbed_values_unmodified`), the jobs panel
 elapsed label (`test_t6_a4_jobs_panel_shows_stubbed_elapsed_unmodified`,

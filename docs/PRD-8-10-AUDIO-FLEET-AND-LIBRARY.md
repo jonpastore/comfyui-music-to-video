@@ -23,7 +23,7 @@ everything below:
 
 | | TRD-8 audio | TRD-9 fleet | TRD-10 library |
 |---|---|---|---|
-| built? | **yes**, except `T8-12` (provisional: no cloning path); `T8-16` media menu built | **yes**, with red tests including `T9-1`/`T9-2`/`T9-15` | **yes** (bulk edit, advice, minor policy) |
+| built? | **yes**, except `T8-12` (provisional: no cloning path); `T8-16` media menu built | **yes**, with red tests including `T9-1`/`T9-2`/`T9-15` | **yes** (bulk edit, advice, minor policy; `T6-A2-library` list numbers) |
 | leftover | `T8-12` stays provisional | gamingpc as a second image box is **CAPABLE, NOT PROVEN** | none named on the ledger |
 
 **TRD-9 specifies software that already works, and the checks now exist.** Four

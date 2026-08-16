@@ -20,9 +20,10 @@ is named.
 
 | module | lines | owns | state against its TRD |
 |---|---|---|---|
-| `studio/app.py` | 7589 | 156 routes, 36 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}` (`T2-37` arc when defined; `T6-A2-playlists` via `playlist_service.numbers`), `/api/playlists/{id}/arc` (`T6-A2-arc` via `arc_service.payload`), `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`, `/api/anchors`; song page `video_model` select is `models.renderable("video")` (`T2-33`); `sets_service.py` / `storyboard_service.py` / `arc_service.py` / `playlist_service.py` / `cleanup_service.py` / `media_service.py` land T6-A3 (`test_t6_a3_*_imports_nothing_from_fastapi`) |
+| `studio/app.py` | 7589 | 156 routes, 36 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}` (`T2-37` arc when defined; `T6-A2-playlists` via `playlist_service.numbers`), `/api/playlists/{id}/arc` (`T6-A2-arc` via `arc_service.payload`), `/api/songs` (`T6-A2-library` via `library_service.numbers`; HTML also on `GET /` / `GET /songs`), `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`, `/api/anchors`; song page `video_model` select is `models.renderable("video")` (`T2-33`); `sets_service.py` / `storyboard_service.py` / `arc_service.py` / `playlist_service.py` / `library_service.py` / `cleanup_service.py` / `media_service.py` land T6-A3 (`test_t6_a3_*_imports_nothing_from_fastapi`) |
 | `studio/arc_service.py` | — | TRD-6 T6-A2-arc meter: `payload(playlist_id)` → song_count / act_count / premise / has_proposal; no FastAPI | **built** (`test_t6_a2_html_and_json_report_the_same_arc_numbers`) |
 | `studio/playlist_service.py` | — | TRD-6 T6-A2-playlists: `numbers(playlist_id)` → song_count / total_secs; no FastAPI | **built** (`test_t6_a2_html_and_json_report_the_same_playlist_numbers`) |
+| `studio/library_service.py` | — | TRD-6 T6-A2-library: `numbers()` → song_count for HTML library and `GET /api/songs`; no FastAPI | **built** (`test_t6_a2_html_and_json_report_the_same_library_numbers`) |
 | `studio/mixer.py` | 2116 | set duration, `transition_times` (`T3-12` model), both filter graphs, overlap arithmetic, beatmatch, ramps, splice, `spliced_duration` / `SPLICE_DURATION_TOLERANCE` (`T3-10`), song-assembly geometry (`T5-7`) and fps (`T2-13d`), `EXPORT_FORMATS` (`T1-24`), `probe.sample_rate` for **T3-4.3-sr**, `probe["channels"]` (`T3-4.3-ch`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox. Mixed clip fps honours the highest and is asserted on the assembled file. Export encode args are a named row of `EXPORT_FORMATS`; `render_set(..., fmt=)` looks the row up and passes it to ffmpeg (`test_t1_24_export_format_row.py`). Probe always exposes sample rate and channel count (0 when no audio) for QC |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `export_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` and the loudness half of §4.3. `T3-9` silence is **not** here |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `FILTER_EXPR_MAX_BYTES = 8192` (`T1-10`), `fragment`, `item_audio`, `wants_master_loudnorm` | built |
@@ -119,7 +120,11 @@ HTML `/playlists` card and JSON `GET /api/playlists/{id}` share
 `playlist_service.numbers()` (`test_t6_a2_html_and_json_report_the_same_playlist_numbers`,
 `T6-A2-playlists`: song_count, total_secs; song_count is service-owned so a
 template `len` recompute fails the stub arm; `arc` still only when defined,
-T2-37). Set, storyboard, review and
+T2-37). Library HTML `GET /` / `GET /songs` (`#library` `data-song-count`)
+and JSON `GET /api/songs` share `library_service.numbers()`
+(`test_t6_a2_html_and_json_report_the_same_library_numbers`, `T6-A2-library`:
+song_count is service-owned so a template `len` recompute fails the stub
+arm; `GET /songs` is 200 never 405). Set, storyboard, review and
 anchor loops complete over JSON (`test_t6_a1_*`).
 
 ## 3. API surface

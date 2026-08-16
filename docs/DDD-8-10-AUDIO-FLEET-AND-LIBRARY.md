@@ -223,6 +223,15 @@ pass.
 
 ## 4. TRD-10 — one feature and a set of rules
 
+### 4.0 Library list (`T6-A2-library`)
+
+The catalogue page is `GET /` and `GET /songs` (same HTML handler). JSON is
+`GET /api/songs`. Both report `song_count` from `library_service.numbers()`
+(no FastAPI import, `T6-A3`). `#library` carries `data-song-count`; a template
+that recomputes from `len(songs)` fails the stub arm
+(`test_t6_a2_html_and_json_report_the_same_library_numbers`). `POST /songs`
+upload is unchanged. `GET /songs` is 200, never 405.
+
 ### 4.1 Bulk edit
 
 Server-side, one route, one transaction (`T10-6`, built: twelve-row success
