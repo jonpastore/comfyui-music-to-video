@@ -10,6 +10,12 @@ file, the loader class it goes into, one line on what it is for, and the
 caveats that cost this project time to learn. Adding a model later is one dict
 entry plus whatever workflow support it needs; it is never a UI change.
 
+When to pick Qwen-Image-Edit 2511 vs LTX/WAN vs a parked Pony/Krea/Flux
+family is `docs/DDD-4-7-IDENTITY-AND-RENDERING.md` §1a. A later change
+may add optional `family` / `stage` / `when` / `not_for` keys copied
+from that section. It does not add Pony, Krea, or Flux as
+`role=reference` defaults.
+
 AVAILABILITY IS NOT ASSUMED. It is read from the live ComfyUI /object_info --
 the same enum the loader node would validate against -- so a catalogued model
 that is not on the box shows as missing in the UI instead of failing forty

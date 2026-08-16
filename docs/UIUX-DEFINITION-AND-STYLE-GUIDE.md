@@ -310,7 +310,7 @@ pre-empt `finding-row` with one. An identity-wrong finding's remedy is
 "edit the text, then re-render" (`T3-28`); the queue must not offer
 "swap the reference image". An image FLAG/REJECT content finding
 (blank, uniform, transparent, lighting, portrait) uses that same
-wording (`T3-33`); the queue must not offer "re-render with a
+wording (`T3-33.a`); the queue must not offer "re-render with a
 different seed" on a still. A silence finding (`T3-9`) shows low / mid /
 high band energy, not a peak; a take that only clicked is empty. An
 edge-silence finding (`T3-4.3-edge`) shows leading / trailing seconds
@@ -647,13 +647,13 @@ measured/expected WxH, unit `px` (not blank), and a re-render-pinned
 remedy — not a silent pass when the request was 320×240 and the box
 quietly wrote 160×120. `T3-4.1-alpha`: a
 fully transparent sheet REJECTs `alpha` with max alpha 0 and an
-edit-the-text remedy (`T3-33`) — not a silent pass on an invisible RGBA still,
+edit-the-text remedy (`T3-33.a`) — not a silent pass on an invisible RGBA still,
 and not a different-seed offer. `T3-4.1-not_uniform`:
 a still that is a single flat colour REJECTs `not_uniform` with measured
-pixel std at or below the floor and an edit-the-text remedy (`T3-33`) — not a
+pixel std at or below the floor and an edit-the-text remedy (`T3-33.a`) — not a,
 silent pass on solid red (whole-array std used to). `T3-4.1-not_blank`:
 a solid black still REJECTs `not_blank` with measured mean level below
-`LUMA_FLOOR` and an edit-the-text remedy (`T3-33`) — not a silent pass on a dead
+`LUMA_FLOOR` and an edit-the-text remedy (`T3-33.a`) — not a silent pass on a dead
 sampler; distinct from `not_uniform` (solid bright red PASSes not_blank).
 `T3-4.2-luma`: a
 solid black clip REJECTs `luma` with measured mean Y below the floor
@@ -936,6 +936,26 @@ grey wall), not a `BACKDROP` string; job 257 `front_nude` seed 5151 PASSes
 *this sheet is the identity reference for the sheet you are composing*. It earns
 emphasis because it is the studio's largest consistency lever, and it does not
 earn a screen.
+
+### 7a.6 Pose QC before anatomy
+
+`T3-33.b` / `T4-20`. On an exposing nude still the tile (or the operator
+notes) shows two sequential stamps: **pose** then **anatomy**. Anatomy
+controls stay disabled until pose is PASS (cat muzzle, both arms,
+source skin, asked camera, tail above the anus). A pose FAIL names
+the failed check. Not a VLM badge. Operator grind:
+`docs/MEASURED-2026-08-16-POSE-ANATOMY.md`. Pose/anatomy/donor/clip
+stamps: `anchor5/roadmap/QC.md`. Training a character LoRA is last
+resort (roadmap O14 on gamingpc), not a control on this page.
+
+### 7a.6b The models picker names a job, not a Civitai aisle
+
+Still identity is Qwen-Image-Edit 2511. Clips are `ltx25` / `wan22_s2v`.
+A Pony, Krea, or Flux file on the box does not appear as a second
+“who is she” choice. If a parked family is ever listed, it is tagged
+**donor** or **wrong sampler** and disabled for `reference`. When-to-use
+copy lives in DDD-4-7 §1a; the picker does not explain every Civitai
+card.
 
 ### 7a.6a Candidate tiles carry a vision confidence
 

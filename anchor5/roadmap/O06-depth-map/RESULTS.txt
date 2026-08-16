@@ -1,0 +1,12 @@
+# RGB-as-depth (closed, horror)
+o6_depth75_00001_.png
+o6_depth85_s5151_00001_.png
+o6_depth90_00001_.png
+# real Depth-Anything
+o6_union_pface_d85_00001_.png
+o6_union_pface_d95_00001_.png
+o6_ds_pface_d85_00001_.png
+o6_union_ff_d85_00001_.png
+o6_enc_d50_00001_.png
+# o6_enc_d70 when landed
+o6_enc_d70_00001_.png

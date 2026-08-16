@@ -3,8 +3,8 @@
 Session hand-off docs, oldest first. The **latest three live at the repo root**;
 everything older is moved here when a fourth is written.
 
-Most recent: **[CONTINUATION-2026-08-15-nude-anchors.md](../../CONTINUATION-2026-08-15-nude-anchors.md)**
-(at the repo root, along with day 15 and day 14).
+Most recent: **[CONTINUATION-2026-08-16-pose-anatomy.md](../../CONTINUATION-2026-08-16-pose-anatomy.md)**
+(at the repo root, along with nude-anchors and day 15). Day 14 is archived.
 
 These docs are in `.gitignore` -- only this index is tracked. `git mv` fails on
 them; use `mv` when rotating one in.
@@ -31,7 +31,9 @@ At the root right now:
 | `CONTINUATION-2026-08-12-meowp-studio-day10.md` | **Measurement, then specification.** 30s and 60s clips render; identity comes from the TEXT and not the reference image; swarm on in production; production video was dead at argparse; TRD-2 drafted. **Holds the standing instruction for the TRD -> PRD -> DDD -> style guide -> critique pipeline.** |
 | `CONTINUATION-2026-08-13-meowp-studio-day11.md` | **The TRDs finished, then built from.** All three TRDs written with 106 failable criteria; the loudnorm finding that would have flattened every level curve the DAW draws; scene_seconds winning over a floor that sat in two places; QC tier 1 with every threshold measured rather than picked. **Nothing deployed.** |
 
-The next continuation archives `CONTINUATION-2026-08-13-meowp-studio-day14.md`.
+The next continuation archives `CONTINUATION-2026-08-13-meowp-studio-day15.md`.
+
+| [CONTINUATION-2026-08-13-meowp-studio-day14.md](CONTINUATION-2026-08-13-meowp-studio-day14.md) | Archived 2026-08-16. First xxx nude came back a human woman — identity from the text. |
 
 ## Standalone hand-offs
 

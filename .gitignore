@@ -33,6 +33,12 @@
 *.png
 *.jpg
 *.jpeg
+*.gif
+*.webp
+*.webm
+
+# Reddit pose hold-frames (operator samples, not source)
+/anchor5/reddit-samples/
 *.pdf
 *.zip
 

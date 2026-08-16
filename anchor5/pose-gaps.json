@@ -20,7 +20,10 @@
         "kneeling.jpg (hands on floor, facing camera, clothed)",
         "poses/allfours-kneel/s843167886 (nude squat look-back — not hands-and-knees)",
         "empty+standing-nude-refs: four standing look-backs",
-        "empty+kneeling.jpg: squat / kneel / ghost / standing-clothed — none all-fours"
+        "empty+kneeling.jpg: squat / kneel / ghost / standing-clothed — none all-fours",
+        "Kontext Dev: nude kneel look-back (sit on heels), not hands-and-knees",
+        "Flux.2 Dev f2-749 / f2-023: hands on floor, look back, nude, her — closest crawl; hips not to camera",
+        "flux2-upback: CAMERA LANDED — rear, soles to lens, on knees. Tail hangs down the midline and covers. 886 shows a cleft; 023 grew wrong genitals. Face not visible. Next: tail high/aside + look back, same camera."
       ]
     },
     {
@@ -35,16 +38,14 @@
     },
     {
       "id": "kneel-present-nude",
-      "have": false,
+      "have": true,
+      "path": "poses/kontext-a4/allfours_s843167886_00001_.png",
       "priority": 3,
       "pose": "kneel",
       "view": "3qtr-rear",
       "must": "kneeling look-back, nude, tail aside",
       "scenes": [7],
-      "closest_we_have": [
-        "looking-back_s843167749 clothed kneel look-back",
-        "poses/allfours-kneel/s843168023 kneeling look-back 3qtr, harness on — C1 undress candidate"
-      ]
+      "note": "Kontext 886. Nude kneel look-back, her, jewelry. Tail not fully aside; crotch not exposed."
     },
     {
       "id": "stand-3qtr-nude",

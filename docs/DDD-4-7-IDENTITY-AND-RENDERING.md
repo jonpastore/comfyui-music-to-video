@@ -24,7 +24,13 @@ sheet and a clip reference frame come out of the same eight nodes, the same
 **So nothing here is an integration.** It is closing the gap between the
 parameters `build_refs.workflow()` already takes and the ones the anchor path can
 express. That framing is the whole design: no new builder, no second model, no
-ControlNet.
+ControlNet in `make_anchor.py`. Cerberus pose hops (InstantX Union, later
+Inpainting CN) are the operator grind in
+`docs/MEASURED-2026-08-16-POSE-ANATOMY.md` (`T4-20`). They do not land in
+the studio graph until a pose PASS exists and the product asks for it.
+A character / anatomy LoRA is **last resort** (roadmap O14, gamingpc,
+Ostris AI Toolkit on 2511). It is not the default anatomy path and it
+is not a studio feature.
 
 | module | owns |
 |---|---|
@@ -47,6 +53,140 @@ photos as image1 and that file as image2 (`T7-20`). Assign writes an
 `anchors` row whose path *is* the upload. That is also `T6-A1`'s named JSON loop for TRD-4/TRD-7:
 `GET/POST /api/anchors`, `/api/anchors/refs`, `/api/anchors/{id}/pick`,
 `/api/anchors/{id}/use-as-ref` (`test_t6_a1_anchor_loop_over_json`).
+
+## 1a. Stacks, families, and when to use them
+
+`studio/models.py` `CATALOG` answers *what is installed and what it is
+FOR*. It does not yet say *when to pick this family instead of that
+one*. This section is that map. A later `models.py` change adds
+optional `family` / `stage` / `when` / `not_for` on each entry and
+copies these sentences. It does **not** add Pony, Krea, or Flux as a
+second `role=reference` default. Grind adapters (SNOFS, labiaplasty,
+InstantX) stay companions or operator files until a pose PASS exists
+and the product asks for them (`T4-20`).
+
+Two studio samplers already share one UNET and must not be mixed:
+
+| lane | UNET | sampler | where |
+|---|---|---|---|
+| **Studio stills** | `qwen_image_edit_2511_fp8mixed` | Lightning 4-step, CFG 1.0, negative inert | `build_refs.workflow`, `make_anchor.py` |
+| **Operator grind** | same file | CFG 2 / 50 / `dpmpp_2m`+`karras`, Lightning **off** | cerberus Comfy, MEASURED 2026-08-16 |
+
+Mixing Lightning with the 50-step grind is the O12 “wrong stack”
+mistake. Phr00t Rapid-AIO is the same *family* with Lightning+NSFW
+**baked in** — use *its* 8 / `euler_ancestral` / `beta` / CFG 1, or
+do not use it.
+
+### When to use which family
+
+Ask what you are trying to change. One family per hop.
+
+| Job | Use | Do not use |
+|---|---|---|
+| Hold **her** from `anchor5/` / operator photos | **Qwen-Image-Edit 2511** as `image1` | Pony, Illustrious, Krea, Flux t2i, Qwen-Image 2512 t2i |
+| Same-pose undress | 2511, VAEEncode the photo, denoise 1.0 (measured) | Empty latent (invents a face). Klein if 2511 undress fails (O12b) |
+| New pose, same person | 2511 + InstantX Union / depth / AnyPose / Multiple-Angles. Encode a **good-face** parent, or empty latent + complete pose map | Photoreal Reddit as `image2` (O9). Incomplete OpenPose. Seed 129080599 for all-fours (kneels) |
+| Draw vulva/anus on a **pose PASS** | InstantX Inpaint CN or Easy-Inpaint LoRA, then SNOFS **Qwen v1.3**, then labiaplasty v4 2511 (`adjust her pussy and anus`) | Union. Scribble-Edit. Anatomy on a FAIL. Pony as `image1` |
+| 2511 still will not draw anatomy | O12a Phr00t (same family, its sampler). Then Klein undress. Then Pony **donor crop** + Lab retone + stitch | Rebase the album onto Pony/Krea. Train (O14) only after those |
+| Still on **peaches** (2080 Ti) | Z-Image Turbo — the only image model that card can run | 2511 (does not fit). Not an identity lock |
+| Album cover | `qwen_artwork` (same 2511 file) | A second cover model |
+| Clip from an approved still + **music** | **`ltx25`** (default) or `wan22_s2v` (wav2vec mouth/beat, ~4.8 s chunks) | Pony/Krea/Flux LoRAs on a video UNET. WAN refiner on an LTX latent |
+| Clip, instrumental, no audio drive | `wan22_i2v` | s2v / ltx25 if you wanted lipsync and then picked this |
+| Clean a **s2v** clip | `wan22_i2v_low` (same WAN VAE). Unproven whether it helps (`T3-26`) | That refiner on LTX output |
+| Photoreal stranger NSFW | Krea 2 / Flux.2 — different product | This album |
+| Tagged furry t2i from a prompt, no photo | Pony / Illustrious | `looking-back.jpg` as if it were a Pony prompt |
+
+### Flows (still → clip)
+
+```
+operator photos (anchor_ref)
+        │
+        ▼
+2511 studio (Lightning) or 2511 grind (50-step)
+        │
+        ├─ pose FAIL ──► do not draw anatomy (T3-33.b)
+        │
+        ▼ pose PASS
+SNOFS Qwen v1.3 / labiaplasty v4 / Inpaint CN
+        │
+        ▼ pick chosen=1
+gen_refs (2511, chosen sheet = image1)
+        │
+        ▼ approved ref still
+ltx25 (default) or wan22_s2v
+        │
+        ▼ assemble; song length owns clip count
+```
+
+Parked off this path: Phr00t AIO, Klein 9B, Pony donor, Krea/Flux
+t2i, O14 training on gamingpc. Flux.1 Kontext and Flux.2 are
+already on cerberus and **failed** this grind (leak / reseal).
+
+### What a later `models.py` entry must declare
+
+Existing required keys stay (`role`, `label`, `file`, `loader`,
+`purpose`, `notes`, `proven`, `companions`). Add, when touched:
+
+| key | values | why |
+|---|---|---|
+| `family` | `qwen-image-edit-2511`, `qwen-edit-lightning`, `qwen-rapid-aio`, `z-image`, `ltx25`, `ltx23`, `wan22-s2v`, `wan22-i2v`, `flux2`, `flux-kontext`, `flux-klein`, `krea2`, `pony`, `illustrious` | Stops a Krea file inheriting the Qwen picker |
+| `stage` | `still-identity`, `still-pose`, `still-anatomy`, `clip`, `refine`, `artwork`, `donor` | Pose LoRA is not a clip model |
+| `when` | one sentence | Copied from the table above |
+| `not_for` | one sentence | The failure mode we already paid for |
+
+Rules for that change:
+
+- A file that does not load on the role’s UNET is `IGNORED` or
+  `proven=opportunistic` with `stage=donor`, never `default` for
+  `reference`.
+- Grind LoRAs (SNOFS, labiaplasty, Easy Inpaint, AnyPose) are
+  **companions** of `qwen_image_edit_2511`, not new roles.
+- InstantX Union / Inpaint CN are not catalogued until the studio
+  graph asks for ControlNet.
+- Phr00t Rapid-AIO, if catalogued, is its own `family` and its own
+  sampler notes. It is not an alias of `qwen_image_edit_2511`.
+- No `role=reference` entry for Pony, Krea, or Flux until the
+  product is a different identity lock.
+
+Companion write-up: `docs/ROADMAP-2026-08-16-POSE-ANATOMY.md`
+§Civitai and §Why Pony / Flux / Krea. Operator runbook (one folder
+per test, QC, catalog → models): `anchor5/roadmap/README.md`.
+
+### 1a.1 Own LoRAs — not one adapter for the catalog
+
+The scene catalog (`anchor5/reddit-pose-catalog.md`) is
+`configuration × pose × contact × act × finish × movement × camera`.
+That is **not** one training job. A single LoRA that “is her, does
+every pose, and does every motion” will smear identity, pose, and
+video into one rank and fail all three.
+
+Split by stage. Identity is already `image1`. Train only the stage
+that inference cannot do. Gamingpc, Comfy stopped, Ostris AI Toolkit
+on **Qwen-Image-Edit-2511** for stills. Motion is a **different UNET**.
+
+| LoRA | Learns | Targets | When |
+|---|---|---|---|
+| **Identity** (optional) | “this face/body is `meowp`” | Operator photos + keeper nudes from `anchor5/`. No Reddit bodies. | Only if image1 starts drifting across many views. Rank 8–16. Regularization: unchanged photos captioned “keep this body.” |
+| **Pose-edit** (one per *family*, not per topic) | standing-her → asked skeleton/camera | **Her** pose-PASS sheets only. Caption is the catalog pose id (`doggy look_back`, `face_down_ass_up`). Control = standing / identity_nude. | After inference has a handful of PASSes in that family. Chicken-and-egg: CN/AnyPose first, then train. Families, not 111 topics: FDAU/doggy, cowgirl, missionary, standing look-back, prone, kneel. Variants (`elbows_down`) are captions on the same LoRA. |
+| **Anatomy-edit** (O14) | draw human-shaped vulva/anus, her pigment, tail origin above anus | Retone’d composites on pose-PASS bodies. Lab L from Reddit crop, a/b from `looking-back.jpg`+`standing.jpg`. | After SNOFS + labiaplasty v4 fail on a PASS. |
+| **Motion** | thrust / grind / look-back turn on the beat | Approved **clips**, not stills. Train on **LTX-2.5 or WAN 2.2**, never 2511. | After stills exist for that pose. `movement` in the catalog is this column, not a Qwen LoRA. |
+
+Do not:
+
+- Train photoreal Reddit full-bodies as Meow P.
+- Train a pose LoRA from FAIL sheets (same as encoding a FAIL parent).
+- Put identity + pose + anatomy + motion in one rank.
+- Train 111 topic LoRAs. Aliases collapse to families; acts/finishes
+  (`creampie_flow`, `squirt`) are later inpaint/clip, not pose weights.
+- Train motion on 2511. 2511 has no time axis.
+
+Order: inference PASSes → optional identity LoRA → pose-family LoRAs
+from those PASSes → anatomy LoRA if still undrawn → LTX/WAN motion
+LoRAs from approved clips. O14 in the roadmap is the anatomy row
+only. This table is the factory. Not started.
+
+Operator how-to (dataset layout, catalog captions, Ostris knobs,
+abort): `anchor5/roadmap/TRAIN.md`.
 
 ## 2. The view table — one table, two projections
 
@@ -122,7 +262,7 @@ storyboard whose `character_reference` is empty is refused
 (`T2-31` / `T2-32` / `grok.EMPTY_CHARACTER_REFERENCE`). When a sheet or
 clip is wrong from the first frame, the QC remedy is edit the text, then
 re-render (`T3-28` / `qc.check_identity_wrong`). The rest of image QC
-uses that same class (`T3-33` / `qc.IMAGE_PROMPT_REWRITE_CHECKS`):
+uses that same class (`T3-33.a` / `qc.IMAGE_PROMPT_REWRITE_CHECKS`):
 blank, uniform, transparent, lighting and portrait findings say edit
 the text, not "re-render with a different seed". Swapping the reference
 image is refused — measured 2026-08-12: same reference, same seed, same

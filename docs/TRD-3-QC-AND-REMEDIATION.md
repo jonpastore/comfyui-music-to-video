@@ -60,7 +60,8 @@ not been shown to separate known-good from known-bad does not gate anything.
 | **T3-1** per-box report groups by `host`; NULL host is `unattributed` | **`qc_service.by_host`** + `GET /api/qc/by-host` |
 | **T3-22** dismissed stays dismissed until the artefact changes | **`qc_service.record`** + `findings.artefact_hash`; same check reopens when the file bytes change |
 | **T3-28** identity-wrong never proposes swapping the reference image | **`qc.check_identity_wrong`** / **`qc.identity_wrong_remedy`**; `record` / `set_remedy` / `approve` refuse the swap wording |
-| **T3-33** image FLAG/REJECT remedy is the next prompt rewrite | **`qc.IMAGE_PROMPT_REWRITE_CHECKS`**; `not_uniform` / `not_blank` / `alpha` / lighting / portrait / identity-look / identity-wrong are `edit-text`. Structural `opens` / `resolution` stay re-render / pinned. Video seed remedies are not this criterion |
+| **T3-33.a** image FLAG/REJECT remedy is the next prompt rewrite | **`qc.IMAGE_PROMPT_REWRITE_CHECKS`**; `not_uniform` / `not_blank` / `alpha` / lighting / portrait / identity-look / identity-wrong are `edit-text`. Structural `opens` / `resolution` stay re-render / pinned. Video seed remedies are not this criterion |
+| **T3-33.b** pose QC before anatomy QC | Operator eye gates (`anchor5/poses/cleanrun/qc-pose-*.json`). Pose FAIL does not get anatomy. Not a VLM. Twin: `T4-20` |
 
 **§4 and §6 below read as unbuilt work and are not.** An audit found this table
 listing seven items, none of them the QC implementation, in a section whose
@@ -233,7 +234,7 @@ alpha not fully transparent.
   transparent (max 0) REJECTs; any non-zero opacity PASSes. RGB without
   an alpha channel is treated as fully opaque (max 255). `measured` /
   `expected` / `unit` = max alpha / `ALPHA_MIN` (1) / `levels`, remedy
-  class `edit-text` (`T3-33`). A fully transparent RGBA sheet is a blank
+  class `edit-text` (`T3-33.a`). A fully transparent RGBA sheet is a blank
   render by another name — tier-1 REJECT, no judgement
   (`test_t3_4_1_alpha.py`). No reading raises, never 0.0 on no data.
 - `T3-4.1-not_uniform` **Uniform / single flat colour REJECTs** —
@@ -241,14 +242,14 @@ alpha not fully transparent.
   red/blue/gray/black fill is ~0 even when R≠G≠B (whole-array std wrongly
   PASSed solid red). Above `UNIFORM_STD_FLOOR` (1.0 levels) PASSes;
   at or below REJECTs. `measured`/`expected`/`unit` = std / floor /
-  `levels`, remedy class `edit-text` (`T3-33`). testsrc2 colour bars PASS;
+  `levels`, remedy class `edit-text` (`T3-33.a`). testsrc2 colour bars PASS;
   solid fills REJECT (`test_t3_4_1_not_uniform.py`). No reading raises,
   never 0.0 on no data. Distinct from `not_blank` (mean luma floor).
 - `T3-4.1-not_blank` **Not blank (mean level above LUMA_FLOOR)** —
   `qc.measure_mean_level` / `check_image` `not_blank`: mean RGB level
   (0–255). Below `LUMA_FLOOR` (24.0) REJECTs (dead-sampler solid black);
   at or above PASSes. `measured`/`expected`/`unit` = mean / floor /
-  `levels`, remedy class `edit-text` (`T3-33`). testsrc2 colour bars PASS;
+  `levels`, remedy class `edit-text` (`T3-33.a`). testsrc2 colour bars PASS;
   solid black REJECT (`test_t3_4_1_not_blank.py`). No reading raises,
   never 0.0 on no data. Distinct from `not_uniform` (spatial std): solid
   bright red PASSes `not_blank` and REJECTs `not_uniform`.
@@ -276,6 +277,15 @@ alpha not fully transparent.
   a fail — the candidate stays pickable. §7 still forbids a VLM
   PASS/FAIL as a gate. Mutation: deleting the scorer leaves dests
   with no `qc_json` and the tile has nothing to show.
+- `T3-33.b` **Pose QC is a hard gate in front of anatomy QC.** Judge the
+  picture, not a metric. Pose PASS requires: feline muzzle matching
+  the operator base (no human skin patch), both arms complete, source
+  skin from `anchor5/` photographs, asked camera/pose (hips-to-camera
+  when that is the sheet), tail origin at the coccyx **above** the
+  anus. Anatomy QC runs only on a pose PASS: human-shaped vulva/anus,
+  pigment from `looking-back.jpg` + `standing.jpg`, cleft lit, no
+  panties, no photoreal identity leak. A pose FAIL must not be
+  inpainted, scribbled, or composited. Not a VLM gate.
 
 ### 4.2 Clips
 
@@ -624,7 +634,7 @@ decision from one whose remedy is "re-run the upscale".
   throughout. Not named — an ordinary human woman by the halfway point, keeping
   only the harness. Identity comes from the text. A remedy prompt that says
   otherwise is the studio teaching a false lesson to the person reading it.
-- `T3-33` **Every image FLAG/REJECT content finding's remedy is the next prompt
+- `T3-33.a` **Every image FLAG/REJECT content finding's remedy is the next prompt
   rewrite, not "re-render with a different seed".** `T3-28` already does this
   for identity-wrong. Blank, uniform, transparent, lighting-cast, portrait-crop
   and identity-look findings use `edit-text` and say "edit the text, then
@@ -745,7 +755,7 @@ check is true, and forcing the check true SUBMITS.
 | `T3-25` remote output move | paired positive: with `can_move_output` forced true, a remote repair is SUBMITTED. Refusal-only stays green forever |
 | `T3-26` whether the refiner helps | paired positive: a labelled set whose refined scores rise reports helping. Always-not-helping stays green forever |
 | `T3-27` every check names a remedy class | assert the class is ACTIONABLE where one exists — the approve path uses it — and that a check with no remedy says so rather than offering a button |
-| `T3-33` image FLAG/REJECT is a prompt rewrite | a dead still's FLAG/REJECT remedy is `edit-text` and names the text; "different seed" on `not_uniform` / `not_blank` / `alpha` is red. Video seed remedies stay. A missing file stays `re-render` |
+| `T3-33.a` image FLAG/REJECT is a prompt rewrite | a dead still's FLAG/REJECT remedy is `edit-text` and names the text; "different seed" on `not_uniform` / `not_blank` / `alpha` is red. Video seed remedies stay. A missing file stays `re-render` |
 
 
 ---
@@ -767,9 +777,9 @@ current.
 | `T3-3` silent clip no has_audio; song missing audio REJECTS | **built** | this slice | `check_video` `has_audio` only when `want_audio` (song defaults it): silent LTX-shaped clip does not emit `has_audio`; same file as `kind=song` REJECTs `has_audio` with remedy re-assemble; song with audio stream does not REJECT `has_audio` (`test_t3_3_has_audio.py`). Previously only `qc.demo()`; `T3-4.4-av` only asserted clips skip |
 | `T3-4.1-opens` image opens (missing/unreadable) | **built** | this slice | `check_image` `opens`: missing path REJECTs; unreadable bytes REJECTs; real PNG is not an opens reject; tiny PNG under `MIN_VIDEO_BYTES` is not size_floor-rejected (PIL path, no image size floor); remedy re-render (`test_t3_4_1_opens.py`) |
 | `T3-4.1-resolution` image resolution as requested | **built** | this slice | PIL size; `check_image` emits `resolution` when `expect.width`+`height` are set: matching WxH PASSes, 160x120 against 320x240 REJECTs, measured equals PIL WxH, unit `px` (not `None`), remedy re-render-pinned; without expect the check emits nothing (`test_t3_4_1_resolution.py`) |
-| `T3-4.1-alpha` alpha not fully transparent | **built** | this slice | `qc.measure_alpha` + `check_image` `alpha`: fully transparent RGBA (max 0) REJECTs; RGB / opaque / partial alpha PASS; measured equals independent max, expected `ALPHA_MIN` (1), unit `levels`, remedy edit-text (`T3-33`, `test_t3_4_1_alpha.py`). No reading raises, never 0.0 |
+| `T3-4.1-alpha` alpha not fully transparent | **built** | this slice | `qc.measure_alpha` + `check_image` `alpha`: fully transparent RGBA (max 0) REJECTs; RGB / opaque / partial alpha PASS; measured equals independent max, expected `ALPHA_MIN` (1), unit `levels`, remedy edit-text (`T3-33.a`, `test_t3_4_1_alpha.py`). No reading raises, never 0.0 |
 | `T3-4.1-not_uniform` uniform / single flat colour | **built** | this slice | `qc.measure_pixel_std` + `check_image` `not_uniform`: max per-channel spatial RGB std vs `UNIFORM_STD_FLOOR` (1.0); solid red/blue/gray/black REJECT; testsrc2 PASS; measured equals the independent reading (`test_t3_4_1_not_uniform.py`). Whole-array std wrongly PASSed solid red. No image raises, never 0.0 |
-| `T3-4.1-not_blank` image mean level above LUMA_FLOOR | **built** | this slice | `qc.measure_mean_level` + `check_image` `not_blank`: solid black REJECT below `LUMA_FLOOR` (24); testsrc2 PASS; measured equals independent mean RGB level, expected floor, unit `levels`, remedy edit-text (`T3-33`, `test_t3_4_1_not_blank.py`). No image raises, never 0.0. Distinct from `not_uniform` (solid bright red PASSes not_blank, REJECTs not_uniform) |
+| `T3-4.1-not_blank` image mean level above LUMA_FLOOR | **built** | this slice | `qc.measure_mean_level` + `check_image` `not_blank`: solid black REJECT below `LUMA_FLOOR` (24); testsrc2 PASS; measured equals independent mean RGB level, expected floor, unit `levels`, remedy edit-text (`T3-33.a`, `test_t3_4_1_not_blank.py`). No image raises, never 0.0. Distinct from `not_uniform` (solid bright red PASSes not_blank, REJECTs not_uniform) |
 | `T3-4.2-luma` mean luma per frame above LUMA_FLOOR | **built** | this slice | `qc.measure_luma` + `check_video` `luma`: solid black REJECT below `LUMA_FLOOR` (24); testsrc2 PASS; measured equals independent mean YAVG, expected floor, unit `Y`, remedy re-render-seed (`test_t3_4_2_luma.py`). No frames raises, never 0.0. Distinct from `black_frames` |
 | `T3-4.2-sat` channel saturation (NaN / green garbage) | **built** | this slice | `qc.measure_channel_sat` + `check_video` `channel_sat`: solid green/lime FLAG above `CHANNEL_SAT_LIMIT` (80 levels of green dominance); testsrc2 / gray / black PASS; measured equals the independent reading (`test_t3_4_2_sat.py`). No frames raises, never 0.0 |
 | `T3-4.2-resolution` resolution as requested | **built** | this slice | `mixer.probe` width/height; `check_video` emits `resolution` when `expect.width`+`height` are set: matching WxH PASSes, 160x120 against 320x240 REJECTs, measured equals probe WxH, unit `px`, remedy re-render-pinned; without expect the check emits nothing (`test_t3_4_2_resolution.py`) |
@@ -803,18 +813,19 @@ current.
 | `T3-16` overlap is inconclusive, no gate | **built** | `test_t3_16_overlap_inconclusive.py` | `identity_verdict` names overlap inconclusive; `build_identity_gate` returns built False / threshold NULL; a threshold on that report (or via `set_threshold`) is refused. Separated ranges are not called inconclusive. No UI |
 | `T3-17` identity drift scored per artefact | **built** | `test_t3_17_identity_drift.py` | `qc.score_identity_artefact` scores each artefact against the chosen anchor (compliance, variation, sample count). Cause-agnostic: a non-empty reference with no species in the text still scores, and the same pixels score the same whatever the prompt said. `qc.run` (tier 1) cannot see it; `qc_service.run_artefact` records a tier-2 measurement with no threshold and no gate |
 | `T3-17-ui` identity-drift scores on QC surface | **built** | `test_t3_17_ui_identity_drift.py` | `GET /qc` finding-row shows compliance, variation, n for each `identity_drift` row. Default queue keeps that PASS (scored, not gated) so the three numbers are visible; not a threshold control and not a gate |
-| **tier 3, §6 entire** | **built** | `test_qc_approve.py` + child rows | `approve()` enqueues one repair and dest ≠ source (`T3-6`/`T3-18`). `T3-19`…`T3-27` and `T3-33` each have a red test. HTML `POST /qc/findings/{id}/approve` and JSON `POST /api/qc/findings/{id}/approve` both call `qc_service.approve`. The JSON route matches the HTML form: ValueError→400, missing→404; the old `NotImplementedError`→501 branch is removed (`test_qc_review_queue_is_json_and_approve_forwards_to_repair`) |
+| **tier 3, §6 entire** | **built** | `test_qc_approve.py` + child rows | `approve()` enqueues one repair and dest ≠ source (`T3-6`/`T3-18`). `T3-19`…`T3-27` and `T3-33.a` each have a red test. HTML `POST /qc/findings/{id}/approve` and JSON `POST /api/qc/findings/{id}/approve` both call `qc_service.approve`. The JSON route matches the HTML form: ValueError→400, missing→404; the old `NotImplementedError`→501 branch is removed (`test_qc_review_queue_is_json_and_approve_forwards_to_repair`) |
 | `T3-23` repair routing | **built** | `160547d` | default `dispatch_repair` asks `where()`/`fits()`/`resolve()`, refuses a pin under a name the box does not have before submit (`test_t3_23_pinned_name_the_box_does_not_have_is_refused_before_submit`), and a correctly-named model on a box that holds it is SUBMITTED (`test_t3_23_correctly_named_model_on_a_box_that_holds_it_is_submitted`). dest is the actuator's file (`fix_ref` / `gen_postproc`), not a copy of src |
 | `T3-24` refiner resident cost | **built** | `a4b7ef9` | real `fits()` (not a stub) routes `wan22_i2v_low` off a 15.92 GiB card onto a 24 GiB one that holds the correct name (`test_t3_24_refiner_routed_off_15_92_to_24_and_submitted`); peaches cannot take the i2v pair (`test_t3_24_peaches_cannot_take_the_pair`) |
 | `T3-25` remote output move | **built** | `test_qc_approve.py` | `can_move_output` is callable; remote repair is refused by that name (`test_t3_25_remote_repair_refused_by_name_until_check_is_true`); forcing the check true SUBMITS (`test_t3_25_forced_true_remote_repair_is_submitted`) |
 | `T3-26` whether the refiner helps | **built** | this slice | fail-closed labelled-set measurement, not opportunistic: no-op / worse scores produce a finding that says not helping (`test_t3_26_no_improve_finding_says_not_helping`); an improvement reports help (`test_t3_26_improved_labelled_set_reports_help`); empty set, missing file, missing score raise NOT MEASURED; catalogue `proven: opportunistic` is not the answer |
+| `T3-33.b` pose QC before anatomy QC | **process** | this slice | Eye gates in `anchor5/poses/cleanrun/qc-pose-*.json`. Pose FAIL (human face patch, missing arm, wrong camera, tail covering the hole) does not get anatomy. Not a VLM gate. Stack notes: `docs/MEASURED-2026-08-16-POSE-ANATOMY.md` (`T4-20`). |
 | `T3-31` vision score on generated stills | **built** | this slice | `score_generated_still` runs on anchors, refs, rerolls (`test_h_reroll_stores_qc_json`), `fix_ref`, `fix_anchor` and artwork. `persist_still_qc` scores `h_repair` dest and standalone `refine_generated_still` dest onto `artefacts.qc_json`. Stored `confidence` is clamped to `min(identity, prompt)` so a 95% composition score cannot hide a 20% identity miss (`test_parse_score_confidence_is_min_of_identity_and_prompt`). The tile shows id/pose when they diverge, plus the VL note. Still advisory — not a gate |
 | `T3-31` refs scored vs chosen anchor | **built** | this slice | `ref_score_bases` resolves the album's chosen sheet for `h_refs` / `h_reroll` / `h_fix_ref`. `score_candidate` bases are that path, not a job plate, the broken source, or empty. Storing any `qc_json` is not enough (`test_h_refs_scores_vs_chosen_anchor`, `test_h_reroll_scores_vs_chosen_anchor`, `test_h_fix_ref_scores_vs_chosen_anchor`). Mutation: pass job plate as bases → red. Mutation: score fix_ref vs source → red |
 | `T3-21` original and repair listed and scored | **built** | this slice | after `h_repair`, `qc_service.pair(fid)` returns original and dest (`test_t3_21_original_and_repair_are_listed_and_scored`): both landed artefacts, both with findings and a `qc.summarise` verdict. dest ≠ src alone is T3-6 |
 | `T3-22` dismissed stays dismissed | **built** | this slice | same bytes stay dismissed (`test_t3_22_dismissed_stays_dismissed_until_artefact_changes`); rewriting the file reopens the same `(path, check)` row. `findings.artefact_hash` is the change detector |
 | `T3-20` remedy versioned in `prompts` | **built** | `test_t3_20_remedy_runs.py` | the version that RUNS is the stored `prompt_versions` row — same id, read back after approval (`test_t3_20_approve_reads_back_the_same_stored_id`). Mutating the job's copied text still sends the stored wording (`test_t3_20_running_remedy_is_the_stored_row_not_the_job_copy`). A deleted row is refused, not replaced by the copy |
 | `T3-28` identity-wrong never swaps the reference | **built** | `test_t3_28_identity_wrong_remedy.py` | `qc.check_identity_wrong` (also via `qc.run`) proposes "edit the text, then re-render"; `qc.proposes_reference_swap` is the detector. `record` / `set_remedy` / `approve` refuse a swap-the-reference wording and name that identity comes from the text. A legal text-edit remedy is stored. |
-| `T3-33` image FLAG/REJECT is a prompt rewrite | **built** | `test_t3_33_image_flag_reject_prompt_rewrite.py` | Image content FLAG/REJECT (`not_uniform` / `not_blank` / `alpha` / lighting / portrait / identity-look / identity-wrong) is `edit-text` and names the text. "re-render with a different seed" on those findings is red. Structural `opens` stays re-render. Clip luma / freeze / sat stay seed |
+| `T3-33.a` image FLAG/REJECT is a prompt rewrite | **built** | `test_t3_33_image_flag_reject_prompt_rewrite.py` | Image content FLAG/REJECT (`not_uniform` / `not_blank` / `alpha` / lighting / portrait / identity-look / identity-wrong) is `edit-text` and names the text. "re-render with a different seed" on those findings is red. Structural `opens` stays re-render. Clip luma / freeze / sat stay seed |
 | `T3-30` a check is callable from a test | **built** | every `studio/test_t3_*.py` | Each named `qc.check_*` / `qc.run` path is invoked with a path and an expectation; a broken artefact rejects and a correct one passes. That is the verification rule, not a missing implementation |
 | `T3-27` every check names a remedy class | **built** | `test_t3_27_remedy_class.py` | `qc.CHECK_REMEDY_CLASS` on every named check. `approve()` puts `remedy_class` on the job and `_repair_actuator_and_key` uses the class, not the edited text (`test_t3_27_approve_uses_the_class_not_the_remedy_text`). `duration_matches_prediction` is `none`; `actionable` is false and approve refuses (`test_t3_27_no_remedy_refuses_approve`) |
 | `T3-19` edited remedy is what runs | **built** | `test_t3_19_finding_row.py` | service half already in `test_t3_19_two_remedy_texts_are_two_jobs`. UI: `GET /qc` finding-row interpolates planted `measured`/`expected`/`unit` (`T3-4`) and the stored remedy; `POST /qc/findings/{id}/approve` with two texts submits two jobs. A false `actionable` row has no Approve button (`T3-27`) |

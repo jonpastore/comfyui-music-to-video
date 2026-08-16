@@ -4,7 +4,7 @@ docs/TRD-3 §4.1: generated stills must not be uniform or a single flat
 colour. Measurement is RGB pixel standard deviation via
 qc.measure_pixel_std. Floor is UNIFORM_STD_FLOOR (1.0 levels). Below
 the floor REJECTs. Above PASSes. measured is the independent std,
-expected is UNIFORM_STD_FLOOR, unit levels, remedy edit-text (T3-33).
+expected is UNIFORM_STD_FLOOR, unit levels, remedy edit-text (T3-33.a).
 
 Mutation: delete the check from check_image → no not_uniform finding.
 Mutation: always PASS → flat-colour arm red.

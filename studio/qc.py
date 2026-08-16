@@ -6,7 +6,7 @@ histogram embed; T3-16 is identity_verdict. T3-17 scores each artefact
 against the chosen anchor (cause-agnostic). The threshold setter is not
 in this file. T3-26's labelled-set refiner measurement lives here too.
 T3-28's identity-wrong remedy: edit the text, never swap the reference image.
-T3-33: every image FLAG/REJECT content finding's remedy is the next prompt
+T3-33.a: every image FLAG/REJECT content finding's remedy is the next prompt
 rewrite, not "re-render with a different seed".
 
 ffprobe, ffmpeg's own analysis filters, PIL and numpy. No model, no opinion.
@@ -321,7 +321,7 @@ CHECK_REMEDY_CLASS = {
     REFINE_DIFFERENTIAL: REMEDY_NONE,
 }
 
-# T3-33: image content FLAG/REJECT is a prompt rewrite. Structural
+# T3-33.a: image content FLAG/REJECT is a prompt rewrite. Structural
 # findings (missing file, wrong box size) stay re-render / pinned.
 # Video/audio seed remedies are not this criterion.
 IMAGE_STRUCTURAL_CHECKS = frozenset({"opens", "resolution", "size_floor"})

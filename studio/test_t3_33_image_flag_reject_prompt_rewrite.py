@@ -1,4 +1,4 @@
-"""T3-33: image FLAG/REJECT remedies are the next prompt rewrite.
+"""T3-33.a: image FLAG/REJECT remedies are the next prompt rewrite.
 
 T3-28 already does this for identity-wrong ("edit the text"). The rest
 of image QC must not propose "re-render with a different seed". A seed
@@ -42,7 +42,7 @@ def test_t3_33_image_content_checks_are_edit_text():
 
 
 def test_t3_33_video_seed_remedies_are_unchanged():
-    """T3-33 is image QC. Clip luma / freeze / sat stay seed."""
+    """T3-33.a is image QC. Clip luma / freeze / sat stay seed."""
     for check in ("luma", "black_frames", "frozen", "channel_sat"):
         assert qc.CHECK_REMEDY_CLASS[check] == qc.REMEDY_RERENDER_SEED, check
 

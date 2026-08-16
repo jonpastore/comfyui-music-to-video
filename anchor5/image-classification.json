@@ -286,6 +286,138 @@
       "notes": "Kneeling look-back 3qtr, harness on. Closest clothed kneel-present. C1 undress candidate for kneel-present-nude. Not all-fours."
     },
     {
+      "id": "f2-749-kneel-hand",
+      "path": "poses/flux2-a4/allfours_s843167749_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "pose",
+      "seed": 843167749,
+      "notes": "Flux.2 Dev. Hands on floor, look back, nude, her. Closest to all-fours so far. Hips not to camera; crotch not exposed."
+    },
+    {
+      "id": "f2-886-kneel-hand",
+      "path": "poses/flux2-a4/allfours_s843167886_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "pose",
+      "seed": 843167886,
+      "notes": "Flux.2. One hand on floor, side-on crawl/kneel, nude, her."
+    },
+    {
+      "id": "f2-023-kneel-hand",
+      "path": "poses/flux2-a4/allfours_s843168023_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "pose",
+      "seed": 843168023,
+      "notes": "Flux.2. Both hands toward floor, tail up, look back. Best crawl of the four. Eyes lime. Not hips-to-camera expose."
+    },
+    {
+      "id": "f2-160-twotail",
+      "path": "poses/flux2-a4/allfours_s843168160_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "skip",
+      "seed": 843168160,
+      "notes": "Flux.2. Hands on floor but two tails."
+    },
+    {
+      "id": "kx-749-kneel-nude",
+      "path": "poses/kontext-a4/allfours_s843167749_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "seed": 843167749,
+      "notes": "Kontext Dev. Asked all-fours; got nude kneel look-back. She is her, jewelry on, no clothes. Not hands-and-knees."
+    },
+    {
+      "id": "kx-886-kneel-nude",
+      "path": "poses/kontext-a4/allfours_s843167886_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "seed": 843167886,
+      "notes": "Kontext. Best nude kneel look-back of the four. Fills kneel-present-nude. Not all-fours."
+    },
+    {
+      "id": "kx-023-kneel-nude",
+      "path": "poses/kontext-a4/allfours_s843168023_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "seed": 843168023,
+      "notes": "Kontext. Nude kneel look-back, her. Tail down. Not all-fours."
+    },
+    {
+      "id": "kx-160-kneel-nude",
+      "path": "poses/kontext-a4/allfours_s843168160_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "seed": 843168160,
+      "notes": "Kontext. Nude kneel, more 3qtr back. Not all-fours."
+    },
+    {
+      "id": "c1-749-kneel-harness",
+      "path": "poses/c1-kneel023/three_quarter_nude_s843167749_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "partial",
+      "usable": "pose",
+      "seed": 843167749,
+      "notes": "C1 image-latent denoise 1.0 on a4k-023. Pose held. Harness stayed. Not a nude keeper."
+    },
+    {
+      "id": "c1-886-kneel-humanface",
+      "path": "poses/c1-kneel023/three_quarter_nude_s843167886_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "partial",
+      "usable": "skip",
+      "seed": 843167886,
+      "notes": "C1. Pose held, harness stayed, face more human than her."
+    },
+    {
+      "id": "c1-023-kneel-harness",
+      "path": "poses/c1-kneel023/three_quarter_nude_s843168023_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "partial",
+      "usable": "pose",
+      "seed": 843168023,
+      "notes": "C1. Cleanest of the four kneel look-backs. Harness still on."
+    },
+    {
+      "id": "c1-160-kneel-float",
+      "path": "poses/c1-kneel023/three_quarter_nude_s843168160_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "partial",
+      "usable": "skip",
+      "seed": 843168160,
+      "notes": "C1. Floating, no floor, harness on."
+    },
+    {
       "id": "a4k-160-stand-clothed",
       "path": "poses/allfours-kneel/on_all_fours_nude_s843168160_00001_.png",
       "kind": "generated",

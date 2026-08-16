@@ -3,7 +3,7 @@
 docs/TRD-3 §4.1: generated stills must not be blank. Measurement is mean
 RGB level via qc.measure_mean_level. Floor is LUMA_FLOOR (24.0 levels).
 Below the floor REJECTs. At or above PASSes. measured is the independent
-mean, expected is LUMA_FLOOR, unit levels, remedy edit-text (T3-33).
+mean, expected is LUMA_FLOOR, unit levels, remedy edit-text (T3-33.a).
 
 Distinct from not_uniform (max per-channel spatial std): solid bright red
 PASSes not_blank (mean >> floor) and REJECTs not_uniform (std ~ 0).

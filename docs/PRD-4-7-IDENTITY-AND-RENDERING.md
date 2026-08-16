@@ -66,7 +66,10 @@ What they need from these four, in their own terms:
    identity and pose, not an average that can read 95% on a human-faced
    two-tail sheet."*
    (`T3-31`, `T4-19`)
-6. *"I have sixteen clothed pose photographs. I name each one, assign a
+6. *"Do not draw anatomy on a sheet that failed pose QC. Empty latent
+   plus a standing photo is how we grew a human face. Photoreal Reddit
+   is never her plate."* (`T3-33.b`, `T4-20`)
+7. *"I have sixteen clothed pose photographs. I name each one, assign a
    tier or generate a tier version, and the identity pair stays the
    identity pair. Base cards look like candidate cards without render
    data."* (`T7-20`)
@@ -92,7 +95,7 @@ empty `character_reference` and name that identity comes from the text.
 The QC side is `qc.check_identity_wrong`: the proposed remedy is edit the
 text, then re-render, and a swap-the-reference wording is refused on
 record, edit and approve. The same lesson is the rest of image QC
-(`T3-33`): a FLAG/REJECT still's remedy is the next prompt rewrite, not
+(`T3-33.a`): a FLAG/REJECT still's remedy is the next prompt rewrite, not
 a different seed.
 
 **3.3 Two clauses that contradict each other do not average — the model picks.**
@@ -110,6 +113,15 @@ values are labelled *"on an anchor this returns noise"* and are correct because
 `latent_mode` is pinned. A dropdown documenting its own uselessness is the mild
 form; a flag whose whole purpose is changing the output doing nothing silently is
 the severe one.
+
+**3.5 The still that holds her and the clip that moves her are different
+UNETs.** Identity stills are Qwen-Image-Edit 2511 on the operator
+photographs. Clips are `ltx25` or `wan22_s2v` on the approved still.
+Pony, Krea, and Flux are other generators: they can donate an anatomy
+crop or make a stranger; they are not a second identity picker.
+`docs/DDD-4-7-IDENTITY-AND-RENDERING.md` §1a is the when-to-use map
+that a later `models.py` `family`/`stage`/`when`/`not_for` change
+copies. Do not offer those families as `role=reference` defaults.
 
 ## 4. What "working" means
 
@@ -132,6 +144,8 @@ the severe one.
 | P8 | Work is pulled, not assigned; "ready" is not "queued"; every artefact's state transition is a row with a time. A re-render, refine, repair or anchor re-roll lists both candidates and either is selectable | `T6-1`…`T6-7`, `T6-A5` |
 | P9 | Every artefact can be joined to what was asked of it, by one canonical path | `T6-8`…`T6-13a` |
 | P10 | A killed worker leaves no half-written job; a long render does not hold the write lock | `T6-14`…`T6-16` |
+| P11 | Pose QC before anatomy. Empty latent is not the identity lock for a new pose. Photoreal is not image2. Anatomy only on a pose PASS. Training a 2511 LoRA is last resort (gamingpc), not the default path | `T3-33.b`, `T4-20` |
+| P12 | Qwen-Image-Edit 2511 holds her stills. LTX/WAN animate an approved still. Pony/Krea/Flux are not a second identity stack. `models.py` may grow `family`/`when`/`not_for`; it does not grow a Pony default | DDD-4-7 §1a, `T4-20`, `T2-35` |
 
 **P5's path is built; the picture look is not.** `T7-6` shipped: with
 use-as-ref ticked, `gen_anchor`'s images list is exactly that sheet.

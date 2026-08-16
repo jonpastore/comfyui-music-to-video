@@ -261,6 +261,11 @@ was orderly, it was the *unmount* that would not complete.
   the measurement is in that document.
 - **No hard exclusion of slow boxes.** `T9-5`, and it is a decision not an
   oversight.
+- **No silent second identity family.** `CATALOG` may later grow optional
+  `family` / `stage` / `when` / `not_for` (DDD-4-7 §1a). That change
+  does not catalogue Pony, Krea, or Flux as `default` for `reference`.
+  Files on disk that are the wrong UNET stay in `IGNORED` or
+  `proven=opportunistic` with `stage=donor` until a workflow exists.
 
 ## 9. How every criterion above is to be verified
 

@@ -162,6 +162,14 @@ keepers, never a stranger plate.
 - New poses run the same still QC as anchors (T3-31 confidence,
   identity, hallucinations). Add prompt/settings remedies:
   latent / denoise / CFG / pose-match / plate-absent / body colour.
+- `T3-33.b` / `T4-20`: pose QC (cat muzzle, both arms, source skin, asked
+  camera, tail origin above the anus) **before** anatomy QC. Empty
+  latent invents a face. InstantX Union is pose only. Vanilla 2511
+  undraws genitals — SNOFS / Inpainting CN / crop-stitch after PASS.
+  Anatomy samples (r/rearpussy, r/GodPussyv2, r/GodAsshole, …) retone
+  to her source photos. Never anatomy on a pose FAIL. Never photoreal
+  as image2. Operator grind:
+  `docs/MEASURED-2026-08-16-POSE-ANATOMY.md`.
 - QC must not fail image-latent sheets for inheriting source size.
 - D7 pair is a new image/video look: lips + identity + blocking.
   NOT MEASURED until a real pair is pinned. Do not rank on warm px.
@@ -276,7 +284,7 @@ wrote the **old** one-shot world to a high built-rate. This file is
 now the product. Do not mark the loop **built** until the criteria
 below exist and can go red.
 
-**Shipped (keep):** still QC (T3-31 advisory, T3-28 / T3-33 edit-text),
+**Shipped (keep):** still QC (T3-31 advisory, T3-28 / T3-33.a edit-text),
 T2-27 per-scene refs, T2-28 refuse refs without a chosen sheet, T2-48
 ceilings, T5 no WAN-of-LTX-latent, T5-A refine, T6-A5 dest≠src, T7-20
 named poses, T10 minor policy rows that landed, nude-loop CLI as a

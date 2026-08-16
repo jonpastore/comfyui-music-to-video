@@ -95,7 +95,7 @@ and it is what the review found missing.
         relaxed at their sides" is a shipped prompt contradiction)
 
     qc_service.py pattern --> sets/storyboard/arc/playlist/cleanup/media_service (T6-A3, built)
-    approve() enqueues dest ≠ src (T3-6 / T3-18, built) --> T3-19…T3-27 / T3-33
+    approve() enqueues dest ≠ src (T3-6 / T3-18, built) --> T3-19…T3-27 / T3-33.a
     calibration row --> tier 2 threshold --> tier 2 UI  (never the other order)
 
 **`T6-13a` and `T2-12a` are the two smallest items with the largest reach in the

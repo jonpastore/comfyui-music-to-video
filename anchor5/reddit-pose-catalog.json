@@ -1,0 +1,2651 @@
+{
+  "_readme": [
+    "Adult 18+ only. Scene vocabulary for Meow P: poses, acts, configs, finishes, movement.",
+    "A scene is configuration \u00d7 pose \u00d7 contact \u00d7 act \u00d7 finish \u00d7 movement \u00d7 camera [\u00d7 overlay].",
+    "topic id is the primitive. aliases map every common porn name onto one id.",
+    "Extract skeleton/depth/camera from a still or GIF hold-frame. Discard pixels.",
+    "Never use as image1 or as a person-plate in image2."
+  ],
+  "updated": "2026-08-15",
+  "compose": "configuration \u00d7 pose \u00d7 contact \u00d7 act \u00d7 finish \u00d7 movement \u00d7 camera [\u00d7 overlay]  |  anatomy after pose QC",
+  "hard_excludes": [
+    "teen / barely-legal / college-as-underage / jailbait / loli / young-girls packaging",
+    "school tropes and youthful uniforms even on adult-named subs",
+    "any face that reads under-18",
+    "incest",
+    "personals",
+    "casting genres used as acts (MILF, PAWG, ethnicity, amateur, studio) \u2014 those are cast, not geometry"
+  ],
+  "not_in_catalog": [
+    "Casting / body: MILF, GILF, teen, petite, PAWG, BBW, ebony, asian, latina, redhead \u2014 pick a model, not an act.",
+    "Production: amateur, gonzo, POV-as-genre, 60fps, VR, hentai-as-genre, OnlyFans \u2014 pipeline, not a pose.",
+    "Lifestyle tags that are just MFM with extra text: hotwife, cuckold, swinging. Use mfm + the pose.",
+    "Named micro-variations that do not change the skeleton: CAT, lunging cowgirl, restrained doggy, little dipper, waterfall, bouncing spoon, rusty trombone, seventh posture.",
+    "Male-only: frot, docking, circle jerk as the sheet. Out of scope unless she is in frame."
+  ],
+  "gif_dump": {
+    "sub": "NSFW_GIF",
+    "members": "~3M"
+  },
+  "index": "https://www.reddit.com/r/NSFW411/wiki/index/",
+  "aliases": {
+    "1on1": "pair",
+    "couple": "pair",
+    "mf": "pair",
+    "fm": "pair",
+    "mfm threesome": "mfm",
+    "two men one woman": "mfm",
+    "double team": "mfm",
+    "mmf threesome": "mmf",
+    "bisexual threesome": "mmf",
+    "ffm threesome": "ffm",
+    "two girls one guy": "ffm",
+    "fmf threesome": "fmf",
+    "man in the middle": "fmf",
+    "fff": "fff",
+    "lesbian threesome": "fff",
+    "three girls": "fff",
+    "4some": "foursome",
+    "fourgy": "foursome",
+    "foursome": "foursome",
+    "mmmf": "mmmf",
+    "three men one woman": "mmmf",
+    "fffm": "fffm",
+    "reverse gangbang": "reverse_gangbang",
+    "mfmf": "mfmf",
+    "two couples": "mfmf",
+    "ffff": "fff",
+    "gb": "gangbang",
+    "gang bang": "gangbang",
+    "bang": "gangbang",
+    "pulling a train": "train",
+    "run a train": "train",
+    "groupsex": "orgy",
+    "group sex": "orgy",
+    "swingers pile": "orgy",
+    "circle jerk": "blowbang",
+    "doggystyle": "doggy",
+    "doggy style": "doggy",
+    "from behind all fours": "doggy",
+    "stallion": "doggy",
+    "leapfrog": "face_down_ass_up",
+    "bulldog": "doggy",
+    "fdau": "face_down_ass_up",
+    "face down ass up": "face_down_ass_up",
+    "chest down hips up": "face_down_ass_up",
+    "flat iron": "pronebone",
+    "prone": "pronebone",
+    "lying doggy": "pronebone",
+    "man on top": "missionary",
+    "missionary plus": "missionary",
+    "cat": "missionary",
+    "coital alignment": "missionary",
+    "stopperage": "mating_press",
+    "folded missionary": "mating_press",
+    "viennese oyster": "legs_over_head",
+    "legs behind head": "legs_over_head",
+    "woman on top": "cowgirl",
+    "girl on top": "cowgirl",
+    "riding": "cowgirl",
+    "cowperson": "cowgirl",
+    "asian cowgirl": "squat_ride",
+    "squat cowgirl": "squat_ride",
+    "reverse missionary": "cowgirl",
+    "lotus flower": "lotus",
+    "yab yum": "lotus",
+    "pounding on the spot": "lotus",
+    "lap sit": "lotus",
+    "spoons": "spoon",
+    "spooning": "spoon",
+    "side fuck": "spoon",
+    "scissors hetero": "side_scissor",
+    "pretzel": "side_scissor",
+    "edge of bed": "butterfly",
+    "hips on edge": "butterfly",
+    "suspended congress": "lift_carry",
+    "ekiben": "lift_carry",
+    "standing carry": "lift_carry",
+    "reverse ekiben": "lift_carry",
+    "bodyguard": "standing_behind",
+    "standing doggy": "standing_behind",
+    "from behind standing": "standing_behind",
+    "against a wall": "wall_pin",
+    "wall sex": "wall_pin",
+    "tabletop": "furniture_edge",
+    "kitchen counter": "furniture_edge",
+    "over the table": "furniture_edge",
+    "bent over furniture": "furniture_edge",
+    "look back": "bent_over_lookback",
+    "bent over": "bent_over_lookback",
+    "rear pussy": "rear_anatomy",
+    "rearpussy": "rear_anatomy",
+    "pussy from behind": "rear_anatomy",
+    "god pussy": "vulva_closeup",
+    "godpussy": "vulva_closeup",
+    "labia": "vulva_closeup",
+    "innie": "vulva_closeup",
+    "asshole closeup": "anus_closeup",
+    "god asshole": "anus_closeup",
+    "queening": "facesit",
+    "facesitting": "facesit",
+    "sit on face": "facesit",
+    "69": "sixty_nine",
+    "sixtynine": "sixty_nine",
+    "on her knees": "kneel_oral",
+    "fellatio kneel": "kneel_oral",
+    "pile driver": "piledriver",
+    "rusty bike pump": "piledriver",
+    "nelson": "full_nelson",
+    "t-square": "t_square",
+    "tsquare": "t_square",
+    "present": "all_fours",
+    "crawl": "all_fours",
+    "spread eagle": "legs_spread",
+    "spreading": "legs_spread",
+    "bj": "blowjob",
+    "fellatio": "blowjob",
+    "blow job": "blowjob",
+    "irrumatio": "deepthroat",
+    "facefuck": "deepthroat",
+    "throat fuck": "deepthroat",
+    "eating pussy": "cunnilingus",
+    "pussy licking": "cunnilingus",
+    "muff dive": "cunnilingus",
+    "rimming": "rim",
+    "anilingus": "rim",
+    "rimjob": "rim",
+    "tossed salad": "rim",
+    "analingus": "rim",
+    "hand job": "handjob",
+    "hj": "handjob",
+    "fingering": "fingering",
+    "digit": "fingering",
+    "titfuck": "titfuck",
+    "titty fuck": "titfuck",
+    "paizuri": "titfuck",
+    "mammary intercourse": "titfuck",
+    "thighjob": "thighjob",
+    "intercrural": "thighjob",
+    "footjob": "footjob",
+    "fj": "footjob",
+    "tribbing": "scissoring",
+    "tribadism": "scissoring",
+    "trib": "scissoring",
+    "strap-on": "lesbian_strap",
+    "strapon": "lesbian_strap",
+    "peg": "pegging",
+    "split roast": "spit_roast",
+    "spitroast": "spit_roast",
+    "chinese finger trap": "spit_roast",
+    "eiffel tower": "spit_roast",
+    "double team rear": "sandwich",
+    "dp": "double_penetration",
+    "double stuff": "double_penetration",
+    "dvp": "double_vaginal",
+    "double vaginal": "double_vaginal",
+    "dap": "double_anal",
+    "double anal": "double_anal",
+    "tp": "triple_penetration",
+    "triple": "triple_penetration",
+    "atm": "ass_to_mouth",
+    "ass to mouth": "ass_to_mouth",
+    "snowball": "snowball",
+    "cuck lick": "creampie_cleanup",
+    "cleanup": "creampie_cleanup",
+    "licked while fucked": "fucklicking",
+    "cucklicking": "fucklicking",
+    "ffmfucklick": "fucklicking",
+    "fuck lick": "fucklicking",
+    "on her back": "missionary",
+    "onherback": "missionary",
+    "ass up face down": "face_down_ass_up",
+    "assupfacedown": "face_down_ass_up",
+    "one chick 2 dicks": "spit_roast",
+    "onechick2dicks": "spit_roast",
+    "lickable starfish": "rim",
+    "eating ass": "rim",
+    "plowcam": "plowcam",
+    "nsfw_plowcam": "plowcam",
+    "girls with girls": "lesbian",
+    "groolstrings": "squirt",
+    "lucky pierre": "mmf",
+    "369": "threesome_369",
+    "double cowgirl": "double_cowgirl",
+    "daisy chain": "daisy_chain",
+    "internal": "creampie",
+    "creampied": "creampie",
+    "don't pull out": "creampie",
+    "leaking creampie": "creampie_flow",
+    "flowing out": "creampie_flow",
+    "pushing it out": "creampie_flow",
+    "creampie drip": "creampie_flow",
+    "anal creampie": "anal_creampie",
+    "cumshot face": "facial",
+    "facials": "facial",
+    "body shot": "body_cum",
+    "throat pie": "throatpie",
+    "oral creampie": "throatpie",
+    "female ejaculation": "squirt",
+    "gush": "squirt",
+    "squirting": "squirt",
+    "breeding": "breeding_supine",
+    "gaping": "gape",
+    "when it goes in": "insertion",
+    "plow cam": "plowcam",
+    "under camera": "plowcam",
+    "pov": "pov",
+    "yiff": "anthro",
+    "furry": "anthro",
+    "used": "freeuse",
+    "public sex": "public",
+    "bdsm": "bondage",
+    "tied": "bondage"
+  },
+  "variants": {
+    "squirt": [
+      "seated",
+      "lying_supine",
+      "kneeling",
+      "all_fours",
+      "standing",
+      "anal",
+      "solo_toy"
+    ],
+    "squirt_while_fucked": [
+      "doggy",
+      "cowgirl",
+      "missionary",
+      "anal"
+    ],
+    "creampie_flow": [
+      "doggy",
+      "missionary",
+      "standing",
+      "anal",
+      "push_out"
+    ],
+    "cowgirl": [
+      "upright",
+      "lean_forward",
+      "grind"
+    ],
+    "reverse_cowgirl": [
+      "upright",
+      "look_back",
+      "lean_forward"
+    ],
+    "doggy": [
+      "hands_down",
+      "elbows_down",
+      "look_back",
+      "anal"
+    ],
+    "missionary": [
+      "legs_wrapped",
+      "legs_up",
+      "legs_on_shoulders"
+    ],
+    "facesit": [
+      "face_forward",
+      "look_back",
+      "smother"
+    ],
+    "spit_roast": [
+      "doggy_oral",
+      "standing_oral",
+      "prone_oral"
+    ],
+    "lesbian_strap": [
+      "doggy",
+      "missionary",
+      "standing"
+    ],
+    "gangbang": [
+      "doggy",
+      "missionary",
+      "cowgirl",
+      "spit_roast"
+    ],
+    "rear_anatomy": [
+      "all_fours",
+      "look_back",
+      "spread",
+      "panties_aside"
+    ],
+    "vulva_closeup": [
+      "innie",
+      "outie",
+      "spread"
+    ],
+    "anus_closeup": [
+      "closed",
+      "spread",
+      "tail_origin"
+    ]
+  },
+  "profile_activity": {
+    "user": "SouthFloridaCouple",
+    "subscriptions_public": true,
+    "source": "old.reddit.com/subreddits/mine/subscriber.json via Firefox cookies, 2026-08-15",
+    "total_subscribed": 1150,
+    "excluded": 40,
+    "working_list": "anchor5/reddit-subscribed.json",
+    "pose_useful": [
+      {
+        "sub": "FFMFucklick",
+        "maps_to": "fucklicking",
+        "why": "Named fucklick feed. During-sex lick, not cleanup."
+      },
+      {
+        "sub": "CreamPieFlowingOut",
+        "maps_to": "creampie_flow",
+        "why": "Exact leak/push-out."
+      },
+      {
+        "sub": "squirting",
+        "maps_to": "squirt",
+        "why": "Main squirt. Split seated/lying/kneeling/anal from hold frames."
+      },
+      {
+        "sub": "GushingGirls",
+        "maps_to": "squirt",
+        "why": "Gush stills+clips."
+      },
+      {
+        "sub": "grool",
+        "maps_to": "squirt",
+        "why": "Wetness, not jet."
+      },
+      {
+        "sub": "CowgirlRiders",
+        "maps_to": "cowgirl",
+        "why": "Dedicated ride. Search reverse in titles."
+      },
+      {
+        "sub": "DoggyStyle",
+        "maps_to": "doggy",
+        "why": "High-volume doggy."
+      },
+      {
+        "sub": "Doggystyle_NSFW",
+        "maps_to": "doggy",
+        "why": "Act-clean doggy gifs."
+      },
+      {
+        "sub": "facedownassup",
+        "maps_to": "face_down_ass_up",
+        "why": "FDAU."
+      },
+      {
+        "sub": "AssUpFaceDown",
+        "maps_to": "face_down_ass_up",
+        "why": "FDAU sibling."
+      },
+      {
+        "sub": "pronebone",
+        "maps_to": "pronebone",
+        "why": "Prone."
+      },
+      {
+        "sub": "pronebone_spitroast",
+        "maps_to": "spit_roast",
+        "why": "Prone + spit roast together."
+      },
+      {
+        "sub": "Onechick2dicks",
+        "maps_to": "spit_roast",
+        "why": "Oral+rear two-partner line."
+      },
+      {
+        "sub": "SpitRoastedGW",
+        "maps_to": "spit_roast",
+        "why": "Amateur spit roast."
+      },
+      {
+        "sub": "SensualMFM",
+        "maps_to": "mfm",
+        "why": "MFM, no MM required."
+      },
+      {
+        "sub": "SensualMMF",
+        "maps_to": "mmf",
+        "why": "MMF / bi contact."
+      },
+      {
+        "sub": "OnHerBack",
+        "maps_to": "missionary",
+        "why": "Supine sheet."
+      },
+      {
+        "sub": "Anal_Missionary",
+        "maps_to": "missionary",
+        "why": "Missionary + anal contact."
+      },
+      {
+        "sub": "Pussy_From_Behind",
+        "maps_to": "bent_over_lookback",
+        "why": "Rear vulva / look-back."
+      },
+      {
+        "sub": "rearpussy",
+        "maps_to": "rear_anatomy",
+        "why": "From-behind vulva/perineum stills. Anatomy after pose QC."
+      },
+      {
+        "sub": "GodPussyv2",
+        "maps_to": "vulva_closeup",
+        "why": "Live godpussy. Shape/labia samples, never image2."
+      },
+      {
+        "sub": "PussiesCloseUp",
+        "maps_to": "vulva_closeup",
+        "why": "Shaved close-up vulva."
+      },
+      {
+        "sub": "LoveThyLabia",
+        "maps_to": "vulva_closeup",
+        "why": "Labia shape library."
+      },
+      {
+        "sub": "GodAsshole",
+        "maps_to": "anus_closeup",
+        "why": "Anus + tail-origin samples."
+      },
+      {
+        "sub": "asshole_closeup",
+        "maps_to": "anus_closeup",
+        "why": "Tight anus stills."
+      },
+      {
+        "sub": "NSFW_Plowcam",
+        "maps_to": "plowcam",
+        "why": "Floor camera."
+      },
+      {
+        "sub": "facesitting",
+        "maps_to": "facesit",
+        "why": "Sit-on-face."
+      },
+      {
+        "sub": "FacesittingHub",
+        "maps_to": "facesit",
+        "why": "Second facesit dump."
+      },
+      {
+        "sub": "Eating_Pussy_GIFs",
+        "maps_to": "cunnilingus",
+        "why": "Oral-on-her motion."
+      },
+      {
+        "sub": "LickableStarfish",
+        "maps_to": "rim",
+        "why": "Rimming."
+      },
+      {
+        "sub": "scissoring",
+        "maps_to": "scissoring",
+        "why": "Girl-on-girl lock."
+      },
+      {
+        "sub": "lesbians",
+        "maps_to": "lesbian",
+        "why": "Parent girl-on-girl."
+      },
+      {
+        "sub": "GirlsWithGirls",
+        "maps_to": "lesbian",
+        "why": "Second lesbian dump."
+      },
+      {
+        "sub": "gangbang",
+        "maps_to": "gangbang",
+        "why": "GB."
+      },
+      {
+        "sub": "GangbangChicks",
+        "maps_to": "gangbang",
+        "why": "Woman-centered GB."
+      },
+      {
+        "sub": "AirTight",
+        "maps_to": "airtight",
+        "why": "Three holes."
+      },
+      {
+        "sub": "CreampieCleanUp",
+        "maps_to": "creampie_cleanup",
+        "why": "Aftermath lick."
+      },
+      {
+        "sub": "holdthemoan",
+        "maps_to": "standing_sex",
+        "why": "Standing/wall/quiet."
+      },
+      {
+        "sub": "freeuse",
+        "maps_to": "freeuse",
+        "why": "Mid-task."
+      },
+      {
+        "sub": "SheLikesItRough",
+        "maps_to": "rough",
+        "why": "Pin/fold overlay."
+      }
+    ],
+    "not_pose": [
+      "Personals / r4r / club ads are not pose sources.",
+      "Pussy-macro / asshole-macro subs are anatomy_sample AFTER pose QC. Never as image2 or a person-plate.",
+      "Ethnicity/cast dumps are not geometry.",
+      "40 teen/youthful-named subs were dropped from the working list."
+    ]
+  },
+  "families": [
+    {
+      "id": "configuration",
+      "label": "Configuration \u2014 who is in the scene",
+      "note": "Letter codes are gender of bodies, left-to-right is not order of acts. MFM \u2260 MMF. FFM \u2260 FMF. Count people first, then pick a pose and an act.",
+      "topic_ids": [
+        "solo",
+        "pair",
+        "mfm",
+        "mmf",
+        "ffm",
+        "fmf",
+        "fff",
+        "foursome",
+        "mfmf",
+        "mmmf",
+        "fffm",
+        "gangbang",
+        "reverse_gangbang",
+        "lesbian_gangbang",
+        "blowbang",
+        "train",
+        "orgy",
+        "daisy_chain"
+      ]
+    },
+    {
+      "id": "pose",
+      "label": "Pose \u2014 her body geometry",
+      "note": "One skeleton. Contact (vaginal/anal) is a separate axis \u2014 doggy is the pose, anal is the contact. Named variations that do not change the skeleton are aliases.",
+      "topic_ids": [
+        "all_fours",
+        "face_down_ass_up",
+        "pronebone",
+        "doggy",
+        "bent_over_lookback",
+        "standing_behind",
+        "standing_sex",
+        "wall_pin",
+        "furniture_edge",
+        "lift_carry",
+        "wheelbarrow",
+        "missionary",
+        "mating_press",
+        "legs_over_head",
+        "butterfly",
+        "cowgirl",
+        "reverse_cowgirl",
+        "squat_ride",
+        "amazon",
+        "lotus",
+        "spoon",
+        "side_scissor",
+        "t_square",
+        "piledriver",
+        "full_nelson",
+        "kneel_oral",
+        "deepthroat",
+        "facesit",
+        "sixty_nine",
+        "legs_spread",
+        "hanging_breasts"
+      ]
+    },
+    {
+      "id": "contact",
+      "label": "Contact \u2014 what is touching",
+      "note": "Stacks on any pose. doggy+anal is two ids, not a new pose.",
+      "topic_ids": [
+        "vaginal",
+        "anal",
+        "cunnilingus",
+        "blowjob",
+        "rim",
+        "handjob",
+        "fingering",
+        "titfuck",
+        "thighjob",
+        "footjob",
+        "toy",
+        "fist",
+        "strap"
+      ]
+    },
+    {
+      "id": "act",
+      "label": "Act \u2014 named topology (people + orifices + motion)",
+      "note": "These are the nouns a storyboard uses. Each one implies a config and usually a pose.",
+      "topic_ids": [
+        "spit_roast",
+        "sandwich",
+        "double_penetration",
+        "double_vaginal",
+        "double_anal",
+        "airtight",
+        "triple_penetration",
+        "threesome_369",
+        "double_cowgirl",
+        "scissoring",
+        "lesbian",
+        "lesbian_strap",
+        "lesbian_squirt",
+        "pegging",
+        "fucklicking",
+        "creampie_cleanup",
+        "ass_to_mouth",
+        "snowball",
+        "freeuse",
+        "rough"
+      ]
+    },
+    {
+      "id": "finish",
+      "label": "Finish / fluid / aftermath",
+      "note": "A beat after or during the act. Combine with a pose. Do not use a finish id as the only pose.",
+      "topic_ids": [
+        "creampie",
+        "creampie_flow",
+        "anal_creampie",
+        "breeding_supine",
+        "facial",
+        "body_cum",
+        "bukkake",
+        "throatpie",
+        "squirt",
+        "squirt_while_fucked",
+        "gape",
+        "distension"
+      ]
+    },
+    {
+      "id": "movement",
+      "label": "Movement \u2014 the beat inside a pose",
+      "note": "These are not poses. They tell the clip what to do in the hold.",
+      "topic_ids": [
+        "insertion",
+        "bounce",
+        "grind",
+        "thrust",
+        "look_back",
+        "crawl",
+        "swap"
+      ]
+    },
+    {
+      "id": "camera",
+      "label": "Camera",
+      "note": "Lens, not pose. Combine with a pose id.",
+      "topic_ids": [
+        "plowcam",
+        "pov",
+        "rear",
+        "side_3qtr"
+      ]
+    },
+    {
+      "id": "anatomy",
+      "label": "Anatomy \u2014 texture after pose QC",
+      "note": "Not a pose. Sample shape/lighting of vulva and anus after the skeleton already passed pose QC (cat face, both arms, source skin, tail origin above the anus). Retone Lab a,b from looking-back.jpg + standing.jpg. Never as image1 or as a person-plate in image2.",
+      "topic_ids": [
+        "rear_anatomy",
+        "vulva_closeup",
+        "anus_closeup"
+      ]
+    },
+    {
+      "id": "overlay",
+      "label": "Overlay \u2014 body class and scene force",
+      "note": "Never a pose by itself. Search the topic id on the overlay source.",
+      "topic_ids": [
+        "anthro",
+        "public",
+        "bondage"
+      ]
+    }
+  ],
+  "topics": [
+    {
+      "id": "solo",
+      "label": "Solo",
+      "definition": "Her alone. Toys, hands, present, spread. No partner skeleton.",
+      "skeleton": "One female body, complete.",
+      "movement": "Self-touch, toy stroke, pose hold.",
+      "hold_frame": "Full body. Hands and toy readable.",
+      "primary": {
+        "sub": "spreading",
+        "media": "still",
+        "members": null,
+        "why": "Cleanest solo expose. Not an act dump."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "pair",
+      "label": "Pair / 1-on-1",
+      "definition": "Her + one partner. Default if no group tag. Pose and act still required.",
+      "skeleton": "Two bodies. She must be complete.",
+      "movement": "Whatever the child pose is.",
+      "hold_frame": "Both bodies, her limbs complete.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Parent config. Do not search this \u2014 pick a pose."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "mfm",
+      "label": "MFM",
+      "definition": "Two men, one woman. No required male-male contact. The usual porn 'two guys one girl'.",
+      "skeleton": "Her in the middle or on one of them. Two male bodies as props.",
+      "movement": "Spit roast, sandwich, DP, or take-turns.",
+      "hold_frame": "Her full spine + both partners. Count three bodies.",
+      "primary": {
+        "sub": "mfm",
+        "media": "mix",
+        "members": null,
+        "why": "Act-clean two-male one-female. Distinct from MMF."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "mmf",
+      "label": "MMF",
+      "definition": "Two men, one woman, with male-male contact (bisexual). Lucky Pierre lives here.",
+      "skeleton": "Same count as MFM. One male is also receiving.",
+      "movement": "One man fucks her while the other fucks him, or they contact each other.",
+      "hold_frame": "Her complete + the MM contact readable if that is the point.",
+      "primary": {
+        "sub": "Threesome",
+        "media": "mix",
+        "members": "~1.1M",
+        "why": "Search MMF / bisexual. No large MMF-only pose sub."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "ffm",
+      "label": "FFM",
+      "definition": "Two women, one man. The women interact with each other and with him.",
+      "skeleton": "Two female skeletons + one male. Girl-girl contact is required for this id.",
+      "movement": "Double cowgirl, one rides / one sits on his face, or they kiss/lick while he fucks one.",
+      "hold_frame": "Both women complete. If the women never touch, it is FMF.",
+      "primary": {
+        "sub": "Threesome",
+        "media": "mix",
+        "members": "~1.1M",
+        "why": "Search FFM. Largest mixed threesome feed."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "fmf",
+      "label": "FMF",
+      "definition": "Two women, one man, man in the middle. Women primarily on him, little girl-girl.",
+      "skeleton": "He is the hub. Each woman occupies one end (mouth / lap / ride).",
+      "movement": "One rides, one on his face or cock. Parallel, not scissoring.",
+      "hold_frame": "Both women + him. Women may not touch each other.",
+      "primary": {
+        "sub": "Threesome",
+        "media": "mix",
+        "members": "~1.1M",
+        "why": "Search FMF or 'man in the middle'. Distinct from FFM."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "fff",
+      "label": "FFF / lesbian threesome",
+      "definition": "Three women. No male. Strap, scissor, sit, daisy chain.",
+      "skeleton": "Three female skeletons.",
+      "movement": "Two-on-one or a triangle.",
+      "hold_frame": "All three complete. She (Meow P) must be identifiable as one of them.",
+      "primary": {
+        "sub": "lesbians",
+        "media": "mix",
+        "members": "~1.8M",
+        "why": "Search threesome / three inside r/lesbians."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "foursome",
+      "label": "Foursome (parent)",
+      "definition": "Exactly four people. Pick a child config (MFMF, MMMF, FFFM) for the sheet.",
+      "skeleton": "Four bodies. She must still read.",
+      "movement": "Two pairs, or 3-on-1, or a square.",
+      "hold_frame": "Her complete. Do not extract the pile.",
+      "primary": {
+        "sub": "Xsome",
+        "media": "mix",
+        "members": "~667k",
+        "why": "Parent. Prefer a child id."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "mfmf",
+      "label": "MFMF / two couples",
+      "definition": "Two men, two women. Often two pairs side by side or a swap.",
+      "skeleton": "Two female skeletons. Extract her, ignore the other woman if needed.",
+      "movement": "Parallel pairs, or a four-way square / 469.",
+      "hold_frame": "Her pair readable.",
+      "primary": {
+        "sub": "Xsome",
+        "media": "mix",
+        "members": "~667k",
+        "why": "Search foursome / two couples."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "mmmf",
+      "label": "MMMF",
+      "definition": "Three men, one woman. Gangbang-lite. Still one female sheet.",
+      "skeleton": "Her + three males. Same extraction rule as gangbang.",
+      "movement": "Spit roast + extra hands, or DP + oral.",
+      "hold_frame": "She fully readable. Extra men are clutter.",
+      "primary": {
+        "sub": "gangbang",
+        "media": "gif/vid",
+        "members": "~726k",
+        "why": "Search foursome / 3 on 1. Count is the difference from gangbang."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "fffm",
+      "label": "FFFM",
+      "definition": "Three women, one man. Same bodies as reverse_gangbang at n=4.",
+      "skeleton": "Three female + one male.",
+      "movement": "He is the hub, or one woman is. Often reverse-gangbang tagged.",
+      "hold_frame": "Her complete among the women.",
+      "primary": {
+        "sub": "Threesome",
+        "media": "mix",
+        "members": "~1.1M",
+        "why": "Search FFFM / reverse gangbang. Same topology as reverse_gangbang, smaller n."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "gangbang",
+      "label": "Gangbang",
+      "definition": "Many men, one woman, simultaneous. Crowd is noise. She is the sheet.",
+      "skeleton": "One female skeleton, many extras.",
+      "movement": "Many contacts at once. Hold a frame where she is not buried.",
+      "hold_frame": "Her full body. Ignore the crowd.",
+      "primary": {
+        "sub": "gangbang",
+        "media": "gif/vid",
+        "members": "~726k",
+        "why": "Largest GB feed."
+      },
+      "fallback": null,
+      "family": "configuration",
+      "variants": [
+        "doggy",
+        "missionary",
+        "cowgirl",
+        "spit_roast"
+      ]
+    },
+    {
+      "id": "reverse_gangbang",
+      "label": "Reverse gangbang",
+      "definition": "Many women, one man. She is one of the women \u2014 pick her skeleton.",
+      "skeleton": "Several female bodies around one male.",
+      "movement": "Take-turns ride / oral. She must be the readable one.",
+      "hold_frame": "Her complete. Do not extract a random extra.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search reverse gangbang. No high-purity dedicated pose sub."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "lesbian_gangbang",
+      "label": "Lesbian gangbang",
+      "definition": "Many women on one woman. Strap, sit, lick, fist. No male.",
+      "skeleton": "One receiving female + several female partners.",
+      "movement": "Sequential or pile. Strap-doggy is the usual hold.",
+      "hold_frame": "The receiver (her) fully readable.",
+      "primary": {
+        "sub": "lesbians",
+        "media": "mix",
+        "members": "~1.8M",
+        "why": "Search gangbang / group inside r/lesbians."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "blowbang",
+      "label": "Blowbang",
+      "definition": "Many partners around her, oral only. Kneel or face-up. Not a hip sheet.",
+      "skeleton": "Kneel/sit, a circle of shafts.",
+      "movement": "Turn from one to the next.",
+      "hold_frame": "Knees + torso + the circle. Skip face-only.",
+      "primary": {
+        "sub": "blowbang",
+        "media": "mix",
+        "members": null,
+        "why": "Dedicated oral+crowd. Distinct from gangbang hips."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "train",
+      "label": "Train / sequential",
+      "definition": "One after another, not a pile. Pose may change per partner. Storyboard beats.",
+      "skeleton": "Usually doggy or missionary, partner swaps.",
+      "movement": "Sequence. Next beat is the swap.",
+      "hold_frame": "One partner locked. Not a simultaneous orgy.",
+      "primary": {
+        "sub": "runatrain",
+        "media": "mix",
+        "members": null,
+        "why": "Defines sequential. Do not substitute r/gangbang."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "orgy",
+      "label": "Orgy / group pile",
+      "definition": "Many-to-many. No single hub. Full-room stills only.",
+      "skeleton": "Many bodies. Only useful if she is isolated in frame.",
+      "movement": "Chaos. Prefer one readable couple inside the room.",
+      "hold_frame": "A readable her, not the wide mess.",
+      "primary": {
+        "sub": "Xsome",
+        "media": "mix",
+        "members": "~667k",
+        "why": "Largest 3+ dump. Crop-heavy."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "daisy_chain",
+      "label": "Daisy chain",
+      "definition": "A ring of oral. Each mouth on the next. Any gender mix.",
+      "skeleton": "A circle of spines. Hard to extract one body.",
+      "movement": "Lick around the ring.",
+      "hold_frame": "Her spine + the two contacts on her.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search daisy chain. Rare clean full-body."
+      },
+      "fallback": null,
+      "family": "configuration"
+    },
+    {
+      "id": "all_fours",
+      "label": "All-fours / crawl / present",
+      "definition": "Hands and knees, hips high, spine long. Partner optional.",
+      "skeleton": "Four points on the ground, knees apart, head up or look-back.",
+      "movement": "Crawl, weight shift, hip present.",
+      "hold_frame": "Peak hip present. Both knees and both hands visible.",
+      "primary": {
+        "sub": "OnAllFours",
+        "media": "mix",
+        "members": null,
+        "why": "Pose-only. No partner required."
+      },
+      "fallback": {
+        "sub": "Doggystyle_NSFW",
+        "search": null,
+        "members": null,
+        "why": "Same skeleton with penetration."
+      },
+      "family": "pose"
+    },
+    {
+      "id": "face_down_ass_up",
+      "label": "Face-down ass-up",
+      "definition": "Chest and face down, hips up, knees apart, soles often toward camera. Not doggy.",
+      "skeleton": "Torso folded, hips stacked over knees, arms forward or under chest.",
+      "movement": "Hip lift, cheek spread, look-back optional.",
+      "hold_frame": "Hips highest, soles and cleft readable.",
+      "primary": {
+        "sub": "facedownassup",
+        "media": "mix",
+        "members": null,
+        "why": "Dedicated FDAU. Closest to the couch photo."
+      },
+      "fallback": {
+        "sub": "nsfw_plowcam",
+        "search": null,
+        "members": null,
+        "why": "Low camera on the same hips."
+      },
+      "family": "pose"
+    },
+    {
+      "id": "pronebone",
+      "label": "Pronebone",
+      "definition": "Flat on her belly, hips pinned or slightly raised. Full spine on the bed.",
+      "skeleton": "Prone, legs together or split, breasts smashed or spilled sideways.",
+      "movement": "Short hip grind, not a bounce.",
+      "hold_frame": "Full spine + hips + his lock.",
+      "primary": {
+        "sub": "pronebone",
+        "media": "gif",
+        "members": "~266k",
+        "why": "Dedicated prone. Large for a single-pose sub."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "doggy",
+      "label": "Doggy",
+      "definition": "All-fours plus rear penetration. Rear or 3/4 camera.",
+      "skeleton": "Same as all_fours with a partner locked at the hips.",
+      "movement": "Thrust cycle.",
+      "hold_frame": "Both knees planted, hips up, insertion readable.",
+      "primary": {
+        "sub": "Doggystyle_NSFW",
+        "media": "gif",
+        "members": null,
+        "why": "Act-clean doggy."
+      },
+      "fallback": {
+        "sub": "anal",
+        "search": "doggy",
+        "members": "~2.2M",
+        "why": "Highest-traffic rear-entry dump."
+      },
+      "family": "pose",
+      "variants": [
+        "hands_down",
+        "elbows_down",
+        "look_back",
+        "anal"
+      ]
+    },
+    {
+      "id": "bent_over_lookback",
+      "label": "Bent-over / look-back",
+      "definition": "Standing hinge at the hips, look over the shoulder.",
+      "skeleton": "Hinge, legs straight or soft-knee, head rotated to camera.",
+      "movement": "Push back, look-back hold.",
+      "hold_frame": "Face + hips in one frame.",
+      "primary": {
+        "sub": "frombehind",
+        "media": "mix",
+        "members": null,
+        "why": "Rear camera standing or bent. Look-back lives here."
+      },
+      "fallback": {
+        "sub": "bentover",
+        "search": null,
+        "members": null,
+        "why": "Still-heavy standing hinge."
+      },
+      "family": "pose"
+    },
+    {
+      "id": "standing_behind",
+      "label": "Standing from behind",
+      "definition": "Both upright or she slightly hinged, he behind. Bodyguard / standing doggy.",
+      "skeleton": "Two standing figures, her back to him, one leg up optional.",
+      "movement": "Short standing thrusts.",
+      "hold_frame": "Head-to-feet, her back and his lock.",
+      "primary": {
+        "sub": "holdthemoan",
+        "media": "gif",
+        "members": "~2.1M",
+        "why": "Largest standing/quiet/wall feed. Search standing / from behind."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "standing_sex",
+      "label": "Standing face-to-face",
+      "definition": "Both standing, facing each other. Full height, S-curve. Wall optional.",
+      "skeleton": "Upright, one of her legs up optional, hands on him or a wall.",
+      "movement": "Short thrusts. Hands brace.",
+      "hold_frame": "Head-to-feet.",
+      "primary": {
+        "sub": "holdthemoan",
+        "media": "gif",
+        "members": "~2.1M",
+        "why": "Same high-traffic standing feed. Search standing / face to face."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "wall_pin",
+      "label": "Wall pin",
+      "definition": "Her back or chest against a wall, standing or one-leg-up.",
+      "skeleton": "Upright, back or cheek to the wall, one knee high.",
+      "movement": "Pin holds, short thrusts.",
+      "hold_frame": "Wall + her full height + the pin.",
+      "primary": {
+        "sub": "holdthemoan",
+        "media": "gif",
+        "members": "~2.1M",
+        "why": "Search wall. Dedicated r/AgainstAWall is smaller."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "furniture_edge",
+      "label": "Furniture edge / tabletop",
+      "definition": "Hips on a lip (bed, table, counter), torso down or supine on the edge.",
+      "skeleton": "Hips at the edge, legs hanging or wrapped, torso on the surface.",
+      "movement": "He stands, she is the edge.",
+      "hold_frame": "Surface + hips + her torso.",
+      "primary": {
+        "sub": "bentover",
+        "media": "still",
+        "members": null,
+        "why": "Standing hinge onto furniture. Search table / counter / edge."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "lift_carry",
+      "label": "Lift / carry / ekiben",
+      "definition": "He stands and holds her off the ground. Her legs around his waist, facing or reverse.",
+      "skeleton": "Her feet off the floor, arms around his neck or hanging.",
+      "movement": "Lift-thrust. Hard to hold a still.",
+      "hold_frame": "Both her feet visible off the ground.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search ekiben / standing carry / lift. No large dedicated sub."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "wheelbarrow",
+      "label": "Wheelbarrow",
+      "definition": "She face-down, legs held, only hands (or nothing) on the ground.",
+      "skeleton": "Inverted hinge, legs in his hands.",
+      "movement": "Carry-thrust.",
+      "hold_frame": "Hands, hanging torso, held legs.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search wheelbarrow. Dedicated sub is too small."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "missionary",
+      "label": "Missionary",
+      "definition": "On her back, legs up, wrapped, or open. He on top, facing her.",
+      "skeleton": "Supine, knees toward chest or around him.",
+      "movement": "Hip roll, legs pull back.",
+      "hold_frame": "Pelvis, both knees, torso. Not a crotch crop.",
+      "primary": {
+        "sub": "Missionary",
+        "media": "gif",
+        "members": null,
+        "why": "Dedicated supine sex."
+      },
+      "fallback": null,
+      "family": "pose",
+      "variants": [
+        "legs_wrapped",
+        "legs_up",
+        "legs_on_shoulders"
+      ]
+    },
+    {
+      "id": "mating_press",
+      "label": "Mating press",
+      "definition": "Folded missionary: knees to chest or shoulders, him on top, deep seat.",
+      "skeleton": "Supine fold, knees at her shoulders, pelvis stacked.",
+      "movement": "Short deep thrusts.",
+      "hold_frame": "Knees, shoulders, pelvis stacked.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search mating press. Dedicated sub is small and anime-leaky."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "legs_over_head",
+      "label": "Legs over head / Viennese oyster",
+      "definition": "Supine, feet next to ears or crossed behind head. Extreme fold.",
+      "skeleton": "Hips rolled, legs beside head, pelvis up.",
+      "movement": "Hold the fold.",
+      "hold_frame": "Feet, head, and pelvis in one frame.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search viennese oyster / legs behind head / legs over head."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "butterfly",
+      "label": "Butterfly / edge hips-up",
+      "definition": "Hips at the edge of a bed/table, legs up against him, he standing or kneeling.",
+      "skeleton": "Supine on a lip, pelvis lifted, legs on his chest or shoulders.",
+      "movement": "He stands and thrusts. She is still.",
+      "hold_frame": "Edge + lifted pelvis + both legs.",
+      "primary": {
+        "sub": "Missionary",
+        "media": "gif",
+        "members": null,
+        "why": "Search butterfly / edge / legs up. Pose is missionary + furniture."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "cowgirl",
+      "label": "Cowgirl",
+      "definition": "She on top, facing him, doing the pumping. Knee plant, spine S-curve.",
+      "skeleton": "Knees outside his hips, torso upright or lean-forward.",
+      "movement": "Bounce / grind. She moves, he is still.",
+      "hold_frame": "Peak bounce, both knees planted, spine readable.",
+      "primary": {
+        "sub": "SheFucksHim",
+        "media": "gif",
+        "members": "~2.5M",
+        "why": "Highest-traffic riding feed."
+      },
+      "fallback": null,
+      "family": "pose",
+      "variants": [
+        "upright",
+        "lean_forward",
+        "grind"
+      ]
+    },
+    {
+      "id": "reverse_cowgirl",
+      "label": "Reverse cowgirl",
+      "definition": "She rides facing away. Back, hips, look-back. Tail-aside analog.",
+      "skeleton": "Knees planted, back to him, head rotated to camera or down.",
+      "movement": "Bounce with look-back holds.",
+      "hold_frame": "Back + hips + look-back in one frame.",
+      "primary": {
+        "sub": "ReverseCowgirl_NSFW",
+        "media": "gif",
+        "members": "~67k",
+        "why": "Reverse-only. Act-clean."
+      },
+      "fallback": {
+        "sub": "SheFucksHim",
+        "search": "reverse",
+        "members": "~2.5M",
+        "why": "If dedicated is thin."
+      },
+      "family": "pose",
+      "variants": [
+        "upright",
+        "look_back",
+        "lean_forward"
+      ]
+    },
+    {
+      "id": "squat_ride",
+      "label": "Squat ride",
+      "definition": "Cowgirl or reverse but she squats on the balls of her feet, not kneeling.",
+      "skeleton": "Feet flat or on toes, knees high, hips over him.",
+      "movement": "Up-down squat, not a kneel-bounce.",
+      "hold_frame": "Both feet visible, not knees-down.",
+      "primary": {
+        "sub": "SheFucksHim",
+        "media": "gif",
+        "members": "~2.5M",
+        "why": "Search squat / asian cowgirl."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "amazon",
+      "label": "Amazon",
+      "definition": "He on his back, legs up. She straddles between his raised legs and fucks down.",
+      "skeleton": "She upright or kneeling, his knees toward his chest, she between them.",
+      "movement": "She thrusts. Power-top silhouette.",
+      "hold_frame": "His raised legs + her upright torso.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search amazon position. Niche; no large dedicated sub."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "lotus",
+      "label": "Lotus / lap sit",
+      "definition": "He sits (cross-legged or on a chair). She sits in his lap, facing him, legs wrapped.",
+      "skeleton": "Seated stack, her legs around his waist, chests close.",
+      "movement": "Grind, not a bounce. Slow.",
+      "hold_frame": "Both seated, her wrap-legs readable.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search lotus / lap / sitting. No large dedicated sub."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "spoon",
+      "label": "Spoon",
+      "definition": "Both on their side, facing the same direction. He behind.",
+      "skeleton": "Two side-lying spines, her knees soft, his lock at her hips.",
+      "movement": "Slow grind from behind.",
+      "hold_frame": "Both full side profiles.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search spoon / spooning / side. Common pose, no huge dedicated sub."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "side_scissor",
+      "label": "Side scissor / pretzel (hetero)",
+      "definition": "She on her back or side, one leg scissored around him. Not lesbian tribbing.",
+      "skeleton": "Her hips rotated, one leg over his hip or shoulder.",
+      "movement": "Side-to-side thrust.",
+      "hold_frame": "The scissored leg + her torso.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search pretzel / scissors. Distinct from scissoring."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "t_square",
+      "label": "T-square",
+      "definition": "She supine, knees up. He lies on his side perpendicular, hips under her arch.",
+      "skeleton": "Her body is the top of the T, his the stem.",
+      "movement": "Sideways thrust.",
+      "hold_frame": "The right angle of the two spines.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search T-square. Rare. Skip if you cannot see both spines."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "piledriver",
+      "label": "Piledriver",
+      "definition": "Folded onto her neck/shoulders, hips up, penetration down from standing.",
+      "skeleton": "Weight on shoulders/neck, hips stacked above head.",
+      "movement": "Drop-thrust.",
+      "hold_frame": "Full fold. Rare clean full-body.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search piledriver. Dedicated sub 404-prone."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "full_nelson",
+      "label": "Full nelson",
+      "definition": "Arms locked behind her head, legs up, penetration from behind or below.",
+      "skeleton": "Arms hooked, knees high, torso upright or leaned.",
+      "movement": "Lift and thrust.",
+      "hold_frame": "Locked arms + both legs + hips.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search full nelson."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "kneel_oral",
+      "label": "Kneeling oral",
+      "definition": "She on her knees, look-up, mouth on a partner.",
+      "skeleton": "Knees down, hips on heels or raised, neck extended.",
+      "movement": "Bob. Hold the look-up.",
+      "hold_frame": "Knees + spine + face. Skip face-only.",
+      "primary": {
+        "sub": "Blowjobs",
+        "media": "mix",
+        "members": "~2.4M",
+        "why": "Largest oral feed."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "deepthroat",
+      "label": "Deepthroat pose",
+      "definition": "Head\u2013neck\u2013torso under load. Throat pose, not a cute BJ still.",
+      "skeleton": "Kneel or supine, neck long, jaw open, torso in frame.",
+      "movement": "Hold at full seat.",
+      "hold_frame": "Neck + torso + knees.",
+      "primary": {
+        "sub": "deepthroat",
+        "media": "gif",
+        "members": "~1.5M",
+        "why": "Dedicated. High volume."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "facesit",
+      "label": "Facesitting / queening",
+      "definition": "She sits on a face. Knee plant, hip drop, look-down or look-back.",
+      "skeleton": "Knees beside a head, hips dropped, torso upright or lean.",
+      "movement": "Grind / sit-hold.",
+      "hold_frame": "Both knees, hips, her torso.",
+      "primary": {
+        "sub": "facesitting",
+        "media": "mix",
+        "members": null,
+        "why": "Dedicated sit-on-face."
+      },
+      "fallback": null,
+      "family": "pose",
+      "variants": [
+        "face_forward",
+        "look_back",
+        "smother"
+      ]
+    },
+    {
+      "id": "sixty_nine",
+      "label": "69",
+      "definition": "Mutual oral. Two-body stack, opposite directions.",
+      "skeleton": "Two spines, her on top or side.",
+      "movement": "Lick cycle. Hold a still stack.",
+      "hold_frame": "Her spine + hips. Skip if she is a head crop.",
+      "primary": {
+        "sub": "69position",
+        "media": "mix",
+        "members": null,
+        "why": "Dedicated 69."
+      },
+      "fallback": {
+        "sub": "NSFW_GIF",
+        "search": "69",
+        "members": "~3M",
+        "why": "If dedicated is stale."
+      },
+      "family": "pose"
+    },
+    {
+      "id": "legs_spread",
+      "label": "Legs spread / anatomy expose",
+      "definition": "Legs parted so vulva/anus read. Solo or partnered. Still pose.",
+      "skeleton": "Hip abduction. Standing, supine, or squat.",
+      "movement": "Hold.",
+      "hold_frame": "Hips + both legs + torso. Drop macros.",
+      "primary": {
+        "sub": "spreading",
+        "media": "still",
+        "members": null,
+        "why": "Dedicated parted-leg stills."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "hanging_breasts",
+      "label": "Hanging breasts",
+      "definition": "Torso inverted or parallel so breasts hang. Combine with all_fours or bent_over.",
+      "skeleton": "Chest dropped, breasts pendulous.",
+      "movement": "Swing on each thrust or crawl step.",
+      "hold_frame": "Side or 3/4 low enough to see hang + hips.",
+      "primary": {
+        "sub": "thehangingboobs",
+        "media": "mix",
+        "members": null,
+        "why": "The camera, not the act. Pair with doggy/FDAU."
+      },
+      "fallback": null,
+      "family": "pose"
+    },
+    {
+      "id": "vaginal",
+      "label": "Vaginal",
+      "definition": "Penis, strap, or toy in the vagina. Default contact if unspecified.",
+      "skeleton": "Whatever the pose is.",
+      "movement": "Thrust / grind / bounce.",
+      "hold_frame": "Hips + insertion readable.",
+      "primary": {
+        "sub": "whenitgoesin",
+        "media": "gif",
+        "members": null,
+        "why": "Insertion feed. Search the pose."
+      },
+      "fallback": null,
+      "family": "contact"
+    },
+    {
+      "id": "anal",
+      "label": "Anal",
+      "definition": "Penis, strap, or toy in the anus. Usually doggy or prone.",
+      "skeleton": "Same as the chosen rear pose.",
+      "movement": "Often slower, deeper hold.",
+      "hold_frame": "Rear 3/4, hips + insertion.",
+      "primary": {
+        "sub": "anal",
+        "media": "gif/vid",
+        "members": "~2.2M",
+        "why": "Largest anal feed."
+      },
+      "fallback": null,
+      "family": "contact"
+    },
+    {
+      "id": "cunnilingus",
+      "label": "Oral on her",
+      "definition": "Mouth on her vulva. She receives.",
+      "skeleton": "Her hips + legs are the sheet. Partner's head is a prop.",
+      "movement": "Lick. Hold her hip drop or thigh spread.",
+      "hold_frame": "Her hips and both legs.",
+      "primary": {
+        "sub": "cunnilingus",
+        "media": "mix",
+        "members": null,
+        "why": "Dedicated oral-on-her."
+      },
+      "fallback": null,
+      "family": "contact"
+    },
+    {
+      "id": "blowjob",
+      "label": "Blowjob / oral on him",
+      "definition": "Her mouth on a penis. Pose is usually kneel_oral.",
+      "skeleton": "See kneel_oral / deepthroat.",
+      "movement": "Bob.",
+      "hold_frame": "Knees + spine + face.",
+      "primary": {
+        "sub": "Blowjobs",
+        "media": "mix",
+        "members": "~2.4M",
+        "why": "Largest BJ feed."
+      },
+      "fallback": null,
+      "family": "contact"
+    },
+    {
+      "id": "rim",
+      "label": "Rimming",
+      "definition": "Mouth on her anus. All-fours or sit-on-face.",
+      "skeleton": "FDAU or facesit, hips to the tongue.",
+      "movement": "Lick hold.",
+      "hold_frame": "Hips + anus + her torso.",
+      "primary": {
+        "sub": "rimjob",
+        "media": "mix",
+        "members": null,
+        "why": "Largest dedicated rim feed."
+      },
+      "fallback": null,
+      "family": "contact"
+    },
+    {
+      "id": "handjob",
+      "label": "Handjob",
+      "definition": "Her hands on a penis. Low pose value unless full body.",
+      "skeleton": "Kneel, sit, or lie. Hands are the act.",
+      "movement": "Stroke.",
+      "hold_frame": "Full body + hands. Skip hand macros.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search handjob. Rarely a sheet by itself."
+      },
+      "fallback": null,
+      "family": "contact"
+    },
+    {
+      "id": "fingering",
+      "label": "Fingering",
+      "definition": "Fingers in her vagina or anus. Solo or partnered.",
+      "skeleton": "Usually supine, squat, or all-fours.",
+      "movement": "In/out or come-hither.",
+      "hold_frame": "Hips + hand + torso.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search fingering. Pair with legs_spread."
+      },
+      "fallback": null,
+      "family": "contact"
+    },
+    {
+      "id": "titfuck",
+      "label": "Titfuck",
+      "definition": "Penis between her breasts. She is usually kneeling or he is on her chest.",
+      "skeleton": "Torso-up, breasts around a shaft, face often in frame.",
+      "movement": "Squeeze-stroke.",
+      "hold_frame": "Torso + breasts + face. Not a hip sheet.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search titfuck / paizuri."
+      },
+      "fallback": null,
+      "family": "contact"
+    },
+    {
+      "id": "thighjob",
+      "label": "Thighjob / intercrural",
+      "definition": "Penis between her closed thighs. No insertion.",
+      "skeleton": "Thighs together, standing, missionary, or spoon.",
+      "movement": "Thrust between thighs.",
+      "hold_frame": "Closed thighs + hips.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search thighjob / intercrural / between thighs."
+      },
+      "fallback": null,
+      "family": "contact"
+    },
+    {
+      "id": "footjob",
+      "label": "Footjob",
+      "definition": "Feet on a penis. She is usually sitting or lying, legs extended.",
+      "skeleton": "Legs long, soles or arches on the shaft.",
+      "movement": "Stroke with feet.",
+      "hold_frame": "Both legs + feet + her torso if you need a sheet.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search footjob. Usually not a full-body sheet."
+      },
+      "fallback": null,
+      "family": "contact"
+    },
+    {
+      "id": "toy",
+      "label": "Toy / dildo",
+      "definition": "A toy does the penetrating or the sitting. Strap is lesbian_strap / pegging.",
+      "skeleton": "Whatever pose holds the toy.",
+      "movement": "Toy stroke or ride.",
+      "hold_frame": "Toy + hips + her torso.",
+      "primary": {
+        "sub": "OnAllFours",
+        "media": "mix",
+        "members": null,
+        "why": "Search dildo / toy inside the pose sub."
+      },
+      "fallback": null,
+      "family": "contact"
+    },
+    {
+      "id": "fist",
+      "label": "Fisting",
+      "definition": "Hand inside vagina or anus. Hip splay.",
+      "skeleton": "Wide hip abduction + forearm.",
+      "movement": "In/out hold at the wrist.",
+      "hold_frame": "Hips + arm + torso.",
+      "primary": {
+        "sub": "fisting",
+        "media": "mix",
+        "members": null,
+        "why": "Dedicated."
+      },
+      "fallback": null,
+      "family": "contact"
+    },
+    {
+      "id": "strap",
+      "label": "Strap / harness (contact)",
+      "definition": "A harnessed phallus. Who wears it is pegging or lesbian_strap.",
+      "skeleton": "Harness on a female hips.",
+      "movement": "Thrust.",
+      "hold_frame": "Harness + both bodies.",
+      "primary": {
+        "sub": "strapon",
+        "media": "mix",
+        "members": null,
+        "why": "Largest strap feed. Child acts pick who receives."
+      },
+      "fallback": null,
+      "family": "contact"
+    },
+    {
+      "id": "spit_roast",
+      "label": "Spit roast / split roast",
+      "definition": "She between two partners: oral + rear (or oral + front). Same act, both spellings. AKA Eiffel if they high-five.",
+      "skeleton": "Three-body line. Her spine end to end.",
+      "movement": "Two cycles. Hold a still line.",
+      "hold_frame": "Her whole body + both partners.",
+      "primary": {
+        "sub": "spitroast",
+        "media": "mix",
+        "members": null,
+        "why": "Dedicated. Do not use r/Threesome (mixed)."
+      },
+      "fallback": {
+        "sub": "mfm",
+        "search": null,
+        "members": null,
+        "why": "More volume. Filter for the oral+rear line."
+      },
+      "family": "act",
+      "variants": [
+        "doggy_oral",
+        "standing_oral",
+        "prone_oral"
+      ]
+    },
+    {
+      "id": "sandwich",
+      "label": "Sandwich",
+      "definition": "Two partners, one in front and one behind, no required oral. She is the filling.",
+      "skeleton": "Two locks at her hips, chests on both sides.",
+      "movement": "Two thrust cycles, often DP.",
+      "hold_frame": "Her torso between two bodies.",
+      "primary": {
+        "sub": "mfm",
+        "media": "mix",
+        "members": null,
+        "why": "Search sandwich / airtight / DP. Distinct from spit_roast (no oral required)."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "double_penetration",
+      "label": "DP (vaginal + anal)",
+      "definition": "Two penetrations, one vaginal and one anal. The default 'DP'.",
+      "skeleton": "Hips splayed to take two.",
+      "movement": "Two thrust cycles.",
+      "hold_frame": "Hips + both entries + her torso.",
+      "primary": {
+        "sub": "doublepenetration",
+        "media": "mix",
+        "members": null,
+        "why": "Dedicated DP."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "double_vaginal",
+      "label": "Double vaginal",
+      "definition": "Two in the vagina. Rarer. Wider hip splay than DP.",
+      "skeleton": "Extreme abduction, two shafts one hole.",
+      "movement": "Two cycles in one hole.",
+      "hold_frame": "Hips + both shafts + torso.",
+      "primary": {
+        "sub": "doublepenetration",
+        "media": "mix",
+        "members": null,
+        "why": "Search DVP / double vaginal."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "double_anal",
+      "label": "Double anal / DAP",
+      "definition": "Two in the anus.",
+      "skeleton": "Same as DP with both rear.",
+      "movement": "Two rear cycles.",
+      "hold_frame": "Rear hips + both entries.",
+      "primary": {
+        "sub": "doubleanal",
+        "media": "mix",
+        "members": null,
+        "why": "Dedicated DAP. Thin. Else search DAP in r/doublepenetration."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "airtight",
+      "label": "Airtight",
+      "definition": "Oral + vaginal + anal at once. Three occupied holes.",
+      "skeleton": "Spit-roast line plus a second penetration.",
+      "movement": "Three cycles.",
+      "hold_frame": "Her full body with all three contacts.",
+      "primary": {
+        "sub": "AirTight",
+        "media": "mix",
+        "members": null,
+        "why": "Only feed that defines this topology."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "triple_penetration",
+      "label": "Triple penetration",
+      "definition": "Three penetrations. Usually airtight, sometimes two in one hole + a third.",
+      "skeleton": "Same as airtight or DP+oral with extras.",
+      "movement": "Three cycles.",
+      "hold_frame": "All three contacts + her torso.",
+      "primary": {
+        "sub": "AirTight",
+        "media": "mix",
+        "members": null,
+        "why": "Search triple. Overlaps airtight."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "threesome_369",
+      "label": "369",
+      "definition": "Two people in 69, a third penetrates one of them (usually doggy into the woman on top).",
+      "skeleton": "69 stack + a third body at the hips.",
+      "movement": "Lick + thrust.",
+      "hold_frame": "The 69 stack and the third lock.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search 369. Niche."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "double_cowgirl",
+      "label": "Double cowgirl",
+      "definition": "FFM: one woman rides him, the other sits on his face (or both ride in turn).",
+      "skeleton": "Two female riding/sitting skeletons on one supine male.",
+      "movement": "Two bounce/grind cycles.",
+      "hold_frame": "Both women complete.",
+      "primary": {
+        "sub": "Threesome",
+        "media": "mix",
+        "members": "~1.1M",
+        "why": "Search double cowgirl / FFM ride."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "scissoring",
+      "label": "Scissoring / tribbing",
+      "definition": "Two women, legs locked, vulva-on-vulva or thigh grind. The girl-on-girl pose.",
+      "skeleton": "Two female hip girdles interlocked.",
+      "movement": "Grind cycle.",
+      "hold_frame": "Both spines + locked legs.",
+      "primary": {
+        "sub": "scissoring",
+        "media": "mix",
+        "members": null,
+        "why": "Dedicated. Do not use r/lesbians for this pose."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "lesbian",
+      "label": "Lesbian / girl-on-girl (parent)",
+      "definition": "Two+ women, full-body contact. Filter kissing-only. Child acts: scissoring, lesbian_strap, lesbian_squirt.",
+      "skeleton": "Dual female.",
+      "movement": "Depends on child.",
+      "hold_frame": "Both bodies complete.",
+      "primary": {
+        "sub": "lesbians",
+        "media": "mix",
+        "members": "~1.8M",
+        "why": "Largest girl-on-girl porn sub."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "lesbian_strap",
+      "label": "Lesbian strap-on",
+      "definition": "One woman strapped, fucking another. All-fours, missionary, or standing.",
+      "skeleton": "Two female bodies + harness.",
+      "movement": "Thrust. Same as doggy/missionary with a harness.",
+      "hold_frame": "Both bodies + the strap.",
+      "primary": {
+        "sub": "strapon",
+        "media": "mix",
+        "members": null,
+        "why": "Largest strap feed. Pegging-him is disallowed there."
+      },
+      "fallback": {
+        "sub": "LesbianPegging",
+        "search": null,
+        "members": null,
+        "why": "If you need lesbian-only."
+      },
+      "family": "act",
+      "variants": [
+        "doggy",
+        "missionary",
+        "standing"
+      ]
+    },
+    {
+      "id": "lesbian_squirt",
+      "label": "Lesbian squirt",
+      "definition": "Two+ women, at least one squirting.",
+      "skeleton": "Dual female + gush.",
+      "movement": "Lick/scissor/strap + jet.",
+      "hold_frame": "Both bodies + the jet.",
+      "primary": {
+        "sub": "LesbiansSquirtingNSFW",
+        "media": "gif/vid",
+        "members": null,
+        "why": "Only feed that defines girl-on-girl + gush."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "pegging",
+      "label": "Pegging",
+      "definition": "She wears a harness and penetrates a man. Not lesbian.",
+      "skeleton": "She standing or kneeling behind a body, harness on.",
+      "movement": "She thrusts.",
+      "hold_frame": "Her full body + harness + his hips.",
+      "primary": {
+        "sub": "pegging",
+        "media": "mix",
+        "members": "~547k",
+        "why": "Dedicated her-on-him strap."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "fucklicking",
+      "label": "Fucklicking / licked while fucked",
+      "definition": "A mouth on her (or on the insertion) while she is being penetrated.",
+      "skeleton": "Sex pose plus a second head at the hips.",
+      "movement": "Thrust + lick together.",
+      "hold_frame": "Her full body + licking head + penetrating partner.",
+      "primary": {
+        "sub": "FFMFucklick",
+        "media": "mix",
+        "members": null,
+        "why": "Subscribed. Named fucklick feed \u2014 during-sex, not cleanup."
+      },
+      "fallback": {
+        "sub": "NSFW_GIF",
+        "search": "fucklicking OR \"eating her out while\"",
+        "members": "~3M",
+        "why": "If the dedicated sub is thin."
+      },
+      "family": "act"
+    },
+    {
+      "id": "creampie_cleanup",
+      "label": "Creampie cleanup",
+      "definition": "A mouth cleaning cum out of her after a creampie.",
+      "skeleton": "Doggy or missionary aftermath, second head at the hips.",
+      "movement": "Lick the leak.",
+      "hold_frame": "Drip + tongue + her hips.",
+      "primary": {
+        "sub": "CreampieCleanUp",
+        "media": "mix",
+        "members": null,
+        "why": "Highest-signal cleanup feed."
+      },
+      "fallback": {
+        "sub": "MenEatingCreampies",
+        "search": null,
+        "members": null,
+        "why": "1-on-1, less cuck-tagged."
+      },
+      "family": "act"
+    },
+    {
+      "id": "ass_to_mouth",
+      "label": "Ass to mouth / ATM",
+      "definition": "Penis or toy goes from her anus to a mouth (hers or a partner's).",
+      "skeleton": "Usually doggy then kneel, or a head at the hips.",
+      "movement": "Pull-out + mouth. Transition.",
+      "hold_frame": "The pull-out and the mouth in one beat if possible.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search ATM / ass to mouth. Tight crops common."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "snowball",
+      "label": "Snowball",
+      "definition": "Cum passed mouth-to-mouth.",
+      "skeleton": "Two faces. Low pose value.",
+      "movement": "Transfer.",
+      "hold_frame": "Skip unless her full kneel reads.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search snowball. Face-heavy."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "freeuse",
+      "label": "Freeuse / used mid-task",
+      "definition": "Used while occupied: sink, chores, sleep-pose, standing at a counter.",
+      "skeleton": "Task pose + penetration.",
+      "movement": "She stays in the task. He moves.",
+      "hold_frame": "Task + sex in one frame.",
+      "primary": {
+        "sub": "freeuse",
+        "media": "mix",
+        "members": "~2.0M",
+        "why": "Largest mid-task sex feed."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "rough",
+      "label": "Rough / pinned / folded",
+      "definition": "Hair, slap, pin, fold. A force overlay on another pose.",
+      "skeleton": "Base pose plus locked arms or folded legs.",
+      "movement": "Hard thrust, pin holds.",
+      "hold_frame": "The pin: arms, hair, or fold readable.",
+      "primary": {
+        "sub": "SheLikesItRough",
+        "media": "gif",
+        "members": "~1.7M",
+        "why": "Largest rough-sex gif feed."
+      },
+      "fallback": null,
+      "family": "act"
+    },
+    {
+      "id": "creampie",
+      "label": "Creampie / internal finish",
+      "definition": "He finishes inside. 1-on-1 or group.",
+      "skeleton": "Whatever the sex pose is at finish.",
+      "movement": "Finish hold, then optional pull-out.",
+      "hold_frame": "Full-seat finish. Hips + torso.",
+      "primary": {
+        "sub": "creampies",
+        "media": "mix",
+        "members": "~1.4M",
+        "why": "Core creampie feed."
+      },
+      "fallback": null,
+      "family": "finish"
+    },
+    {
+      "id": "creampie_flow",
+      "label": "Creampie flowing out",
+      "definition": "Cream leaking or being pushed out after. The drip is the act.",
+      "skeleton": "Usually doggy or missionary, partner pulled back.",
+      "movement": "Drip, push-out, overflow.",
+      "hold_frame": "The flow, hips still in the sex pose.",
+      "primary": {
+        "sub": "CreamPieFlowingOut",
+        "media": "mix",
+        "members": null,
+        "why": "Exact act."
+      },
+      "fallback": {
+        "sub": "creampiegifs",
+        "search": "flowing OR leaking OR drip",
+        "members": null,
+        "why": "Motion leak."
+      },
+      "family": "finish",
+      "variants": [
+        "doggy",
+        "missionary",
+        "standing",
+        "anal",
+        "push_out"
+      ]
+    },
+    {
+      "id": "anal_creampie",
+      "label": "Anal creampie",
+      "definition": "Internal anal finish + optional leak.",
+      "skeleton": "Prone or doggy.",
+      "movement": "Finish, then drip.",
+      "hold_frame": "Rear hips + drip.",
+      "primary": {
+        "sub": "anal",
+        "media": "gif/vid",
+        "members": "~2.2M",
+        "why": "Search anal creampie. Dedicated AnalCreampie is smaller."
+      },
+      "fallback": null,
+      "family": "finish"
+    },
+    {
+      "id": "breeding_supine",
+      "label": "Breeding / on-back legs open",
+      "definition": "On her back, legs open, 'breed' framing. Adult fertility look \u2014 not underage.",
+      "skeleton": "Supine, knees wide, pelvis tilted up.",
+      "movement": "Deep seat, hold.",
+      "hold_frame": "Torso + both legs + pelvis.",
+      "primary": {
+        "sub": "BreedingMaterial",
+        "media": "mix",
+        "members": null,
+        "why": "The pose+finish together."
+      },
+      "fallback": null,
+      "family": "finish"
+    },
+    {
+      "id": "facial",
+      "label": "Facial",
+      "definition": "Finish on her face. Usually kneel or supine look-up.",
+      "skeleton": "Kneel_oral or missionary look-up.",
+      "movement": "The shot.",
+      "hold_frame": "Face + torso + knees. Skip face-only.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search facial. Huge dumps are too broad (r/cumsluts)."
+      },
+      "fallback": null,
+      "family": "finish"
+    },
+    {
+      "id": "body_cum",
+      "label": "Body cumshot",
+      "definition": "Finish on breasts, belly, ass, or back. Not a facial, not internal.",
+      "skeleton": "Whatever pose presents the target surface.",
+      "movement": "The shot.",
+      "hold_frame": "The surface + her torso.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search cum on tits / belly / ass."
+      },
+      "fallback": null,
+      "family": "finish"
+    },
+    {
+      "id": "bukkake",
+      "label": "Bukkake",
+      "definition": "Many finish on her face/body. Kneel in a circle. Overlay on blowbang.",
+      "skeleton": "Kneel/sit, many shafts, splash.",
+      "movement": "Many shots.",
+      "hold_frame": "Knees + torso. Skip face-only.",
+      "primary": {
+        "sub": "bukkake",
+        "media": "mix",
+        "members": "~456k",
+        "why": "Dedicated splash. Pose is kneel."
+      },
+      "fallback": null,
+      "family": "finish"
+    },
+    {
+      "id": "throatpie",
+      "label": "Throatpie",
+      "definition": "He finishes in her throat / mouth, often swallowed or leaking from lips.",
+      "skeleton": "Deepthroat or kneel_oral at full seat.",
+      "movement": "Finish hold.",
+      "hold_frame": "Neck + torso + knees.",
+      "primary": {
+        "sub": "deepthroat",
+        "media": "gif",
+        "members": "~1.5M",
+        "why": "Search throatpie / oral creampie."
+      },
+      "fallback": null,
+      "family": "finish"
+    },
+    {
+      "id": "squirt",
+      "label": "Squirt / gush",
+      "definition": "Female ejaculation / gush. Mixes pee. Judge the picture.",
+      "skeleton": "Usually supine or all-fours, thighs parted.",
+      "movement": "Jet or gush. One frame is the sheet.",
+      "hold_frame": "The jet. Hips + thighs in frame.",
+      "primary": {
+        "sub": "squirting",
+        "media": "mix",
+        "members": "~2.1M",
+        "why": "Largest squirt community. ~950 posts/week."
+      },
+      "fallback": null,
+      "family": "finish",
+      "variants": [
+        "seated",
+        "lying_supine",
+        "kneeling",
+        "all_fours",
+        "standing",
+        "anal",
+        "solo_toy"
+      ]
+    },
+    {
+      "id": "squirt_while_fucked",
+      "label": "Squirt during penetration",
+      "definition": "Gush while being fucked. Doggy and cowgirl dominate.",
+      "skeleton": "Underlying sex pose plus the jet.",
+      "movement": "Thrust + gush on the same beat.",
+      "hold_frame": "Insertion + jet in one frame.",
+      "primary": {
+        "sub": "SquirtWhileFucked",
+        "media": "gif",
+        "members": null,
+        "why": "Defines squirt-during-sex. Do not substitute r/squirting."
+      },
+      "fallback": null,
+      "family": "finish",
+      "variants": [
+        "doggy",
+        "cowgirl",
+        "missionary",
+        "anal"
+      ]
+    },
+    {
+      "id": "gape",
+      "label": "Gape",
+      "definition": "Open hole after anal or toys. Anatomy after the pose is already right.",
+      "skeleton": "Usually FDAU or doggy, partner pulled back.",
+      "movement": "Hold the open.",
+      "hold_frame": "Rear hips + gape + torso.",
+      "primary": {
+        "sub": "gaping",
+        "media": "mix",
+        "members": null,
+        "why": "Dedicated gape."
+      },
+      "fallback": null,
+      "family": "finish"
+    },
+    {
+      "id": "distension",
+      "label": "Distension / bulge",
+      "definition": "Belly or hole stretch from a large insertion. Visible silhouette.",
+      "skeleton": "Standing or supine with a bulge.",
+      "movement": "Seat and hold.",
+      "hold_frame": "Profile so the bulge reads.",
+      "primary": {
+        "sub": "distension",
+        "media": "mix",
+        "members": "~511k",
+        "why": "Dedicated stretch silhouette."
+      },
+      "fallback": null,
+      "family": "finish"
+    },
+    {
+      "id": "insertion",
+      "label": "Insertion beat",
+      "definition": "The first-thrust / when-it-goes-in moment.",
+      "skeleton": "Whatever pose is about to lock.",
+      "movement": "Entry. One frame.",
+      "hold_frame": "Tip-to-seat, hips + both bodies.",
+      "primary": {
+        "sub": "whenitgoesin",
+        "media": "gif",
+        "members": null,
+        "why": "Dedicated insertion moment."
+      },
+      "fallback": null,
+      "family": "movement"
+    },
+    {
+      "id": "bounce",
+      "label": "Bounce / ride cycle",
+      "definition": "She moves up and down. Cowgirl family.",
+      "skeleton": "See cowgirl / reverse_cowgirl / squat_ride.",
+      "movement": "Up-down. Hold peak height or peak seat.",
+      "hold_frame": "Peak bounce, knees planted.",
+      "primary": {
+        "sub": "SheFucksHim",
+        "media": "gif",
+        "members": "~2.5M",
+        "why": "The riding dump is the bounce library."
+      },
+      "fallback": null,
+      "family": "movement"
+    },
+    {
+      "id": "grind",
+      "label": "Grind",
+      "definition": "Hips circle or rock without a full stroke. Lotus, cowgirl lean, facesit, scissor.",
+      "skeleton": "Connected hips, small motion.",
+      "movement": "Circle / rock.",
+      "hold_frame": "Hips locked, torso readable.",
+      "primary": {
+        "sub": "SheFucksHim",
+        "media": "gif",
+        "members": "~2.5M",
+        "why": "Search grind."
+      },
+      "fallback": null,
+      "family": "movement"
+    },
+    {
+      "id": "thrust",
+      "label": "Thrust cycle",
+      "definition": "He moves, she is the brace. Doggy, missionary, standing, prone.",
+      "skeleton": "Her brace pose.",
+      "movement": "In-out. Hold peak hip crash.",
+      "hold_frame": "His lock + her brace.",
+      "primary": {
+        "sub": "Doggystyle_NSFW",
+        "media": "gif",
+        "members": null,
+        "why": "Any penetration gif dump. Doggy is the type specimen."
+      },
+      "fallback": null,
+      "family": "movement"
+    },
+    {
+      "id": "look_back",
+      "label": "Look-back",
+      "definition": "Head rotates to camera over the shoulder. Overlay on doggy, FDAU, reverse cowgirl, bent.",
+      "skeleton": "Base pose + rotated head.",
+      "movement": "Hold the look.",
+      "hold_frame": "Face and hips in one frame.",
+      "primary": {
+        "sub": "frombehind",
+        "media": "mix",
+        "members": null,
+        "why": "Look-back lives here."
+      },
+      "fallback": null,
+      "family": "movement"
+    },
+    {
+      "id": "crawl",
+      "label": "Crawl",
+      "definition": "She moves forward on all fours. Present without a locked partner.",
+      "skeleton": "all_fours in motion.",
+      "movement": "Step the hands, then the knees.",
+      "hold_frame": "Mid-step, all four points visible.",
+      "primary": {
+        "sub": "OnAllFours",
+        "media": "mix",
+        "members": null,
+        "why": "Pose-only crawl."
+      },
+      "fallback": null,
+      "family": "movement"
+    },
+    {
+      "id": "swap",
+      "label": "Partner swap",
+      "definition": "Train beat: one partner leaves, the next locks.",
+      "skeleton": "Same pose, new partner.",
+      "movement": "The exchange.",
+      "hold_frame": "Old lock releasing or new lock seating.",
+      "primary": {
+        "sub": "runatrain",
+        "media": "mix",
+        "members": null,
+        "why": "Sequential by definition."
+      },
+      "fallback": null,
+      "family": "movement"
+    },
+    {
+      "id": "plowcam",
+      "label": "Plowcam / floor camera",
+      "definition": "Lens under or between during sex. Looking up at hips.",
+      "skeleton": "Whatever pose is above the lens.",
+      "movement": "Thrust toward camera.",
+      "hold_frame": "Low, hips large, torso receding.",
+      "primary": {
+        "sub": "nsfw_plowcam",
+        "media": "gif",
+        "members": null,
+        "why": "Dedicated under-angle."
+      },
+      "fallback": null,
+      "family": "camera"
+    },
+    {
+      "id": "pov",
+      "label": "POV",
+      "definition": "Camera is a participant. Usually his eyes. She looks into lens.",
+      "skeleton": "Whatever pose faces the lens.",
+      "movement": "Depends.",
+      "hold_frame": "Her face + the act. Watch for face-only.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search POV + the pose. Too broad to be a pose source."
+      },
+      "fallback": null,
+      "family": "camera"
+    },
+    {
+      "id": "rear",
+      "label": "Rear camera",
+      "definition": "Lens behind her hips. FDAU, doggy, reverse cowgirl, bent.",
+      "skeleton": "Back, hips, soles or look-back.",
+      "movement": "Depends.",
+      "hold_frame": "Hips fill the frame, torso recedes.",
+      "primary": {
+        "sub": "frombehind",
+        "media": "mix",
+        "members": null,
+        "why": "Rear camera standing or bent."
+      },
+      "fallback": null,
+      "family": "camera"
+    },
+    {
+      "id": "side_3qtr",
+      "label": "Side / three-quarter",
+      "definition": "The default storyboard camera. Full skeleton.",
+      "skeleton": "Whole body, 3/4.",
+      "movement": "Depends.",
+      "hold_frame": "Head to feet.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Prefer this over macros in any sub."
+      },
+      "fallback": null,
+      "family": "camera"
+    },
+    {
+      "id": "rear_anatomy",
+      "label": "Rear vulva / perineum from behind",
+      "definition": "From-behind view of vulva + perineum + anus. All-fours or bent look-back. Tail origin sits above the anus.",
+      "skeleton": "Hips toward camera, cheeks parted, both holes readable. Pose already accepted.",
+      "movement": "Hold. No act required.",
+      "hold_frame": "Lit cleft. Trim panties if present. Discard the person.",
+      "primary": {
+        "sub": "rearpussy",
+        "media": "still",
+        "members": "~1.2M",
+        "why": "Named rear-pussy stills. Trim garments."
+      },
+      "fallback": {
+        "sub": "Pussy_From_Behind",
+        "search": null,
+        "members": "~96k",
+        "why": "Look-back rear vulva sibling."
+      },
+      "family": "anatomy",
+      "variants": [
+        "all_fours",
+        "look_back",
+        "spread",
+        "panties_aside"
+      ]
+    },
+    {
+      "id": "vulva_closeup",
+      "label": "Vulva close-up / labia shape",
+      "definition": "Front or 3/4 close-up of human-shaped vulva. Innie/outie/spread. Shape library only.",
+      "skeleton": "Crotch crop is allowed here. Not a body pose.",
+      "movement": "None.",
+      "hold_frame": "Readable labia. Adult 18+ only.",
+      "primary": {
+        "sub": "GodPussyv2",
+        "media": "still",
+        "members": "~87k",
+        "why": "Live r/godpussy. Certified close-ups."
+      },
+      "fallback": {
+        "sub": "PussiesCloseUp",
+        "search": null,
+        "members": "~208k",
+        "why": "Shaved close-up dump."
+      },
+      "family": "anatomy",
+      "variants": [
+        "innie",
+        "outie",
+        "spread"
+      ]
+    },
+    {
+      "id": "anus_closeup",
+      "label": "Anus / tail-origin close-up",
+      "definition": "Anus and the skin just above it \u2014 where her tail must start. Not a gape act.",
+      "skeleton": "Rear crop. Coccyx / top of cleft visible.",
+      "movement": "None.",
+      "hold_frame": "Closed or softly open anus, tail-root zone lit.",
+      "primary": {
+        "sub": "GodAsshole",
+        "media": "still",
+        "members": "~815k",
+        "why": "High-volume anus stills."
+      },
+      "fallback": {
+        "sub": "asshole_closeup",
+        "search": null,
+        "members": "~401k",
+        "why": "Tight detail."
+      },
+      "family": "anatomy",
+      "variants": [
+        "closed",
+        "spread",
+        "tail_origin"
+      ]
+    },
+    {
+      "id": "anthro",
+      "label": "Anthro / yiff",
+      "definition": "Drawn furry sex. Pose library for her class. Identity still comes from her photos.",
+      "skeleton": "Whatever act you searched. Discard the character.",
+      "movement": "Search the pose/act id as a tag.",
+      "hold_frame": "Readable anthro skeleton. Never as image2 person-plate.",
+      "primary": {
+        "sub": "yiff",
+        "media": "still",
+        "members": null,
+        "why": "Main furry porn."
+      },
+      "fallback": {
+        "sub": "lesbianyiff",
+        "search": "lesbian OR scissor OR strap",
+        "members": null,
+        "why": "Girl-on-girl anthro."
+      },
+      "family": "overlay"
+    },
+    {
+      "id": "public",
+      "label": "Public",
+      "definition": "Sex where she can be seen. Standing, wall, car, outdoors. Blurry phones.",
+      "skeleton": "Usually standing_sex or bent_over.",
+      "movement": "Quiet, hurried.",
+      "hold_frame": "Sharp full-body only.",
+      "primary": {
+        "sub": "holdthemoan",
+        "media": "gif",
+        "members": "~2.1M",
+        "why": "Largest public-ish standing feed."
+      },
+      "fallback": null,
+      "family": "overlay"
+    },
+    {
+      "id": "bondage",
+      "label": "Bondage",
+      "definition": "Rope, cuffs, hogtie, spread-eagle restraints. Geometry is the tie + a base pose.",
+      "skeleton": "Base pose with locked limbs.",
+      "movement": "She cannot move. He does.",
+      "hold_frame": "The tie + her full body.",
+      "primary": {
+        "sub": "NSFW_GIF",
+        "media": "gif",
+        "members": "~3M",
+        "why": "Search bondage + the pose. r/Bondage is mixed discussion."
+      },
+      "fallback": null,
+      "family": "overlay"
+    }
+  ]
+}

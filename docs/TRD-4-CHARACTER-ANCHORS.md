@@ -173,6 +173,18 @@ in a document is stale the moment the constants move.
   `h_repair` dest still and a standalone refine dest also store
   `qc_json`. Mutation: a
   generate that writes extra `anchor_ref` rows fails this.
+- `T4-20` **Exposing nudes are two gates, not one render.** Pose QC
+  (`T3-33.b`) is judged on the picture before any anatomy pass. A new
+  pose is not an empty latent plus a contradictory source (that invents
+  a human face). InstantX Union is pose/depth only and does not emit
+  genitals. Vanilla Qwen-Image-Edit 2511 is uncensored and still
+  undraws vulva/anus; anatomy is a later inpaint/composite on a pose
+  PASS, pigment from the operator photographs, never a photoreal plate
+  as image2. A trained 2511 edit LoRA is last resort (roadmap O14 on
+  gamingpc) after SNOFS Qwen v1.3 + Inpaint CN fail; it is not this
+  criterion and it does not land in `make_anchor.py`. Measured
+  2026-08-16: `docs/MEASURED-2026-08-16-POSE-ANATOMY.md`.
+  Mutation: compositing anatomy onto a pose-FAIL sheet fails this.
 
 ## 7. Explicitly not building
 
@@ -182,6 +194,10 @@ in a document is stale the moment the constants move.
   outpaint on the model that rendered the frame; a multi-image edit model does
   not need them.
 - No new negative prompt. §5.
+- No second identity UNET in the studio picker. Pony / Illustrious /
+  Krea 2 / Flux t2i are not `role=reference` defaults. When-to-use is
+  DDD-4-7 §1a. A Pony anatomy **donor crop** after pose PASS is O12c,
+  not a new criterion.
 
 ## 8. How every criterion above is to be verified
 
@@ -302,6 +318,7 @@ deployed and live on cerberus.
 | `T4-16`/`T4-17` the negative does not move | **holds** | — | nothing moved out of the negative; the fast-mode drop is still stated on the form |
 | `T4-18` compose a front-nude XXX sheet and assert six things | **built** | `a5527b1` | six independent tests on the real composer (`test_t4_18_*` in `studio/test_trd4_unverified.py`): no negation, body parts, both slots named, no wardrobe, no "bare skin", `tiers.PINNED` last. Deleting PINNED or adding a negation each fails only its own test |
 | `T4-19` tile shows confidence or named xAI/local failure | **built** | `80575de` | `test_anchor_qc.py`: `qc_tag` and the candidate tile name the backend; generate still does not write extra `anchor_ref` rows |
+| `T4-20` pose QC before anatomy; no empty-latent identity lock; no photoreal image2 | **process** | 2026-08-16 | Operator grind `docs/MEASURED-2026-08-16-POSE-ANATOMY.md`. Studio graph unchanged. O14 train is last resort, not this criterion. |
 
 ### 9.1 `T4-11` was true in the constant and false in every render
 

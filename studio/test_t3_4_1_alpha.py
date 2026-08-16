@@ -7,7 +7,7 @@ tier-1 REJECT, no judgement.
 
 RGB without an alpha channel is treated as fully opaque (PASS).
 measured is max alpha (0–255), expected ALPHA_MIN, unit levels.
-remedy class edit-text (T3-33).
+remedy class edit-text (T3-33.a).
 
 Mutation: delete the check from check_image → no alpha finding.
 Mutation: always PASS → transparent arm red.

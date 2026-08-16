@@ -11,6 +11,9 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
+| **gamingpc Comfy** `100.107.235.105:8188` (`~/comfy-backend`, docker) | Grok — **held** | #535 grind-stack copy + donor Z-Image t2i + non-overlapping 2511 jobs (O1 empty+botharms, O13, angles). Not p_*/o12a. Do not stitch donors onto pose FAIL. | 2026-08-16 |
+| `anchor5/roadmap/**` (docs + synced pngs) | Grok — **released** | Per-option runbook, QC.md, CATALOG-MODELS.md, sheets synced from cerberus/gamingpc. | 2026-08-16 |
+| `docs/ROADMAP-2026-08-16-POSE-ANATOMY.md`, `docs/MEASURED-2026-08-16-POSE-ANATOMY.md`, `CONTINUATION-2026-08-16-pose-anatomy.md`, `docs/TRD-4-CHARACTER-ANCHORS.md` (T4-20 note only), `docs/PRD-4-7-IDENTITY-AND-RENDERING.md` (P11 one clause), `docs/DDD-4-7-IDENTITY-AND-RENDERING.md` (grind paragraph), `docs/UIUX-DEFINITION-AND-STYLE-GUIDE.md` (§7a.6 one sentence) | Grok — **released** | O14 last-resort 2511 LoRA train plan (gamingpc). No trainer install. | 2026-08-16 |
 | `make_anchor.py`, `studio/prompts.py`, `studio/templates/_anchor_form.html`, `studio/app.py` (anchor form / profile fields / preview ONLY), `studio/test_app.py` | A1 pose+matrix | T7-16 pose type (replaces view pose clause, never beside it) + UIUX 7a.1 tier×view matrix. TDD. | 2026-08-14 |
 | `studio/qc_service.py`, `studio/qc.py`, new `studio/test_qc_approve.py` | A2 qc-approve | T3-18: approve() stops raising; one explicit approval enqueues one repair; T3-6 repair_path != path. TDD. | 2026-08-14 |
 | `studio/grok.py`, `build_song.py`, their self-checks / related tests | A3 length+refine | T2-12a legal 8n+1 rounding owned by TRD-2; T5-1 `--refine` on ltx/ltx25 adds a pass or raises. TDD. | 2026-08-14 |
