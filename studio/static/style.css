@@ -121,7 +121,12 @@ button {
 }
 button:hover:not(:disabled) { background: #8fb2ff; }
 button:active:not(:disabled) { background: #6a92e8; }
-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* One rule for keyboard focus on every interactive control (UIUX §5.7 / §8). */
+a:focus-visible, button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* A real alternative sitting beside the primary: Cancel, Close, Revert. */

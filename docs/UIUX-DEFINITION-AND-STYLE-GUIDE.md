@@ -1250,7 +1250,10 @@ A style guide is falsifiable or it is decoration.
   again, and it can fail, which is why it is worth writing.
 - **Focus is everywhere.** A check walks the rendered pages for interactive
   elements and asserts each resolves a `:focus-visible` style. Deleting the rule
-  must turn it red.
+  must turn it red. `test_uiux_focus_visible.py` —
+  `test_focus_visible_rule_exists_and_deleting_it_fails` (CSS-source + mutation
+  arm) and `test_rendered_pages_include_interactive_controls_and_stylesheet`
+  (`/`, `/songs`, `/playlists`; TestClient + CSS parse, no browser).
 - **The nav matches the agreed order**, asserted against one list that both
   `base.html` and the API read. `T6-A2` objects written so far: the queue panel
   (`test_t6_a2_html_and_json_report_the_same_queue_numbers`), the review
