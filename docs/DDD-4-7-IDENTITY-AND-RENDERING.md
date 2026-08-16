@@ -287,8 +287,9 @@ plus Swarm assign. Do not add a second pull queue.
 - **`T6-18` still deletes nothing on write.** `T6-19` is the operator
   confirm + dry-run + clip cleanup: local host `os.remove`; remote host
   only when a known `SWARM_INPUT_DIRS` input→output twin exists (same SSH
-  staging path as `install_input`); otherwise skip with reason — never
-  invent a remote path.
+  staging path as `install_input`, path `shlex.quote`d because OpenSSH
+  shells the remote argv); otherwise skip with reason — never invent a
+  remote path.
 
 ## 7. Where the studio still owns two copies of one fact
 
