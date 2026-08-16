@@ -21,10 +21,13 @@ the TRD-4/TRD-7 anchor loop (`test_t6_a1_anchor_loop_over_json`).
 (`test_t6_a2_html_and_json_report_the_same_queue_numbers`), review
 queue (`test_t6_a2_html_and_json_report_the_same_review_queue_numbers`),
 set editor (`test_t6_a2_html_and_json_report_the_same_set_numbers`,
-`T6-A2-set`), and storyboard
+`T6-A2-set`), storyboard
 (`test_t6_a2_html_and_json_report_the_same_storyboard_numbers`,
 `T6-A2-storyboard` — same `storyboard_service.payload()` for scene_time /
-song_length / clip_seconds / scene_count / mismatch).
+song_length / clip_seconds / scene_count / mismatch), and album arc
+(`test_t6_a2_html_and_json_report_the_same_arc_numbers`, `T6-A2-arc` —
+same `arc_service.payload()` for song_count / act_count / premise /
+has_proposal; playlist payload stays T2-37-shaped).
 `T6-A4` is proven for the queue panel
 (`test_t6_a4_queue_page_shows_stubbed_values_unmodified`) and the
 storyboard coverage meter

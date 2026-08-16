@@ -3,6 +3,14 @@
 <h1>{{ playlist.name }} &mdash; story arc</h1>
 <p class="hint"><a href="/playlists">&larr; Playlists</a></p>
 
+{# T6-A2-arc numbers come from arc_service.payload; do not recompute
+   song_count from arc.songs | length or act_count from arc.acts | length. #}
+<div id="arc-meter"
+     data-song-count="{{ song_count }}"
+     data-act-count="{{ act_count }}"
+     data-premise="{{ premise }}"
+     data-has-proposal="{{ 'true' if has_proposal else 'false' }}"></div>
+
 <section class="card">
   <h2>Write the arc</h2>
   <p class="hint">One request over every track on the album, in order, with its lyrics &mdash;
@@ -79,9 +87,9 @@
 
 {% if arc %}
 <section class="card">
-  <h2>{{ arc.premise }}</h2>
-  <p class="meta">{{ arc.songs | length }} track{{ "" if arc.songs | length == 1 else "s" }}
-    &middot; {{ arc.acts | length }} act{{ "" if arc.acts | length == 1 else "s" }}
+  <h2>{{ premise if premise else arc.premise }}</h2>
+  <p class="meta">{{ song_count }} track{{ "" if song_count == 1 else "s" }}
+    &middot; {{ act_count }} act{{ "" if act_count == 1 else "s" }}
     {% if row and row.model %}&middot; <span class="muted">{{ row.model }}</span>{% endif %}
     {% if row and row.created %}&middot;
       <time class="local-time muted" datetime="{{ row.created | isotime }}">{{ row.created | isotime }}</time>

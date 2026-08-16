@@ -43,6 +43,7 @@ import qc_service   # recording those findings and answering the review queue
 import sets_service  # TRD-1 / T6-A3: sets, items, render — no FastAPI
 import cleanup_service  # T6-19: confirmed clip cleanup — no FastAPI
 import storyboard_service  # TRD-2 / T6-A3: arc, board, meter — no FastAPI
+import arc_service  # TRD-6 T6-A2-arc: playlist arc meter — no FastAPI
 import media_service  # TRD-8 T8-16: song media bag — no FastAPI
 import video_fx   # per-item video look effects -- same, pure/no deps
 
@@ -7309,15 +7310,17 @@ def start_arc(id: int, theme: str = Form(""), direction: str = Form(""),
 @app.get("/playlists/{id}/arc", response_class=HTMLResponse)
 def view_arc(request: Request, id: int):
     pl = get_playlist_or_404(id)
-    row = db.one("SELECT * FROM arcs WHERE playlist_id=?", id)
-    data, md = {}, ""
-    if row and row["json_path"] and os.path.isfile(row["json_path"]):
-        with open(row["json_path"]) as f:
-            data = json.load(f)
+    # T6-A2-arc: numbers from arc_service.payload — same function the JSON GET uses.
+    try:
+        meter = arc_service.payload(id)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from None
+    row = meter["row"]
+    data = meter["arc"] or {}
+    md = ""
     if row and row["md_path"] and os.path.isfile(row["md_path"]):
         md = open(row["md_path"]).read()
-    outdir, slug = album_arc_dir(pl)
-    proposal = arc.load_proposal(outdir, slug) or {}
+    proposal = meter["proposal"] or {}
     titles = {r["id"]: r["title"] for r in db.q(
         """SELECT s.id, s.title FROM playlist_items pi JOIN songs s ON s.id = pi.song_id
            WHERE pi.playlist_id=? ORDER BY pi.position""", id)}
@@ -7335,7 +7338,13 @@ def view_arc(request: Request, id: int):
             defaults[b] = ""
     return templates.TemplateResponse(request, "arc.html", {
         "playlist": pl, "arc": data, "row": row, "md": md, "titles": titles,
-        "proposal": proposal, "backends": have, "models": models, "defaults": defaults})
+        "proposal": proposal, "backends": have, "models": models, "defaults": defaults,
+        # T6-A2-arc distinctive numbers — service-owned, data-* on the page
+        "song_count": meter["song_count"],
+        "act_count": meter["act_count"],
+        "premise": meter["premise"],
+        "has_proposal": meter["has_proposal"],
+    })
 
 
 @app.post("/playlists/{id}/arc/accept")
@@ -7428,8 +7437,19 @@ def _persist_arc(pl, data, model="", direction=""):
 
 @app.get("/api/playlists/{id}/arc")
 def api_arc_get(id: int):
-    get_playlist_or_404(id)
-    return JSONResponse({"arc": _load_arc(id)})
+    # T6-A2-arc: same arc_service.payload numbers as the HTML page.
+    # Playlist GET /api/playlists/{id} stays T2-37-shaped (arc only when defined).
+    try:
+        p = arc_service.payload(id)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from None
+    return JSONResponse({
+        "arc": p["arc"],
+        "song_count": p["song_count"],
+        "act_count": p["act_count"],
+        "premise": p["premise"],
+        "has_proposal": p["has_proposal"],
+    })
 
 
 @app.post("/api/playlists/{id}/arc/propose")

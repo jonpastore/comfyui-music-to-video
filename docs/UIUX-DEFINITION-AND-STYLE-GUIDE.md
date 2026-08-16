@@ -45,7 +45,7 @@ Three facts about the domain decide almost every rule below:
 | `static/style.css` | 1247 lines |
 | `static/app.js` | 1589 lines, hand-written, 55 `addEventListener` |
 | `templates/` | 29 files, 3481 lines |
-| routes | 156+, of which **37+** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue`, `/qc`, set HTML `/sets/{id}`, storyboard HTML `/songs/{id}/storyboard/{tier}`, and song Media (`/api/songs/{id}/media`) each match their JSON surface on the same numbers (`T6-A2` / `T6-A2-set` / `T6-A2-storyboard` / `T8-16`). `sets_service` / `storyboard_service` / `media_service` import nothing from FastAPI (`T6-A3`) |
+| routes | 156+, of which **37+** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue`, `/qc`, set HTML `/sets/{id}`, storyboard HTML `/songs/{id}/storyboard/{tier}`, album arc HTML `/playlists/{id}/arc`, and song Media (`/api/songs/{id}/media`) each match their JSON surface on the same numbers (`T6-A2` / `T6-A2-set` / `T6-A2-storyboard` / `T6-A2-arc` / `T8-16`). `sets_service` / `storyboard_service` / `arc_service` / `media_service` import nothing from FastAPI (`T6-A3`) |
 
 ### 2.2 The root finding: tokens exist for colour, and for nothing else
 
@@ -263,6 +263,11 @@ HTML `/songs/{id}/storyboard/{tier}` (`#storyboard-meter` data attrs) and
 **`T6-A4-storyboard` built**: meter fill width is `coverage.fill_pct` from
 `storyboard_service.payload` — no template compute
 (`test_t6_a4_storyboard_page_shows_stubbed_fill_pct_unmodified`).
+**`T6-A2-arc` built**:
+HTML `/playlists/{id}/arc` (`#arc-meter` data attrs) and
+`GET /api/playlists/{id}/arc` report the same `song_count` / `act_count` /
+`premise` / `has_proposal` from `arc_service.payload`
+(`test_t6_a2_html_and_json_report_the_same_arc_numbers`).
 **`T2-25` built**:
 `POST /songs/{id}/clips` refuses a scene-time miss (400, no job)
 and still queues an in-tolerance board.
@@ -1235,7 +1240,10 @@ A style guide is falsifiable or it is decoration.
   (`test_t6_a2_html_and_json_report_the_same_storyboard_numbers`,
   `T6-A2-storyboard` — `#storyboard-meter` data attrs for scene_time /
   song_length / clip_seconds / scene_count / mismatch from
-  `storyboard_service.payload`), and the song media bag
+  `storyboard_service.payload`), the album arc
+  (`test_t6_a2_html_and_json_report_the_same_arc_numbers`, `T6-A2-arc` —
+  `#arc-meter` data attrs for song_count / act_count / premise /
+  has_proposal from `arc_service.payload`), and the song media bag
   (`test_t6_a2_html_and_json_report_the_same_media_numbers`, `T8-16`).
   Nav is still this guide's own list check.
 - **No template computes.** `T6-A4`, asserted by a differential: stub the service
