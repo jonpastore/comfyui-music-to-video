@@ -7,9 +7,9 @@ Companion documents: `docs/PRD-1-3-EDITING-AND-QUALITY.md`,
 `docs/DDD-1-3-EDITING-AND-QUALITY.md`. Built-state is the TRD ledgers.
 
 **Every number below was counted from the tree at `f9ca597`, then the built
-claims were reconciled to the TRDs.** The leftover UI that the TRDs still
-do not call built: live loudness meter; waveform still a PNG (`mixer.peaks`
-is the data, T1-13…T1-15). GPU new-view / portrait / T7-7 / T5-2 sheets stay
+claims were reconciled to the TRDs.** Timeline peaks (`data-peaks`) and
+on-demand loudness are **built** (`test_t1_peaks_meter.py`). `T7-16` pose
+type is **built**. GPU new-view / portrait / T7-7 / T5-2 sheets stay
 **NOT MEASURED**. The commands are named so a claim can be re-run rather than
 believed.
 
@@ -211,7 +211,8 @@ Joins, playhead and lanes are the same view: `.tl-join[data-t]` (drag POSTs
 the set's `rounding.abs_delta_sum`, bounded by half a frame per join
 (`T1-6`); video cuts snap to that frame while audio crossfades stay on
 the stored second (`T1-5`). The page does not invent a second clock.
-Easy omits the lane strip. Waveform is still a PNG. Forms remain.
+Easy omits the lane strip. `.tl-block` draws `mixer.peaks` (`data-peaks`),
+not `waveform_png` as `background-image` (`test_t1_peaks_meter.py`). Forms remain.
 A stored `gain_db` ramp does reach the rendered file (`T1-9b`, RMS/s
 slope on `mix_audio`); so do `pan` (L/R energy) and the filter lanes
 (band energy) (`T1-12`). A fully-populated lane's filter text stays under
@@ -912,7 +913,10 @@ to a model change rather than guessed. `T7-13` is built: `view:<key>` types
 are generated from the view table (`test_view_framing_type_reaches_the_composer`),
 so the UI iterates types rather than listing
 them; a type added to `PROMPT_TYPES` appears with no template change. That is the
-same rule `T2-33` sets for the model picker.
+same rule `T2-33` sets for the model picker. **`T7-16` built**: album `pose`
+is a `prompts` row; `apply_pose` replaces the standing clause; the generate
+form carries `name="pose"`; preview shows the saved version
+(`test_pose_is_composed_previewed_and_screened`).
 
 ### 7a.5 "Use as reference" is a tile state, not a new page
 

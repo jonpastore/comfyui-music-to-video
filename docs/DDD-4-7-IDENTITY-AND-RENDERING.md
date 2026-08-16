@@ -95,7 +95,7 @@ history"*. The four types:
 | `view:<key>` | no | how a camera is placed is not a function of the rating. **Generated from `VIEWS`, not written per view**, or `T7-1` is undone the moment a view is added |
 | `backdrop` | no | five clauses of studio, lighting, framing and focus welded together, shared by every sheet ever rendered here; `T4-13`'s lighting lock lands inside it and `T7-5` overrides half of it |
 | `composite` | no | the clause deciding whether three references are one character or three. Load-bearing for `T7-10` and untunable today |
-| `pose` | no | what the character is *doing*, as distinct from where the camera is and what they look like. The variation knob the form lacks |
+| `pose` | no | what the character is *doing*, as distinct from where the camera is and what they look like. Album `prompts` row via `prompts.latest`; `apply_pose` replaces the view stance. Anchors form `name="pose"` is the per-sheet override. **built** (`test_pose_is_composed_previewed_and_screened`) |
 
 Two constraints that make this smaller than it looks:
 

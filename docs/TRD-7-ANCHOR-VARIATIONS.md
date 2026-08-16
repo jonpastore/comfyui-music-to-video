@@ -288,9 +288,9 @@ been seen red is a claim about a check, not about the code. Commits are on
 | `T7-13` per-view framing versioned | **built** | `prompts.py` | `PROMPT_TYPES` generated as `view:<key>` from `make_anchor.VIEWS` (untiered). `test_view_framing_type_reaches_the_composer`: a saved `view:front` version is what `default_anchor_prompt` / `prompt_for` emit, including for a cast member. Mutation: drop the `PROMPT_TYPES.update` or skip album view: text in the composer → red |
 | `T7-14` `backdrop` a versioned type | **built** | `d5526cb` | album override reaches the composed prompt and the constant does not appear beside it |
 | `T7-15` `composite` a versioned type | **built** | `d5526cb` | appears at `n_refs=2`, absent at `n_refs=1`, album wording replaces the constant |
-| `T7-16` `pose` | **partial** | `T7-20` | Named uploaded poses (`T7-20`, `77e33d7`) are the operator path: a plate is a named photo, not a second standing clause. The album-versioned `pose` prompt type in §9.1 is still not a `prompts` row |
-| `T7-17` composed and previewed | **built** for `T7-13`/`T7-14`/`T7-15` | `d5526cb` + `view:` types | the preview runs the real composer; a saved `view:front` reaches `prompt_for` (`test_view_framing_type_reaches_the_composer`) |
-| `T7-18` screened and walked | **built** for `T7-13`/`T7-14`/`T7-15` | `d5526cb` | `view:` / backdrop / composite / pose go through `screen_prompt_field` / `prompts.save`; the negation walker covers studio `ANCHOR_PROFILE_FIELDS` defaults, not only `make_anchor`'s constants |
+| `T7-16` `pose` | **built** | this change | Album-versioned `prompts` type `pose` (untiered). `prompts.save` + `anchor_profile_fields` overlay `prompts.latest(album, "pose")` into `anchor_from`; `apply_pose` **replaces** the view stance (never beside it). `test_pose_replaces_the_view_stance_and_does_not_sit_beside_it` — four shipped views stay frozen sha256 without a pose; kneeling pose drops "arms relaxed" / "standing upright". `test_pose_is_composed_previewed_and_screened` — save a pose version, `default_anchor_prompt` and `/anchors/preview` both carry it; screened save refuses "ignore all previous instructions". Named uploads stay `T7-20`. Mutation: append pose beside framing → red |
+| `T7-17` composed and previewed | **built** for `T7-13`/`T7-14`/`T7-15`/`T7-16` | `d5526cb` + `view:` types + pose | the preview runs the real composer; a saved `view:front` reaches `prompt_for` (`test_view_framing_type_reaches_the_composer`); a saved `pose` reaches preview (`test_pose_is_composed_previewed_and_screened`) |
+| `T7-18` screened and walked | **built** for `T7-13`/`T7-14`/`T7-15`/`T7-16` | `d5526cb` | `view:` / backdrop / composite / pose go through `screen_prompt_field` / `prompts.save`; the negation walker covers studio `ANCHOR_PROFILE_FIELDS` defaults, not only `make_anchor`'s constants |
 | `T7-19` per-view prompt box | **built** | `415584d` | an edit reaches only its own view; the sibling view composes its own. Mutation: the back sheet came back holding `"FRONT VIEW character reference sheet of ..."` — the reported symptom |
 | `T7-20` named uploaded poses | **built** | this change | An operator names a base image, optionally assigns a tier, and either generates a sheet for that pose (identity photos + that plate) or assigns the upload itself as the chosen sheet. Upload cap is 24. Custom `pose_<id>` views omit the standing backdrop clause. Mutation: 95/20/40 score stores 20; assign creates a chosen `anchors` row from the file |
 
@@ -301,10 +301,10 @@ before this work was 233 / 186.
 ### 9.1 What is left, and why it is one unit
 
 `T7-3` (new views + structural camera/pose/crop split + four-shipped frozen
-compose), `T7-5` (portrait crop + size), and `T7-13` (`view:<key>` types) are
-built. GPU new-view / portrait sheets remain NOT MEASURED. The leftover is the
-album-versioned `pose` row in `T7-16` (named uploaded poses via `T7-20` are
-the operator path; the `prompts` type is still partial).
+compose), `T7-5` (portrait crop + size), `T7-13` (`view:<key>` types), and
+`T7-16` (album `pose` `prompts` row + `apply_pose` replace) are built. GPU
+new-view / portrait / T7-7 sheets remain NOT MEASURED. Named uploads stay
+`T7-20`. The leftover is those GPU measurements, not the pose type.
 
 Every framing string in `DEFAULT_VIEWS` already contains a POSE — *"standing
 upright, arms relaxed at their sides, feet apart"*. A `pose` field (`T7-16`)

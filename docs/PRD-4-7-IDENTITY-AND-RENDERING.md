@@ -121,7 +121,7 @@ the severe one.
 | P3a | Lighting lock is channel balance on the rendered sheet (olive/magenta FLAG, grey PASS), not the `BACKDROP` string. Job 257 `front_nude` seed 5151 PASSes 8.06; sibling seed 5288 still FLAGs 14.76 | `T4-13` |
 | P4 | A new view is one table entry, and is tier-gated by what it *is* rather than by a list somebody remembered to update | `T7-1`/`T7-2`/`T7-3` built (`make_anchor.VIEWS` + `is_nude_view` + form/compose via `test_t7_3_new_views.py`). GPU new-view sheets NOT MEASURED |
 | P5 | An approved sheet can be the identity lock for the next sheet — the lever that keeps clips on-model, applied to anchors | `T7-6`/`T7-8` built. `T7-7` harness only; GPU pair **NOT MEASURED** |
-| P6 | The four things that shape every sheet — view framing, backdrop, composite, pose — are versioned, per-album prompts rather than code constants | `T7-13` built (`view:<key>` from the view table). `T7-14`/`T7-15`/`T7-19` built. Album `pose` row in `T7-16` remains |
+| P6 | The four things that shape every sheet — view framing, backdrop, composite, pose — are versioned, per-album prompts rather than code constants | `T7-13` built (`view:<key>` from the view table). `T7-14`/`T7-15`/`T7-16`/`T7-19` built. `T7-16`: saved `pose` version reaches compose + preview (`test_pose_is_composed_previewed_and_screened`); `apply_pose` replaces the stance (`test_pose_replaces_the_view_stance_and_does_not_sit_beside_it`). Named uploads stay `T7-20` |
 | P7 | `--refine` either refines or refuses, and whether it helps is measured rather than assumed | `T5-1`…`T5-6` |
 | P7a | A ×2 clip among 832×480 siblings assembles at 1664×960 with no silent letterbox; mixed aspect is refused | `T5-7` |
 | P7b | Each clip ceiling is labeled measured or chosen; an over-long single-clip request is refused or split, not only annotated | `T5-9` |
@@ -154,9 +154,9 @@ statement of it:
    nudity derived, required cameras compose and appear in the form. GPU
    new-view sheets remain NOT MEASURED.
 2. **Make the words editable and versioned** (P6). The operator's real loop is
-   tune-render-compare. `view:<key>` (`T7-13`), `backdrop` and `composite` are
-   versioned; the leftover is the album `pose` row (`T7-16`). Named uploads
-   (`T7-20`) are the operator path.
+   tune-render-compare. `view:<key>` (`T7-13`), `backdrop`, `composite`, and
+   album `pose` (`T7-16`) are versioned. Named uploads (`T7-20`) remain the
+   plate path. GPU leftover is `T7-7` / new-view sheets, not the pose type.
 3. **Prove identity holds** (P5's `T7-7`). Harness built. GPU four-image set
    **NOT MEASURED**.
 4. **TRD-4 string/policy rows** (P1–P3, P3a) are **built**. `T4-13` is
