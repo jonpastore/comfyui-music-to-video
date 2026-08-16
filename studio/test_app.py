@@ -5448,13 +5448,15 @@ def test_a_song_gets_a_waveform_picture_when_it_is_analysed(patch_stub):
         other = db.upsert_song("no-waves", title="Unanalysed")
         assert appmod.song_waveform(other) is None
 
-        # it reaches the SET EDITOR, which is the only reason it exists
+        # set editor draws peaks data, not the PNG as a background-image
         client.post("/sets/new", data={"name": "Wave Set", "mode": "audio"})
         setid = db.one("SELECT id FROM sets WHERE name='Wave Set'")["id"]
         client.post(f"/sets/{setid}/items", data={"song_id": sid})
         page = client.get(f"/sets/{setid}").text
-        assert "has-wave" in page and appmod.media_url(path) in page, \
-            "the waveform never reaches the timeline block it was generated for"
+        assert "has-wave" in page, "timeline block has no peaks envelope"
+        assert "data-peaks=" in page, "peaks pairs never reach the timeline block"
+        assert "background-image" not in page or appmod.media_url(path) not in page, \
+            "timeline still uses the PNG as a background-image"
 
         # and it is swept with the song, because it lives in the assets bag
         client.post(f"/songs/{sid}/delete", data={"confirm": "DELETE"})

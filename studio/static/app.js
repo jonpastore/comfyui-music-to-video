@@ -23,6 +23,81 @@ function watchJob(jobId, targetId) {
   es.onerror = function () { es.close(); };
 }
 
+// Waveform: .tl-block[data-peaks] holds mixer.peaks min/max pairs.
+function drawTlWaves() {
+  document.querySelectorAll(".tl-block[data-peaks] canvas.tl-wave").forEach(function (canvas) {
+    var block = canvas.closest(".tl-block");
+    if (!block) return;
+    var pairs;
+    try { pairs = JSON.parse(block.getAttribute("data-peaks") || "[]"); }
+    catch (err) { return; }
+    if (!pairs || !pairs.length) return;
+    var w = Math.max(2, canvas.clientWidth || block.clientWidth || 100);
+    var h = Math.max(2, canvas.clientHeight || 40);
+    if (canvas.width !== w) canvas.width = w;
+    if (canvas.height !== h) canvas.height = h;
+    var ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, w, h);
+    var mid = h / 2;
+    var n = pairs.length;
+    var maxAbs = 0;
+    for (var i = 0; i < n; i++) {
+      var lo = Math.abs(pairs[i][0] || 0);
+      var hi = Math.abs(pairs[i][1] || 0);
+      if (lo > maxAbs) maxAbs = lo;
+      if (hi > maxAbs) maxAbs = hi;
+    }
+    if (!(maxAbs > 0)) maxAbs = 1;
+    ctx.fillStyle = getComputedStyle(document.documentElement)
+      .getPropertyValue("--accent").trim() || "#7aa2f7";
+    var barW = Math.max(1, w / n);
+    for (var j = 0; j < n; j++) {
+      var mn = pairs[j][0] || 0;
+      var mx = pairs[j][1] || 0;
+      var y1 = mid - (mx / maxAbs) * (mid - 1);
+      var y2 = mid - (mn / maxAbs) * (mid - 1);
+      var top = Math.min(y1, y2);
+      var bot = Math.max(y1, y2);
+      ctx.fillRect(j * barW, top, Math.max(1, barW - 0.5), Math.max(1, bot - top));
+    }
+  });
+}
+
+function bindLiveMeter() {
+  document.querySelectorAll("[data-meter=loudness] .tl-measure").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var card = btn.closest("[data-meter-url]");
+      var url = card && card.getAttribute("data-meter-url");
+      if (!url) return;
+      btn.disabled = true;
+      fetch(url).then(function (r) { return r.json(); }).then(function (body) {
+        var loud = body.loudness;
+        if (!loud) return;
+        var fill = card.querySelector(".meter-fill");
+        if (fill) fill.style.width = (loud.fill_pct || 0) + "%";
+        var meter = card.querySelector(".meter");
+        if (meter) {
+          meter.classList.toggle("off", !!loud.flagged);
+          meter.classList.toggle("ok", !loud.flagged);
+        }
+        var text = card.querySelector(".meter-text");
+        if (text) {
+          var html = "<strong data-lufs=\"" + loud.lufs + "\">" +
+            Number(loud.lufs).toFixed(1) + "</strong> LUFS";
+          if (loud.true_peak_db != null) {
+            html += " / <strong data-tp=\"" + loud.true_peak_db + "\">" +
+              Number(loud.true_peak_db).toFixed(1) + "</strong> dBTP";
+          }
+          if (loud.flagged) html += " <span class=\"tag warn-tag\">off target</span>";
+          html += " <span class=\"muted\">· live_mix</span>";
+          text.innerHTML = html;
+        }
+      }).finally(function () { btn.disabled = false; });
+    });
+  });
+}
+
 // Drag-to-reorder, for a table of rows OR a horizontal timeline of blocks.
 // One handler keyed off data-reorder-url rather than the playlist endpoint, and
 // off data-axis rather than assuming vertical, so the set editor's table and its
@@ -39,6 +114,13 @@ function watchJob(jobId, targetId) {
 // handler never sees the ticks. Pointer handlers below write the same
 // stored secs / automation / ?at= the server already owns.
 document.addEventListener("DOMContentLoaded", function () {
+  drawTlWaves();
+  bindLiveMeter();
+  if (typeof ResizeObserver !== "undefined") {
+    document.querySelectorAll(".tl-block.has-wave").forEach(function (b) {
+      new ResizeObserver(drawTlWaves).observe(b);
+    });
+  }
   document.querySelectorAll("[data-reorder-url]").forEach(function (root) {
     // a table reorders its rows, anything else reorders its own children
     var body = root.tBodies ? root.tBodies[0] : root;

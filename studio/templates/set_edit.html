@@ -77,6 +77,32 @@
 <p class="empty">No songs yet. Add one below.</p>
 {% else %}
 
+<section class="card" data-meter="loudness"
+         data-meter-url="/api/sets/{{ set.id }}/loudness">
+  <h3>Loudness</h3>
+  <div class="meter {% if loudness and loudness.flagged %}off{% elif loudness %}ok{% endif %}">
+    <div class="meter-bar">
+      <div class="meter-fill" style="width: {{ loudness.fill_pct if loudness and loudness.fill_pct is defined else 0 }}%"></div>
+    </div>
+    <p class="meter-text">
+      {% if loudness and loudness.lufs is defined %}
+      <strong data-lufs="{{ loudness.lufs }}">{{ "%.1f"|format(loudness.lufs) }}</strong> LUFS
+      {% if loudness.true_peak_db is not none %}
+      / <strong data-tp="{{ loudness.true_peak_db }}">{{ "%.1f"|format(loudness.true_peak_db) }}</strong> dBTP
+      {% endif %}
+      {% if loudness.flagged %}<span class="tag warn-tag">off target</span>{% endif %}
+      <span class="muted">· {{ loudness.source or "last_render" }}</span>
+      {% else %}
+      <span class="muted">No render loudness yet.</span>
+      {% endif %}
+    </p>
+    <p class="hint">Last render is shown without remuxing. Measure runs
+      <code>export_loudness</code> on the current mix
+      (<code>GET /api/sets/{{ set.id }}/loudness</code>).</p>
+    <button type="button" class="tl-measure">Measure current mix</button>
+  </div>
+</section>
+
 {% if suggested_order %}
 <section class="card">
   <h3>Suggested running order</h3>
@@ -118,14 +144,21 @@
 {% endif %}
 <div class="timeline" data-reorder-url="/sets/{{ set.id }}/reorder" data-axis="x" data-reload>
   {% for t in timeline %}
-  {# The waveform behind the block. A background-image, not an <img>: it has to
-     stretch to whatever width the block's flex share gives it, and the picture
-     is of the RAW track -- the renderer level-matches every item with loudnorm,
-     so this is the shape of the music, not of the mix. #}
-  <div class="tl-block{% if t.waveform %} has-wave{% endif %}" draggable="true"
-       data-item="{{ t.id }}" style="flex: {{ t.pct }} 1 0
-       {%- if t.waveform %}; background-image: url('{{ media_url(t.waveform) }}'){% endif %}"
+  {# Waveform from mixer.peaks, not waveform_png as background-image. #}
+  <div class="tl-block{% if t.peaks %} has-wave{% elif t.peaks_reason %} has-wave wave-empty{% endif %}"
+       draggable="true"
+       data-item="{{ t.id }}"
+       {% if t.song_id is not none %}data-song="{{ t.song_id }}"{% endif %}
+       data-peaks='{{ t.peaks | tojson }}'
+       data-reason="{{ t.peaks_reason or '' }}"
+       data-n-peaks="{{ t.n_peaks }}"
+       style="flex: {{ t.pct }} 1 0"
        title="{{ t.title }} — {{ t.secs | hms }}">
+    {% if t.peaks %}
+    <canvas class="tl-wave" aria-hidden="true"></canvas>
+    {% elif t.peaks_reason %}
+    <span class="tl-wave-reason" data-reason="{{ t.peaks_reason }}">{{ t.peaks_reason }}</span>
+    {% endif %}
     <span class="tl-title">{{ loop.index }}. {{ t.title }}</span>
     <span class="tl-meta">{{ t.secs | hms }}{% if t.bpm %} · {{ "%.0f"|format(t.bpm) }}{% endif %}{% if t.key %} · {{ t.key }}{% endif %}</span>
     {% if not loop.last %}

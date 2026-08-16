@@ -244,17 +244,14 @@ The waveform is the part that must change rather than grow: today it is
 `mixer.waveform_png()` set as a `background-image` on the block. `mixer.peaks`
 now returns the decimated min/max pairs (`T1-13`/`T1-14`);
 `GET /api/songs/{id}/peaks` adds `reason` when there is nothing to draw
-(`T1-15`: `no_audio` / `missing` / `unreadable`, never a flat line). The UI
-still draws the picture. The swap onto those numbers remains — the regions
-have to be draggable, and a picture cannot be. Same component, different
-source; the CSS comment about text-shadow over the waveform (dimming it
-would hide the quiet passages, which are exactly what you look at it to
-find) stays true either way. An empty envelope must surface `reason`, not
-a silent strip.
+(`T1-15`: `no_audio` / `missing` / `unreadable`, never a flat line). The set timeline draws those pairs on a canvas (`data-peaks`), not the
+PNG as `background-image`. Join drag stays on `.tl-join`. An empty
+envelope surfaces `reason`, not a silent strip.
 
-**Genuinely not built** — the live `meter` component (live
-loudness-against-target as you mix — the export asset already
-names measured I/TP and the off-target flag, `T1-25`).
+**Live loudness meter built** — last-render I/TP on the set editor
+without remux; **Measure current mix** hits `GET /api/sets/{id}/loudness`
+(`export_loudness` on the current mix). The export asset still names
+measured I/TP (`T1-25`).
 `GET /api/songs/{id}/storyboard/{tier}/meter` reports `scene_time`
 against `song_length` and `mismatch` beyond `SCENE_TIME_TOLERANCE`
 (`T2-23`). It reports this song's `clip_seconds` from

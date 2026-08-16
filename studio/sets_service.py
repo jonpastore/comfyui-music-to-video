@@ -11,6 +11,7 @@ in a route handler.
 """
 import json
 import os
+import tempfile
 import time
 
 import automation
@@ -240,11 +241,105 @@ def rounding_for(row, items, total):
     return mixer.rounding_report(blocks, fps)
 
 
-def payload(sid):
+def peaks_envelope(it):
+    """T1-13/T1-15 envelope for one set item. Empty always carries a reason."""
+    if is_card_row(it):
+        return {"pairs": [], "reason": "no_audio", "song_id": None, "n": 0}
+    try:
+        song_id = it["song_id"]
+    except (KeyError, IndexError, TypeError):
+        song_id = None
+    try:
+        path = it["mp3_path"]
+    except (KeyError, IndexError, TypeError):
+        path = None
+    if song_id is None:
+        return {"pairs": [], "reason": "no_audio", "song_id": None, "n": 0}
+    env = mixer.peaks_from_path(path)
+    return {"pairs": env["pairs"], "reason": env["reason"],
+            "song_id": song_id, "n": len(env["pairs"])}
+
+
+def timeline_peaks(items):
+    """Per-item peaks envelopes in running order — the set editor's source."""
+    return [{"id": it["id"], **peaks_envelope(it)} for it in items]
+
+
+def _loudness_mix_items(row):
+    """Audio items for the on-demand meter: same gain/automation/audience as render."""
+    items = db.q("SELECT * FROM set_items WHERE set_id=? ORDER BY position", row["id"])
+    if not items:
+        return []
+    mode = audience(row)
+    build = []
+    for it in items:
+        if is_card_row(it):
+            build.append({**card_mix_item(it),
+                          "automation": automation.item_audio(it["id"]),
+                          "mode_audience": mode})
+            continue
+        song = db.one("SELECT * FROM songs WHERE id=?", it["song_id"])
+        if not song or not song["mp3_path"] or not os.path.isfile(song["mp3_path"]):
+            continue
+        build.append({
+            "audio": song["mp3_path"],
+            "transition": it["transition"], "secs": it["secs"],
+            "in_secs": it["in_secs"], "out_secs": it["out_secs"],
+            "hold": hold_of(it),
+            "gain_db": it["gain_db"], "effects_json": it["effects_json"],
+            "automation": automation.item_audio(it["id"]),
+            "mode_audience": mode,
+            **beatmatch_fields(it, song),
+        })
+    return build
+
+
+def live_loudness(row):
+    """On-demand loudness of the current mix via mixer.export_loudness.
+
+    Mixes through mixer.mix_audio. Do not call this on every GET /sets/{id}
+    or GET /api/sets/{id} — that remuxes the set on a page load. The
+    endpoint is GET /api/sets/{id}/loudness.
+    """
+    items = _loudness_mix_items(row)
+    if not items:
+        return None
+    fd, path = tempfile.mkstemp(suffix=".mp3")
+    os.close(fd)
+    rec = None
+    try:
+        mixer.mix_audio(items, path)
+        rec = mixer.export_loudness(path, items)
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    if not rec:
+        return None
+    target = rec.get("target_lufs")
+    lufs = rec.get("lufs")
+    if target and lufs is not None and target != 0:
+        fill = min(100.0, abs(float(lufs) / float(target)) * 100.0)
+    else:
+        fill = 0.0
+    rec = dict(rec)
+    rec["fill_pct"] = fill
+    rec["source"] = "live_mix"
+    return rec
+
+
+def payload(sid, with_peaks=True, with_meter=False):
+    """JSON body for one set.
+
+    with_peaks: timeline envelopes from mixer.peaks (cheap). HTML and
+    GET /api/sets/{id} both report these (T6-A2).
+    with_meter: remuxes the set. Default False. listed() never asks.
+    """
     row = get(sid) if not hasattr(sid, "keys") else sid
     items = item_rows(row["id"])
     total, err = duration(mix_items(row["id"]))
-    return {
+    out = {
         "set": _json_row(row),
         "items": [_json_row(it) for it in items],
         "count": len(items),
@@ -254,12 +349,17 @@ def payload(sid):
         "duration_error": err,
         "rounding": rounding_for(row, items, total),
     }
+    if with_peaks:
+        out["timeline"] = timeline_peaks(items)
+    if with_meter:
+        out["loudness"] = live_loudness(row)
+    return out
 
 
 def listed():
     rows = db.q("SELECT * FROM sets WHERE mode != ? ORDER BY updated DESC, id DESC",
                 automation.SONG_EDITOR_MODE)
-    return [payload(r) for r in rows]
+    return [payload(r, with_peaks=False, with_meter=False) for r in rows]
 
 
 def create(name, mode=None, tier=None, playlist_id=None):

@@ -123,7 +123,7 @@ def test_t1_17_waveform_png_is_still_the_picture():
     page = open(os.path.join(os.path.dirname(__file__), "templates",
                              "set_edit.html"), encoding="utf-8").read()
     assert "background-image" in page
-    assert "t.waveform" in page
+    assert "data-peaks=" in page or "tl-wave" in page
 
 
 def test_t1_17_preview_endpoint_is_accurate_and_defaults_to_20s():

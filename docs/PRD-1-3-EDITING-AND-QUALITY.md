@@ -159,10 +159,9 @@ id, and the answer re-orders everything below:
 3. **Clips at the length you asked for** — `scene_seconds` finally meaning
    something.
 
-**The set timeline went last and is now mostly built.** Leftover on the
-TRD-1/UIUX surface: the live loudness meter, and the waveform still drawn
-from `waveform_png` instead of `mixer.peaks`. §6's P1 below was written
-with the timeline first and is superseded by this list.
+**The set timeline went last and is now built** including peaks-from-data
+and the on-demand loudness meter. §6's P1 below was written with the
+timeline first and is superseded by this list.
 
 **The queue is rewritten in full**, not reduced to its one blocking column. Asked
 whether to take just `T6-13a` and leave working machinery alone, Jon chose the

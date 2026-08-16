@@ -41,6 +41,7 @@ import automation  # set-item curves: fragments + the loudnorm decision
 import qc          # tier-1 output checks: pure measurement, no db, no app
 import qc_service   # recording those findings and answering the review queue
 import sets_service  # TRD-1 / T6-A3: sets, items, render — no FastAPI
+import cleanup_service  # T6-19: confirmed clip cleanup — no FastAPI
 import storyboard_service  # TRD-2 / T6-A3: arc, board, meter — no FastAPI
 import video_fx   # per-item video look effects -- same, pure/no deps
 
@@ -6406,6 +6407,73 @@ def start_render(id: int, tier: str = Form(...), fade: float = Form(0.0)):
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
+@app.post("/songs/{id}/renders/{render_id}/confirm")
+def html_confirm_render(id: int, render_id: int):
+    get_song_or_404(id)
+    try:
+        cleanup_service.confirm_render(render_id)
+    except (LookupError, ValueError, RuntimeError) as e:
+        raise HTTPException(400, str(e))
+    return RedirectResponse(f"/songs/{id}", status_code=303)
+
+
+@app.post("/api/renders/{render_id}/confirm")
+def api_confirm_render(render_id: int):
+    try:
+        row = cleanup_service.confirm_render(render_id)
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
+    return JSONResponse({
+        "id": row["id"], "song_id": row["song_id"], "tier": row["tier"],
+        "path": row["path"], "confirmed": 1,
+        "confirmed_at": row["confirmed_at"],
+    })
+
+
+@app.post("/api/assets/{asset_id}/confirm")
+def api_confirm_set_asset(asset_id: int):
+    try:
+        row = cleanup_service.confirm_set_asset(asset_id)
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
+    return JSONResponse({
+        "id": row["id"], "path": row["path"], "kind": row["kind"],
+        "confirmed": 1, "confirmed_at": row["confirmed_at"],
+    })
+
+
+@app.get("/api/songs/{id}/cleanup")
+def api_cleanup_plan(id: int, tier: str):
+    """Dry-run listing of clip files that would be deleted. Writes nothing."""
+    get_song_or_404(id)
+    valid_tier_or_400(tier)
+    try:
+        plan = cleanup_service.plan_clip_cleanup(id, tier)
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
+    return JSONResponse(plan)
+
+
+@app.post("/api/songs/{id}/cleanup")
+def api_cleanup_run(id: int, tier: str = Form(...), dry_run: str = Form("1"),
+                    confirm: str = Form("")):
+    """Dry-run (default) or delete clip files after operator confirm.
+
+    Real delete needs dry_run=0 and confirm=DELETE. Local files only.
+    """
+    get_song_or_404(id)
+    valid_tier_or_400(tier)
+    want_dry = str(dry_run).lower() not in ("0", "false", "no", "off")
+    if not want_dry and confirm != "DELETE":
+        raise HTTPException(
+            400, "real cleanup requires confirm=DELETE (and dry_run=0)")
+    try:
+        out = cleanup_service.run_clip_cleanup(id, tier, dry_run=want_dry)
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
+    return JSONResponse(out)
+
+
 @app.post("/songs/{id}/audio")
 def edit_song_audio(id: int, trim_start: float = Form(0.0), trim_end: BlankFloat = Form(None),
                      gain_db: float = Form(0.0), fade_in: float = Form(0.0), fade_out: float = Form(0.0),
@@ -7777,12 +7845,14 @@ def set_detail(row, at=0.0):
     # render_set, mix_audio and set_duration share -- a block whose width was
     # computed separately would drift from what actually renders, which is the
     # defect this codebase has already fixed three times.
+    # Waveform is peaks data (T1-13/T1-15), not waveform_png background-image.
     timeline, longest = [], 0.0
     for it in items:
         secs = 0.0
+        env = sets_service.peaks_envelope(it)
         if _is_card_row(it):
             secs = float(it["card_secs"] or 0.0)
-            title, bpm, key, wave = "MEOW P", None, None, None
+            title, bpm, key = "MEOW P", None, None
         else:
             try:
                 # OSError/RuntimeError only: a file that is missing or unreadable is
@@ -7796,14 +7866,15 @@ def set_detail(row, at=0.0):
             except (OSError, RuntimeError, KeyError):
                 secs = 0.0
             title, bpm, key = it["song_title"], it["song_bpm"], it["song_key"]
-            wave = song_waveform(it["song_id"])
         longest = max(longest, secs)
         timeline.append({"id": it["id"], "title": title, "secs": secs,
                           "bpm": bpm, "key": key,
+                          "song_id": env["song_id"],
+                          "peaks": env["pairs"], "peaks_reason": env["reason"],
+                          "n_peaks": env["n"],
                           "transition": it["transition"], "trans_secs": it["secs"],
                           "hold": _hold_of(it), "beatmatch": it["beatmatch"],
-                          "branded": bool(_brand_of(it, row)),
-                          "waveform": wave})
+                          "branded": bool(_brand_of(it, row))})
     for t in timeline:
         # a floor so a very short item is still clickable rather than a hairline
         t["pct"] = max(8.0, 100.0 * t["secs"] / longest) if longest else 100.0
@@ -7823,6 +7894,14 @@ def set_detail(row, at=0.0):
         fps = float(stored_fps)
     rounding = mixer.rounding_report(blocks, fps)
     playhead = mixer.timeline_playhead(at, total)
+    # Last *render* loudness (T1-25 on the asset). Live remux is
+    # GET /api/sets/{id}/loudness — not this page load.
+    last_loudness = None
+    for r in renders:
+        if r.get("loudness"):
+            last_loudness = dict(r["loudness"])
+            last_loudness.setdefault("source", "last_render")
+            break
     if "automation_lanes" in affordances:
         curves = {}
         for t in timeline:
@@ -7844,6 +7923,7 @@ def set_detail(row, at=0.0):
             "axis": mixer.timeline_axis(total),
             "joins": joins, "rounding": rounding, "playhead": playhead, "lanes": lanes,
             "lane_items": lane_items,
+            "loudness": last_loudness,
             "duration_error": duration_error, "missing_video": missing_video, "renders": renders,
             "beatmatch_plan": beatmatch_plan, "suggested_order": suggested_order,
             "suggested_order_ids": suggested_order_ids,
@@ -8413,9 +8493,19 @@ async def api_sets_create(request: Request):
 @app.get("/api/sets/{id}")
 def api_set_get(id: int):
     try:
-        return JSONResponse(sets_service.payload(id))
+        return JSONResponse(sets_service.payload(id, with_peaks=True, with_meter=False))
     except (LookupError, ValueError, RuntimeError) as e:
         _svc_http(e)
+
+
+@app.get("/api/sets/{id}/loudness")
+def api_set_loudness(id: int):
+    """On-demand remux + export_loudness. Not called by GET /api/sets/{id}."""
+    try:
+        rec = sets_service.live_loudness(sets_service.get(id))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
+    return JSONResponse({"loudness": rec})
 
 
 @app.post("/api/sets/{id}/items")
