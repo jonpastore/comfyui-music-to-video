@@ -432,7 +432,8 @@
   <p class="hint">Confirm is separate from assemble. Clip cleanup is
     <code>GET/POST /api/songs/{{ song.id }}/cleanup?tier=…</code>
     (dry-run default; real delete needs <code>dry_run=0</code> and
-    <code>confirm=DELETE</code>). Local files only.</p>
+    <code>confirm=DELETE</code>). Local files via <code>os.remove</code>;
+    remote only through a known <code>SWARM_INPUT_DIRS</code> twin.</p>
   {% endif %}
 </section>
 

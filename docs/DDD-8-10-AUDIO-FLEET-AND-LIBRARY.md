@@ -34,7 +34,9 @@ seed, duration and the parameters as sent sit on the take, so a later song edit
 cannot rewrite the ask. `songs.mp3_path` is not a write target. Pick is
 `POST /songs/{id}/takes/{id}/pick` via `pick_take` (`T8-2`): it records
 `takes.picked` and leaves the unpicked take listed and playable. Use on an
-`audio_gen` asset is refused so that column cannot become the pick.
+`audio_gen` asset is refused so that column cannot become the pick. **`T8-2a`**
+is built: `insert_take` copies `songs.style_text` onto `takes.tags` when tags
+are omitted (`test_t8_2a_song_style_text_is_copied_onto_the_take`).
 
 ### 2.2 The design, and the one rule it turns on
 

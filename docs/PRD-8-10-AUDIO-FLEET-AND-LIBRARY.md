@@ -89,7 +89,8 @@ still not shipped (`T8-12`, provisional by absence).
    Do not treat the TRD-9 ledger as empty.
 2. **TRD-8's take model.** New generations land as `takes` rows (`T8-1`); pick
    (`T8-2`) is built — picking records `takes.picked` and does not write
-   `songs.mp3_path`; Use on a generated take is refused. **`T8-3` is built** —
+   `songs.mp3_path`; Use on a generated take is refused. **`T8-2a` is built** —
+   generate-without-tags copies `songs.style_text` onto `takes.tags`. **`T8-3` is built** —
    generated, resynthesised and bridged each land a take listed with its
    origin and path. Takes generated before `T8-1` still cannot say what they
    were asked for. `T8-10` is the voice-store gate (built); `T8-11` is built —
