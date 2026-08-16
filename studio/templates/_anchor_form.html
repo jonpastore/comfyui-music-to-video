@@ -200,6 +200,9 @@
         <div class="candidate-actions">
           <button type="submit" formnovalidate
                   formaction="/anchors/refs/{{ r.id }}/assign"
+                  hx-post="/anchors/refs/{{ r.id }}/assign"
+                  hx-target="#anchor-form" hx-swap="outerHTML"
+                  hx-include="closest .ref-thumb, [name=album], [name=character_id]"
                   title="Use this photo as the chosen sheet for the named pose and tier">
             Assign as sheet</button>
           <button type="submit" class="thumb-btn-danger delete-ref" formnovalidate

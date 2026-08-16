@@ -2863,6 +2863,14 @@ def ref_fields(row):
     return d
 
 
+def _one_form_value(form, key):
+    """Exactly one non-empty value, or ''. Repeated fields on the generate form
+    make form.get() return the first card — often an unnamed identity photo."""
+    vals = [" ".join(str(v or "").split()) for v in form.getlist(key)]
+    vals = [v for v in vals if v]
+    return vals[0] if len(vals) == 1 else ""
+
+
 def update_ref_meta(asset_id, **fields):
     row = db.one("SELECT * FROM assets WHERE id=? AND kind='anchor_ref'", asset_id)
     if not row:
@@ -2979,10 +2987,15 @@ async def assign_anchor_ref_as_sheet(request: Request, asset_id: int):
     album = db.jset(row).get("scope_value") or (form.get("album") or "").strip()
     if not album:
         raise HTTPException(400, "this base image has no album")
-    name = fields["pose_name"] or " ".join((form.get("pose_name") or "").split())[:80]
+    # The generate form repeats name="pose_name" / pose_tier on every card.
+    # form.get() is the first card — often the unnamed identity pair. Trust
+    # the saved meta, and only a single submitted value (htmx includes one
+    # .ref-thumb).
+    name = fields["pose_name"] or _one_form_value(form, "pose_name")[:80]
     if not name:
         raise HTTPException(400, "name the pose before assigning it as a sheet")
-    tier = fields["pose_tier"] or (form.get("pose_tier") or form.get("tier") or "").strip()
+    tier = (fields["pose_tier"] or _one_form_value(form, "pose_tier")
+            or _one_form_value(form, "tier"))
     if not tier:
         raise HTTPException(400, "pick a tier for this pose, or tick one on the form")
     valid_tier_or_400(tier)
@@ -3011,9 +3024,7 @@ async def assign_anchor_ref_as_sheet(request: Request, asset_id: int):
            json.dumps({"source": "upload", "asset_id": asset_id, "pose_name": name,
                        "content_tier": art_tier or tier}))
     update_ref_meta(asset_id, pose_name=name, pose_tier=tier, role="pose", pose_nude=nude)
-    if request.headers.get("HX-Request"):
-        return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
-    return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
+    return await _anchor_form_or_redirect(request, album)
 
 
 @app.post("/anchors/refs/{asset_id}/delete")

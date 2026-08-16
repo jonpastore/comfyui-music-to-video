@@ -77,5 +77,43 @@ def test_named_pose_meta_and_assign():
         assert json.loads(sheet["render_json"])["source"] == "upload"
 
 
+def test_assign_uses_saved_name_when_form_repeats_empty_pose_name():
+    """Assign is a submit of #anchor-form. Every card names pose_name; the
+    first is often the unnamed identity pair. Saved meta must still win."""
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Assign Sibling Song", album="Street Cats")
+        album = song["album"]
+        dest = os.path.join(db.DATA, "uploads", "anchors", "album", "Street_Cats")
+        os.makedirs(dest, exist_ok=True)
+        blank = os.path.join(dest, "blank.png")
+        named = os.path.join(dest, "named.png")
+        open(blank, "wb").write(_png_bytes())
+        open(named, "wb").write(_png_bytes())
+        now = time.time()
+        db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+               None, "anchor_ref", blank,
+               json.dumps({"scope_value": album, "character_id": None}), now)
+        db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+               None, "anchor_ref", named,
+               json.dumps({"scope_value": album, "character_id": None,
+                           "pose_name": "standing front", "pose_tier": "r",
+                           "role": "pose"}), now + 1)
+        row = db.one("SELECT * FROM assets WHERE path=?", named)
+        a = client.post(f"/anchors/refs/{row['id']}/assign", data=[
+            ("album", album),
+            ("pose_name", ""),
+            ("pose_name", "wrong sibling"),
+            ("pose_tier", ""),
+            ("pose_tier", "xxx"),
+        ], follow_redirects=False)
+        assert a.status_code == 303, a.text
+        sheet = db.one("SELECT * FROM anchors WHERE view=?",
+                       appmod.pose_view_key(row["id"], False))
+        assert sheet is not None
+        assert sheet["chosen"] == 1
+        assert sheet["tier"] == "r"
+        assert json.loads(sheet["render_json"])["pose_name"] == "standing front"
+
+
 def test_upload_cap_is_twenty_four():
     assert appmod.MAX_ANCHOR_UPLOADS >= 16
