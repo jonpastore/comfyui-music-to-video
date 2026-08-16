@@ -71,6 +71,12 @@ edge-span bug broke the first time — the route sized every bridge as
 gap + 2×xfade when an edge span has only **one** seam, so a 20 s track spliced at
 0.1 s came back **20.193 s** with audio missing.
 
+The song page generate card's "Replace a span" hint shows the two-crossfade
+eaten seconds as `splice_eaten_secs` = `2 * mixer.SPLICE_XFADE` from the route
+(`T8-9` / `T6-A4-splice-hint`). The template interpolates that number; it does
+not restate `2 * 0.25`. Stubbing `SPLICE_XFADE` moves the page
+(`test_t8_9_splice_hint.py`).
+
 **This is rule 0 of `DDD-1-3` §7 in another place**: one decision, one
 application point, and the criterion asserts through the owner.
 

@@ -49,7 +49,7 @@ The same operator, in the two modes the other documents do not cover:
 |---|---|---|
 | P1 | A take says what it was asked for, months later, without reading it back off a song row that has moved | `T8-1`, `T8-3` (built) |
 | P2 | Picking a take is a separate act, and the take you did not pick survives to be compared | `T8-2` (built), and `T6-A5` owns the rule |
-| P3 | A span can be replaced without deleting audio or lengthening the song | `T8-6`…`T8-9` (built) |
+| P3 | A span can be replaced without deleting audio or lengthening the song; the UI hint does not restate the xfade arithmetic | `T8-6`…`T8-9` (built; span hint `test_t8_9_splice_hint.py`) |
 | P4 | A voice reference cannot exist without a recorded source and consent | `T8-10`/`T8-11` built; `T8-12` provisional |
 | P5 | A workflow naming a model reaches the box that holds it, under the name that box uses | `T9-1`…`T9-3` (built: `test_t9_1_*` both directions; `test_t9_2_*` per-loader; T9-3 free-draw identity) |
 | P6 | A box that went away is told apart from a workflow a box refused | `T9-6`, `T9-7` (built) |

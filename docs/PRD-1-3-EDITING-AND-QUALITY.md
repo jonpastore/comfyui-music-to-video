@@ -35,10 +35,13 @@ total_secs; `arc` still only when defined, T2-37).
 (`test_t6_a4_queue_page_shows_stubbed_values_unmodified`), the jobs panel
 elapsed label (`test_t6_a4_jobs_panel_shows_stubbed_elapsed_unmodified`,
 `T6-A4-jobs`: `jobs_ctx` owns preformatted `elapsed`; the template does
-not `|format`), and the storyboard coverage meter
+not `|format`), the storyboard coverage meter
 (`test_t6_a4_storyboard_page_shows_stubbed_fill_pct_unmodified`,
 `T6-A4-storyboard`: `coverage.fill_pct` is service-owned; the template
-does not recompute intent/rendered). `T6-A5` is proven for set re-render,
+does not recompute intent/rendered), and the song generate card replace-span
+hint (`test_t8_9_splice_hint.py`, `T6-A4-splice-hint` / T8-9:
+`splice_eaten_secs` = `2 * mixer.SPLICE_XFADE` from the route; no
+`2 * 0.25` in the template). `T6-A5` is proven for set re-render,
 refine, repair and anchor re-roll (`test_t6_a5_*`, `qc_service.listed` /
 `select`). `T6-A3` is **built** as `sets_service.py` /
 `storyboard_service.py` / `arc_service.py` / `playlist_service.py` /

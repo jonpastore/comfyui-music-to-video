@@ -2372,6 +2372,7 @@ def song_page(request: Request, id: int):
         if row["path"]:
             song_paths.add(jobs.canonical_path(row["path"]))
     findings = [f for f in qc_service.queue() if f["path"] in song_paths]
+    splice_eaten_secs = 2 * mixer.SPLICE_XFADE
     return templates.TemplateResponse(request, "song.html", {
         "song": song, "tiers": all_tiers, "storyboards": storyboards, "beat_count": beat_count,
         "approved_tiers": approved_tiers, "reviews": reviews,
@@ -2386,6 +2387,7 @@ def song_page(request: Request, id: int):
         "findings": findings,
         "media": media,
         "lyrics_replace_warning": lyrics.REPLACE_WARNING,
+        "splice_eaten_secs": splice_eaten_secs,
         **storyboard_form_ctx(song, form_tier, chat_models, best),
     })
 

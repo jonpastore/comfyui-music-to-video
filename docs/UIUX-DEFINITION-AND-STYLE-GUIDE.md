@@ -263,6 +263,9 @@ HTML `/songs/{id}/storyboard/{tier}` (`#storyboard-meter` data attrs) and
 **`T6-A4-storyboard` built**: meter fill width is `coverage.fill_pct` from
 `storyboard_service.payload` — no template compute
 (`test_t6_a4_storyboard_page_shows_stubbed_fill_pct_unmodified`).
+**`T6-A4-splice-hint` built** (T8-9): song generate card "Replace a span" hint
+shows `splice_eaten_secs` = `2 * mixer.SPLICE_XFADE` from the route — no
+`2 * 0.25` in the template (`test_t8_9_splice_hint.py`).
 **`T6-A2-arc` built**:
 HTML `/playlists/{id}/arc` (`#arc-meter` data attrs) and
 `GET /api/playlists/{id}/arc` report the same `song_count` / `act_count` /
@@ -983,6 +986,11 @@ navigation between two takes destroys the comparison. The tile also reads
 `params_json.voice_id` (`T8-11`): which voice produced the take, or that none
 did. A take that cannot say is a take that cannot be compared on that axis.
 
+The generate card's "Replace a span" hint states how much of the bridge the two
+crossfades eat. That number is `splice_eaten_secs` from the route
+(`2 * mixer.SPLICE_XFADE`), not a second `2 * 0.25` in the template (`T8-9`,
+`T6-A4-splice-hint`).
+
 ### 7b.2 The consent field is a gate, and gates look different from fields
 
 `T8-10` refuses a voice with no recorded source and consent. **A refusal that
@@ -1263,7 +1271,9 @@ A style guide is falsifiable or it is decoration.
   check for jobs panel elapsed (`jobs_ctx` preformats `e.elapsed`,
   `T6-A4-jobs`). `test_t6_a4_storyboard_page_shows_stubbed_fill_pct_unmodified` is
   that check for the storyboard coverage meter (`coverage.fill_pct`,
-  `T6-A4-storyboard`). `T6-A7` requires that
+  `T6-A4-storyboard`). `test_t8_9_splice_hint.py` is that check for the song
+  generate card replace-span hint (`splice_eaten_secs` from
+  `2 * mixer.SPLICE_XFADE`, `T6-A4-splice-hint` / T8-9). `T6-A7` requires that
   differential to be able to fail: counts stay off list lengths so a
   `len()`-recompute mutation goes red (`test_t6_a7_measurement_can_fail.py`).
 - **The measurements in §2 are re-runnable.** Each is a one-line count, and a
