@@ -285,8 +285,10 @@ plus Swarm assign. Do not add a second pull queue.
 **The shape of what is left:**
 
 - **`T6-18` still deletes nothing on write.** `T6-19` is the operator
-  confirm + dry-run + local `os.remove` of clip files. Remote twins are
-  listed via `artefacts.host`, not SSH-deleted.
+  confirm + dry-run + clip cleanup: local host `os.remove`; remote host
+  only when a known `SWARM_INPUT_DIRS` input→output twin exists (same SSH
+  staging path as `install_input`); otherwise skip with reason — never
+  invent a remote path.
 
 ## 7. Where the studio still owns two copies of one fact
 

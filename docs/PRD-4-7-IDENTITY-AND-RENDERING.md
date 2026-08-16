@@ -176,7 +176,8 @@ statement of it:
 **Out, with the owner named:** the timeline, the arc, QC's tiers and repair
 (TRD 1-3). The negative prompt and fast/quality mode (TRD-4 §5 owns them and
 nothing here moves them). Lifecycle writes still delete nothing (`T6-18`).
-Operator-confirmed local clip cleanup is `T6-19`.
+Operator-confirmed clip cleanup is `T6-19` (local `os.remove`; remote only
+via a known `SWARM_INPUT_DIRS` twin, else skip).
 
 **Not building**, cited not restated: no IP-Adapter / InstantID / ReActor
 (TRD-4 §7, TRD-7 §5 — a multi-image edit model conditions natively); no second

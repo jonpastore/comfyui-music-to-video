@@ -4,13 +4,15 @@ docs/TRD-6 §6. T6-18 stays: lifecycle writes never delete. This criterion
 is an explicit confirm + dry-run + delete job.
 
 Positive halves:
-  dry-run lists clips and deletes none
-  confirm + run deletes clips and keeps anchors/refs/storyboard/assembled
+  dry-run lists clips (path, host, remote, can_delete, reason) and deletes none
+  confirm + run deletes local clips and keeps anchors/refs/storyboard/assembled
+  remote without known twin mapping is skipped, not deleted
   unconfirmed refuses
 
 Mutations that must go red:
   skip dry-run default (dry_run=False by default)
   delete an anchor path as if it were a clip
+  treating unknown remote host as local delete
 """
 import inspect
 import os
@@ -22,7 +24,9 @@ import pytest
 import cleanup_service
 import db
 import jobs
+import models
 import mutation_read
+import pipeline
 
 
 def _isolate():
@@ -42,8 +46,12 @@ def _write(path, blob=b"x"):
     return path
 
 
-def _fixture(data, *, with_anchor=True, n_clips=2):
-    """Song + tier with assembled render, clips, ref, storyboard, optional anchor."""
+def _fixture(data, *, with_anchor=True, n_clips=2, remote_host=None):
+    """Song + tier with assembled render, clips, ref, storyboard, optional anchor.
+
+    Clips land on this box (SELF_HOST) unless remote_host is set for clip 1 —
+    that clip exercises the remote-without-mapping skip path.
+    """
     sid = db.upsert_song("t619", title="T6-19 Song", duration=12.3)
     tier = "r"
     now = time.time()
@@ -58,14 +66,17 @@ def _fixture(data, *, with_anchor=True, n_clips=2):
         if i == 0:
             p = _write(os.path.join(data, "clips", f"clip_{i:03d}.mp4"),
                        f"clip{i}".encode())
+            host = models.SELF_HOST
+            via = "comfy"
         else:
             p = _write(os.path.join(data, "ComfyUI", "output", "t619",
                                     f"clip_{i:03d}.mp4"),
                        f"clip{i}".encode())
+            host = remote_host if remote_host else models.SELF_HOST
+            via = "swarm" if remote_host else "comfy"
         db.run("""INSERT INTO clips (song_id, tier, clip_idx, path, status)
                   VALUES (?,?,?,?,?)""", sid, tier, i, p, "done")
-        jobs.land(p, host="cerberus" if i == 0 else "100.107.235.105",
-                  via="comfy" if i == 0 else "swarm")
+        jobs.land(p, host=host, via=via)
         clips.append(p)
     ref = _write(os.path.join(data, "refs", "ref_000.png"), b"ref")
     db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, created)
@@ -118,7 +129,7 @@ def test_t6_19_unconfirmed_refuses_cleanup():
 
 
 def test_t6_19_dry_run_lists_clips_and_deletes_none():
-    """Dry-run lists clip paths (with artefacts.host) and writes nothing."""
+    """Dry-run lists path/host/remote/can_delete/reason and writes nothing."""
     data = _isolate()
     fx = _fixture(data)
     cleanup_service.confirm_render(fx["render_id"])
@@ -129,10 +140,12 @@ def test_t6_19_dry_run_lists_clips_and_deletes_none():
     listed = {t["path"] for t in plan["would_delete"]}
     for p in fx["clips"]:
         assert jobs.canonical_path(p) in listed
-    # artefacts.host is on the listing; never invent remote paths beyond it.
-    hosts = {t["host"] for t in plan["would_delete"]}
-    assert "cerberus" in hosts or None in hosts or hosts
-    assert any(t["host"] for t in plan["would_delete"]), plan["would_delete"]
+    for t in plan["would_delete"]:
+        assert "path" in t and "host" in t
+        assert "remote" in t and "can_delete" in t and "reason" in t
+        assert t["remote"] is False
+        assert t["can_delete"] is True
+        assert t["host"]  # artefacts.host recorded; never invent beyond it
     for p in fx["clips"]:
         assert os.path.isfile(p), "dry-run deleted a clip"
     assert os.path.isfile(fx["assembled"])
@@ -144,8 +157,8 @@ def test_t6_19_dry_run_lists_clips_and_deletes_none():
     assert all(r["status"] == "done" for r in rows), rows
 
 
-def test_t6_19_confirm_and_run_deletes_clips_keeps_rest():
-    """Confirm + dry_run=False deletes clips; keeps assembled/refs/sb/anchor."""
+def test_t6_19_confirm_and_run_deletes_local_clips_keeps_rest():
+    """Confirm + dry_run=False deletes local clips; keeps assembled/refs/sb/anchor."""
     data = _isolate()
     fx = _fixture(data)
     cleanup_service.confirm_render(fx["render_id"])
@@ -153,6 +166,7 @@ def test_t6_19_confirm_and_run_deletes_clips_keeps_rest():
         fx["song_id"], fx["tier"], dry_run=False)
     assert out["dry_run"] is False
     assert out["n_deleted"] == 2, out
+    assert out.get("n_skipped_remote", 0) == 0
     for p in fx["clips"]:
         assert not os.path.isfile(p), f"clip still present: {p}"
     assert os.path.isfile(fx["assembled"]), "assembled file was deleted"
@@ -178,6 +192,87 @@ def test_t6_19_confirm_and_run_deletes_clips_keeps_rest():
                  fx["song_id"])
     assert all(r["status"] == cleanup_service.STATUS_CLEANED for r in clips)
     assert all(r["path"] for r in clips)
+
+
+def test_t6_19_remote_without_mapping_is_skipped_not_deleted(monkeypatch):
+    """Remote host with no SWARM_INPUT_DIRS twin: skip, leave file, no cleaned."""
+    data = _isolate()
+    remote = "100.107.235.105"
+    fx = _fixture(data, remote_host=remote)
+    # No twin mapping configured — refuse remote delete by name.
+    monkeypatch.setattr(pipeline, "SWARM_INPUT_DIRS", [])
+    cleanup_service.confirm_render(fx["render_id"])
+    plan = cleanup_service.plan_clip_cleanup(fx["song_id"], fx["tier"])
+    by_idx = {t["clip_idx"]: t for t in plan["would_delete"]}
+    assert by_idx[0]["remote"] is False and by_idx[0]["can_delete"] is True
+    assert by_idx[1]["remote"] is True and by_idx[1]["can_delete"] is False
+    assert "no known path mapping" in by_idx[1]["reason"]
+    assert by_idx[1]["host"] == remote
+
+    out = cleanup_service.run_clip_cleanup(
+        fx["song_id"], fx["tier"], dry_run=False)
+    assert out["n_deleted"] == 1, out
+    assert out["n_skipped_remote"] == 1
+    assert not os.path.isfile(fx["clips"][0]), "local clip should be gone"
+    assert os.path.isfile(fx["clips"][1]), "remote-unmapped clip must remain"
+    # Skipped remote stays status done (not cleaned) — do not pretend deleted.
+    rows = {r["clip_idx"]: r for r in db.q(
+        "SELECT clip_idx, status FROM clips WHERE song_id=?", fx["song_id"])}
+    assert rows[0]["status"] == cleanup_service.STATUS_CLEANED
+    assert rows[1]["status"] == "done"
+    assert out["skipped_remote"][0]["host"] == remote
+
+
+def test_t6_19_remote_with_twin_mapping_deletes_via_ssh(monkeypatch):
+    """Remote host with known SWARM_INPUT_DIRS twin: ssh rm, not invent path."""
+    data = _isolate()
+    remote = "100.107.235.105"
+    out_root = os.path.join(data, "ComfyUI", "output")
+    monkeypatch.setattr(pipeline, "COMFY_OUTPUT", out_root)
+    monkeypatch.setattr(
+        pipeline, "SWARM_INPUT_DIRS",
+        [f"jon@{remote}:/home/jon/comfy-backend/input"])
+    # Clip under COMFY_OUTPUT so twin maps; land as remote host.
+    sid = db.upsert_song("t619r", title="remote", duration=5.0)
+    tier = "r"
+    now = time.time()
+    assembled = _write(os.path.join(data, "assembled.mp4"), b"a")
+    rid = db.run(
+        "INSERT INTO renders (song_id, tier, path, created) VALUES (?,?,?,?)",
+        sid, tier, assembled, now)
+    clip = _write(os.path.join(out_root, "song_r", "clip_000.mp4"), b"clip")
+    db.run("""INSERT INTO clips (song_id, tier, clip_idx, path, status)
+              VALUES (?,?,?,?,?)""", sid, tier, 0, clip, "done")
+    jobs.land(clip, host=remote, via="swarm")
+    cleanup_service.confirm_render(rid)
+
+    plan = cleanup_service.plan_clip_cleanup(sid, tier)
+    t = plan["would_delete"][0]
+    assert t["remote"] is True and t["can_delete"] is True
+    assert t["remote_path"] == "/home/jon/comfy-backend/output/song_r/clip_000.mp4"
+    assert t["ssh_target"] == f"jon@{remote}"
+    assert t["reason"] == "remote twin via SWARM_INPUT_DIRS"
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        class R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+        return R()
+
+    monkeypatch.setattr(cleanup_service.subprocess, "run", fake_run)
+    out = cleanup_service.run_clip_cleanup(sid, tier, dry_run=False)
+    assert out["n_deleted"] == 1
+    assert not os.path.isfile(clip)
+    assert calls, "ssh rm was not invoked"
+    assert calls[0][0] == "ssh"
+    assert f"jon@{remote}" in calls[0]
+    assert "/home/jon/comfy-backend/output/song_r/clip_000.mp4" in calls[0]
+    # Never invent: ssh target and path come from the known twin only.
+    assert "ComfyUI/output" not in " ".join(calls[0])
 
 
 def test_t6_19_run_default_is_dry_run():
@@ -249,6 +344,34 @@ def test_t6_19_mutation_delete_anchor_is_named():
     assert kept[jobs.canonical_path(fx["anchor"])] == "anchor"
 
 
+def test_t6_19_mutation_unknown_host_as_local_delete_goes_red():
+    """Mutation: treat unknown remote host as local → would wrongly os.remove.
+
+    Product is_local_host must refuse non-SELF_HOST; collapsing remote to
+    local is the named defect for #537.
+    """
+    remote = "100.107.235.105"
+    assert cleanup_service.is_local_host(remote) is False
+    assert cleanup_service.is_local_host(models.SELF_HOST) is True
+    assert cleanup_service.is_local_host(None) is True
+    assert cleanup_service.is_local_host("127.0.0.1") is True
+
+    src = inspect.getsource(cleanup_service.is_local_host)
+    # Named mutation: always return True (unknown host treated as local).
+    report = mutation_read.apply(
+        src,
+        "return False",
+        "return True  # mutation: treat remote as local",
+    )
+    assert report["n"] >= 1
+    # Live function still classifies remote as not local.
+    assert cleanup_service.is_local_host(remote) is False
+    cls = cleanup_service.classify_target("/tmp/x.mp4", remote)
+    assert cls["remote"] is True
+    assert cls["can_delete"] is False
+    assert "no known path mapping" in cls["reason"]
+
+
 def test_t6_19_h_render_song_does_not_set_confirmed():
     """Assemble INSERT does not write confirmed=1 (silent confirm defect)."""
     import app as appmod
@@ -303,6 +426,8 @@ def test_t6_19_api_confirm_and_dry_run(monkeypatch):
         plan = r.json()
         assert plan["dry_run"] is True
         assert plan["n_clips"] == 2
+        for t in plan["would_delete"]:
+            assert "remote" in t and "can_delete" in t and "reason" in t
         for p in fx["clips"]:
             assert os.path.isfile(p)
 
