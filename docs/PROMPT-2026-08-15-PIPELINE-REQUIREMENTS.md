@@ -268,3 +268,35 @@ map row on g/pg13 is refused.
   two graphs from the docs alone.
 - Every new criterion has a positive half and can go red.
 - D7’s picture look is marked NOT MEASURED until a pinned GPU pair.
+
+## 6. Tree vs this loop (2026-08-16)
+
+Reconciled after `trd-closeout-30` was stopped. Code/ledger closeout
+wrote the **old** one-shot world to a high built-rate. This file is
+now the product. Do not mark the loop **built** until the criteria
+below exist and can go red.
+
+**Shipped (keep):** still QC (T3-31 advisory, T3-28 / T3-33 edit-text),
+T2-27 per-scene refs, T2-28 refuse refs without a chosen sheet, T2-48
+ceilings, T5 no WAN-of-LTX-latent, T5-A refine, T6-A5 dest≠src, T7-20
+named poses, T10 minor policy rows that landed, nude-loop CLI as a
+sidecar (not the studio loop).
+
+**Not this product yet (the leftover):**
+
+| #529 piece | Tree |
+|---|---|
+| D1 coverage list from the board (no bind) | not a first-class studio output |
+| D2 ceiling-tier pose generate (clothed+nude iff r/xxx) | not wired; sidecar `batch_edit` only |
+| D3 ticked-lower backfill, never invent a higher tier | not a criterion |
+| D4 draft map + Accept (classify cannot write it) | no `scene_pose_map` |
+| D5 location plate per location key | no `location_plates` |
+| D6 LTX always first | lip-sync still means skip-LTX in T2-42/43 |
+| D7 decoded s2v hop (`control_video` = LTX frames) | **NOT MEASURED**; no GPU pair |
+| D8 T5-A stays on the LTX take, not on s2v | specified; confirm graph labels |
+| D9 D7 look (lips + her + blocking) | no pinned pair |
+| D10 identity = text + her image1; charcoal-brown | measured on stills; 0 chosen studio anchors |
+| sqlite `classification_json` | sidecar `anchor5/*.json` only |
+| Docs TRD-2/3/4/5/7 + PRDs + DDDs + UIUX describe this loop | **not rewritten** — still the one-sheet world |
+
+**Product:** 0 chosen anchors live. Factory is still on step 1.

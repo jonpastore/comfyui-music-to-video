@@ -87,7 +87,9 @@ storyboard side is `T2-31`: `write_storyboard` / `save_scene` refuse an
 empty `character_reference` and name that identity comes from the text.
 The QC side is `qc.check_identity_wrong`: the proposed remedy is edit the
 text, then re-render, and a swap-the-reference wording is refused on
-record, edit and approve.
+record, edit and approve. The same lesson is the rest of image QC
+(`T3-33`): a FLAG/REJECT still's remedy is the next prompt rewrite, not
+a different seed.
 
 **3.3 Two clauses that contradict each other do not average — the model picks.**
 Day 4 measured it: the nude clause asserted bare skin beside "entire body covered

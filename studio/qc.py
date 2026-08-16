@@ -6,6 +6,8 @@ histogram embed; T3-16 is identity_verdict. T3-17 scores each artefact
 against the chosen anchor (cause-agnostic). The threshold setter is not
 in this file. T3-26's labelled-set refiner measurement lives here too.
 T3-28's identity-wrong remedy: edit the text, never swap the reference image.
+T3-33: every image FLAG/REJECT content finding's remedy is the next prompt
+rewrite, not "re-render with a different seed".
 
 ffprobe, ffmpeg's own analysis filters, PIL and numpy. No model, no opinion.
 
@@ -302,12 +304,12 @@ CHECK_REMEDY_CLASS = {
     "channels": REMEDY_RERENDER,
     "dc_offset": REMEDY_RERENDER,
     "edge_silence": REMEDY_RERENDER,
-    "not_uniform": REMEDY_RERENDER_SEED,
-    "not_blank": REMEDY_RERENDER_SEED,
-    "alpha": REMEDY_RERENDER_SEED,
+    "not_uniform": REMEDY_EDIT_TEXT,
+    "not_blank": REMEDY_EDIT_TEXT,
+    "alpha": REMEDY_EDIT_TEXT,
     IDENTITY_LOOK: REMEDY_EDIT_TEXT,
-    LIGHTING_LOCK: REMEDY_RERENDER,
-    PORTRAIT_CROP: REMEDY_RERENDER,
+    LIGHTING_LOCK: REMEDY_EDIT_TEXT,
+    PORTRAIT_CROP: REMEDY_EDIT_TEXT,
     IDENTITY_WRONG: REMEDY_EDIT_TEXT,
     IDENTITY_DRIFT: REMEDY_NONE,
     SHEET_REVIEW: REMEDY_NONE,
@@ -318,6 +320,15 @@ CHECK_REMEDY_CLASS = {
     REFINER_HELP_CHECK: REMEDY_NONE,
     REFINE_DIFFERENTIAL: REMEDY_NONE,
 }
+
+# T3-33: image content FLAG/REJECT is a prompt rewrite. Structural
+# findings (missing file, wrong box size) stay re-render / pinned.
+# Video/audio seed remedies are not this criterion.
+IMAGE_STRUCTURAL_CHECKS = frozenset({"opens", "resolution", "size_floor"})
+IMAGE_PROMPT_REWRITE_CHECKS = frozenset({
+    "not_uniform", "not_blank", "alpha",
+    IDENTITY_LOOK, LIGHTING_LOCK, PORTRAIT_CROP, IDENTITY_WRONG,
+})
 
 _DEFAULT_REMEDY = {
     REMEDY_NONE: "this check has no remedy — it cannot be approved",
@@ -1023,7 +1034,8 @@ def check_channel_balance(path, expect=None, kind="image"):
         f"backdrop {side} cast {mag:.1f} (R={means[0]:.1f} G={means[1]:.1f} "
         f"B={means[2]:.1f})",
         round(mag, 2), LIGHTING_CAST_LIMIT, "levels",
-        remedy="re-render; T4-13 is even neutral studio lighting, not a colour cast")]
+        remedy="edit the text, then re-render. T4-13 is even neutral "
+               "studio lighting, not a colour cast")]
 
 
 def t4_13_claim():
@@ -1745,16 +1757,14 @@ def check_image(path, expect):
     out.append(finding(path, "image", "not_uniform",
                        PASS if std > UNIFORM_STD_FLOOR else REJECT,
                        f"pixel standard deviation {std:.2f}",
-                       round(std, 2), UNIFORM_STD_FLOOR, "levels",
-                       remedy="re-render with a different seed"))
+                       round(std, 2), UNIFORM_STD_FLOOR, "levels"))
     # T3-4.1-not_blank: mean RGB level vs LUMA_FLOOR. Distinct from
     # not_uniform — solid bright red PASSes mean and REJECTs std.
     mean = measure_mean_level(path)
     out.append(finding(path, "image", "not_blank",
                        PASS if mean >= LUMA_FLOOR else REJECT,
                        f"mean level {mean:.1f}",
-                       round(mean, 1), LUMA_FLOOR, "levels",
-                       remedy="re-render with a different seed"))
+                       round(mean, 1), LUMA_FLOOR, "levels"))
     # T3-4.1-alpha: alpha not fully transparent. RGB without alpha is
     # opaque (max 255). All-zero alpha REJECTs — no judgement.
     try:
@@ -1762,8 +1772,7 @@ def check_image(path, expect):
     except RuntimeError as e:
         out.append(finding(path, "image", "alpha", REJECT,
                            str(e).split("\n")[0],
-                           None, ALPHA_MIN, "levels",
-                           remedy="re-render with a different seed"))
+                           None, ALPHA_MIN, "levels"))
     else:
         amax = alpha["max"]
         out.append(finding(
@@ -1771,8 +1780,7 @@ def check_image(path, expect):
             PASS if amax >= ALPHA_MIN else REJECT,
             (f"max alpha {amax:.0f}" if amax >= ALPHA_MIN
              else f"fully transparent (max alpha {amax:.0f})"),
-            round(amax, 1), ALPHA_MIN, "levels",
-            remedy="re-render with a different seed"))
+            round(amax, 1), ALPHA_MIN, "levels"))
     if _wants_identity_look(expect):
         out.extend(check_identity_look(path, expect, kind="image"))
     out.extend(check_channel_balance(path, expect, kind="image"))
@@ -2252,8 +2260,8 @@ def check_portrait_crop(path, expect=None, kind="image"):
         (f"subject bottom {bottom:.2f} of frame "
          f"({'head-and-shoulders' if ok else 'full-body head-to-toe won'})"),
         round(bottom, 3), PORTRAIT_BOTTOM_LIMIT, "fraction",
-        remedy="re-render; portrait must be a head-and-shoulders crop, "
-               "not full-body with a losing clause")]
+        remedy="edit the text, then re-render. Portrait must be a "
+               "head-and-shoulders crop, not full-body with a losing clause")]
 
 
 def identity_verdict(overlap):

@@ -117,6 +117,7 @@ the eight things that must become true; they are not a new contract.
 | P6 | Every rendered artefact is measured against the workflow that asked for it, never against a constant. A mixed-model clip is judged at its native fps, not the song's output fps. An interpolated clip is judged at RIFE `(n-1)*m+1` frames and `make_postproc.out_fps`, not `n*m` / `fps*m`. A silent or near-silent take is rejected on measured low/mid/high band energy, not peak volume. A take with DC offset above `DC_OFFSET_LIMIT` is flagged. An assembled song's clip count is judged against `len(build_song.clip_plan)`, not `scene_count` | `T3-2`, `T3-4`, `T3-7`, `T3-8`, `T3-9`, `T3-4.3-dc`, `T3-4.4-nclips` **built** (`test_t3_4_4_nclips.py`), `T2-13f` |
 | P7 | A finding arrives actionable — measured, expected, unit, a remedy class, and an editable prompt — and nothing runs without approval. A dismissed finding stays off the queue until the artefact itself changes. The remedy that RUNS is the stored prompts row. Approving produces a new candidate; original and repair are both listed and scored | `T3-18`, `T3-19` **built** (`GET /qc` finding-row + `test_t3_19_finding_row.py`: two HTML approvals submit two jobs), `T3-20`, `T3-21`, `T3-22`, `T3-27` |
 | P8 | Identity failures are attributed to the text, never to the reference image | `T2-31`, `T2-32`, `T3-17`, `T3-28` |
+| P8a | An image FLAG/REJECT content finding's remedy is the next prompt rewrite, not "re-render with a different seed". Identity-wrong already said "edit the text"; blank, uniform, transparent, lighting and portrait findings say the same | `T3-28`, `T3-33` |
 
 **P8 is the one to defend hardest.** It is measured, not theoretical: same
 reference, same seed, same box, species named in the prompt or not — named gives
@@ -125,7 +126,10 @@ keeping only the harness. A remedy that proposes swapping the reference image
 teaches the operator a false lesson, which is why `T3-28` forbids it by name.
 `qc.check_identity_wrong` (via `qc.run`) proposes "edit the text, then
 re-render"; `record` / `set_remedy` / `approve` refuse a swap-the-reference
-wording. `T3-17` scores that artefact against the chosen anchor
+wording. `T3-33` extends that lesson to the rest of image QC: a blank,
+uniform, transparent, lighting-cast or portrait-crop finding's remedy
+is the same class — edit the text — not a different seed. A missing
+file or a downscaled still stay structural. `T3-17` scores that artefact against the chosen anchor
 regardless of cause — it does not require an empty `character_reference`.
 The picture still has to be looked at — this is the score and the remedy,
 not a gate. The storyboard-side pair is `T2-31` / `T2-32`: saving an empty
@@ -444,6 +448,9 @@ order and take the dependencies from here.
    the actuator receives. `T3-27` is built: every check names a remedy
    class, `approve()` uses that class (not the edited wording), and a
    check with no remedy refuses rather than offering a button.
+   `T3-33` is built: image content FLAG/REJECT remedies are `edit-text`
+   (the next prompt rewrite); "re-render with a different seed" is
+   refused by the check, not offered as the default.
 10. Every generated still is vision-scored into `qc_json` (`T3-31`),
     including a `fix_anchor` sibling, an `h_reroll` dest, the artwork
     generate (not only the refined cover), an `h_repair` dest still,

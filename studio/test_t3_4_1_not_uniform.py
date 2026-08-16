@@ -4,7 +4,7 @@ docs/TRD-3 §4.1: generated stills must not be uniform or a single flat
 colour. Measurement is RGB pixel standard deviation via
 qc.measure_pixel_std. Floor is UNIFORM_STD_FLOOR (1.0 levels). Below
 the floor REJECTs. Above PASSes. measured is the independent std,
-expected is UNIFORM_STD_FLOOR, unit levels, remedy re-render-seed.
+expected is UNIFORM_STD_FLOOR, unit levels, remedy edit-text (T3-33).
 
 Mutation: delete the check from check_image → no not_uniform finding.
 Mutation: always PASS → flat-colour arm red.
@@ -73,7 +73,7 @@ def test_t3_4_1_not_uniform_flat_rejects_varied_passes(tmp_path):
     assert float(g["measured"]) > qc.UNIFORM_STD_FLOOR, g
     assert float(g["expected"]) == qc.UNIFORM_STD_FLOOR
     assert g["unit"] == "levels"
-    assert g["remedy_class"] == qc.REMEDY_RERENDER_SEED
+    assert g["remedy_class"] == qc.REMEDY_EDIT_TEXT
     detail = (g["detail"] or "").lower()
     assert "std" in detail or "uniform" in detail or "dev" in detail, g
 
@@ -83,7 +83,7 @@ def test_t3_4_1_not_uniform_flat_rejects_varied_passes(tmp_path):
         assert float(row["measured"]) <= qc.UNIFORM_STD_FLOOR, (label, row)
         assert float(row["expected"]) == qc.UNIFORM_STD_FLOOR
         assert row["unit"] == "levels"
-        assert row["remedy_class"] == qc.REMEDY_RERENDER_SEED
+        assert row["remedy_class"] == qc.REMEDY_EDIT_TEXT
 
 
 def test_t3_4_1_not_uniform_measured_matches_independent(tmp_path):

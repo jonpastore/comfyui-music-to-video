@@ -20,10 +20,14 @@ those in the same commit. A worktree that only has code is unfinished.
 Progress and completion ratio are those status tables, not Jarvis and
 not a grind agent's "landed" list.
 
-**Pipeline:** operator **base photographs** (`assets` kind `anchor_ref`)
-→ generate **candidates** (`anchors`) → pick one → that sheet feeds
-storyboard **refs** → clips. Do not upload plates or generated sheets
-as bases unless the operator did.
+**Pipeline (D1–D10, `docs/PROMPT-2026-08-15-PIPELINE-REQUIREMENTS.md`):**
+operator **base photographs** → classified pose library → generate missing
+poses at the **ceiling** tier → Accept-gated pose→scene map → **per-scene**
+refs (that keeper + location plate) → **LTX first** → optional decoded s2v
+hop on lip scenes → assemble. One chosen front sheet is not image1 for
+every scene. Do not upload plates or generated sheets as bases unless the
+operator did. Jarvis **#529** is this loop. **#528** is the old stills-only
+draft — do not implement from it.
 
 ## Character (decided)
 
@@ -96,8 +100,9 @@ Operator guide (Grok vs Claude, compaction, UI):
 
 ## Product order
 
-1. Anchors on-model (her, asked pose, asked view).
+1. Anchors on-model (her, asked pose, asked view) and the #529 loop
+   (coverage → library → map → scene refs + location plates → LTX → s2v hop).
 2. Know when a sheet is wrong (QC / repair).
-3. Clips at the asked length.
+3. Clips at the asked length (song length still owns clip count).
 4. Timeline last.
 5. TRD-6 queue in full, not a stub.

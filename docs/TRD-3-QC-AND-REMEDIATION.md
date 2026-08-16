@@ -60,6 +60,7 @@ not been shown to separate known-good from known-bad does not gate anything.
 | **T3-1** per-box report groups by `host`; NULL host is `unattributed` | **`qc_service.by_host`** + `GET /api/qc/by-host` |
 | **T3-22** dismissed stays dismissed until the artefact changes | **`qc_service.record`** + `findings.artefact_hash`; same check reopens when the file bytes change |
 | **T3-28** identity-wrong never proposes swapping the reference image | **`qc.check_identity_wrong`** / **`qc.identity_wrong_remedy`**; `record` / `set_remedy` / `approve` refuse the swap wording |
+| **T3-33** image FLAG/REJECT remedy is the next prompt rewrite | **`qc.IMAGE_PROMPT_REWRITE_CHECKS`**; `not_uniform` / `not_blank` / `alpha` / lighting / portrait / identity-look / identity-wrong are `edit-text`. Structural `opens` / `resolution` stay re-render / pinned. Video seed remedies are not this criterion |
 
 **§4 and §6 below read as unbuilt work and are not.** An audit found this table
 listing seven items, none of them the QC implementation, in a section whose
@@ -232,7 +233,7 @@ alpha not fully transparent.
   transparent (max 0) REJECTs; any non-zero opacity PASSes. RGB without
   an alpha channel is treated as fully opaque (max 255). `measured` /
   `expected` / `unit` = max alpha / `ALPHA_MIN` (1) / `levels`, remedy
-  class `re-render-seed`. A fully transparent RGBA sheet is a blank
+  class `edit-text` (`T3-33`). A fully transparent RGBA sheet is a blank
   render by another name — tier-1 REJECT, no judgement
   (`test_t3_4_1_alpha.py`). No reading raises, never 0.0 on no data.
 - `T3-4.1-not_uniform` **Uniform / single flat colour REJECTs** —
@@ -240,14 +241,14 @@ alpha not fully transparent.
   red/blue/gray/black fill is ~0 even when R≠G≠B (whole-array std wrongly
   PASSed solid red). Above `UNIFORM_STD_FLOOR` (1.0 levels) PASSes;
   at or below REJECTs. `measured`/`expected`/`unit` = std / floor /
-  `levels`, remedy class `re-render-seed`. testsrc2 colour bars PASS;
+  `levels`, remedy class `edit-text` (`T3-33`). testsrc2 colour bars PASS;
   solid fills REJECT (`test_t3_4_1_not_uniform.py`). No reading raises,
   never 0.0 on no data. Distinct from `not_blank` (mean luma floor).
 - `T3-4.1-not_blank` **Not blank (mean level above LUMA_FLOOR)** —
   `qc.measure_mean_level` / `check_image` `not_blank`: mean RGB level
   (0–255). Below `LUMA_FLOOR` (24.0) REJECTs (dead-sampler solid black);
   at or above PASSes. `measured`/`expected`/`unit` = mean / floor /
-  `levels`, remedy class `re-render-seed`. testsrc2 colour bars PASS;
+  `levels`, remedy class `edit-text` (`T3-33`). testsrc2 colour bars PASS;
   solid black REJECT (`test_t3_4_1_not_blank.py`). No reading raises,
   never 0.0 on no data. Distinct from `not_uniform` (spatial std): solid
   bright red PASSes `not_blank` and REJECTs `not_uniform`.
@@ -607,6 +608,8 @@ decision from one whose remedy is "re-run the upscale".
 | wrong duration / frame count | re-render with corrected request | — |
 | black or frozen frames | re-render (different seed) | nothing repairs a dead sampler in place |
 | resolution downscaled | re-render pinned to a box that honours it | — |
+| blank / uniform / transparent still | edit the **text**, then re-render | a different seed will not draw a figure the prompt did not ask for |
+| lighting cast / portrait crop lost | edit the **text**, then re-render | the losing clause is in the wording |
 | soft or low-detail clip | upscale pass (`make_postproc`) | it will not add identity |
 | identity drift **within** a chained clip | re-render the chain from the last good frame | a per-frame fix; the drift is generative |
 | identity wrong from the first frame | edit the **text**, then re-render | swapping the reference image will not fix it — measured |
@@ -621,6 +624,14 @@ decision from one whose remedy is "re-run the upscale".
   throughout. Not named — an ordinary human woman by the halfway point, keeping
   only the harness. Identity comes from the text. A remedy prompt that says
   otherwise is the studio teaching a false lesson to the person reading it.
+- `T3-33` **Every image FLAG/REJECT content finding's remedy is the next prompt
+  rewrite, not "re-render with a different seed".** `T3-28` already does this
+  for identity-wrong. Blank, uniform, transparent, lighting-cast, portrait-crop
+  and identity-look findings use `edit-text` and say "edit the text, then
+  re-render". Structural findings (`opens`, `resolution`) stay re-render /
+  pinned — a missing file is not a prompt defect. Clip luma / freeze /
+  channel-sat stay seed; those are video. A remedy that tells the operator to
+  roll a new seed is the studio teaching that the wording was fine.
 
 ## 7. Backend / front-end separation
 
@@ -734,6 +745,7 @@ check is true, and forcing the check true SUBMITS.
 | `T3-25` remote output move | paired positive: with `can_move_output` forced true, a remote repair is SUBMITTED. Refusal-only stays green forever |
 | `T3-26` whether the refiner helps | paired positive: a labelled set whose refined scores rise reports helping. Always-not-helping stays green forever |
 | `T3-27` every check names a remedy class | assert the class is ACTIONABLE where one exists — the approve path uses it — and that a check with no remedy says so rather than offering a button |
+| `T3-33` image FLAG/REJECT is a prompt rewrite | a dead still's FLAG/REJECT remedy is `edit-text` and names the text; "different seed" on `not_uniform` / `not_blank` / `alpha` is red. Video seed remedies stay. A missing file stays `re-render` |
 
 
 ---
@@ -755,9 +767,9 @@ current.
 | `T3-3` silent clip no has_audio; song missing audio REJECTS | **built** | this slice | `check_video` `has_audio` only when `want_audio` (song defaults it): silent LTX-shaped clip does not emit `has_audio`; same file as `kind=song` REJECTs `has_audio` with remedy re-assemble; song with audio stream does not REJECT `has_audio` (`test_t3_3_has_audio.py`). Previously only `qc.demo()`; `T3-4.4-av` only asserted clips skip |
 | `T3-4.1-opens` image opens (missing/unreadable) | **built** | this slice | `check_image` `opens`: missing path REJECTs; unreadable bytes REJECTs; real PNG is not an opens reject; tiny PNG under `MIN_VIDEO_BYTES` is not size_floor-rejected (PIL path, no image size floor); remedy re-render (`test_t3_4_1_opens.py`) |
 | `T3-4.1-resolution` image resolution as requested | **built** | this slice | PIL size; `check_image` emits `resolution` when `expect.width`+`height` are set: matching WxH PASSes, 160x120 against 320x240 REJECTs, measured equals PIL WxH, unit `px` (not `None`), remedy re-render-pinned; without expect the check emits nothing (`test_t3_4_1_resolution.py`) |
-| `T3-4.1-alpha` alpha not fully transparent | **built** | this slice | `qc.measure_alpha` + `check_image` `alpha`: fully transparent RGBA (max 0) REJECTs; RGB / opaque / partial alpha PASS; measured equals independent max, expected `ALPHA_MIN` (1), unit `levels`, remedy re-render-seed (`test_t3_4_1_alpha.py`). No reading raises, never 0.0 |
+| `T3-4.1-alpha` alpha not fully transparent | **built** | this slice | `qc.measure_alpha` + `check_image` `alpha`: fully transparent RGBA (max 0) REJECTs; RGB / opaque / partial alpha PASS; measured equals independent max, expected `ALPHA_MIN` (1), unit `levels`, remedy edit-text (`T3-33`, `test_t3_4_1_alpha.py`). No reading raises, never 0.0 |
 | `T3-4.1-not_uniform` uniform / single flat colour | **built** | this slice | `qc.measure_pixel_std` + `check_image` `not_uniform`: max per-channel spatial RGB std vs `UNIFORM_STD_FLOOR` (1.0); solid red/blue/gray/black REJECT; testsrc2 PASS; measured equals the independent reading (`test_t3_4_1_not_uniform.py`). Whole-array std wrongly PASSed solid red. No image raises, never 0.0 |
-| `T3-4.1-not_blank` image mean level above LUMA_FLOOR | **built** | this slice | `qc.measure_mean_level` + `check_image` `not_blank`: solid black REJECT below `LUMA_FLOOR` (24); testsrc2 PASS; measured equals independent mean RGB level, expected floor, unit `levels`, remedy re-render-seed (`test_t3_4_1_not_blank.py`). No image raises, never 0.0. Distinct from `not_uniform` (solid bright red PASSes not_blank, REJECTs not_uniform) |
+| `T3-4.1-not_blank` image mean level above LUMA_FLOOR | **built** | this slice | `qc.measure_mean_level` + `check_image` `not_blank`: solid black REJECT below `LUMA_FLOOR` (24); testsrc2 PASS; measured equals independent mean RGB level, expected floor, unit `levels`, remedy edit-text (`T3-33`, `test_t3_4_1_not_blank.py`). No image raises, never 0.0. Distinct from `not_uniform` (solid bright red PASSes not_blank, REJECTs not_uniform) |
 | `T3-4.2-luma` mean luma per frame above LUMA_FLOOR | **built** | this slice | `qc.measure_luma` + `check_video` `luma`: solid black REJECT below `LUMA_FLOOR` (24); testsrc2 PASS; measured equals independent mean YAVG, expected floor, unit `Y`, remedy re-render-seed (`test_t3_4_2_luma.py`). No frames raises, never 0.0. Distinct from `black_frames` |
 | `T3-4.2-sat` channel saturation (NaN / green garbage) | **built** | this slice | `qc.measure_channel_sat` + `check_video` `channel_sat`: solid green/lime FLAG above `CHANNEL_SAT_LIMIT` (80 levels of green dominance); testsrc2 / gray / black PASS; measured equals the independent reading (`test_t3_4_2_sat.py`). No frames raises, never 0.0 |
 | `T3-4.2-resolution` resolution as requested | **built** | this slice | `mixer.probe` width/height; `check_video` emits `resolution` when `expect.width`+`height` are set: matching WxH PASSes, 160x120 against 320x240 REJECTs, measured equals probe WxH, unit `px`, remedy re-render-pinned; without expect the check emits nothing (`test_t3_4_2_resolution.py`) |
@@ -802,6 +814,7 @@ current.
 | `T3-22` dismissed stays dismissed | **built** | this slice | same bytes stay dismissed (`test_t3_22_dismissed_stays_dismissed_until_artefact_changes`); rewriting the file reopens the same `(path, check)` row. `findings.artefact_hash` is the change detector |
 | `T3-20` remedy versioned in `prompts` | **built** | `test_t3_20_remedy_runs.py` | the version that RUNS is the stored `prompt_versions` row — same id, read back after approval (`test_t3_20_approve_reads_back_the_same_stored_id`). Mutating the job's copied text still sends the stored wording (`test_t3_20_running_remedy_is_the_stored_row_not_the_job_copy`). A deleted row is refused, not replaced by the copy |
 | `T3-28` identity-wrong never swaps the reference | **built** | `test_t3_28_identity_wrong_remedy.py` | `qc.check_identity_wrong` (also via `qc.run`) proposes "edit the text, then re-render"; `qc.proposes_reference_swap` is the detector. `record` / `set_remedy` / `approve` refuse a swap-the-reference wording and name that identity comes from the text. A legal text-edit remedy is stored. |
+| `T3-33` image FLAG/REJECT is a prompt rewrite | **built** | `test_t3_33_image_flag_reject_prompt_rewrite.py` | Image content FLAG/REJECT (`not_uniform` / `not_blank` / `alpha` / lighting / portrait / identity-look / identity-wrong) is `edit-text` and names the text. "re-render with a different seed" on those findings is red. Structural `opens` stays re-render. Clip luma / freeze / sat stay seed |
 | `T3-30` a check is callable from a test | **built** | every `studio/test_t3_*.py` | Each named `qc.check_*` / `qc.run` path is invoked with a path and an expectation; a broken artefact rejects and a correct one passes. That is the verification rule, not a missing implementation |
 | `T3-27` every check names a remedy class | **built** | `test_t3_27_remedy_class.py` | `qc.CHECK_REMEDY_CLASS` on every named check. `approve()` puts `remedy_class` on the job and `_repair_actuator_and_key` uses the class, not the edited text (`test_t3_27_approve_uses_the_class_not_the_remedy_text`). `duration_matches_prediction` is `none`; `actionable` is false and approve refuses (`test_t3_27_no_remedy_refuses_approve`) |
 | `T3-19` edited remedy is what runs | **built** | `test_t3_19_finding_row.py` | service half already in `test_t3_19_two_remedy_texts_are_two_jobs`. UI: `GET /qc` finding-row interpolates planted `measured`/`expected`/`unit` (`T3-4`) and the stored remedy; `POST /qc/findings/{id}/approve` with two texts submits two jobs. A false `actionable` row has no Approve button (`T3-27`) |

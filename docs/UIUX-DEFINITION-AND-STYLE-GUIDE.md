@@ -283,7 +283,10 @@ per-box QC report is JSON only (`GET /api/qc/by-host`, `T3-1`): groups by
 `host`, NULL host is an explicit `unattributed` bucket. No page; do not
 pre-empt `finding-row` with one. An identity-wrong finding's remedy is
 "edit the text, then re-render" (`T3-28`); the queue must not offer
-"swap the reference image". A silence finding (`T3-9`) shows low / mid /
+"swap the reference image". An image FLAG/REJECT content finding
+(blank, uniform, transparent, lighting, portrait) uses that same
+wording (`T3-33`); the queue must not offer "re-render with a
+different seed" on a still. A silence finding (`T3-9`) shows low / mid /
 high band energy, not a peak; a take that only clicked is empty. An
 edge-silence finding (`T3-4.3-edge`) shows leading / trailing seconds
 against `EDGE_SILENCE_LIMIT_S`, not whole-file band energy. An assembled-song
@@ -616,14 +619,14 @@ a still at the wrong width×height REJECTs `resolution` with
 measured/expected WxH, unit `px` (not blank), and a re-render-pinned
 remedy — not a silent pass when the request was 320×240 and the box
 quietly wrote 160×120. `T3-4.1-alpha`: a
-fully transparent sheet REJECTs `alpha` with max alpha 0 and a
-re-render-seed remedy — not a silent pass on an invisible RGBA still.
-`T3-4.1-not_uniform`:
+fully transparent sheet REJECTs `alpha` with max alpha 0 and an
+edit-the-text remedy (`T3-33`) — not a silent pass on an invisible RGBA still,
+and not a different-seed offer. `T3-4.1-not_uniform`:
 a still that is a single flat colour REJECTs `not_uniform` with measured
-pixel std at or below the floor and a re-render-seed remedy — not a
+pixel std at or below the floor and an edit-the-text remedy (`T3-33`) — not a
 silent pass on solid red (whole-array std used to). `T3-4.1-not_blank`:
 a solid black still REJECTs `not_blank` with measured mean level below
-`LUMA_FLOOR` and a re-render-seed remedy — not a silent pass on a dead
+`LUMA_FLOOR` and an edit-the-text remedy (`T3-33`) — not a silent pass on a dead
 sampler; distinct from `not_uniform` (solid bright red PASSes not_blank).
 `T3-4.2-luma`: a
 solid black clip REJECTs `luma` with measured mean Y below the floor

@@ -7,7 +7,7 @@ tier-1 REJECT, no judgement.
 
 RGB without an alpha channel is treated as fully opaque (PASS).
 measured is max alpha (0–255), expected ALPHA_MIN, unit levels.
-remedy class re-render-seed.
+remedy class edit-text (T3-33).
 
 Mutation: delete the check from check_image → no alpha finding.
 Mutation: always PASS → transparent arm red.
@@ -79,14 +79,14 @@ def test_t3_4_1_alpha_transparent_rejects_opaque_passes(tmp_path):
         assert float(row["measured"]) >= qc.ALPHA_MIN, (label, row)
         assert row["expected"] == qc.ALPHA_MIN
         assert row["unit"] == "levels"
-        assert row["remedy_class"] == qc.REMEDY_RERENDER_SEED
+        assert row["remedy_class"] == qc.REMEDY_EDIT_TEXT
 
     row = _alpha(qc.run(clear, "image", {}))
     assert row["verdict"] == qc.REJECT, row
     assert float(row["measured"]) < qc.ALPHA_MIN, row
     assert row["expected"] == qc.ALPHA_MIN
     assert row["unit"] == "levels"
-    assert row["remedy_class"] == qc.REMEDY_RERENDER_SEED
+    assert row["remedy_class"] == qc.REMEDY_EDIT_TEXT
     detail = (row["detail"] or "").lower()
     assert "transparent" in detail or "alpha" in detail, row
 
@@ -115,4 +115,4 @@ def test_t3_4_1_alpha_in_check_remedy_class():
     """T3-27: alpha names a remedy class before a finding can be emitted."""
     assert "alpha" in qc.CHECK_REMEDY_CLASS, (
         "alpha not in CHECK_REMEDY_CLASS — T3-4.1-alpha not wired")
-    assert qc.CHECK_REMEDY_CLASS["alpha"] == qc.REMEDY_RERENDER_SEED
+    assert qc.CHECK_REMEDY_CLASS["alpha"] == qc.REMEDY_EDIT_TEXT

@@ -3,7 +3,7 @@
 docs/TRD-3 §4.1: generated stills must not be blank. Measurement is mean
 RGB level via qc.measure_mean_level. Floor is LUMA_FLOOR (24.0 levels).
 Below the floor REJECTs. At or above PASSes. measured is the independent
-mean, expected is LUMA_FLOOR, unit levels, remedy re-render-seed.
+mean, expected is LUMA_FLOOR, unit levels, remedy edit-text (T3-33).
 
 Distinct from not_uniform (max per-channel spatial std): solid bright red
 PASSes not_blank (mean >> floor) and REJECTs not_uniform (std ~ 0).
@@ -74,7 +74,7 @@ def test_t3_4_1_not_blank_black_rejects_testsrc2_passes(tmp_path):
     assert float(g["measured"]) >= qc.LUMA_FLOOR, g
     assert float(g["expected"]) == qc.LUMA_FLOOR
     assert g["unit"] == "levels"
-    assert g["remedy_class"] == qc.REMEDY_RERENDER_SEED
+    assert g["remedy_class"] == qc.REMEDY_EDIT_TEXT
     detail = (g["detail"] or "").lower()
     assert "mean" in detail or "level" in detail or "blank" in detail, g
 
@@ -83,7 +83,7 @@ def test_t3_4_1_not_blank_black_rejects_testsrc2_passes(tmp_path):
     assert float(row["measured"]) < qc.LUMA_FLOOR, row
     assert float(row["expected"]) == qc.LUMA_FLOOR
     assert row["unit"] == "levels"
-    assert row["remedy_class"] == qc.REMEDY_RERENDER_SEED
+    assert row["remedy_class"] == qc.REMEDY_EDIT_TEXT
 
 
 def test_t3_4_1_not_blank_measured_matches_independent(tmp_path):
@@ -127,4 +127,4 @@ def test_t3_4_1_not_blank_in_check_remedy_class():
     """T3-27: not_blank names a remedy class before a finding can be emitted."""
     assert "not_blank" in qc.CHECK_REMEDY_CLASS, (
         "not_blank not in CHECK_REMEDY_CLASS — T3-4.1-not_blank not wired")
-    assert qc.CHECK_REMEDY_CLASS["not_blank"] == qc.REMEDY_RERENDER_SEED
+    assert qc.CHECK_REMEDY_CLASS["not_blank"] == qc.REMEDY_EDIT_TEXT

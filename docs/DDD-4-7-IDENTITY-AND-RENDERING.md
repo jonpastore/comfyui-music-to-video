@@ -120,7 +120,10 @@ Identity comes from the text, not from the reference image. Saving a
 storyboard whose `character_reference` is empty is refused
 (`T2-31` / `T2-32` / `grok.EMPTY_CHARACTER_REFERENCE`). When a sheet or
 clip is wrong from the first frame, the QC remedy is edit the text, then
-re-render (`T3-28` / `qc.check_identity_wrong`). Swapping the reference
+re-render (`T3-28` / `qc.check_identity_wrong`). The rest of image QC
+uses that same class (`T3-33` / `qc.IMAGE_PROMPT_REWRITE_CHECKS`):
+blank, uniform, transparent, lighting and portrait findings say edit
+the text, not "re-render with a different seed". Swapping the reference
 image is refused — measured 2026-08-12: same reference, same seed, same
 box; species named or not is the one variable.
 
