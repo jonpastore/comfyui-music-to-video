@@ -124,6 +124,30 @@ def test_t2_11_clip_chain_plan_marks_successor_depends_on():
     assert [p["depends_on"] for p in two] == [None, None], two
 
 
+def _park_foreign_jobs(keep_ids):
+    """Cancel other queued/running jobs so _claim only sees keep_ids.
+
+    Shared studio.db + single worker (T6-1) leave foreign work that would
+    steal the next claim. Production claim semantics are unchanged.
+    """
+    keep = tuple(keep_ids)
+    if not keep:
+        return
+    placeholders = ",".join("?" * len(keep))
+    now = time.time()
+    db.run(
+        f"""UPDATE jobs SET status='cancelled', finished=?
+            WHERE status IN ('queued','running','cancelling')
+              AND id NOT IN ({placeholders})""",
+        now, *keep)
+    # Worker may already have taken the chain head; put keep back to queued.
+    db.run(
+        f"""UPDATE jobs SET status='queued', started=NULL, finished=NULL,
+                   error=NULL, progress=NULL
+            WHERE id IN ({placeholders})""",
+        *keep)
+
+
 def test_t2_11_start_clips_wires_depends_on_and_claim_waits():
     """POST /clips enqueues the chain with depends_on; _claim skips the
     successor until the predecessor is done.
@@ -132,6 +156,8 @@ def test_t2_11_start_clips_wires_depends_on_and_claim_waits():
     Mutation: wire depends_on but claim ignores it → successor pulled early.
     """
     was = _pin_fleet()
+    cap_was = jobs._capability_where
+    jobs._capability_where = None
     try:
         scenes = [_scene(1, 30.0)]
         plan = build_song.clip_chain_plan(scenes, "ltx25")
@@ -174,6 +200,16 @@ def test_t2_11_start_clips_wires_depends_on_and_claim_waits():
             f"successor job {succ['id']} depends_on={_depends_on(succ)}, "
             f"want predecessor job {pred['id']}")
 
+        # Isolate from leftover queued work. Stop the single worker so it
+        # cannot snatch the chain head after enqueue wakes it (T6-1).
+        jobs.stop()
+        _park_foreign_jobs([pred["id"], succ["id"]])
+        # Regression: a foreign running job must not hide the chain head.
+        foreign = jobs.enqueue("clips", {"who": "t211-foreign-running"},
+                               song_id=None)
+        db.run("UPDATE jobs SET status='running', started=? WHERE id=?",
+               time.time(), foreign)
+
         # T6-2 primitive: ready ≠ queued
         first = jobs._claim()
         assert first is not None and first["id"] == pred["id"], (
@@ -182,6 +218,7 @@ def test_t2_11_start_clips_wires_depends_on_and_claim_waits():
         assert jobs._claim() is None, (
             "successor was pulled before its predecessor landed")
         assert jobs.get(succ["id"])["status"] == "queued"
+        assert jobs.get(foreign)["status"] == "running"
 
         db.run("UPDATE jobs SET status='done', finished=? WHERE id=?",
                time.time(), pred["id"])
@@ -190,6 +227,11 @@ def test_t2_11_start_clips_wires_depends_on_and_claim_waits():
             f"predecessor done but successor {succ['id']} not pulled "
             f"(got {pulled['id'] if pulled else None})")
     finally:
+        jobs._capability_where = cap_was
+        try:
+            jobs.start()
+        except Exception:
+            pass
         _restore_fleet(was)
 
 

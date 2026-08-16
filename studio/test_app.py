@@ -6962,7 +6962,8 @@ def test_generated_audio_is_kept_and_says_which_path_ran(monkeypatch, tmp_path):
 
 def test_qc_review_queue_is_json_and_approve_forwards_to_repair():
     """docs/TRD-3 7 / T3-18: the loop is JSON. approve() enqueues a repair
-    and the route returns 200 with the approved row -- not a 501 lie.
+    and the route returns 200 with the approved row -- never 501.
+    ValueError is 400; missing finding is 404 (same as the HTML form).
     """
     with TestClient(appmod.app) as client:
         qc_service.record([{
@@ -6986,8 +6987,26 @@ def test_qc_review_queue_is_json_and_approve_forwards_to_repair():
 
         r = client.post(f"/api/qc/findings/{fid}/approve")
         assert r.status_code == 200, r.text
-        assert r.json()["status"] == "approved"
+        assert r.status_code != 501
+        body = r.json()
+        assert body.get("status") == "approved", body
+        assert body.get("ok") is True and body.get("id") == fid, body
         assert client.get(f"/api/qc/findings/{fid}").json()["status"] == "approved"
+
+        # ValueError (no remedy) → 400; missing → 404; never 501
+        qc_service.record([{
+            "path": "/tmp/qc-route-no-remedy.mp4", "kind": "clip", "tier": 1,
+            "check": "duration", "verdict": "reject", "measured": "1.0",
+            "expected": "30.0", "unit": "s", "detail": "short",
+            "remedy": ""}])
+        bare = db.one("SELECT id FROM findings WHERE path=?",
+                      "/tmp/qc-route-no-remedy.mp4")["id"]
+        bad = client.post(f"/api/qc/findings/{bare}/approve")
+        assert bad.status_code == 400, bad.text
+        assert bad.status_code != 501
+        missing = client.post("/api/qc/findings/999999/approve")
+        assert missing.status_code == 404, missing.text
+        assert missing.status_code != 501
 
         # a dismissal needs a reason, and a dismissed finding leaves the queue
         assert client.post(f"/api/qc/findings/{fid}/dismiss", data={"why": ""}).status_code == 400

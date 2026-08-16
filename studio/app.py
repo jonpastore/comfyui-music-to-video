@@ -2486,13 +2486,15 @@ def api_qc_dismiss(fid: int, why: str = Form("")):
 @app.post("/api/qc/findings/{fid}/approve")
 def api_qc_approve(fid: int):
     """Human sign-off. qc_service.approve enqueues the repair; this route
-    only forwards. A ValueError is a bad finding (dismissed, no remedy)."""
+    only forwards. A ValueError is a bad finding (dismissed, no remedy).
+    Missing is 404 (get raises ValueError 'no finding …')."""
     try:
         row = qc_service.approve(fid)
-    except NotImplementedError as e:
-        raise HTTPException(501, str(e))
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        msg = str(e)
+        if msg.startswith("no finding"):
+            raise HTTPException(404, msg)
+        raise HTTPException(400, msg)
     except KeyError:
         raise HTTPException(404, f"no finding {fid}")
     return {"ok": True, "id": row["id"], "status": row["status"]}

@@ -3,8 +3,8 @@ human sign-off, a repair is listed beside the original and scored, and a
 dismissed finding stays dismissed until the artefact changes.
 
 The route in app.api_qc_approve calls qc_service.approve and decides nothing
-else (T6-A10). These tests call that same function -- not a helper it wraps,
-and not the HTTP layer, which is just a 501-or-forward.
+else (T6-A10). These tests call that same function -- not a helper it wraps.
+HTTP success shape is covered in test_app (200 + approved, never 501).
 """
 import json
 import os
