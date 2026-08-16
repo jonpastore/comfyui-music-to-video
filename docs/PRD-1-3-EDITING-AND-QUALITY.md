@@ -41,7 +41,9 @@ not `|format`), and the storyboard coverage meter
 does not recompute intent/rendered). `T6-A5` is proven for set re-render,
 refine, repair and anchor re-roll (`test_t6_a5_*`, `qc_service.listed` /
 `select`). `T6-A3` is **built** as `sets_service.py` /
-`storyboard_service.py` (`test_t6_a3_*`). `T6-A7` is **built**
+`storyboard_service.py` / `arc_service.py` / `playlist_service.py` /
+`cleanup_service.py` / `media_service.py` (`test_t6_a3_*_imports_nothing_from_fastapi`
+and the direct-call differentials). `T6-A7` is **built**
 (`test_t6_a7_measurement_can_fail.py`): equal control/mutated is refused;
 T6-A4's distinctive stub counts are the product differential.
 
@@ -296,8 +298,9 @@ unbuilt work and are not" — the ledger with line counts is DDD §1.
    scene (not CHUNK); `pipeline.gen_refs` stamps it
    (`test_t2_refs_clip_seconds.py`).
 2. **The service split**, TRD-1 and TRD-2 (`T6-A3`) — **built** as
-   `sets_service.py` / `storyboard_service.py` (same shape as `qc_service.py`;
-   `test_t6_a3_*`).
+   `sets_service.py` / `storyboard_service.py` / `arc_service.py` /
+   `playlist_service.py` / `cleanup_service.py` / `media_service.py` (same
+   shape as `qc_service.py`; `test_t6_a3_*_imports_nothing_from_fastapi`).
 
 ### P1 — SUPERSEDED BY §6.0, kept for its dependency edges
 

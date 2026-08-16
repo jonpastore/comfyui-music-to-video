@@ -94,7 +94,7 @@ and it is what the review found missing.
         asserted byte-identical -- `pose` beside "standing upright, arms
         relaxed at their sides" is a shipped prompt contradiction)
 
-    qc_service.py pattern --> sets_service, storyboard_service (T6-A3, built)
+    qc_service.py pattern --> sets/storyboard/arc/playlist/cleanup/media_service (T6-A3, built)
     approve() enqueues dest ≠ src (T3-6 / T3-18, built) --> T3-19…T3-27 / T3-33
     calibration row --> tier 2 threshold --> tier 2 UI  (never the other order)
 

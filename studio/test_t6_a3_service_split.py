@@ -4,8 +4,8 @@ docs/TRD-6 §0.1. A route handler contains no arithmetic, no defaulting
 and no decision. If a test can only reach the logic through a request,
 the logic is in the wrong place.
 
-Kill: add `from fastapi import HTTPException` to sets_service → import
-scan goes red.
+Kill: add `from fastapi import HTTPException` to sets_service (or any of
+arc / playlist / cleanup / media service) → import scan goes red.
 Differential: default mode / scene_seconds clamp / meter mismatch live
 in the service. Calling the service with no request must produce them.
 A handler that still writes `or "audio"` or `or 4.0` is the defect.
@@ -17,8 +17,12 @@ import os
 import tempfile
 import time
 
+import arc_service
+import cleanup_service
 import db
 import jobs
+import media_service
+import playlist_service
 import sets_service
 import storyboard_service
 import tiers
@@ -63,6 +67,26 @@ def test_t6_a3_sets_service_imports_nothing_from_fastapi():
 def test_t6_a3_storyboard_service_imports_nothing_from_fastapi():
     names = _fastapi_imports(storyboard_service.__file__)
     assert names == [], f"storyboard_service imports FastAPI: {names}"
+
+
+def test_t6_a3_arc_service_imports_nothing_from_fastapi():
+    names = _fastapi_imports(arc_service.__file__)
+    assert names == [], f"arc_service imports FastAPI: {names}"
+
+
+def test_t6_a3_playlist_service_imports_nothing_from_fastapi():
+    names = _fastapi_imports(playlist_service.__file__)
+    assert names == [], f"playlist_service imports FastAPI: {names}"
+
+
+def test_t6_a3_cleanup_service_imports_nothing_from_fastapi():
+    names = _fastapi_imports(cleanup_service.__file__)
+    assert names == [], f"cleanup_service imports FastAPI: {names}"
+
+
+def test_t6_a3_media_service_imports_nothing_from_fastapi():
+    names = _fastapi_imports(media_service.__file__)
+    assert names == [], f"media_service imports FastAPI: {names}"
 
 
 def test_t6_a3_create_set_and_add_item_without_a_request():
