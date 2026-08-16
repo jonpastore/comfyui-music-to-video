@@ -2408,6 +2408,21 @@ def song_page(request: Request, id: int):
             song_paths.add(jobs.canonical_path(row["path"]))
     findings = [f for f in qc_service.queue() if f["path"] in song_paths]
     splice_eaten_secs = 2 * mixer.SPLICE_XFADE
+    # T6-19: dry-run plans only for operator-confirmed tiers. Template
+    # interpolates; no recompute (T6-A4). Unconfirmed → no cleanup card.
+    cleanup_plans = []
+    seen_cleanup_tiers = set()
+    for r in renders:
+        if not cleanup_service.is_confirmed(r):
+            continue
+        t = r["tier"]
+        if t in seen_cleanup_tiers:
+            continue
+        seen_cleanup_tiers.add(t)
+        try:
+            cleanup_plans.append(cleanup_service.plan_clip_cleanup(id, t))
+        except cleanup_service.UnconfirmedError:
+            continue
     return templates.TemplateResponse(request, "song.html", {
         "song": song, "tiers": all_tiers, "storyboards": storyboards, "beat_count": beat_count,
         "approved_tiers": approved_tiers, "reviews": reviews,
@@ -2421,6 +2436,7 @@ def song_page(request: Request, id: int):
         "best_model": best, "render_tiers": render_tiers,
         "findings": findings,
         "media": media,
+        "cleanup_plans": cleanup_plans,
         "lyrics_replace_warning": lyrics.REPLACE_WARNING,
         "splice_eaten_secs": splice_eaten_secs,
         **storyboard_form_ctx(song, form_tier, chat_models, best),

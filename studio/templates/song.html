@@ -439,13 +439,66 @@
     </li>
     {% endfor %}
   </ul>
-  <p class="hint">Confirm is separate from assemble. Clip cleanup is
-    <code>GET/POST /api/songs/{{ song.id }}/cleanup?tier=…</code>
-    (dry-run default; real delete needs <code>dry_run=0</code> and
-    <code>confirm=DELETE</code>). Local files via <code>os.remove</code>;
-    remote only through a known <code>SWARM_INPUT_DIRS</code> twin.</p>
+  <p class="hint">Confirm is separate from assemble. Clip cleanup cards appear
+    only after Confirm clean — dry-run listing first; real delete needs
+    <code>dry_run=0</code> and <code>confirm=DELETE</code>.</p>
   {% endif %}
 </section>
+
+{% for plan in cleanup_plans %}
+<section class="card cleanup-card" id="cleanup-{{ plan.tier }}"
+         data-cleanup-tier="{{ plan.tier }}"
+         data-cleanup-n-can-delete="{{ plan.n_can_delete }}"
+         data-cleanup-n-clips="{{ plan.n_clips }}"
+         data-cleanup-dry-run="{{ 1 if plan.dry_run else 0 }}">
+  <h2>Clip cleanup — {{ plan.tier | tiername }}</h2>
+  <p class="meta">Dry-run from <code>plan_clip_cleanup</code>
+    &middot; <span data-cleanup-n-can-delete>{{ plan.n_can_delete }}</span> can delete
+    &middot; {{ plan.n_clips }} clips listed
+    &middot; assembled kept</p>
+  {% if plan.would_delete %}
+  <div class="table-scroll">
+    <table class="list cleanup-plan">
+      <thead><tr>
+        <th>path</th><th>host</th><th>remote</th><th>can_delete</th><th>reason</th>
+      </tr></thead>
+      <tbody>
+      {% for t in plan.would_delete %}
+        <tr data-cleanup-path="{{ t.path }}"
+            data-cleanup-host="{{ t.host or '' }}"
+            data-cleanup-remote="{{ t.remote }}"
+            data-cleanup-can-delete="{{ t.can_delete }}"
+            data-cleanup-reason="{{ t.reason }}">
+          <td class="truncate"><code>{{ t.path }}</code></td>
+          <td class="nowrap">{{ t.host or "local" }}</td>
+          <td>{{ t.remote }}</td>
+          <td>{{ t.can_delete }}</td>
+          <td data-cleanup-reason>{{ t.reason }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">No clip files listed for this tier.</p>
+  {% endif %}
+  <form method="post" action="/api/songs/{{ song.id }}/cleanup"
+        class="stack-form cleanup-delete"
+        data-cleanup-delete-form="{{ plan.tier }}">
+    <input type="hidden" name="tier" value="{{ plan.tier }}">
+    <input type="hidden" name="dry_run" value="0">
+    <label>Type <code>DELETE</code> to remove listed clip files
+      <input type="text" name="confirm" placeholder="DELETE" autocomplete="off" required>
+    </label>
+    <button type="submit" class="danger">Delete clips</button>
+  </form>
+  <p class="hint">Default remains dry-run (this listing). Real delete posts
+    <code>dry_run=0</code> and <code>confirm=DELETE</code>. Anchors, refs,
+    storyboards, findings rows, and the assembled file stay. Local via
+    <code>os.remove</code>; remote only through a known
+    <code>SWARM_INPUT_DIRS</code> twin — never invent a remote path.</p>
+</section>
+{% endfor %}
 
 <section class="card">
   <h2>QC</h2>

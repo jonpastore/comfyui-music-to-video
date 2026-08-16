@@ -53,7 +53,9 @@ refine, repair and anchor re-roll (`test_t6_a5_*`, `qc_service.listed` /
 `select`). `T6-A3` is **built** as `sets_service.py` /
 `storyboard_service.py` / `arc_service.py` / `playlist_service.py` /
 `cleanup_service.py` / `media_service.py` (`test_t6_a3_*_imports_nothing_from_fastapi`
-and the direct-call differentials). `T6-A7` is **built**
+and the direct-call differentials). `T6-19` song-page cleanup UI is **built**
+(`test_t6_19_cleanup_ui.py`): confirmed tiers show the dry-run plan card;
+unconfirmed has no delete form. `T6-A7` is **built**
 (`test_t6_a7_measurement_can_fail.py`): equal control/mutated is refused;
 T6-A4's distinctive stub counts are the product differential.
 

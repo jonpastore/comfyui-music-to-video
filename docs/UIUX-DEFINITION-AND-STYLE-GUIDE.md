@@ -1165,6 +1165,16 @@ pick form (`POST /songs/{id}/takes/{id}/pick`); a picked take shows a
 `picked` tag, not a second button. Use stays on the edit card — never
 write `songs.mp3_path` as the pick.
 
+**`T6-19` assemble / cleanup card:** Confirm clean is separate from
+Assemble. After a render is confirmed, the song page shows a **Clip
+cleanup** card for that tier: dry-run listing from
+`cleanup_service.plan_clip_cleanup` (`path`, `host`, `remote`,
+`can_delete`, `reason`, `n_can_delete`) — interpolate only, no
+recompute (`T6-A4`). Real delete form posts `dry_run=0` and
+`confirm=DELETE` to `POST /api/songs/{id}/cleanup`; default remains
+dry-run. Unconfirmed renders keep the Confirm button and get **no**
+cleanup delete form. T6-18 stays: lifecycle writes never delete.
+
 ### 7b.6 A child mention is not a universal refuse
 
 `T10-18` is built. At `g` and `pg13` the storyboard direction, scene

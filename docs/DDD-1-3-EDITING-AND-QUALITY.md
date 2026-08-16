@@ -89,6 +89,7 @@ Service modules, same shape:
     arc_service.py         TRD-2/6 album arc meter (song_count / act_count / premise)
     playlist_service.py    TRD-6   playlist card numbers (song_count / total_secs)
     cleanup_service.py     TRD-6   T6-19 operator-confirmed clip cleanup
+                                   (song page card interpolates plan_clip_cleanup)
     media_service.py       TRD-8   song media bag (takes / edits / original / renders)
 
 `arc.py` and `automation.py` are already FastAPI-free and become their

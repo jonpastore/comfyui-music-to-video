@@ -289,7 +289,10 @@ plus Swarm assign. Do not add a second pull queue.
   only when a known `SWARM_INPUT_DIRS` input→output twin exists (same SSH
   staging path as `install_input`, path `shlex.quote`d because OpenSSH
   shells the remote argv); otherwise skip with reason — never invent a
-  remote path.
+  remote path. Song page (`song.html`) interpolates
+  `cleanup_service.plan_clip_cleanup` per confirmed tier; the delete form
+  posts to `POST /api/songs/{id}/cleanup` with `dry_run=0` and
+  `confirm=DELETE`. Unconfirmed tiers get no cleanup card.
 
 ## 7. Where the studio still owns two copies of one fact
 

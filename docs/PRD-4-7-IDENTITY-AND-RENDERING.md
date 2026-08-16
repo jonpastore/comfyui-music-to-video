@@ -178,6 +178,8 @@ statement of it:
 nothing here moves them). Lifecycle writes still delete nothing (`T6-18`).
 Operator-confirmed clip cleanup is `T6-19` (local `os.remove`; remote only
 via a known `SWARM_INPUT_DIRS` twin with a shell-quoted ssh path, else skip).
+The song page shows a dry-run cleanup card after Confirm clean; real delete
+still needs `dry_run=0` and `confirm=DELETE` (no auto-delete).
 
 **Not building**, cited not restated: no IP-Adapter / InstantID / ReActor
 (TRD-4 §7, TRD-7 §5 — a multi-image edit model conditions natively); no second
