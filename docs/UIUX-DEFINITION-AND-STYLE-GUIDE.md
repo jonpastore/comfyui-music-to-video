@@ -260,6 +260,9 @@ two `scene_seconds` yields two clip lengths. **`T6-A2-storyboard` built**:
 HTML `/songs/{id}/storyboard/{tier}` (`#storyboard-meter` data attrs) and
 `GET /api/songs/{id}/storyboard/{tier}` report the same five numbers from
 `storyboard_service.payload` (`test_t6_a2_html_and_json_report_the_same_storyboard_numbers`).
+**`T6-A4-storyboard` built**: meter fill width is `coverage.fill_pct` from
+`storyboard_service.payload` — no template compute
+(`test_t6_a4_storyboard_page_shows_stubbed_fill_pct_unmodified`).
 **`T2-25` built**:
 `POST /songs/{id}/clips` refuses a scene-time miss (400, no job)
 and still queues an in-tolerance board.
@@ -1238,7 +1241,9 @@ A style guide is falsifiable or it is decoration.
 - **No template computes.** `T6-A4`, asserted by a differential: stub the service
   to return known values and assert the page shows them unmodified.
   `test_t6_a4_queue_page_shows_stubbed_values_unmodified` is that check for
-  `/queue`. `_jobs_panel.html` still formats elapsed. `T6-A7` requires that
+  `/queue`. `test_t6_a4_storyboard_page_shows_stubbed_fill_pct_unmodified` is
+  that check for the storyboard coverage meter (`coverage.fill_pct`,
+  `T6-A4-storyboard`). `_jobs_panel.html` still formats elapsed. `T6-A7` requires that
   differential to be able to fail: counts stay off list lengths so a
   `len()`-recompute mutation goes red (`test_t6_a7_measurement_can_fail.py`).
 - **The measurements in §2 are re-runnable.** Each is a one-line count, and a

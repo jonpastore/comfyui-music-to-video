@@ -39,18 +39,19 @@
 </section>
 
 {# ---- did the model write too much or too little for this track?
-       T6-A2 numbers come from storyboard_service.payload; do not recompute
-       scene_count from scene_rows, clip length from CHUNK, or mismatch. ---- #}
+       T6-A2 numbers and T6-A4 fill_pct come from storyboard_service.payload;
+       do not recompute scene_count, clip length, mismatch, or meter width. ---- #}
 <section class="card" id="storyboard-meter"
          data-scene-time="{{ scene_time }}"
          data-song-length="{{ song_length }}"
          data-clip-seconds="{{ clip_seconds }}"
          data-scene-count="{{ scene_count }}"
-         data-mismatch="{{ 'true' if mismatch else 'false' }}">
+         data-mismatch="{{ 'true' if mismatch else 'false' }}"
+         data-fill-pct="{{ coverage.fill_pct }}">
   <h2>Coverage</h2>
   <div class="meter {% if coverage.ok %}ok{% else %}off{% endif %}">
     <div class="meter-bar">
-      <div class="meter-fill" style="width: {{ [100, (coverage.intent / coverage.rendered * 100) if coverage.rendered else 0] | min }}%"></div>
+      <div class="meter-fill" style="width: {{ coverage.fill_pct }}%"></div>
     </div>
     <p class="meter-text">
       {{ scene_count }} scenes ask for <strong>{{ coverage.intent | hms }}</strong>

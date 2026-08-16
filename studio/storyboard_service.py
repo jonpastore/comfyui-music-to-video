@@ -245,11 +245,17 @@ def scene_time_report(scene_time, song_length):
 def coverage(rows, nclips, duration, clip_secs=None):
     intent = sum(r["guidance"] for r in rows)
     rendered = nclips * build_song.clip_seconds(clip_secs)
+    # T6-A4: fill_pct is service-owned. Template interpolates only.
+    if rendered:
+        fill_pct = min(100.0, (intent / rendered) * 100.0)
+    else:
+        fill_pct = 0.0
     return {
         "intent": intent, "rendered": rendered, "duration": duration or 0.0,
         "nclips": nclips, "scenes": len(rows),
         "ratio": (rendered / intent) if intent else 0.0,
         "ok": bool(intent) and 0.85 <= (rendered / intent) <= 1.15,
+        "fill_pct": fill_pct,
     }
 
 

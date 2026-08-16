@@ -25,9 +25,14 @@ set editor (`test_t6_a2_html_and_json_report_the_same_set_numbers`,
 (`test_t6_a2_html_and_json_report_the_same_storyboard_numbers`,
 `T6-A2-storyboard` — same `storyboard_service.payload()` for scene_time /
 song_length / clip_seconds / scene_count / mismatch).
-`T6-A4` is proven for the queue panel (`test_t6_a4_*`); `T6-A5` is proven
-for set re-render, refine, repair and anchor re-roll (`test_t6_a5_*`,
-`qc_service.listed` / `select`). `T6-A3` is **built** as `sets_service.py` /
+`T6-A4` is proven for the queue panel
+(`test_t6_a4_queue_page_shows_stubbed_values_unmodified`) and the
+storyboard coverage meter
+(`test_t6_a4_storyboard_page_shows_stubbed_fill_pct_unmodified`,
+`T6-A4-storyboard`: `coverage.fill_pct` is service-owned; the template
+does not recompute intent/rendered). `T6-A5` is proven for set re-render,
+refine, repair and anchor re-roll (`test_t6_a5_*`, `qc_service.listed` /
+`select`). `T6-A3` is **built** as `sets_service.py` /
 `storyboard_service.py` (`test_t6_a3_*`). `T6-A7` is **built**
 (`test_t6_a7_measurement_can_fail.py`): equal control/mutated is refused;
 T6-A4's distinctive stub counts are the product differential.
