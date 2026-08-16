@@ -50,7 +50,7 @@ The same operator, in the two modes the other documents do not cover:
 | P2 | Picking a take is a separate act, and the take you did not pick survives to be compared | `T8-2`, and `T6-A5` owns the rule |
 | P3 | A span can be replaced without deleting audio or lengthening the song | `T8-6`…`T8-9` |
 | P4 | A voice reference cannot exist without a recorded source and consent | `T8-10`…`T8-12` |
-| P5 | A workflow naming a model reaches the box that holds it, under the name that box uses | `T9-1`…`T9-3` |
+| P5 | A workflow naming a model reaches the box that holds it, under the name that box uses | `T9-1`…`T9-3` (built: `test_t9_1_*` both directions; `test_t9_2_*` per-loader; T9-3 free-draw identity) |
 | P6 | A box that went away is told apart from a workflow a box refused | `T9-6`, `T9-7` |
 | P6a | A fleet op that needs a stop names which service, and never more | `T9-18` (built: `fleet_watch.name_stop`; vDisk lesson — docker only, not the array) |
 | P6b | An unreachable alert transport degrades to a recorded state change, never silence | `T9-17` (built: `fleet_watch` `_alert` record + check) |

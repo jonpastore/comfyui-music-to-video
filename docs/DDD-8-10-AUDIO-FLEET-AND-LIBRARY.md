@@ -126,7 +126,10 @@ box; the fleet answers with four backends:
 ### 3.2 Retargeting is the design, and the retry is the fallback
 
 `_retarget` rewrites loader filenames to the spellings a box publishes,
-**per loader**, before a pinned attempt goes out. `_attempt_plan` walks one free
+**per loader**, before a pinned attempt goes out. `T9-1` asserts both
+alias directions (peaches fp16 ↔ cerberus bf16); `T9-2` asserts a VAE
+name is never resolved out of the UNET enum (`test_trd9_fleet.py`).
+`_attempt_plan` walks one free
 draw then each box in turn, except a graph that loads `ref_motion` /
 `control_video` (`LoadVideosFromFolder`) pins to cerberus (`T2-46`) — kjnodes
 is absent on gamingpc.
