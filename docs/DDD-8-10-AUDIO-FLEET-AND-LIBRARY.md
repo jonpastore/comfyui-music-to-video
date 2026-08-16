@@ -34,7 +34,9 @@ seed, duration and the parameters as sent sit on the take, so a later song edit
 cannot rewrite the ask. `songs.mp3_path` is not a write target. Pick is
 `POST /songs/{id}/takes/{id}/pick` via `pick_take` (`T8-2`): it records
 `takes.picked` and leaves the unpicked take listed and playable. Use on an
-`audio_gen` asset is refused so that column cannot become the pick. **`T8-2a`**
+`audio_gen` asset is refused so that column cannot become the pick. The song
+Media card (T8-16 bag) exposes that same pick form on unpicked takes and a
+`picked` tag when already picked (`test_t8_2_media_card_pick.py`). **`T8-2a`**
 is built: `insert_take` copies `songs.style_text` onto `takes.tags` when tags
 are omitted (`test_t8_2a_song_style_text_is_copied_onto_the_take`).
 
@@ -121,8 +123,9 @@ point: takes (`db.list_takes`), `assets` rows of kind `audio_edit` and
 `audio_original`, and `renders` rows. It returns one list plus counts and, when
 empty, a non-empty `reason`. No FastAPI import (`T6-A3`).
 `GET /api/songs/{id}/media` and the song-page Media card both call it, so
-HTML and JSON report the same numbers and `kind:id` keys (`T6-A2`). The card
-does not pick or use — that stays `T8-2` / the generate and edit cards.
+HTML and JSON report the same numbers and `kind:id` keys (`T6-A2`). The bag
+list is T8-16; pick on take rows is T8-2 (form when not picked, tag when
+picked). Use of edits stays on the edit card.
 
 ## 3. TRD-9 — testing what already works
 

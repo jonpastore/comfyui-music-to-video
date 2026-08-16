@@ -106,7 +106,9 @@ still not shipped (`T8-12`, provisional by absence).
    (`media_service.list_bag`: takes, `audio_edit`, `audio_original`,
    assembled renders); `GET /api/songs/{id}/media` and the song HTML card
    report the same count and `kind:id` keys (`T6-A2`). Empty is empty +
-   `reason`. Picking/using stays `T8-2`.
+   `reason`. **`T8-2` Media-card pick is built** — unpicked takes on that
+   bag show `POST /songs/{id}/takes/{id}/pick`; picked takes show a tag
+   (`studio/test_t8_2_media_card_pick.py`). Use stays on the edit card.
 3. **TRD-10's bulk edit.** `T10-3`…`T10-7` are built: blank leaves alone, toggle-all is the shown set, invalid refuses the batch, one transaction, pre-write count equals rows changed.
 3a. **TRD-10's lyrics provenance.** `T10-8` is built: a transcription stores
    which backend produced it and that it is a transcription; supplied text

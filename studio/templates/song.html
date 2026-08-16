@@ -88,8 +88,8 @@
   <h2>Media</h2>
   <p class="muted">Song-level bag: takes, audio edits, the original upload, and
     assembled renders. One list the JSON endpoint reports
-    (<code>GET /api/songs/{{ song.id }}/media</code>). Picking a take is a
-    separate act on the generate card below.</p>
+    (<code>GET /api/songs/{{ song.id }}/media</code>). Unpicked takes can be
+    picked here; Use stays on the edit card.</p>
   {% if media.reason %}
   <p class="empty" data-media-reason="{{ media.reason }}">{{ media.reason }}</p>
   {% else %}
@@ -101,10 +101,20 @@
   <ul class="media-bag">
     {% for it in media["items"] %}
     <li data-media-id="{{ it.id }}" data-media-kind="{{ it.kind }}"
-        data-media-key="{{ it.kind }}:{{ it.id }}">
+        data-media-key="{{ it.kind }}:{{ it.id }}"
+        {% if it.kind == "take" %}data-media-picked="{{ 1 if it.picked else 0 }}"{% endif %}>
       <span class="tag">{{ it.kind }}</span>
       <span class="media-label">{{ it.label }}</span>
       {% if it.path %}<code class="muted">{{ it.path.split('/')[-1] }}</code>{% endif %}
+      {% if it.kind == "take" %}
+        {% if it.picked %}
+        <span class="tag" data-take-picked="{{ it.id }}">picked</span>
+        {% else %}
+        <form method="post" action="/songs/{{ song.id }}/takes/{{ it.id }}/pick">
+          <button type="submit">Pick this take</button>
+        </form>
+        {% endif %}
+      {% endif %}
     </li>
     {% endfor %}
   </ul>

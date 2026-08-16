@@ -1130,10 +1130,12 @@ echo, eq, loudnorm and the rest appear only when stored.
 takes, audio edits, the original upload, assembled renders — from
 `media_service.list_bag`. The card interpolates that payload
 (`data-media-count`, `data-media-key="kind:id"`, empty `reason`);
-`GET /api/songs/{id}/media` returns the same object. No pick/use
-controls on this card (those stay on the generate / edit cards). An
-empty song shows the reason, not a blank card that looks like a
-missing section.
+`GET /api/songs/{id}/media` returns the same object. An empty song
+shows the reason, not a blank card that looks like a missing section.
+**`T8-2` on this card:** unpicked `kind==take` rows show the existing
+pick form (`POST /songs/{id}/takes/{id}/pick`); a picked take shows a
+`picked` tag, not a second button. Use stays on the edit card — never
+write `songs.mp3_path` as the pick.
 
 ### 7b.6 A child mention is not a universal refuse
 

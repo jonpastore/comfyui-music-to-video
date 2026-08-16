@@ -169,8 +169,9 @@ bag of takes, `audio_edit` assets, `audio_original`, and assembled renders.
   and ids** (`T6-A2`). `GET /api/songs/{id}/media` and the song-page Media card
   both call `media_service.list_bag`. An empty song returns `count: 0` with a
   non-empty `reason`. After a take + an audio_edit + a render land, both
-  surfaces report the same `count` and the same `kind:id` keys. Picking/using
-  is **not** this criterion (`T8-2` already owns that).
+  surfaces report the same `count` and the same `kind:id` keys. The bag list is
+  this criterion; pick UI on the Media card is `T8-2` (form on unpicked takes,
+  `picked` tag when already picked — not a second bag implementation).
 
 ## 7. Explicitly not building
 
@@ -264,7 +265,7 @@ current.
 | `T8-4` the audio path accepts a child mention | **built** | `1cac5bb` | the image guardrail is off the audio path, measured — "nursery rhyme for children" had been refused. Image refuse half is now `T10-18`/`T10-22`, not a blanket |
 | **`T8-5`** just-under accepted; just-over names the bound | **built** | this slice | `POST /songs/{id}/audio/generate` accepts tags/lyrics/seconds at `MAX_TAGS` / `MAX_LYRICS` / `MAX_AUDIO_SECS` and enqueues; just over each is 400 and the body names that field and bound. Refuse-only loop in `test_app.py` is not enough — positive half lives in `studio/test_t8_5_audio_generate_bounds.py` |
 | **`T8-1`** a take records the ask | **built** | `test_takes.py` | `h_audio` copies tags/lyrics/seed/duration/params onto `takes` via `insert_take`. Changing the song after generate leaves the take's ask. Does not write `songs.mp3_path` |
-| **`T8-2`** pick is a separate act | **built** | `test_takes.py` | `POST /songs/{id}/takes/{id}/pick` records the pick. Both takes stay listed and playable. Use on `audio_gen` is refused so `songs.mp3_path` is not the pick |
+| **`T8-2`** pick is a separate act | **built** | `test_takes.py`, `test_t8_2_media_card_pick.py` | `POST /songs/{id}/takes/{id}/pick` records the pick. Both takes stay listed and playable. Use on `audio_gen` is refused so `songs.mp3_path` is not the pick. Media card (T8-16 bag) shows the pick form on unpicked takes and a `picked` tag after — `studio/test_t8_2_media_card_pick.py` |
 | **`T8-2a`** `songs.style_text` copied onto the take | **built** | `test_takes.py` | `test_t8_2a_song_style_text_is_copied_onto_the_take`: generate with no tags copies `songs.style_text` onto `takes.tags`; changing the song after generate leaves the take's tags. Mutation: omit the copy → take has empty tags |
 | **`T8-3`** a take records which path produced it | **built** | `test_takes.py` | insert/origin CHECK. Positive half: `h_audio` for generated, resynthesised (`source_path`) and bridged (`bridge` span) each lands a take in `list_takes` with that origin and a real path under `db.DATA` |
 | **`T8-10`** no voice without source+consent | **built** | `test_takes.py` | `insert_voice` refuses missing/blank source or consent and names which. A voice with both is stored, readable via `get_voice`, and assignable on `take_voices`. Empty string is not a recorded state. |
@@ -273,4 +274,4 @@ current.
 | **`T8-13`** the song editor uses the shared automation model | **built** | this slice | `POST /api/songs/{id}/automation/{lane}` writes through `automation.save`; GET re-reads the stored, decimated curve. Rows land in `automation` on a one-item `mode=song_editor` set. `item_audio` emits the fragments (positive half). `MAX_POINTS`, RDP and linear/hold only — bezier is 400. `studio/test_t8_13_song_editor_automation.py` |
 | **`T8-14`** predicted length is rendered length | **built** | this slice | `GET /api/songs/{id}/editor/duration` and `POST /api/songs/{id}/editor/render` share `_song_editor_mix_items` → `mixer.set_duration` then `mixer.mix_audio`. Render emits `predicted` first; probed length lands within `mixer.SET_DURATION_TOLERANCE` (imported, not restated). Echo moves the prediction so a length-blind re-encode cannot pass. `studio/test_t8_14_song_editor_duration.py` |
 | **`T8-15`** preview proxy | **built** | this slice | `GET /api/songs/{id}/preview` returns `mixer.preview_proxy` over the editor item's `effects_json` (`is_proxy: true`, `not_applied` from stored effects — T1-16 on this surface). Adding `echo_out` lists it; `eq_kill` stays off until stored. Missing song is 404. `studio/test_t8_15_song_editor_preview.py` |
-| **`T8-16`** media bag (media menu) | **built** | this slice | `media_service.list_bag` (no FastAPI) lists takes + `audio_edit` + `audio_original` + assembled `renders` as one list. Empty song: `count: 0` + `reason: "empty"`. `GET /api/songs/{id}/media` and the song HTML Media card both call it (T6-A2: same count and `kind:id` keys). Missing song is 404. Picking/using is not this criterion. `studio/test_t8_16_media_menu.py` |
+| **`T8-16`** media bag (media menu) | **built** | this slice | `media_service.list_bag` (no FastAPI) lists takes + `audio_edit` + `audio_original` + assembled `renders` as one list. Empty song: `count: 0` + `reason: "empty"`. `GET /api/songs/{id}/media` and the song HTML Media card both call it (T6-A2: same count and `kind:id` keys). Missing song is 404. Bag list is this criterion; pick UI on the card is `T8-2` (`test_t8_2_media_card_pick.py`). `studio/test_t8_16_media_menu.py` |
