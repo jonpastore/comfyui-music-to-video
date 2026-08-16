@@ -1,0 +1,41 @@
+{
+  "_readme": [
+    "Iteration 2 of 10. ONE variable vs i01: image1 is looking-back.jpg instead of standing.jpg.",
+    "i01 proved the charcoal plate wins pose and anatomy AND identity (short-hair latex stranger). looking-back.jpg already faces the same way as the plate, so identity should compete harder.",
+    "Everything else identical: empty latent, CFG 2.0/50, LoRA 0, seed 5151, same plate, same prompt."
+  ],
+  "env": {
+    "RENDER_BACKEND": "comfy",
+    "SWARM_URL": "http://127.0.0.1:7801",
+    "COMFY_URL": "http://127.0.0.1:8188",
+    "COMFY_INPUT": "/home/jon/ComfyUI/input",
+    "COMFY_OUTPUT": "/home/jon/ComfyUI/output",
+    "RENDER_ATTEMPTS": "1"
+  },
+  "defaults": {
+    "refs": ["anchor5/plates/meowp_charcoal_poseplate.png"],
+    "outdir": "anchor5/nude-i02",
+    "tier": "xxx",
+    "n": 1,
+    "seed": 5151,
+    "latent": "empty",
+    "width": 896,
+    "height": 1216,
+    "mode": "quality",
+    "cfg": 2.0,
+    "steps": 50,
+    "sampler_name": "dpmpp_2m",
+    "scheduler": "karras",
+    "lora_strength": 0.0,
+    "ref_method": "index_timestep_zero",
+    "backend": "comfy",
+    "prompt": "{pose} She is the same adult anthropomorphic black feline woman as image 1: sleek black feline face, yellow-green almond eyes, pointed feline ears, long wavy black hair with purple highlights, long black tail, gold hoop earrings and gold jewelry. Image 2 is pose and framing only. She is fully nude and barefoot, gold hoop earrings and gold jewelry from image 1 still on her. Her whole body continues in the same jet-black skin as her face, shoulders and midriff in image 1: same hue, same undertone, same matte finish. Human-shaped adult female anatomy on that body: full breasts, nipples and areolae, a defined human vulva with inner and outer labia, and a visible anus. Areolae and labia are a darker shade of that same skin, clearly drawn. Same illustration style and lighting as image 1. Plain flat uniform neutral grey studio backdrop, seamless and empty.",
+    "negative": "clothing, bikini, thong, briefs, harness, boots, shoes, gloves, pink skin, peach skin, tan skin, extra tails, extra person, featureless crotch"
+  },
+  "jobs": [
+    {
+      "input": "anchor5/looking-back.jpg",
+      "pose": "Kneeling, seen from behind, knees wide apart, hips toward the camera, back arched, tail swept aside, head turned to look back over her shoulder."
+    }
+  ]
+}

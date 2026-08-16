@@ -1,0 +1,63 @@
+{
+  "_readme": [
+    "Step 2 of the process: storyboard poses vs image-classification.json.",
+    "This is NOT a slot map. It only lists what the board asks for and whether we have it.",
+    "have=false means generate that pose, then add the still to image-classification.json.",
+    "Do not anatomy-inpaint until an exposing pose exists."
+  ],
+  "storyboard": "../Street Cats/Back Alley Pussy/back_alley_pussy_xxx.json",
+  "classification": "image-classification.json",
+  "needed": [
+    {
+      "id": "allfours-lookback-expose",
+      "have": false,
+      "priority": 1,
+      "pose": "all-fours",
+      "view": "3qtr-rear",
+      "must": "looking back, tail up, breasts hanging, vulva and anus fully exposed",
+      "scenes": [7, 8, 9, 10, 14],
+      "closest_we_have": [
+        "kneeling.jpg (hands on floor, facing camera, clothed)",
+        "poses/allfours-kneel/s843167886 (nude squat look-back — not hands-and-knees)",
+        "empty+standing-nude-refs: four standing look-backs",
+        "empty+kneeling.jpg: squat / kneel / ghost / standing-clothed — none all-fours"
+      ]
+    },
+    {
+      "id": "supine-legs-parted",
+      "have": false,
+      "priority": 2,
+      "pose": "supine",
+      "view": "front",
+      "must": "on her back, knees bent, legs parted, vulva exposed",
+      "scenes": [12],
+      "closest_we_have": ["playing.jpg (supine, legs together, clothed)"]
+    },
+    {
+      "id": "kneel-present-nude",
+      "have": false,
+      "priority": 3,
+      "pose": "kneel",
+      "view": "3qtr-rear",
+      "must": "kneeling look-back, nude, tail aside",
+      "scenes": [7],
+      "closest_we_have": [
+        "looking-back_s843167749 clothed kneel look-back",
+        "poses/allfours-kneel/s843168023 kneeling look-back 3qtr, harness on — C1 undress candidate"
+      ]
+    },
+    {
+      "id": "stand-3qtr-nude",
+      "have": true,
+      "path": "nude-qc/looking-back_s843168023_00001_.png",
+      "scenes": [1, 5, 13]
+    },
+    {
+      "id": "front-crouch-nude",
+      "have": true,
+      "path": "nude-qc/tense_s843167886_00001_.png",
+      "note": "legs apart but crotch not exposed enough for anatomy definition",
+      "scenes": [2, 3, 4, 6, 11]
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "_readme": [
+    "One seed on four different poses -- a spread test, not a seed sweep. Same defaults as config.nude.json; only n and outdir differ."
+  ],
+  "env": {
+    "RENDER_BACKEND": "swarm",
+    "SWARM_URL": "http://127.0.0.1:7801",
+    "COMFY_URL": "http://127.0.0.1:8188",
+    "COMFY_INPUT": "/home/jon/ComfyUI/input",
+    "COMFY_OUTPUT": "/home/jon/ComfyUI/output",
+    "SWARM_INPUT_DIRS": "jon@100.107.235.105:/home/jon/comfy-backend/input,root@100.95.184.29:/mnt/user/appdata/comfyui-swarm/mnt/ComfyUI/input",
+    "_RENDER_ATTEMPTS": "Backends 0 and 1 ONLY. Verified 2026-08-15 by reading /object_info off each box: cerberus and gamingpc both hold qwen_image_edit_2511_fp8mixed + the 2511 Lightning 4-step LoRA, same filenames. peaches (backend 2) holds NEITHER and can only refuse these workflows; ethan (3) is unreachable. pipeline._attempt_plan walks running backends in id order, so capping the attempts at 2 stops the walk before it ever reaches peaches.",
+    "RENDER_ATTEMPTS": "2"
+  },
+  "defaults": {
+    "refs": [],
+    "outdir": "anchor5/nude-test",
+    "tier": "xxx",
+    "n": 1,
+    "latent": "image",
+    "prompt": "{pose} Change ONLY her clothing: every garment and accessory is gone and her whole body is uncovered. Where the outfit was, her body continues in exactly the same matte black skin as her bare shoulders, midriff and legs in image 1: the same colour, the same matte light-absorbing finish, the same texture, lit by the same soft studio light. Human female anatomy on that matte black body: human breasts with nipples and areolae, and a defined vulva, each one shade lighter than the surrounding black so they read clearly. Everything else is exactly as in image 1 -- same woman, same feline head, face, ears and yellow-green eyes, same long wavy black hair with purple highlights, same tail, same body colour and matte finish, same human proportions and musculature, same pose, same camera angle, same framing, same crop, same lighting, and the same plain flat neutral grey background."
+  },
+  "jobs": [
+    {
+      "input": "anchor5/back.jpg",
+      "pose": "Full-body rear view, seen from directly behind, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/portrait.jpg",
+      "pose": "Head-and-shoulders portrait, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/seated.jpg",
+      "pose": "Seated, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/tense.jpg",
+      "pose": "The exact same pose, camera angle, framing and crop as image 1."
+    }
+  ]
+}

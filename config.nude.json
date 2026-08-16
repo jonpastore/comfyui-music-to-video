@@ -1,0 +1,89 @@
+{
+  "_readme": [
+    "batch_edit.py --config config.nude.json   -- xxx tier, every anchor5 pose, human body / feline colouring.",
+    "Written in the shape of config.json, which worked: ONE change clause, then everything else named as preserved. The first version re-described the whole character (species, body plan, every body part, surface) and the model repainted the figure instead of editing it.",
+    "MATTE, stated positively, and never 'smooth' or 'sheen'. Those two words produced glossy black latex over the whole body in the first run -- the render obeyed them exactly. docs/reviews/XXX-NUDE-PROMPT-REVIEW flags 'smooth' as a hazard word; its own prompt uses it because that prompt builds an anchor from nothing, where there is no surface to preserve.",
+    "The words nude / naked / wears nothing are deliberately absent for the same reason.",
+    "No refs. The clothed anchors are what image 2 and image 3 would carry, and this set is trying to lose the outfit -- image 1 alone holds identity and pose."
+  ],
+  "env": {
+    "RENDER_BACKEND": "swarm",
+    "SWARM_URL": "http://127.0.0.1:7801",
+    "COMFY_URL": "http://127.0.0.1:8188",
+    "COMFY_INPUT": "/home/jon/ComfyUI/input",
+    "COMFY_OUTPUT": "/home/jon/ComfyUI/output",
+    "SWARM_INPUT_DIRS": "jon@100.107.235.105:/home/jon/comfy-backend/input,root@100.95.184.29:/mnt/user/appdata/comfyui-swarm/mnt/ComfyUI/input",
+    "_RENDER_ATTEMPTS": "Backends 0 and 1 ONLY. Verified 2026-08-15 by reading /object_info off each box: cerberus and gamingpc both hold qwen_image_edit_2511_fp8mixed + the 2511 Lightning 4-step LoRA, same filenames. peaches (backend 2) holds NEITHER and can only refuse these workflows; ethan (3) is unreachable. pipeline._attempt_plan walks running backends in id order, so capping the attempts at 2 stops the walk before it ever reaches peaches.",
+    "RENDER_ATTEMPTS": "2"
+  },
+  "defaults": {
+    "refs": [],
+    "outdir": "anchor5/nude",
+    "tier": "xxx",
+    "n": 4,
+    "latent": "image",
+    "prompt": "{pose} Change ONLY her clothing: every garment and accessory is gone and her whole body is uncovered. Where the outfit was, her body continues in exactly the same matte black skin as her bare shoulders, midriff and legs in image 1: the same colour, the same matte light-absorbing finish, the same texture, lit by the same soft studio light. Human female anatomy on that matte black body: human breasts with nipples and areolae, and a defined vulva, each one shade lighter than the surrounding black so they read clearly. Everything else is exactly as in image 1 -- same woman, same feline head, face, ears and yellow-green eyes, same long wavy black hair with purple highlights, same tail, same body colour and matte finish, same human proportions and musculature, same pose, same camera angle, same framing, same crop, same lighting, and the same plain flat neutral grey background."
+  },
+  "jobs": [
+    {
+      "input": "anchor5/back.jpg",
+      "pose": "Full-body rear view, seen from directly behind, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/cleaning-kneeling.jpg",
+      "pose": "Kneeling, grooming herself, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/cleaning-seated.jpg",
+      "pose": "Seated, grooming herself, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/curled-napping.jpg",
+      "pose": "Curled up asleep, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/feeding.jpg",
+      "pose": "The exact same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/kneeling.jpg",
+      "pose": "Kneeling upright, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/laying-side.jpg",
+      "pose": "Lying on her side, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/looking-back.jpg",
+      "pose": "Full-body standing rear view, turning her head to look back over her shoulder, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/playing.jpg",
+      "pose": "The exact same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/portrait.jpg",
+      "pose": "Head-and-shoulders portrait, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/seated.jpg",
+      "pose": "Seated, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/side profile.jpg",
+      "pose": "Full-body standing side profile view, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/standing-3qtr.jpg",
+      "pose": "Full-body standing three-quarter view, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/standing.jpg",
+      "pose": "Full-body standing front view, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/tense.jpg",
+      "pose": "The exact same pose, camera angle, framing and crop as image 1."
+    }
+  ]
+}

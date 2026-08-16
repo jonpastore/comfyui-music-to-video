@@ -1,0 +1,46 @@
+{
+  "_readme": [
+    "R-TIER nude variant. Structure supplied by Jon 2026-08-15: pose directive -> single change clause -> preservation list -> background lock, with the pipeline's own segments appended.",
+    "tier r, not xxx: the r wording names visible things and the supplied assembled example ends with it. refs restored because that example includes the cast clause, which build_refs only appends when image 2 and image 3 exist.",
+    "n 1 across four different poses -- a spread test."
+  ],
+  "env": {
+    "RENDER_BACKEND": "swarm",
+    "SWARM_URL": "http://127.0.0.1:7801",
+    "COMFY_URL": "http://127.0.0.1:8188",
+    "COMFY_INPUT": "/home/jon/ComfyUI/input",
+    "COMFY_OUTPUT": "/home/jon/ComfyUI/output",
+    "SWARM_INPUT_DIRS": "jon@100.107.235.105:/home/jon/comfy-backend/input,root@100.95.184.29:/mnt/user/appdata/comfyui-swarm/mnt/ComfyUI/input",
+    "_RENDER_ATTEMPTS": "Backends 0 and 1 ONLY. Verified 2026-08-15 by reading /object_info off each box: cerberus and gamingpc both hold qwen_image_edit_2511_fp8mixed + the 2511 Lightning 4-step LoRA, same filenames. peaches (backend 2) holds NEITHER and can only refuse these workflows; ethan (3) is unreachable. pipeline._attempt_plan walks running backends in id order, so capping the attempts at 2 stops the walk before it ever reaches peaches.",
+    "RENDER_ATTEMPTS": "2"
+  },
+  "defaults": {
+    "refs": [
+      "anchor5/cleaning-kneeling.jpg",
+      "anchor5/standing.jpg"
+    ],
+    "outdir": "anchor5/nude-r",
+    "tier": "r",
+    "n": 1,
+    "latent": "image",
+    "prompt": "{pose} Remove all clothing and accessories. Render the figure completely nude. The body must show accurate, continuous human anatomy with natural skin tone, subtle subsurface scattering, and consistent coloration across the entire surface \u2014 no fabric edges, no seams, no residual clothing texture, no color breaks, and no mismatched patches. Skin must match the exact tone, undertone, and markings of the woman in image 1. Everything else is exactly as in image 1 \u2014 same woman, same face, same hair, same skin tone and markings, same tail, same pose, same camera angle, same framing, same lighting. The body is fully nude with correct adult female anatomy, continuous skin, and no clothing of any kind. The background is a plain flat uniform neutral grey studio backdrop, seamless and completely empty: no scenery, no props, no furniture, no floor line, no horizon, no visible ground plane, no cast shadow and no vignette."
+  },
+  "jobs": [
+    {
+      "input": "anchor5/back.jpg",
+      "pose": "Full-body rear view, seen from directly behind, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/portrait.jpg",
+      "pose": "Head-and-shoulders portrait, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/seated.jpg",
+      "pose": "Seated, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "input": "anchor5/tense.jpg",
+      "pose": "The exact same pose, camera angle, framing and crop as image 1."
+    }
+  ]
+}

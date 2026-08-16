@@ -1,0 +1,60 @@
+{
+  "_readme": [
+    "r5 2026-08-15. r4 failed in two measured ways: latent=image + 'same pose as image 1' kept the covering tail and the boots; clothed extra refs re-imposed wardrobe; 'remove accessories' stripped jewelry; 'human female anatomy' without binding colour to image 1 produced a tan human woman (norefs) or mush (tense+refs).",
+    "This run uses the working stack: Qwen-Image-Edit 2511, empty latent 896x1216, CFG 2.0 / 50 / dpmpp_2m+karras, LoRA 0, index_timestep_zero. No extra refs. Source is image1 (identity only).",
+    "Pose wording names the NEW pose and does not say 'same as image 1'. Jewelry stays. Clothes and shoes live in the negative. Anatomy is human-shaped on her jet-black body; areolae and labia are a darker shade of that same skin.",
+    "Seeds: 4748 clothes the back (avoid). 129080599 stands up / holds identity (front standing only). 5151 holds a plate pose (no plate here). New poses use other seeds.",
+    "Render ON cerberus via ComfyUI direct (backend comfy). Do not --pin 1 (gamingpc)."
+  ],
+  "env": {
+    "RENDER_BACKEND": "comfy",
+    "SWARM_URL": "http://127.0.0.1:7801",
+    "COMFY_URL": "http://127.0.0.1:8188",
+    "COMFY_INPUT": "/home/jon/ComfyUI/input",
+    "COMFY_OUTPUT": "/home/jon/ComfyUI/output",
+    "RENDER_ATTEMPTS": "1"
+  },
+  "defaults": {
+    "refs": [],
+    "outdir": "anchor5/nude-r5",
+    "tier": "xxx",
+    "n": 1,
+    "latent": "empty",
+    "width": 896,
+    "height": 1216,
+    "mode": "quality",
+    "cfg": 2.0,
+    "steps": 50,
+    "sampler_name": "dpmpp_2m",
+    "scheduler": "karras",
+    "lora_strength": 0.0,
+    "ref_method": "index_timestep_zero",
+    "backend": "comfy",
+    "prompt": "{pose} She is fully nude and barefoot, gold hoop earrings and gold jewelry from image 1 still on her. Her whole body continues in the same jet-black skin as her face, shoulders and midriff in image 1: same hue, same undertone, same matte finish. Human-shaped adult female anatomy on that jet-black body: full breasts, nipples and areolae, a defined human vulva with inner and outer labia, and a visible anus. Areolae and labia are a darker shade of that same skin, clearly drawn. Everything else is the same woman as image 1 -- same feline head, face, ears and yellow-green eyes, same long wavy black hair with purple highlights, same tail, same body colour, same illustration style, same lighting. The background is a plain flat uniform neutral grey studio backdrop, seamless and empty.",
+    "negative": "clothing, bikini, thong, briefs, shorts, harness, leather straps, boots, shoes, gloves, pink skin, peach skin, tan skin, human face, extra tails, featureless crotch"
+  },
+  "jobs": [
+    {
+      "input": "anchor5/looking-back.jpg",
+      "seed": 843167749,
+      "n": 2,
+      "pose": "On hands and knees, hips toward the camera, back arched, tail lifted up and aside, head turned to look back over her shoulder at the camera, knees apart, breasts hanging down, vulva and anus visible between her thighs."
+    },
+    {
+      "input": "anchor5/standing.jpg",
+      "seed": 1961801208,
+      "n": 2,
+      "pose": "Lying on her back, knees bent and legs parted wide, tail swept aside, fully exposing her vulva and anus, breasts resting on her chest with nipples and areolae visible, looking toward the camera."
+    },
+    {
+      "input": "anchor5/tense.jpg",
+      "seed": 129080599,
+      "pose": "Full-body standing wide-stance crouch facing the camera, legs planted far apart, knees bent, tail lifted aside, vulva visible between her thighs, both arms held low and out to the sides with clawed hands spread."
+    },
+    {
+      "input": "anchor5/laying-side.jpg",
+      "seed": 962217059,
+      "pose": "Lying on her back, knees bent and legs parted wide, tail swept aside, fully exposing her vulva and anus, breasts resting on her chest with nipples and areolae visible, looking toward the camera."
+    }
+  ]
+}

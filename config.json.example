@@ -1,0 +1,97 @@
+{
+  "_readme": [
+    "batch_edit.py --config <this file>   (--only <substring> to run one job, --debug to print the assembled prompt)",
+    "Three blocks. env is applied to the environment BEFORE studio/pipeline.py is imported, because that module reads these at import time; a shell export still wins over what is here.",
+    "defaults is any key below; jobs is a list where each entry overrides whatever it needs. Anything unset falls back to DEFAULTS in batch_edit.py, so a config only states what it changes.",
+    "defaults.prompt may carry {placeholders} filled from the job's own keys -- that is how one shared body of prose gets a per-image leading clause. A job missing one is an error, not an empty clause.",
+    "Keys beginning with _ are ignored (JSON has no comments)."
+  ],
+
+  "env": {
+    "_comment": "Omit the whole block to use the environment as-is.",
+    "RENDER_BACKEND": "swarm",
+    "SWARM_URL": "http://127.0.0.1:7801",
+    "COMFY_URL": "http://127.0.0.1:8188",
+    "COMFY_INPUT": "/home/jon/ComfyUI/input",
+    "COMFY_OUTPUT": "/home/jon/ComfyUI/output",
+    "SWARM_INPUT_DIRS": "user@host:/path/to/ComfyUI/input,user@host2:/path/to/ComfyUI/input"
+  },
+
+  "defaults": {
+    "_input": "an image file, OR a directory -- a directory runs every image in it through the same prompt",
+    "input": "",
+
+    "_prompt": "the instruction. Put framing and pose FIRST: buried mid-prompt they are ignored (measured 1/4 vs 4/4 on this fleet). Negatives are inert at cfg 1.0, so say what you want, not what you don't.",
+    "prompt": "{pose} Change only X. Everything else is exactly as in image 1.",
+
+    "_refs": "extra conditioning images, held constant across the batch. The source is image1, so at most 2 -- Qwen-Image-Edit 2511 takes three. Name them in the prompt as 'image 2'/'image 3' or the model decides for itself what they are for.",
+    "refs": [],
+
+    "_outdir": "where the rendered files are copied. Empty means <input dir>/out",
+    "outdir": "",
+
+    "_n": "variants per image, each a distinct seed. Composition is seed-dominated, so best-of-N beats one render",
+    "n": 4,
+
+    "_seed": "base seed. null draws a random one, which is also what stops a re-run being a ComfyUI cache hit (identical workflow = cached node output, success reported, no file written)",
+    "seed": null,
+
+    "_tier": "studio tier name -- g, pg13, r, xxx, or one added in the UI. Resolved from the tiers table at run time so this file never holds a stale copy. The pinned adults-only clause is welded on regardless.",
+    "tier": "r",
+    "_guardrail": "literal tier wording instead of a tier name, for a checkout with no studio database",
+    "guardrail": "",
+
+    "_negative": "INERT at cfg 1.0 (ComfyUI skips the negative pass entirely). Needs mode=quality to do anything.",
+    "negative": "",
+
+    "_mode": "fast = Lightning LoRA, 4 steps, cfg 1.0, ~15s. quality = LoRA off, 28 steps, cfg 4.5, ~60s, and the only mode where a negative applies.",
+    "mode": "fast",
+
+    "_latent": "image = VAEEncode the source, so the output inherits its size and composition. empty = start from noise at width x height.",
+    "latent": "image",
+    "width": 896,
+    "height": 1216,
+
+    "_denoise": "null follows the mode (1.0). Below 1.0 keeps more of the encoded source -- the lever when identity or background drifts. The Lightning LoRA needs 4 effective steps, so pair 0.5 with steps 8.",
+    "denoise": null,
+    "steps": null,
+    "cfg": null,
+    "sampler_name": null,
+    "scheduler": null,
+    "_lora_strength": "0 takes the Lightning distillation out of the way, which is what cfg > 1 requires",
+    "lora_strength": null,
+    "_ref_method": "how the references fold into the latent: offset, index, uxo/uno, index_timestep_zero. THE reference-adherence knob for this architecture -- there is no IP-Adapter to weight.",
+    "ref_method": null,
+
+    "_backend": "comfy renders on COMFY_URL alone; swarm lets SwarmUI pick across the fleet. null follows RENDER_BACKEND.",
+    "backend": null,
+
+    "_rest": "below here: values that used to be literals in the script. Rarely worth changing.",
+    "exts": [".png", ".jpg", ".jpeg", ".webp"],
+    "run_prefix": "batch_",
+    "pattern": "*.png",
+    "seed_stride": 137,
+    "seed_span": 1000
+  },
+
+  "jobs": [
+    {
+      "_comment": "one image, its own leading pose clause filling {pose}",
+      "input": "anchor5/back.jpg",
+      "pose": "Full-body rear view from behind, in exactly the same pose, camera angle, framing and crop as image 1."
+    },
+    {
+      "_comment": "a job may override any default -- here a different prompt entirely, and fewer seeds",
+      "input": "anchor5/portrait.jpg",
+      "prompt": "Head-and-shoulders portrait, same framing as image 1. Change only the eye colour to green.",
+      "n": 2
+    },
+    {
+      "_comment": "a directory: every image in it, same prompt, one output each",
+      "input": "anchor5/",
+      "pose": "The exact same pose, camera angle, framing and crop as image 1.",
+      "outdir": "anchor5/sweep",
+      "n": 1
+    }
+  ]
+}
