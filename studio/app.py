@@ -47,6 +47,7 @@ import arc_service  # TRD-6 T6-A2-arc: playlist arc meter — no FastAPI
 import playlist_service  # TRD-6 T6-A2-playlists: song_count / total_secs — no FastAPI
 import library_service  # TRD-6 T6-A2-library: library song_count — no FastAPI
 import media_service  # TRD-8 T8-16: song media bag — no FastAPI
+import nav_service  # UIUX §8 / T6-A2-nav: topbar links — no FastAPI
 import video_fx   # per-item video look effects -- same, pure/no deps
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -143,6 +144,8 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 templates.env.globals["media_url"] = lambda p: media_url(p)
 templates.env.globals["jset"] = db.jset
+# UIUX §8: one list drives the topbar; template iterates, never hardcodes.
+templates.env.globals["nav_links"] = nav_service.links
 
 
 def hms(secs):
@@ -1912,6 +1915,12 @@ def api_songs():
         "song_count": nums["song_count"],
         "songs": [_json_row(s) for s in songs],
     })
+
+
+@app.get("/api/nav")
+def api_nav():
+    """Topbar links as JSON. Same list base.html iterates (UIUX §8 / T6-A2-nav)."""
+    return JSONResponse({"links": nav_service.links()})
 
 
 @app.get("/songs/{id}/row", response_class=HTMLResponse)

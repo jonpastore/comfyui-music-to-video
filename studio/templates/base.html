@@ -16,14 +16,9 @@
   <header class="topbar">
     <a class="brand" href="/">Meow P Studio</a>
     <nav>
-      <a href="/">Library</a>
-      <a href="/anchors">Anchors</a>
-      <a href="/playlists">Playlists</a>
-      <a href="/sets">Sets</a>
-      <a href="/tiers">Tiers</a>
-      <a href="/models">Models</a>
-      <a href="/jobs">Jobs</a>
-      <a href="/config">Config</a>
+      {% for link in nav_links() %}
+      <a href="{{ link.href }}">{{ link.label }}</a>
+      {% endfor %}
     </nav>
   </header>
   <main>

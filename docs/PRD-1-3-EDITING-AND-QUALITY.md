@@ -34,7 +34,10 @@ total_secs; `arc` still only when defined, T2-37), and the library list
 (`test_t6_a2_html_and_json_report_the_same_library_numbers`,
 `T6-A2-library` — same `library_service.numbers()` for song_count on
 HTML `GET /` / `GET /songs` and JSON `GET /api/songs`; `GET /songs` is
-200 never 405).
+200 never 405), and the topbar nav
+(`test_uiux_nav.py` / `test_uiux_nav_html_and_json_share_one_list`,
+`T6-A2-nav` — same `nav_service.links()` for HTML `base.html` `<nav>`
+and JSON `GET /api/nav`; probe monkeypatch mutation).
 `T6-A4` is proven for the queue panel
 (`test_t6_a4_queue_page_shows_stubbed_values_unmodified`), the jobs panel
 elapsed label (`test_t6_a4_jobs_panel_shows_stubbed_elapsed_unmodified`,

@@ -45,7 +45,7 @@ Three facts about the domain decide almost every rule below:
 | `static/style.css` | 1247 lines |
 | `static/app.js` | 1589 lines, hand-written, 55 `addEventListener` |
 | `templates/` | 29 files, 3481 lines |
-| routes | 156+, of which **37+** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue`, `/qc`, set HTML `/sets/{id}`, storyboard HTML `/songs/{id}/storyboard/{tier}`, album arc HTML `/playlists/{id}/arc`, playlist list HTML `/playlists`, library HTML `GET /` / `GET /songs` (JSON `GET /api/songs`), and song Media (`/api/songs/{id}/media`) each match their JSON surface on the same numbers (`T6-A2` / `T6-A2-set` / `T6-A2-storyboard` / `T6-A2-arc` / `T6-A2-playlists` / `T6-A2-library` / `T8-16`). `sets_service` / `storyboard_service` / `arc_service` / `playlist_service` / `library_service` / `cleanup_service` / `media_service` import nothing from FastAPI (`T6-A3`; `test_t6_a3_*_imports_nothing_from_fastapi`) |
+| routes | 156+, of which **38+** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue`, `/qc`, set HTML `/sets/{id}`, storyboard HTML `/songs/{id}/storyboard/{tier}`, album arc HTML `/playlists/{id}/arc`, playlist list HTML `/playlists`, library HTML `GET /` / `GET /songs` (JSON `GET /api/songs`), song Media (`/api/songs/{id}/media`), and topbar nav (`base.html` + `GET /api/nav` via `nav_service.links`, `T6-A2-nav` / `test_uiux_nav.py`) each match their JSON surface on the same numbers (`T6-A2` / `T6-A2-set` / `T6-A2-storyboard` / `T6-A2-arc` / `T6-A2-playlists` / `T6-A2-library` / `T6-A2-nav` / `T8-16`). `sets_service` / `storyboard_service` / `arc_service` / `playlist_service` / `library_service` / `cleanup_service` / `media_service` / `nav_service` import nothing from FastAPI (`T6-A3`; `test_t6_a3_*_imports_nothing_from_fastapi`) |
 
 ### 2.2 The root finding: tokens exist for colour, and for nothing else
 
@@ -1255,7 +1255,14 @@ A style guide is falsifiable or it is decoration.
   arm) and `test_rendered_pages_include_interactive_controls_and_stylesheet`
   (`/`, `/songs`, `/playlists`; TestClient + CSS parse, no browser).
 - **The nav matches the agreed order**, asserted against one list that both
-  `base.html` and the API read. `T6-A2` objects written so far: the queue panel
+  `base.html` and the API read. **`T6-A2-nav` built**:
+  `test_uiux_nav.py` (`test_uiux_nav_html_and_json_share_one_list`) —
+  `nav_service.LINKS` / `nav_service.links()` drives the topbar (`base.html`
+  iterates `nav_links()`) and `GET /api/nav` (`{links: [...]}`); a
+  monkeypatched probe entry appears in both HTML `<nav>` and JSON; hardcoding
+  the old eight `<a>` tags in the template drops the probe → red. Today's eight
+  destinations stay in today's order until §5.1 renames/order land. Other
+  `T6-A2` objects: the queue panel
   (`test_t6_a2_html_and_json_report_the_same_queue_numbers`), the review
   queue (`test_t6_a2_html_and_json_report_the_same_review_queue_numbers`),
   the set editor (`test_t6_a2_html_and_json_report_the_same_set_numbers`,
@@ -1275,7 +1282,6 @@ A style guide is falsifiable or it is decoration.
   `library_service.numbers`; HTML on `/` and `/songs`, JSON on
   `/api/songs`), and the song media bag
   (`test_t6_a2_html_and_json_report_the_same_media_numbers`, `T8-16`).
-  Nav is still this guide's own list check.
 - **No template computes.** `T6-A4`, asserted by a differential: stub the service
   to return known values and assert the page shows them unmodified.
   `test_t6_a4_queue_page_shows_stubbed_values_unmodified` is that check for
