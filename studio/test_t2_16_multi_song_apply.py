@@ -11,6 +11,7 @@ dropped. Mutation: confirm writes every song in the arc → count arm red.
 """
 import json
 import os
+import tempfile
 import time
 
 from fastapi.testclient import TestClient
@@ -79,8 +80,32 @@ def test_t2_16_http_two_songs_need_confirm_and_write_exactly_those():
             data={"song_ids": pair, "confirm": "1"})
         assert confirmed.status_code in (200, 303), confirmed.text
 
-    written = sorted(os.listdir(applied))
-    assert written == [f"{sids[0]}.json", f"{sids[1]}.json"], written
+    written = os.listdir(applied)
+    # set: multi-digit ids make lexical sort != insertion order (see pin below)
+    assert set(written) == {f"{sids[0]}.json", f"{sids[1]}.json"}, written
     assert not os.path.isfile(os.path.join(applied, f"{sids[2]}.json"))
     assert json.load(open(os.path.join(applied, f"{sids[0]}.json")))["beat"] == "beat 1"
     assert json.load(open(os.path.join(applied, f"{sids[1]}.json")))["beat"] == "beat 2"
+
+
+def test_t2_16_applied_listing_not_lexical_id_order():
+    """Pin: multi-digit ids where lexical filename order != insertion order.
+
+    song ids 9 then 10: sorted(listdir) is ['10.json','9.json'], not
+    ['9.json','10.json']. Restoring sorted(...) == [sid0, sid1] as strings
+    fails this pin.
+    """
+    sids = [9, 10]
+    data = _arc_body(sids + [11])
+    dest = tempfile.mkdtemp()
+    got = arc.apply_summaries(data, dest, sids, confirm=True)
+    assert got == sids
+    applied = os.path.join(dest, "applied")
+    listing = os.listdir(applied)
+    expected = {f"{sids[0]}.json", f"{sids[1]}.json"}
+    assert set(listing) == expected, listing
+    # prove the old arm would flake on these ids
+    assert sorted(listing) != [f"{sids[0]}.json", f"{sids[1]}.json"]
+    assert not os.path.isfile(os.path.join(applied, "11.json"))
+    assert json.load(open(os.path.join(applied, "9.json")))["beat"] == "beat 1"
+    assert json.load(open(os.path.join(applied, "10.json")))["beat"] == "beat 2"
