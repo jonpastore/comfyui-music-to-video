@@ -111,6 +111,17 @@ built** — `GET /api/songs/{id}/preview` returns `mixer.preview_proxy`
 over the editor item's `effects_json` (`is_proxy`, `not_applied`); same
 rule as T1-16 on the set surface.
 
+### 2.6 The media menu is one bag, one service
+
+**`T8-16` is built.** TRD-1 §11 deferred the media menu with the song editor;
+this document owns it. `media_service.list_bag(song_id)` is the only assembly
+point: takes (`db.list_takes`), `assets` rows of kind `audio_edit` and
+`audio_original`, and `renders` rows. It returns one list plus counts and, when
+empty, a non-empty `reason`. No FastAPI import (`T6-A3`).
+`GET /api/songs/{id}/media` and the song-page Media card both call it, so
+HTML and JSON report the same numbers and `kind:id` keys (`T6-A2`). The card
+does not pick or use — that stays `T8-2` / the generate and edit cards.
+
 ## 3. TRD-9 — testing what already works
 
 ### 3.1 The seam is already right
@@ -431,6 +442,7 @@ fields refuse it on the HTTP surface
                          ->  song editor writes the shared automation model (T8-13, built)
                          ->  song editor predicted length = rendered length (T8-14, built)
                          ->  song editor preview is a proxy with not_applied (T8-15, built)
+                         ->  media bag one list, HTML=JSON (T8-16, built)
     bulk edit (T10-6 built)         ->  T10-3, T10-4, T10-5, T10-7
     advice labelling  ->  T10-11..T10-15 over the four live modules
                          ->  the picked/unpicked distinction (T8-2)

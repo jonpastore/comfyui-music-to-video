@@ -23,8 +23,8 @@ everything below:
 
 | | TRD-8 audio | TRD-9 fleet | TRD-10 library |
 |---|---|---|---|
-| built? | **yes**, except `T8-12` (provisional: no cloning path) | **yes**, with red tests including `T9-1`/`T9-2`/`T9-15` | **yes** (bulk edit, advice, minor policy) |
-| leftover | media menu has no owner; `T8-12` stays provisional | gamingpc as a second image box is **CAPABLE, NOT PROVEN** | none named on the ledger |
+| built? | **yes**, except `T8-12` (provisional: no cloning path); `T8-16` media menu built | **yes**, with red tests including `T9-1`/`T9-2`/`T9-15` | **yes** (bulk edit, advice, minor policy) |
+| leftover | `T8-12` stays provisional | gamingpc as a second image box is **CAPABLE, NOT PROVEN** | none named on the ledger |
 
 **TRD-9 specifies software that already works, and the checks now exist.** Four
 backends, retargeting, the retry walk, input staging, alerting and a shared
@@ -101,6 +101,11 @@ still not shipped (`T8-12`, provisional by absence).
    (`GET/POST /api/songs/{id}/editor/duration` and `.../editor/render`).
    **`T8-15` is built** — `GET /api/songs/{id}/preview` is a proxy and lists
    `not_applied` from the editor item's effects (T1-16 on this surface).
+   **`T8-16` is built** — the media menu is one bag
+   (`media_service.list_bag`: takes, `audio_edit`, `audio_original`,
+   assembled renders); `GET /api/songs/{id}/media` and the song HTML card
+   report the same count and `kind:id` keys (`T6-A2`). Empty is empty +
+   `reason`. Picking/using stays `T8-2`.
 3. **TRD-10's bulk edit.** `T10-3`…`T10-7` are built: blank leaves alone, toggle-all is the shown set, invalid refuses the batch, one transaction, pre-write count equals rows changed.
 3a. **TRD-10's lyrics provenance.** `T10-8` is built: a transcription stores
    which backend produced it and that it is a transcription; supplied text
@@ -144,8 +149,8 @@ still not shipped (`T8-12`, provisional by absence).
    `studio/test_t10_25_unset_is_xxx.py`). `T10-26` is built.
 
 Items 2–5 on this list **landed**. What the TRDs still leave open: `T8-12`
-(provisional), the media menu (no owner), gamingpc as a second image box
-(**CAPABLE, NOT PROVEN**).
+(provisional), gamingpc as a second image box (**CAPABLE, NOT PROVEN**).
+The media menu is owned as `T8-16` (built).
 
 ## 5. Scope
 

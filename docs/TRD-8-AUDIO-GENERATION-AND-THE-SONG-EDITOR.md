@@ -158,6 +158,20 @@ rather than inventing a second one.
 - `T8-15` **Preview says it is a proxy** and lists what it does not apply, as
   data in the response (`T1-16`'s rule, this document's surface).
 
+### 6a. The media menu (song-level bag)
+
+**Owned here.** TRD-1 §11 deferred *"the song-level audio editor and the media
+menu"*; §6 covers the editor. This subsection is the media menu: one song-level
+bag of takes, `audio_edit` assets, `audio_original`, and assembled renders.
+
+- `T8-16` **The media bag is one list**, produced by a service that imports
+  nothing from FastAPI (`T6-A3`), and **HTML and JSON report the same numbers
+  and ids** (`T6-A2`). `GET /api/songs/{id}/media` and the song-page Media card
+  both call `media_service.list_bag`. An empty song returns `count: 0` with a
+  non-empty `reason`. After a take + an audio_edit + a render land, both
+  surfaces report the same `count` and the same `kind:id` keys. Picking/using
+  is **not** this criterion (`T8-2` already owns that).
+
 ## 7. Explicitly not building
 
 - **No second automation model.** §6, and TRD-1 owns it.
@@ -197,6 +211,7 @@ overlapping. `docs/reviews/TRD8910-*`.
 | `T8-13` the editor uses the shared automation model | passes if the editor is absent or read-only | an edit **written in the song editor is consumed by the shared path**, same limits and modes |
 | `T8-14` predicted length is rendered length | vacuous if nothing renders or nothing is predicted | a real render **emits a prediction first** and lands within `SET_DURATION_TOLERANCE` |
 | `T8-15` preview declares itself a proxy | passes if preview is removed | the endpoint returns proxy data **and a non-empty `not_applied` list** |
+| `T8-16` the media bag is one list, HTML=JSON | passes if the surface is absent or always empty | after a take + an audio_edit + a render, **both** surfaces report the same non-zero count and the same `kind:id` keys; empty song is empty + `reason` |
 
 **`T8-12` is PROVISIONAL and the preamble's "each can fail" does not hold for
 it.** Both reviewers caught the document contradicting itself: it says every
@@ -225,10 +240,8 @@ Found by review, and named rather than quietly dropped.
   nobody has justified would be inventing a requirement. **If it is wanted it is
   TRD-10's**, and this line exists so it is not lost a second time.
 
-**The media menu is also disowned.** TRD-1 §11 defers *"the song-level audio
-editor **and the media menu**"*, this document claims that deferral, and §6's
-criteria cover only the editor. The media menu has **no owner** — recorded here
-rather than silently absorbed.
+**The media menu is owned here as `T8-16`.** TRD-1 §11 deferred it with the
+song-level editor; §6a claims it. Picking/using stays `T8-2`.
 
 
 ---
@@ -259,3 +272,4 @@ current.
 | **`T8-13`** the song editor uses the shared automation model | **built** | this slice | `POST /api/songs/{id}/automation/{lane}` writes through `automation.save`; GET re-reads the stored, decimated curve. Rows land in `automation` on a one-item `mode=song_editor` set. `item_audio` emits the fragments (positive half). `MAX_POINTS`, RDP and linear/hold only — bezier is 400. `studio/test_t8_13_song_editor_automation.py` |
 | **`T8-14`** predicted length is rendered length | **built** | this slice | `GET /api/songs/{id}/editor/duration` and `POST /api/songs/{id}/editor/render` share `_song_editor_mix_items` → `mixer.set_duration` then `mixer.mix_audio`. Render emits `predicted` first; probed length lands within `mixer.SET_DURATION_TOLERANCE` (imported, not restated). Echo moves the prediction so a length-blind re-encode cannot pass. `studio/test_t8_14_song_editor_duration.py` |
 | **`T8-15`** preview proxy | **built** | this slice | `GET /api/songs/{id}/preview` returns `mixer.preview_proxy` over the editor item's `effects_json` (`is_proxy: true`, `not_applied` from stored effects — T1-16 on this surface). Adding `echo_out` lists it; `eq_kill` stays off until stored. Missing song is 404. `studio/test_t8_15_song_editor_preview.py` |
+| **`T8-16`** media bag (media menu) | **built** | this slice | `media_service.list_bag` (no FastAPI) lists takes + `audio_edit` + `audio_original` + assembled `renders` as one list. Empty song: `count: 0` + `reason: "empty"`. `GET /api/songs/{id}/media` and the song HTML Media card both call it (T6-A2: same count and `kind:id` keys). Missing song is 404. Picking/using is not this criterion. `studio/test_t8_16_media_menu.py` |

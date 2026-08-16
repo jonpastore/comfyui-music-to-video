@@ -45,7 +45,7 @@ Three facts about the domain decide almost every rule below:
 | `static/style.css` | 1247 lines |
 | `static/app.js` | 1589 lines, hand-written, 55 `addEventListener` |
 | `templates/` | 29 files, 3481 lines |
-| routes | 156, of which **36** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue`, `/qc`, and set HTML `/sets/{id}` each match their JSON surface on the same numbers (`T6-A2` / `T6-A2-set`). `sets_service` / `storyboard_service` import nothing from FastAPI (`T6-A3`, `test_t6_a3_*`) |
+| routes | 156+, of which **37+** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue`, `/qc`, set HTML `/sets/{id}`, and song Media (`/api/songs/{id}/media`) each match their JSON surface on the same numbers (`T6-A2` / `T6-A2-set` / `T8-16`). `sets_service` / `storyboard_service` / `media_service` import nothing from FastAPI (`T6-A3`) |
 
 ### 2.2 The root finding: tokens exist for colour, and for nothing else
 
@@ -1122,6 +1122,15 @@ effects — the warning is data every client carries, not a sentence in
 one template. Gain and pan stay off the list (browser applies them);
 echo, eq, loudnorm and the rest appear only when stored.
 
+`T8-16`: the song-page **Media** card is the media menu. One bag —
+takes, audio edits, the original upload, assembled renders — from
+`media_service.list_bag`. The card interpolates that payload
+(`data-media-count`, `data-media-key="kind:id"`, empty `reason`);
+`GET /api/songs/{id}/media` returns the same object. No pick/use
+controls on this card (those stay on the generate / edit cards). An
+empty song shows the reason, not a blank card that looks like a
+missing section.
+
 ### 7b.6 A child mention is not a universal refuse
 
 `T10-18` is built. At `g` and `pg13` the storyboard direction, scene
@@ -1212,8 +1221,10 @@ A style guide is falsifiable or it is decoration.
   `base.html` and the API read. `T6-A2` objects written so far: the queue panel
   (`test_t6_a2_html_and_json_report_the_same_queue_numbers`), the review
   queue (`test_t6_a2_html_and_json_report_the_same_review_queue_numbers`),
-  and the set editor (`test_t6_a2_html_and_json_report_the_same_set_numbers`,
-  `T6-A2-set`). Nav is still this guide's own list check.
+  the set editor (`test_t6_a2_html_and_json_report_the_same_set_numbers`,
+  `T6-A2-set`), and the song media bag
+  (`test_t6_a2_html_and_json_report_the_same_media_numbers`, `T8-16`).
+  Nav is still this guide's own list check.
 - **No template computes.** `T6-A4`, asserted by a differential: stub the service
   to return known values and assert the page shows them unmodified.
   `test_t6_a4_queue_page_shows_stubbed_values_unmodified` is that check for

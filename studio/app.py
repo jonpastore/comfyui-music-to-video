@@ -43,6 +43,7 @@ import qc_service   # recording those findings and answering the review queue
 import sets_service  # TRD-1 / T6-A3: sets, items, render — no FastAPI
 import cleanup_service  # T6-19: confirmed clip cleanup — no FastAPI
 import storyboard_service  # TRD-2 / T6-A3: arc, board, meter — no FastAPI
+import media_service  # TRD-8 T8-16: song media bag — no FastAPI
 import video_fx   # per-item video look effects -- same, pure/no deps
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -2261,12 +2262,22 @@ def api_song_editor_render(id: int):
     })
 
 
+@app.get("/api/songs/{id}/media")
+def api_song_media(id: int):
+    """T8-16: song-level media bag. Same payload the song HTML card reads."""
+    try:
+        return media_service.list_bag(id)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+
+
 @app.get("/songs/{id}", response_class=HTMLResponse)
 def song_page(request: Request, id: int):
     song = get_song_or_404(id)
     storyboards = {r["tier"]: r for r in db.q("SELECT * FROM storyboards WHERE song_id=?", id)}
     style_assets = db.q("SELECT * FROM assets WHERE song_id=? AND kind='style' ORDER BY id DESC", id)
     renders = db.q("SELECT * FROM renders WHERE song_id=? ORDER BY id DESC", id)
+    media = media_service.list_bag(id)
     song_jobs = db.q("SELECT * FROM jobs WHERE song_id=? ORDER BY id DESC LIMIT 20", id)
     active_job = next((j for j in song_jobs if j["status"] in ("queued", "running", "cancelling")), None)
     try:
@@ -2371,6 +2382,7 @@ def song_page(request: Request, id: int):
         "takes": takes, "audio_model": models.get(models.default_for("audio")),
         "best_model": best, "render_tiers": render_tiers,
         "findings": findings,
+        "media": media,
         "lyrics_replace_warning": lyrics.REPLACE_WARNING,
         **storyboard_form_ctx(song, form_tier, chat_models, best),
     })
