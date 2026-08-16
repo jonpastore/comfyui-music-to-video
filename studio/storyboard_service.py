@@ -322,9 +322,13 @@ def payload(song_id, tier):
     rows, nclips = scenes(song, sb, tier, {c["name"] for c, _a in cast},
                           scene_seconds=sb_secs)
     cov = coverage(rows, nclips, song["duration"], sb_secs)
+    report = scene_time_report(cov.get("intent"), cov.get("duration"))
+    clip_secs = build_song.clip_seconds(sb_secs)
     # T2-30: extras/background do not warn — only unanchored leads.
     unanchored = sorted({n["name"] for r in rows for n in r["cast"]
                          if not n["anchored"] and n.get("role") == "lead"})
+    # T6-A2: HTML /songs/{id}/storyboard/{tier} and GET /api/... report these
+    # from this function. scene_count is not len(scenes) at the template.
     return {
         "song_id": song["id"],
         "tier": tier,
@@ -334,6 +338,12 @@ def payload(song_id, tier):
         "scene_seconds": sb_secs,
         "nclips": nclips,
         "anchors": anchors_by_character(song["album"] or "", tier),
+        "scene_time": report["scene_time"],
+        "song_length": report["song_length"],
+        "clip_seconds": clip_secs,
+        "scene_count": cov["scenes"],
+        "mismatch": report["mismatch"],
+        "tolerance": report["tolerance"],
     }
 
 
@@ -396,8 +406,12 @@ def meter(song_id, tier):
     p = payload(song_id, tier)
     out = dict(p["coverage"])
     out["nclips"] = p["nclips"]
-    out.update(scene_time_report(out.get("intent"), out.get("duration")))
-    out["clip_seconds"] = build_song.clip_seconds(p.get("scene_seconds"))
+    out["scene_time"] = p["scene_time"]
+    out["song_length"] = p["song_length"]
+    out["tolerance"] = p["tolerance"]
+    out["mismatch"] = p["mismatch"]
+    out["clip_seconds"] = p["clip_seconds"]
+    out["scene_count"] = p["scene_count"]
     return out
 
 

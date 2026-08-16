@@ -38,22 +38,35 @@
   {% endif %}
 </section>
 
-{# ---- did the model write too much or too little for this track? ---- #}
-<section class="card">
+{# ---- did the model write too much or too little for this track?
+       T6-A2 numbers come from storyboard_service.payload; do not recompute
+       scene_count from scene_rows, clip length from CHUNK, or mismatch. ---- #}
+<section class="card" id="storyboard-meter"
+         data-scene-time="{{ scene_time }}"
+         data-song-length="{{ song_length }}"
+         data-clip-seconds="{{ clip_seconds }}"
+         data-scene-count="{{ scene_count }}"
+         data-mismatch="{{ 'true' if mismatch else 'false' }}">
   <h2>Coverage</h2>
   <div class="meter {% if coverage.ok %}ok{% else %}off{% endif %}">
     <div class="meter-bar">
       <div class="meter-fill" style="width: {{ [100, (coverage.intent / coverage.rendered * 100) if coverage.rendered else 0] | min }}%"></div>
     </div>
     <p class="meter-text">
-      {{ coverage.scenes }} scenes ask for <strong>{{ coverage.intent | hms }}</strong>;
-      the track is <strong>{{ coverage.rendered | hms }}</strong>
-      ({{ coverage.nclips }} clips of {{ "%.4f"|format(chunk) }}s).
+      {{ scene_count }} scenes ask for <strong>{{ coverage.intent | hms }}</strong>
+      (scene time <span class="num">{{ scene_time }}</span>s);
+      song length is <strong><span class="num">{{ song_length }}</span>s</strong>
+      (rendered track <strong>{{ coverage.rendered | hms }}</strong>,
+      {{ coverage.nclips }} clips of <span class="num">{{ clip_seconds }}</span>s).
       {% if coverage.ratio %}
         Each scene is played <strong>&times;{{ "%.2f"|format(coverage.ratio) }}</strong>
         its written length.
       {% endif %}
     </p>
+    {% if mismatch %}
+    <p class="warn">Scene time <strong>{{ scene_time }}</strong>s does not match
+      song length <strong>{{ song_length }}</strong>s.</p>
+    {% endif %}
     <p class="hint">
       {% if coverage.ok %}
       Pacing matches the track. The render is always exactly the length of the song &mdash;

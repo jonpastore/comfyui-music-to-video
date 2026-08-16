@@ -45,7 +45,7 @@ Three facts about the domain decide almost every rule below:
 | `static/style.css` | 1247 lines |
 | `static/app.js` | 1589 lines, hand-written, 55 `addEventListener` |
 | `templates/` | 29 files, 3481 lines |
-| routes | 156+, of which **37+** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue`, `/qc`, set HTML `/sets/{id}`, and song Media (`/api/songs/{id}/media`) each match their JSON surface on the same numbers (`T6-A2` / `T6-A2-set` / `T8-16`). `sets_service` / `storyboard_service` / `media_service` import nothing from FastAPI (`T6-A3`) |
+| routes | 156+, of which **37+** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue`, `/qc`, set HTML `/sets/{id}`, storyboard HTML `/songs/{id}/storyboard/{tier}`, and song Media (`/api/songs/{id}/media`) each match their JSON surface on the same numbers (`T6-A2` / `T6-A2-set` / `T6-A2-storyboard` / `T8-16`). `sets_service` / `storyboard_service` / `media_service` import nothing from FastAPI (`T6-A3`) |
 
 ### 2.2 The root finding: tokens exist for colour, and for nothing else
 
@@ -256,7 +256,11 @@ measured I/TP (`T1-25`).
 against `song_length` and `mismatch` beyond `SCENE_TIME_TOLERANCE`
 (`T2-23`). It reports this song's `clip_seconds` from
 `build_song.clip_seconds(scene_seconds)` (`T2-24`): the same song at
-two `scene_seconds` yields two clip lengths. **`T2-25` built**:
+two `scene_seconds` yields two clip lengths. **`T6-A2-storyboard` built**:
+HTML `/songs/{id}/storyboard/{tier}` (`#storyboard-meter` data attrs) and
+`GET /api/songs/{id}/storyboard/{tier}` report the same five numbers from
+`storyboard_service.payload` (`test_t6_a2_html_and_json_report_the_same_storyboard_numbers`).
+**`T2-25` built**:
 `POST /songs/{id}/clips` refuses a scene-time miss (400, no job)
 and still queues an in-tolerance board.
 
@@ -1222,7 +1226,11 @@ A style guide is falsifiable or it is decoration.
   (`test_t6_a2_html_and_json_report_the_same_queue_numbers`), the review
   queue (`test_t6_a2_html_and_json_report_the_same_review_queue_numbers`),
   the set editor (`test_t6_a2_html_and_json_report_the_same_set_numbers`,
-  `T6-A2-set`), and the song media bag
+  `T6-A2-set`), the storyboard
+  (`test_t6_a2_html_and_json_report_the_same_storyboard_numbers`,
+  `T6-A2-storyboard` — `#storyboard-meter` data attrs for scene_time /
+  song_length / clip_seconds / scene_count / mismatch from
+  `storyboard_service.payload`), and the song media bag
   (`test_t6_a2_html_and_json_report_the_same_media_numbers`, `T8-16`).
   Nav is still this guide's own list check.
 - **No template computes.** `T6-A4`, asserted by a differential: stub the service

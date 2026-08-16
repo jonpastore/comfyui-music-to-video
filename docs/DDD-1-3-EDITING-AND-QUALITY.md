@@ -91,9 +91,13 @@ T6-A2 is `test_t6_a2_html_and_json_report_the_same_review_queue_numbers`
 (`/qc` HTML vs `/api/qc/findings`, same `qc_service.queue()`). Set HTML
 `/sets/{id}` and JSON `/api/sets/{id}` share `set_detail()`
 (`test_t6_a2_html_and_json_report_the_same_set_numbers`, `T6-A2-set`).
-Set, storyboard, review and anchor loops now complete over JSON
-(`test_t6_a1_*`); storyboard still writes its own T6-A2 number-agreement
-test.
+Storyboard HTML `/songs/{id}/storyboard/{tier}` and JSON
+`GET /api/songs/{id}/storyboard/{tier}` share `storyboard_service.payload()`
+(`test_t6_a2_html_and_json_report_the_same_storyboard_numbers`,
+`T6-A2-storyboard`: scene_time, song_length, clip_seconds, scene_count,
+mismatch; scene_count is service-owned so a template `len(scene_rows)`
+recompute fails the stub arm). Set, storyboard, review and anchor loops
+complete over JSON (`test_t6_a1_*`).
 
 ## 3. API surface
 

@@ -5374,14 +5374,22 @@ def start_storyboard(id: int, tier: str = Form(...), model: str = Form(""),
 
 @app.get("/api/songs/{id}/storyboard/{tier}")
 def api_storyboard_prompt(id: int, tier: str):
-    """T2-17 prompt always; T2-26 board+anchors when a readable board exists."""
+    """T2-17 prompt always; T2-26 board+anchors when a readable board exists.
+
+    T6-A2: board numbers (scene_time, song_length, clip_seconds, scene_count,
+    mismatch) come from storyboard_service.payload — same function the HTML
+    page reads.
+    """
     song = get_song_or_404(id)
     tier = valid_tier_or_400(tier)
     gen = storyboard_generation_payload(song, tier)
     row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", song["id"], tier)
     if not row or not row["json_path"] or not os.path.isfile(row["json_path"]):
         return JSONResponse(gen)
-    payload = _storyboard_payload(song, tier)
+    try:
+        payload = storyboard_service.payload(song["id"], tier)
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
     payload.update(gen)
     return JSONResponse(payload)
 
@@ -5732,6 +5740,14 @@ def view_storyboard(request: Request, id: int, tier: str):
     row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
     if not row:
         raise HTTPException(404, "no storyboard for this tier yet")
+    # T6-A2: numbers from storyboard_service.payload — same function the JSON
+    # GET uses. Template interpolates; it does not recompute scene_count.
+    try:
+        board = storyboard_service.payload(id, tier)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from None
+    except RuntimeError as e:
+        raise HTTPException(500, str(e)) from None
     md = ""
     if row["md_path"] and os.path.isfile(row["md_path"]):
         with open(row["md_path"]) as f:
@@ -5750,15 +5766,22 @@ def view_storyboard(request: Request, id: int, tier: str):
     # (character_id IS NULL) first, then the cast.
     anchors = album_chosen_anchors(album, tier)
     unanchored = unanchored_leads(rows)
+    clip_secs = board["clip_seconds"]
     return templates.TemplateResponse(request, "storyboard.html", {
         "song": song, "tier": tier, "row": row, "md": md, "sb": sb,
         # the page shows THIS song's clip length, not the old constant
-        "scene_rows": rows, "anchors": anchors, "chunk": build_song.clip_seconds(sb_secs),
+        "scene_rows": rows, "anchors": anchors, "chunk": clip_secs,
         "unanchored": unanchored,
         # T2-28-html: plan-panel reasons for Generate refs (marked, not disabled)
         "refs_blockers": refs_plan_blockers(song, tier, rows),
-        "coverage": coverage(rows, nclips, song["duration"], sb_secs),
+        "coverage": board["coverage"],
         "fields": EDITABLE_SCENE_FIELDS,
+        # T6-A2 distinctive numbers — service-owned, data-* on the page
+        "scene_time": board["scene_time"],
+        "song_length": board["song_length"],
+        "clip_seconds": clip_secs,
+        "scene_count": board["scene_count"],
+        "mismatch": board["mismatch"],
     })
 
 
@@ -5888,28 +5911,11 @@ def _scene_json(r):
 
 
 def _storyboard_payload(song, tier):
-    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", song["id"], tier)
-    if not row:
-        raise HTTPException(404, "no storyboard for this tier yet")
+    """Board JSON via storyboard_service.payload (T6-A2 / T6-A3)."""
     try:
-        sb = load_storyboard(row)
-    except (OSError, json.JSONDecodeError) as e:
-        raise HTTPException(500, f"storyboard file is unreadable: {e}") from None
-    cast = cast_anchors(song["album"] or "", tier)
-    sb_secs = row["scene_seconds"]
-    rows, nclips = storyboard_scenes(song, sb, tier, {c["name"] for c, _a in cast},
-                                     scene_seconds=sb_secs)
-    cov = coverage(rows, nclips, song["duration"], sb_secs)
-    return {
-        "song_id": song["id"],
-        "tier": tier,
-        "scenes": [_scene_json(r) for r in rows],
-        "coverage": cov,
-        "unanchored": unanchored_leads(rows),
-        "scene_seconds": sb_secs,
-        "nclips": nclips,
-        "anchors": anchors_by_character(song["album"] or "", tier),
-    }
+        return storyboard_service.payload(song["id"], tier)
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
 
 
 def _enqueue_storyboard(song_id, tier, model="", scene_seconds=None, direction=""):
