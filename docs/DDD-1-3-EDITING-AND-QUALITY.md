@@ -20,8 +20,9 @@ is named.
 
 | module | lines | owns | state against its TRD |
 |---|---|---|---|
-| `studio/app.py` | 7589 | 156 routes, 36 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}` (`T2-37` arc when defined), `/api/playlists/{id}/arc` (`T6-A2-arc` via `arc_service.payload`), `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`, `/api/anchors`; song page `video_model` select is `models.renderable("video")` (`T2-33`); `sets_service.py` / `storyboard_service.py` / `arc_service.py` land T6-A3 (`test_t6_a3_*`) |
+| `studio/app.py` | 7589 | 156 routes, 36 of them `/api/*` JSON | T6-A1 named loops land on `/api/sets`, `/api/playlists/{id}` (`T2-37` arc when defined; `T6-A2-playlists` via `playlist_service.numbers`), `/api/playlists/{id}/arc` (`T6-A2-arc` via `arc_service.payload`), `/api/songs/{id}/storyboard/{tier}`, `/api/qc/*`, `/api/anchors`; song page `video_model` select is `models.renderable("video")` (`T2-33`); `sets_service.py` / `storyboard_service.py` / `arc_service.py` / `playlist_service.py` land T6-A3 (`test_t6_a3_*`) |
 | `studio/arc_service.py` | — | TRD-6 T6-A2-arc meter: `payload(playlist_id)` → song_count / act_count / premise / has_proposal; no FastAPI | **built** (`test_t6_a2_html_and_json_report_the_same_arc_numbers`) |
+| `studio/playlist_service.py` | — | TRD-6 T6-A2-playlists: `numbers(playlist_id)` → song_count / total_secs; no FastAPI | **built** (`test_t6_a2_html_and_json_report_the_same_playlist_numbers`) |
 | `studio/mixer.py` | 2116 | set duration, `transition_times` (`T3-12` model), both filter graphs, overlap arithmetic, beatmatch, ramps, splice, `spliced_duration` / `SPLICE_DURATION_TOLERANCE` (`T3-10`), song-assembly geometry (`T5-7`) and fps (`T2-13d`), `EXPORT_FORMATS` (`T1-24`), `probe.sample_rate` for **T3-4.3-sr**, `probe["channels"]` (`T3-4.3-ch`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox. Mixed clip fps honours the highest and is asserted on the assembled file. Export encode args are a named row of `EXPORT_FORMATS`; `render_set(..., fmt=)` looks the row up and passes it to ffmpeg (`test_t1_24_export_format_row.py`). Probe always exposes sample rate and channel count (0 when no audio) for QC |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `export_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` and the loudness half of §4.3. `T3-9` silence is **not** here |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `FILTER_EXPR_MAX_BYTES = 8192` (`T1-10`), `fragment`, `item_audio`, `wants_master_loudnorm` | built |
@@ -107,8 +108,12 @@ recompute fails the stub arm). Album arc HTML `/playlists/{id}/arc` and
 JSON `GET /api/playlists/{id}/arc` share `arc_service.payload()`
 (`test_t6_a2_html_and_json_report_the_same_arc_numbers`, `T6-A2-arc`:
 song_count, act_count, premise, has_proposal; song_count is service-owned
-so a template `arc.songs | length` recompute fails the stub arm; playlist
-`GET /api/playlists/{id}` stays T2-37-shaped). Set, storyboard, review and
+so a template `arc.songs | length` recompute fails the stub arm). Playlist
+HTML `/playlists` card and JSON `GET /api/playlists/{id}` share
+`playlist_service.numbers()` (`test_t6_a2_html_and_json_report_the_same_playlist_numbers`,
+`T6-A2-playlists`: song_count, total_secs; song_count is service-owned so a
+template `len` recompute fails the stub arm; `arc` still only when defined,
+T2-37). Set, storyboard, review and
 anchor loops complete over JSON (`test_t6_a1_*`).
 
 ## 3. API surface
@@ -138,7 +143,9 @@ are the same pair for refine, repair and anchor re-roll — `qc_service.listed`
 and `qc_service.select` decide; the route forwards.
 
 **B · arc and storyboard** — `GET /api/playlists/{id}` is the playlist
-card payload: identity fields plus `arc` only when one is defined
+card payload: identity fields, `song_count` / `total_secs` from
+`playlist_service.numbers()` (`T6-A2-playlists`; same numbers as the
+HTML `/playlists` card), plus `arc` only when one is defined
 (`T2-37`; omitted when none so always-present cannot pass).
 `GET/POST /playlists/{id}/arc` (POST is
 propose; empty theme is 400, `T2-14`), `POST .../arc/propose` (same

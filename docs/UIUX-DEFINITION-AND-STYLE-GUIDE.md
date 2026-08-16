@@ -45,7 +45,7 @@ Three facts about the domain decide almost every rule below:
 | `static/style.css` | 1247 lines |
 | `static/app.js` | 1589 lines, hand-written, 55 `addEventListener` |
 | `templates/` | 29 files, 3481 lines |
-| routes | 156+, of which **37+** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue`, `/qc`, set HTML `/sets/{id}`, storyboard HTML `/songs/{id}/storyboard/{tier}`, album arc HTML `/playlists/{id}/arc`, and song Media (`/api/songs/{id}/media`) each match their JSON surface on the same numbers (`T6-A2` / `T6-A2-set` / `T6-A2-storyboard` / `T6-A2-arc` / `T8-16`). `sets_service` / `storyboard_service` / `arc_service` / `media_service` import nothing from FastAPI (`T6-A3`) |
+| routes | 156+, of which **37+** are `/api/*` JSON. `T6-A1` named loops complete: set empty→rendered, storyboard, review queue, anchors. `/queue`, `/qc`, set HTML `/sets/{id}`, storyboard HTML `/songs/{id}/storyboard/{tier}`, album arc HTML `/playlists/{id}/arc`, playlist list HTML `/playlists`, and song Media (`/api/songs/{id}/media`) each match their JSON surface on the same numbers (`T6-A2` / `T6-A2-set` / `T6-A2-storyboard` / `T6-A2-arc` / `T6-A2-playlists` / `T8-16`). `sets_service` / `storyboard_service` / `arc_service` / `playlist_service` / `media_service` import nothing from FastAPI (`T6-A3`) |
 
 ### 2.2 The root finding: tokens exist for colour, and for nothing else
 
@@ -268,6 +268,11 @@ HTML `/playlists/{id}/arc` (`#arc-meter` data attrs) and
 `GET /api/playlists/{id}/arc` report the same `song_count` / `act_count` /
 `premise` / `has_proposal` from `arc_service.payload`
 (`test_t6_a2_html_and_json_report_the_same_arc_numbers`).
+**`T6-A2-playlists` built**:
+HTML `/playlists` (`#playlist-{id}` `data-song-count` / `data-total-secs`) and
+`GET /api/playlists/{id}` report the same `song_count` / `total_secs` from
+`playlist_service.numbers`
+(`test_t6_a2_html_and_json_report_the_same_playlist_numbers`).
 **`T2-25` built**:
 `POST /songs/{id}/clips` refuses a scene-time miss (400, no job)
 and still queues an in-tolerance board.
@@ -408,8 +413,10 @@ The album arc wand proposes; Accept and Reject are separate controls
 (`T2-15`). Propose does not replace the stored file. Reject leaves the
 previous arc on disk. Accept is the write. A proposal that was never
 Accepted is still a proposal.
-The playlist card payload (`GET /api/playlists/{id}`) carries the
-album's arc when one is defined and omits the field when none, so a
+The playlist card payload (`GET /api/playlists/{id}`) carries
+`song_count` / `total_secs` from `playlist_service.numbers` (same as
+the HTML `/playlists` card, `T6-A2-playlists`) and the album's arc when
+one is defined and omits the field when none, so a
 row can show it without hardcoding (`T2-37`). Asserted on the payload,
 not on a rendered row.
 A generated storyboard carries a distinctive string from the album arc
@@ -1243,7 +1250,10 @@ A style guide is falsifiable or it is decoration.
   `storyboard_service.payload`), the album arc
   (`test_t6_a2_html_and_json_report_the_same_arc_numbers`, `T6-A2-arc` —
   `#arc-meter` data attrs for song_count / act_count / premise /
-  has_proposal from `arc_service.payload`), and the song media bag
+  has_proposal from `arc_service.payload`), the playlist card
+  (`test_t6_a2_html_and_json_report_the_same_playlist_numbers`,
+  `T6-A2-playlists` — `#playlist-{id}` data attrs for song_count /
+  total_secs from `playlist_service.numbers`), and the song media bag
   (`test_t6_a2_html_and_json_report_the_same_media_numbers`, `T8-16`).
   Nav is still this guide's own list check.
 - **No template computes.** `T6-A4`, asserted by a differential: stub the service

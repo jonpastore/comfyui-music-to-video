@@ -27,7 +27,10 @@ set editor (`test_t6_a2_html_and_json_report_the_same_set_numbers`,
 song_length / clip_seconds / scene_count / mismatch), and album arc
 (`test_t6_a2_html_and_json_report_the_same_arc_numbers`, `T6-A2-arc` —
 same `arc_service.payload()` for song_count / act_count / premise /
-has_proposal; playlist payload stays T2-37-shaped).
+has_proposal), and playlist cards
+(`test_t6_a2_html_and_json_report_the_same_playlist_numbers`,
+`T6-A2-playlists` — same `playlist_service.numbers()` for song_count /
+total_secs; `arc` still only when defined, T2-37).
 `T6-A4` is proven for the queue panel
 (`test_t6_a4_queue_page_shows_stubbed_values_unmodified`), the jobs panel
 elapsed label (`test_t6_a4_jobs_panel_shows_stubbed_elapsed_unmodified`,

@@ -83,7 +83,8 @@
 {% for d in playlists %}
 {# <details> is the collapse: no JS, keyboard-accessible, and the summary is
    the whole card when shut -- image, name, date, songs, total length. #}
-<details class="card playlist-card">
+<details class="card playlist-card" id="playlist-{{ d.playlist.id }}"
+         data-song-count="{{ d.song_count }}" data-total-secs="{{ d.total_secs }}">
   <summary>
     {% if d.playlist.image_path %}
     <img class="cover" src="{{ media_url(d.playlist.image_path) }}" alt="">
@@ -94,7 +95,7 @@
       <strong>{{ d.playlist.name }}</strong>
       <span class="muted">
         {{ d.playlist.created | ts }} &middot;
-        {{ d.count }} song{{ "" if d.count == 1 else "s" }} &middot;
+        {{ d.song_count }} song{{ "" if d.song_count == 1 else "s" }} &middot;
         {{ d.total_secs | hms }}
       </span>
     </span>
@@ -457,8 +458,8 @@
     </div>
     <p><strong>This deletes:</strong></p>
     <ul>
-      <li>the playlist itself and its ordering of {{ d.count }}
-        song{{ "" if d.count == 1 else "s" }}</li>
+      <li>the playlist itself and its ordering of {{ d.song_count }}
+        song{{ "" if d.song_count == 1 else "s" }}</li>
       <li>its album cover image</li>
     </ul>
     <p><strong>This keeps:</strong></p>

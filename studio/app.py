@@ -44,6 +44,7 @@ import sets_service  # TRD-1 / T6-A3: sets, items, render — no FastAPI
 import cleanup_service  # T6-19: confirmed clip cleanup — no FastAPI
 import storyboard_service  # TRD-2 / T6-A3: arc, board, meter — no FastAPI
 import arc_service  # TRD-6 T6-A2-arc: playlist arc meter — no FastAPI
+import playlist_service  # TRD-6 T6-A2-playlists: song_count / total_secs — no FastAPI
 import media_service  # TRD-8 T8-16: song media bag — no FastAPI
 import video_fx   # per-item video look effects -- same, pure/no deps
 
@@ -6947,7 +6948,7 @@ def playlist_detail(p):
                             s.duration AS duration, s.mp3_path AS mp3_path
                      FROM playlist_items pi JOIN songs s ON s.id = pi.song_id
                      WHERE pi.playlist_id=? ORDER BY pi.position""", p["id"])
-    rows, total, tiers_with_video = [], 0.0, {}
+    rows, tiers_with_video = [], {}
     for it in items:
         # every rendered video for this song, newest first per tier -- this is
         # what makes a set renderable at a given tier, and what the card offers
@@ -6955,10 +6956,14 @@ def playlist_detail(p):
         videos = {}
         for r in db.q("SELECT * FROM renders WHERE song_id=? ORDER BY id DESC", it["song_id"]):
             videos.setdefault(r["tier"], r["path"])
-        total += it["duration"] or 0.0
         for t in videos:
             tiers_with_video[t] = tiers_with_video.get(t, 0) + 1
         rows.append({"item": it, "videos": sorted(videos.items())})
+    # T6-A2-playlists: song_count / total_secs from playlist_service — same
+    # function GET /api/playlists/{id} uses. Not len(items) at the template.
+    nums = playlist_service.numbers(p["id"])
+    song_count = nums["song_count"]
+    total = nums["total_secs"]
     # a tier can render a set only if EVERY song in the playlist has a video
     # at that tier; offering one that cannot render just moves the failure
     ready = sorted(t for t, n in tiers_with_video.items() if n == len(items)) if items else []
@@ -6988,7 +6993,8 @@ def playlist_detail(p):
     artwork_models = [{"key": e["key"], "label": e["label"], "available": e["available"],
                        "default": e["key"] == artwork_default}
                       for e in models.catalog(role="artwork")]
-    return {"playlist": p, "rows": rows, "count": len(items), "total_secs": total,
+    return {"playlist": p, "rows": rows, "song_count": song_count,
+            "count": song_count, "total_secs": total,
             "video_tiers": ready, "sets": sets, "profile_fields": profile_fields,
             "anchors": all_anchors, "anchor_tiers": anchor_tiers,
             "anchor_count": len(all_anchors),
@@ -7001,13 +7007,19 @@ def playlist_detail(p):
 
 
 def _playlist_payload(p):
-    """JSON playlist card. Arc only when one is defined (T2-37)."""
+    """JSON playlist card. Arc only when one is defined (T2-37).
+
+    song_count / total_secs from playlist_service (T6-A2-playlists).
+    """
+    nums = playlist_service.numbers(p["id"])
     out = {
         "id": p["id"],
         "name": p["name"],
         "kind": p["kind"],
         "image_path": p["image_path"],
         "created": p["created"],
+        "song_count": nums["song_count"],
+        "total_secs": nums["total_secs"],
     }
     arc_data = _load_arc(p["id"])
     if arc_data is not None:
