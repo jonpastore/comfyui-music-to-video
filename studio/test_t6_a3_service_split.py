@@ -21,6 +21,7 @@ import arc_service
 import cleanup_service
 import db
 import jobs
+import library_service
 import media_service
 import playlist_service
 import sets_service
@@ -87,6 +88,11 @@ def test_t6_a3_cleanup_service_imports_nothing_from_fastapi():
 def test_t6_a3_media_service_imports_nothing_from_fastapi():
     names = _fastapi_imports(media_service.__file__)
     assert names == [], f"media_service imports FastAPI: {names}"
+
+
+def test_t6_a3_library_service_imports_nothing_from_fastapi():
+    names = _fastapi_imports(library_service.__file__)
+    assert names == [], f"library_service imports FastAPI: {names}"
 
 
 def test_t6_a3_create_set_and_add_item_without_a_request():
