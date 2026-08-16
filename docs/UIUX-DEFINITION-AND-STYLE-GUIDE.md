@@ -1258,6 +1258,18 @@ A style guide is falsifiable or it is decoration.
   `font-size`, spacing and `border-radius` literals outside `:root` and fails on
   a value that is not a token. This is the check that keeps §2.2 from happening
   again, and it can fail, which is why it is worth writing.
+  **`test_uiux_scale_tokens.py` — ratchet (not yet a hard token rule).**
+  §2.2 is not tokenized: `:root` still has colour/elevation/motion only, and
+  the sheet still carries the fourteen font-size literals and the ad-hoc
+  spacing/radius set counted there. The suite records that set as a
+  **ceiling** and fails when a *new* distinct raw literal appears on a
+  `font-size` / `padding`|`margin`|`gap` / `border-radius` declaration
+  outside `:root`. `var(--…)` and a small allowlist (`0`, `1px` hairlines,
+  `auto`, `50%`, CSS keywords) pass. Mutation arm: append
+  `font-size: 3.14159rem` to a copy → red
+  (`test_new_font_size_literal_fails_mutation`); live `style.css` is not
+  rewritten. When §5.2 / §5.3 land as real tokens, promote this from
+  ratchet to "only `var(--…)` or allowlist."
 - **Focus is everywhere.** A check walks the rendered pages for interactive
   elements and asserts each resolves a `:focus-visible` style. Deleting the rule
   must turn it red. `test_uiux_focus_visible.py` —
