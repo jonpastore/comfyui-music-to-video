@@ -1,10 +1,12 @@
 # PRD · Audio, the fleet, and the library (TRD 8-10)
 
-Status: written 2026-08-13. Covers `docs/TRD-8-AUDIO-GENERATION-AND-THE-SONG-EDITOR.md`
+Status: written 2026-08-13. **Refreshed 2026-08-16 against the TRD-8/9/10
+ledgers at `d782d2e`.** Covers `docs/TRD-8-AUDIO-GENERATION-AND-THE-SONG-EDITOR.md`
 (15), `docs/TRD-9-THE-FLEET-AND-ITS-OPERATIONAL-LAYER.md` (17),
 `docs/TRD-10-LIBRARY-LYRICS-AND-THE-ADVICE-SURFACES.md` (17) — **49 criteria.**
 Design: `docs/DDD-8-10-AUDIO-FLEET-AND-LIBRARY.md`. Siblings:
 `docs/PRD-1-3-EDITING-AND-QUALITY.md`, `docs/PRD-4-7-IDENTITY-AND-RENDERING.md`.
+Built-state lives in those TRD ledgers, not in this file.
 
 ---
 
@@ -21,15 +23,14 @@ everything below:
 
 | | TRD-8 audio | TRD-9 fleet | TRD-10 library |
 |---|---|---|---|
-| built? | **partly, and the central idea is missing** | **yes, entirely, in production** | partly |
-| the risk | a feature that shipped without its model | machinery that promises nothing in writing | model opinions with no rules |
+| built? | **yes**, except `T8-12` (provisional: no cloning path) | **yes**, with red tests including `T9-1`/`T9-2`/`T9-15` | **yes** (bulk edit, advice, minor policy) |
+| leftover | media menu has no owner; `T8-12` stays provisional | gamingpc as a second image box is **CAPABLE, NOT PROVEN** | none named on the ledger |
 
-**TRD-9 is the unusual one and worth stating plainly: it specifies software that
-already works.** Four backends, retargeting, the retry walk, input staging,
-alerting and a shared GPU — roughly 1,700 lines, live in production, zero
-acceptance criteria. That is the opposite of TRD-6, which specifies machinery
-that does not exist. Its value is not new behaviour; it is that **a change to
-routing can be shown to have broken something**, which today it cannot.
+**TRD-9 specifies software that already works, and the checks now exist.** Four
+backends, retargeting, the retry walk, input staging, alerting and a shared
+GPU are live. `test_trd9_fleet.py` can fail `T9-1`…`T9-18` (and `T9-15` via
+`test_t5_5_submit_records_pre_render_vram`). TRD-6's queue is also **built**
+on its own ledger; it is not "machinery that does not exist."
 
 ## 2. Who it is for
 
@@ -46,17 +47,17 @@ The same operator, in the two modes the other documents do not cover:
 
 | # | outcome | proven by |
 |---|---|---|
-| P1 | A take says what it was asked for, months later, without reading it back off a song row that has moved | `T8-1`, `T8-3` |
-| P2 | Picking a take is a separate act, and the take you did not pick survives to be compared | `T8-2`, and `T6-A5` owns the rule |
-| P3 | A span can be replaced without deleting audio or lengthening the song | `T8-6`…`T8-9` |
-| P4 | A voice reference cannot exist without a recorded source and consent | `T8-10`…`T8-12` |
+| P1 | A take says what it was asked for, months later, without reading it back off a song row that has moved | `T8-1`, `T8-3` (built) |
+| P2 | Picking a take is a separate act, and the take you did not pick survives to be compared | `T8-2` (built), and `T6-A5` owns the rule |
+| P3 | A span can be replaced without deleting audio or lengthening the song | `T8-6`…`T8-9` (built) |
+| P4 | A voice reference cannot exist without a recorded source and consent | `T8-10`/`T8-11` built; `T8-12` provisional |
 | P5 | A workflow naming a model reaches the box that holds it, under the name that box uses | `T9-1`…`T9-3` (built: `test_t9_1_*` both directions; `test_t9_2_*` per-loader; T9-3 free-draw identity) |
-| P6 | A box that went away is told apart from a workflow a box refused | `T9-6`, `T9-7` |
+| P6 | A box that went away is told apart from a workflow a box refused | `T9-6`, `T9-7` (built) |
 | P6a | A fleet op that needs a stop names which service, and never more | `T9-18` (built: `fleet_watch.name_stop`; vDisk lesson — docker only, not the array) |
 | P6b | An unreachable alert transport degrades to a recorded state change, never silence | `T9-17` (built: `fleet_watch` `_alert` record + check) |
 | P7 | Four measurement traps that each cost a wrong diagnosis are checks, not folklore | `T9-10`…`T9-13` (`T9-10` built: cache-hit empty ≠ refusal, A/B needs distinct seeds; `T9-11` built: raw+pin; `T9-12` built: `/history` is not Swarm authority, container log is; `T9-13a`/`T9-13b` built: byte completeness; staging path reads `CATALOG.companions`) |
 | P8 | A bulk edit changes exactly what was shown and asked for, or nothing | `T10-3`…`T10-7` (built) |
-| P9 | A model's words are a proposal, never a verdict and never a gate | `T10-11`…`T10-15` |
+| P9 | A model's words are a proposal, never a verdict and never a gate | `T10-11`…`T10-15` (built) |
 | P10 | A song for a child, and a G-tier video for it, is a first-class thing this studio can make | `T10-18` (built). `T10-18a` (built: `r` may mention in lyrics/narrative only). `T10-18b` (built: xxx refuses minor refs everywhere including lyrics). `T10-19` (built: escalation re-screens whole work, names blocker). `T10-19a` (built: named-field list at the prompt boundary). `T10-20` (built: no override reaches escalation). `T10-21` (built: clear does not silently unlock; explicit unlock on empty re-screen; prior renders keep attribution). `T10-22` (built: locked accepts, explicit refuses, one string). `T10-23` closes the asset side channel (built). `T10-24` screens the final composed string after merge/PINNED weld (built). `T10-25` (built: unset tier is `xxx`). `T10-26` (built: non-nude sexualisation of a depicted minor refused at every tier) |
 
 **P9 is the one that has no owner anywhere else.** Four modules ask a model for
@@ -83,10 +84,9 @@ still not shipped (`T8-12`, provisional by absence).
 
 ## 4. Priorities
 
-1. **TRD-9 first, and it is mostly writing tests for what exists.** It is the
-   cheapest of the three — the behaviour is there and correct; what is missing is
-   the ability to prove a change did not break it. Everything else in the
-   project renders through it.
+1. **TRD-9's red tests landed.** The remaining fleet fact is operational, not a
+   missing criterion: gamingpc is **CAPABLE, NOT PROVEN** as a second image box.
+   Do not treat the TRD-9 ledger as empty.
 2. **TRD-8's take model.** New generations land as `takes` rows (`T8-1`); pick
    (`T8-2`) is built — picking records `takes.picked` and does not write
    `songs.mp3_path`; Use on a generated take is refused. **`T8-3` is built** —
@@ -142,6 +142,10 @@ still not shipped (`T8-12`, provisional by absence).
    and after `PINNED` is welded. `T10-25` is built: unset tier is `xxx` on
    every write path (`policy_tier` / `screen_prompt_field`;
    `studio/test_t10_25_unset_is_xxx.py`). `T10-26` is built.
+
+Items 2–5 on this list **landed**. What the TRDs still leave open: `T8-12`
+(provisional), the media menu (no owner), gamingpc as a second image box
+(**CAPABLE, NOT PROVEN**).
 
 ## 5. Scope
 

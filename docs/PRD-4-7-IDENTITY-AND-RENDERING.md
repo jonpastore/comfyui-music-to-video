@@ -1,11 +1,13 @@
 # PRD · Identity, variations, rendering and the queue (TRD 4-7)
 
-Status: written 2026-08-13. Covers `docs/TRD-4-CHARACTER-ANCHORS.md` (18),
+Status: written 2026-08-13. **Refreshed 2026-08-16 against the TRD-4/5/6/7
+ledgers at `d782d2e`.** Covers `docs/TRD-4-CHARACTER-ANCHORS.md` (18),
 `docs/TRD-5-CLIP-RENDERING-AND-REFINE.md` (10),
 `docs/TRD-6-QUEUE-LIFECYCLE-AND-STORAGE.md` (25),
 `docs/TRD-7-ANCHOR-VARIATIONS.md` (19) — **72 criteria**, counted not quoted.
 Sequencing: `docs/PLAN-TRD-4-7.md`. Design: `docs/DDD-4-7-IDENTITY-AND-RENDERING.md`.
 Sibling: `docs/PRD-1-3-EDITING-AND-QUALITY.md`.
+Built-state lives in those TRD ledgers, not in this file.
 
 This does not restate a criterion. It says who is served, what counts as
 working, and what the four documents are collectively **for** — which none of
@@ -25,10 +27,12 @@ that has to be trustworthy for those decisions to mean anything:
 `T6-A1`'s named loop for these two, over JSON: save operator base photographs,
 generate candidates for a named view, pick one, use that sheet as the next
 identity lock (`test_t6_a1_anchor_loop_over_json`).
-- **TRD-5 — the graph that turns a request into a clip**, and the refine pass
-  that currently does nothing.
-- **TRD-6 — the queue, the lifecycle, and what joins to what.** The plumbing
-  every other document depends on and each one disowned.
+- **TRD-5 — the graph that turns a request into a clip**, and the refine pass.
+  `_refine_ltx` ships variant A (`T5-1`/`T5-3`/`T5-4` built as a graph). The
+  GPU pair that proves it helps (`T5-2`) and the peak-VRAM reading (`T5-5`)
+  are **NOT MEASURED**.
+- **TRD-6 — the queue, the lifecycle, and what joins to what.** Ledger is
+  **built** (`T6-1`…`T6-A10`). `T6-18` still deletes nothing; GC is deferred.
 
 **The single thread running through all four is identity.** An album is one
 character seen from many angles across thirty-one songs, and every defect this
@@ -116,7 +120,7 @@ the severe one.
 | P3 | The composed positive prompt contains no negation, names the body parts, names the reference slots, and never says "bare skin" on a furred character | `T4-10`…`T4-14`, `T4-18` |
 | P3a | Lighting lock is channel balance on the rendered sheet (olive/magenta FLAG, grey PASS), not the `BACKDROP` string. Job 257 `front_nude` seed 5151 PASSes 8.06; sibling seed 5288 still FLAGs 14.76 | `T4-13` |
 | P4 | A new view is one table entry, and is tier-gated by what it *is* rather than by a list somebody remembered to update | `T7-1`/`T7-2`/`T7-3` built (`make_anchor.VIEWS` + `is_nude_view` + form/compose via `test_t7_3_new_views.py`). GPU new-view sheets NOT MEASURED |
-| P5 | An approved sheet can be the identity lock for the next sheet — the lever that keeps clips on-model, applied to anchors | `T7-6`…`T7-8` |
+| P5 | An approved sheet can be the identity lock for the next sheet — the lever that keeps clips on-model, applied to anchors | `T7-6`/`T7-8` built. `T7-7` harness only; GPU pair **NOT MEASURED** |
 | P6 | The four things that shape every sheet — view framing, backdrop, composite, pose — are versioned, per-album prompts rather than code constants | `T7-13` built (`view:<key>` from the view table). `T7-14`/`T7-15`/`T7-19` built. Album `pose` row in `T7-16` remains |
 | P7 | `--refine` either refines or refuses, and whether it helps is measured rather than assumed | `T5-1`…`T5-6` |
 | P7a | A ×2 clip among 832×480 siblings assembles at 1664×960 with no silent letterbox; mixed aspect is refused | `T5-7` |
@@ -129,24 +133,17 @@ the severe one.
 | P9 | Every artefact can be joined to what was asked of it, by one canonical path | `T6-8`…`T6-13a` |
 | P10 | A killed worker leaves no half-written job; a long render does not hold the write lock | `T6-14`…`T6-16` |
 
-**P5 is the highest-leverage unbuilt thing in the studio** — and it moved while
-this was being written. `gen_refs` passes a chosen anchor as image1 for every
-scene, which is *why clips stay on-model*; the anchors UI had no such path, so
-sheet 2 was a fresh interpretation of the photographs rather than a variation of
-the sheet that was approved. Session B shipped `T7-6` on 2026-08-13 (`d315c6f`).
-`T7-7` — does it actually hold identity across views — now has the offline
-ranking harness: `t7_7_identity_differential` on a rendered front /
-three_quarter pair versus the same pair from the raw photographs. No
-threshold. The GPU four-image set is still NOT MEASURED. The
-photo-conditioned half is on disk (Catatonic jobs 244/248: a front /
-three_quarter pair of the identity-collapsed human woman, not her;
-Street Cats jobs 264/268: `front_nude_s1943749893` +
-`three_quarter_nude_s1096561198`; 262 cancelled). Both used base
-photographs, not a chosen anchor as image1. The use-as-ref half has
-never been rendered. `t7_7_claim` refuses unpinned bytes.
-The compose hook FLAGs a human-body nude compose, including the
-live-studio "Human woman's body" clause, through `run_artefact`. That is
-not the picture measurement.
+**P5's path is built; the picture look is not.** `T7-6` shipped: with
+use-as-ref ticked, `gen_anchor`'s images list is exactly that sheet.
+`gen_refs` still passes a chosen anchor as image1 for every scene (TRD-2
+refs-identity). `T7-7` has the offline ranking harness
+(`t7_7_identity_differential`). The GPU four-image set is still
+**NOT MEASURED**. Photo-conditioned halves on disk (Catatonic jobs
+244/248; Street Cats jobs 264/268) used base photographs, not a chosen
+anchor as image1. The use-as-ref half has never been rendered.
+`t7_7_claim` refuses unpinned bytes. The compose hook FLAGs a
+human-body nude compose through `run_artefact`. That is not the picture
+measurement. **0 chosen studio anchors** — the factory is still on step 1.
 
 ## 5. Priorities
 
@@ -158,19 +155,18 @@ statement of it:
    new-view sheets remain NOT MEASURED.
 2. **Make the words editable and versioned** (P6). The operator's real loop is
    tune-render-compare. `view:<key>` (`T7-13`), `backdrop` and `composite` are
-   versioned; the leftover is the album `pose` row (`T7-16`).
-3. **Prove identity holds** (P5's `T7-7`). One measurement, and it is a
-   human-judged one.
-4. **Finish TRD-4's remainder** (P1-P3), most of which is differentials for
-   behaviour that already exists.
-5. **Make `--refine` honest** (P7).
-6. **The queue — CORRECTED.** An earlier draft of this line said "last, except
-   `T6-13a`". **Jon decided 2026-08-13 to build TRD-6 IN FULL**: the pull model,
-   the lifecycle and the identity rules are all in scope, and `T6-13a` still goes
-   first *inside* it because the clip-length chain waits on that one column.
-   `PRD-1-3` §6.0 carried this decision and this file did not — **two documents
-   disagreeing about scope on the same day**, found by the first external review
-   of this layer.
+   versioned; the leftover is the album `pose` row (`T7-16`). Named uploads
+   (`T7-20`) are the operator path.
+3. **Prove identity holds** (P5's `T7-7`). Harness built. GPU four-image set
+   **NOT MEASURED**.
+4. **TRD-4 string/policy rows** (P1–P3, P3a) are **built**. `T4-13` is
+   measured on job 257; sibling seed 5288 still FLAGs.
+5. **`--refine` is honest as a graph** (P7 / `T5-1`). GPU look (`T5-2`) and
+   peak VRAM (`T5-5`) stay **NOT MEASURED**. Variant B does not fit (`T5-6`).
+6. **The queue is built in full** (P8–P10). Ledger: `T6-1`…`T6-A10`. `T6-18`
+   still deletes nothing. An earlier draft of this line said "last, except
+   `T6-13a`"; Jon decided 2026-08-13 to build TRD-6 in full, and the
+   landers did.
 
 ## 6. Scope
 
@@ -196,10 +192,11 @@ coordinator (TRD-6 §7).
    done while `ALBUM_FIELDS["body"]`'s default still carried the negation that
    actually rendered. **Any built-state claim is worth re-reading before acting
    on it.**
-2. **A criterion satisfied by absence.** TRD-6's 25 criteria describe machinery
-   that does not exist and can all go green at once by never building it — its
-   own §8 says so. TRD-4/5/6/7 have no one-sided-criteria tables, while TRD-1/2/3
-   each do.
+2. **A criterion satisfied by absence.** TRD-6 §8 warned that 25 unbuilt
+   criteria can all go green by never building them. That warning is spent:
+   the ledger marks them **built** with tests that can go red. The remaining
+   one-sided risk is `T6-18` (GC deferred) and the GPU **NOT MEASURED** rows
+   in TRD-5/TRD-7.
 3. **Prompt surface area grows faster than the checks on it.** Four new types ×
    ten views is a lot of composed text, and every combination is a chance at
    §3.3's contradiction. `T7-4` is the check that keeps it honest: two views of

@@ -1,15 +1,17 @@
 # UI/UX definition and style guide
 
-Status: written 2026-08-13. Covers the whole studio front end, not one feature.
+Status: written 2026-08-13. **Refreshed 2026-08-16 against the TRD ledgers at
+`d782d2e`.** Covers the whole studio front end, not one feature.
 Consulted: chatgpt (see §7 for what was folded in and what was rejected).
 Companion documents: `docs/PRD-1-3-EDITING-AND-QUALITY.md`,
-`docs/DDD-1-3-EDITING-AND-QUALITY.md`.
+`docs/DDD-1-3-EDITING-AND-QUALITY.md`. Built-state is the TRD ledgers.
 
-**Every number below was counted from the tree at `f9ca597`.** The commands are
-named so a claim can be re-run rather than believed, and two things that looked
-like findings were counted and are not — they are in §2.4 under "already good",
-because a style guide that lists a discipline the code already has as a defect
-is a document nobody trusts twice.
+**Every number below was counted from the tree at `f9ca597`, then the built
+claims were reconciled to the TRDs.** The leftover UI that the TRDs still
+do not call built: live loudness meter; waveform still a PNG (`mixer.peaks`
+is the data, T1-13…T1-15). GPU new-view / portrait / T7-7 / T5-2 sheets stay
+**NOT MEASURED**. The commands are named so a claim can be re-run rather than
+believed.
 
 ---
 
@@ -190,7 +192,7 @@ cover; no render-tag). Each card names the pose, picks a tier, and either
 generates a sheet or assigns the upload as the chosen sheet (`T7-20`). The
 corner tick is identity lock only; *Generate this pose* is a second tick.
 
-**The timeline exists and is not yet the DAW.** `.timeline` / `.tl-block`
+**The timeline is the set editor, not a missing DAW.** `.timeline` / `.tl-block`
 are built and used by `set_edit.html`, and the good part is already right:
 blocks are flex-sized by how long each item actually **plays after trim**, so
 the picture matches the render rather than being decorative, and the handover

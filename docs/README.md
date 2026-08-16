@@ -1,7 +1,8 @@
 # The document set — what owns what, and where to trust it
 
-Written 2026-08-13. **This is the map, and it exists because the first external
-review of the PRD/DDD layer found there was none.** Eleven documents grouped in
+Written 2026-08-13. **Refreshed 2026-08-16 against the TRD ledgers at
+`d782d2e`.** This is the map, and it exists because the first external
+review of the PRD/DDD layer found there was none. Eleven documents grouped in
 threes, each internally coherent, and nothing saying which owns which, which
 label is canonical, or where a reader should trust a built-state claim. Four of
 that review's "what is missing" findings are one missing document, and this is it.
@@ -42,9 +43,10 @@ what was measured. **"Built" means a check can go red, not that the code
 exists.** That distinction is the whole point: `T4-10` read as done for a day
 while `app.ALBUM_FIELDS["body"]` quietly beat the constant it asserted.
 
-Do **not** trust: prose in a PRD or DDD about what exists (those freeze at
-different commits and say so), `docs/STATUS-2026-08-13.md` (a snapshot, dated),
-or a summary in `SESSIONS.md` (a log, not a state).
+Do **not** trust a PRD or DDD that disagrees with its TRD ledger. Those
+files were refreshed 2026-08-16 to match the ledgers at `d782d2e`; if they
+drift again, the ledger wins. Also do not trust `docs/STATUS-2026-08-13.md`
+(a snapshot, dated) or a summary in `SESSIONS.md` (a log, not a state).
 
 **Built-state claims in this project have drifted within the hour, repeatedly.**
 Three commits landed mid-review on 2026-08-13 and made a ledger stale before it
@@ -93,7 +95,7 @@ and it is what the review found missing.
         relaxed at their sides" is a shipped prompt contradiction)
 
     qc_service.py pattern --> sets_service, storyboard_service (T6-A3, built)
-    approve() stops raising --> T3-6 and T3-18 stop being provisional
+    approve() enqueues dest ≠ src (T3-6 / T3-18, built) --> T3-19…T3-27 / T3-33
     calibration row --> tier 2 threshold --> tier 2 UI  (never the other order)
 
 **`T6-13a` and `T2-12a` are the two smallest items with the largest reach in the
@@ -115,7 +117,8 @@ checked against the tree before it reaches a document.
 
 ## 6. What no document in this set can tell you
 
-**Whether any of it works.** Every check run on 2026-08-13 was on strings, graphs
-and schemas. **Not one was on an image.** `T4-13` (the lighting differential) and
-`T7-7` (identity held across views) are the two criteria the prompt rewrite
-exists for, and both need a render.
+**Whether the pictures hold.** Most TRD checks are still on strings, graphs
+and schemas. `T4-13` is now **measured** on job 257 (seed 5151 PASSes 8.06;
+sibling 5288 still FLAGs 14.76). `T7-7` (identity held across views) still
+needs a pinned GPU four-image set — harness only, **NOT MEASURED**. 0 chosen
+studio anchors.

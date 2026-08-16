@@ -1,29 +1,31 @@
 # DDD · Design for TRD 8-10
 
-Status: written 2026-08-13. Product: `docs/PRD-8-10-AUDIO-FLEET-AND-LIBRARY.md`.
+Status: written 2026-08-13. **Refreshed 2026-08-16 against the TRD-8/9/10
+ledgers at `d782d2e`.** Product: `docs/PRD-8-10-AUDIO-FLEET-AND-LIBRARY.md`.
 Contracts: TRD-8, TRD-9, TRD-10. Siblings: `docs/DDD-1-3-EDITING-AND-QUALITY.md`,
 `docs/DDD-4-7-IDENTITY-AND-RENDERING.md`.
 
-Everything below was read off the tree at `c01c977`, deployed to production the
-same day. Where a claim is a measurement, the command that produced it is named.
+The original read-off was `c01c977`. Built-state is the TRD ledgers, not this
+stamp. Where a claim is a measurement, the command that produced it is named.
 
 ---
 
 ## 1. The shape of the work, which differs per document
 
-| | what building it means |
-|---|---|
-| **TRD-8** | a take/voice schema wired under a stage that already generates |
-| **TRD-9** | tests for behaviour that is correct and unspecified — almost no new code |
-| **TRD-10** | one unbuilt feature (bulk edit) plus labelling rules over four live modules |
+| | what building it means | ledger |
+|---|---|---|
+| **TRD-8** | a take/voice schema wired under a stage that already generates | **built**; `T8-12` provisional (no cloning path) |
+| **TRD-9** | tests for behaviour that is correct and live | **built**; `T9-1`/`T9-2`/`T9-15` have red tests. gamingpc image box **CAPABLE, NOT PROVEN** |
+| **TRD-10** | bulk edit plus labelling rules over four live modules | **built** (`T10-1`…`T10-26`). The plan's `library` table is still out of scope |
 
 ## 2. TRD-8 — the take model
 
-### 2.1 What is missing, exactly
+### 2.1 What shipped, and what is still missing
 
-`AUDIO_BUILDOUT_PLAN.md` §4 specifies four tables. At `c01c977` all four were
-absent. `takes`, `voices` and `take_voices` now exist in `db.py`; **`library`
-does not** (TRD-8 §9 left it to TRD-10, and TRD-10 did not take it).
+`AUDIO_BUILDOUT_PLAN.md` §4 specified four tables. `takes`, `voices` and
+`take_voices` exist in `db.py` and are the `T8-1`…`T8-11` store. **`library`
+does not** (TRD-8 §9 left it to TRD-10, and TRD-10 did not take it). That is
+the only named schema leftover; it is not a TRD-10 criterion.
 
 What shipped at `c01c977` wrote each generated candidate as an `assets` row under
 `db.DATA/audio/<slug>/`. **Nothing is overwritten**, so `T6-A5` is not violated.

@@ -8,10 +8,10 @@ measurement that cannot fail is not evidence) is **built** as
 `test_t6_a7_measurement_can_fail.py` — equal control/mutated refused; product
 exemplar is the T6-A4 stub differential on `/queue`.
 
-**Every "built" and "not built" below was read off the tree at `7de0aea` (refreshed 2026-08-15), not
-off a document.** The 2026-08-13 snapshot was `f9ca597`. TRD-3 §2.1 records what happens otherwise: a "do not rebuild"
+**Every "built" and "not built" below was read off the tree at `7de0aea` (refreshed 2026-08-15), then
+reconciled to the TRD-1/2/3 ledgers at `d782d2e` on 2026-08-16.** The 2026-08-13 snapshot was `f9ca597`. TRD-3 §2.1 records what happens otherwise: a "do not rebuild"
 table that omitted the QC implementation, which is the omission most likely to
-cost a rewrite. Where a claim here is a measurement, the command that produced it
+cost a rewrite. Built-state is the TRD ledgers. Where a claim here is a measurement, the command that produced it
 is named.
 
 ---
@@ -419,8 +419,10 @@ loud part is. The reduce is `mixer.peaks(samples, z)` (`T1-13`/`T1-14`).
 `GET /api/songs/{id}/peaks` serves `{song_id, z, n, pairs, reason}`:
 `reason` is `null` when there are pairs, and `no_audio` / `missing` /
 `unreadable` when `pairs` is empty (`T1-15`). A flat line is silence;
-empty without a reason is forbidden. Analyse storage and
-`/api/sets/{id}/peaks?z=` are not wired yet.
+empty without a reason is forbidden. Song peaks are served. The set
+timeline still paints `waveform_png`, not those pairs — that swap is
+the leftover, not the API. `/api/sets/{id}/peaks?z=` is not a TRD-1
+criterion.
 
 The limit is stated in the design because it will otherwise be discovered by a
 feature request: `analyse.py` loads mono at 22050 Hz, chosen because it matched

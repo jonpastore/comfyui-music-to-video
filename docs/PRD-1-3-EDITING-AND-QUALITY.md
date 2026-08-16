@@ -1,8 +1,10 @@
 # PRD · The studio's editing and quality surface (TRD 1-3)
 
-Status: written 2026-08-13. Covers `docs/TRD-1-TIMELINE-AND-MIXING.md`,
+Status: written 2026-08-13. **Refreshed 2026-08-16 against the TRD-1/2/3
+ledgers at `d782d2e`.** Covers `docs/TRD-1-TIMELINE-AND-MIXING.md`,
 `docs/TRD-2-STORY-ARC-AND-STORYBOARDS.md`, `docs/TRD-3-QC-AND-REMEDIATION.md`.
 Design that satisfies it: `docs/DDD-1-3-EDITING-AND-QUALITY.md`.
+Built-state lives in those TRD ledgers, not in this file.
 
 **What this document adds, and what it deliberately does not.** The three TRDs
 already hold ~133 acceptance criteria, and they are the contract — this does not
@@ -150,15 +152,17 @@ id, and the answer re-orders everything below:
 1. **Anchors that stay on-model** — identity and variations. Session B's work,
    already in flight.
 2. **Know when a render is wrong** — QC's repair path. The measuring half is
-   built; `approve()` enqueues a dest ≠ source. GPU actuators
-   (`make_postproc` / `fix_ref`) are not wired — `h_repair` refuses a silent
-   copy rather than marking the finding repaired.
+   built; `approve()` enqueues a dest ≠ source (`T3-6`/`T3-18`). GPU
+   actuators are wired: `dispatch_repair` asks `where()`/`fits()`/`resolve()`
+   and dest is the `fix_ref` / `gen_postproc` file (`T3-23`). Image
+   FLAG/REJECT is a prompt rewrite (`T3-33`).
 3. **Clips at the length you asked for** — `scene_seconds` finally meaning
    something.
 
-**The set timeline goes last.** It is the biggest gap between what exists and
-what a person would expect, and it is not what is wanted next. §6's P1 below was
-written with the timeline first and is superseded by this list.
+**The set timeline went last and is now mostly built.** Leftover on the
+TRD-1/UIUX surface: the live loudness meter, and the waveform still drawn
+from `waveform_png` instead of `mixer.peaks`. §6's P1 below was written
+with the timeline first and is superseded by this list.
 
 **The queue is rewritten in full**, not reduced to its one blocking column. Asked
 whether to take just `T6-13a` and leave working machinery alone, Jon chose the

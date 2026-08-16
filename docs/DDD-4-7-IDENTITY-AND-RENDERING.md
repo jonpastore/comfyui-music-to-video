@@ -6,8 +6,9 @@ Sequencing and review record: `docs/PLAN-TRD-4-7.md`,
 `docs/DDD-1-3-EDITING-AND-QUALITY.md`.
 
 **Read off the tree at `f9ca597` plus session B's `415584d` / `4032aba` /
-`d315c6f`.** The built state in here moved three times during the writing of the
-plan, so every claim names what it was read from.
+`d315c6f`.** **Refreshed 2026-08-16 against the TRD-4/5/6/7 ledgers at
+`d782d2e`.** Built-state is those ledgers. Every claim that is a measurement
+names what it was read from.
 
 ---
 
@@ -181,9 +182,11 @@ does not replace the picture look.
 
 ## 5. Refine on LTX
 
-`build_song.workflow()` returns for the LTX families before the refine block is
-reached, so `--refine` on `ltx25` — the catalogue default — does nothing and says
-nothing.
+The silent no-op is gone. `_refine_ltx` attaches variant A on LTX
+(`T5-1`/`T5-3`/`T5-4`, `test_clip_length.py`). `--refine` either adds that
+pass or raises. The GPU pair that proves the pass changes the picture
+(`T5-2`) and the peak-VRAM reading (`T5-5`) are **NOT MEASURED**. Variant
+B does not fit; that finding is on `CATALOG['ltx25']['notes']` (`T5-6`).
 
 **Do not wire the WAN refiner to LTX.** It re-samples the s2v latent with
 `wan22_i2v_low` and that is valid *only* because s2v and i2v-low share
@@ -258,12 +261,11 @@ still accept a 30 s divisor so song length owns clip count.
 
 ## 6. Queue, lifecycle and identity (TRD-6)
 
-25 criteria, and TRD-6 §8 states the design constraint better than a design
-section can: **every criterion here describes machinery that does not exist, so
-each must be written as a red test first** or the document is satisfied at scale
-by never building it.
+The TRD-6 ledger is **built** (`T6-1`…`T6-A10`). §8's warning — write the red
+test first or the document is satisfied by never building it — is why those
+rows name a test. It is not a description of the tree today.
 
-**What is already true**, and should not be rebuilt: `artefacts.expect_json`
+**What shipped**, and should not be rebuilt: `artefacts.expect_json`
 written at submit time by `pipeline._stamp_expect` from
 `build_song.expect_from_workflow` (`T6-11`); `pipeline._backend_vanished`
 distinguishing a box that went away from a workflow a box refused, which arrive
@@ -275,26 +277,16 @@ and two spellings of one file are one row (`T6-8`); a job handler's land +
 findings writes are one transaction (`T6-14`, `jobs.writes()`), and `_run_one`
 still drops the write lock before a long handler (`T6-16`).
 
-**The shape of what is not:**
+Also shipped: `T6-13a` (`songs.duration` is the authority;
+`test_t6_13a_songs_duration_is_the_authority_and_nothing_reprobes`);
+`T6-2` ready ≠ queued so `T2-11` chains wait; `T6-1` one studio worker
+plus Swarm assign. Do not add a second pull queue.
 
-- **`T6-13a` first, and it does not wait for the rest.** `songs.duration`, written
-  once from ffprobe on upload, is the authority. TRD-1 §3.2 (`app.clip_count`),
-  TRD-2 §3.4 (`grok.generate_storyboard`) and TRD-3 §4.4 (`qc_service.run_song`
-  assembled expect; `h_qc` forwards) all read that column; a re-ffprobe on those
-  paths fails
-  `test_t6_13a_songs_duration_is_the_authority_and_nothing_reprobes`.
-  `DDD-1-3` §6's chain now starts at `T6-13a`.
-- **Identity before lifecycle before queue.** `T6-8`'s path is the join key
-  later rows attach to. Cascade policy is stated **per table**, not inherited
-  from whatever sqlite does.
-- **`T6-2` is the criterion that makes chains safe**: "ready" expressed
-  separately from "queued", because a chained clip needs its predecessor's last
-  frame to exist (TRD-2 `T2-11`).
-- **`T6-1`'s pull model is a rewrite of machinery that works.** A backend that is
-  slow, off, or behind a VPN self-corrects by pulling less, and the measured
-  291.6 s vs 378.2 s inversion never arises because nothing is split by a
-  forecast. It is right, and it is the phase most likely to cost more than it
-  returns if it starts before TRD-4/5/7 are done.
+**The shape of what is left:**
+
+- **`T6-18` still deletes nothing.** Garbage collection is deferred by name.
+  A confirmed-cleanup job is a new criterion, not a silent delete in the
+  write path.
 
 ## 7. Where the studio still owns two copies of one fact
 
@@ -302,12 +294,13 @@ Design-level, because each is a place a future change can silently disagree with
 itself. Two are folded by `PLAN-TRD-4-7` §2; these are the ones that remain in
 code rather than in documents.
 
-- **`DEFAULT_VIEWS` / `ANCHOR_VIEWS`** — §2. The last hand-kept view pair.
-- **`ALBUM_FIELDS` defaults vs `make_anchor`'s constants** — `4032aba` fixed the
-  `body` case *and the general shape remains*: `album_profile()` fills every
-  field from its default, so a truthy default always beats the constant. The
-  negation walker now covers both; nothing yet asserts they *agree* except for
-  `body`.
+- **`DEFAULT_VIEWS` / `ANCHOR_VIEWS`** — **folded** (`T7-1`): both are
+  projections of `make_anchor.VIEWS`. Adding a view is one table entry.
+- **`ALBUM_FIELDS` defaults vs `make_anchor`'s constants** — `4032aba` fixed
+  `body`. The walker now asserts `body`, `backdrop` and `composite` are the
+  same string as their `make_anchor` constants (`T4-11` / TRD-4 §9.1). A
+  truthy album default still beats the constant at compose time — that is
+  why the walker exists.
 - **`DENOISE_CHOICES`' labels vs `latent_mode`** — §4, `T7-8`. One resolver, or
   the label and the graph drift the moment either moves.
 
