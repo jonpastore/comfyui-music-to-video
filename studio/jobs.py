@@ -138,6 +138,7 @@ LABELS = {
     "render_song": "Assemble song video",
     "render_set": "Render playlist set",
     "edit_audio": "Edit audio",
+    "cleanup_clips": "Clean up clip files",
 }
 
 

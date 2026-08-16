@@ -207,11 +207,14 @@ worker share one file, and WAL is already on.
   rows keep working with the column NULL**, which is the compatibility rule
   every column added this week already follows (`expect_json`,
   `scene_seconds`, `resident_gib`).
-- `T6-18` **Nothing is deleted by this document.** Garbage collection is
-  deferred by name in the reconciliation because it needs a manifest of what was
-  pushed where — and §4's expectation record plus §3's identity rules are most
-  of that manifest. When GC is specified it extends these tables rather than
-  inventing its own, and the shapes here must not make that harder.
+- `T6-18` **Nothing is deleted by this document's lifecycle writes.** Assemble,
+  re-render and repair never delete. The shapes here are the manifest a later
+  delete job reads. T6-18 is not weakened by T6-19.
+- `T6-19` **Operator-confirmed clip cleanup.** Confirm is a separate act from
+  assemble. Dry-run lists targets and writes nothing. Explicit run deletes
+  **local** clip files at `clips.path` (`os.remove`). `artefacts.host` is on
+  the listing; this job does not SSH-delete a remote box. KEEP anchors, refs,
+  storyboards, assembled file, findings rows. `cleanup_service`.
 
 ## 7. Explicitly not building
 
@@ -296,3 +299,4 @@ current.
 | `T6-A4` no template computes | **built** | this change | `test_t6_a4_queue_page_shows_stubbed_values_unmodified`: stub `queue_ctx` with elapsed `12.7s` and counts 3/7 (not the list lengths); `/queue` shows those strings unmodified. `_queue.html` interpolates `queue_n_running`, `queue_n_waiting`, `queue_rows`, `e.elapsed`. `_jobs_panel.html` still formats elapsed. |
 | `T6-A5` predecessor and successor listed and selectable | **built** | this change | `qc_service.listed` / `select` are the shared entry point (T6-A10). Set re-render (`h_render_set`), refine (`refine_generated_still`), repair (`h_repair`) and anchor re-roll (`h_anchor`) each write a sibling and call `record_pair`. `test_t6_a5_*` picks the predecessor, then the successor; both files stay. `GET/POST /api/qc/lineage`, `GET /api/sets/{id}/renders` + `/pick`. T6-6 cites this criterion. |
 | `T6-A3` service imports nothing from FastAPI; tests call it directly | **built** | this change | `sets_service.py` and `storyboard_service.py` have no `fastapi` import (AST). `test_t6_a3_*` creates a set, adds an item, reads payload, clamps `scene_seconds` 100→60, and flags a 20s/120s meter miss by calling the functions with no request. JSON handlers `api_sets_create` / `api_set_add_item` / `api_start_storyboard` / `api_storyboard_meter` no longer default or compute. |
+| `T6-19` operator-confirmed clip cleanup | **built** | this change | `cleanup_service`: confirm ≠ assemble; dry-run lists clips (`artefacts.host` recorded) and deletes none; confirm+run deletes **local** `clips.path` files and keeps anchors/refs/storyboard/assembled/findings. Unconfirmed refuses. No remote SSH delete. `studio/test_t6_19_confirmed_cleanup.py` |

@@ -385,9 +385,21 @@
   {% if renders %}
   <ul class="tier-links">
     {% for r in renders %}
-    <li>{{ r.tier | tiername }}: <a href="{{ media_url(r.path) }}">{{ r.path.split('/')[-1] }}</a></li>
+    <li>{{ r.tier | tiername }}: <a href="{{ media_url(r.path) }}">{{ r.path.split('/')[-1] }}</a>
+      {% if r.confirmed %}
+      <span class="tag">confirmed</span>
+      {% else %}
+      <form method="post" action="/songs/{{ song.id }}/renders/{{ r.id }}/confirm" class="inline">
+        <button type="submit" class="secondary">Confirm clean</button>
+      </form>
+      {% endif %}
+    </li>
     {% endfor %}
   </ul>
+  <p class="hint">Confirm is separate from assemble. Clip cleanup is
+    <code>GET/POST /api/songs/{{ song.id }}/cleanup?tier=…</code>
+    (dry-run default; real delete needs <code>dry_run=0</code> and
+    <code>confirm=DELETE</code>). Local files only.</p>
   {% endif %}
 </section>
 

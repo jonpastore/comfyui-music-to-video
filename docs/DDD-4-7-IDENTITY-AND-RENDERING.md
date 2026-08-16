@@ -284,9 +284,9 @@ plus Swarm assign. Do not add a second pull queue.
 
 **The shape of what is left:**
 
-- **`T6-18` still deletes nothing.** Garbage collection is deferred by name.
-  A confirmed-cleanup job is a new criterion, not a silent delete in the
-  write path.
+- **`T6-18` still deletes nothing on write.** `T6-19` is the operator
+  confirm + dry-run + local `os.remove` of clip files. Remote twins are
+  listed via `artefacts.host`, not SSH-deleted.
 
 ## 7. Where the studio still owns two copies of one fact
 

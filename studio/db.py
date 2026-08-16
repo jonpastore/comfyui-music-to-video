@@ -426,6 +426,12 @@ MIGRATIONS = [
     "ALTER TABLE songs ADD COLUMN minor_locked INTEGER DEFAULT 0",
     # T2-7: which model was asked when this version was produced.
     "ALTER TABLE prompt_versions ADD COLUMN model TEXT",
+    # T6-19: operator-confirmed clean assembled output. NULL/0 is unconfirmed;
+    # first assemble never silent-confirms.
+    "ALTER TABLE renders ADD COLUMN confirmed INTEGER DEFAULT 0",
+    "ALTER TABLE renders ADD COLUMN confirmed_at REAL",
+    "ALTER TABLE assets ADD COLUMN confirmed INTEGER DEFAULT 0",
+    "ALTER TABLE assets ADD COLUMN confirmed_at REAL",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and
