@@ -1249,9 +1249,11 @@ A style guide is falsifiable or it is decoration.
 - **No template computes.** `T6-A4`, asserted by a differential: stub the service
   to return known values and assert the page shows them unmodified.
   `test_t6_a4_queue_page_shows_stubbed_values_unmodified` is that check for
-  `/queue`. `test_t6_a4_storyboard_page_shows_stubbed_fill_pct_unmodified` is
+  `/queue`. `test_t6_a4_jobs_panel_shows_stubbed_elapsed_unmodified` is that
+  check for jobs panel elapsed (`jobs_ctx` preformats `e.elapsed`,
+  `T6-A4-jobs`). `test_t6_a4_storyboard_page_shows_stubbed_fill_pct_unmodified` is
   that check for the storyboard coverage meter (`coverage.fill_pct`,
-  `T6-A4-storyboard`). `_jobs_panel.html` still formats elapsed. `T6-A7` requires that
+  `T6-A4-storyboard`). `T6-A7` requires that
   differential to be able to fail: counts stay off list lengths so a
   `len()`-recompute mutation goes red (`test_t6_a7_measurement_can_fail.py`).
 - **The measurements in §2 are re-runnable.** Each is a one-line count, and a

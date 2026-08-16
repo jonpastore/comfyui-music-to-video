@@ -8795,35 +8795,46 @@ def jobs_refresh_secs(choice, busy):
         return JOBS_REFRESH_BUSY if busy else JOBS_REFRESH_IDLE
 
 
-@app.get("/jobs", response_class=HTMLResponse)
-def jobs_page(request: Request, refresh: str = "auto", partial: int = 0):
+def jobs_ctx(refresh: str = "auto"):
+    """Jobs panel rows and refresh. Formatted elapsed lives here (T6-A4).
+
+    Template interpolates only — no |format, no arithmetic on the seconds.
+    """
     now = time.time()
     entries = []
     for j in jobs.recent():
-        elapsed = None
-        if j["started"]:
-            elapsed = (j["finished"] or now) - j["started"]
+        raw = ((j["finished"] or now) - j["started"]) if j["started"] else None
+        elapsed = None if raw is None else f"{raw:.0f}s"
         entries.append({"job": j, "desc": jobs.describe(j), "elapsed": elapsed,
                          "cancelable": j["status"] in ("queued", "running")})
     busy = any(e["job"]["status"] in ("queued", "running", "cancelling") for e in entries)
     if refresh not in dict(JOBS_REFRESH_CHOICES):
         refresh = "auto"
-    ctx = {"jobs": entries, "active": jobs.active(), "refresh": refresh,
-           "refresh_secs": jobs_refresh_secs(refresh, busy),
-           "refresh_choices": JOBS_REFRESH_CHOICES,
-           # ComfyUI's OWN queue, which this app does not control: it is
-           # unauthenticated on the tailnet, so work can arrive there from
-           # anywhere and "nothing running" here never meant the card was idle
-           "comfy": pipeline.comfy_queue(),
-           # SwarmUI's backends, if it is running. A sibling of the count above,
-           # never a replacement: with two backends there are two answers.
-           "swarm": pipeline.swarm_backends(),
-           # WHICH of them actually renders. Read live rather than hardcoded in
-           # the template: this panel told everyone "nothing routes through
-           # Swarm yet" for as long as that was a sentence someone had typed,
-           # and a page that describes a render nobody is performing is the
-           # defect this codebase keeps making.
-           "render_backend": pipeline.RENDER_BACKEND}
+    return {
+        "jobs": entries,
+        "active": jobs.active(),
+        "refresh": refresh,
+        "refresh_secs": jobs_refresh_secs(refresh, busy),
+        "refresh_choices": JOBS_REFRESH_CHOICES,
+        # ComfyUI's OWN queue, which this app does not control: it is
+        # unauthenticated on the tailnet, so work can arrive there from
+        # anywhere and "nothing running" here never meant the card was idle
+        "comfy": pipeline.comfy_queue(),
+        # SwarmUI's backends, if it is running. A sibling of the count above,
+        # never a replacement: with two backends there are two answers.
+        "swarm": pipeline.swarm_backends(),
+        # WHICH of them actually renders. Read live rather than hardcoded in
+        # the template: this panel told everyone "nothing routes through
+        # Swarm yet" for as long as that was a sentence someone had typed,
+        # and a page that describes a render nobody is performing is the
+        # defect this codebase keeps making.
+        "render_backend": pipeline.RENDER_BACKEND,
+    }
+
+
+@app.get("/jobs", response_class=HTMLResponse)
+def jobs_page(request: Request, refresh: str = "auto", partial: int = 0):
+    ctx = jobs_ctx(refresh)
     # the poll swaps the panel only -- returning the whole page would nest a
     # second <html> inside the one already on screen
     return templates.TemplateResponse(request, "_jobs_panel.html" if partial else "jobs.html", ctx)

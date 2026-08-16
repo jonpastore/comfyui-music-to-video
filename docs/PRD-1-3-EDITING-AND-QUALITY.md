@@ -29,8 +29,10 @@ song_length / clip_seconds / scene_count / mismatch), and album arc
 same `arc_service.payload()` for song_count / act_count / premise /
 has_proposal; playlist payload stays T2-37-shaped).
 `T6-A4` is proven for the queue panel
-(`test_t6_a4_queue_page_shows_stubbed_values_unmodified`) and the
-storyboard coverage meter
+(`test_t6_a4_queue_page_shows_stubbed_values_unmodified`), the jobs panel
+elapsed label (`test_t6_a4_jobs_panel_shows_stubbed_elapsed_unmodified`,
+`T6-A4-jobs`: `jobs_ctx` owns preformatted `elapsed`; the template does
+not `|format`), and the storyboard coverage meter
 (`test_t6_a4_storyboard_page_shows_stubbed_fill_pct_unmodified`,
 `T6-A4-storyboard`: `coverage.fill_pct` is service-owned; the template
 does not recompute intent/rendered). `T6-A5` is proven for set re-render,

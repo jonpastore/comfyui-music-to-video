@@ -68,8 +68,11 @@ nothing from FastAPI; the five routes are thin. Copy that shape, do not invent a
 second one. `T6-A4` holds on `/queue`: `queue_ctx` emits the counts, the row
 list and a formatted `elapsed`, and `_queue.html` interpolates them. A stub that
 returns `12.7s` and counts that are not the list lengths is what the page
-shows (`test_t6_a4_queue_page_shows_stubbed_values_unmodified`). `_jobs_panel.html`
-still formats elapsed. **`T6-A4-storyboard` built**: `storyboard_service.coverage`
+shows (`test_t6_a4_queue_page_shows_stubbed_values_unmodified`). **`T6-A4-jobs`
+built**: `jobs_ctx` owns preformatted `elapsed` (`12s` / stub `12.7s`);
+`_jobs_panel.html` interpolates `e.elapsed` only (no `|format`). Stub
+differential: `test_t6_a4_jobs_panel_shows_stubbed_elapsed_unmodified`.
+**`T6-A4-storyboard` built**: `storyboard_service.coverage`
 owns `fill_pct`; `storyboard.html` interpolates `coverage.fill_pct` only (no
 intent/rendered division in the template). Stub differential:
 `test_t6_a4_storyboard_page_shows_stubbed_fill_pct_unmodified`.
