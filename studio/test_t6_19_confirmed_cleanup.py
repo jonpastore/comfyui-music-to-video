@@ -16,6 +16,7 @@ Mutations that must go red:
 """
 import inspect
 import os
+import shlex
 import tempfile
 import time
 
@@ -270,9 +271,38 @@ def test_t6_19_remote_with_twin_mapping_deletes_via_ssh(monkeypatch):
     assert calls, "ssh rm was not invoked"
     assert calls[0][0] == "ssh"
     assert f"jon@{remote}" in calls[0]
-    assert "/home/jon/comfy-backend/output/song_r/clip_000.mp4" in calls[0]
+    remote_cmd = calls[0][-1]
+    want = "/home/jon/comfy-backend/output/song_r/clip_000.mp4"
+    assert remote_cmd == f"rm -f -- {shlex.quote(want)}", remote_cmd
+    # Unquoted argv is the injection form; OpenSSH joins it through a shell.
+    assert calls[0][3:] != ["rm", "-f", "--", want]
     # Never invent: ssh target and path come from the known twin only.
-    assert "ComfyUI/output" not in " ".join(calls[0])
+    assert "ComfyUI/output" not in " ".join(str(x) for x in calls[0])
+
+
+def test_t6_19_remote_remove_quotes_shell_metacharacters(monkeypatch):
+    """OpenSSH shells the remote argv; an unquoted ; is injection."""
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+
+        class R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+        return R()
+
+    monkeypatch.setattr(cleanup_service.subprocess, "run", fake_run)
+    nasty = "/home/jon/comfy-backend/output/song_r/clip;reboot.mp4"
+    cleanup_service._remote_remove("jon@100.107.235.105", nasty)
+    assert calls, "ssh was not invoked"
+    remote_cmd = calls[0][-1]
+    assert remote_cmd == f"rm -f -- {shlex.quote(nasty)}", remote_cmd
+    # Unquoted form would let the remote shell see `;reboot`.
+    assert ";reboot" not in remote_cmd.replace(shlex.quote(nasty), "")
+    with pytest.raises(ValueError, match="unsafe"):
+        cleanup_service._remote_remove("jon@host", "/out/clip\n.mp4")
 
 
 def test_t6_19_run_default_is_dry_run():

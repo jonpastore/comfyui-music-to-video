@@ -16,6 +16,7 @@ rows, and artefacts rows (status cleaned so findings still join — T6-9).
     python3 cleanup_service.py   # self-check against a temporary database
 """
 import os
+import shlex
 import subprocess
 import time
 
@@ -272,14 +273,19 @@ def _remote_remove(ssh_target, remote_path):
 
     ssh_target is the left side of a SWARM_INPUT_DIRS entry (user@host or host).
     remote_path must already be a known twin — never constructed here.
+    OpenSSH runs the remote argv through a shell, so the path is one quoted
+    command — unquoted argv is injection (`;`, backticks, spaces).
     """
     if not ssh_target or not remote_path:
         raise ValueError("refusing remote delete without known target and path")
     if remote_path.endswith("/") or remote_path in (".", ".."):
         raise ValueError(f"refusing unsafe remote path: {remote_path!r}")
+    if "\n" in remote_path or "\r" in remote_path or "\x00" in remote_path:
+        raise ValueError(f"refusing unsafe remote path: {remote_path!r}")
+    remote_cmd = f"rm -f -- {shlex.quote(remote_path)}"
     subprocess.run(
         ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
-         ssh_target, "rm", "-f", "--", remote_path],
+         ssh_target, remote_cmd],
         check=True, capture_output=True, text=True, timeout=120,
     )
 
