@@ -48,12 +48,17 @@
            data-mismatch="{{ 'true' if mismatch else 'false' }}"
            data-fill-pct="{{ coverage.fill_pct }}">
     <p class="meta">{{ scene_count }} scenes ·
-      {{ coverage.intent | hms }} written ·
-      song {{ coverage.rendered | hms }}
+      asked {{ coverage.intent | hms }} ·
+      on the timeline {{ coverage.rendered | hms }} ·
+      song {{ song_length | hms }}
       {% if mismatch %}
-      · <span class="warn">scene time {{ scene_time }}s ≠ song {{ song_length }}s</span>
+      · <span class="warn">asked {{ scene_time | hms }} ≠ song {{ song_length | hms }}</span>
       {% endif %}
     </p>
+    <p class="hint">Asked is the sum of each scene's duration_guidance.
+      The timeline is how those scenes are scaled onto the mp3
+      ({{ song_length | hms }}). A 4s pin on a 3:10 track is why 50 scenes
+      ask for more time than the song.</p>
   </section>
 
   {% if all_videos %}

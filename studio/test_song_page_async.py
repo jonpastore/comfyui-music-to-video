@@ -106,6 +106,9 @@ def test_song_page_folds_and_storyboard_are_buttons():
         assert "Save" in panel.text
         assert "Generate" in panel.text
         assert "Scenes and timing" in panel.text
+        assert "asked" in panel.text
+        assert "on the timeline" in panel.text
+        assert "song 3:13" not in panel.text or "asked" in panel.text
         assert 'id="ref-preview"' in client.get("/").text
 
 
