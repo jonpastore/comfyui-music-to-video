@@ -184,7 +184,7 @@ def test_t6_a3_enqueue_storyboard_clamps_without_a_request():
     assert args["scene_seconds"] == 60.0, args
     omitted = storyboard_service.enqueue(sid, "pg13")
     oargs = _job_args(omitted)
-    assert oargs["scene_seconds"] == 4.0, oargs
+    assert oargs["scene_seconds"] is None, oargs
 
 
 def test_t6_a3_handlers_do_not_default_or_decide():

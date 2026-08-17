@@ -51,14 +51,8 @@
     <textarea name="direction" rows="8" maxlength="{{ max_direction }}">{{ direction }}</textarea>
   </label>
 
-  <label>About how long each scene should run (seconds)
-    <input type="number" name="scene_seconds" min="1" max="60" step="0.5"
-           value="{{ scene_seconds }}">
-  </label>
-  <p class="hint">This track at {{ scene_seconds }}s is about
-    <strong>{{ expect_scenes }}</strong> scenes &mdash; one still and one
-    prompt each. A scene longer than one render splits automatically.
-    4s makes ~50 short scenes on a 3-minute song; 12&ndash;15s is a
-    handful of real scenes.</p>
+  <p class="hint">The storyboard writes the scenes and their lengths. You do
+    not set a clip count. A scene longer than one render splits
+    automatically (last frame of part N starts part N+1).</p>
   <button type="submit">Generate storyboard</button>
 </form>

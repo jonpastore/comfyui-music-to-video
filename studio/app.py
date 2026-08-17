@@ -5604,13 +5604,10 @@ def storyboard_form_ctx(song, tier, chat_models=None, best=None, direction=None)
             if from_board:
                 stored = from_board
         direction = stored or beat or default_direction(song, tier)
-    secs = storyboard_service.DEFAULT_SCENE_SECONDS
     return {"song": song, "tier": tier, "tiers": tiers.all_tiers(),
             "direction": direction, "pinned": tiers.PINNED.strip(),
             "tier_text": tier_tone(tier, song["album"] or ""),
             "max_direction": grok.MAX_DIRECTION,
-            "scene_seconds": secs,
-            "expect_scenes": storyboard_service.clip_count(song, secs),
             "models": chat_models if chat_models is not None else [], "best_model": best}
 
 
@@ -5681,8 +5678,9 @@ def storyboard_form(request: Request, id: int, tier: str):
 @app.post("/songs/{id}/storyboard")
 def start_storyboard(request: Request, id: int, tier: str = Form(...),
                       model: str = Form(""),
-                      scene_seconds: float = Form(4.0), direction: str = Form("")):
-    jid, direction = enqueue_storyboard(id, tier, model, scene_seconds, direction)
+                      scene_seconds: str = Form(""), direction: str = Form("")):
+    secs = scene_seconds.strip() if isinstance(scene_seconds, str) else scene_seconds
+    jid, direction = enqueue_storyboard(id, tier, model, secs or None, direction)
     return json_or_redirect(
         request,
         {"job_id": jid, "kind": "storyboard", "tier": tier, "prompt": direction},

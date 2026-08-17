@@ -1013,24 +1013,14 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
     model = _resolve_model(model)
 
     sections = parse_sections(lyrics)
-    # scene_seconds=None (the default) hands the count to the model: it has the
-    # lyrics and the track length, and a fixed seconds-per-scene made pacing a
-    # slider rather than a reading of the song.
-    # DECIDED 2026-08-12 by Jon (docs/TRD-2 3.4): scene_seconds WINS. The old
-    # max(len(sections), ...) floored the count at one scene per lyric section,
-    # so Rear Entrance's 25 sections returned 25 scenes at 7.83s whether 15s or
-    # 30s was asked for -- "clip length defined by the storyboard" resolved to
-    # 7.83s and no amount of asking changed it. One scene is one clip now.
+    # Default (scene_seconds=None): the storyboard dictates the scene count.
+    # The writer has the lyrics and the track; it must tile the song (T2-8b).
+    # Decided 2026-08-17: do not pin ceil(duration / 4s) — that minted 50
+    # clip-shaped "scenes" on Hard to Handle. An explicit scene_seconds still
+    # pins n_clips_for for T2-8 / T2-9 tests and anyone who asks.
     #
-    # The floor was in TWO live places. Deleting it here alone would have done
-    # nothing visible: validate() rejected a short storyboard, and `problems`
-    # feeds the RETRY LOOP, so the model was told to fix it and handed back 25
-    # scenes again. See validate(expect_scenes=...) below -- they move together.
-    #
-    # sections is still read: it is the min_scenes floor for the UNPINNED path
-    # (scene_seconds=None), where the model chooses the count and one scene per
-    # section is the right guidance.
-    # One implementation: duration / legal scene_seconds (T2-12a / T2-13).
+    # The old lyric-section floor remains only on this unpinned path
+    # (validate expect_scenes=None): at least one scene per lyric section.
     n_scenes = n_clips_for(song["duration"], scene_seconds) if scene_seconds else None
 
     exemplar, exemplar_md, from_file = _exemplar()

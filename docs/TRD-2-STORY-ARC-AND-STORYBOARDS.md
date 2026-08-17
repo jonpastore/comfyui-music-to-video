@@ -231,12 +231,12 @@ the approve grid and let clip generation start with two thirds of its references
 missing"*, because `clip_plan` spreads a 20-scene storyboard across all 41 clips
 of a 3:16 track.
 
-**Both survive.** Duration is the dividend; `scene_seconds` is the divisor; the
-count is `ceil(duration / scene_seconds)` and is therefore always ours. The
-operator grid is **scenes** (`clip_chain_plan` heads). Video parts past the
-first of a scene are last-frame chained (T2-10 / T2-11), not tiles. The old
-bug was trusting the MODEL's scene count for the *video* plan; that is still
-not what `n_clips_for` does.
+**Decided 2026-08-17:** the storyboard dictates the scene count. Generate
+does not pin `ceil(duration / 4s)` (that minted 50 clip-shaped scenes on
+Hard to Handle). An explicit `scene_seconds` still pins `n_clips_for` for
+tests and anyone who asks. The operator grid is those scenes. Video parts
+past the first of a scene are last-frame chained (T2-10 / T2-11), not
+tiles. `n_clips_for` is the optional pin, not the default.
 
 - `T2-13` **`CHUNK` has exactly one reader.** `build_song.clip_seconds()` and
   `n_clips_for()` are it; `build_storyboard`, `build_refs`, `reroll_refs`,

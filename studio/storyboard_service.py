@@ -180,8 +180,9 @@ def check_direction(direction, tier=None):
 
 
 def clamp_scene_seconds(scene_seconds):
+    """Optional pacing pin. Empty/None means the storyboard chooses the count."""
     if scene_seconds is None or scene_seconds == "":
-        scene_seconds = DEFAULT_SCENE_SECONDS
+        return None
     try:
         scene_seconds = float(scene_seconds)
     except (TypeError, ValueError):

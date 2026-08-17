@@ -404,8 +404,8 @@ from `nclips` alone. Assembly still clamps to the track — an overrun
 is a signal, not the expected leftover of 4.8125 s quantisation.
 The storyboard planner prompt does not tell the model clips are a fixed
 4.8125 s (`T2-14a`). The song-page Direction box is the **brief**, not
-the board; existing G/XXX links open the scenes. `scene_seconds` is on
-the generate form so 4s no longer silently yields ~50 tiles.
+the board; existing G/XXX links open the scenes. Scene count is the
+board's; there is no clip-count or scene-seconds setter on generate.
 Its clip-length line is `clip_seconds(scene_seconds)`,
 so two plannings produce two TIMING statements (`T2-14b`). TIMING still
 states track length and requires scene durations to sum to it (`T2-14c`).
