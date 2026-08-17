@@ -2944,49 +2944,47 @@ async def upload_style(id: int, image: UploadFile = File(...), note: str = Form(
 
 
 def nest_anchor_groups(group_list):
-    """Tier tabs → clothed/nude sub-tabs → one row per camera position.
+    """Tier → character → clothed/nude → one row per camera position.
 
     Flat groups stay available for tests that walk candidates; the page
     renders this nest so a dozen sheets do not dump as one long column.
     """
-    sections = []
-    index = {}
+    albums = {}
     for g in group_list:
-        key = (g["scope_kind"], g["scope_value"], g["character_id"], g["character_name"])
-        if key not in index:
-            index[key] = {"scope_kind": key[0], "album": key[1],
-                          "character_id": key[2],
-                          "character_name": key[3] or "protagonist",
-                          "tier_map": {}}
-            sections.append(index[key])
-        sec = index[key]
+        album = g["scope_value"]
+        if album not in albums:
+            albums[album] = {"scope_kind": g["scope_kind"], "album": album,
+                             "tier_map": {}}
+        tmap = albums[album]["tier_map"]
         tier = g["tier"] or ""
-        if tier not in sec["tier_map"]:
-            sec["tier_map"][tier] = {"clothed": {}, "nude": {}}
+        tmap.setdefault(tier, {})
+        who = (g["character_id"], g["character_name"] or "protagonist")
+        tmap[tier].setdefault(who, {"clothed": {}, "nude": {}})
         family = view_family(g["view"])
         pos = view_position_label(g["view"])
-        sec["tier_map"][tier][family].setdefault(pos, []).append(g)
+        tmap[tier][who][family].setdefault(pos, []).append(g)
     out = []
-    for sec in sections:
+    for album, sec in albums.items():
         tiers = []
-        for name, fams in sec["tier_map"].items():
-            families = []
-            for fam_key in ("clothed", "nude"):
-                rows = [{"position": pos, "groups": gs}
-                        for pos, gs in fams[fam_key].items()]
-                families.append({"key": fam_key, "rows": rows})
-            # XXX work is nude-first. Open that family when the tab has nudes
-            # so the operator is not one click away from the sheets they came
-            # for. R/G/PG-13 stay on clothed.
-            default_key = ("nude" if name == "xxx"
-                           and any(f["key"] == "nude" and f["rows"] for f in families)
-                           else "clothed")
-            for fam in families:
-                fam["default"] = fam["key"] == default_key
-            tiers.append({"name": name, "families": families})
+        for name, chars in sec["tier_map"].items():
+            characters = []
+            for (cid, cname), fams in chars.items():
+                families = []
+                for fam_key in ("clothed", "nude"):
+                    rows = [{"position": pos, "groups": gs}
+                            for pos, gs in fams[fam_key].items()]
+                    families.append({"key": fam_key, "rows": rows})
+                default_key = ("nude" if name == "xxx"
+                               and any(f["key"] == "nude" and f["rows"] for f in families)
+                               else "clothed")
+                for fam in families:
+                    fam["default"] = fam["key"] == default_key
+                characters.append({
+                    "character_id": cid, "character_name": cname,
+                    "families": families,
+                })
+            tiers.append({"name": name, "characters": characters})
         out.append({"scope_kind": sec["scope_kind"], "album": sec["album"],
-                    "character_id": sec["character_id"],
-                    "character_name": sec["character_name"],
                     "tab_id": f"anchor-gallery-{len(out)}",
                     "tiers": tiers})
     return out
@@ -3302,6 +3300,52 @@ async def assign_anchor_ref_as_sheet(request: Request, asset_id: int):
                        "content_tier": art_tier or tier}))
     update_ref_meta(asset_id, pose_name=name, pose_tier=tier, role="pose", pose_nude=nude)
     return await _anchor_form_or_redirect(request, album)
+
+
+@app.post("/anchors/upload-pose")
+async def upload_pose_sheet(request: Request, album: str = Form(...),
+                            tier: str = Form(...), key: str = Form(""),
+                            label: str = Form("uploaded pose"),
+                            nude: str = Form(""),
+                            image: UploadFile = File(...)):
+    """A sheet generated elsewhere (Mage, etc.) becomes the keeper for this pose."""
+    album = album.strip()
+    if not album:
+        raise HTTPException(400, "album required")
+    valid_tier_or_400(tier)
+    name = " ".join((label or "uploaded pose").split())[:80]
+    is_nude = str(nude).lower() in ("1", "on", "true", "yes") or "nude" in name.lower()
+    if is_nude and not tiers.allows_nudity(tier):
+        raise HTTPException(400, f"{tier.upper()} does not permit a nude sheet")
+    dest_dir = os.path.join(db.DATA, "uploads", "anchors", "album", safe_name(album))
+    path = await save_upload(image, MAX_IMAGE, dest_dir, "image",
+                             prefix=f"pose_{int(time.time() * 1000)}")
+    now = time.time()
+    aid = db.run(
+        "INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+        None, "anchor_ref", path,
+        json.dumps({"scope_kind": "album", "scope_value": album, "role": "pose",
+                    "pose_name": name, "pose_tier": tier, "pose_nude": is_nude,
+                    "source": "upload"}),
+        now)
+    view = pose_view_key(aid, is_nude)
+    db.run("""UPDATE anchors SET chosen=0 WHERE scope_kind='album' AND scope_value=?
+              AND tier=? AND view=? AND character_id IS NULL""",
+           album, tier, view)
+    new_id = db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path,
+                                            chosen, created, character_id, render_json)
+                       VALUES ('album',?,?,?,?,1,?,NULL,?)""",
+                    album, tier, view, path, now,
+                    json.dumps({"source": "upload", "asset_id": aid, "pose_name": name}))
+    if key:
+        try:
+            cov = pose_plan.album_coverage(album, tier)
+            group = next((x for x in cov["needed"] if str(x["key"]) == str(key)), None)
+            if group:
+                pose_plan.stamp_binds(tier, group.get("binds") or [], new_id)
+        except (LookupError, OSError, ValueError, json.JSONDecodeError):
+            pass
+    return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 
 @app.post("/anchors/refs/{asset_id}/delete")

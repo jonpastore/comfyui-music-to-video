@@ -48,6 +48,9 @@
     </label>
   </div>
 
+  <details class="disclose" {% if selected_tiers %}open{% endif %}>
+    <summary>Tiers
+      <span class="muted">{% if selected_tiers %}{{ selected_tiers | join(", ") }}{% else %}none ticked{% endif %}</span></summary>
   <fieldset>
     <legend>Tiers &mdash; one tab, and one set of sheets, per tier</legend>
     <div class="check-row">
@@ -63,7 +66,11 @@
       {% endfor %}
     </div>
   </fieldset>
+  </details>
 
+  <details class="disclose" {% if selected_views %}open{% endif %}>
+    <summary>Views
+      <span class="muted">{% if sheet_count %}{{ sheet_count }} sheet{{ "" if sheet_count == 1 else "s" }}{% else %}none ticked{% endif %}</span></summary>
   <fieldset class="views-fieldset">
     <legend>Views &mdash; one sheet per ticked cell, per tier</legend>
     <div class="view-toolbar">
@@ -144,9 +151,13 @@
     <p class="hint"><strong>{{ sheet_count }}</strong> sheet{{ "" if sheet_count == 1 else "s" }}
       to render, each with its own candidates.</p>
   </fieldset>
+  </details>
 
   {# ---- base images: kept, not re-uploaded every time ---- #}
   {% if saved_refs %}
+  <details class="disclose" open>
+    <summary>Base images
+      <span class="muted">{{ saved_refs | length }}</span></summary>
   <fieldset>
     <legend>Base images{{ help("refs") }}</legend>
     <p class="hint">Identity lock: tick up to {{ max_refs }} photographs of her.
@@ -216,6 +227,7 @@
       {% endfor %}
     </div>
   </fieldset>
+  </details>
   {% endif %}
 
   <label>Add reference images
@@ -236,6 +248,9 @@
   </div>
 
   {% if tier_panels %}
+  <details class="disclose">
+    <summary>Prompts
+      <span class="muted">per tier and view</span></summary>
   {# ---- the rules that apply, above the box they govern ---- #}
   <div class="guardrail-panel">
     <h3>What applies to every sheet</h3>
@@ -380,6 +395,7 @@
     <strong>Draft this prompt</strong> recommends one view;
     <strong>Draft all &hellip; prompts</strong> fills every selected position in that
     clothed or nude set. Nothing is saved until you Save or Generate.</p>
+  </details>
   {% else %}
   <p class="hint">Tick at least one tier and one view. Nothing is pre-selected.</p>
   {% endif %}
@@ -447,6 +463,9 @@
   </div>
 
   {# ---- render settings: the knobs that actually exist for this model ---- #}
+  <details class="disclose">
+    <summary>Render
+      <span class="muted">{% if runs %}{{ runs[0].summary }}{% else %}defaults{% endif %}</span></summary>
   <fieldset>
     <legend>Render &mdash; reference adherence</legend>
     {# The controls below OPEN on the last generation's settings for this album.
@@ -620,6 +639,7 @@
         (seed, +137, +274&hellip;), and a CFG sweep reuses it at every guidance value.</p>
     </details>
   </fieldset>
+  </details>
 
   {# Every help panel, once. A trigger may repeat -- the per-tier panels are a
      loop -- but an id may not. #}

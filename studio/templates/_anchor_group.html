@@ -7,11 +7,13 @@
   {# One bar per GROUP, not one for the page: a candidate only ever competes
      with its own scope+tier+view+character, and a selection spanning groups
      would delete across sheets that have nothing to do with each other. #}
+  {% if g.candidates | length > 1 %}
   <div class="candidate-bar" data-group>
-    <label class="check"><input type="checkbox" class="pick-all-anchors"> Select all</label>
+    <label class="check"><input type="checkbox" class="pick-all-anchors"> Select all in this pose</label>
     <span class="muted anchor-count">none selected</span>
     <button type="button" class="thumb-btn-danger delete-selected" hidden>Delete selected</button>
   </div>
+  {% endif %}
   <div class="candidate-grid">
     {% for c in g.candidates %}
     <div class="candidate {% if c.chosen %}picked{% endif %}" data-anchor="{{ c.id }}">

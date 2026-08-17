@@ -572,9 +572,25 @@ document.addEventListener("click", function (e) {
     return;
   }
 
+  var gtab = e.target.closest(".gallery-char-tab");
+  if (gtab) {
+    var groot = gtab.closest(".tier-panel") || document;
+    var gkey = gtab.getAttribute("data-char");
+    groot.querySelectorAll(".gallery-char-tab").forEach(function (t) {
+      t.classList.toggle("active", t === gtab);
+    });
+    groot.querySelectorAll(".gallery-char-panel").forEach(function (p) {
+      var on = p.getAttribute("data-char") === gkey;
+      p.classList.toggle("hidden", !on);
+      if (on) revealLazy(p);
+    });
+    return;
+  }
+
   var ftab = e.target.closest(".family-tab");
   if (ftab) {
-    var root = ftab.closest(".tier-panel") || ftab.closest(".gallery-section") || document;
+    var root = ftab.closest(".gallery-char-panel") || ftab.closest(".tier-panel")
+      || ftab.closest(".gallery-section") || document;
     root.querySelectorAll(".family-tab").forEach(function (t) {
       t.classList.toggle("active", t === ftab);
       t.setAttribute("aria-selected", t === ftab ? "true" : "false");
@@ -2304,12 +2320,12 @@ function initAnchors() {
     if (!confirm(msg)) return;
     api("/anchors/delete", {anchor_ids: [Number(card.dataset.anchor)]})
       .then(function () {
-        var sec = card.closest("section.card");
+        var sec = card.closest("section.anchor-group") || card.closest("section.card");
         card.remove();
         if (next) { show(next); }
         else { box.close(); }
-        if (sec && !sec.querySelectorAll(".candidate").length) sec.remove();
-        else if (sec) refreshGroup(sec);
+        dropEmptyGroup(sec);
+        if (sec && sec.parentNode) refreshGroup(sec);
       })
       .catch(function (err) {
         box.querySelector(".lightbox-pos").textContent = "not deleted: " + err.message;
@@ -2324,7 +2340,10 @@ function initAnchors() {
   });
 
   // ---- selection, per GROUP ----
-  function sectionOf(el) { return el.closest("section.card"); }
+  function sectionOf(el) {
+    return el.closest("section.anchor-group") || el.closest("[data-group]")
+      || el.closest("section.card");
+  }
   function boxesIn(sec) { return Array.prototype.slice.call(sec.querySelectorAll(".pick-anchor")); }
   function chosenIn(sec) { return boxesIn(sec).filter(function (b) { return b.checked; }); }
 
@@ -2348,13 +2367,22 @@ function initAnchors() {
     }
   });
 
+  function dropEmptyGroup(sec) {
+    if (!sec || sec.querySelectorAll(".candidate").length) return;
+    var head = sec.previousElementSibling;
+    sec.remove();
+    if (head && head.classList && head.classList.contains("anchor-row-head")) {
+      var nxt = head.nextElementSibling;
+      if (!nxt || !nxt.classList.contains("anchor-group")) head.remove();
+    }
+  }
   function removeCards(sec, ids) {
     ids.forEach(function (id) {
       var card = sec.querySelector('.candidate[data-anchor="' + id + '"]');
       if (card) card.remove();
     });
-    if (!sec.querySelectorAll(".candidate").length) sec.remove();
-    else refreshGroup(sec);
+    dropEmptyGroup(sec);
+    if (sec && sec.parentNode) refreshGroup(sec);
   }
   function say(sec, msg) {
     var c = sec.querySelector(".anchor-count");

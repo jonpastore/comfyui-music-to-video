@@ -45,5 +45,19 @@
           data-scenes="{{ g.n_scenes }}"
           title="Copy a detailed prompt for Mage">Generate…</button>
   <textarea class="pose-brief-text" hidden readonly>{{ pose_mage_prompt(album, tier, g) }}</textarea>
+  <form method="post" action="/anchors/upload-pose" enctype="multipart/form-data"
+        class="pose-upload" title="Upload a sheet generated elsewhere">
+    <input type="hidden" name="album" value="{{ album }}">
+    <input type="hidden" name="tier" value="{{ tier }}">
+    <input type="hidden" name="key" value="{{ g.key }}">
+    <input type="hidden" name="label" value="{{ g.label }}">
+    <label class="icon-btn">
+      <span class="visually-hidden">Upload sheet for {{ g.label }}</span>
+      <input type="file" name="image" accept="image/*" required hidden
+             onchange="this.form.submit()">
+      <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+    </label>
+  </form>
   {% endif %}
 </li>

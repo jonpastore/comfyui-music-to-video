@@ -1112,7 +1112,11 @@ the top of the fold. **Generate…** opens a modal with a copyable Mage
 prompt from the storyboard’s pose/need text (`#pose-brief`).
 `POST /anchors/keeper` plus the save icon stamps the assignment — on
 `/anchors` and on the playlist Anchors fold. Roster thumbs open `#pose-preview`. Playlist Anchors uses
-character tabs and Clothed/Nude family tabs. Gallery tiles use icon
+character tabs and Clothed/Nude family tabs. On `/anchors` the gallery tabs are **tier → character → clothed/nude**.
+Delete selected applies to one pose group only; an emptied row is
+removed. The generate form’s tiers / views / prompts / render blocks
+are collapsible. A missing pose can take an uploaded third-party sheet
+(`POST /anchors/upload-pose`). Gallery tiles use icon
 actions (filled check = keeper, outline =
 pick, clear, delete) with `title` help. The Fix dialog has a help icon
 per action; Close sits on the far right; submit enqueues a new candidate

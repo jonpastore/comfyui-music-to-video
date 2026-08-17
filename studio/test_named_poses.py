@@ -227,10 +227,30 @@ def test_xxx_gallery_defaults_to_nude_family():
             })
         nest = appmod.nest_anchor_groups(groups)
         by_tier = {t["name"]: t for t in nest[0]["tiers"]}
-        xxx_default = [f["key"] for f in by_tier["xxx"]["families"] if f["default"]]
-        r_default = [f["key"] for f in by_tier["r"]["families"] if f["default"]]
+        xxx_default = [f["key"] for f in by_tier["xxx"]["characters"][0]["families"]
+                       if f["default"]]
+        r_default = [f["key"] for f in by_tier["r"]["characters"][0]["families"]
+                     if f["default"]]
         assert xxx_default == ["nude"]
         assert r_default == ["clothed"]
+        assert "characters" in by_tier["xxx"]
+        assert by_tier["xxx"]["characters"][0]["character_name"] == "protagonist"
+
+
+def test_upload_pose_becomes_chosen_sheet(tmp_path):
+    with TestClient(appmod.app) as client:
+        album = f"Upload Pose {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        png = _png_bytes()
+        r = client.post("/anchors/upload-pose",
+                        data={"album": album, "tier": "xxx", "key": "side-lying",
+                              "label": "side-lying"},
+                        files={"image": ("side.png", png, "image/png")},
+                        follow_redirects=False)
+        assert r.status_code == 303, r.text
+        row = db.one("SELECT * FROM anchors WHERE scope_value=? AND chosen=1", album)
+        assert row is not None
+        assert "side-lying" in (row["render_json"] or "")
 
 
 def test_storyboard_strip_uses_pose_name_not_view_key():

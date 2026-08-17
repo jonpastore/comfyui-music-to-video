@@ -125,7 +125,7 @@
 {% else %}
 {% for section in gallery %}
 <section class="card gallery-section">
-  <h2>{{ section.album }} &middot; {{ section.character_name }}</h2>
+  <h2>{{ section.album }}</h2>
   <div class="tier-tabs" data-album="{{ section.tab_id }}">
     {% for t in section.tiers %}
     <button type="button" class="tier-tab {% if loop.first %}active{% endif %}"
@@ -135,8 +135,17 @@
   {% for t in section.tiers %}
   <div class="tier-panel {% if not loop.first %}hidden{% endif %}"
        data-album="{{ section.tab_id }}" data-tier="{{ t.name }}">
-    <div class="family-tabs" role="tablist" aria-label="{{ t.name | tiername }} sheets">
-      {% for fam in t.families %}
+    <div class="cast-tabs" role="tablist" aria-label="Character">
+      {% for ch in t.characters %}
+      <button type="button" class="cast-tab gallery-char-tab {% if loop.first %}active{% endif %}"
+              data-char="{{ loop.index }}">{{ ch.character_name }}</button>
+      {% endfor %}
+    </div>
+    {% for ch in t.characters %}
+    <div class="gallery-char-panel {% if not loop.first %}hidden{% endif %}"
+         data-char="{{ loop.index }}">
+    <div class="family-tabs" role="tablist" aria-label="{{ t.name | tiername }} {{ ch.character_name }} sheets">
+      {% for fam in ch.families %}
       <button type="button" class="family-tab {% if fam.default %}active{% endif %}"
               data-family="{{ fam.key }}" aria-selected="{{ fam.default | lower }}">
         {{ fam.key | capitalize }}
@@ -144,7 +153,7 @@
       </button>
       {% endfor %}
     </div>
-    {% for fam in t.families %}
+    {% for fam in ch.families %}
     <div class="family-panel {% if not fam.default %}hidden{% endif %}"
          data-family="{{ fam.key }}">
       {% if not fam.rows %}
@@ -156,6 +165,8 @@
       {% include "_anchor_group.html" %}
       {% endfor %}
       {% endfor %}
+    </div>
+    {% endfor %}
     </div>
     {% endfor %}
   </div>
