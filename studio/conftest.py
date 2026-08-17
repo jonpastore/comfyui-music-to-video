@@ -145,6 +145,7 @@ def _write_storyboard(sb, outdir, slug, tier):
 
 classify_calls = []
 describe_calls = []
+look_draft_calls = []
 draft_calls = []
 edit_prompt_calls = []
 refs_calls = []
@@ -204,6 +205,12 @@ _stub("vision",
       describe_anchor=lambda image_path, field, model=None, progress=None: (
           describe_calls.append((image_path, field))
           or f"drafted {field} from the anchor"),
+      draft_look_field=lambda image_path, field, lyrics="", tier_guide="",
+                              current="", progress=None: (
+          describe_calls.append((image_path, field))
+          or look_draft_calls.append({"image": image_path, "field": field,
+                                      "lyrics": lyrics, "tier_guide": tier_guide})
+          or f"drafted {field} from lyrics and cover"),
       draft_view_prompt=lambda image_path=None, view="front", current="",
                                fields=None, progress=None: (
           draft_calls.append({"image": image_path, "view": view, "current": current})

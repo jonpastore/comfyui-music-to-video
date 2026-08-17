@@ -1,27 +1,66 @@
+  {% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_edit %}
+  <details class="song-fold pl-fold" open>
+    <summary><h2>Songs</h2>
+      <span class="muted">{{ d.song_count }} · {{ d.total_secs | hms }}</span></summary>
   {% if not d.rows %}
   <p class="empty">No songs added yet.</p>
   {% else %}
   <table class="list sortable" data-reorder-url="/playlists/{{ d.playlist.id }}/reorder">
-    <thead><tr><th></th><th>#</th><th>Song</th><th>Length</th><th>Play</th>
-               <th>Transition</th><th></th></tr></thead>
+    <thead><tr>
+      <th></th><th>#</th><th>Song</th>
+      <th class="num">Length</th>
+      <th>Play</th>
+      <th>Transition</th>
+      <th></th>
+    </tr></thead>
     <tbody>
     {% for r in d.rows %}
       <tr draggable="true" data-item="{{ r.item.id }}">
         <td class="grip" title="drag to reorder">&#8942;&#8942;</td>
         <td class="pos">{{ loop.index }}</td>
-        <td><a href="/songs/{{ r.item.song_id }}">{{ r.item.song_title }}</a></td>
-        <td>{{ r.item.duration | hms }}</td>
         <td>
-          {% if r.item.mp3_path %}<a href="{{ media_url(r.item.mp3_path) }}">audio</a>{% endif %}
-          {% for tier, path in r.videos %}
-          <a href="{{ media_url(path) }}">{{ tier | tiername }}</a>
-          {% endfor %}
-          {% if not r.videos %}<span class="muted">no video</span>{% endif %}
+          <a href="/songs/{{ r.item.song_id }}">{{ r.item.song_title }}</a>
+          {% if r.arc and (r.arc.role or r.arc.beat) %}
+          <div class="song-arc-beat muted" title="{{ r.arc.role }}{% if r.arc.role and r.arc.beat %} — {% endif %}{{ r.arc.beat }}">{{ r.arc.role }}{% if r.arc.role and r.arc.beat %} — {% endif %}{{ r.arc.beat }}</div>
+          {% endif %}
         </td>
-        <td>{{ r.item.transition }} {{ r.item.secs }}s</td>
+        <td class="num">{{ r.item.duration | hms }}</td>
+        <td class="play-matrix">
+          {% if r.item.mp3_path %}<a href="{{ media_url(r.item.mp3_path) }}" title="Audio">audio</a>{% endif %}
+          {% for t in d.video_matrix %}
+            {% if r.video_by_tier.get(t) %}
+            <a class="tier-cell has" href="{{ media_url(r.video_by_tier[t]) }}"
+               title="{{ t | tiername }} video">{{ t | tiername }}</a>
+            {% else %}
+            <span class="tier-cell miss" title="No {{ t | tiername }} video">{{ t | tiername }}</span>
+            {% endif %}
+          {% endfor %}
+        </td>
         <td>
-          <form method="post" action="/playlists/{{ d.playlist.id }}/items/{{ r.item.id }}/delete">
-            <button type="submit" class="danger btn-sm">Remove</button>
+          <form method="post" action="/playlists/{{ d.playlist.id }}/items/{{ r.item.id }}"
+                class="trans-edit">
+            <select name="transition" title="Transition into the next song"
+                    aria-label="Transition into the next song">
+              {% for t in d.transitions %}
+              <option value="{{ t }}" {% if r.item.transition == t %}selected{% endif %}>{{ t }}</option>
+              {% endfor %}
+            </select>
+            <input type="number" name="secs" step="0.1" min="0" value="{{ r.item.secs }}"
+                   title="Transition length in seconds" aria-label="Transition seconds">
+            <button type="submit" class="icon-btn"
+                    title="Save this transition" aria-label="Save this transition">
+              {{ glyph_save() }}
+            </button>
+          </form>
+        </td>
+        <td>
+          <form method="post" action="/playlists/{{ d.playlist.id }}/items/{{ r.item.id }}/delete"
+                class="inline" onsubmit="return confirm('Remove {{ r.item.song_title }} from this playlist? The song itself stays.');">
+            <button type="submit" class="icon-btn danger-icon"
+                    title="Remove from playlist (the song stays)"
+                    aria-label="Remove {{ r.item.song_title }} from this playlist">
+              {{ glyph_delete() }}
+            </button>
           </form>
         </td>
       </tr>
@@ -31,7 +70,8 @@
   <p class="muted">Drag a row to reorder. Order saves on drop.</p>
   {% endif %}
 
-  <form method="post" action="/playlists/{{ d.playlist.id }}/items">
+  {% if songs %}
+  <form method="post" action="/playlists/{{ d.playlist.id }}/items" class="add-song-bar">
     <label>Song
       <select name="song_id" required>
         {% for s in songs %}<option value="{{ s.id }}">{{ s.title }}</option>{% endfor %}
@@ -39,255 +79,352 @@
     </label>
     <label>Transition
       <select name="transition">
-        <option value="fade">fade</option>
-        <option value="cut">cut</option>
-      </select>
-    </label>
-    <label>Secs <input type="number" step="0.1" name="secs" value="2.0"></label>
-    <button type="submit">Add song</button>
-  </form>
-
-  <h3>Story arc</h3>
-  <p class="hint">What the album is ABOUT, and what each track does in it &mdash; the
-    storyboard for a song is written against its own beat and its neighbours' ends.
-    <a href="/playlists/{{ d.playlist.id }}/arc">Open the arc &rarr;</a></p>
-
-  <h3>Render set</h3>
-  <form method="post" action="/playlists/{{ d.playlist.id }}/render">
-    <label class="check"><input type="checkbox" name="include_videos" value="true"> Include videos</label>
-    {% if d.video_tiers %}
-    <span class="tiers">
-      {% for t in d.video_tiers %}
-      <label class="check"><input type="checkbox" name="tier" value="{{ t }}"> {{ t | tiername }}</label>
-      {% endfor %}
-    </span>
-    {% else %}
-    <span class="muted">no tier has a video for every song
-      {%- if d.partial_tiers %} (partial: {{ d.partial_tiers | join(", ") }}){% endif -%}
-      &mdash; audio-only mix available</span>
-    {% endif %}
-    <button type="submit">Render set</button>
-  </form>
-  <p class="muted">Unticked renders one crossfaded mp3. Ticked renders one video
-    set per selected tier, and only tiers with a video for every song are offered.</p>
-
-  {% if d.sets %}
-  <ul class="tier-links">
-    {% for a in d.sets %}
-    <li><a href="{{ media_url(a.path) }}">{{ a.path.split('/')[-1] }}</a></li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-
-  <div class="section-head">
-    <h3>Album look</h3>
-    <span class="section-actions">
-      {# Fill READS the cover; Create WRITES a new one from these fields. Two
-         directions through the same pair of things, so they sit together. #}
-      <form method="post" action="/playlists/{{ d.playlist.id }}/fill"
-            hx-post="/playlists/{{ d.playlist.id }}/fill"
-            hx-target="#album-look-{{ d.playlist.id }}" hx-swap="outerHTML"
-            hx-disabled-elt="find button" hx-indicator="#fill-busy-{{ d.playlist.id }}">
-        <button type="submit" {% if not d.playlist.image_path %}disabled
-                title="Upload an album cover first"{% else %}
-                title="Read the album cover and fill the boxes below"{% endif %}>
-          Fill from cover
-        </button>
-      </form>
-      <span class="htmx-indicator muted" id="fill-busy-{{ d.playlist.id }}">
-        reading the cover&hellip;</span>
-      <button type="button" class="secondary"
-              onclick="document.getElementById('art-{{ d.playlist.id }}').showModal()">
-        Create album art&hellip;
-      </button>
-    </span>
-  </div>
-  <p class="muted">Every description the pipeline uses for this album. These used to be
-    written into make_anchor.py and build_refs.py, which made one album part of the code;
-    a new album is now these boxes. Blank means &ldquo;use the default shown&rdquo;.
-    Each box explains itself under <strong>?</strong>, and &#10024; drafts one from the
-    album's anchor.</p>
-  {# the partial is also rendered on its own by the wand and fill routes, where
-     the playlist is the top-level context -- bind the same names here #}
-  {% with playlist = d.playlist, profile_fields = d.profile_fields %}
-    {% include "_album_look_form.html" %}
-  {% endwith %}
-
-  <div class="section-head">
-    <h3>Cast</h3>
-    <span class="section-actions">
-      <form method="post" action="/playlists/{{ d.playlist.id }}/propose-cast"
-            hx-post="/playlists/{{ d.playlist.id }}/propose-cast"
-            hx-target="#cast-form-{{ d.playlist.id }}" hx-swap="outerHTML"
-            hx-disabled-elt="find button" hx-indicator="#cast-busy-{{ d.playlist.id }}">
-        <button type="submit" {% if not d.playlist.image_path %}disabled
-                title="Upload an album cover first"{% else %}
-                title="Look at the album cover and propose a supporting character"{% endif %}>
-          Propose a character from the cover
-        </button>
-      </form>
-      <span class="htmx-indicator muted" id="cast-busy-{{ d.playlist.id }}">
-        looking at the cover&hellip;</span>
-    </span>
-  </div>
-  <p class="muted">The album look above describes the <strong>protagonist</strong>. These are the
-    other NAMED characters &mdash; a duet partner, an antagonist. The storyboard is told who
-    exists and names the main actors per scene, and each named character's anchor is attached
-    to those scenes as an extra reference image. Extras and background crowd are deliberately
-    not listed: they need no anchor, and each one would spend a reference slot
-    (three images total, and the protagonist holds the first).</p>
-
-  {% if d.cast %}
-  {% for m in d.cast %}
-  <form method="post" action="/characters/{{ m.c.id }}/save" class="stack-form character-row">
-    <div class="field-row">
-      <strong>{{ m.c.name }}</strong>
-      {% if m.anchors %}
-      <span class="tag done">{{ m.anchors }} chosen anchor{{ "" if m.anchors == 1 else "s" }}</span>
-      {% else %}
-      <span class="warn">no anchor &mdash; naming this character in a scene does nothing yet</span>
-      {% endif %}
-      <a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">anchor &rarr;</a>
-    </div>
-    {% for f in d.character_fields %}
-    <label>{{ f }}
-      <textarea name="{{ f }}" rows="2">{{ m.c[f] or "" }}</textarea>
-    </label>
-    {% endfor %}
-    <div class="field-row">
-      <button type="submit">Save {{ m.c.name }}</button>
-    </div>
-  </form>
-  {# Copy shared wording from another cast member -- a band in matching
-     uniforms, a team in the same kit. Per FIELD, and IDENTITY is not on the
-     list: a band shares a uniform, not a face, and copying identity would give
-     two characters one appearance, which is the thing a cast exists to keep
-     apart. Copied, not linked: editing the source afterwards leaves this alone,
-     because a shared uniform still needs describing per character the moment
-     someone's sleeve is torn. #}
-  {% if d.cast | length > 1 %}
-  <form method="post" action="/characters/{{ m.c.id }}/copy-from" class="field-row copy-from">
-    <label>
-      <span class="label-text">Copy wording from</span>
-      <select name="source_id">
-        {% for o in d.cast if o.c.id != m.c.id %}
-        <option value="{{ o.c.id }}">{{ o.c.name }}</option>
+        {% for t in d.transitions %}
+        <option value="{{ t }}" {% if t == "fade" %}selected{% endif %}>{{ t }}</option>
         {% endfor %}
       </select>
     </label>
-    <div class="check-row">
-      {% for f in d.copyable_fields %}
-      <label class="check">
-        <input type="checkbox" name="field" value="{{ f }}"
-               {% if f == "wardrobe" %}checked{% endif %}> {{ f.replace("_", " ") }}
-      </label>
-      {% endfor %}
-    </div>
-    <button type="submit" class="secondary">Copy to {{ m.c.name }}</button>
-  </form>
-  {% endif %}
-  <form method="post" action="/characters/{{ m.c.id }}/delete" class="delete-character"
-        data-name="{{ m.c.name }}">
-    <button type="submit" class="danger">Delete {{ m.c.name }}</button>
-  </form>
-  {% endfor %}
-  {% else %}
-  <p class="empty">No named characters besides the protagonist.</p>
-  {% endif %}
-
-  {% with playlist = d.playlist, proposed = none %}
-    {% include "_cast_form.html" %}
-  {% endwith %}
-  <p class="hint">Blank fields fall back to the album look above, so a supporting character
-    still inherits its body-consistency wording &mdash; the one thing that must never be
-    missing from a prompt.</p>
-
-  <div class="section-head">
-    <h3>Anchors</h3>
-    <span class="section-actions">
-      <span class="muted">{{ d.anchor_count }} anchor{{ "" if d.anchor_count == 1 else "s" }}
-        across {{ d.character_count }} character{{ "" if d.character_count == 1 else "s" }}</span>
-      <label class="inline-label">Character
-        {# filters the tiles client-side: the anchors are already on the page,
-           and a round trip to hide half of them would be wasted #}
-        <select class="anchor-character-filter" data-album="{{ d.playlist.id }}">
-          <option value="">all characters</option>
-          {% for name, n in d.anchor_characters %}
-          <option value="{{ name }}">{{ name }} ({{ n }})</option>
-          {% endfor %}
-        </select>
-      </label>
-    </span>
-  </div>
-  <p class="muted">Character sheets for this album, one per character, tier and view. Every song
-    on the album renders against the CHOSEN one for its tier. Click any sheet to see it full
-    size beside its opposite view.</p>
-
-  {% if d.anchor_tiers %}
-  <div class="tier-tabs" data-album="{{ d.playlist.id }}">
-    {% for t in d.anchor_tiers %}
-    <button type="button" class="tier-tab {% if loop.first %}active{% endif %}"
-            data-tier="{{ t.name }}">
-      {{ t.name | tiername }} <span class="muted">({{ t.count }})</span>
+    <label>Secs
+      <input type="number" step="0.1" name="secs" value="2.0">
+    </label>
+    <button type="submit" class="icon-btn add-song-go"
+            title="Add this song to the playlist"
+            aria-label="Add this song to the playlist">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M7 3h2v4h4v2H9v4H7V9H3V7h4z"/></svg>
     </button>
-    {% endfor %}
-  </div>
+  </form>
+  {% elif d.song_count %}
+  <p class="muted">Every song in the library is already on this playlist.</p>
+  {% else %}
+  <p class="muted">No songs in the library yet.</p>
+  {% endif %}
+  </details>
 
-  {% for t in d.anchor_tiers %}
-  <div class="tier-panel {% if not loop.first %}hidden{% endif %}"
-       data-album="{{ d.playlist.id }}" data-tier="{{ t.name }}">
-    {% for group in t.rows %}
-    <h4 class="anchor-row-head">
-      {{ group.label }}
-      {% if group.nude %}<span class="tag">nudity permitted by this tier</span>{% endif %}
-    </h4>
-    <div class="anchor-row">
-      {% for a in group.anchors %}
-      <figure class="anchor-tile {% if a.chosen %}picked{% endif %}"
-              data-character="{{ a.character_name or 'protagonist' }}">
-        <img src="{{ media_url(a.path) }}" loading="lazy"
-             alt="{{ a.character_name or 'protagonist' }}, {{ a.tier | tiername }}, {{ a.view | viewname }}"
-             class="anchor-open" data-full="{{ media_url(a.path) }}"
-             data-opposite="{{ media_url(a.opposite) if a.opposite else '' }}"
-             data-label="{{ a.character_name or 'protagonist' }} &middot; {{ a.tier | tiername }} &middot; {{ a.view | viewname }}">
-        <figcaption>
-          <strong>{{ a.character_name or "protagonist" }}</strong>
-          &middot; {{ a.view | viewname }}
-          &middot; v{{ a.version }}
-          {% if a.chosen %}<span class="tag done">in use</span>{% endif %}
-          <br>
-          {# rendered in the BROWSER's timezone: the server is UTC and the
-             studio is used from a machine that is not #}
-          <time class="local-time muted" datetime="{{ a.created | isotime }}">
-            {{ a.created | isotime }}</time>
-        </figcaption>
-        <div class="anchor-actions">
-          {% if not a.chosen %}
-          <form method="post" action="/anchors/{{ a.id }}/pick">
-            <button type="submit">Use this</button>
-          </form>
-          {% endif %}
-          <button type="button" class="anchor-edit"
-                  data-anchor="{{ a.id }}"
-                  data-label="{{ a.character_name or 'protagonist' }} &middot; {{ a.tier | tiername }} &middot; {{ a.view | viewname }}"
-                  data-src="{{ media_url(a.path) }}">Edit</button>
-          <form method="post" action="/anchors/{{ a.id }}/delete" class="delete-anchor">
-            <button type="submit" class="thumb-btn-danger"
-                    {% if a.chosen %}disabled title="pick another sheet first"{% endif %}>
-              Delete
+  <details class="song-fold pl-fold" id="fold-arc">
+    <summary><h2>Story arc</h2>
+      <span class="muted">{% if premise %}{{ premise }}{% else %}what the album is about{% endif %}</span></summary>
+    {% include "_arc_panel.html" %}
+  </details>
+
+  <details class="song-fold pl-fold">
+    <summary><h2>Render set</h2>
+      <span class="muted">{% if d.video_tiers %}{{ d.video_tiers | join(", ") }} ready{% else %}audio mix{% endif %}</span></summary>
+    <form method="post" action="/playlists/{{ d.playlist.id }}/render" class="clip-bar js-busy-form">
+      <label class="check" title="Off: one crossfaded mp3. On: one video set per ticked tier.">
+        <input type="checkbox" name="include_videos" value="true"> Include videos</label>
+      {% if d.video_tiers %}
+        {% for t in d.video_tiers %}
+        <label class="check"><input type="checkbox" name="tier" value="{{ t }}"> {{ t | tiername }}</label>
+        {% endfor %}
+      {% endif %}
+      <button type="submit">Render set</button>
+      <span class="form-busy muted">Queuing the set&hellip;</span>
+      <button type="button" class="icon-btn help-tip"
+              title="What Render set does" aria-label="What Render set does"
+              data-label="Render set"
+              data-help="Off, this mixes one crossfaded mp3 of the playlist. On, it renders one video set per ticked tier. A tier is offered only when every song on the playlist already has a video at that rating. Partial tiers (some songs only) stay off the list so you do not queue a set that cannot finish.">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <path fill="currentColor" d="M7.3 6.2c0-.8.5-1.3 1.3-1.3s1.3.5 1.3 1.2c0 .6-.3.9-.9 1.3-.5.4-.8.7-.8 1.3h1.3c0-.4.2-.7.7-1.1.7-.5 1.3-1 1.3-2 0-1.3-1-2.2-2.4-2.2-1.5 0-2.6 1-2.6 2.5zm1.1 5.8h1.4V10.7H8.4z"/>
+        </svg>
+      </button>
+    </form>
+    {% if not d.video_tiers %}
+    <p class="notice">{% if d.partial_tiers %}Partial video on {{ d.partial_tiers | join(", ") }} — not enough to stitch a set.{% else %}No video tier covers every song.{% endif %} Audio mix is available.</p>
+    {% endif %}
+    {% if d.sets %}
+    <ul class="tier-links">
+      {% for a in d.sets %}
+      <li><a href="{{ media_url(a.path) }}">{{ a.path.split('/')[-1] }}</a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </details>
+
+  <details class="song-fold pl-fold">
+    <summary><h2>Album look</h2>
+      <span class="muted">{{ d.lead_name }}{% for m in d.cast %} · {{ m.c.name }}{% endfor %}</span></summary>
+    <div class="look-chrome">
+      <div class="cast-tabs" role="tablist">
+        <button type="button" class="cast-tab active" data-cast="lead">{{ d.lead_name }}</button>
+        {% for m in d.cast %}
+        <button type="button" class="cast-tab" data-cast="c{{ m.c.id }}">{{ m.c.name }}{% if m.is_lead %} <span class="tag">lead</span>{% endif %}</button>
+        {% endfor %}
+        <button type="button" class="cast-tab" data-cast="add">Add</button>
+      </div>
+      <span class="section-actions">
+        <form method="post" action="/playlists/{{ d.playlist.id }}/fill"
+              hx-post="/playlists/{{ d.playlist.id }}/fill"
+              hx-target="#album-look-{{ d.playlist.id }}" hx-swap="outerHTML"
+              hx-disabled-elt="find button" hx-indicator="#fill-busy-{{ d.playlist.id }}">
+          <button type="submit" {% if not d.playlist.image_path and not d.has_lyrics %}disabled
+                  title="Add songs with lyrics or a cover first"{% else %}
+                  title="Draft the lead's boxes from the album lyrics and the cover"{% endif %}>
+            Draft from lyrics + cover
+          </button>
+        </form>
+        <span class="htmx-indicator muted" id="fill-busy-{{ d.playlist.id }}">
+          reading lyrics and cover&hellip;</span>
+        <button type="button" class="secondary"
+                onclick="document.getElementById('art-{{ d.playlist.id }}').showModal()">
+          Create album art&hellip;
+        </button>
+        <form method="post" action="/playlists/{{ d.playlist.id }}/propose-cast"
+              hx-post="/playlists/{{ d.playlist.id }}/propose-cast"
+              hx-target="#cast-form-{{ d.playlist.id }}" hx-swap="outerHTML"
+              hx-disabled-elt="find button" hx-indicator="#cast-busy-{{ d.playlist.id }}"
+              hx-on::after-request="var t=this.closest('.pl-fold').querySelector('[data-cast=add]'); if(t) t.click();">
+          <button type="submit" {% if not d.playlist.image_path %}disabled
+                  title="Upload an album cover first"{% else %}
+                  title="Look at the album cover and propose a supporting character"{% endif %}>
+            Propose from cover
+          </button>
+        </form>
+        <span class="htmx-indicator muted" id="cast-busy-{{ d.playlist.id }}">
+          looking at the cover&hellip;</span>
+        <button type="button" class="icon-btn help-tip"
+                title="What album look is" aria-label="What album look is"
+                data-label="Album look"
+                data-help="The first tab is the album lead. Other tabs are named people. Tick Lead on a tab if they need a consistent face and an identity front. Story role (partner, antagonist) is a label, not that toggle. World and premise stay on the album lead. Sparkle drafts from every song's lyrics plus the cover.">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <path fill="currentColor" d="M7.3 6.2c0-.8.5-1.3 1.3-1.3s1.3.5 1.3 1.2c0 .6-.3.9-.9 1.3-.5.4-.8.7-.8 1.3h1.3c0-.4.2-.7.7-1.1.7-.5 1.3-1 1.3-2 0-1.3-1-2.2-2.4-2.2-1.5 0-2.6 1-2.6 2.5zm1.1 5.8h1.4V10.7H8.4z"/>
+          </svg>
+        </button>
+      </span>
+    </div>
+    <div class="cast-panel" data-cast="lead">
+      {% with playlist = d.playlist, profile_fields = d.profile_fields, look_tabs = d.look_tabs,
+              look_tab_help = d.look_tab_help, wardrobe_tiers = d.wardrobe_tiers,
+              character = none %}
+        {% include "_album_look_form.html" %}
+      {% endwith %}
+      <div class="anchor-row">
+        {% for a in d.anchors if not a.character_name %}
+        <figure class="anchor-tile {% if a.chosen %}picked{% endif %}"
+                data-character="{{ d.lead_name }}">
+          <button type="button" class="js-ref-preview thumb-open"
+                  data-full="{{ media_url(a.path) }}"
+                  data-label="{{ d.lead_name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
+                  title="Open this sheet">
+            <img src="{{ media_url(a.path) }}" loading="lazy" alt="">
+          </button>
+          <figcaption>
+            <span class="tile-meta">{{ a.tier | tiername }} · {{ a.view | viewname }}{% if a.version %} · v{{ a.version }}{% endif %}</span>
+            {% if a.chosen %}<span class="tag done">in use</span>{% endif %}
+          </figcaption>
+          <form method="post" action="/anchors/{{ a.id }}/delete" class="inline still-del">
+            <button type="submit" class="icon-btn danger-icon"
+                    title="Delete this sheet" {% if a.chosen %}disabled{% endif %}>
+              {{ glyph_delete() }}
             </button>
           </form>
+        </figure>
+        {% else %}
+        <p class="empty">No lead sheets yet.
+          <a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">Generate on Anchors</a></p>
+        {% endfor %}
+      </div>
+    </div>
+    {% for m in d.cast %}
+    <div class="cast-panel hidden" data-cast="c{{ m.c.id }}">
+      <div class="look-char-bar">
+        <label class="check" title="A lead needs an identity front and can take a reference slot. Untick to keep them as an extra with no consistency requirement.">
+          <input type="checkbox" name="figure_role" value="lead"
+                 form="album-look-{{ d.playlist.id }}-c{{ m.c.id }}"
+                 {% if m.is_lead %}checked{% endif %}>
+          Lead
+        </label>
+        <input type="hidden" name="figure_role_present" value="1"
+               form="album-look-{{ d.playlist.id }}-c{{ m.c.id }}">
+        <label class="inline-label">Story role
+          <input type="text" name="role" form="album-look-{{ d.playlist.id }}-c{{ m.c.id }}"
+                 value="{{ m.c.role or '' }}" placeholder="partner, antagonist">
+        </label>
+        {% if m.anchors %}
+        <span class="tag done">{{ m.anchors }} chosen</span>
+        {% elif m.is_lead %}
+        <span class="warn">no front — naming them in a scene does nothing yet</span>
+        {% endif %}
+      </div>
+      {% with playlist = d.playlist, profile_fields = m.profile_fields,
+              look_tabs = d.char_look_tabs, look_tab_help = d.look_tab_help,
+              wardrobe_tiers = m.wardrobe_tiers, character = m.c,
+              cast = d.cast, copyable_fields = d.copyable_fields %}
+        {% include "_album_look_form.html" %}
+      {% endwith %}
+      <p class="hint">Sheets for {{ m.c.name }}.
+        <button type="button" class="secondary btn-sm js-pick-anchor"
+                data-dialog="pick-{{ m.c.id }}">Choose a sheet</button></p>
+      <div class="anchor-row">
+        {% for a in d.anchors if a.character_name == m.c.name %}
+        <figure class="anchor-tile {% if a.chosen %}picked{% endif %}">
+          <button type="button" class="js-ref-preview thumb-open"
+                  data-full="{{ media_url(a.path) }}"
+                  data-label="{{ m.c.name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
+                  title="Open this sheet">
+            <img src="{{ media_url(a.path) }}" loading="lazy" alt="">
+          </button>
+          <figcaption>
+            <span class="tile-meta">{{ a.tier | tiername }} · {{ a.view | viewname }}{% if a.version %} · v{{ a.version }}{% endif %}</span>
+            {% if a.chosen %}<span class="tag done">in use</span>{% endif %}
+          </figcaption>
+          {% if not a.chosen %}
+          <form method="post" action="/anchors/{{ a.id }}/pick" class="inline">
+            <button type="submit" class="icon-btn" title="Use this sheet">Use</button>
+          </form>
+          {% endif %}
+          <form method="post" action="/anchors/{{ a.id }}/delete" class="inline still-del">
+            <button type="submit" class="icon-btn danger-icon" title="Delete this sheet"
+                    {% if a.chosen %}disabled{% endif %}>
+              {{ glyph_delete() }}
+            </button>
+          </form>
+        </figure>
+        {% else %}
+        <p class="empty">No sheets for {{ m.c.name }} yet.</p>
+        {% endfor %}
+      </div>
+      <dialog class="confirm-modal" id="pick-{{ m.c.id }}">
+        <div class="modal-bar">
+          <strong>Choose a sheet for {{ m.c.name }}</strong>
+          {{ modal_close() }}
         </div>
-      </figure>
+        <div class="anchor-row">
+          {% for a in d.anchors if a.character_name == m.c.name and not a.chosen %}
+          <figure class="anchor-tile">
+            <img src="{{ media_url(a.path) }}" alt="">
+            <figcaption>{{ a.tier | tiername }} · {{ a.view | viewname }}</figcaption>
+            <form method="post" action="/anchors/{{ a.id }}/pick">
+              <button type="submit">Use this</button>
+            </form>
+          </figure>
+          {% else %}
+          <p class="empty">Every sheet for {{ m.c.name }} is already in use, or none exist.
+            <a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">Generate on Anchors</a></p>
+          {% endfor %}
+        </div>
+      </dialog>
+    </div>
+    {% endfor %}
+    <div class="cast-panel hidden" data-cast="add">
+      {% with playlist = d.playlist, proposed = none %}
+        {% include "_cast_form.html" %}
+      {% endwith %}
+    </div>
+  </details>
+
+  <details class="song-fold pl-fold">
+    <summary><h2>Anchors</h2>
+      <span class="muted">{{ d.anchor_count }} sheets</span></summary>
+    {% if d.pose_need %}
+    <h3>Poses this album needs</h3>
+    {% for cov in d.pose_need %}
+    <details class="disclose" {% if loop.first %}open{% endif %}>
+      <summary>{{ cov.tier | tiername }}
+        · {{ cov.n_have }}/{{ cov.n_needed }}
+        {% if cov.n_missing %} · {{ cov.n_missing }} missing{% endif %}</summary>
+      <ul class="pose-need">
+        {% for g in cov.needed %}
+        <li class="{% if g.sheet_id %}have{% else %}missing{% endif %}">
+          {% if g.path %}
+          <img src="{{ media_url(g.path) }}" alt="" loading="lazy">
+          {% endif %}
+          <span>
+            <strong>{{ g.label }}</strong>
+            <span class="muted">{{ g.n_scenes }} scene{{ "" if g.n_scenes == 1 else "s" }}
+              · {% for s in g.songs %}<a href="/songs/{{ s.id }}">{{ s.title }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</span>
+            {% if not g.sheet_id %}
+            <a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">create this pose</a>
+            {% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endfor %}
+    {% endif %}
+    <div class="section-head">
+      <span class="section-actions">
+        <label class="inline-label">Character
+          <select class="anchor-character-filter" data-album="{{ d.playlist.id }}">
+            <option value="">all characters</option>
+            {% for name, n in d.anchor_characters %}
+            <option value="{{ name }}">{{ name }} ({{ n }})</option>
+            {% endfor %}
+          </select>
+        </label>
+      </span>
+    </div>
+
+    {% if d.anchor_tiers %}
+    <div class="tier-tabs" data-album="{{ d.playlist.id }}">
+      {% for t in d.anchor_tiers %}
+      <button type="button" class="tier-tab {% if loop.first %}active{% endif %}"
+              data-tier="{{ t.name }}">
+        {{ t.name | tiername }} <span class="muted">({{ t.count }})</span>
+      </button>
+      {% endfor %}
+    </div>
+
+    {% for t in d.anchor_tiers %}
+    <div class="tier-panel {% if not loop.first %}hidden{% endif %}"
+         data-album="{{ d.playlist.id }}" data-tier="{{ t.name }}">
+      {% for group in t.rows %}
+      <h4 class="anchor-row-head">
+        {{ group.label }}
+        {% if group.nude %}<span class="tag">nudity permitted by this tier</span>{% endif %}
+      </h4>
+      <div class="anchor-row">
+        {% for a in group.anchors %}
+        <figure class="anchor-tile {% if a.chosen %}picked{% endif %}"
+                data-character="{{ a.character_name or 'protagonist' }}">
+          <button type="button" class="js-ref-preview thumb-open anchor-open"
+                  data-full="{{ media_url(a.path) }}"
+                  data-opposite="{{ media_url(a.opposite) if a.opposite else '' }}"
+                  data-label="{{ a.character_name or d.lead_name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
+                  title="Open this sheet">
+            <img src="{{ media_url(a.path) }}" loading="lazy"
+                 alt="{{ a.character_name or d.lead_name }}, {{ a.tier | tiername }}, {{ a.view | viewname }}">
+          </button>
+          <figcaption>
+            <strong>{{ a.character_name or d.lead_name }}</strong>
+            &middot; {{ a.view | viewname }}{% if a.version %}
+            &middot; v{{ a.version }}{% endif %}
+            {% if a.chosen %}<span class="tag done">in use</span>{% endif %}
+            <br>
+            <time class="local-time muted" datetime="{{ a.created | isotime }}">
+              {{ a.created | isotime }}</time>
+          </figcaption>
+          <div class="anchor-actions">
+            {% if not a.chosen %}
+            <form method="post" action="/anchors/{{ a.id }}/pick">
+              <button type="submit">Use this</button>
+            </form>
+            {% endif %}
+            <button type="button" class="anchor-edit"
+                    data-anchor="{{ a.id }}"
+                    data-label="{{ a.character_name or d.lead_name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
+                    data-src="{{ media_url(a.path) }}">Edit</button>
+            <form method="post" action="/anchors/{{ a.id }}/delete" class="delete-anchor still-del">
+              <button type="submit" class="icon-btn danger-icon"
+                      title="Delete this sheet"
+                      {% if a.chosen %}disabled title="pick another sheet first"{% endif %}>
+                {{ glyph_delete() }}
+              </button>
+            </form>
+          </div>
+        </figure>
+        {% endfor %}
+      </div>
       {% endfor %}
     </div>
     {% endfor %}
-  </div>
-  {% endfor %}
-  {% else %}
-  <p class="empty">None yet.</p>
-  {% endif %}
-  <p><a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">Manage anchors for this album &rarr;</a></p>
+    {% else %}
+    <p class="empty">None yet.</p>
+    {% endif %}
+    <p><a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">Manage anchors for this album</a></p>
+  </details>
 
   <dialog class="confirm-modal" id="art-{{ d.playlist.id }}">
     <div class="modal-bar">
@@ -300,8 +437,8 @@
       <label class="check">
         <input type="checkbox" name="use_anchor" value="true" {% if d.has_anchor %}checked{% endif %}
                {% if not d.has_anchor %}disabled{% endif %}>
-        Use the album anchor, so the cover shows the actual protagonist
-        {% if not d.has_anchor %}<span class="muted">&mdash; no chosen anchor yet</span>{% endif %}
+        Use the lead identity front
+        {% if not d.has_anchor %}<span class="muted">&mdash; no chosen front yet</span>{% endif %}
       </label>
       <label class="check">
         <input type="checkbox" name="from_cover" value="true"
@@ -330,21 +467,23 @@
     </form>
   </dialog>
 
-  <h3>Album cover</h3>
-  <p class="muted">Shown on this card, and what <strong>Fill from cover</strong> and
-    <strong>Propose a character</strong> read.</p>
-  <form method="post" action="/playlists/{{ d.playlist.id }}/image" enctype="multipart/form-data"
-        class="stack-form">
-    <label>Album image <input type="file" name="image" accept="image/*" required></label>
-    <div class="button-row">
+  <details class="song-fold pl-fold">
+    <summary><h2>Cover</h2>
+      <span class="muted">{% if d.playlist.image_path %}set{% else %}none{% endif %}</span></summary>
+    <p class="hint">Click the art on the card header for a full view, replace, or delete.
+      The date lives on the header, next to the title.</p>
+    <form method="post" action="/playlists/{{ d.playlist.id }}/image" enctype="multipart/form-data"
+          class="clip-bar">
+      <label>Replace <input type="file" name="image" accept="image/*" required></label>
       <button type="submit">Set image</button>
-    </div>
-  </form>
+    </form>
+  </details>
 
   <div class="button-row danger-row">
-    <button type="button" class="secondary"
+    <button type="button" class="danger"
+            title="Delete this playlist"
             onclick="document.getElementById('del-pl-{{ d.playlist.id }}').showModal()">
-      Delete playlist&hellip;
+      Delete playlist
     </button>
   </div>
 

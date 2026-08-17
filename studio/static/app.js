@@ -1,21 +1,26 @@
 // Minimal SSE watcher for job progress -- no htmx-sse extension needed.
 function watchJob(jobId, targetId, onDone) {
-  var el = document.getElementById(targetId);
-  if (!el || !jobId) return;
-  el.hidden = false;
-  var es = new EventSource("/jobs/" + jobId + "/stream");
-  es.onmessage = function (e) {
-    var data = JSON.parse(e.data);
-    el.textContent = "job #" + data.id + " (" + (data.status || "") + "): " +
-      (data.error || data.progress || "");
+  if (!jobId) return;
+  var el = targetId ? document.getElementById(targetId) : null;
+  if (el) el.hidden = false;
+  var finished = false;
+  var es = null;
+  var tries = 0;
+  function apply(data) {
+    if (!data || finished) return;
+    if (el) {
+      el.textContent = "job #" + data.id + " (" + (data.status || "") + "): " +
+        (data.error || data.progress || "");
+    }
     if (data.status === "done" || data.status === "failed" || data.status === "cancelled") {
-      es.close();
+      finished = true;
+      if (es) { es.close(); es = null; }
+      if (poll) clearInterval(poll);
       if (typeof onDone === "function") {
         onDone(data);
         return;
       }
-      // No surprise reload. The line reports the outcome and offers the refresh;
-      // an automatic one threw away whatever you were typing in a textarea.
+      if (!el) return;
       var btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = "Refresh to see the results";
@@ -24,8 +29,27 @@ function watchJob(jobId, targetId, onDone) {
       btn.addEventListener("click", function () { location.reload(); });
       el.appendChild(btn);
     }
-  };
-  es.onerror = function () { es.close(); };
+  }
+  function connect() {
+    if (finished) return;
+    if (es) es.close();
+    es = new EventSource("/jobs/" + jobId + "/stream");
+    es.onmessage = function (e) {
+      try { apply(JSON.parse(e.data)); } catch (err) {}
+    };
+    es.onerror = function () {
+      if (es) { es.close(); es = null; }
+      if (!finished && tries++ < 60) setTimeout(connect, 1000);
+    };
+  }
+  connect();
+  var poll = setInterval(function () {
+    if (finished) return;
+    fetch("/jobs/" + jobId, {headers: {Accept: "application/json"}})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(apply)
+      .catch(function () {});
+  }, 2500);
 }
 
 // Waveform: .tl-block[data-peaks] holds mixer.peaks min/max pairs.
@@ -602,15 +626,26 @@ document.addEventListener("change", function (e) {
 // Timestamps are rendered as UTC and converted HERE. The server runs UTC and
 // this is read from a machine that does not, so formatting server-side would
 // show a time nobody is in.
-document.addEventListener("DOMContentLoaded", function () {
-  document.querySelectorAll("time.local-time").forEach(function (el) {
+function formatLocalTimes(root) {
+  var scope = root && root.querySelectorAll ? root : document;
+  var stamp = {year: "numeric", month: "short", day: "numeric",
+               hour: "2-digit", minute: "2-digit"};
+  scope.querySelectorAll("time.local-time").forEach(function (el) {
     var d = new Date(el.getAttribute("datetime"));
     if (isNaN(d)) return;
-    el.textContent = d.toLocaleString(undefined, {
-      year: "numeric", month: "short", day: "numeric",
-      hour: "2-digit", minute: "2-digit"});
+    el.textContent = d.toLocaleString(undefined, stamp);
     el.title = el.getAttribute("datetime") + " (UTC)";
   });
+  scope.querySelectorAll("option[data-created]").forEach(function (opt) {
+    var d = new Date(opt.getAttribute("data-created"));
+    if (isNaN(d)) return;
+    var label = opt.getAttribute("data-label") || opt.value;
+    opt.textContent = label + " · " + d.toLocaleString(undefined, stamp);
+  });
+}
+document.addEventListener("DOMContentLoaded", function () {
+  formatLocalTimes(document);
+  applyRerollChip(document.getElementById("job-chip"));
 });
 
 // ---- keyboard review ------------------------------------------------------
@@ -621,6 +656,7 @@ document.addEventListener("keydown", function (e) {
   var t = e.target;
   if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" ||
             t.isContentEditable)) return;
+  if (document.querySelector("dialog[open]")) return;
   var tiles = Array.prototype.slice.call(document.querySelectorAll(".clip-tile"));
   if (!tiles.length) return;
   var cur = document.activeElement && document.activeElement.closest(".clip-tile");
@@ -685,7 +721,7 @@ document.addEventListener("DOMContentLoaded", function () {
 // Off-screen plates / stills / clips stay as data-src until they approach
 // the viewport. Native loading=lazy is not enough after an htmx panel swap
 // of fifty scenes: the browser still queues every <video preload=metadata>.
-function hydrateLazy(root) {
+function hydrateLazy(root, eager) {
   var scope = root && root.querySelectorAll ? root : document;
   var nodes = scope.querySelectorAll("img.lazy-src[data-src], video.lazy-src[data-src]");
   if (!nodes.length) return;
@@ -695,8 +731,13 @@ function hydrateLazy(root) {
     el.src = src;
     el.removeAttribute("data-src");
     el.classList.remove("lazy-src");
+    if (el.tagName === "VIDEO") {
+      el.muted = true;
+      el.playsInline = true;
+      el.addEventListener("loadeddata", function () { seekNonBlackFrame(el); }, {once: true});
+    }
   }
-  if (!("IntersectionObserver" in window)) {
+  if (eager || !("IntersectionObserver" in window)) {
     Array.prototype.forEach.call(nodes, load);
     return;
   }
@@ -714,11 +755,16 @@ function hydrateLazy(root) {
   });
 }
 document.body.addEventListener("htmx:afterSwap", function (e) {
-  hydrateLazy(e.detail && e.detail.target ? e.detail.target : e.target);
+  var target = e.detail && e.detail.target ? e.detail.target : e.target;
+  formatLocalTimes(target);
+  hydrateLazy(target);
+  var chip = (target && target.id === "job-chip") ? target
+    : document.getElementById("job-chip");
+  applyRerollChip(chip);
 });
 document.addEventListener("toggle", function (e) {
   if (e.target && e.target.tagName === "DETAILS" && e.target.open) {
-    hydrateLazy(e.target);
+    hydrateLazy(e.target, true);
   }
 }, true);
 
@@ -1636,9 +1682,7 @@ function initSongPage() {
           det.setAttribute("hx-target", "find .tier-board-body");
           det.setAttribute("hx-swap", "innerHTML");
           det.innerHTML = "<summary title=\"" + label + ": click to expand or collapse scenes\">" +
-            "<span class=\"tier-toggle\" aria-hidden=\"true\">" +
-            "<svg viewBox=\"0 0 16 16\"><path fill=\"currentColor\" d=\"M6 3.2 11.2 8 6 12.8V3.2z\"/></svg>" +
-            "</span><span>" + label + " · " +
+            "<span>" + label + " · " +
             (b.scene_count || "?") + " scenes</span></summary>" +
             "<div class=\"tier-board-body\"><p class=\"muted\">Loading scenes…</p></div>";
           list.appendChild(det);
@@ -1652,7 +1696,7 @@ function initSongPage() {
     return api("/api/songs/" + songId).then(paintSong);
   }
 
-  function followJob(d) {
+  function followJob(d, form) {
     var jid = d.job_id || (d.job_ids && d.job_ids[0]);
     if (!jid) {
       flash("Saved.");
@@ -1660,9 +1704,19 @@ function initSongPage() {
     }
     refreshQueue();
     flash("Queued job #" + jid + (d.kind ? " (" + d.kind + ")" : ""));
+    if (form && form.classList.contains("reroll-bar")) {
+      paintRerollPlaceholders(form, d);
+    }
     watchJob(jid, "song-status", function (job) {
       refreshQueue();
-      if (job.status === "done") refreshSong();
+      if (job.status === "done") {
+        if (form && form.classList.contains("reroll-bar")) refreshSceneRow(form);
+        else refreshSong();
+        return;
+      }
+      if (job.status === "failed" || job.status === "cancelled") {
+        clearRerollPlaceholders(jid);
+      }
     });
   }
 
@@ -1679,6 +1733,11 @@ function initSongPage() {
     var dest = (e.submitter && e.submitter.getAttribute("formaction")) || action;
     var note = saveNoteNear(form);
     if (note) say2(note, "saving…");
+    if (form.id && form.id.indexOf("sb-del-") === 0) {
+      var nField = form.querySelector("[name=n]");
+      var verSel = (form.closest(".sb-panel") || page).querySelector("select.sb-ver");
+      if (nField && verSel) nField.value = verSel.value;
+    }
     api(dest, new FormData(form))
       .then(function (d) {
         if (d.deleted != null && form.classList.contains("delete-song")) {
@@ -1698,44 +1757,31 @@ function initSongPage() {
           flash(d.explicit ? "Marked explicit." : "Marked clean.");
           return;
         }
-        if (d.job_id || (d.job_ids && d.job_ids.length)) return followJob(d);
+        if (d.job_id || (d.job_ids && d.job_ids.length)) return followJob(d, form);
+        if (d.versions || d.version) {
+          paintSbVersions(form, d.versions, d.version && d.version.n);
+          if (note) {
+            if (form.id && form.id.indexOf("sb-del-") === 0) say2(note, "deleted");
+            else if (form.id && form.id.indexOf("sb-restore-") === 0) say2(note, "restored");
+            else say2(note, "version saved");
+          }
+          if (form.id && form.id.indexOf("sb-restore-") === 0) reloadSbPanel(form);
+          return;
+        }
         if (form.classList.contains("pose-bind")) {
           paintPoseBind(form, d);
           say2(note, d.source === "saved" ? "pinned" : (d.sheet_id ? "saved" : "cleared"));
           return;
         }
         if (form.classList.contains("still-pick")) {
-          var fig = form.closest(".ref-frame");
-          if (fig) fig.classList.toggle("approved", !!d.approved);
-          var pickBtn = form.querySelector("button");
-          if (pickBtn) pickBtn.textContent = d.approved ? "Unapprove" : "Use this still";
-          if (d.approved) {
-            var cell = form.closest(".preview-stills");
-            if (cell) {
-              cell.querySelectorAll(".ref-frame").forEach(function (other) {
-                if (other === fig) return;
-                other.classList.remove("approved");
-                var ob = other.querySelector(".still-pick button");
-                if (ob) ob.textContent = "Use this still";
-                var tag = other.querySelector(".tag.done");
-                if (tag) tag.remove();
-              });
-              if (fig && !fig.querySelector(".tag.done")) {
-                var cap = fig.querySelector("figcaption");
-                if (cap) {
-                  var t = document.createElement("span");
-                  t.className = "tag done";
-                  t.textContent = "approved";
-                  cap.appendChild(document.createTextNode(" "));
-                  cap.appendChild(t);
-                }
-              }
-            }
-          } else if (fig) {
-            var gone = fig.querySelector(".tag.done");
-            if (gone) gone.remove();
-          }
+          paintStillApprove(form.closest(".ref-frame"), !!d.approved);
           if (note) say2(note, d.approved ? "approved" : "unapproved");
+          return;
+        }
+        if (d.deleted != null && /\/refs\/\d+\/delete$/.test(action)) {
+          var goneFig = form.closest(".ref-frame");
+          if (goneFig) goneFig.remove();
+          if (note) say2(note, "deleted");
           return;
         }
         if (note) {
@@ -1760,13 +1806,6 @@ function initSongPage() {
     sayPending(sel.form && sel.form.querySelector(".save-note"), "not saved yet");
   });
 
-  page.addEventListener("click", function (e) {
-    var tip = e.target.closest && e.target.closest(".help-tip");
-    if (!tip || !page.contains(tip)) return;
-    var form = tip.closest("form");
-    var helpNote = form && form.querySelector(".save-note");
-    if (helpNote && tip.title) sayPending(helpNote, tip.title);
-  });
 }
 
 var POSE_BIND_COPY = {
@@ -1790,6 +1829,88 @@ function sayPending(el, msg) {
   el.className = (el.className.replace(/\s*flash-(ok|fail)\b/g, "").replace(/\s+/g, " ").trim());
 }
 
+function seekNonBlackFrame(video) {
+  var d = video.duration;
+  if (!isFinite(d) || d <= 0) return;
+  var canvas = document.createElement("canvas");
+  var ctx = canvas.getContext("2d", {willReadFrequently: true});
+  var times = [0.2, 0.4, 0.7, 1.1, 1.6, d * 0.12, d * 0.2, d * 0.3, d * 0.45];
+  var seen = {};
+  var queue = [];
+  times.forEach(function (t) {
+    t = Math.min(Math.max(0.08, t), Math.max(0.08, d - 0.05));
+    var key = t.toFixed(2);
+    if (seen[key]) return;
+    seen[key] = true;
+    queue.push(t);
+  });
+  queue.sort(function (a, b) { return a - b; });
+  var i = 0;
+  function frameIsLit() {
+    var w = 24, h = 24;
+    canvas.width = w;
+    canvas.height = h;
+    try {
+      ctx.drawImage(video, 0, 0, w, h);
+      var data = ctx.getImageData(0, 0, w, h).data;
+    } catch (err) {
+      return true;
+    }
+    var sum = 0;
+    for (var p = 0; p < data.length; p += 4) sum += data[p] + data[p + 1] + data[p + 2];
+    return (sum / (w * h)) > 24;
+  }
+  function step() {
+    if (i >= queue.length) return;
+    var t = queue[i++];
+    var onSeek = function () {
+      video.removeEventListener("seeked", onSeek);
+      if (frameIsLit()) return;
+      step();
+    };
+    video.addEventListener("seeked", onSeek);
+    try { video.currentTime = t; } catch (err) { step(); }
+  }
+  step();
+}
+
+function paintStillApprove(fig, approved) {
+  if (!fig) return;
+  fig.classList.toggle("approved", !!approved);
+  var pickBtn = fig.querySelector(".still-pick button");
+  if (pickBtn) {
+    var label = approved ? "Unapprove this still" : "Use this still as the scene reference";
+    pickBtn.classList.toggle("on", !!approved);
+    pickBtn.title = label;
+    pickBtn.setAttribute("aria-label", label);
+    if (!pickBtn.querySelector("svg")) pickBtn.textContent = approved ? "Unapprove" : "Use this still";
+  }
+  var strip = fig.closest(".scene-refs, .preview-stills");
+  if (approved && strip) {
+    strip.querySelectorAll(".ref-frame").forEach(function (other) {
+      if (other === fig) return;
+      other.classList.remove("approved");
+      var ob = other.querySelector(".still-pick button");
+      if (ob) ob.textContent = "Use this still";
+      var tag = other.querySelector(".tag.done");
+      if (tag) tag.remove();
+    });
+    if (!fig.querySelector(".tag.done")) {
+      var cap = fig.querySelector("figcaption");
+      if (cap) {
+        var t = document.createElement("span");
+        t.className = "tag done";
+        t.textContent = "approved";
+        cap.appendChild(document.createTextNode(" "));
+        cap.appendChild(t);
+      }
+    }
+  } else {
+    var gone = fig.querySelector(".tag.done");
+    if (gone) gone.remove();
+  }
+}
+
 function paintPoseBind(form, d) {
   if (!form || !d) return;
   var src = d.source || "none";
@@ -1801,8 +1922,10 @@ function paintPoseBind(form, d) {
     label.textContent = pair[0];
   }
   if (help) {
-    help.title = pair[1];
+    help.title = "What " + pair[0] + " means";
     help.setAttribute("aria-label", "What " + pair[0] + " means");
+    help.setAttribute("data-label", pair[0]);
+    help.setAttribute("data-help", pair[1]);
   }
   var btn = form.querySelector(".thumb-open");
   var img = btn && btn.querySelector("img");
@@ -1819,6 +1942,163 @@ function paintPoseBind(form, d) {
     }
     if (btn) btn.setAttribute("data-full", d.url);
   }
+}
+
+function paintSbVersions(form, versions, selected) {
+  var panel = form && form.closest(".sb-panel");
+  if (!panel) return;
+  var sel = panel.querySelector("select.sb-ver");
+  if (!sel) return;
+  var keep = selected != null ? String(selected) : sel.value;
+  sel.innerHTML = "";
+  (versions || []).forEach(function (v) {
+    var opt = document.createElement("option");
+    opt.value = v.n;
+    var label = v.label || ("v" + v.n);
+    opt.setAttribute("data-label", label);
+    if (v.created) {
+      var iso = typeof v.created === "number"
+        ? new Date(v.created * 1000).toISOString()
+        : String(v.created);
+      opt.setAttribute("data-created", iso.indexOf("Z") === -1 && iso.indexOf("T") === -1
+        ? new Date(Number(v.created) * 1000).toISOString()
+        : iso);
+    }
+    opt.textContent = label;
+    sel.appendChild(opt);
+  });
+  if (!versions || !versions.length) {
+    var empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "No snapshots yet";
+    sel.appendChild(empty);
+  }
+  if (keep) sel.value = keep;
+  formatLocalTimes(sel);
+  var none = !versions || !versions.length;
+  var del = panel.querySelector(".sb-ver-del");
+  var rest = panel.querySelector(".sb-ver-restore");
+  if (del) del.disabled = none;
+  if (rest) rest.disabled = none;
+}
+
+function reloadSbPanel(form) {
+  var board = form && form.closest(".tier-board");
+  var dest = board && board.getAttribute("hx-get");
+  var body = board && board.querySelector(".tier-board-body");
+  if (!dest || !body || typeof htmx === "undefined") return;
+  htmx.ajax("GET", dest, {target: body, swap: "innerHTML"});
+}
+
+function paintRerollPlaceholders(form, d) {
+  var row = form && form.closest(".stills-row");
+  if (!row) return;
+  var n = Math.max(1, parseInt(d.n, 10) || 4);
+  var strip = row.querySelector(".scene-refs");
+  if (!strip) {
+    strip = document.createElement("div");
+    strip.className = "media-strip scene-refs";
+    var empty = row.querySelector("p.empty");
+    if (empty) empty.replaceWith(strip);
+    else row.appendChild(strip);
+  }
+  form.dataset.rerollJob = String(d.job_id);
+  clearRerollPlaceholders(d.job_id, strip);
+  for (var i = 0; i < n; i++) {
+    var fig = document.createElement("figure");
+    fig.className = "ref-frame still-pending";
+    fig.setAttribute("data-job-id", String(d.job_id));
+    fig.setAttribute("aria-label", "Rendering still");
+    fig.innerHTML = "<div class=\"still-skeleton\"></div><figcaption>rendering…</figcaption>";
+    strip.appendChild(fig);
+  }
+}
+
+function clearRerollPlaceholders(jobId, root) {
+  var scope = root || document;
+  if (!jobId) return;
+  scope.querySelectorAll('.still-pending[data-job-id="' + jobId + '"]').forEach(function (el) {
+    el.remove();
+  });
+}
+
+function refreshSceneRow(form) {
+  var scene = form && form.closest(".scene");
+  var panel = form && form.closest(".sb-panel");
+  var page = document.getElementById("song-page");
+  refreshSceneEl(scene, page && page.getAttribute("data-song-id"),
+                 panel && panel.getAttribute("data-tier"),
+                 form && form.dataset.rerollJob);
+}
+
+function sceneElForClip(tier, clipIdx) {
+  var sel = '.sb-panel[data-tier="' + tier + '"] .reroll-bar input[name=clip_idx][value="' + clipIdx + '"]';
+  var input = document.querySelector(sel);
+  return input ? input.closest(".scene") : null;
+}
+
+function refreshSceneEl(scene, songId, tier, jobId) {
+  if (!scene || !scene.id || !songId || !tier) return;
+  var num = scene.id.replace("scene-", "");
+  fetch("/songs/" + songId + "/storyboard/" + encodeURIComponent(tier) + "/scene/" + num, {
+    headers: {"Accept": "text/html"}
+  }).then(function (r) {
+    if (!r.ok) throw new Error("could not refresh scene");
+    return r.text();
+  }).then(function (html) {
+    var wrap = document.createElement("div");
+    wrap.innerHTML = html.trim();
+    var next = wrap.querySelector(".scene") || wrap.firstElementChild;
+    if (!next) return;
+    var wasOpen = scene.open;
+    scene.replaceWith(next);
+    next.open = wasOpen || true;
+    if (typeof htmx !== "undefined") htmx.process(next);
+    formatLocalTimes(next);
+    hydrateLazy(next, true);
+  }).catch(function () {
+    if (jobId) clearRerollPlaceholders(jobId);
+  });
+}
+
+var _appliedReroll = {};
+
+function applyRerollChip(chip) {
+  if (!chip || chip.getAttribute("data-kind") !== "reroll") return;
+  var jid = chip.getAttribute("data-job-id");
+  var status = chip.getAttribute("data-status");
+  if (!jid || !status) return;
+  var key = jid + ":" + status;
+  if (_appliedReroll[key]) return;
+  var page = document.getElementById("song-page");
+  var songId = page && page.getAttribute("data-song-id");
+  var chipSong = chip.getAttribute("data-song-id");
+  if (songId && chipSong && String(songId) !== String(chipSong)) return;
+  var tier = chip.getAttribute("data-tier");
+  var clips = (chip.getAttribute("data-clips") || "").split(",").filter(Boolean);
+  if (status === "queued" || status === "running") {
+    var n = parseInt(chip.getAttribute("data-n"), 10) || 4;
+    clips.forEach(function (ci) {
+      var scene = sceneElForClip(tier, ci);
+      var form = scene && scene.querySelector(".reroll-bar");
+      if (form) paintRerollPlaceholders(form, {job_id: jid, n: n});
+    });
+    return;
+  }
+  if (status === "failed" || status === "cancelled") {
+    _appliedReroll[key] = true;
+    clearRerollPlaceholders(jid);
+    return;
+  }
+  if (status !== "done") return;
+  var any = false;
+  clips.forEach(function (ci) {
+    var scene = sceneElForClip(tier, ci);
+    if (!scene) return;
+    any = true;
+    refreshSceneEl(scene, songId || chipSong, tier, jid);
+  });
+  if (any) _appliedReroll[key] = true;
 }
 
 // ---- Anchors: view full size, multi-select, and nothing reloads the page -----
@@ -2522,12 +2802,17 @@ document.addEventListener("click", function (e) {
     var still = el && el.getAttribute("data-still");
     if (!still) return note("no approved still on this clip", true);
     vdlg.close();
-    var dlg = document.getElementById("ref-preview");
-    if (!dlg) return;
-    dlg.querySelector("img").src = still;
-    var lab = document.getElementById("ref-preview-label");
-    if (lab) lab.textContent = "approved still — fix or reroll, then re-render the clip";
-    if (typeof dlg.showModal === "function") dlg.showModal();
+    var thumb = document.querySelector('.js-ref-preview[data-full="' + still + '"]');
+    if (thumb) {
+      document.dispatchEvent(new CustomEvent("meowp:open-ref", {detail: {el: thumb}}));
+    } else {
+      var dlg = document.getElementById("ref-preview");
+      if (!dlg) return;
+      dlg.querySelector("img").src = still;
+      var lab = document.getElementById("ref-preview-label");
+      if (lab) lab.textContent = "approved still — fix or reroll, then re-render the clip";
+      if (typeof dlg.showModal === "function") dlg.showModal();
+    }
     var scene = el.getAttribute("data-scene");
     var row = scene && document.getElementById("scene-" + scene);
     if (row) row.scrollIntoView({block: "nearest"});
@@ -2538,14 +2823,278 @@ document.addEventListener("click", function (e) {
   });
 })();
 
-document.addEventListener("click", function (e) {
-  var btn = e.target.closest(".js-ref-preview");
-  if (!btn) return;
+(function () {
   var dlg = document.getElementById("ref-preview");
   if (!dlg) return;
   var img = dlg.querySelector("img");
-  img.src = btn.getAttribute("data-full") || "";
-  var lab = document.getElementById("ref-preview-label");
-  if (lab) lab.textContent = btn.getAttribute("data-label") || "";
-  if (typeof dlg.showModal === "function") dlg.showModal();
+  var items = [];
+  var idx = 0;
+
+  function current() { return items[idx] || null; }
+
+  function figureOf(el) {
+    return el && el.closest(".ref-frame");
+  }
+
+  function note(msg, bad) {
+    say2(document.getElementById("ref-preview-note"), msg, bad);
+  }
+
+  function thumbsAround(el) {
+    var strip = el && el.closest(".scene-refs, .preview-stills");
+    if (strip) {
+      return Array.prototype.slice.call(strip.querySelectorAll(".js-ref-preview[data-full]"));
+    }
+    return el ? [el] : [];
+  }
+
+  function syncActions() {
+    var fig = figureOf(current());
+    var can = !!(fig && fig.querySelector(".still-pick"));
+    ["ref-approve", "ref-fix", "ref-delete"].forEach(function (id) {
+      var b = document.getElementById(id);
+      if (b) b.hidden = !can;
+    });
+    var approve = document.getElementById("ref-approve");
+    if (approve && can) {
+      approve.textContent = fig.classList.contains("approved") ? "Unapprove" : "Use this still";
+    }
+    var prev = document.getElementById("ref-prev");
+    var next = document.getElementById("ref-next");
+    if (prev) prev.disabled = items.length < 2;
+    if (next) next.disabled = items.length < 2;
+  }
+
+  function show(i) {
+    if (!items.length) return;
+    idx = (i + items.length) % items.length;
+    var el = items[idx];
+    img.src = el.getAttribute("data-full") || "";
+    var lab = document.getElementById("ref-preview-label");
+    if (lab) lab.textContent = el.getAttribute("data-label") || "";
+    var pos = document.getElementById("ref-preview-pos");
+    if (pos) pos.textContent = (idx + 1) + " / " + items.length;
+    syncActions();
+    note("");
+  }
+
+  function openFrom(el) {
+    if (!el) return;
+    items = thumbsAround(el);
+    var at = items.indexOf(el);
+    if (at < 0) {
+      items = [el];
+      at = 0;
+    }
+    show(at);
+    if (typeof dlg.showModal === "function") dlg.showModal();
+  }
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest("#ref-prev")) { e.preventDefault(); show(idx - 1); return; }
+    if (e.target.closest("#ref-next")) { e.preventDefault(); show(idx + 1); return; }
+    var btn = e.target.closest(".js-ref-preview");
+    if (btn && btn.getAttribute("data-full")) openFrom(btn);
+  });
+
+  document.addEventListener("meowp:open-ref", function (e) {
+    if (e.detail && e.detail.el) openFrom(e.detail.el);
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (!dlg.open) return;
+    var t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
+    if (e.key === "ArrowLeft") { e.preventDefault(); show(idx - 1); }
+    if (e.key === "ArrowRight") { e.preventDefault(); show(idx + 1); }
+  });
+
+  var approve = document.getElementById("ref-approve");
+  if (approve) approve.addEventListener("click", function () {
+    var fig = figureOf(current());
+    var form = fig && fig.querySelector(".still-pick");
+    if (!form) return note("this still cannot be approved here", true);
+    note("saving…");
+    api(form.getAttribute("action"), new FormData(form)).then(function (d) {
+      paintStillApprove(fig, !!d.approved);
+      syncActions();
+      note(d.approved ? "approved" : "unapproved");
+    }).catch(function (err) { note(err.message, true); });
+  });
+
+  var fix = document.getElementById("ref-fix");
+  if (fix) fix.addEventListener("click", function () {
+    var fig = figureOf(current());
+    var btn = fig && fig.querySelector(".js-ref-fix");
+    if (!btn) return note("no fix on this still", true);
+    dlg.close();
+    btn.click();
+  });
+
+  var del = document.getElementById("ref-delete");
+  if (del) del.addEventListener("click", function () {
+    var fig = figureOf(current());
+    var form = fig && fig.querySelector('form[action*="/refs/"][action$="/delete"]');
+    if (!form) return note("this still cannot be deleted here", true);
+    note("deleting…");
+    api(form.getAttribute("action"), new FormData(form)).then(function () {
+      items.splice(idx, 1);
+      fig.remove();
+      if (!items.length) { dlg.close(); return; }
+      show(idx);
+      note("deleted");
+    }).catch(function (err) { note(err.message, true); });
+  });
+})();
+
+function syncStillsDelete(row) {
+  if (!row) return;
+  var n = row.querySelectorAll(".js-still-select:checked").length;
+  var btn = row.querySelector(".js-stills-delete");
+  if (!btn) return;
+  btn.hidden = n === 0;
+  btn.textContent = n ? ("Delete selected (" + n + ")") : "Delete selected";
+}
+
+document.addEventListener("change", function (e) {
+  var box = e.target.closest && e.target.closest(".js-still-select");
+  if (!box) return;
+  syncStillsDelete(box.closest(".stills-row"));
+});
+
+document.addEventListener("click", function (e) {
+  var btn = e.target.closest && e.target.closest(".js-stills-delete");
+  if (!btn) return;
+  var row = btn.closest(".stills-row");
+  if (!row) return;
+  var picked = Array.prototype.slice.call(row.querySelectorAll(".js-still-select:checked"));
+  if (!picked.length) return;
+  btn.disabled = true;
+  var note = row.querySelector(".save-note") || row.querySelector(".stills-head");
+  function next() {
+    var input = picked.shift();
+    if (!input) {
+      btn.disabled = false;
+      syncStillsDelete(row);
+      return;
+    }
+    var fig = input.closest(".ref-frame");
+    var form = fig && fig.querySelector("form.still-del");
+    if (!form) return next();
+    api(form.getAttribute("action"), new FormData(form)).then(function () {
+      if (fig) fig.remove();
+      next();
+    }).catch(function (err) {
+      btn.disabled = false;
+      if (note && note.classList.contains("save-note")) say2(note, err.message, true);
+    });
+  }
+  next();
+});
+
+document.addEventListener("click", function (e) {
+  var tip = e.target.closest && e.target.closest(".help-tip");
+  if (!tip) return;
+  e.preventDefault();
+  var dlg = document.getElementById("tip-modal");
+  if (!dlg || typeof dlg.showModal !== "function") return;
+  var title = document.getElementById("tip-modal-title");
+  var body = document.getElementById("tip-modal-body");
+  if (title) title.textContent = tip.getAttribute("data-label") || "Help";
+  if (body) body.textContent = tip.getAttribute("data-help") || tip.title || "";
+  dlg.showModal();
+});
+
+document.addEventListener("click", function (e) {
+  var look = e.target.closest && e.target.closest(".look-tab");
+  if (look) {
+    var root = look.closest("form") || look.parentElement;
+    var key = look.getAttribute("data-look");
+    root.querySelectorAll(".look-tab").forEach(function (t) {
+      t.classList.toggle("active", t === look);
+    });
+    (look.closest("form") || document).querySelectorAll(".look-panel").forEach(function (p) {
+      p.classList.toggle("hidden", p.getAttribute("data-look") !== key);
+    });
+    return;
+  }
+  var wtab = e.target.closest && e.target.closest(".wardrobe-tab");
+  if (wtab) {
+    var wroot = wtab.closest(".look-panel") || wtab.parentElement;
+    var wkey = wtab.getAttribute("data-ward");
+    wroot.querySelectorAll(".wardrobe-tab").forEach(function (t) {
+      t.classList.toggle("active", t === wtab);
+    });
+    wroot.querySelectorAll(".wardrobe-panel").forEach(function (p) {
+      p.classList.toggle("hidden", p.getAttribute("data-ward") !== wkey);
+    });
+    return;
+  }
+  var ctab = e.target.closest && e.target.closest(".cast-tab");
+  if (ctab) {
+    var box = ctab.closest(".pl-fold") || ctab.parentElement.parentElement;
+    var key = ctab.getAttribute("data-cast");
+    box.querySelectorAll(".cast-tab").forEach(function (t) {
+      t.classList.toggle("active", t === ctab);
+    });
+    box.querySelectorAll(".cast-panel").forEach(function (p) {
+      p.classList.toggle("hidden", p.getAttribute("data-cast") !== key);
+    });
+    return;
+  }
+  var sub = e.target.closest && e.target.closest(".cast-subtab");
+  if (sub) {
+    var panel = sub.closest(".cast-panel");
+    var key = sub.getAttribute("data-sub");
+    panel.querySelectorAll(".cast-subtab").forEach(function (t) {
+      t.classList.toggle("active", t === sub);
+    });
+    panel.querySelectorAll(".cast-sub").forEach(function (p) {
+      p.classList.toggle("hidden", p.getAttribute("data-sub") !== key);
+    });
+    return;
+  }
+  var pick = e.target.closest && e.target.closest(".js-pick-anchor");
+  if (pick) {
+    var dlg = document.getElementById(pick.getAttribute("data-dialog") || "");
+    if (dlg && typeof dlg.showModal === "function") dlg.showModal();
+    return;
+  }
+});
+
+document.addEventListener("click", function (e) {
+  var cover = e.target.closest && e.target.closest(".js-cover-open");
+  if (!cover) return;
+  var card = cover.closest(".playlist-card");
+  e.preventDefault();
+  e.stopPropagation();
+  if (card && !card.open) {
+    card.open = true;
+    return;
+  }
+  var box = document.getElementById("cover-preview");
+  if (!box) return;
+  var img = document.getElementById("cover-preview-img");
+  if (img) img.src = cover.getAttribute("data-full") || "";
+  var pid = cover.getAttribute("data-playlist");
+  var rep = document.getElementById("cover-replace");
+  var del = document.getElementById("cover-delete");
+  if (rep && pid) rep.setAttribute("action", "/playlists/" + pid + "/image");
+  if (del && pid) del.setAttribute("action", "/playlists/" + pid + "/image/delete");
+  if (typeof box.showModal === "function") box.showModal();
+}, true);
+
+document.addEventListener("submit", function (e) {
+  var busy = e.target.closest && e.target.closest(".js-busy-form");
+  if (busy) busy.classList.add("is-busy");
+});
+
+document.addEventListener("change", function (e) {
+  var sel = e.target.closest && e.target.closest(".js-look-hist");
+  if (!sel || !sel.value) return;
+  var ta = document.getElementById(sel.getAttribute("data-target") || "");
+  if (!ta) return;
+  fetch("/prompt-versions/" + sel.value + "/text")
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) { if (j && j.text != null) ta.value = j.text; });
 });

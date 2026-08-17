@@ -1,0 +1,74 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.8/schema.json",
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "studio/static/**/*.js",
+      "studio/static/**/*.css",
+      "!!studio/static/**/*.min.js",
+      "!!**/htmx.min.js"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "assist": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "none",
+      "correctness": {
+        "noConstantCondition": "error",
+        "noInvalidConstructorSuper": "error",
+        "noPrecisionLoss": "error",
+        "noSetterReturn": "error",
+        "noUnreachable": "error",
+        "noUnsafeFinally": "error",
+        "noUndeclaredVariables": "error",
+        "noUnusedVariables": "warn",
+        "noUnusedFunctionParameters": "off",
+        "noInnerDeclarations": "off"
+      },
+      "suspicious": {
+        "noCompareNegZero": "error",
+        "noDebugger": "error",
+        "noDuplicateClassMembers": "error",
+        "noDuplicateObjectKeys": "error",
+        "noDuplicateParameters": "error",
+        "noSelfCompare": "error",
+        "noSparseArray": "error",
+        "noUnsafeNegation": "error",
+        "noWith": "error",
+        "noAssignInExpressions": "off",
+        "noRedeclare": "warn",
+        "noVar": "off",
+        "noGlobalIsNan": "off",
+        "noGlobalIsFinite": "off",
+        "noAlert": "off",
+        "noShadow": "off",
+        "noEmptyBlockStatements": "off",
+        "noEqualsToNull": "off",
+        "noNestedPromises": "off"
+      },
+      "complexity": {
+        "noImportantStyles": "off",
+        "useOptionalChain": "off",
+        "useArrowFunction": "off"
+      },
+      "style": {
+        "noDescendingSpecificity": "off",
+        "useTemplate": "off"
+      }
+    }
+  },
+  "javascript": {
+    "globals": ["htmx"]
+  },
+  "css": {
+    "linter": {
+      "enabled": true
+    }
+  }
+}

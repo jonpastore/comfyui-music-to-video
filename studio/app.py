@@ -38,7 +38,6 @@ import prompts
 import analyse
 import effects    # per-item audio DJ effects -- pure, no deps, validated for real (not stubbed)
 import automation  # set-item curves: fragments + the loudnorm decision
-import qc          # tier-1 output checks: pure measurement, no db, no app
 import qc_service   # recording those findings and answering the review queue
 import sets_service  # TRD-1 / T6-A3: sets, items, render — no FastAPI
 import cleanup_service  # T6-19: confirmed clip cleanup — no FastAPI
@@ -452,7 +451,9 @@ def album_anchor_tiers(album):
             count += len(group)
         if tier_rows:
             out.append({"name": tier, "count": count, "rows": tier_rows})
-    return out, rows
+    stamped = [dict(r, version=version[r["id"]], opposite=opposite_path(r))
+               for r in rows]
+    return out, stamped
 templates.env.filters["ts"] = lambda t: (
     time.strftime("%Y-%m-%d", time.localtime(t)) if t else "date unknown")
 # time of day for job rows: a date is useless for telling this render from the
@@ -634,23 +635,31 @@ def album_cast(album):
 
     The PROTAGONIST is not in here: they are the album profile
     (playlists.identity/wardrobe/body), which every existing album already has.
-    Extras and background characters are not in here either, and must not be --
-    a row exists so a character can have an ANCHOR, and only a main actor needs
-    one to stay consistent across fifty frames.
     """
     return db.q("SELECT * FROM characters WHERE scope_value=? ORDER BY name", album or "")
+
+
+def character_is_lead(c):
+    """Named rows default to lead (T2-49). extra/background are an explicit unset."""
+    if c is None:
+        return False
+    if "figure_role" not in c.keys() or not c["figure_role"]:
+        return True
+    return c["figure_role"] == "lead"
 
 
 def offered_cast(album):
     """Album characters the storyboard writer may name as leads.
 
-    A chosen front is not required. T2-49: generate has to know Tiger and
-    Panther exist from the character row, or it invents a stranger and the
-    scene cannot stay consistent later. Missing fronts block Generate refs
-    (T2-28), not the writer.
+    A chosen front is not required. T2-49: generate has to know each LEAD
+    exists from the character row. Extra/background stay out so they can
+    be invented in a scene without an identity slot. Missing fronts block
+    Generate refs (T2-28), not the writer.
     """
     out = []
     for c in album_cast(album):
+        if not character_is_lead(c):
+            continue
         desc = " ".join(p for p in (c["role"], c["identity"], c["wardrobe"]) if p)
         out.append((c["name"], desc or "album lead"))
     return out
@@ -661,6 +670,8 @@ def album_leads_for_form(album, tier, named=None):
     named = {str(n).strip().lower() for n in (named or []) if str(n).strip()}
     rows = []
     for c in album_cast(album):
+        if not character_is_lead(c):
+            continue
         front = chosen_anchor("album", album or "", tier, "front", c["id"])
         name = c["name"]
         rows.append({
@@ -2566,7 +2577,6 @@ def song_page(request: Request, id: int):
     for t in storyboards:
         heads = _scene_head_idxs(song, t)
         n_scenes = len(heads) if heads else (storyboards[t]["scene_count"] or 0)
-        head_idxs = list(heads.values())
         n_refs = 0
         n_approved = 0
         storyboard_service.stamp_ref_scenes(song, t)
@@ -2653,6 +2663,8 @@ def song_page(request: Request, id: int):
         "cleanup_plans": cleanup_plans,
         "lyrics_replace_warning": lyrics.REPLACE_WARNING,
         "splice_eaten_secs": splice_eaten_secs,
+        "song_arc": _song_arc_beat(song),
+        "playlist_id": _playlist_id_for_album(album),
         **storyboard_form_ctx(song, form_tier, chat_models, best),
     })
 
@@ -4253,6 +4265,17 @@ async def delete_prompt_version(request: Request):
                          "versions": [dict(r) for r in left]})
 
 
+@app.get("/prompt-versions/{vid}/text")
+def prompt_version_text(vid: int):
+    """One saved wording, for loading back into an album-look box."""
+    row = prompts.get(vid)
+    if not row:
+        raise HTTPException(404, "that version no longer exists")
+    return JSONResponse({"id": row["id"], "text": row["text"],
+                         "label": row["label"],
+                         "version": row["version_number"]})
+
+
 @app.post("/anchors/version/update")
 async def update_prompt_version(request: Request):
     """Correct a version in place -- a typo, or a better name.
@@ -4342,7 +4365,6 @@ def anchor_prompt_preview(album, tier, view, character_id=None, typed="",
     showing it buries the wording that actually steers a render. It is still
     attached to what is sent, and the panel says so.
     """
-    import make_anchor
     import guardrail as g
     settings = settings or {}
     pos = (typed or "").strip() or default_anchor_prompt(album, view, character_id)
@@ -5076,11 +5098,64 @@ async def add_character(id: int, request: Request):
 
 @app.post("/characters/{cid}/save")
 async def save_character(cid: int, request: Request):
-    get_character_or_404(cid)
-    fields = check_character_fields(await request.form())
+    char = get_character_or_404(cid)
+    form = await request.form()
+    if "figure_role_present" in form:
+        fig = "lead" if (form.get("figure_role") or "") == "lead" else "extra"
+        db.run("UPDATE characters SET figure_role=? WHERE id=?", fig, cid)
+    fields = check_character_fields(form)
+    for t in VIDEO_MATRIX_TIERS:
+        raw = form.get(f"wardrobe_{t}")
+        if raw is None:
+            continue
+        text = screen_prompt_field((raw or "").strip(), "wardrobe", "character")
+        _save_look_version(char["scope_value"], "look_wardrobe", text,
+                           tier=t, character_id=cid)
+        if t == "xxx":
+            fields["wardrobe"] = text
     for field, value in fields.items():
         db.run(f"UPDATE characters SET {field}=? WHERE id=?", value, cid)
+        if field != "role":
+            _save_look_version(char["scope_value"], field, value, character_id=cid)
     return RedirectResponse("/playlists", status_code=303)
+
+
+@app.post("/characters/{cid}/describe", response_class=HTMLResponse)
+def describe_character_field(request: Request, cid: int, field: str = Form(...),
+                             tier: str = Form("")):
+    """Wand: draft one supporting-character field from album lyrics + cover."""
+    char = get_character_or_404(cid)
+    p = db.one("SELECT * FROM playlists WHERE name=? AND kind='playlist'",
+               char["scope_value"])
+    if not p:
+        raise HTTPException(400, f"no playlist for album '{char['scope_value']}'")
+    box_key = field
+    box_tier = (tier or "").strip()
+    if field.startswith("wardrobe_") and field != "wardrobe":
+        box_tier = field.split("_", 1)[1]
+        field = "wardrobe"
+    if field not in ("identity", "body", "wardrobe", "nude_wardrobe", "anatomy"):
+        raise HTTPException(400, f"cannot describe {field!r}")
+    lyrics = _album_lyrics(p["id"])
+    existing = char[field] if field in char.keys() and char[field] else ""
+    note = f"Supporting character {char['name']}"
+    if char["role"]:
+        note += f" ({char['role']})"
+    current = (note + ". " + existing).strip()
+    text = _draft_one_look(p, field, lyrics, tier=box_tier, current=current)
+    who = f"c{cid}"
+    if field == "wardrobe" and box_tier:
+        f = _wardrobe_field(p["name"], box_tier, text, character_id=cid, who=who)["field"]
+        f["value"] = text
+        f["key"] = box_key if box_key.startswith("wardrobe_") else f"wardrobe_{box_tier}"
+        return templates.TemplateResponse(request, "_album_field.html", {
+            "playlist": p, "character": char, "f": f})
+    label, _default, hint = ALBUM_FIELDS[field]
+    return templates.TemplateResponse(request, "_album_field.html", {
+        "playlist": p, "character": char,
+        "f": {"key": field, "label": label, "value": text, "hint": hint,
+              "wand": True, "tier": box_tier, "who": who,
+              "history": _look_history(p["name"], field, character_id=cid)}})
 
 
 @app.post("/characters/{cid}/copy-from")
@@ -6203,7 +6278,7 @@ async def save_storyboard_lock(request: Request, id: int, tier: str):
 
 @app.post("/songs/{id}/storyboard/{tier}/versions")
 async def snapshot_storyboard(request: Request, id: int, tier: str):
-    song = get_song_or_404(id)
+    get_song_or_404(id)
     row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
     if not row:
         raise HTTPException(404, "no storyboard for this tier yet")
@@ -6214,7 +6289,10 @@ async def snapshot_storyboard(request: Request, id: int, tier: str):
     except LookupError as e:
         raise HTTPException(400, str(e)) from None
     if wants_json(request):
-        return JSONResponse({"ok": True, "version": ver})
+        return JSONResponse({
+            "ok": True, "version": ver,
+            "versions": storyboard_versions.list_versions(row["json_path"], tier),
+        })
     return RedirectResponse(f"/songs/{id}#fold-storyboard", status_code=303)
 
 
@@ -6242,7 +6320,33 @@ async def restore_storyboard(request: Request, id: int, tier: str):
     db.run("UPDATE storyboards SET json_path=?, md_path=?, scene_count=? WHERE id=?",
            jp, mp, nscenes, row["id"])
     if wants_json(request):
-        return JSONResponse({"ok": True, "restored": n, "scene_count": nscenes})
+        return JSONResponse({
+            "ok": True, "restored": n, "scene_count": nscenes,
+            "versions": storyboard_versions.list_versions(jp, tier),
+        })
+    return RedirectResponse(f"/songs/{id}#fold-storyboard", status_code=303)
+
+
+@app.post("/songs/{id}/storyboard/{tier}/versions/delete")
+async def delete_storyboard_version(request: Request, id: int, tier: str):
+    """Remove one named snapshot. The live board is not touched."""
+    get_song_or_404(id)
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
+    if not row:
+        raise HTTPException(404, "no storyboard for this tier yet")
+    form = await request.form()
+    try:
+        n = int(form.get("n") or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "which version?")
+    if n < 1:
+        raise HTTPException(400, "which version?")
+    left = storyboard_versions.list_versions(row["json_path"], tier)
+    if not any(r.get("n") == n for r in left):
+        raise HTTPException(404, f"no version {n}")
+    left = storyboard_versions.delete(row["json_path"], tier, n)
+    if wants_json(request):
+        return JSONResponse({"ok": True, "deleted": n, "versions": left})
     return RedirectResponse(f"/songs/{id}#fold-storyboard", status_code=303)
 
 
@@ -6327,7 +6431,31 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
         "short_fields": SHORT_SCENE_FIELDS,
         "scene_open": True,
         "chunk": build_song.clip_seconds(row["scene_seconds"]),
-        "pose_plan": pose_plan.plan(song, tier)})
+        "pose_plan": pose_plan.plan(song, tier),
+        "ref_flags": latest_flags(song["id"], tier)})
+
+
+@app.get("/songs/{id}/storyboard/{tier}/scene/{num}", response_class=HTMLResponse)
+def storyboard_scene_row(request: Request, id: int, tier: str, num: int):
+    """One open scene row — swap after a reroll so placeholders become stills."""
+    song = get_song_or_404(id)
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
+    if not row:
+        raise HTTPException(404, "no storyboard for this tier yet")
+    sb = load_storyboard(row, normalized=False)
+    anchored = {c["name"] for c, _a in cast_anchors(song["album"] or "", tier)}
+    rows, _ = storyboard_scenes(song, sb, tier, anchored,
+                                scene_seconds=row["scene_seconds"])
+    r = next((x for x in rows if x["num"] == num), None)
+    if r is None:
+        raise HTTPException(404, f"no scene {num} in this storyboard")
+    return templates.TemplateResponse(request, "_scene_row.html", {
+        "song": song, "tier": tier, "r": r, "fields": EDITABLE_SCENE_FIELDS,
+        "short_fields": SHORT_SCENE_FIELDS,
+        "scene_open": True,
+        "chunk": build_song.clip_seconds(row["scene_seconds"]),
+        "pose_plan": pose_plan.plan(song, tier),
+        "ref_flags": latest_flags(song["id"], tier)})
 
 
 def _ref_candidate_json(row):
@@ -6894,7 +7022,8 @@ def start_reroll(request: Request, id: int, tier: str = Form(...), clip_idx: Lis
                              "step": step},
                  song_id=id)
     return json_or_redirect(
-        request, {"job_id": jid, "kind": "reroll", "tier": tier, "n": n},
+        request, {"job_id": jid, "kind": "reroll", "tier": tier, "n": n,
+                  "clip_indices": idxs},
         f"/songs/{id}#fold-storyboard")
 
 
@@ -7570,11 +7699,59 @@ def delete_song(request: Request, id: int, confirm: str = Form("")):
 # (label, default, hint). The hints are the hard-won findings from this
 # project's own render logs, put where the text is actually typed -- every one
 # of them is something that cost a regeneration to learn.
+VIDEO_MATRIX_TIERS = ("g", "pg13", "r", "xxx")
+LOOK_TABS = (
+    ("lead", "Lead", ("identity", "body")),
+    ("wardrobe", "Wardrobe", ("wardrobe", "nude_wardrobe")),
+    ("world", "World", ("style_text", "world", "backdrop", "render_tail")),
+    ("sheets", "Sheets", ("composite", "anatomy")),
+)
+# Supporting characters share the look UI but not album-wide world/composite.
+CHAR_LOOK_TABS = (
+    ("lead", "Lead", ("identity", "body")),
+    ("wardrobe", "Wardrobe", ("wardrobe", "nude_wardrobe")),
+    ("sheets", "Sheets", ("anatomy",)),
+)
+
+
+def _playlist_id_for_album(album):
+    if not album:
+        return None
+    row = db.one("SELECT id FROM playlists WHERE name=? AND kind='playlist'", album)
+    return row["id"] if row else None
+
+
+def _song_arc_beat(song):
+    """This song's role/beat from the album arc, or None."""
+    pid = _playlist_id_for_album(song["album"] or "")
+    if not pid:
+        return None
+    data = _load_arc(pid)
+    if not data:
+        return None
+    for s in data.get("songs") or []:
+        if s.get("song_id") == song["id"]:
+            return s
+    return None
+
+
+def lead_display_name(prof):
+    """Tab label for the album lead. Not the word protagonist."""
+    st = " ".join(str((prof or {}).get("style_text") or "").split())
+    for sep in (" — ", " – ", " - ", ":"):
+        if sep in st:
+            name = st.split(sep, 1)[0].strip()
+            if name and len(name) <= 40:
+                return name
+    return "Lead"
+
+
 ALBUM_FIELDS = {
     "style_text": (
-        "Overarching theme",
-        "The look and mood of the whole album, in a sentence or two.",
-        "The first thing the storyboard model is told about this release."),
+        "Album premise",
+        "What this record is ABOUT, in a sentence or two — not a product name.",
+        "The first thing the storyboard model is told about this release. Write the "
+        "story premise from the lyrics, not a studio slogan or a tool name."),
     "identity": (
         "Character identity",
         "Head, face and hair come from the identity image; keep that identity exactly.",
@@ -7667,7 +7844,114 @@ ALBUM_FIELDS = {
 }
 
 # Fields the wand can draft from a look at the album's anchor image.
-DESCRIBABLE = ("identity", "wardrobe", "body")
+DESCRIBABLE = tuple(ALBUM_FIELDS)
+LOOK_TAB_HELP = {
+    "lead": "This character's fixed identity and body. Other named people are the other tabs.",
+    "wardrobe": "Most graphic clothed look on XXX, then refine per rating against that rating's guidelines. Nude wording is the unclothed swap.",
+    "world": "Premise, places, studio backdrop, and render medium. Album-wide — not per character. Premise is what the record is ABOUT.",
+    "sheets": "Multiple references means several photos of the SAME person, not a multi-character scene.",
+}
+
+
+def _album_lyrics(playlist_id, limit=10000):
+    """Join every track's lyrics on this playlist, in order."""
+    parts = []
+    for r in db.q("""SELECT s.title, s.lyrics FROM playlist_items pi
+                     JOIN songs s ON s.id = pi.song_id
+                     WHERE pi.playlist_id=? ORDER BY pi.position""", playlist_id):
+        ly = " ".join(str(r["lyrics"] or "").split())
+        if ly:
+            parts.append(f"{r['title']}: {ly[:1800]}")
+    return "\n".join(parts)[:limit]
+
+
+def _look_history(album, prompt_type, tier="", character_id=None):
+    if prompt_type not in prompts.PROMPT_TYPES:
+        return []
+    return [dict(r) for r in prompts.versions(
+        album, prompt_type, tier=tier, character_id=character_id)[:8]]
+
+
+def _save_look_version(album, prompt_type, text, tier="", character_id=None):
+    """A new prompts row only when the wording actually changed."""
+    text = (text or "").strip()
+    if not text or prompt_type not in prompts.PROMPT_TYPES:
+        return
+    prev = prompts.latest(album, prompt_type, tier=tier, character_id=character_id)
+    if prev and prev["text"] == text:
+        return
+    try:
+        prompts.save(album, prompt_type, text, "album look",
+                     tier=tier, character_id=character_id)
+    except ValueError:
+        return
+
+
+def _wardrobe_field(album, tier, fallback, character_id=None, who="lead"):
+    row = prompts.latest(album, "look_wardrobe", tier=tier, character_id=character_id)
+    value = (row["text"] if row and row["text"] else "") or fallback
+    label = f"Wardrobe ({'PG-13' if tier == 'pg13' else tier.upper()})"
+    return {
+        "tier": tier,
+        "field": {
+            "key": f"wardrobe_{tier}",
+            "label": label,
+            "value": value,
+            "hint": ALBUM_FIELDS["wardrobe"][2],
+            "wand": True,
+            "who": who,
+            "tier": tier,
+            "history": _look_history(album, "look_wardrobe", tier=tier,
+                                     character_id=character_id),
+        },
+    }
+
+
+def _character_look(album, char):
+    """Same look boxes as the lead, scoped to one supporting character."""
+    who = f"c{char['id']}"
+    fields = []
+    for k in ("identity", "body", "wardrobe", "nude_wardrobe", "anatomy"):
+        label, _default, hint = ALBUM_FIELDS[k]
+        val = char[k] if k in char.keys() and char[k] else ""
+        fields.append({
+            "key": k, "label": label, "value": val, "hint": hint, "wand": True,
+            "history": _look_history(album, k, character_id=char["id"]),
+            "who": who,
+        })
+    fallback = (char["wardrobe"] if "wardrobe" in char.keys() and char["wardrobe"] else "")
+    tiers_out = [_wardrobe_field(album, t, fallback, character_id=char["id"], who=who)
+                 for t in VIDEO_MATRIX_TIERS]
+    return fields, tiers_out
+
+
+def _describe_image(p):
+    """Cover first, then the chosen identity front. Either may be missing."""
+    cover = p["image_path"] if p["image_path"] and os.path.isfile(p["image_path"]) else None
+    if cover:
+        return cover
+    anchor = db.one("""SELECT * FROM anchors WHERE scope_kind='album' AND scope_value=?
+                       ORDER BY chosen DESC, (view='front') DESC, id DESC LIMIT 1""",
+                    p["name"])
+    return anchor["path"] if anchor else None
+
+
+def _draft_one_look(p, field, lyrics, tier="", current=""):
+    image = _describe_image(p)
+    if not image and not lyrics:
+        raise HTTPException(
+            400, f"no cover, lyrics, or anchor for album '{p['name']}' yet")
+    guide = ""
+    if field == "wardrobe" and tier:
+        try:
+            guide = tiers.compose_guardrail(tier, p["name"])
+        except Exception:
+            guide = ""
+    try:
+        return vision.draft_look_field(image, field, lyrics=lyrics,
+                                       tier_guide=guide, current=current)
+    except Exception as e:
+        raise HTTPException(502, f"could not draft {field}: {e}") from None
 
 # EVERYTHING make_anchor.prompt_for composes from. The form edits these, the run
 # records them and gen_anchor ships them as one profile dict -- so a field
@@ -7790,7 +8074,8 @@ def playlist_detail(p):
             videos.setdefault(r["tier"], r["path"])
         for t in videos:
             tiers_with_video[t] = tiers_with_video.get(t, 0) + 1
-        rows.append({"item": it, "videos": sorted(videos.items())})
+        rows.append({"item": it, "videos": sorted(videos.items()),
+                     "video_by_tier": videos})
     # T6-A2-playlists: song_count / total_secs from playlist_service — same
     # function GET /api/playlists/{id} uses. Not len(items) at the template.
     nums = playlist_service.numbers(p["id"])
@@ -7804,8 +8089,16 @@ def playlist_detail(p):
     # the album profile, as (key, label, current value) for the form
     prof = album_profile(p["name"])
     profile_fields = [{"key": k, "label": ALBUM_FIELDS[k][0], "value": prof[k],
-                       "hint": ALBUM_FIELDS[k][2], "wand": k in DESCRIBABLE}
+                       "hint": ALBUM_FIELDS[k][2], "wand": k in DESCRIBABLE,
+                       "history": _look_history(p["name"], k), "who": "lead"}
                       for k in ALBUM_FIELDS]
+    wardrobe_tiers = [_wardrobe_field(p["name"], t, prof["wardrobe"], who="lead")
+                      for t in VIDEO_MATRIX_TIERS]
+    has_lyrics = bool(_album_lyrics(p["id"]))
+    arc_data = _load_arc(p["id"]) or {}
+    arc_by_sid = {s.get("song_id"): s for s in (arc_data.get("songs") or [])}
+    for r in rows:
+        r["arc"] = arc_by_sid.get(r["item"]["song_id"])
     anchor_tiers, all_anchors = album_anchor_tiers(p["name"])
     # how many sheets each character has, for the filter -- an anchor you cannot
     # find among fifty is one you will regenerate rather than reuse
@@ -7818,16 +8111,31 @@ def playlist_detail(p):
     cast = []
     for c in album_cast(p["name"]):
         n = db.one("SELECT COUNT(*) n FROM anchors WHERE character_id=? AND chosen=1", c["id"])["n"]
-        cast.append({"c": c, "anchors": n})
+        cfields, cward = _character_look(p["name"], c)
+        cast.append({"c": c, "anchors": n, "profile_fields": cfields,
+                     "wardrobe_tiers": cward, "is_lead": character_is_lead(c)})
     has_anchor = bool(db.one("""SELECT id FROM anchors WHERE scope_kind='album' AND scope_value=?
                                  AND chosen=1 AND character_id IS NULL""", p["name"]))
     artwork_default = models.default_for("artwork")
     artwork_models = [{"key": e["key"], "label": e["label"], "available": e["available"],
                        "default": e["key"] == artwork_default}
                       for e in models.catalog(role="artwork")]
+    pose_need = []
+    for t in VIDEO_MATRIX_TIERS:
+        try:
+            cov = pose_plan.album_coverage(p["name"], t)
+        except (LookupError, OSError, ValueError):
+            continue
+        if cov.get("n_needed"):
+            pose_need.append(cov)
     return {"playlist": p, "rows": rows, "song_count": song_count,
             "count": song_count, "total_secs": total,
             "video_tiers": ready, "sets": sets, "profile_fields": profile_fields,
+            "look_tabs": LOOK_TABS,
+            "char_look_tabs": CHAR_LOOK_TABS,
+            "look_tab_help": LOOK_TAB_HELP,
+            "wardrobe_tiers": wardrobe_tiers,
+            "has_lyrics": has_lyrics,
             "anchors": all_anchors, "anchor_tiers": anchor_tiers,
             "anchor_count": len(all_anchors),
             "anchor_characters": sorted(per_character.items()),
@@ -7835,7 +8143,13 @@ def playlist_detail(p):
             "artwork_models": artwork_models, "has_anchor": has_anchor,
             "cast": cast, "character_fields": CHARACTER_FIELDS,
             "copyable_fields": COPYABLE_CHARACTER_FIELDS,
-            "partial_tiers": sorted(t for t in tiers_with_video if t not in ready)}
+            "partial_tiers": sorted(t for t in tiers_with_video if t not in ready),
+            "video_matrix": VIDEO_MATRIX_TIERS,
+            "transitions": list(mixer.TRANSITIONS),
+            "lead_name": lead_display_name(prof),
+            "pose_need": pose_need,
+            "released": p["released"] if "released" in p.keys() else None,
+            "album_date": album_date_iso(p)}
 
 
 def _playlist_payload(p):
@@ -7865,12 +8179,22 @@ def api_playlist_get(id: int):
     return JSONResponse(_playlist_payload(get_playlist_or_404(id)))
 
 
+def album_date_iso(p):
+    t = None
+    if "released" in p.keys() and p["released"]:
+        t = p["released"]
+    elif p["created"]:
+        t = p["created"]
+    return time.strftime("%Y-%m-%d", time.localtime(t)) if t else ""
+
+
 def playlist_summary(p):
     """Collapsed card only. song_count / total_secs from playlist_service
     (T6-A2-playlists). Heavy album look / anchors load on expand."""
     nums = playlist_service.numbers(p["id"])
     return {"playlist": p, "song_count": nums["song_count"],
-            "total_secs": nums["total_secs"]}
+            "total_secs": nums["total_secs"],
+            "album_date": album_date_iso(p)}
 
 
 @app.get("/playlists", response_class=HTMLResponse)
@@ -7887,9 +8211,13 @@ def playlists_page(request: Request):
 def playlist_card(request: Request, id: int):
     """Album body for one playlist card. Loaded when the operator opens it."""
     p = get_playlist_or_404(id)
-    songs = db.q("SELECT * FROM songs ORDER BY title")
-    return templates.TemplateResponse(request, "_playlist_card.html", {
-        "d": playlist_detail(p), "songs": songs})
+    on_ids = {r["song_id"] for r in
+              db.q("SELECT song_id FROM playlist_items WHERE playlist_id=?", id)}
+    songs = [s for s in db.q("SELECT * FROM songs ORDER BY title")
+             if s["id"] not in on_ids]
+    ctx = {"d": playlist_detail(p), "songs": songs, "playlist": p}
+    ctx.update(_arc_template_vars(id))
+    return templates.TemplateResponse(request, "_playlist_card.html", ctx)
 
 
 @app.post("/playlists")
@@ -7925,6 +8253,39 @@ async def set_playlist_image(id: int, image: UploadFile = File(...)):
     return RedirectResponse("/playlists", status_code=303)
 
 
+@app.post("/playlists/{id}/date")
+async def set_playlist_date(request: Request, id: int):
+    """Album release date shown on the card. Not the row's created time."""
+    get_playlist_or_404(id)
+    form = await request.form()
+    raw = (form.get("released") or "").strip()
+    if not raw:
+        db.run("UPDATE playlists SET released=NULL WHERE id=?", id)
+        return json_or_redirect(request, {"ok": True, "released": None}, "/playlists")
+    try:
+        stamp = time.mktime(time.strptime(raw, "%Y-%m-%d"))
+    except ValueError:
+        raise HTTPException(400, "date must be YYYY-MM-DD")
+    db.run("UPDATE playlists SET released=? WHERE id=?", stamp, id)
+    return json_or_redirect(request, {"ok": True, "released": raw}, "/playlists")
+
+
+@app.post("/playlists/{id}/image/delete")
+def delete_playlist_image(request: Request, id: int):
+    """Clear the cover. Songs and the album look stay."""
+    p = get_playlist_or_404(id)
+    path = p["image_path"] or ""
+    db.run("UPDATE playlists SET image_path=NULL WHERE id=?", id)
+    data = os.path.realpath(db.DATA)
+    real = os.path.realpath(path) if path else ""
+    if real and real.startswith(data + os.sep) and os.path.isfile(real):
+        try:
+            os.remove(real)
+        except OSError:
+            pass
+    return json_or_redirect(request, {"ok": True, "deleted": "cover"}, "/playlists")
+
+
 @app.post("/playlists/{id}/profile")
 async def save_album_profile(id: int, request: Request):
     """The album's look: identity, wardrobe, body, world, render style, theme.
@@ -7933,7 +8294,7 @@ async def save_album_profile(id: int, request: Request):
     A field left exactly at its default is stored as NULL rather than a copy,
     so changing a default later still reaches every album that never edited it.
     """
-    get_playlist_or_404(id)
+    p = get_playlist_or_404(id)
     form = await request.form()
     # Screened before anything is written. Every one of these fields is composed
     # into an anchor prompt, and this was the only free-text path in the studio
@@ -7942,18 +8303,29 @@ async def save_album_profile(id: int, request: Request):
     # inherited by every sheet and every cast member who copies from it.
     values = {key: screen_prompt_field((form.get(key) or "").strip(), key, "album")
               for key in ALBUM_FIELDS if key in form}
+    # Per-rating wardrobe. XXX (most graphic) is also the album wardrobe column.
+    for t in VIDEO_MATRIX_TIERS:
+        raw = form.get(f"wardrobe_{t}")
+        if raw is None:
+            continue
+        text = screen_prompt_field((raw or "").strip(), "wardrobe", "album")
+        _save_look_version(p["name"], "look_wardrobe", text, tier=t)
+        if t == "xxx":
+            values["wardrobe"] = text
     for key, (_label, default, _hint) in ALBUM_FIELDS.items():
         if key not in values:
             continue
         value = values[key]
         db.run(f"UPDATE playlists SET {key}=? WHERE id=?",
                None if not value or value == default else value, id)
+        _save_look_version(p["name"], key, value)
     return RedirectResponse("/playlists", status_code=303)
 
 
 @app.post("/playlists/{id}/describe", response_class=HTMLResponse)
-def describe_album_field(request: Request, id: int, field: str = Form(...)):
-    """Wand: draft one profile field by looking at this album's anchor.
+def describe_album_field(request: Request, id: int, field: str = Form(...),
+                         tier: str = Form("")):
+    """Wand: draft one profile field from the album lyrics plus the cover.
 
     Synchronous rather than a job: it is one call, the user is staring at the
     box waiting for it, and a queued job would land behind an hour of rendering.
@@ -7961,50 +8333,76 @@ def describe_album_field(request: Request, id: int, field: str = Form(...)):
     existing Save button is still what writes it.
     """
     p = get_playlist_or_404(id)
+    box_key = field
+    box_tier = (tier or "").strip()
+    if field.startswith("wardrobe_") and field != "wardrobe":
+        box_tier = field.split("_", 1)[1]
+        field = "wardrobe"
     if field not in DESCRIBABLE:
         raise HTTPException(400, f"cannot describe {field!r}")
-    anchor = db.one("""SELECT * FROM anchors WHERE scope_kind='album' AND scope_value=?
-                       ORDER BY chosen DESC, (view='front') DESC, id DESC LIMIT 1""", p["name"])
-    if not anchor:
-        raise HTTPException(400, f"no anchor for album '{p['name']}' yet -- generate one first")
-    try:
-        text = vision.describe_anchor(anchor["path"], field)
-    except Exception as e:
-        raise HTTPException(502, f"could not describe the anchor: {e}") from None
+    lyrics = _album_lyrics(id)
+    text = _draft_one_look(p, field, lyrics, tier=box_tier)
+    if field == "wardrobe" and box_tier:
+        f = _wardrobe_field(p["name"], box_tier, text)["field"]
+        f["value"] = text
+        f["key"] = box_key if box_key.startswith("wardrobe_") else f"wardrobe_{box_tier}"
+        f["who"] = "lead"
+        return templates.TemplateResponse(request, "_album_field.html", {
+            "playlist": p, "f": f})
     label, _default, hint = ALBUM_FIELDS[field]
     return templates.TemplateResponse(request, "_album_field.html", {
         "playlist": p,
-        "f": {"key": field, "label": label, "value": text, "hint": hint, "wand": True}})
+        "f": {"key": field, "label": label, "value": text, "hint": hint, "wand": True,
+              "tier": box_tier, "who": "lead",
+              "history": _look_history(p["name"], field)}})
 
 
 @app.post("/playlists/{id}/fill", response_class=HTMLResponse)
 def fill_album_look(request: Request, id: int):
-    """Draft every describable field at once by reading the album COVER.
+    """Draft every look field from the album lyrics plus the cover.
 
-    The wand does one field from the anchor; this does the set from the cover,
-    which is the image that exists first. Nothing is saved -- the text lands in
-    the boxes and the existing Save button is still what writes it.
+    The wand does one field; this does the set. Wardrobe is drafted at XXX
+    first, then refined down each rating against that rating's guidelines.
+    Nothing is saved -- the text lands in the boxes and Save still writes it.
     """
     p = get_playlist_or_404(id)
-    if not p["image_path"] or not os.path.isfile(p["image_path"]):
-        raise HTTPException(400, "this album has no cover image yet -- upload one first")
+    lyrics = _album_lyrics(id)
+    image = _describe_image(p)
+    if not image and not lyrics:
+        raise HTTPException(
+            400, "add songs with lyrics or upload a cover first")
     prof = album_profile(p["name"])
     fields = []
     for key in ALBUM_FIELDS:
         label, _default, hint = ALBUM_FIELDS[key]
         value = prof[key]
-        if key in DESCRIBABLE:
-            try:
-                drafted = vision.describe_cover(p["image_path"], key)
-            except Exception as e:
-                raise HTTPException(502, f"could not read the cover: {e}") from None
-            # an empty answer means the cover does not show it -- keep what is
-            # already there rather than blanking a field that was filled in
+        if key in DESCRIBABLE and key != "wardrobe":
+            drafted = _draft_one_look(p, key, lyrics, current=value)
             value = drafted or value
         fields.append({"key": key, "label": label, "value": value, "hint": hint,
-                       "wand": key in DESCRIBABLE})
+                       "wand": key in DESCRIBABLE, "who": "lead",
+                       "history": _look_history(p["name"], key)})
+    graphic = _draft_one_look(p, "wardrobe", lyrics, tier="xxx",
+                              current=prof["wardrobe"])
+    if graphic:
+        for f in fields:
+            if f["key"] == "wardrobe":
+                f["value"] = graphic
+    wardrobe_tiers = []
+    current = graphic or prof["wardrobe"]
+    for t in reversed(VIDEO_MATRIX_TIERS):
+        drafted = _draft_one_look(p, "wardrobe", lyrics, tier=t, current=current)
+        if drafted:
+            current = drafted
+        item = _wardrobe_field(p["name"], t, current, who="lead")
+        item["field"]["value"] = current
+        wardrobe_tiers.append(item)
+    wardrobe_tiers.reverse()
     return templates.TemplateResponse(request, "_album_look_form.html",
-                                       {"playlist": p, "profile_fields": fields})
+                                       {"playlist": p, "profile_fields": fields,
+                                        "look_tabs": LOOK_TABS,
+                                        "look_tab_help": LOOK_TAB_HELP,
+                                        "wardrobe_tiers": wardrobe_tiers})
 
 
 @app.post("/playlists/{id}/propose-cast", response_class=HTMLResponse)
@@ -8112,11 +8510,36 @@ def add_playlist_item(id: int, song_id: int = Form(...),
     return RedirectResponse("/playlists", status_code=303)
 
 
+@app.post("/playlists/{id}/items/{item_id}")
+async def edit_playlist_item(request: Request, id: int, item_id: int):
+    """Change the join into the next song. The live board is not touched."""
+    get_playlist_or_404(id)
+    row = db.one("SELECT * FROM playlist_items WHERE id=? AND playlist_id=?",
+                 item_id, id)
+    if not row:
+        raise HTTPException(404, "that song is not on this playlist")
+    form = await request.form()
+    transition = (form.get("transition") or row["transition"] or "fade").strip()
+    if transition not in mixer.TRANSITIONS:
+        raise HTTPException(400, f"transition must be one of {', '.join(mixer.TRANSITIONS)}")
+    try:
+        secs = float(form.get("secs") if form.get("secs") not in (None, "") else row["secs"] or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "secs must be a number")
+    if secs < 0:
+        raise HTTPException(400, "secs cannot be negative")
+    db.run("UPDATE playlist_items SET transition=?, secs=? WHERE id=? AND playlist_id=?",
+           transition, secs, item_id, id)
+    return json_or_redirect(
+        request, {"ok": True, "id": item_id, "transition": transition, "secs": secs},
+        "/playlists")
+
+
 @app.post("/playlists/{id}/items/{item_id}/delete")
-def remove_playlist_item(id: int, item_id: int):
+def remove_playlist_item(request: Request, id: int, item_id: int):
     get_playlist_or_404(id)
     db.run("DELETE FROM playlist_items WHERE id=? AND playlist_id=?", item_id, id)
-    return RedirectResponse("/playlists", status_code=303)
+    return json_or_redirect(request, {"ok": True, "deleted": item_id}, "/playlists")
 
 
 @app.post("/playlists/{id}/reorder")
@@ -8133,12 +8556,53 @@ def album_arc_dir(pl):
     return os.path.join(db.DATA, "arcs", slug), slug
 
 
+def _arc_template_vars(id):
+    """Context shared by GET /playlists/{id}/arc and the playlist fold."""
+    pl = get_playlist_or_404(id)
+    try:
+        meter = arc_service.payload(id)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from None
+    row = meter["row"]
+    data = meter["arc"] or {}
+    md = ""
+    if row and row["md_path"] and os.path.isfile(row["md_path"]):
+        md = open(row["md_path"]).read()
+    proposal = meter["proposal"] or {}
+    titles = {r["id"]: r["title"] for r in db.q(
+        """SELECT s.id, s.title FROM playlist_items pi JOIN songs s ON s.id = pi.song_id
+           WHERE pi.playlist_id=? ORDER BY pi.position""", id)}
+    have = chat.available()
+    models_by = {b: chat.list_models(b) for b in have}
+    defaults = {}
+    for b in have:
+        try:
+            defaults[b] = chat.openai_model() if b == "openai" else grok._resolve_model(None)
+        except Exception:
+            defaults[b] = ""
+    return {
+        "playlist": pl, "arc": data, "row": row, "md": md, "titles": titles,
+        "proposal": proposal, "backends": have, "models": models_by, "defaults": defaults,
+        "song_count": meter["song_count"],
+        "act_count": meter["act_count"],
+        "premise": meter["premise"],
+        "has_proposal": meter["has_proposal"],
+    }
+
+
+def _arc_result(request, id):
+    if request.headers.get("hx-request"):
+        return templates.TemplateResponse(request, "_arc_panel.html",
+                                          _arc_template_vars(id))
+    return RedirectResponse(f"/playlists/{id}/arc", status_code=303)
+
+
 @app.post("/playlists/{id}/arc")
 @app.post("/playlists/{id}/arc/propose")
-def start_arc(id: int, theme: str = Form(""), direction: str = Form(""),
+def start_arc(request: Request, id: int, theme: str = Form(""), direction: str = Form(""),
               backend: str = Form(""), model: str = Form("")):
     """Queue a proposal for the album's story arc. Not saved until accepted."""
-    pl = get_playlist_or_404(id)
+    get_playlist_or_404(id)
     try:
         direction = arc.require_theme(theme or direction)
     except ValueError as e:
@@ -8164,51 +8628,16 @@ def start_arc(id: int, theme: str = Form(""), direction: str = Form(""),
                                       f"{target} group, or change the backend.")
     jobs.enqueue("arc", {"playlist_id": id, "direction": direction,
                           "backend": backend or None, "model": model or None})
-    return RedirectResponse(f"/playlists/{id}/arc", status_code=303)
+    return _arc_result(request, id)
 
 
 @app.get("/playlists/{id}/arc", response_class=HTMLResponse)
 def view_arc(request: Request, id: int):
-    pl = get_playlist_or_404(id)
-    # T6-A2-arc: numbers from arc_service.payload — same function the JSON GET uses.
-    try:
-        meter = arc_service.payload(id)
-    except LookupError as e:
-        raise HTTPException(404, str(e)) from None
-    row = meter["row"]
-    data = meter["arc"] or {}
-    md = ""
-    if row and row["md_path"] and os.path.isfile(row["md_path"]):
-        md = open(row["md_path"]).read()
-    proposal = meter["proposal"] or {}
-    titles = {r["id"]: r["title"] for r in db.q(
-        """SELECT s.id, s.title FROM playlist_items pi JOIN songs s ON s.id = pi.song_id
-           WHERE pi.playlist_id=? ORDER BY pi.position""", id)}
-    # Every chat model each backend will actually accept, so the arc is not
-    # locked to whatever is pinned beside the key. The pinned one is shown as
-    # the default rather than hidden, because "which model wrote this" is the
-    # first question asked of any arc that reads badly.
-    have = chat.available()
-    models = {b: chat.list_models(b) for b in have}
-    defaults = {}
-    for b in have:
-        try:
-            defaults[b] = chat.openai_model() if b == "openai" else grok._resolve_model(None)
-        except Exception:
-            defaults[b] = ""
-    return templates.TemplateResponse(request, "arc.html", {
-        "playlist": pl, "arc": data, "row": row, "md": md, "titles": titles,
-        "proposal": proposal, "backends": have, "models": models, "defaults": defaults,
-        # T6-A2-arc distinctive numbers — service-owned, data-* on the page
-        "song_count": meter["song_count"],
-        "act_count": meter["act_count"],
-        "premise": meter["premise"],
-        "has_proposal": meter["has_proposal"],
-    })
+    return templates.TemplateResponse(request, "arc.html", _arc_template_vars(id))
 
 
 @app.post("/playlists/{id}/arc/accept")
-def accept_arc(id: int):
+def accept_arc(request: Request, id: int):
     """T2-15: accepting is the write. The proposal is discarded after."""
     pl = get_playlist_or_404(id)
     outdir, slug = album_arc_dir(pl)
@@ -8228,22 +8657,22 @@ def accept_arc(id: int):
               created=excluded.created""",
            pl["id"], json_path, md_path, used, data.get("direction", ""), time.time())
     arc.discard_proposal(outdir, slug)
-    return RedirectResponse(f"/playlists/{id}/arc", status_code=303)
+    return _arc_result(request, id)
 
 
 @app.post("/playlists/{id}/arc/reject")
-def reject_arc(id: int):
+def reject_arc(request: Request, id: int):
     """T2-15: reject deletes the proposal and does not touch the committed files."""
     pl = get_playlist_or_404(id)
     outdir, slug = album_arc_dir(pl)
     if arc.load_proposal(outdir, slug) is None:
         raise HTTPException(400, "there is no arc proposal to reject")
     arc.discard_proposal(outdir, slug)
-    return RedirectResponse(f"/playlists/{id}/arc", status_code=303)
+    return _arc_result(request, id)
 
 
 @app.post("/playlists/{id}/arc/apply")
-def apply_arc(id: int, song_ids: str = Form(""), confirm: str = Form("")):
+def apply_arc(request: Request, id: int, song_ids: str = Form(""), confirm: str = Form("")):
     """T2-16: more than one song is a confirmation, not a default."""
     pl = get_playlist_or_404(id)
     row = db.one("SELECT * FROM arcs WHERE playlist_id=?", id)
@@ -8260,7 +8689,7 @@ def apply_arc(id: int, song_ids: str = Form(""), confirm: str = Form("")):
                             confirm=confirm.lower() in ("1", "true", "yes", "on"))
     except ValueError as e:
         raise HTTPException(400, str(e))
-    return RedirectResponse(f"/playlists/{id}/arc", status_code=303)
+    return _arc_result(request, id)
 
 
 def _playlist_tracks(pid):
@@ -9724,8 +10153,20 @@ def queue_ctx():
     def entry(j):
         raw = ((j["finished"] or now) - j["started"]) if j["started"] else None
         elapsed = None if raw is None else f"{raw:.0f}s"
+        args = {}
+        try:
+            args = json.loads(j["args_json"] or "{}")
+        except (TypeError, ValueError):
+            pass
+        clips = args.get("clip_indices") or []
+        if not isinstance(clips, list):
+            clips = []
         return {"job": j, "desc": jobs.describe(j),
-                "elapsed": elapsed, "elapsed_secs": raw}
+                "elapsed": elapsed, "elapsed_secs": raw,
+                "tier": args.get("tier") or "",
+                "clip_indices": [int(c) for c in clips if str(c).lstrip("-").isdigit()],
+                "n": args.get("n") or 0,
+                "song_id": j["song_id"] or args.get("song_id")}
 
     rows = [dict(r) for r in db.q(
         """SELECT * FROM jobs WHERE status IN ('queued','running','cancelling')
@@ -9827,6 +10268,29 @@ def cancel_job(request: Request, id: int):
         row = jobs.get(id)
         return JSONResponse({"cancelled": id, "status": row["status"] if row else "cancelled"})
     return RedirectResponse("/jobs", status_code=303)
+
+
+@app.get("/jobs/{id}")
+def job_one(request: Request, id: int):
+    """JSON status for one job. HTML still lives on /jobs."""
+    row = jobs.get(id)
+    if row is None:
+        raise HTTPException(404, "no such job")
+    if not wants_json(request):
+        return RedirectResponse("/jobs", status_code=303)
+    args = {}
+    try:
+        args = json.loads(row["args_json"] or "{}")
+    except (TypeError, ValueError):
+        pass
+    return JSONResponse({
+        "id": row["id"], "status": row["status"], "progress": row["progress"],
+        "error": row["error"], "kind": row["kind"],
+        "song_id": row["song_id"] or args.get("song_id"),
+        "tier": args.get("tier"),
+        "clip_indices": args.get("clip_indices") or [],
+        "n": args.get("n") or 0,
+    })
 
 
 @app.get("/jobs/{id}/stream")

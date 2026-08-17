@@ -1,0 +1,24 @@
+# Linter only. Format is not a hook until we ask for it.
+target-version = "py312"
+line-length = 100
+
+extend-exclude = [
+    "Street Cats",
+    "Catatonic",
+    "deprecated",
+    "clipmax",
+    "reroll",
+    "zimage_sweep",
+    "anchor5",
+    "studio/data",
+]
+
+[lint]
+# Ruff default: E4, E7, E9, F
+select = ["E4", "E7", "E9", "F"]
+ignore = [
+    "E401",  # multiple imports on one line — house style
+    "E402",  # import after sys.path.insert
+    "E731",  # lambda assignment in tests
+    "E741",  # short names (l, I, O)
+]

@@ -472,11 +472,14 @@ A scene lists **every** rendered part (not only the head) and Play scene
 runs them in order. The panel also has an all-clips strip and Assemble. Summaries carry the one-line status so
 you do not open a card to learn it is idle.
 Storyboard editing lives **on the song page**, not a second interface.
-Each written tier is a `.tier-board` with a chevron that rotates
-open/closed (hover: expand or collapse). It `hx-get`s
+Each written tier is a `.tier-board` with the shared caret
+(hover: expand or collapse). Scene lists have a Scene / Time / Pose
+header; times are right-aligned tabular nums. It `hx-get`s
 `/songs/{id}/storyboard/{tier}/panel`. The panel leads with a one-line
-toolbar (Save board, Snapshot, version select, Restore, secondary
-Generate that names the overwrite). Raw JSON is a closed details.
+toolbar (Save JSON, Name this version, Snapshot, version select with created
+time, Restore, Delete version, secondary Generate that names the overwrite).
+Raw JSON is a closed details and is versioned by Snapshot / Restore / Delete
+the same way album prompts are.
 Identity and world are a **Board lock** form, not a blob. Each scene
 is a closed `<details class="scene">` whose fields write the stored
 JSON (`name`, `camera`, `pose`, prompts, …). Approve remaining /
@@ -514,18 +517,34 @@ select (`POST .../scene/{n}/pose-sheet`). The plate thumb is a
 Save scene) so two disks are not the same control. Every icon has
 `title` and `aria-label`. A `.save-note` reports saved / pinned / the
 error and does not fade on failure. Bind status is **Pinned** (operator chose), **Suggested**
-(matcher), **Missing sheet**, or **No plate**, with a help icon — not
-the old “saved bind · standing” string. The pose word sits beside the
-help. `GET /api/songs/{id}/pose-plan/{tier}` is the same object
+(matcher), **Missing sheet**, or **No plate**, with a help icon that
+opens `#tip-modal` (stays until Close / Esc) — not inline save-note
+text. Pose word, plate thumb (fixed 4.5×6rem, not a collapsed lazy
+frame), picker, Save plate and status sit on one row. Opening a scene
+loads that row's thumbs immediately. `GET /api/songs/{id}/pose-plan/{tier}` is the same object
 (`test_pose_plan.py`).
 Scene media is stacked rows: pose word + plate controls on one
 nowrap row; **reference stills** and **clips** each scroll sideways
-(no wrap). Stills show every candidate, **Use this still** approves one.
-Reroll carries note, `n`, seed min/max, and equal/fib stepping.
-Fix (face / inpaint / outpaint) and Delete sit on the still.
-**Render clip** defaults to first clip only; Auto post is T5 LTX refine;
-Auto QC enqueues `qc` after the clip. WAN S2V is a later hop, not this
-button. There is no separate Approve refs page.
+(no wrap). The cue/camera/location line is not repeated above the
+fields. Stills show every candidate, **Use this still** approves one.
+Reroll is one bar above the stills (What to change, Images to generate,
+Min, Max, Seed stepping). Submitting it plants N shimmer placeholders
+in the stills strip; they swap for the real stills when the job lands
+and clear if it fails or is cancelled. The sticky job chip carries
+`data-kind` / `data-clips`; a finished reroll refreshes that scene
+row even if the SSE watch was missed. Clip thumbs seek ~0.5s in so
+the first-frame black is not the poster.
+Fix (face / inpaint / outpaint) and Delete sit on the still as icon
+buttons with hover titles (check / wrench / trash), not labeled
+primaries. Each still has a top-right select box; **Delete selected**
+removes the ticked ones. `#ref-preview`: Close is on the right of the
+bar with Use this still / Fix / Delete; tall prev/next sit beside the
+image; Left/Right arrows step stills in that scene. Clip thumbs walk
+forward from ~0.2s until the frame is not black.
+**Render clip** sits on the Clips heading row with First clip only,
+Auto post (LTX refine), and Auto QC as one nowrap option bar. First
+clip only is the default. WAN S2V is a later hop, not this button.
+There is no separate Approve refs page.
 Stills and clips show `.qc-tag`: confidence, identity, and the
 assessment sentence. Wardrobe may change; physical identity must not.
 Scene plates, stills and clip thumbs use `data-src` + `.lazy-src`;
@@ -1039,10 +1058,41 @@ form carries `name="pose"`; preview shows the saved version
 
 ### 7a.5 Album pose roster; keeper is "Use as this pose"
 
-The anchors page lists **poses this album's songs need** (`pose_plan.album_coverage`,
-`GET /api/albums/{album}/pose-coverage/{tier}`): union of every storyboard
-on that album at the selected tier. Have = a chosen keeper; missing =
-generate or assign. The roster dropdown (`POST /anchors/keeper`) plus **Save** sets
+The playlist card and the song **Reference images** fold both list
+**poses this album / song needs** and which are missing
+(`pose_plan.album_coverage` / `pose_plan.plan`). The anchors page lists
+the same roster (`GET /api/albums/{album}/pose-coverage/{tier}`): union
+of every storyboard on that album at the selected tier. Have = a chosen
+keeper; missing = generate or assign. Playlist sections are
+`.song-fold` cards (Songs, Arc, Render set, Album look, Cast, Anchors,
+Cover). The Story arc fold embeds the full arc writer (`_arc_panel.html`,
+same meter as `GET /playlists/{id}/arc`). Songs already on the playlist
+are omitted from Add; the add control has a visible edge. Each song row
+shows that track's arc role/beat when an arc exists. Album look is
+tabbed by character (album lead first, then named people, then Add)
+on one chrome row with Draft / Create art / Propose. Then
+Lead / Wardrobe / World / Sheets with tab-row help. Supporting
+characters use that same look form (Identity | Body, no Role cell).
+A **Lead** checkbox on the character bar is the pipeline bit (needs a
+front; offered at generate). **Story role** (partner, antagonist) is a
+compact label on that bar, not a figure role. World
+and album premise stay on the album lead. Song-row beats are one line
+(full text in `title`). The story-arc track dump starts closed.
+New playlist is a one-line bar. Render set shows “Queuing the set”
+on submit (`.js-busy-form` / `.form-busy`). Long GPU work stays on the
+sticky job chip, not a full-page spinner. Date + pencil stay on one header line.
+Shared chrome: `.look-chrome`, `.tab` family (look/cast/wardrobe still
+aliases), `glyph_*` macros, `.field-grid`. Do not add a second icon set. Wardrobe
+is sub-tabbed G / PG-13 / R / XXX / Nude; XXX is the most graphic
+clothed look and lower ratings refine it. Sparkle and **Draft from
+lyrics + cover** analyse every song's lyrics plus the cover (or the
+lead front if there is no cover). The World tab's first box is **Album
+premise** (what the record is about), not a product slogan. Each save
+writes a `prompts` version that can be loaded back. The cover thumb expands the card when it is closed and opens a
+lightbox (pencil = replace, trash = delete) when it is open. Album
+date is the pencil on the card header next to the title. The Play column is G / PG-13 / R / XXX. Save,
+edit, and delete icons are the shared `glyph_save` / `glyph_edit` /
+`glyph_delete` macros. Transitions edit in the row. Remove confirms. The roster dropdown (`POST /anchors/keeper`) plus **Save** sets
 the keeper and stamps those scenes. Roster thumbs open `#pose-preview`.
 Gallery tiles use icon actions (filled check = keeper, outline =
 pick, clear, delete) with `title` help. Clear unsets `chosen`

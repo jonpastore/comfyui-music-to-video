@@ -1,0 +1,20 @@
+# Ruff (Python) + Biome (studio/static JS/CSS). Install once:
+#   pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.17
+    hooks:
+      - id: ruff-check
+        types_or: [python, pyi]
+
+  # Lax FE lint: real bugs only (syntax, undeclared, unreachable). No format.
+  # Scope and rule set live in biome.json — do not broaden without raising
+  # noRedeclare / noUnusedVariables off warn, which still fire on app.js.
+  - repo: https://github.com/biomejs/pre-commit
+    rev: v2.5.8
+    hooks:
+      - id: biome-ci
+        name: biome-lint (studio/static)
+        files: ^studio/static/.*\.(js|css)$
+        exclude: \.min\.js$
+        additional_dependencies: ["@biomejs/biome@2.5.8"]

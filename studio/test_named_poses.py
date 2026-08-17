@@ -377,8 +377,16 @@ def test_playlists_page_is_summaries_until_the_card_loads():
         listing = client.get("/playlists").text
         assert f'id="playlist-{pl}"' in listing
         assert f'hx-get="/playlists/{pl}/card"' in listing
+        assert 'id="cover-preview"' in listing
+        js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
+        assert "card.open = true" in js
         assert 'id="page-loading"' in listing
         assert 'name="identity"' not in listing
         card = client.get(f"/playlists/{pl}/card").text
         assert 'name="identity"' in card
         assert "<html" not in card.lower()
+        assert "pl-fold" in card
+        assert "look-tab" in card
+        assert "cast-tab" in card
+        assert "Main character identity" in card
+        assert "trans-edit" in card or "No songs added yet" in card

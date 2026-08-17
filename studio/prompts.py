@@ -68,6 +68,14 @@ PROMPT_TYPES = {
     # The album's arc generation prompt (theme / direction). Untiered: the
     # story does not change because the wardrobe does. docs/TRD-2 T2-5.
     "arc":           {"tiered": False, "label": "Album arc prompt"},
+    # Album-look boxes that are not composer fields. Versioned the same way
+    # so a premise or world list can be restored after a bad fill.
+    "style_text":    {"tiered": False, "label": "Album premise"},
+    "world":         {"tiered": False, "label": "World"},
+    "render_tail":   {"tiered": False, "label": "Render style"},
+    # Clothed wardrobe per rating. playlists.wardrobe stays the most graphic
+    # (XXX) fallback; lower tiers refine it against compose_guardrail.
+    "look_wardrobe": {"tiered": True,  "label": "Wardrobe (by rating)"},
 }
 # T7-13: one type per view, generated from the view table so T7-1 still holds.
 # Untiered — camera placement is not a function of the rating.
@@ -156,7 +164,8 @@ def save(album, prompt_type, text, label, tier="", character_id=None, model=None
     text, label = check(text, label)
     if prompt_type.startswith("view:") or prompt_type in (
             "identity", "wardrobe", "body", "nude_wardrobe", "anatomy",
-            "backdrop", "composite", "pose", "positive", "tier_wording"):
+            "backdrop", "composite", "pose", "positive", "tier_wording",
+            "style_text", "world", "render_tail", "look_wardrobe"):
         import tiers
         tiers.check_text(text, prompt_type)
         tiers.check_override(text)
@@ -271,7 +280,7 @@ def demo():
 
     # an UNTIERED type ignores the tier it was saved from, or the same negative
     # saved from two tier tabs becomes two histories of one thing
-    n1 = save("Street Cats", "negative", "white fur", "a", tier="r")
+    save("Street Cats", "negative", "white fur", "a", tier="r")
     n2 = save("Street Cats", "negative", "white fur, cream tail", "b", tier="xxx")
     assert n2["version_number"] == 2, "an untiered type split its history by tier"
     assert len(versions("Street Cats", "negative", tier="anything")) == 2

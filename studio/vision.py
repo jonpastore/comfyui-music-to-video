@@ -495,6 +495,83 @@ def describe_anchor(image_path, field, model=None, progress=None):
     return " ".join(str(text).split()).strip()
 
 
+LOOK_DRAFT = {
+    "identity": (
+        "Describe ONLY the lead character's fixed identity from the cover and the lyrics' "
+        "world: face, eyes, ears, hair, markings, build. Traits that must not drift."),
+    "wardrobe": (
+        "Describe ONLY what the lead is WEARING: garments, cut, colour, materials, hardware. "
+        "Say what is worn, never what is absent. Match the album's tone from the lyrics."),
+    "body": (
+        "Describe ONLY body colouring and texture, part by part (shoulders, arms, torso, "
+        "hips, thighs, calves), each matching the face. Positive wording only."),
+    "nude_wardrobe": (
+        "Write the unclothed swap: she is nude, surface owned by the body clause, no garment "
+        "names. Adult fictional character. Match the album's explicitness from the lyrics."),
+    "anatomy": (
+        "What a nude sheet DEPICTS (not what it omits), matching the drawn style on the cover. "
+        "Adult fictional anatomy only."),
+    "backdrop": (
+        "Studio backdrop and lighting for identity sheets, not a music-video set. Neutral, "
+        "even, full body in frame. Do not copy the cover's poster composition."),
+    "composite": (
+        "One sentence: every reference photograph is the SAME lead, one figure alone. "
+        "Not a multi-character scene."),
+    "style_text": (
+        "Write the album's premise in one or two sentences: what this record is ABOUT, "
+        "from the lyrics and the cover's mood. Not a product slogan, not a tool name."),
+    "world": (
+        "List distinct recurring places this album's videos happen in, drawn from the lyrics "
+        "and the cover. Concrete locations, not adjectives."),
+    "render_tail": (
+        "Medium, quality and aspect only (e.g. photoreal cinematic still, 16:9). No subject."),
+}
+
+
+def album_lyrics_blob(rows, limit=10000):
+    """Join per-song lyrics for look/arc drafts."""
+    parts = []
+    for r in rows or []:
+        title = (r["title"] if hasattr(r, "keys") else r.get("title")) or "track"
+        ly = (r["lyrics"] if hasattr(r, "keys") else r.get("lyrics")) or ""
+        ly = " ".join(str(ly).split())
+        if not ly:
+            continue
+        parts.append(f"{title}: {ly[:1800]}")
+    return "\n".join(parts)[:limit]
+
+
+def draft_look_field(image_path, field, lyrics="", tier_guide="", current="",
+                     progress=None):
+    """Draft one album-look field from the cover (or front) plus album lyrics."""
+    spec = LOOK_DRAFT.get(field)
+    if not spec:
+        raise ValueError(f"nothing to describe for {field!r}")
+    bits = [spec]
+    if lyrics:
+        bits.append("Lyrics of every song on this album:\n" + lyrics)
+    if tier_guide:
+        bits.append("Draft for this content rating / wardrobe guideline:\n" + tier_guide)
+    if current:
+        bits.append("Current wording to refine (keep what still fits):\n" + current)
+    bits.append(
+        "Adult fictional music-video project. Present tense. One or two sentences "
+        "unless the field needs a short list. No markdown, no preamble. "
+        'Reply as JSON: {"text": "<the description>"}'
+    )
+    user = "\n\n".join(bits)
+    system = (
+        "You write album-look prompt fragments. Use the lyrics for story, world and "
+        "tone. Use the cover image for the lead's look when one is attached."
+    )
+    if image_path and os.path.isfile(image_path):
+        raw, _call = ask(image_path, system, user, progress)
+    else:
+        raw, _used = ask_text(system, user, progress)
+    text = json_or_raise(raw, f"draft look {field}").get("text", "")
+    return " ".join(str(text).split()).strip()
+
+
 def describe_cover(image_path, field, progress=None):
     """Draft one album-profile field by looking at the album COVER.
 

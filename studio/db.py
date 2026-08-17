@@ -376,6 +376,10 @@ MIGRATIONS = [
     # compared side by side, and nothing in the anchors table records which.
     "ALTER TABLE characters ADD COLUMN nude_wardrobe TEXT",
     "ALTER TABLE characters ADD COLUMN anatomy TEXT",
+    # Story role (partner/antagonist) is characters.role. figure_role is the
+    # pipeline bit: lead needs an identity front; extra/background do not.
+    # NULL/blank means lead so existing named rows stay offered (T2-49).
+    "ALTER TABLE characters ADD COLUMN figure_role TEXT",
     # The studio backdrop and the multi-reference clause, per album. Both were
     # constants in make_anchor with no override and no history, and both are
     # load-bearing prompt text: BACKDROP is five clauses of studio, lighting,
@@ -438,6 +442,7 @@ MIGRATIONS = [
     # NULL = a row from before this column; stamp_ref_scenes backfills
     # chain-head rows only, and never 7000–16999 clip_plan-era seeds.
     "ALTER TABLE refs ADD COLUMN scene_number INTEGER",
+    "ALTER TABLE playlists ADD COLUMN released REAL",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and

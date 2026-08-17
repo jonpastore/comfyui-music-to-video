@@ -140,9 +140,17 @@ HTML `/playlists` card and JSON `GET /api/playlists/{id}` share
 `playlist_service.numbers()` (`test_t6_a2_html_and_json_report_the_same_playlist_numbers`,
 `T6-A2-playlists`: song_count, total_secs; song_count is service-owned so a
 template `len` recompute fails the stub arm; `arc` still only when defined,
-T2-37). The list page is summaries only; album look, cast and the
+T2-37). The list page is summaries only; album look, cast, the
+embedded arc writer (`_arc_panel.html`, same `arc_service.payload()`
+as `/playlists/{id}/arc`) and the
 anchor gallery land from `GET /playlists/{id}/card` when the operator
-opens the card (`test_playlists_page_is_summaries_until_the_card_loads`). Library HTML `GET /` / `GET /songs` (`#library` `data-song-count`)
+opens the card (`test_playlists_page_is_summaries_until_the_card_loads`).
+Look-field wands and **Draft from lyrics + cover** call
+`vision.draft_look_field` with every track's lyrics plus the cover.
+Album look and cast are one fold: character tabs, same look form for
+the album lead and each named supporting character. `characters.figure_role`
+(`lead` default, or `extra`) is what `offered_cast` reads; story `role`
+is a label. Library HTML `GET /` / `GET /songs` (`#library` `data-song-count`)
 and JSON `GET /api/songs` share `library_service.numbers()`
 (`test_t6_a2_html_and_json_report_the_same_library_numbers`, `T6-A2-library`:
 song_count is service-owned so a template `len` recompute fails the stub

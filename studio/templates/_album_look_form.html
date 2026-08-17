@@ -1,12 +1,106 @@
-{# The album look fields. Its own partial because "Fill from cover" swaps the
-   whole set at once -- the wand replaces one field, this replaces all of them.
-   Nothing is saved either way until Save album look is pressed. #}
-<form id="album-look-{{ playlist.id }}"
-      method="post" action="/playlists/{{ playlist.id }}/profile" class="stack-form">
-  <div class="field-grid">
-    {% for f in profile_fields %}
-      {% include "_album_field.html" %}
+{% from "_macros.html" import glyph_delete %}
+{# The look fields for the lead (album columns) or one supporting character.
+   Fill from lyrics swaps the lead form whole; the wand replaces one field. #}
+{% set who = ("c" ~ character.id) if character else "lead" %}
+{% set tabs = look_tabs %}
+<form id="album-look-{{ playlist.id }}{% if character %}-c{{ character.id }}{% endif %}"
+      method="post"
+      action="{% if character %}/characters/{{ character.id }}/save{% else %}/playlists/{{ playlist.id }}/profile{% endif %}"
+      class="stack-form">
+  <div class="look-tabs" role="tablist">
+    {% for key, label, keys in tabs %}
+    <span class="look-tab-wrap">
+      <button type="button" class="look-tab {% if loop.first %}active{% endif %}"
+              data-look="{{ key }}" role="tab">{{ label }}</button>
+      <button type="button" class="icon-btn help-tip look-help"
+              title="{{ look_tab_help.get(key, label) }}"
+              aria-label="What {{ label }} is"
+              data-label="{{ label }}"
+              data-help="{{ look_tab_help.get(key, '') }}">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <path fill="currentColor" d="M7.3 6.2c0-.8.5-1.3 1.3-1.3s1.3.5 1.3 1.2c0 .6-.3.9-.9 1.3-.5.4-.8.7-.8 1.3h1.3c0-.4.2-.7.7-1.1.7-.5 1.3-1 1.3-2 0-1.3-1-2.2-2.4-2.2-1.5 0-2.6 1-2.6 2.5zm1.1 5.8h1.4V10.7H8.4z"/>
+        </svg>
+      </button>
+    </span>
     {% endfor %}
   </div>
-  <button type="submit">Save album look</button>
+  {% for key, label, keys in tabs %}
+  <div class="look-panel {% if key != 'wardrobe' %}field-grid{% endif %} {% if not loop.first %}hidden{% endif %}"
+       data-look="{{ key }}" role="tabpanel">
+    {% if key == "wardrobe" %}
+    <div class="wardrobe-tabs" role="tablist">
+      {% for t in wardrobe_tiers %}
+      <button type="button" class="wardrobe-tab {% if loop.first %}active{% endif %}"
+              data-ward="{{ t.tier }}" role="tab">{{ t.tier | tiername }}</button>
+      {% endfor %}
+      <button type="button" class="wardrobe-tab" data-ward="nude" role="tab">Nude</button>
+    </div>
+    {% for t in wardrobe_tiers %}
+    <div class="wardrobe-panel field-grid {% if not loop.first %}hidden{% endif %}"
+         data-ward="{{ t.tier }}">
+      {% with f = t.field %}
+        {% include "_album_field.html" %}
+      {% endwith %}
+    </div>
+    {% endfor %}
+    <div class="wardrobe-panel field-grid hidden" data-ward="nude">
+      {% for f in profile_fields if f.key == "nude_wardrobe" %}
+        {% include "_album_field.html" %}
+      {% endfor %}
+    </div>
+    {% else %}
+    {% for f in profile_fields if f.key in keys %}
+      {% include "_album_field.html" %}
+    {% endfor %}
+    {% endif %}
+  </div>
+  {% endfor %}
+  <div class="look-save-row">
+    <button type="submit">{% if character %}Save {{ character.name }}{% else %}Save album look{% endif %}</button>
+    {% if character and cast %}
+    <span class="look-char-actions">
+      {% for o in cast if o.c.id != character.id %}
+      {% if loop.first %}
+      <label class="inline-label">Copy from
+        <select name="source_id" form="copy-{{ character.id }}">
+      {% endif %}
+          <option value="{{ o.c.id }}">{{ o.c.name }}</option>
+      {% if loop.last %}
+        </select>
+      </label>
+      {% endif %}
+      {% endfor %}
+    </span>
+    {% endif %}
+  </div>
 </form>
+{% if character %}
+<div class="cast-iconbar">
+  {% set ns = namespace(has_sib=false) %}
+  {% for o in (cast or []) if o.c.id != character.id %}{% set ns.has_sib = true %}{% endfor %}
+  {% if ns.has_sib %}
+  <form id="copy-{{ character.id }}" method="post"
+        action="/characters/{{ character.id }}/copy-from" class="clip-bar">
+    {% for f in copyable_fields %}
+    <label class="check">
+      <input type="checkbox" name="field" value="{{ f }}"
+             {% if f == "wardrobe" %}checked{% endif %}> {{ f.replace("_", " ") }}
+    </label>
+    {% endfor %}
+    <button type="submit" class="icon-btn" title="Copy wording to {{ character.name }}"
+            aria-label="Copy wording to {{ character.name }}">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M5 2h8v10H5zm1.5 1.5v7h5v-7zM3 5h1.2v8H11V14H3z"/></svg>
+    </button>
+  </form>
+  {% endif %}
+  <form method="post" action="/characters/{{ character.id }}/delete" class="delete-character"
+        data-name="{{ character.name }}"
+        onsubmit="return confirm('Delete {{ character.name }}? Their sheets stay on disk until you remove them.');">
+    <button type="submit" class="icon-btn danger-icon"
+            title="Delete {{ character.name }}" aria-label="Delete {{ character.name }}">
+      {{ glyph_delete() }}
+    </button>
+  </form>
+</div>
+{% endif %}

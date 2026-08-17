@@ -2,44 +2,59 @@
 {# One album-profile field. Swapped whole by the wand, so the hx-* attributes
    have to live on this wrapper: the replacement is what keeps working.
 
-   The explanatory text is the field's PLACEHOLDER and its help modal, not a
-   paragraph above the box -- as a paragraph it pushed the boxes apart and
-   still had to be re-read every time. The modal keeps every word of it. #}
-<div class="album-field" id="album-field-{{ f.key }}">
+   `who` namespaces ids so the lead and each supporting character can share
+   a page without colliding help dialogs or hx-targets. #}
+{% set who = f.who if f.who else "lead" %}
+{% set fid = f.key ~ "-" ~ who %}
+{% set wand_url = "/characters/" ~ character.id ~ "/describe" if character
+                  else "/playlists/" ~ playlist.id ~ "/describe" %}
+<div class="album-field" id="album-field-{{ fid }}">
   <div class="field-head">
-    <label for="f-{{ f.key }}">{{ f.label }}</label>
+    <label for="f-{{ fid }}">{% if f.key == "identity" and who == "lead" %}Main character identity{% else %}{{ f.label }}{% endif %}</label>
     <span class="field-actions">
+      {% if f.history %}
+      <label class="look-hist">v{{ f.history[0].version_number }}
+        <select class="js-look-hist" data-target="f-{{ fid }}"
+                title="Load a previous wording of this box"
+                aria-label="Previous wordings of {{ f.label }}">
+          {% for v in f.history %}
+          <option value="{{ v.id }}">v{{ v.version_number }} · {{ v.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
       {% if f.wand %}
       <button type="button" class="wand"
-              title="Draft this field by looking at this album's anchor image. It fills the box only -- nothing is saved until you press Save album look."
-              aria-label="Draft {{ f.label }} from the album's anchor image"
-              hx-post="/playlists/{{ playlist.id }}/describe"
-              hx-vals='{"field": "{{ f.key }}"}'
-              hx-target="#album-field-{{ f.key }}"
+              title="Draft this field from every song's lyrics on this album plus the cover. It fills the box only -- nothing is saved until you press Save."
+              aria-label="Draft {{ f.label }} from the album lyrics and cover"
+              hx-post="{{ wand_url }}"
+              hx-vals='{"field": "{{ f.key }}", "tier": "{{ f.tier or "" }}"}'
+              hx-target="#album-field-{{ fid }}"
               hx-swap="outerHTML"
               hx-disabled-elt="this"
-              hx-indicator="#wand-busy-{{ f.key }}">&#10024;</button>
-      <span class="htmx-indicator muted" id="wand-busy-{{ f.key }}">looking&hellip;</span>
+              hx-indicator="#wand-busy-{{ fid }}">&#10024;</button>
+      <span class="htmx-indicator muted" id="wand-busy-{{ fid }}">reading lyrics&hellip;</span>
       {% endif %}
       <button type="button" class="help-btn" title="What is this field for?"
               aria-label="Help for {{ f.label }}"
-              onclick="document.getElementById('help-{{ f.key }}').showModal()">?</button>
+              onclick="document.getElementById('help-{{ fid }}').showModal()">?</button>
     </span>
   </div>
 
-  <textarea id="f-{{ f.key }}" name="{{ f.key }}" rows="7"
+  <textarea id="f-{{ fid }}" name="{{ f.key }}" rows="7"
             placeholder="{{ f.hint }}">{{ f.value }}</textarea>
 
-  <dialog class="help-modal" id="help-{{ f.key }}">
+  <dialog class="help-modal" id="help-{{ fid }}">
     <div class="modal-bar">
       <strong>{{ f.label }}</strong>
       {{ modal_close() }}
     </div>
     <p>{{ f.hint }}</p>
     {% if f.wand %}
-    <p class="hint">The &#10024; button drafts this field by looking at the album's anchor
-      image. It fills the box only &mdash; nothing is saved until you press
-      <strong>Save album look</strong>.</p>
+    <p class="hint">The &#10024; button drafts this field from the lyrics of every
+      song on the album and the cover (or the identity front if there is no
+      cover). It fills the box only &mdash; nothing is saved until you press
+      <strong>Save</strong>.</p>
     {% endif %}
   </dialog>
 </div>

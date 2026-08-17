@@ -1,0 +1,145 @@
+{# Album story arc. Shared by GET /playlists/{id}/arc and the playlist fold.
+   T6-A2-arc numbers come from arc_service.payload; do not recompute
+   song_count from arc.songs | length or act_count from arc.acts | length. #}
+<div id="arc-embed-{{ playlist.id }}" class="arc-embed">
+<div id="arc-meter"
+     data-song-count="{{ song_count }}"
+     data-act-count="{{ act_count }}"
+     data-premise="{{ premise }}"
+     data-has-proposal="{{ 'true' if has_proposal else 'false' }}"></div>
+
+<section class="arc-block">
+  <h3>Write the arc</h3>
+  <p class="hint">One request over every track on the album, in order, with its lyrics.
+    The storyboard writer for a song is then told its own beat, the close of the
+    track before it and the open of the track after.</p>
+  <p class="hint"><strong>Story only.</strong> The arc never carries content rules.
+    <strong>xAI is the default</strong> for an adult album; a sanitised arc writes
+    every storyboard against a story with the teeth taken out.</p>
+  {% if not backends %}
+  <p class="hint"><span class="tag warn-tag">no API key</span>
+    Set one on the <a href="/config">Config page</a> first.</p>
+  {% endif %}
+  <form method="post" action="/playlists/{{ playlist.id }}/arc" class="stack-form"
+        hx-post="/playlists/{{ playlist.id }}/arc"
+        hx-target="#arc-embed-{{ playlist.id }}" hx-swap="outerHTML">
+    <label>Theme &mdash; required, what this record is about
+      <textarea name="theme" rows="2" required
+        placeholder="it should end somewhere colder than it started">{{ row.prompt if row else "" }}</textarea>
+    </label>
+    <div class="field-row">
+      <label>Backend
+        <select name="backend">
+          <option value="">default{% if backends %} ({{ backends[0] }}){% endif %}</option>
+          {% for b in backends %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Model
+        <select name="model">
+          <option value="">the pinned default{% for b, m in defaults.items() %}
+            {% if m %} &middot; {{ b }}: {{ m }}{% endif %}{% endfor %}</option>
+          {% for b in backends %}
+          <optgroup label="{{ b }}">
+            {% for m in models.get(b, []) %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit" {% if not backends %}disabled{% endif %}>
+        {{ "Propose a rewrite" if arc else "Propose the arc" }}</button>
+    </div>
+    <p class="hint">The wand writes a proposal. Accept saves it; reject leaves the
+      previous arc on disk. Applying per-song summaries to more than one song
+      needs confirmation.</p>
+  </form>
+</section>
+
+{% if proposal and proposal.premise %}
+<section class="arc-block model-authored">
+  <h3>Proposal</h3>
+  <p class="hint"><span class="tag">model</span> Not saved until you accept.</p>
+  <p>{{ proposal.premise }}</p>
+  <div class="field-row">
+    <form method="post" action="/playlists/{{ playlist.id }}/arc/accept"
+          hx-post="/playlists/{{ playlist.id }}/arc/accept"
+          hx-target="#arc-embed-{{ playlist.id }}" hx-swap="outerHTML">
+      <button type="submit">Accept</button>
+    </form>
+    <form method="post" action="/playlists/{{ playlist.id }}/arc/reject"
+          hx-post="/playlists/{{ playlist.id }}/arc/reject"
+          hx-target="#arc-embed-{{ playlist.id }}" hx-swap="outerHTML">
+      <button type="submit">Reject</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+{% if arc %}
+<section class="arc-block">
+  <h3>{{ premise if premise else arc.premise }}</h3>
+  <p class="meta">{{ song_count }} track{{ "" if song_count == 1 else "s" }}
+    &middot; {{ act_count }} act{{ "" if act_count == 1 else "s" }}
+    {% if row and row.model %}&middot; <span class="muted">{{ row.model }}</span>{% endif %}
+    {% if row and row.created %}&middot;
+      <time class="local-time muted" datetime="{{ row.created | isotime }}">{{ row.created | isotime }}</time>
+    {% endif %}</p>
+
+  {% if arc.continuity %}
+  <h4>Continuity</h4>
+  <p class="hint">Attached to every storyboard on this album.</p>
+  <ul>{% for c in arc.continuity %}<li>{{ c }}</li>{% endfor %}</ul>
+  {% endif %}
+
+  {% for a in arc.acts %}
+  <h4>{{ a.name }}</h4>
+  <p><em>{{ a.turn }}</em></p>
+  <p class="muted">{% for sid in a.songs %}{{ titles.get(sid, sid) }}{% if not loop.last %} &middot; {% endif %}{% endfor %}</p>
+  {% endfor %}
+</section>
+
+<details class="disclose arc-tracks">
+  <summary>Tracks
+    <span class="muted">{{ song_count }} beat{{ "" if song_count == 1 else "s" }}</span></summary>
+{% for s in arc.songs %}
+<section class="arc-block">
+  <h4>{{ s.position }}. {{ titles.get(s.song_id, s.song_id) }}</h4>
+  <p><strong>Role.</strong> {{ s.role }}</p>
+  <p><strong>Beat.</strong> {{ s.beat }}</p>
+  <p><strong>Opens.</strong> {{ s.opens }}</p>
+  <p><strong>Closes.</strong> {{ s.closes }}</p>
+  {% if s.transition_out %}
+  <p class="hint">Into the next: <code>{{ s.transition_out.kind }}</code>
+    {% if s.transition_out.secs %}{{ s.transition_out.secs }}s{% endif %}
+    {% if s.transition_out.hold %}+ {{ s.transition_out.hold }}s hold{% endif %}
+    &mdash; {{ s.transition_out.why }}
+    <span class="muted">(a default when a set is built from this album; the set editor
+      overrides every one)</span></p>
+  {% endif %}
+</section>
+{% endfor %}
+</details>
+{% if titles %}
+<section class="arc-block">
+  <h4>Apply per-song summaries</h4>
+  <p class="hint">Writes each named song's beat into the album's
+    <code>applied/</code> folder. More than one song needs the confirmation
+    box &mdash; the wand does not rewrite an album unasked.</p>
+  <form method="post" action="/playlists/{{ playlist.id }}/arc/apply" class="stack-form"
+        hx-post="/playlists/{{ playlist.id }}/arc/apply"
+        hx-target="#arc-embed-{{ playlist.id }}" hx-swap="outerHTML">
+    <label>Song ids
+      <input type="text" name="song_ids"
+        value="{% for sid in titles %}{{ sid }}{% if not loop.last %},{% endif %}{% endfor %}">
+    </label>
+    <label><input type="checkbox" name="confirm" value="1">
+      Confirm writing every named song</label>
+    <button type="submit">Apply</button>
+  </form>
+</section>
+{% endif %}
+{% else %}
+<p class="empty">No arc yet.</p>
+{% endif %}
+</div>

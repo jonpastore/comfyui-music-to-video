@@ -23,7 +23,6 @@ import uvicorn
 from conftest import render_set_calls  # noqa: F401 (read by GAP2 render tests)
 
 import db
-import jobs
 import app as app_module
 
 from fastapi.testclient import TestClient
@@ -361,13 +360,57 @@ def test_album_profile_fields_have_hints_and_the_wand_drafts_from_the_anchor(cli
     # the CHOSEN anchor, not just any row
     assert describe_calls[n:] == [("/fake/front.png", "body")]
     # a fragment that replaces the field in place, not a whole page
-    assert "<html" not in r2.text and 'id="album-field-body"' in r2.text
-    assert "drafted body from the anchor" in r2.text
+    assert "<html" not in r2.text and 'id="album-field-body-lead"' in r2.text
+    assert "drafted body from lyrics and cover" in r2.text
     # drafting must not save: the row is still untouched until Save is pressed
     assert db.one("SELECT body FROM playlists WHERE id=?", pl)["body"] is None
 
     r3 = client.post(f"/playlists/{pl}/describe", data={"field": "world"}, follow_redirects=False)
-    assert r3.status_code == 400, "world is not a describable field"
+    assert r3.status_code == 200, r3.text
+    assert "drafted world from lyrics and cover" in r3.text
+    assert db.one("SELECT world FROM playlists WHERE id=?", pl)["world"] is None
+
+    sid = _make_song("lyrics-look")
+    db.run("UPDATE songs SET lyrics=? WHERE id=?",
+           "neon rain on the alley, she walks the wet concrete alone", sid)
+    client.post(f"/playlists/{pl}/items", data={"song_id": sid}, follow_redirects=False)
+    from conftest import look_draft_calls
+    look_draft_calls.clear()
+    r4 = client.post(f"/playlists/{pl}/describe",
+                     data={"field": "style_text"}, follow_redirects=False)
+    assert r4.status_code == 200, r4.text
+    assert look_draft_calls, "wand did not call draft_look_field"
+    assert "neon rain" in (look_draft_calls[-1]["lyrics"] or "")
+    r5 = client.post(f"/playlists/{pl}/describe",
+                     data={"field": "wardrobe_r", "tier": "r"}, follow_redirects=False)
+    assert r5.status_code == 200, r5.text
+    assert look_draft_calls[-1]["field"] == "wardrobe"
+    assert look_draft_calls[-1]["tier_guide"]
+
+    cid = db.run(
+        "INSERT INTO characters (scope_value, name, role, identity, created) VALUES (?,?,?,?,?)",
+        name, "Panther", "partner", "black panther man", time.time())
+    card2 = client.get(f"/playlists/{pl}/card").text
+    assert f'data-cast="c{cid}"' in card2
+    assert f'action="/characters/{cid}/save"' in card2
+    assert "character-row" not in card2
+    r6 = client.post(f"/characters/{cid}/describe",
+                     data={"field": "identity"}, follow_redirects=False)
+    assert r6.status_code == 200, r6.text
+    assert "drafted identity from lyrics and cover" in r6.text
+    assert f'id="album-field-identity-c{cid}"' in r6.text
+    assert db.one("SELECT identity FROM characters WHERE id=?", cid)["identity"] == "black panther man"
+    import app as appmod
+    names = [n for n, _d in appmod.offered_cast(name)]
+    assert "Panther" in names
+    client.post(f"/characters/{cid}/save",
+                data={"figure_role_present": "1", "identity": "black panther man"},
+                follow_redirects=False)
+    names2 = [n for n, _d in appmod.offered_cast(name)]
+    assert "Panther" not in names2
+    card3 = client.get(f"/playlists/{pl}/card").text
+    assert 'name="figure_role"' in card3
+    assert "Story role" in card3
 
 
 def test_playlist_delete_keeps_songs_and_renders(client):
@@ -402,6 +445,8 @@ def test_playlist_card_summary_and_drag_order(client):
     assert "2 songs" in page
     assert "5:00" in page          # 200 + 100 seconds, on the collapsed card
     assert "2025-08" in page or "2025-0" in page or "20" in page
+    assert "album-date-edit" in page
+    assert "set date in Cover" not in page
 
     items = db.q("SELECT * FROM playlist_items WHERE playlist_id=? ORDER BY position", pl)
     assert [i["song_id"] for i in items] == [s1, s2]
@@ -411,6 +456,43 @@ def test_playlist_card_summary_and_drag_order(client):
     assert r.status_code == 303
     after = db.q("SELECT * FROM playlist_items WHERE playlist_id=? ORDER BY position", pl)
     assert [i["song_id"] for i in after] == [s2, s1]
+    card = client.get(f"/playlists/{pl}/card").text
+    assert "pl-fold" in card
+    assert "look-tab" in card
+    assert card.count("<h2>Album look</h2>") == 1
+    assert "<h2>Cast</h2>" not in card
+    assert "new-playlist-bar" in page
+    assert "look-chrome" in card
+    assert "character-row" not in card
+    assert "trans-edit" in card
+    assert "tier-cell" in card
+    assert ("Add this song to the playlist" in card) or (
+        "already on this playlist" in card)
+    if "Add this song to the playlist" in card:
+        assert "add-song-go" in card
+    assert "arc-embed" in card
+    assert "wardrobe-tab" in card
+    assert "Album premise" in card
+    assert f'<option value="{s1}">' not in card
+    assert f'<option value="{s2}">' not in card
+    assert "class=\"danger\"" in card or "class='danger'" in card or "class=\"danger\"" in card
+    first = after[0]
+    r2 = client.post(f"/playlists/{pl}/items/{first['id']}",
+                     data={"transition": "cut", "secs": "0.5"},
+                     headers={"Accept": "application/json"})
+    assert r2.status_code == 200, r2.text
+    assert r2.json()["transition"] == "cut"
+    assert ">R<" in card or "value=\"r\"" in card or "tier-cell" in card
+    dated = client.post(f"/playlists/{pl}/date", data={"released": "2024-06-01"},
+                        headers={"Accept": "application/json"})
+    assert dated.status_code == 200, dated.text
+    assert dated.json()["released"] == "2024-06-01"
+    listed = client.get("/playlists").text
+    assert "2024-06-01" in listed
+    assert 'action="/playlists/%s/date"' % pl not in card
+    gone = client.post(f"/playlists/{pl}/image/delete",
+                       headers={"Accept": "application/json"})
+    assert gone.status_code == 200, gone.text
 
 
 # --------------------------------------------------------------- GAP 3 --

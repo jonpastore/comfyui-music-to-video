@@ -355,7 +355,7 @@ def test_audio_edit_use_and_revert():
         sid = song["id"]
         original_path = song["mp3_path"]
 
-        r = client.post(f"/songs/{sid}/audio", data={"trim_start": "0", "gain_db": "2"})
+        client.post(f"/songs/{sid}/audio", data={"trim_start": "0", "gain_db": "2"})
         job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='edit_audio' ORDER BY id DESC", sid)
         wait_job(job["id"])
         asset = db.one("SELECT * FROM assets WHERE song_id=? AND kind='audio_edit'", sid)
@@ -411,7 +411,7 @@ def test_explicit_flag_set_at_upload_and_toggled_and_shown():
         assert r3.status_code in (200, 303), r3.text
         assert db.one("SELECT explicit FROM songs WHERE id=?", song["id"])["explicit"] == 0
 
-        r4 = client.post(f"/songs/{song['id']}/explicit")
+        client.post(f"/songs/{song['id']}/explicit")
         assert db.one("SELECT explicit FROM songs WHERE id=?", song["id"])["explicit"] == 1
 
 
@@ -1984,12 +1984,12 @@ def test_approve_grid_groups_by_scene_and_puts_seed_above_the_name():
         assert "17000" in page
         assert 'class="tag">pose-library scene 1 Alley Invitation' not in page
         assert ">Reroll<" in page
-        assert "what to change" in page
+        assert "What to change" in page
         assert "Scene 1" in page or "1. Alley Invitation" in page
         assert "Part 1" not in page
         assert "Clip #0" not in page
         assert "Images to generate" in page
-        assert "seed stepping" in page
+        assert "Seed stepping" in page
         assert 'name="n"' in page
         assert 'name="seed_min"' in page
         assert 'name="seed_max"' in page
@@ -2921,19 +2921,20 @@ def _album_with_cover(client, name="Cover Album"):
 
 
 def test_fill_from_cover_drafts_the_look_without_saving_it():
-    from conftest import cover_calls
+    from conftest import look_draft_calls
     with TestClient(appmod.app) as client:
         pl = _album_with_cover(client, "Fill Album")
-        cover_calls.clear()
+        look_draft_calls.clear()
 
         r = client.post(f"/playlists/{pl['id']}/fill")
         assert r.status_code == 200, r.text
-        assert "drafted identity from the cover" in r.text
-        assert "drafted wardrobe from the cover" in r.text
-        assert "drafted body from the cover" in r.text
-        # only the DESCRIBABLE fields are read; theme/world/render style are not
-        # things a cover can tell you
-        assert {f for _p, f in cover_calls} == set(appmod.DESCRIBABLE), cover_calls
+        assert "drafted identity from lyrics and cover" in r.text
+        assert "drafted wardrobe from lyrics and cover" in r.text
+        assert "drafted body from lyrics and cover" in r.text
+        assert "drafted world from lyrics and cover" in r.text
+        drafted = {c["field"] for c in look_draft_calls}
+        assert drafted == set(appmod.DESCRIBABLE), drafted
+        assert any(c["field"] == "wardrobe" and c["tier_guide"] for c in look_draft_calls)
 
         # nothing is saved -- the boxes are filled and Save is still what writes
         row = db.one("SELECT identity FROM playlists WHERE id=?", pl["id"])
@@ -3541,7 +3542,6 @@ def test_the_album_arc_reaches_the_storyboard_and_the_set():
         assert ctx["continuity"] == ["the collar is always brass"]
 
         # and it is in the prompt the model is actually handed, not just passed
-        import grok as grokmod
         from conftest import _real_module
         block = _real_module("grok")._arc_block(ctx)
         assert "closes 1" in block and "opens 3" in block and "brass" in block, block
@@ -4539,7 +4539,7 @@ def test_set_editor_shows_each_item_bpm_and_key():
         wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='analyse'",
                          song["id"])["id"])
 
-        r = client.post("/sets/new", data={"name": "Metadata Set", "mode": "audio"})
+        client.post("/sets/new", data={"name": "Metadata Set", "mode": "audio"})
         row = db.one("SELECT * FROM sets WHERE name='Metadata Set'")
         client.post(f"/sets/{row['id']}/items",
                     data={"song_id": song["id"], "transition": "fade", "secs": "1.0"})
@@ -4604,8 +4604,8 @@ def test_base_images_are_kept_picked_and_deletable(patch_stub):
         assert seen[-1] == [saved[0]["path"]]
 
         # more than the model conditions on is REFUSED, not silently narrowed
-        third = client.post("/anchors/refs", data={"album": "Refs Album"},
-                            files=[("images", ("c.png", _png_bytes(), "image/png"))])
+        client.post("/anchors/refs", data={"album": "Refs Album"},
+                    files=[("images", ("c.png", _png_bytes(), "image/png"))])
         allr = appmod.anchor_refs("Refs Album")
         assert len(allr) == 3
         # httpx wants a DICT for data when files are also present; duplicate
@@ -5766,6 +5766,8 @@ def test_every_page_shows_the_queue_and_stops_polling_when_it_drains(patch_stub)
         assert f"#{jid}" in chip and "running" in chip, "chip hides the live job"
         assert "Generate anchor candidates" in chip
         assert "data-open-jobs" in chip
+        assert f'data-job-id="{jid}"' in chip
+        assert 'data-kind="anchor"' in chip
         wait_job(jid)
 
         # a job that finished a moment ago is still visible -- a render that
@@ -6793,7 +6795,6 @@ def test_the_preflight_refuses_everything_the_submit_refuses(patch_stub):
         # four references: the route counts ticks PLUS uploads, and so must this.
         # Counting only ticks is what made three uploads plus two ticks read as
         # two references.
-        refs = []
         for i in range(4):
             client.post("/anchors/refs", data={"album": "Preflight Album"},
                         files=[("images", (f"r{i}.png", _png_bytes(), "image/png"))])

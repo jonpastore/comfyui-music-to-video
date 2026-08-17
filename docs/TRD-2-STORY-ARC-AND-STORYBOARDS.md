@@ -497,9 +497,12 @@ false.
 
 The operator edits the board **on the song page** (`#fold-storyboard` →
 `.tier-board` → `/songs/{id}/storyboard/{tier}/panel`). Save / Generate /
-named versions / scene rows are the same HTML routes `initSongPage`
-posts as JSON. `GET /songs/{id}/storyboard/{tier}` stays as the T6-A2
-HTML surface (same `storyboard_service.payload()` numbers).
+named versions (snapshot, restore, delete, created timestamp) / scene
+rows are the same HTML routes `initSongPage` posts as JSON.
+`GET /songs/{id}/storyboard/{tier}` stays as the T6-A2 HTML surface
+(same `storyboard_service.payload()` numbers).
+`GET /songs/{id}/storyboard/{tier}/scene/{num}` returns one open scene
+row so a finished reroll can replace its placeholders.
 
 ### 5.1 The time meter
 
@@ -780,6 +783,8 @@ current.
 | **`T2-37` arc in the playlist payload** | **built** | `test_t2_37_playlist_arc.py` | `GET /api/playlists/{id}` carries `arc` (with the stored premise) only when an arc is defined; a playlist without one omits the field. Mutation: always include `arc` → absent arm red. Mutation: drop `arc` when defined → present arm red. Mutation: key present without the stored premise → present arm red. Rendered row is not this |
 | **`T6-A2-arc` HTML and JSON share arc meter** | **built** | `test_t6_a2_arc_numbers.py` | HTML `GET /playlists/{id}/arc` (`#arc-meter` data attrs) and JSON `GET /api/playlists/{id}/arc` report the same `song_count` / `act_count` / `premise` / `has_proposal` from `arc_service.payload()`. Fixture: 3 songs / 2 acts / unique premise / proposal present. Stub arm forces `song_count=99` (not list length) so a template that recomputes `arc.songs \| length` goes red. Playlist payload stays T2-37-shaped. Mutation: template `len` recompute → stub arm red |
 | **`T6-A2-playlists` HTML and JSON share playlist card numbers** | **built** | `test_t6_a2_playlist_numbers.py` | HTML `GET /playlists` (`#playlist-{id}` `data-song-count` / `data-total-secs`) and JSON `GET /api/playlists/{id}` report the same `song_count` / `total_secs` from `playlist_service.numbers()`. Fixture: 3 songs with durations 11.5+22.25+7.0=40.75s. Stub arm forces `song_count=99` (not list length) so a template `len` recompute goes red. `arc` still only when defined (T2-37). Mutation: template `len` recompute → stub arm red |
+| **Playlist look drafts from album lyrics + cover** | **built** | `test_load.py` / `test_app.py` | `POST /playlists/{id}/describe` and `/fill` call `vision.draft_look_field` with every track's lyrics plus the cover (or the lead front). World/premise are draftable. Wardrobe is per rating against `compose_guardrail`. Add-song omits tracks already on the playlist. The Story arc fold embeds `_arc_panel.html`. Album look and cast are one fold; supporting characters use the same look form (`POST /characters/{id}/describe`). Mutation: cover-only `describe_cover` → lyrics arm red. Mutation: 400 on `world` → premise arm red |
+| **Named character figure_role is the lead toggle** | **built** | `test_load.py` | `characters.figure_role` is `lead` (default/NULL) or `extra`. `offered_cast` / generate-form omit extras. Story `role` stays free text on the tab bar. Mutation: extras still offered → red. Mutation: unchecking Lead still offers them → red |
 
 Refreshed 2026-08-15 against T2-28-html + refs-identity + cast-slots + refs-score + refs-length per-clip expect. The five grouped “not built” wand/meter/cast rows above were stale: each named criterion now has its own **built** row. **T2-28** is built: `POST /songs/{id}/refs` refuses when a named lead has no chosen sheet; the storyboard plan-panel marks Generate refs (`button.blocked`, names the unanchored lead). The **reference-image generate path** (`h_refs` / `pipeline.gen_refs` / `build_refs.workflow`) is **built**: image1 is the chosen identity front, not a standing 4748 plate (`test_t2_refs_identity.py`). **Pose plates** are **built**: each scene binds a chosen pose sheet (`pose_plan`, `test_pose_plan.py`) and that file is image2; cast leads take whatever slots remain (image3 when a plate is present). Landed-ref **scoring** vs the chosen anchor (`ref_score_bases`) is built (`test_h_refs_scores_vs_chosen_anchor`). **refs-length per-clip**: each ref graph's expect is `clip_seconds` / `legal_frames`, not CHUNK (`test_t2_refs_clip_seconds.py`).
 
