@@ -3099,14 +3099,46 @@ document.addEventListener("click", function (e) {
   var ctab = e.target.closest && e.target.closest(".cast-tab");
   if (ctab) {
     var box = ctab.closest(".pl-fold") || ctab.parentElement.parentElement;
+    if (ctab.hasAttribute("data-filter")) {
+      var want = ctab.getAttribute("data-filter") || "";
+      var head = ctab.closest(".section-head") || box;
+      head.querySelectorAll(".cast-tab").forEach(function (t) {
+        t.classList.toggle("active", t === ctab);
+      });
+      box.querySelectorAll(".anchor-tile").forEach(function (tile) {
+        tile.classList.toggle("hidden", want && tile.dataset.character !== want);
+      });
+      return;
+    }
     var key = ctab.getAttribute("data-cast");
-    box.querySelectorAll(".cast-tab").forEach(function (t) {
+    box.querySelectorAll(".look-chrome .cast-tab, .cast-tabs .cast-tab").forEach(function (t) {
+      if (t.hasAttribute("data-filter")) return;
       t.classList.toggle("active", t === ctab);
     });
+    if (key === "world") {
+      box.querySelectorAll(".cast-panel").forEach(function (p) {
+        p.classList.toggle("hidden", p.getAttribute("data-cast") !== "lead");
+      });
+      var lead = box.querySelector('.cast-panel[data-cast="lead"]');
+      if (lead) {
+        lead.querySelectorAll(".look-tab").forEach(function (t) {
+          t.classList.remove("active");
+        });
+        lead.querySelectorAll(".look-panel").forEach(function (p) {
+          var on = p.getAttribute("data-look") === "world";
+          p.classList.toggle("hidden", !on);
+        });
+      }
+      return;
+    }
     box.querySelectorAll(".cast-panel").forEach(function (p) {
       var on = p.getAttribute("data-cast") === key;
       p.classList.toggle("hidden", !on);
-      if (on) revealLazy(p);
+      if (on) {
+        revealLazy(p);
+        var first = p.querySelector(".look-tab");
+        if (first) first.click();
+      }
     });
     return;
   }

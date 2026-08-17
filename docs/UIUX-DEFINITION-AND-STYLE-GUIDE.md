@@ -1075,13 +1075,16 @@ are omitted from Add; the add control has a visible edge. Each song row
 shows that track's arc role/beat when an arc exists. Album look is
 tabbed by character (album lead first, then named people, then Add)
 on one chrome row with Draft / Create art / Propose. Then
-Identity / Wardrobe / World / Sheets with tab-row help. Supporting
+Identity / Wardrobe / Sheet wording with tab-row help. **World** is an
+album-scope tab on the people row (not a character look tab): premise,
+places, backdrop, render style. Supporting
 characters use that same look form (Identity | Body, no Role cell).
 A **Lead** checkbox on the character bar is the pipeline bit (needs a
 front; offered at generate). That checkbox is the only Lead control —
 the look subtab is **Identity**, not a second Lead. **Story role**
-(partner, antagonist) is a compact label on that bar, not a figure role. World
-and album premise stay on the album lead. Song-row beats are one line
+(partner, antagonist) is a compact label on that bar, not a figure role.
+Pictures live in the **Anchors** fold, not under Sheet wording. Cover
+replace/delete is the header lightbox only — there is no Cover fold. Song-row beats are one line
 (click the beat to expand; `.song-arc-beat.is-open`). Transition
 save and remove sit in one nowrap `.song-actions` cell. The story-arc
 fold is an editor: premise, continuity, and per-track role/beat/opens/closes
@@ -1104,9 +1107,13 @@ lightbox (pencil = replace, trash = delete) when it is open. Album
 date is the pencil on the card header next to the title. The Play column is G / PG-13 / R / XXX. Save,
 edit, and delete icons are the shared `glyph_save` / `glyph_edit` /
 `glyph_delete` macros. Transitions edit in the row. Remove confirms. The roster dropdown (`POST /anchors/keeper`) plus **Save** sets
-the keeper and stamps those scenes. Roster thumbs open `#pose-preview`.
-Gallery tiles use icon actions (filled check = keeper, outline =
-pick, clear, delete) with `title` help. Clear unsets `chosen`
+the keeper and stamps those scenes — on `/anchors` and on the playlist
+Anchors fold. Roster thumbs open `#pose-preview`. Playlist Anchors uses
+character tabs and Clothed/Nude family tabs. Gallery tiles use icon
+actions (filled check = keeper, outline =
+pick, clear, delete) with `title` help. The Fix dialog has a help icon
+per action; Close sits on the far right; submit enqueues a new candidate
+(no Save). Clear unsets `chosen`
 (`POST /anchors/{id}/clear`). The gallery tile no longer says
 "Use as reference" — that was a generate-path hook (`T7-6` JSON still
 exists) and read as the pose bind. Album names in the generate hint are

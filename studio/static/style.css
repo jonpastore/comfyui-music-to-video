@@ -1928,12 +1928,43 @@ label.icon-btn {
   .lightbox-pair img { max-height: 40vh; }
 }
 
+.fix-modal > .modal-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.fix-modal > .modal-bar > strong { flex: 1; min-width: 0; }
 .fix-modal-body { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-start; }
 .fix-modal-body > img {
   width: 260px;
+  min-height: 10rem;
+  object-fit: contain;
+  background: var(--bg);
   border-radius: 6px;
   border: 1px solid var(--border);
 }
+.fix-forms h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.anchor-tile .thumb-open,
+.anchor-tile .anchor-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.anchor-tile img {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 8rem;
+  object-fit: cover;
+  background: var(--bg);
+}
+.pose-keeper-form { margin: 0.35rem 0 0; }
 .fix-forms { flex: 1 1 24rem; min-width: 20rem; }
 .fix-forms h4 { margin: 0.75rem 0 0.3rem; }
 .fix-forms form + form { border-top: 1px solid var(--border); padding-top: 0.75rem; }

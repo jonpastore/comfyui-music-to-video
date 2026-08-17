@@ -7720,13 +7720,13 @@ LOOK_TABS = (
     ("identity", "Identity", ("identity", "body")),
     ("wardrobe", "Wardrobe", ("wardrobe", "nude_wardrobe")),
     ("world", "World", ("style_text", "world", "backdrop", "render_tail")),
-    ("sheets", "Sheets", ("composite", "anatomy")),
+    ("sheets", "Sheet wording", ("composite", "anatomy")),
 )
 # Supporting characters share the look UI but not album-wide world/composite.
 CHAR_LOOK_TABS = (
     ("identity", "Identity", ("identity", "body")),
     ("wardrobe", "Wardrobe", ("wardrobe", "nude_wardrobe")),
-    ("sheets", "Sheets", ("anatomy",)),
+    ("sheets", "Sheet wording", ("anatomy",)),
 )
 
 
@@ -7865,7 +7865,7 @@ LOOK_TAB_HELP = {
     "identity": "This character's fixed face and body. The Lead checkbox on the character bar is the pipeline bit — this tab is not a second Lead control.",
     "wardrobe": "Most graphic clothed look on XXX, then refine per rating against that rating's guidelines. Nude wording is the unclothed swap.",
     "world": "Premise, places, studio backdrop, and render medium. Album-wide — not per character. Premise is what the record is ABOUT.",
-    "sheets": "Multiple references means several photos of the SAME person, not a multi-character scene.",
+    "sheets": "Prompt wording for composing a sheet (multiple references, anatomy). The pictures live in the Anchors fold, not here.",
 }
 
 
@@ -8169,9 +8169,10 @@ def playlist_gallery(p):
     prof = album_profile(p["name"])
     anchor_tiers, all_anchors = album_anchor_tiers(p["name"])
     per_character = {}
+    lead_n = lead_display_name(prof)
     for a in all_anchors:
-        per_character[a["character_name"] or "protagonist"] = \
-            per_character.get(a["character_name"] or "protagonist", 0) + 1
+        who = a["character_name"] or lead_n
+        per_character[who] = per_character.get(who, 0) + 1
     pose_need = []
     for t in VIDEO_MATRIX_TIERS:
         try:

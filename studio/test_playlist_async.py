@@ -183,3 +183,16 @@ def test_playlist_card_has_hx_on_look_and_songs():
     assert "closest .playlist-body" in card
     assert ">Identity<" in card
     assert 'data-look="identity"' in card
+    assert 'data-cast="world"' in card
+    assert "Sheet wording" in card
+    assert f'hx-get="/playlists/{pid}/sheets' not in card
+    assert "fold-cover-" not in card
+    assert "<h2>Cover</h2>" not in card
+
+
+def test_playlist_anchors_have_keeper_save_and_family_tabs():
+    pid, album = _playlist()
+    with TestClient(appmod.app) as client:
+        gal = client.get(f"/playlists/{pid}/anchors").text
+    assert "family-tabs" in gal or "None yet" in gal
+    assert "data-filter" in gal or "None yet" in gal

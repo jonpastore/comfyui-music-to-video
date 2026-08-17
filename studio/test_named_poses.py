@@ -387,7 +387,7 @@ def test_playlists_page_is_summaries_until_the_card_loads():
         assert "<html" not in card.lower()
         assert "pl-fold" in card
         assert f'hx-get="/playlists/{pl}/anchors"' in card
-        assert f'hx-get="/playlists/{pl}/sheets' in card
+        assert f'hx-get="/playlists/{pl}/sheets' not in card
         assert "look-tab" in card
         assert "cast-tab" in card
         assert "Main character identity" in card

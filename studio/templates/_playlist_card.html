@@ -154,6 +154,7 @@
         {% for m in d.cast %}
         <button type="button" class="cast-tab" data-cast="c{{ m.c.id }}">{{ m.c.name }}{% if m.is_lead %} <span class="tag">lead</span>{% endif %}</button>
         {% endfor %}
+        <button type="button" class="cast-tab" data-cast="world">World</button>
         <button type="button" class="cast-tab" data-cast="add">Add</button>
       </div>
       <span class="section-actions">
@@ -189,7 +190,7 @@
         <button type="button" class="icon-btn help-tip"
                 title="What album look is" aria-label="What album look is"
                 data-label="Album look"
-                data-help="The first tab is this person's identity and body — not a second Lead control. Tick Lead on the character bar if they need a consistent face and an identity front. Story role (partner, antagonist) is a label, not that toggle. World and premise stay on the album lead. Sparkle drafts from every song's lyrics plus the cover.">
+                data-help="People tabs are named faces. World is album-wide (premise, places, backdrop, render style), not a character. Identity / Wardrobe / Sheet wording are per person. Tick Lead on the character bar if they need a consistent face. Pictures live in Anchors, not under Sheet wording. Sparkle drafts from every song's lyrics plus the cover.">
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
             <path fill="currentColor" d="M7.3 6.2c0-.8.5-1.3 1.3-1.3s1.3.5 1.3 1.2c0 .6-.3.9-.9 1.3-.5.4-.8.7-.8 1.3h1.3c0-.4.2-.7.7-1.1.7-.5 1.3-1 1.3-2 0-1.3-1-2.2-2.4-2.2-1.5 0-2.6 1-2.6 2.5zm1.1 5.8h1.4V10.7H8.4z"/>
@@ -203,11 +204,6 @@
               character = none %}
         {% include "_album_look_form.html" %}
       {% endwith %}
-      <div class="anchor-row"
-           hx-get="/playlists/{{ d.playlist.id }}/sheets?who=lead"
-           hx-trigger="revealed once" hx-swap="innerHTML">
-        <p class="muted">Loading sheets&hellip;</p>
-      </div>
     </div>
     {% for m in d.cast %}
     <div class="cast-panel hidden" data-cast="c{{ m.c.id }}">
@@ -236,12 +232,6 @@
               cast = d.cast, copyable_fields = d.copyable_fields %}
         {% include "_album_look_form.html" %}
       {% endwith %}
-      <p class="hint">Sheets for {{ m.c.name }}.</p>
-      <div class="anchor-row"
-           hx-get="/playlists/{{ d.playlist.id }}/sheets?who={{ m.c.name | urlencode }}"
-           hx-trigger="revealed once" hx-swap="innerHTML">
-        <p class="muted">Loading sheets&hellip;</p>
-      </div>
     </div>
     {% endfor %}
     <div class="cast-panel hidden" data-cast="add">
@@ -301,21 +291,6 @@
         on disk.</p>
     </form>
   </dialog>
-
-  <details class="song-fold pl-fold" id="fold-cover-{{ d.playlist.id }}">
-    <summary><h2>Cover</h2>
-      <span class="muted">{% if d.playlist.image_path %}set{% else %}none{% endif %}</span></summary>
-    <p class="hint">Click the art on the card header for a full view, replace, or delete.
-      The date lives on the header, next to the title.</p>
-    <form method="post" action="/playlists/{{ d.playlist.id }}/image" enctype="multipart/form-data"
-          class="clip-bar"
-          hx-post="/playlists/{{ d.playlist.id }}/image"
-          hx-target="#cover-slot-{{ d.playlist.id }}" hx-swap="innerHTML"
-          hx-encoding="multipart/form-data">
-      <label>Replace <input type="file" name="image" accept="image/*" required></label>
-      <button type="submit">Set image</button>
-    </form>
-  </details>
 
   <div class="button-row danger-row">
     <button type="button" class="danger"

@@ -9,7 +9,7 @@
       class="stack-form"
       {% if character %}{{ playlist_hx("/characters/" ~ character.id ~ "/save") }}{% else %}{{ playlist_hx("/playlists/" ~ playlist.id ~ "/profile") }}{% endif %}>
   <div class="look-tabs" role="tablist">
-    {% for key, label, keys in tabs %}
+    {% for key, label, keys in tabs if key != "world" %}
     <span class="look-tab-wrap">
       <button type="button" class="look-tab {% if loop.first %}active{% endif %}"
               data-look="{{ key }}" role="tab">{{ label }}</button>
