@@ -1,7 +1,12 @@
+{% from "_macros.html" import glyph_delete %}
 {# One Library row. Its own partial so an async upload can ask the server for the
    row it just created (GET /songs/{id}/row) instead of the page rebuilding this
    markup in JavaScript -- two copies of a row is how the two stop matching. #}
-<tr data-song="{{ e.song.id }}">
+<tr data-song="{{ e.song.id }}"
+    data-genre="{{ e.song.genre or '' }}"
+    data-subgenre="{{ e.song.subgenre or '' }}"
+    data-genre2="{{ e.song.genre2 or '' }}"
+    data-subgenre2="{{ e.song.subgenre2 or '' }}">
   <td class="pick"><input type="checkbox" class="pick-song" value="{{ e.song.id }}"></td>
   <td>
     <a href="/songs/{{ e.song.id }}">{{ e.song.title }}</a>
@@ -9,8 +14,14 @@
   </td>
   <td>{{ e.song.album or "" }}</td>
   <td class="cell-genre">
+    <span class="genre-text">
     {{ e.song.genre or "" }}{% if e.song.subgenre %} / {{ e.song.subgenre }}{% endif %}
     {% if e.song.genre2 %}<br>{{ e.song.genre2 }}{% if e.song.subgenre2 %} / {{ e.song.subgenre2 }}{% endif %}{% endif %}
+    </span>
+    <button type="button" class="icon-btn js-genre-set"
+            title="Set genre" aria-label="Set genre for {{ e.song.title }}">
+      Set
+    </button>
   </td>
   <td class="num" data-k="{{ e.song.duration or '' }}">
     {% if e.song.duration %}{{ e.song.duration | hms }}{% endif %}
@@ -26,13 +37,15 @@
   </td>
   {# one modal per song rather than per render: the tiers of a song are
      watched against each other, and a row of buttons is not a column #}
-  <td data-k="{{ e.videos | length }}">
-    {% if e.videos %}
-    <button type="button" class="linkish"
-            onclick="document.getElementById('vid-{{ e.song.id }}').showModal()">
-      {% for v in e.videos %}{{ v.tier | tiername }}{% if not loop.last %}, {% endif %}{% endfor %}
-    </button>
-    {% endif %}
+  <td class="play-matrix" data-k="{{ e.videos | length }}">
+    {% for t in e.video_matrix %}
+      {% if e.video_by_tier.get(t) %}
+      <a class="tier-cell has" href="{{ media_url(e.video_by_tier[t].path) }}"
+         title="{{ t | tiername }} video">{{ t | tiername }}</a>
+      {% else %}
+      <span class="tier-cell miss" title="No {{ t | tiername }} video">{{ t | tiername }}</span>
+      {% endif %}
+    {% endfor %}
   </td>
   <td data-k="{{ e.sets | length }}">
     {% for s in e.sets %}
@@ -44,7 +57,11 @@
        it and calls the same route with Accept: application/json #}
     <form method="post" action="/songs/{{ e.song.id }}/delete" class="delete-song">
       <input type="hidden" name="confirm" value="DELETE">
-      <button type="submit" class="danger btn-sm">Delete</button>
+      <button type="submit" class="icon-btn danger-icon"
+              title="Delete this song and its generated files"
+              aria-label="Delete {{ e.song.title }}">
+        {{ glyph_delete() }}
+      </button>
     </form>
   </td>
 </tr>

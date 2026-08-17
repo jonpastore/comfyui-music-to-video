@@ -581,6 +581,11 @@ not an operator step. If the scene is longer than one render, it
 splits and part 2+ starts on the last frame (T2-10 / T2-11). Reroll is n / seed min–max / equal or
 fibonacci. A candidate has Approve, Fix, Delete. Thumbs open
 `#ref-preview`. `test_approve_grid_groups_by_scene_and_puts_seed_above_the_name`.
+**Library:** upload accepts popular audio (mp3 / wav / flac / ogg / m4a / …),
+not mp3-only. Bulk genre bar is one icon row. Per-row **Set** opens a
+taxonomy modal with Ask AI (`POST /songs/genres/suggest`, title/lyrics/style
+against `genres.json`). Video column is G/PG-13/R/XXX chips; only rendered
+tiers are links. Delete is the shared trash icon and still confirms.
 **Playlists:** `GET /playlists` is collapsed summaries
 (`#playlist-{id}` `data-song-count` / `data-total-secs` still
 `playlist_service.numbers`, `T6-A2-playlists`). Opening a card

@@ -2396,8 +2396,11 @@ button.clip-nav svg { width: 1.2rem; height: 1.2rem; }
 /* Library bulk genre bar. The checkbox column is deliberately narrow and
    unsortable -- a tick has no order. */
 table.list th.pick, table.list td.pick { width: 1.5rem; text-align: center; }
-.bulk-bar { margin-bottom: 0.75rem; }
+.bulk-bar { margin-bottom: 0.75rem; padding: 0.6rem 0.8rem; }
+.bulk-bar .clip-bar { margin: 0; align-items: flex-end; }
 .bulk-bar.busy { opacity: 0.6; pointer-events: none; }
+.cell-genre { white-space: nowrap; }
+.cell-genre .js-genre-set { margin-left: 0.35rem; font-size: 0.75rem; }
 /* A suggested genre is NOT a saved one, and must not look like it until Save. */
 tr.suggested td.cell-genre {
   color: var(--accent, #8ab4f8);

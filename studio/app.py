@@ -65,6 +65,8 @@ PORT = int(os.environ.get("STUDIO_PORT", "8000"))
 MAX_MP3 = 50 * 1024 * 1024
 MAX_IMAGE = 20 * 1024 * 1024
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+AUDIO_EXTS = {".mp3", ".wav", ".flac", ".ogg", ".oga", ".m4a", ".aac",
+              ".opus", ".wma", ".aiff", ".aif", ".caf"}
 MAX_REROLL_CLIPS = 64
 # The FORM's gain bound is the FILTER BUILDER's bound, imported rather than
 # retyped. These were (-30, +30) here and (-60, +24) in effects.gain() -- two
@@ -813,9 +815,12 @@ async def save_upload(upload: UploadFile, cap: int, dest_dir: str, kind: str, pr
     ext = os.path.splitext(name)[1].lower()
     ct = (upload.content_type or "").lower()
     if kind == "mp3":
-        if ext != ".mp3":
-            raise HTTPException(400, "expected a .mp3 file")
-        if ct and not (ct.startswith("audio/") or ct == "application/octet-stream"):
+        if ext not in AUDIO_EXTS:
+            raise HTTPException(
+                400, f"unsupported audio type {ext or '(none)'}; "
+                     f"use {', '.join(sorted(AUDIO_EXTS))}")
+        if ct and not (ct.startswith("audio/") or ct in (
+                "application/ogg", "application/octet-stream")):
             raise HTTPException(400, f"expected audio, got {ct}")
     else:
         if ext not in IMAGE_EXTS:
@@ -2050,6 +2055,8 @@ def song_entry(s, in_sets=None):
         latest.setdefault(r["tier"], r)
     return {"song": s, "tiers": tier_status,
             "videos": [latest[t] for t in sorted(latest)],
+            "video_by_tier": latest,
+            "video_matrix": VIDEO_MATRIX_TIERS,
             "sets": in_sets.get(s["id"], [])}
 
 
@@ -2203,12 +2210,15 @@ GENRE_SUGGEST_SYSTEM = (
 GENRE_SUGGEST_USER = """TAXONOMY (genre -> allowed subgenres). Use ONLY these exact strings:
 {taxonomy}
 
-Each track below is given with its production style prompt, which usually names
-the genre directly. Where the prompt names two styles (often separated by a
-slash), the first is the primary and the second goes in genre2/subgenre2.
+Each track below may include a production style prompt, title, album, and lyrics.
+If a style prompt is present it usually names the genre directly. Where the
+prompt names two styles (often separated by a slash), the first is the primary
+and the second goes in genre2/subgenre2. If there is no style prompt, classify
+from title, album and lyrics using ONLY the taxonomy.
 
-First COPY the exact style phrase before the first comma. The FIRST style named
-there is always the primary -- do not reorder by what seems more specific.
+First COPY a short exact phrase from the track text as evidence. The FIRST
+style named in a style prompt is always the primary -- do not reorder by
+what seems more specific.
 
 Reply with a JSON object: {{"tracks": [
   {{"id": 1, "evidence": "<the copied phrase>", "genre": "...", "subgenre": "...",
@@ -2239,12 +2249,24 @@ async def suggest_genres(request: Request):
     ids = [int(i) for i in (body.get("song_ids") or [])]
     if not ids:
         raise HTTPException(400, "no songs selected")
-    rows = [r for r in (db.one("SELECT id, title, style_text FROM songs WHERE id=?", i)
-                        for i in ids) if r and (r["style_text"] or "").strip()]
+    rows = [r for r in (db.one(
+        "SELECT id, title, album, style_text, lyrics FROM songs WHERE id=?", i)
+                        for i in ids) if r]
     if not rows:
-        raise HTTPException(400, "none of those songs has a style prompt to read")
-    listing = "\n".join(f'{r["id"]}. "{r["title"]}" :: {(r["style_text"] or "")[:GENRE_CLIP]}'
-                        for r in rows)
+        raise HTTPException(400, "those songs were not found")
+
+    def _genre_blob(r):
+        bits = [f'title="{r["title"]}"', f'album="{(r["album"] or "")}"']
+        st = (r["style_text"] or "").strip()
+        if st:
+            bits.append("style=" + st[:GENRE_CLIP])
+        ly = " ".join((r["lyrics"] or "").split())[:200]
+        if ly:
+            bits.append("lyrics=" + ly)
+        return " ".join(bits)
+
+    blobs = {r["id"]: _genre_blob(r) for r in rows}
+    listing = "\n".join(f'{r["id"]}. {blobs[r["id"]]}' for r in rows)
     try:
         out, model = vision.ask_text(GENRE_SUGGEST_SYSTEM,
                                       GENRE_SUGGEST_USER.format(
@@ -2253,19 +2275,18 @@ async def suggest_genres(request: Request):
     except Exception as e:
         raise HTTPException(502, f"could not read the style prompts: {e}") from None
 
-    style = {r["id"]: (r["style_text"] or "") for r in rows}
     suggestions, dropped = [], []
     for item in (data.get("tracks") if isinstance(data, dict) else data) or []:
         sid = item.get("id")
-        if sid not in style:
+        if sid not in blobs:
             dropped.append({"song_id": sid, "why": "not a song that was asked about"})
             continue
         # TWO checks, not one. The taxonomy check catches an invented label; only
         # the evidence check catches a confident answer about a track the model
         # never actually read, and that is the failure no vocabulary can see.
         evidence = (item.get("evidence") or "").strip()
-        if not evidence or evidence not in style[sid]:
-            dropped.append({"song_id": sid, "why": "evidence is not quoted from the style prompt"})
+        if not evidence or evidence not in blobs[sid]:
+            dropped.append({"song_id": sid, "why": "evidence is not quoted from the track text"})
             continue
         try:
             g, sg = valid_genre_or_400(item.get("genre"), item.get("subgenre"), "genre")

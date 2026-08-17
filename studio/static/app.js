@@ -744,6 +744,8 @@ document.addEventListener("DOMContentLoaded", function () {
   initGenreSelects("genre2-select", "subgenre2-select");
   initGenreSelects("bulk-genre-select", "bulk-subgenre-select");
   initGenreSelects("bulk-genre2-select", "bulk-subgenre2-select");
+  initGenreSelects("set-genre-select", "set-subgenre-select");
+  initGenreSelects("set-genre2-select", "set-subgenre2-select");
   initLibraryBulk();
   initAnchors();
   initAnchorBatch();
@@ -2544,13 +2546,84 @@ function initLibraryBulk() {
   });
 
   function paintGenre(row, g) {
-    var cell = row.querySelector(".cell-genre");
+    var cell = row.querySelector(".genre-text") || row.querySelector(".cell-genre");
     if (!cell) return;
-    var first = g.genre + (g.subgenre ? " / " + g.subgenre : "");
+    var first = (g.genre || "") + (g.subgenre ? " / " + g.subgenre : "");
     var second = g.genre2 ? g.genre2 + (g.subgenre2 ? " / " + g.subgenre2 : "") : "";
     cell.textContent = first;
     if (second) { cell.appendChild(document.createElement("br")); cell.append(second); }
   }
+
+  var genreDlg = document.getElementById("genre-set");
+  var genreSong = null;
+  function genreNote(msg) {
+    var n = document.getElementById("genre-set-note");
+    if (n) n.textContent = msg || "";
+  }
+  function setSel(id, value) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.value = value || "";
+    el.dispatchEvent(new Event("change"));
+  }
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest(".js-genre-set");
+    if (!btn || !genreDlg) return;
+    var row = btn.closest("tr[data-song]");
+    if (!row) return;
+    genreSong = row.getAttribute("data-song");
+    var title = document.getElementById("genre-set-title");
+    var name = row.querySelector("a");
+    if (title) title.textContent = "Set genre" + (name ? " — " + name.textContent : "");
+    setSel("set-genre-select", row.getAttribute("data-genre"));
+    setSel("set-subgenre-select", row.getAttribute("data-subgenre"));
+    setSel("set-genre2-select", row.getAttribute("data-genre2"));
+    setSel("set-subgenre2-select", row.getAttribute("data-subgenre2"));
+    genreNote("");
+    if (typeof genreDlg.showModal === "function") genreDlg.showModal();
+  });
+  var ask = document.getElementById("genre-set-suggest");
+  if (ask) ask.addEventListener("click", function () {
+    if (!genreSong) return;
+    genreNote("asking…");
+    post("/songs/genres/suggest", {song_ids: [Number(genreSong)]})
+      .then(function (d) {
+        var s = (d.suggestions || [])[0];
+        if (!s) {
+          genreNote((d.dropped && d.dropped[0] && d.dropped[0].why) || "no suggestion");
+          return;
+        }
+        setSel("set-genre-select", s.genre);
+        setSel("set-subgenre-select", s.subgenre);
+        setSel("set-genre2-select", s.genre2);
+        setSel("set-subgenre2-select", s.subgenre2);
+        genreNote("Suggested from: " + (s.evidence || d.model || "AI") + " — Save to keep.");
+      })
+      .catch(function (err) { genreNote(err.message); });
+  });
+  var keep = document.getElementById("genre-set-save");
+  if (keep) keep.addEventListener("click", function () {
+    if (!genreSong) return;
+    genreNote("saving…");
+    post("/songs/genres", {song_ids: [Number(genreSong)],
+                            genre: val("set-genre-select"),
+                            subgenre: val("set-subgenre-select"),
+                            genre2: val("set-genre2-select"),
+                            subgenre2: val("set-subgenre2-select")})
+      .then(function (d) {
+        var u = (d.updated || [])[0];
+        var row = document.querySelector('tr[data-song="' + genreSong + '"]');
+        if (row && u) {
+          paintGenre(row, u);
+          row.setAttribute("data-genre", u.genre || "");
+          row.setAttribute("data-subgenre", u.subgenre || "");
+          row.setAttribute("data-genre2", u.genre2 || "");
+          row.setAttribute("data-subgenre2", u.subgenre2 || "");
+        }
+        if (genreDlg && typeof genreDlg.close === "function") genreDlg.close();
+      })
+      .catch(function (err) { genreNote(err.message); });
+  });
   function busy(on, msg) { note.textContent = msg || ""; bar.classList.toggle("busy", !!on); }
 
   // Upload: same route, same validation, but the Library stays where it is and

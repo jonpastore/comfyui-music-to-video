@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import modal_close %}
+{% from "_macros.html" import modal_close, glyph_save, glyph_delete %}
 {% block content %}
 <h1>Library</h1>
 
@@ -11,7 +11,10 @@
     <div class="field-row">
       <label>Title <input type="text" name="title" required></label>
       <label>Album <input type="text" name="album"></label>
-      <label>MP3 <input type="file" name="mp3" accept="audio/mpeg,.mp3" required></label>
+      <label>File
+        <input type="file" name="mp3" required
+               accept="audio/*,.mp3,.wav,.flac,.ogg,.oga,.m4a,.aac,.opus,.wma,.aiff,.aif">
+      </label>
     </div>
     {# the four genre fields are one decision, so they read as one row rather
        than four full-width stacked selects #}
@@ -37,7 +40,10 @@
     </div>
     <div class="form-actions">
       <label class="check"><input type="checkbox" name="explicit" value="true"> Explicit lyrics</label>
-      <button type="submit">Upload</button>
+      <button type="submit" class="icon-btn" title="Upload this song" aria-label="Upload this song">
+        <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+      </button>
     </div>
   </form>
 </section>
@@ -56,30 +62,36 @@
    that is why there is no "clear" option here, which would have to be its own
    deliberate control rather than an empty select. #}
 <section class="card bulk-bar" id="bulk-genre">
-  <div class="field-row">
+  <div class="clip-bar">
+    <span class="muted" id="bulk-count">no songs selected</span>
     <label>Genre
       <select id="bulk-genre-select">
         <option value="">(leave alone)</option>
         {% for g in genre_data %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
       </select>
     </label>
-    <label>Subgenre
+    <label>Sub
       <select id="bulk-subgenre-select"><option value="">(none)</option></select>
     </label>
-    <label>Secondary genre
+    <label>Genre 2
       <select id="bulk-genre2-select">
         <option value="">(leave alone)</option>
         {% for g in genre_data %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
       </select>
     </label>
-    <label>Secondary subgenre
+    <label>Sub 2
       <select id="bulk-subgenre2-select"><option value="">(none)</option></select>
     </label>
-  </div>
-  <div class="form-actions">
-    <span class="muted" id="bulk-count">no songs selected</span>
-    <button type="button" class="secondary" id="bulk-suggest">Suggest from style prompts</button>
-    <button type="button" id="bulk-save">Save to selected</button>
+    <button type="button" class="icon-btn" id="bulk-suggest"
+            title="Ask AI for genres from title, lyrics, or style prompt"
+            aria-label="Suggest genres">
+      <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" aria-hidden="true"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z"/></svg>
+    </button>
+    <button type="button" class="icon-btn" id="bulk-save"
+            title="Save genres to selected songs" aria-label="Save to selected">
+      {{ glyph_save() }}
+    </button>
   </div>
   <p class="hint" id="bulk-note"></p>
 </section>
@@ -108,21 +120,41 @@
 </table>
 </div>
 
-{% for e in songs %}{% if e.videos %}
-<dialog class="video-modal" id="vid-{{ e.song.id }}">
-  <div class="modal-bar">
-    <strong>{{ e.song.title }}</strong>
-    {{ modal_close() }}
-  </div>
-  {% for v in e.videos %}
-  <p class="meta">{{ v.tier | tiername }} &middot;
-    <time class="local-time" datetime="{{ v.created | isotime }}">{{ v.created | isotime }}</time>
-  </p>
-  {# preload=none so 31 rows of modals cost nothing until one is opened #}
-  <video controls preload="none" src="{{ media_url(v.path) }}"></video>
-  {% endfor %}
-</dialog>
-{% endif %}{% endfor %}
 {% endif %}
 </div>
+
+<dialog class="confirm-modal" id="genre-set">
+  <div class="modal-bar">
+    <strong id="genre-set-title">Set genre</strong>
+    <span class="lightbox-spacer"></span>
+    {{ modal_close() }}
+  </div>
+  <p class="hint">Pick from the studio taxonomy. Ask AI to recommend from the
+    song's title, lyrics, or style prompt — nothing is saved until you press Save.</p>
+  <div class="field-row">
+    <label>Genre
+      <select id="set-genre-select">
+        <option value="">(none)</option>
+        {% for g in genre_data %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Subgenre
+      <select id="set-subgenre-select"><option value="">(none)</option></select>
+    </label>
+    <label>Secondary genre
+      <select id="set-genre2-select">
+        <option value="">(none)</option>
+        {% for g in genre_data %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Secondary subgenre
+      <select id="set-subgenre2-select"><option value="">(none)</option></select>
+    </label>
+  </div>
+  <div class="button-row">
+    <button type="button" class="secondary" id="genre-set-suggest">Ask AI</button>
+    <button type="button" id="genre-set-save">Save</button>
+  </div>
+  <p class="hint" id="genre-set-note"></p>
+</dialog>
 {% endblock %}

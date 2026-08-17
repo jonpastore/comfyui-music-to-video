@@ -1086,6 +1086,16 @@ def test_library_routes_answer_json_and_still_redirect_a_form_post():
         assert row.status_code == 200, row.text
         assert f'<tr data-song="{sid}"' in row.text
         assert 'class="pick-song"' in row.text and "cell-genre" in row.text
+        assert "js-genre-set" in row.text
+        assert "tier-cell" in row.text
+        assert "danger-icon" in row.text
+
+        page = client.get("/").text
+        assert 'accept="audio/*' in page or ".wav" in page
+        assert 'id="genre-set"' in page
+        wav = client.post("/songs", data={"title": "Wav Upload"}, headers=J,
+                          files={"mp3": ("t.wav", b"RIFF....WAVEfmt ", "audio/wav")})
+        assert wav.status_code == 200, wav.text
 
         # Uploading queues transcribe and analyse, so an immediate delete is
         # refused -- and the reason arrives in `detail`, which is what app.js's
