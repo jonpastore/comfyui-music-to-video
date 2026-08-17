@@ -175,6 +175,10 @@ details.disclose > summary {
   gap: 0.45rem;
   flex-wrap: wrap;
 }
+details.disclose > summary > h2 {
+  margin: 0;
+  flex: 0 1 auto;
+}
 details.song-fold > summary::-webkit-details-marker,
 details.tier-board > summary::-webkit-details-marker,
 details.scene > summary::-webkit-details-marker,
@@ -1196,7 +1200,15 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
   background: var(--bg);
   border-top: 1px solid var(--border);
 }
-.pose-roster { list-style: none; padding: 0; margin: 0.4rem 0 0; }
+.pose-roster {
+  list-style: none;
+  padding: 0 0.15rem 0 0;
+  margin: 0.4rem 0 0;
+  max-height: min(28rem, 50vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
 .pose-roster-row {
   display: grid;
   grid-template-columns: 3rem minmax(7rem, 1fr) auto auto auto;

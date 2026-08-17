@@ -265,6 +265,8 @@ def test_album_coverage_rolls_up_songs_and_clear_unsets_keeper():
         assert "pick a sheet or generate a prompt" not in page
         assert "Missing:" not in page
         assert "pose-ph" in page or "pose-roster-open" in page
+        css = open(os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
+        assert ".pose-roster" in css and "overflow-y: auto" in css
         assert "Use as this pose" in page
         assert "Use as reference" not in page
         assert "Catatonic" not in page

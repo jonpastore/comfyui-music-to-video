@@ -1115,7 +1115,9 @@ date is the pencil on the card header next to the title. The Play column is G / 
 edit, and delete icons are the shared `glyph_save` / `glyph_edit` /
 `glyph_delete` macros. Transitions edit in the row. Remove confirms. The roster is a one-line grid: thumb (or a dashed `.pose-ph` when
 there is no sheet), pose name + songs, then the sheet dropdown, then a
-save icon (no “Keeper” label). Missing poses do **not** dump as
+save icon (no “Keeper” label). The list scrolls (`.pose-roster`
+`max-height: min(28rem, 50vh)`) so a hundred missing poses do not
+stretch the page. Missing poses do **not** dump as
 `Missing: crouching, …` — the count lives in the summary tag and each
 empty row is the row. **Generate…** opens a modal with a copyable Mage
 prompt from the storyboard’s pose/need text (`#pose-brief`).
