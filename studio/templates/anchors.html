@@ -64,10 +64,14 @@
 
 {% if coverage_by_tier %}
 <section class="card" id="album-pose-roster">
-  <h2>Poses this album&rsquo;s songs need</h2>
-  <p class="hint">Union of every storyboard on this album. Pick the keeper
-    sheet in the dropdown. Generate a missing pose below if the list has
-    nothing that fits.</p>
+  {% set miss = namespace(n=0) %}
+  {% for t, cov in coverage_by_tier.items() %}{% set miss.n = miss.n + cov.n_missing %}{% endfor %}
+  <details class="disclose" {% if miss.n %}open{% endif %}>
+  <summary><h2>Poses this album&rsquo;s songs need</h2>
+    {% if miss.n %}<span class="tag warn-tag">{{ miss.n }} missing</span>{% endif %}
+    <span class="muted">pick a sheet or generate a prompt</span></summary>
+  <p class="hint">The dropdown is the assignment. Save (disk icon) writes it.
+    Missing poses open a prompt you can send to Mage.</p>
   {% set ns = namespace(shown="", n=-1) %}
   {% for t, cov in coverage_by_tier.items() %}
     {% if cov.n_needed > ns.n %}
@@ -80,7 +84,7 @@
     {% for t, cov in coverage_by_tier.items() %}
     <button type="button" class="tier-tab {% if t == ns.shown %}active{% endif %}"
             data-tier="{{ t }}">{{ t | tiername }}
-      <span class="muted">({{ cov.n_have }}/{{ cov.n_needed }})</span></button>
+      <span class="muted">({{ cov.n_have }}/{{ cov.n_needed }}{% if cov.n_missing %} · {{ cov.n_missing }} missing{% endif %})</span></button>
     {% endfor %}
   </div>
   {% for t, cov in coverage_by_tier.items() %}
@@ -89,49 +93,21 @@
     {% if not cov.needed %}
     <p class="empty">No storyboard on this album at {{ t | tiername }} yet.</p>
     {% else %}
+    {% if cov.n_missing %}
+    <p class="notice">Missing:
+      {% for g in cov.needed if not g.sheet_id %}{{ g.label }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+    {% endif %}
     <ul class="pose-roster">
       {% for g in cov.needed %}
-      <li class="pose-roster-row {% if g.sheet_id %}have{% else %}missing{% endif %}"
-          data-pose-key="{{ g.key }}">
-        {% if g.path %}
-        <button type="button" class="pose-roster-open"
-                data-full="{{ media_url(g.path) }}"
-                data-label="{{ g.label }}"
-                title="Preview this keeper">
-          <img class="lazy-src" data-src="{{ media_url(g.path) }}" alt="" loading="lazy" decoding="async">
-        </button>
-        {% else %}
-        <span class="cover cover-empty">none</span>
-        {% endif %}
-        <span>
-          <strong>{{ g.label }}</strong>
-          <span class="muted">
-            {{ g.n_scenes }} scene{{ "" if g.n_scenes == 1 else "s" }}
-            · {% for s in g.songs %}<a href="/songs/{{ s.id }}">{{ s.title }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
-          </span>
-          <form method="post" action="/anchors/keeper" class="pose-keeper-form">
-            <input type="hidden" name="album" value="{{ cov.album }}">
-            <input type="hidden" name="tier" value="{{ cov.tier }}">
-            <input type="hidden" name="key" value="{{ g.key }}">
-            <label>Keeper
-              <select name="sheet_id">
-                <option value="0">none</option>
-                {% for sh in cov.sheets %}
-                <option value="{{ sh.id }}" {% if g.sheet_id == sh.id %}selected{% endif %}>
-                  {{ sh.label }}{% if sh.chosen %} · keeper{% endif %}
-                </option>
-                {% endfor %}
-              </select>
-            </label>
-            <button type="submit">Save</button>
-          </form>
-        </span>
-      </li>
+      {% with album=cov.album, tier=cov.tier, sheets=cov.sheets, hx=false %}
+        {% include "_pose_need_row.html" %}
+      {% endwith %}
       {% endfor %}
     </ul>
     {% endif %}
   </div>
   {% endfor %}
+  </details>
 </section>
 {% endif %}
 

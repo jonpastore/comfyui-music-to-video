@@ -328,10 +328,14 @@ def album_coverage(album, tier):
                     "source": item.get("source") or "unbound",
                     "songs": [],
                     "binds": [],
+                    "needs": [],
                     "n_scenes": 0,
                 }
                 groups[key] = g
             g["n_scenes"] += 1
+            need = (item.get("need") or item.get("pose") or "").strip()
+            if need and need not in g["needs"] and len(g["needs"]) < 6:
+                g["needs"].append(need[:800])
             g["binds"].append({"song_id": song["id"], "num": item["num"]})
             if not any(s["id"] == song["id"] for s in g["songs"]):
                 g["songs"].append({"id": song["id"], "title": song["title"]})

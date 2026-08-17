@@ -1190,6 +1190,14 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
   padding: 0.45rem 0;
   border-bottom: 1px solid var(--border);
 }
+.pose-roster-copy {
+  flex: 1 1 12rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.pose-roster-copy strong { font-weight: 600; }
 .pose-roster-row img,
 .pose-roster-row .cover {
   width: 3rem;
@@ -1200,14 +1208,15 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
 }
 .pose-roster-row.missing { opacity: 0.95; }
 .pose-roster-row .warn { display: block; }
-.pose-keeper-form { margin-top: 0.25rem; }
-.pose-keeper-form label {
-  flex-direction: row;
+.pose-keeper-form {
+  display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   margin: 0;
+  flex: none;
 }
-.pose-keeper-form select { min-width: 12rem; }
+.pose-keeper-form select { min-width: 10rem; max-width: 16rem; }
+.pose-roster-row .js-pose-brief { flex: none; }
 
 .pose-plan { margin: 0.75rem 0 0.4rem; }
 .pose-plan-list {
@@ -1964,7 +1973,6 @@ label.icon-btn {
   object-fit: cover;
   background: var(--bg);
 }
-.pose-keeper-form { margin: 0.35rem 0 0; }
 .fix-forms { flex: 1 1 24rem; min-width: 20rem; }
 .fix-forms h4 { margin: 0.75rem 0 0.3rem; }
 .fix-forms form + form { border-top: 1px solid var(--border); padding-top: 0.75rem; }

@@ -61,6 +61,19 @@
 hx-post="{{ url }}" hx-target="closest .playlist-body" hx-swap="innerHTML"
 {%- endmacro %}
 
+{% macro pose_mage_prompt(album, tier, g) -%}
+Album: {{ album }}
+Rating: {{ tier | tiername }}
+Pose name: {{ g.label }}
+
+What the storyboard asked — use this as the pose, not a standing sheet:
+{% for n in g.needs or [] %}{{ n }}
+{% else %}{{ g.label }}
+{% endfor %}
+One figure, full body inside the frame, empty studio, matching the album identity photographs. {{ tier | tiername }} rating.
+Used in {{ g.n_scenes }} scene{{ "" if g.n_scenes == 1 else "s" }}{% if g.songs %} on {% for s in g.songs %}{{ s.title }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}.
+{%- endmacro %}
+
 {% macro save_icon(label, title, extra="") %}
 <button type="submit" class="icon-btn labeled" title="{{ title }}"
         aria-label="{{ title }}" {{ extra }}>

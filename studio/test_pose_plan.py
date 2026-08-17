@@ -9,7 +9,6 @@ import time
 from fastapi.testclient import TestClient
 
 import app as appmod
-import build_refs
 import db
 import pose_plan
 from test_app import _png_bytes, _upload_song, wait_job
@@ -261,7 +260,8 @@ def test_album_coverage_rolls_up_songs_and_clear_unsets_keeper():
         assert "album-pose-roster" in page
         assert "pose-keeper-form" in page
         assert "pose-roster-open" in page
-        assert ">Save<" in page
+        assert "Save this assignment" in page
+        assert "js-pose-brief" in page or "missing" in page
         assert "Use as this pose" in page
         assert "Use as reference" not in page
         assert "Catatonic" not in page
@@ -363,6 +363,7 @@ def test_bind_route_json_reports_source():
         assert "Use this plate" not in page
         assert "Save this plate for the scene" in page
         assert "help-tip" in page
+        assert "data-help=" in page
         assert "Pinned" in page
         assert "Save scene 1" in page
         assert "Save plate" in page
@@ -373,8 +374,15 @@ def test_bind_route_json_reports_source():
         assert "Pose plate" in page
         assert ">Clips<" in page or ">Clips</h4>" in page
         assert "First clip only" in page
+        assert "What First clip only means" in page
+        assert 'class="clip-bar"' in page
+        assert 'class="clips-head"' in page
+        assert "When does S2V happen?" in page
+        assert "WAN S2V is a later hop" not in page or "data-help=" in page
         assert ">Reroll<" in page
-        assert "what to change" in page
+        assert "What to change" in page
+        assert 'class="reroll-form reroll-bar"' in page
+        assert "js-ref-preview thumb-open" in page
         assert 'name="seed_min"' in page
         assert "lazy-src" in page
         assert "data-src=" in page

@@ -1,0 +1,49 @@
+{% from "_macros.html" import glyph_save, pose_mage_prompt, playlist_hx %}
+{# One pose-need row: name + songs on the left, sheet select + save on the right.
+   Missing rows get a Generate button that opens #pose-brief. #}
+<li class="pose-roster-row {% if g.sheet_id %}have{% else %}missing{% endif %}"
+    data-pose-key="{{ g.key }}">
+  {% if g.path %}
+  <button type="button" class="pose-roster-open"
+          data-full="{{ media_url(g.path) }}"
+          data-label="{{ g.label }}"
+          title="Preview this sheet">
+    <img class="lazy-src" data-src="{{ media_url(g.path) }}" alt="" loading="lazy" decoding="async">
+  </button>
+  {% else %}
+  <span class="cover cover-empty">none</span>
+  {% endif %}
+  <div class="pose-roster-copy">
+    <strong>{{ g.label }}</strong>
+    <span class="muted">
+      {{ g.n_scenes }} scene{{ "" if g.n_scenes == 1 else "s" }}
+      {% if g.songs %} · {% for s in g.songs %}<a href="/songs/{{ s.id }}">{{ s.title }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+    </span>
+  </div>
+  <form method="post" action="/anchors/keeper" class="pose-keeper-form"
+        {% if hx %}{{ playlist_hx("/anchors/keeper") }}{% endif %}>
+    <input type="hidden" name="album" value="{{ album }}">
+    <input type="hidden" name="tier" value="{{ tier }}">
+    <input type="hidden" name="key" value="{{ g.key }}">
+    <select name="sheet_id" aria-label="Sheet for {{ g.label }}">
+      <option value="0">none</option>
+      {% for sh in sheets %}
+      <option value="{{ sh.id }}" {% if g.sheet_id == sh.id %}selected{% endif %}>
+        {{ sh.label }}{% if sh.chosen %} · in use{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="icon-btn" title="Save this assignment"
+            aria-label="Save this assignment">{{ glyph_save() }}</button>
+  </form>
+  {% if not g.sheet_id %}
+  <button type="button" class="secondary js-pose-brief"
+          data-label="{{ g.label }}"
+          data-tier="{{ tier | tiername }}"
+          data-album="{{ album }}"
+          data-songs="{% for s in g.songs %}{{ s.title }}{% if not loop.last %}, {% endif %}{% endfor %}"
+          data-scenes="{{ g.n_scenes }}"
+          title="Copy a detailed prompt for Mage">Generate…</button>
+  <textarea class="pose-brief-text" hidden readonly>{{ pose_mage_prompt(album, tier, g) }}</textarea>
+  {% endif %}
+</li>

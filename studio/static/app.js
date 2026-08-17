@@ -3048,11 +3048,47 @@ document.addEventListener("click", function (e) {
 });
 
 document.addEventListener("click", function (e) {
+  if (e.target && e.target.id === "pose-brief-copy") {
+    var ta = document.getElementById("pose-brief-text");
+    if (!ta) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value);
+    } else {
+      ta.select();
+      document.execCommand("copy");
+    }
+    e.target.textContent = "Copied";
+    setTimeout(function () { e.target.textContent = "Copy prompt"; }, 1500);
+    return;
+  }
   var beat = e.target.closest && e.target.closest(".song-arc-beat");
   if (beat) {
     var open = !beat.classList.contains("is-open");
     beat.classList.toggle("is-open", open);
     beat.setAttribute("aria-expanded", open ? "true" : "false");
+    return;
+  }
+  var brief = e.target.closest && e.target.closest(".js-pose-brief");
+  if (brief) {
+    var dlg = document.getElementById("pose-brief");
+    if (!dlg || typeof dlg.showModal !== "function") return;
+    var title = document.getElementById("pose-brief-title");
+    var meta = document.getElementById("pose-brief-meta");
+    var ta = document.getElementById("pose-brief-text");
+    var src = brief.parentElement && brief.parentElement.querySelector(".pose-brief-text");
+    if (title) title.textContent = "Generate: " + (brief.getAttribute("data-label") || "pose");
+    if (meta) {
+      var bits = [];
+      if (brief.getAttribute("data-album")) bits.push(brief.getAttribute("data-album"));
+      if (brief.getAttribute("data-tier")) bits.push(brief.getAttribute("data-tier"));
+      if (brief.getAttribute("data-scenes")) {
+        bits.push(brief.getAttribute("data-scenes") + " scene(s)");
+      }
+      if (brief.getAttribute("data-songs")) bits.push(brief.getAttribute("data-songs"));
+      meta.textContent = bits.join(" · ");
+    }
+    if (ta) ta.value = src ? src.value : "";
+    dlg.showModal();
     return;
   }
   var tip = e.target.closest && e.target.closest(".help-tip");

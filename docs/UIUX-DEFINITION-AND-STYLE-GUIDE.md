@@ -1106,9 +1106,12 @@ writes a `prompts` version that can be loaded back. The cover thumb expands the 
 lightbox (pencil = replace, trash = delete) when it is open. Album
 date is the pencil on the card header next to the title. The Play column is G / PG-13 / R / XXX. Save,
 edit, and delete icons are the shared `glyph_save` / `glyph_edit` /
-`glyph_delete` macros. Transitions edit in the row. Remove confirms. The roster dropdown (`POST /anchors/keeper`) plus **Save** sets
-the keeper and stamps those scenes — on `/anchors` and on the playlist
-Anchors fold. Roster thumbs open `#pose-preview`. Playlist Anchors uses
+`glyph_delete` macros. Transitions edit in the row. Remove confirms. The roster is a one-line row: pose name + songs, then the sheet
+dropdown, then a save icon (no “Keeper” label). Missing poses list at
+the top of the fold. **Generate…** opens a modal with a copyable Mage
+prompt from the storyboard’s pose/need text (`#pose-brief`).
+`POST /anchors/keeper` plus the save icon stamps the assignment — on
+`/anchors` and on the playlist Anchors fold. Roster thumbs open `#pose-preview`. Playlist Anchors uses
 character tabs and Clothed/Nude family tabs. Gallery tiles use icon
 actions (filled check = keeper, outline =
 pick, clear, delete) with `title` help. The Fix dialog has a help icon

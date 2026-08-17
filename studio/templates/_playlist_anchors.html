@@ -1,50 +1,32 @@
 {% from "_macros.html" import glyph_delete, glyph_edit, playlist_hx %}
 {# Full album sheet gallery. Loaded when the Anchors fold opens. #}
 {% if d.pose_need %}
-<h3>Poses this album needs</h3>
-<p class="hint">Assignment, not a caption. Save picks the keeper sheet for that
-  pose at this rating. An in-use sheet cannot be deleted until you pick another.</p>
+{% set miss = namespace(n=0) %}
+{% for cov in d.pose_need %}{% set miss.n = miss.n + cov.n_missing %}{% endfor %}
+<details class="disclose" {% if miss.n %}open{% endif %}>
+  <summary>Poses this album needs
+    {% if miss.n %}<span class="tag warn-tag">{{ miss.n }} missing</span>{% endif %}</summary>
+<p class="hint">The dropdown is the assignment. Save writes it. Missing poses
+  open a prompt for Mage.</p>
 {% for cov in d.pose_need %}
-<details class="disclose" {% if loop.first %}open{% endif %}>
+<details class="disclose" {% if cov.n_missing %}open{% endif %}>
   <summary>{{ cov.tier | tiername }}
     · {{ cov.n_have }}/{{ cov.n_needed }}
     {% if cov.n_missing %} · {{ cov.n_missing }} missing{% endif %}</summary>
-  <ul class="pose-need">
+  {% if cov.n_missing %}
+  <p class="notice">Missing:
+    {% for g in cov.needed if not g.sheet_id %}{{ g.label }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+  {% endif %}
+  <ul class="pose-roster">
     {% for g in cov.needed %}
-    <li class="{% if g.sheet_id %}have{% else %}missing{% endif %}">
-      {% if g.path %}
-      <img class="lazy-src" data-src="{{ media_url(g.path) }}" alt="" loading="lazy" decoding="async">
-      {% endif %}
-      <span>
-        <strong>{{ g.label }}</strong>
-        <span class="muted">{{ g.n_scenes }} scene{{ "" if g.n_scenes == 1 else "s" }}
-          · {% for s in g.songs %}<a href="/songs/{{ s.id }}">{{ s.title }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</span>
-        {% if not g.sheet_id %}
-        <a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">create this pose</a>
-        {% endif %}
-        <form method="post" action="/anchors/keeper" class="pose-keeper-form clip-bar"
-              {{ playlist_hx("/anchors/keeper") }}>
-          <input type="hidden" name="album" value="{{ d.playlist.name }}">
-          <input type="hidden" name="tier" value="{{ cov.tier }}">
-          <input type="hidden" name="key" value="{{ g.key }}">
-          <label>Keeper
-            <select name="sheet_id" aria-label="Keeper for {{ g.label }}">
-              <option value="0">none</option>
-              {% for sh in cov.sheets %}
-              <option value="{{ sh.id }}" {% if g.sheet_id == sh.id %}selected{% endif %}>
-                {{ sh.label }}{% if sh.chosen %} · in use{% endif %}
-              </option>
-              {% endfor %}
-            </select>
-          </label>
-          <button type="submit">Save</button>
-        </form>
-      </span>
-    </li>
+    {% with album=d.playlist.name, tier=cov.tier, sheets=cov.sheets, hx=true %}
+      {% include "_pose_need_row.html" %}
+    {% endwith %}
     {% endfor %}
   </ul>
 </details>
 {% endfor %}
+</details>
 {% endif %}
 
 <div class="section-head">

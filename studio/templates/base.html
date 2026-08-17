@@ -46,6 +46,20 @@
     </div>
     <p id="tip-modal-body"></p>
   </dialog>
+  <dialog class="confirm-modal" id="pose-brief">
+    <div class="modal-bar">
+      <strong id="pose-brief-title">Generate this pose</strong>
+      <span class="lightbox-spacer"></span>
+      {{ modal_close() }}
+    </div>
+    <p class="hint" id="pose-brief-meta"></p>
+    <label>Prompt for Mage
+      <textarea id="pose-brief-text" rows="12" readonly></textarea>
+    </label>
+    <div class="button-row">
+      <button type="button" id="pose-brief-copy">Copy prompt</button>
+    </div>
+  </dialog>
   <dialog class="lightbox" id="ref-preview">
     <div class="lightbox-bar">
       <strong id="ref-preview-label"></strong>
