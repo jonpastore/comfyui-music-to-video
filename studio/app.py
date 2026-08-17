@@ -5825,10 +5825,18 @@ async def api_start_storyboard(id: int, tier: str, request: Request):
 # reference renderer actually sends; video_motion_prompt is what the clip
 # renderer sends; story is the human line the detail-shot path falls back to
 # (build_refs.tighten_for_detail). video_model is a directorial fact on the
-# scene (T2-42 / T2-43); camera still feeds SHOT_RULES and is not editable
-# here -- scene_number keys the whole allocation.
-EDITABLE_SCENE_FIELDS = ("image_prompt", "video_motion_prompt", "story",
-                         "video_model")
+# scene (T2-42 / T2-43) and sits beside camera. scene_number keys the
+# allocation and is not editable here.
+EDITABLE_SCENE_FIELDS = (
+    "name", "cue", "duration_guidance", "story",
+    "camera", "video_model", "motion", "lighting", "location", "pose",
+    "image_prompt", "video_motion_prompt", "negative_prompt",
+)
+BOARD_LOCK_FIELDS = ("character_reference", "album_world_reference")
+SHORT_SCENE_FIELDS = (
+    "name", "cue", "duration_guidance", "camera", "video_model",
+    "motion", "lighting", "location", "pose",
+)
 MAX_SCENE_FIELD = 4000
 
 # Fields re-screened on T10-21 unlock. Lyrics may mention a child at r
@@ -6092,7 +6100,7 @@ def storyboard_page_ctx(song, tier):
         raw = sb
     return {
         "song": song, "tier": tier, "row": row, "md": md, "sb": sb,
-        "board_json": json.dumps(raw, indent=1),
+        "board_json": json.dumps(raw, indent=1, ensure_ascii=False),
         "scene_rows": rows, "anchors": anchors,
         "identity_fronts": identity_fronts, "chunk": clip_secs,
         "unanchored": unanchored_leads(rows),
@@ -6102,6 +6110,7 @@ def storyboard_page_ctx(song, tier):
         "pose_plan": pose_plan.plan(song, tier),
         "coverage": board["coverage"],
         "fields": EDITABLE_SCENE_FIELDS,
+        "short_fields": SHORT_SCENE_FIELDS,
         "scene_time": board["scene_time"],
         "song_length": board["song_length"],
         "clip_seconds": clip_secs,
@@ -6154,6 +6163,41 @@ async def save_storyboard_board(request: Request, id: int, tier: str):
            jp, mp, n, row["id"])
     if wants_json(request):
         return JSONResponse({"ok": True, "scene_count": n, "tier": tier})
+    return RedirectResponse(f"/songs/{id}#fold-storyboard", status_code=303)
+
+
+@app.post("/songs/{id}/storyboard/{tier}/lock")
+async def save_storyboard_lock(request: Request, id: int, tier: str):
+    """Patch board-level identity / world text without a raw JSON edit."""
+    song = get_song_or_404(id)
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
+    if not row:
+        raise HTTPException(404, "no storyboard for this tier yet")
+    form = await request.form()
+    sb = load_storyboard(row, normalized=False)
+    changed = False
+    for field in BOARD_LOCK_FIELDS:
+        if field not in form:
+            continue
+        value = (form.get(field) or "").strip()
+        if len(value) > MAX_SCENE_FIELD:
+            raise HTTPException(
+                400, f"{field} is {len(value)} characters; keep it under {MAX_SCENE_FIELD}")
+        try:
+            tiers.check_text(value, field, tier=tier)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        if field == "character_reference" and not value:
+            raise HTTPException(400, grok.EMPTY_CHARACTER_REFERENCE)
+        if (sb.get(field) or "") != value:
+            sb[field] = value
+            changed = True
+    if not str((sb.get("character_reference") or "")).strip():
+        raise HTTPException(400, grok.EMPTY_CHARACTER_REFERENCE)
+    if changed:
+        grok.write_storyboard(sb, os.path.dirname(row["json_path"]), song["slug"], tier)
+    if wants_json(request):
+        return JSONResponse({"ok": True, "changed": changed})
     return RedirectResponse(f"/songs/{id}#fold-storyboard", status_code=303)
 
 
@@ -6280,6 +6324,8 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
         return JSONResponse({"ok": True, "num": num, "changed": changed})
     return templates.TemplateResponse(request, "_scene_row.html", {
         "song": song, "tier": tier, "r": r, "fields": EDITABLE_SCENE_FIELDS,
+        "short_fields": SHORT_SCENE_FIELDS,
+        "scene_open": True,
         "chunk": build_song.clip_seconds(row["scene_seconds"]),
         "pose_plan": pose_plan.plan(song, tier)})
 

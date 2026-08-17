@@ -472,9 +472,15 @@ A scene lists **every** rendered part (not only the head) and Play scene
 runs them in order. The panel also has an all-clips strip and Assemble. Summaries carry the one-line status so
 you do not open a card to learn it is idle.
 Storyboard editing lives **on the song page**, not a second interface.
-Each written tier is a `.tier-board` that `hx-get`s
-`/songs/{id}/storyboard/{tier}/panel` (JSON textarea, Save, Generate,
-named versions, coverage, scenes and timing). Approve-all lives on the song storyboard panel. `GET /songs/{id}/approve/{tier}`
+Each written tier is a `.tier-board` with a chevron that rotates
+open/closed (hover: expand or collapse). It `hx-get`s
+`/songs/{id}/storyboard/{tier}/panel`. The panel leads with a one-line
+toolbar (Save board, Snapshot, version select, Restore, secondary
+Generate that names the overwrite). Raw JSON is a closed details.
+Identity and world are a **Board lock** form, not a blob. Each scene
+is a closed `<details class="scene">` whose fields write the stored
+JSON (`name`, `camera`, `pose`, prompts, …). Approve remaining /
+replace picks sit above that list. `GET /songs/{id}/approve/{tier}`
 303s to the song page. `GET /songs/{id}/storyboard/{tier}` remains for T6-A2 numbers.
 `initSongPage` posts every control as JSON.
 The song page **Reference images** checkboxes stay disabled until front
@@ -504,10 +510,10 @@ scenes still generate from identity front + scene text. Generate refs
 freezes auto-matches and sends each bound sheet as that scene's image2
 plate. Storyboard scene rows have a **Pose plate**
 select (`POST .../scene/{n}/pose-sheet`). The plate thumb is a
-`button.thumb-open` (neutral, not the accent fill). Save actions on the
-row and the storyboard toolbar are `.icon-btn` floppy icons; a
-`.save-note` reports saved / pinned / the error and does not fade on
-failure. Bind status is **Pinned** (operator chose), **Suggested**
+`button.thumb-open` (neutral, not the accent fill). Save actions are labeled floppies (Save JSON, Save lock, Save plate,
+Save scene) so two disks are not the same control. Every icon has
+`title` and `aria-label`. A `.save-note` reports saved / pinned / the
+error and does not fade on failure. Bind status is **Pinned** (operator chose), **Suggested**
 (matcher), **Missing sheet**, or **No plate**, with a help icon — not
 the old “saved bind · standing” string. The pose word sits beside the
 help. `GET /api/songs/{id}/pose-plan/{tier}` is the same object

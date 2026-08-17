@@ -1635,7 +1635,10 @@ function initSongPage() {
           det.setAttribute("hx-trigger", "toggle once");
           det.setAttribute("hx-target", "find .tier-board-body");
           det.setAttribute("hx-swap", "innerHTML");
-          det.innerHTML = "<summary><span>" + label + " · " +
+          det.innerHTML = "<summary title=\"" + label + ": click to expand or collapse scenes\">" +
+            "<span class=\"tier-toggle\" aria-hidden=\"true\">" +
+            "<svg viewBox=\"0 0 16 16\"><path fill=\"currentColor\" d=\"M6 3.2 11.2 8 6 12.8V3.2z\"/></svg>" +
+            "</span><span>" + label + " · " +
             (b.scene_count || "?") + " scenes</span></summary>" +
             "<div class=\"tier-board-body\"><p class=\"muted\">Loading scenes…</p></div>";
           list.appendChild(det);

@@ -1,6 +1,7 @@
 {# Sticky topbar chip. Click opens #jobs-modal. Polls only while work moves. #}
 <button type="button" id="job-chip" class="job-chip
         {% if queue_latest %}job-chip-{{ queue_latest.job.status }}{% else %}job-chip-idle{% endif %}"
+        title="Open the job queue" aria-label="Open the job queue"
         data-open-jobs aria-haspopup="dialog" aria-controls="jobs-modal"
         {% if queue_refresh_secs %}hx-get="/queue?chip=1"
         hx-trigger="every {{ queue_refresh_secs }}s" hx-swap="outerHTML"{% endif %}>

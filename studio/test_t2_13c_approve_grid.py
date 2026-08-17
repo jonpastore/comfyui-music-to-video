@@ -54,7 +54,7 @@ def test_t2_13c_approve_grid_lists_every_scene_not_every_clip():
 
         page = client.get(f"/songs/{sid}/storyboard/pg13/panel").text
         assert page
-        assert page.count('<section class="scene"') == scene_count
+        assert page.count('class="scene"') == scene_count
         assert f'data-nclips="{len(plan)}"' in page
         assert f'data-nclips="{want_clips}"' not in page
         assert "Part 1" not in page

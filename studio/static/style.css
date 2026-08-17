@@ -187,22 +187,48 @@ details.song-fold[open] > summary { margin-bottom: 0.75rem; }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.45rem;
   cursor: pointer;
+  list-style: none;
 }
+.tier-board > summary::-webkit-details-marker { display: none; }
+.tier-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+  color: var(--muted);
+  transition: transform .12s ease;
+}
+.tier-toggle svg { width: 0.85rem; height: 0.85rem; display: block; }
+.tier-board[open] > summary .tier-toggle { transform: rotate(90deg); }
+.tier-board[open] > summary { margin-bottom: 0.45rem; }
 .sb-toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.45rem 0.6rem;
 }
+.sb-toolbar .icon-btn,
+.sb-toolbar button,
+.sb-toolbar select {
+  min-height: 2.1rem;
+}
+.sb-toolbar.sb-approve { margin: 0.75rem 0 0.35rem; }
 .sb-json {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.8rem;
   line-height: 1.35;
 }
-.sb-ver { margin: 0; }
+.sb-ver { margin: 0; min-width: 10rem; }
+.sb-raw-json, .sb-lock-fields { margin: 0.55rem 0 0.25rem; }
+.sb-raw-json > summary, .sb-lock-fields > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
 
 .thumb-open {
   display: block;
@@ -1044,16 +1070,20 @@ img.lazy-src, video.lazy-src {
 
 .scene {
   border-top: 1px solid var(--border);
-  padding: 1rem 0;
+  padding: 0.55rem 0;
 }
 .scene:first-of-type { border-top: 0; }
+.scene[open] { padding-bottom: 1rem; }
 .scene-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+  cursor: pointer;
+  list-style: none;
 }
+.scene-head::-webkit-details-marker { display: none; }
 .scene-head h3 { margin: 0; }
 .scene .timing { white-space: nowrap; }
 .scene-form { margin: 0.6rem 0; }
@@ -1241,6 +1271,14 @@ a.icon-btn {
   color: var(--muted);
   font: inherit;
   font-weight: 500;
+}
+button.icon-btn.labeled,
+a.icon-btn.labeled {
+  width: auto;
+  min-height: 2.1rem;
+  padding: 0 0.55rem;
+  gap: 0.35rem;
+  font: 500 0.8rem/1.2 inherit;
 }
 button.icon-btn:hover:not(:disabled),
 a.icon-btn:hover:not(:disabled) {
@@ -2008,6 +2046,7 @@ tr.job-cancelled { opacity: 0.55; }
 @media (prefers-reduced-motion: reduce) {
   .status-running::before { animation: none; }
   .flash-ok { animation: none; }
+  .tier-toggle { transition: none; }
 }
 
 /* A link that reads as a primary button. sets.html had <a><button></a> --

@@ -361,10 +361,12 @@ def test_bind_route_json_reports_source():
         page = client.get(f"/songs/{song['id']}/storyboard/r").text
         assert "saved bind" not in page
         assert "Use this plate" not in page
-        assert 'aria-label="Save this plate for the scene"' in page
+        assert "Save this plate for the scene" in page
         assert "help-tip" in page
         assert "Pinned" in page
         assert "Save scene 1" in page
+        assert "Save plate" in page
+        assert "Save scene" in page
         assert "icon-btn" in page
         assert "scene-preview" in page
         assert "Reference stills" in page

@@ -3,8 +3,9 @@
    Its own partial so saving a scene swaps just that scene back in (htmx) --
    a full page reload on a 49-scene storyboard loses your scroll position and
    every other box you were part-way through. #}
-<section class="scene" id="scene-{{ r.num }}">
-  <header class="scene-head">
+{% from "_macros.html" import save_icon %}
+<details class="scene" id="scene-{{ r.num }}" {% if scene_open %}open{% endif %}>
+  <summary class="scene-head">
     <h3>{{ r.num }}. {{ r.name }}</h3>
     <span class="timing num">
       {% if r.start is not none %}
@@ -17,7 +18,8 @@
         <span class="muted">no timing yet</span>
       {% endif %}
     </span>
-  </header>
+    {% if r.scene.pose %}<span class="pose-word">{{ r.scene.pose }}</span>{% endif %}
+  </summary>
 
   <p class="meta">
     {% if r.scene.cue %}<span class="tag">{{ r.scene.cue }}</span>{% endif %}
@@ -52,7 +54,7 @@
     <ul>{% for s in r.shots %}<li>{{ s }}</li>{% endfor %}</ul>
     <p class="hint">Derived from <code>camera</code> by build_song.SHOT_RULES and prepended to
       the prompt. Framing is ignored unless it leads &mdash; that is why it is not in the box
-      below. Change <code>camera</code> in the storyboard JSON to change it.</p>
+      below. Change <code>camera</code> on this scene to change it.</p>
   </details>
   {% endif %}
 
@@ -92,10 +94,8 @@
         {% endfor %}
       </select>
     </label>
-    <button type="submit" class="icon-btn" title="Save this plate for the scene"
-            aria-label="Save this plate for the scene">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 2h8l2 2v10H3zm2 0v4h6V2zm-1 8v3h8v-3z"/></svg>
-    </button>
+    {{ save_icon("Save plate",
+       "Save this plate for the scene — Generate refs uses it as the pose (image2).") }}
     <span class="pose-bind-meta">
       <span class="pose-bind-label" data-source="{{ s.source }}">{{ bind_label }}</span>
       <button type="button" class="icon-btn help-tip" title="{{ bind_help }}"
@@ -118,16 +118,44 @@
   <form class="scene-form stack-form"
         method="post"
         action="/songs/{{ song.id }}/storyboard/{{ tier }}/scene/{{ r.num }}">
-    {% for f in fields %}
+    <div class="field-row">
+      {% for f in ("name", "cue", "duration_guidance") %}
+      <label>{{ f.replace("_", " ") }}
+        <input type="text" name="{{ f }}" value="{{ r.scene[f] or "" }}">
+      </label>
+      {% endfor %}
+    </div>
+    <div class="field-row">
+      <label>camera
+        <input type="text" name="camera" value="{{ r.scene.camera or "" }}">
+      </label>
+      <label>video model
+        <input type="text" name="video_model" value="{{ r.scene.video_model or "" }}"
+               placeholder="job default">
+      </label>
+      <label>pose
+        <input type="text" name="pose" value="{{ r.scene.pose or "" }}">
+      </label>
+      <label>motion
+        <input type="text" name="motion" value="{{ r.scene.motion or "" }}">
+      </label>
+    </div>
+    <div class="field-row">
+      <label>location
+        <input type="text" name="location" value="{{ r.scene.location or "" }}">
+      </label>
+      <label>lighting
+        <input type="text" name="lighting" value="{{ r.scene.lighting or "" }}">
+      </label>
+    </div>
+    {% for f in ("story", "image_prompt", "video_motion_prompt", "negative_prompt") %}
     <label>{{ f.replace("_", " ") }}
       <textarea name="{{ f }}" rows="{{ 5 if f == 'image_prompt' else 2 }}">{{ r.scene[f] or "" }}</textarea>
     </label>
     {% endfor %}
     <div class="scene-save-row">
-      <button type="submit" class="icon-btn" title="Save scene {{ r.num }}"
-              aria-label="Save scene {{ r.num }}">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 2h8l2 2v10H3zm2 0v4h6V2zm-1 8v3h8v-3z"/></svg>
-      </button>
+      {{ save_icon("Save scene",
+         "Save scene " ~ r.num ~ " — writes these fields into the storyboard JSON.") }}
       <span class="save-note" aria-live="polite"></span>
     </div>
   </form>
@@ -167,7 +195,7 @@
           {% if cands %}
           <div class="scene-refs">
             {% for c in cands %}
-            <figure class="ref-frame clip-tile {% if c.approved %}approved{% endif %}"
+            <figure class="ref-frame clip-tile {% if c.approved %}approved{% endif %}{% if r.refs[0].stale %} stale{% endif %}"
                     tabindex="0" data-clip="{{ ns.head }}">
               <button type="button" class="js-ref-preview thumb-open"
                       data-full="{{ media_url(c.path) }}"
@@ -177,6 +205,7 @@
               <figcaption>
                 still{% if c.seed is not none %} · {{ c.seed }}{% endif %}
                 {% if c.approved %}<span class="tag done">approved</span>{% endif %}
+                {% if r.refs[0].stale %}<span class="tag warn-tag">stale</span>{% endif %}
                 {% if ref_flags and ns.head is not none and ref_flags.get(ns.head) %}
                 <span class="tag warn-tag" title="{{ ref_flags[ns.head].reason }}">{{ ref_flags[ns.head].issue }}</span>
                 {% endif %}
@@ -294,4 +323,4 @@
       </tr>
     </tbody>
   </table>
-</section>
+</details>

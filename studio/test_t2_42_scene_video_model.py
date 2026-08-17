@@ -139,11 +139,10 @@ def test_t2_42_scene_row_shows_video_model_beside_camera():
         ])
         page = client.get(f"/songs/{sid}/storyboard/pg13")
         assert page.status_code == 200, page.text
-        row = re.search(
-            r'<section class="scene" id="scene-1">(.*?)</section>',
-            page.text, re.S)
-        assert row, page.text
-        html = row.group(1)
+        start = page.text.find('id="scene-1"')
+        end = page.text.find('id="scene-2"')
+        assert start != -1, page.text
+        html = page.text[start:end if end != -1 else None]
         meta = re.search(r'<p class="meta">(.*?)</p>', html, re.S)
         assert meta, html
         line = re.sub(r"\s+", " ", meta.group(1))

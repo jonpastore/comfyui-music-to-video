@@ -98,6 +98,8 @@ def test_song_page_folds_and_storyboard_are_buttons():
         assert "Edit XXX scenes" not in page
         assert "approve grid" not in page.lower()
         assert 'class="tier-board"' in page
+        assert "tier-toggle" in page
+        assert "expand or collapse" in page.lower()
         # pose plan for a tier lives inside that tier's expand body
         assert "tier-ref-body" in page
         panel = client.get(f"/songs/{sid}/storyboard/xxx/panel")

@@ -42,14 +42,15 @@
          that clips a long line. #}
       <td class="truncate queue-progress">{{ e.job.progress or e.job.error or "" }}</td>
       <td class="queue-actions">
-        <a class="icon-btn" href="/jobs/{{ e.job.id }}/log" title="log" aria-label="log">
+        <a class="icon-btn" href="/jobs/{{ e.job.id }}/log"
+           title="Open this job's log" aria-label="Open this job's log">
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
             <path fill="currentColor" d="M2 3.5h12v1.4H2zm0 3.8h12v1.4H2zm0 3.8h8v1.4H2z"/>
           </svg>
         </a>
         {% if e.job.status in ("queued", "running") %}
         <form method="post" action="/jobs/{{ e.job.id }}/cancel" class="inline">
-          <button type="submit" class="icon-btn" title="cancel" aria-label="cancel">
+          <button type="submit" class="icon-btn" title="Cancel this job" aria-label="Cancel this job">
             <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
               <rect x="3" y="3" width="10" height="10" fill="currentColor"/>
             </svg>
@@ -57,7 +58,7 @@
         </form>
         {% elif e.job.status in ("failed", "cancelled") %}
         <form method="post" action="/jobs/{{ e.job.id }}/retry" class="inline">
-          <button type="submit" class="icon-btn" title="retry" aria-label="retry">
+          <button type="submit" class="icon-btn" title="Retry this job" aria-label="Retry this job">
             <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
               <path fill="currentColor" d="M8 3a5 5 0 1 0 4.5 2.9l-1.4.6A3.5 3.5 0 1 1 8 4.5V7l3-3-3-3v2.5A5 5 0 0 0 8 3z"/>
             </svg>

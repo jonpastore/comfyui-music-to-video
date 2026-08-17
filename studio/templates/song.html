@@ -311,7 +311,10 @@
              hx-get="/songs/{{ song.id }}/storyboard/{{ t }}/panel"
              hx-trigger="{{ 'load, toggle once' if t == open_tier else 'toggle once' }}"
              hx-target="find .tier-board-body" hx-swap="innerHTML">
-      <summary>
+      <summary title="{{ t | tiername }}: click to expand or collapse scenes">
+        <span class="tier-toggle" aria-hidden="true">
+          <svg viewBox="0 0 16 16"><path fill="currentColor" d="M6 3.2 11.2 8 6 12.8V3.2z"/></svg>
+        </span>
         <span>{{ t | tiername }} · {{ sb.scene_count or "?" }} scenes</span>
       </summary>
       <div class="tier-board-body"><p class="muted">Loading scenes…</p></div>

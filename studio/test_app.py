@@ -1454,7 +1454,7 @@ def test_scene_edit_rewrites_the_json_the_renderer_reads_and_marks_frames_stale(
 
         # a frame rendered BEFORE the edit
         db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created)
-                  VALUES (?,'r',0,'/fake/clip_000.png',7000,1,?)""", sid, time.time())
+                  VALUES (?,'r',0,'/fake/clip_000.png',5151,1,?)""", sid, time.time())
 
         r = client.post(f"/songs/{sid}/storyboard/r/scene/1",
                         data={"image_prompt": "a neon stairwell, rewritten"})
@@ -1549,7 +1549,7 @@ def test_picking_a_character_anchor_does_not_unpick_the_protagonists():
         assert appmod.chosen_anchor("album", album, "r", character_id=nyx["id"])["path"] == "nyx.png"
 
 
-def test_only_anchored_cast_reaches_the_storyboard_and_the_renderer():
+def test_album_cast_is_offered_and_only_anchored_leads_reach_refs():
     with TestClient(appmod.app) as client:
         album = "Cast Refs Album"
         song = _upload_song(client, "Cast Song", album=album)
@@ -1567,16 +1567,8 @@ def test_only_anchored_cast_reaches_the_storyboard_and_the_renderer():
                         sid)["id"])
         offered = dict(grok_calls["args"]["cast"])
         assert "Nyx" in offered, offered
-        assert "Ghost" not in offered, "offered a character with no anchor to name"
-
-        from conftest import refs_calls
-        refs_calls.clear()
-        client.post(f"/songs/{sid}/refs", data={"tier": "pg13"})
-        wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='refs' ORDER BY id DESC",
-                        sid)["id"])
-        cast = refs_calls[-1]["cast"]
-        assert set(cast) == {"Nyx"}, cast
-        assert cast["Nyx"]["path"] == "nyx.png"
+        assert "Ghost" in offered, "T2-49: album leads are offered before they have a front"
+        assert [c["name"] for c, _ in appmod.cast_anchors(album, "pg13")] == ["Nyx"]
 
 
 def test_build_refs_attaches_cast_as_image2_and_names_them_inside_the_guardrail():

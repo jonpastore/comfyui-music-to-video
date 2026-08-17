@@ -22,6 +22,8 @@
       {% endfor %}
     </nav>
     <button type="button" id="job-chip" class="job-chip" data-open-jobs
+            title="Open the job queue"
+            aria-label="Open the job queue"
             aria-haspopup="dialog" aria-controls="jobs-modal"
             hx-get="/queue?chip=1" hx-trigger="load" hx-swap="outerHTML">
       <span class="muted">jobs</span>
@@ -53,12 +55,12 @@
     </div>
     <div class="clip-stage">
       <button type="button" class="clip-nav clip-nav-prev" id="clip-prev"
-              aria-label="Previous clip">
+              title="Previous clip" aria-label="Previous clip">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M10.2 2.2 4.4 8l5.8 5.8 1.4-1.4L7.2 8l4.4-4.4z"/></svg>
       </button>
       <video controls preload="metadata"></video>
       <button type="button" class="clip-nav clip-nav-next" id="clip-next"
-              aria-label="Next clip">
+              title="Next clip" aria-label="Next clip">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M5.8 2.2 4.4 3.6 8.8 8l-4.4 4.4 1.4 1.4L11.6 8z"/></svg>
       </button>
     </div>

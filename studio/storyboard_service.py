@@ -25,8 +25,11 @@ import mixer
 
 SCENE_TIME_TOLERANCE = 0.15
 # video_model is a directorial fact on the scene (T2-42 / T2-43 / T2-44).
-EDITABLE_SCENE_FIELDS = ("image_prompt", "video_motion_prompt", "story",
-                         "video_model")
+EDITABLE_SCENE_FIELDS = (
+    "name", "cue", "duration_guidance", "story",
+    "camera", "video_model", "motion", "lighting", "location", "pose",
+    "image_prompt", "video_motion_prompt", "negative_prompt",
+)
 MAX_SCENE_FIELD = 4000
 DEFAULT_SCENE_SECONDS = 4.0
 SCENE_SECONDS_MIN = 1.0
