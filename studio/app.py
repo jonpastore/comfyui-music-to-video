@@ -1969,16 +1969,19 @@ def sets_by_song():
         if sid is not None:
             label = set_names.get(sid, "(deleted set)")
             song_ids = set_members.get(sid, [])
+            href = f"/sets/{sid}"
         else:
             pid = meta.get("playlist_id")
             label = pl_names.get(pid, "(deleted playlist)")
             song_ids = pl_members.get(pid, [])
+            href = "/sets"
         if meta.get("tier"):
             label += f" {meta['tier'].upper()}"
         if meta.get("mode") == "audio":
             label += " (audio)"
         for song_id in song_ids:
-            out.setdefault(song_id, []).append({"id": a["id"], "label": label})
+            out.setdefault(song_id, []).append(
+                {"id": a["id"], "label": label, "href": href})
     return out
 
 
@@ -9581,19 +9584,22 @@ def _set_payload(row):
     }
 
 
+def _editable_set_rows():
+    return db.q(
+        "SELECT id, name FROM sets WHERE mode != ? ORDER BY updated DESC, id DESC",
+        automation.SONG_EDITOR_MODE)
+
+
 @app.get("/sets", response_class=HTMLResponse)
-def sets_page(request: Request):
-    """The Sets shelf: every editable set (the document you can open and
-    change), plus every rendered file that predates the sets table and so has
-    no set of its own -- assets from the old playlist quick-render.
-    """
-    editable = [set_detail(r) for r in db.q(
-        "SELECT * FROM sets WHERE mode != ? ORDER BY updated DESC, id DESC",
-        automation.SONG_EDITOR_MODE)]
-    playlists = db.q("SELECT id, name FROM playlists WHERE kind='playlist' ORDER BY name")
-    return templates.TemplateResponse(request, "sets.html",
-                                      {"editable_sets": editable, "playlists": playlists,
-                                       "all_tiers": tiers.all_tiers()})
+def sets_page(request: Request, at: float = 0.0):
+    """One editor. Empty studio gets a create form; otherwise the
+    most recently updated set — same page as GET /sets/{id}."""
+    rows = _editable_set_rows()
+    if not rows:
+        playlists = db.q("SELECT id, name FROM playlists WHERE kind='playlist' ORDER BY name")
+        return templates.TemplateResponse(request, "sets.html",
+                                          {"playlists": playlists, "all_tiers": tiers.all_tiers()})
+    return set_edit_page(request, rows[0]["id"], at=at)
 
 
 @app.get("/sets/new", response_class=HTMLResponse)
@@ -9612,8 +9618,8 @@ def _create_set_row(name, mode=None, tier="", playlist_id=None):
 @app.post("/sets/new")
 def create_set(name: str = Form(...), mode: str = Form("video"), tier: str = Form(""),
                playlist_id: BlankInt = Form(None)):
-    _create_set_row(name, mode, tier, playlist_id)
-    return RedirectResponse("/sets", status_code=303)
+    sid = _create_set_row(name, mode, tier, playlist_id)
+    return RedirectResponse(f"/sets/{sid}", status_code=303)
 
 
 @app.get("/sets/{id}", response_class=HTMLResponse)
@@ -9622,21 +9628,11 @@ def set_edit_page(request: Request, id: int, at: float = 0.0):
     if row["mode"] == automation.SONG_EDITOR_MODE:
         raise HTTPException(404, "no such set")
     songs = db.q("SELECT id, title FROM songs ORDER BY title")
+    playlists = db.q("SELECT id, name FROM playlists WHERE kind='playlist' ORDER BY name")
     ctx = {**set_detail(row, at=at), "songs": songs, "all_tiers": tiers.all_tiers(),
-           "transitions": SET_TRANSITIONS}
+           "transitions": SET_TRANSITIONS, "all_sets": _editable_set_rows(),
+           "playlists": playlists}
     return templates.TemplateResponse(request, "set_edit.html", ctx)
-
-
-@app.get("/sets/{id}/card", response_class=HTMLResponse)
-def set_card(request: Request, id: int):
-    """Editor fragment for the fold on /sets. Same numbers as GET /sets/{id}."""
-    row = get_set_or_404(id)
-    if row["mode"] == automation.SONG_EDITOR_MODE:
-        raise HTTPException(404, "no such set")
-    songs = db.q("SELECT id, title FROM songs ORDER BY title")
-    ctx = {**set_detail(row), "songs": songs, "all_tiers": tiers.all_tiers(),
-           "transitions": SET_TRANSITIONS}
-    return templates.TemplateResponse(request, "_set_editor.html", ctx)
 
 
 @app.post("/sets/{id}/discard")
@@ -9681,6 +9677,8 @@ def _suggest_ctx(request, id, suggested, note="", form=None, item_id=None,
     row = get_set_or_404(id)
     ctx = {**set_detail(row), "songs": db.q("SELECT id, title FROM songs ORDER BY title"),
            "all_tiers": tiers.all_tiers(), "transitions": SET_TRANSITIONS,
+           "all_sets": _editable_set_rows(),
+           "playlists": db.q("SELECT id, name FROM playlists WHERE kind='playlist' ORDER BY name"),
            "suggest_note": note,
            # the box that drove this, still holding what was typed in it
            "set_direction": (form.get("mix_direction") if form else "") or "",

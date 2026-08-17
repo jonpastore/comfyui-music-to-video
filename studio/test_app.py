@@ -3191,15 +3191,13 @@ def test_sets_page_lists_rendered_sets_and_deleting_one_keeps_the_songs():
                json.dumps({"set_id": row["id"], "mode": "video", "tier": "r"}), time.time())
 
         page = client.get("/sets").text
+        assert page.count('aria-label="Choose a set"') == 1
         assert "Set Album Mix" in page
         assert "Legacy renders" not in page
         assert "Open &rarr;" not in page and "Open →" not in page
-        assert "set-fold" in page
+        assert "set-fold" not in page
         assert f"/sets/{row['id']}/discard" in page
-        assert f"/sets/{row['id']}/card" in page
-        card = client.get(f"/sets/{row['id']}/card")
-        assert card.status_code == 200
-        assert "Add a song" in card.text
+        assert 'aria-label="Choose a set"' in page
         assert "<video" in page
         assert ">R<" in page or "R</span>" in page, "the tier is not shown"
 

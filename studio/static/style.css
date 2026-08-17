@@ -2120,43 +2120,24 @@ img.lazy-src, video.lazy-src {
 table.list th, table.list td { vertical-align: top; text-align: left; }
 table.list td.num, table.list th.num { text-align: right; }
 
-/* ---- sets shelf ---- */
+/* ---- sets editor ---- */
 .set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 1rem; }
 .set-card { margin-bottom: 0; }
 .set-card video, .set-card audio { width: 100%; border-radius: 6px; margin: 0.5rem 0; }
 .set-card video { max-height: 240px; background: #000; }
-details.set-fold > summary {
+.set-switch {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 0.55rem 0.85rem;
-  cursor: pointer;
-  list-style: none;
+  align-items: end;
+  gap: 0.6rem 0.85rem;
+  margin: 0 0 1rem;
 }
-details.set-fold > summary::-webkit-details-marker { display: none; }
-details.set-fold > summary::marker { content: none; }
-details.set-fold > summary::before {
-  content: "";
-  width: 0.42rem;
-  height: 0.42rem;
-  border-right: 1.7px solid var(--muted);
-  border-bottom: 1.7px solid var(--muted);
-  transform: rotate(-45deg);
-  flex: none;
-  margin-top: 0.45rem;
-}
-details.set-fold[open] > summary::before { transform: rotate(45deg); }
-details.set-fold .summary-text { flex: 1 1 12rem; min-width: 0; }
-details.set-fold .set-summary-actions { flex: none; margin-left: auto; }
-details.set-fold .set-plays {
-  flex: 1 1 100%;
+.set-new-inline {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: end;
   gap: 0.4rem;
 }
-details.set-fold .set-play { width: 100%; border-radius: 6px; margin: 0; }
-details.set-fold video.set-play { max-height: 240px; background: #000; }
-details.set-fold[open] > summary { margin-bottom: 0.75rem; }
 .linkish {
   background: none;
   border: 0;

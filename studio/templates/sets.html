@@ -1,11 +1,8 @@
 {% extends "base.html" %}
-{% from "_macros.html" import glyph_delete %}
 {% block content %}
 <h1>Sets</h1>
 <p class="hint">A set is a document: songs in an order, each with its own trim, gain and
-  transition. Rendering it never destroys the last output &mdash; every render lands beside
-  the ones before it, exactly like an anchor keeps its candidates. Expand a card to edit.
-  Video sets play the latest video take here; audio sets play the mix.</p>
+  transition. Create one to open the editor.</p>
 
 <form method="post" action="/sets/new" class="new-playlist-bar">
   <label>New set
@@ -15,14 +12,6 @@
     <select name="mode">
       <option value="video">Audio + video</option>
       <option value="audio">Audio only</option>
-    </select>
-  </label>
-  <label>Tier
-    <select name="tier">
-      <option value="">(choose later)</option>
-      {% for t in all_tiers %}
-      <option value="{{ t.name }}">{{ t.name | tiername }}</option>
-      {% endfor %}
     </select>
   </label>
   <label>From playlist
@@ -35,80 +24,5 @@
   </label>
   <button type="submit">Create</button>
 </form>
-
-{% if not editable_sets %}
 <p class="empty">No sets yet.</p>
-{% else %}
-<div class="set-grid">
-  {% for s in editable_sets %}
-  {% set latest_video = namespace(r=none) %}
-  {% set latest_audio = namespace(r=none) %}
-  {% for r in s.renders if not r.missing %}
-    {% if r.mode == "video" and latest_video.r is none %}{% set latest_video.r = r %}{% endif %}
-    {% if r.mode == "audio" and latest_audio.r is none %}{% set latest_audio.r = r %}{% endif %}
-  {% endfor %}
-  <details class="card set-fold"
-           id="{% if s.renders %}set-{{ s.renders[0].asset.id }}{% else %}set-s{{ s.set.id }}{% endif %}"
-           data-set="{{ s.set.id }}"
-           hx-get="/sets/{{ s.set.id }}/card"
-           hx-trigger="toggle once"
-           hx-target="find .set-fold-body"
-           hx-swap="innerHTML">
-    <summary>
-      <span class="summary-text">
-        <strong>{{ s.set.name }}</strong>
-        <span class="muted summary-meta">
-          <span class="tag">{{ s.set.mode }}</span>
-          {% if s.set.tier %}<span class="tag">{{ s.set.tier | tiername }}</span>{% endif %}
-          {{ s.count }} song{{ "" if s.count == 1 else "s" }}
-          {% if s.duration_error %}
-          <span class="tag warn-tag">can't render as configured</span>
-          {% else %}
-          &middot; {{ s.total_secs | hms }}
-          {% endif %}
-          {% if s.renders %}
-          &middot; {{ s.renders | length }} take{{ "" if s.renders | length == 1 else "s" }}
-          {% endif %}
-        </span>
-      </span>
-      <span class="set-summary-actions" onclick="event.preventDefault(); event.stopPropagation();">
-        <button type="button" class="icon-btn danger-icon"
-                title="Delete this set" aria-label="Delete this set"
-                onclick="document.getElementById('del-set-{{ s.set.id }}').showModal()">
-          {{ glyph_delete() }}
-        </button>
-      </span>
-      <span class="set-plays" onclick="event.stopPropagation()">
-        {% if latest_video.r %}
-        <video class="set-play" controls preload="metadata"
-               src="{{ media_url(latest_video.r.asset.path) }}"></video>
-        {% endif %}
-        {% if latest_audio.r %}
-        <audio class="set-play" controls preload="none"
-               src="{{ media_url(latest_audio.r.asset.path) }}"></audio>
-        {% endif %}
-        {% if not latest_video.r and not latest_audio.r %}
-        <span class="empty">Not rendered yet.</span>
-        {% endif %}
-      </span>
-    </summary>
-    <div class="set-fold-body"><p class="muted">Loading editor&hellip;</p></div>
-  </details>
-  <dialog class="confirm-modal" id="del-set-{{ s.set.id }}">
-    <div class="modal-bar">
-      <strong>Delete &ldquo;{{ s.set.name }}&rdquo;?</strong>
-      <button type="button" class="secondary"
-              onclick="this.closest('dialog').close()">Cancel</button>
-    </div>
-    <p>This deletes the set document and its assembled takes.
-      Songs and their own videos stay.</p>
-    <form method="post" action="/sets/{{ s.set.id }}/discard" class="button-row">
-      <button type="submit" class="thumb-btn-danger">Delete this set</button>
-      <button type="button" class="secondary"
-              onclick="this.closest('dialog').close()">Cancel</button>
-    </form>
-  </dialog>
-  {% endfor %}
-</div>
-{% endif %}
 {% endblock %}
