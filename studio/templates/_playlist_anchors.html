@@ -11,6 +11,17 @@
   <summary>{{ cov.tier | tiername }}
     · {{ cov.n_have }}/{{ cov.n_needed }}
     {% if cov.n_missing %} · {{ cov.n_missing }} missing{% endif %}</summary>
+  {% if cov.people and cov.people | length > 1 %}
+  <div class="cast-tabs pose-who-tabs" role="tablist" aria-label="Filter poses by character">
+    <button type="button" class="cast-tab pose-who-tab active" data-who="">All</button>
+    {% for p in cov.people %}
+    <button type="button" class="cast-tab pose-who-tab" data-who="{{ p.who }}">
+      {{ p.name }}
+      <span class="muted">({{ p.n_needed }}{% if p.n_missing %} · {{ p.n_missing }} missing{% endif %})</span>
+    </button>
+    {% endfor %}
+  </div>
+  {% endif %}
   <ul class="pose-roster">
     {% for g in cov.needed %}
     {% with album=d.playlist.name, tier=cov.tier, sheets=cov.sheets, hx=true %}

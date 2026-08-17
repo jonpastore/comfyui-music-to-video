@@ -119,6 +119,84 @@ def is_identity_front(row):
     return str(row["view"] or "") == "front"
 
 
+def _album_lead_name(album):
+    """Tab label for the protagonist. Same split as app.lead_display_name."""
+    row = db.one(
+        "SELECT style_text FROM playlists WHERE name=? AND kind='playlist'",
+        album or "")
+    st = " ".join(str((row["style_text"] if row else "") or "").split())
+    for sep in (" — ", " – ", " - ", ":"):
+        if sep in st:
+            name = st.split(sep, 1)[0].strip()
+            if name and len(name) <= 40:
+                return name
+    return "Lead"
+
+
+def _album_leads(album):
+    """Protagonist (id None) then named leads. Extras do not get a plate."""
+    out = [{"id": None, "name": _album_lead_name(album)}]
+    seen = {out[0]["name"].lower()}
+    for c in db.q(
+            "SELECT id, name, figure_role FROM characters WHERE scope_value=? ORDER BY name",
+            album or ""):
+        role = ""
+        if "figure_role" in c.keys() and c["figure_role"]:
+            role = c["figure_role"]
+        if role and role != "lead":
+            continue
+        name = (c["name"] or "").strip()
+        if not name or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        out.append({"id": c["id"], "name": name})
+    return out
+
+
+def _figure_name(entry):
+    if isinstance(entry, dict):
+        return str(entry.get("name") or "").strip()
+    return str(entry or "").strip()
+
+
+def _figure_role(entry):
+    if isinstance(entry, dict):
+        return str(entry.get("role") or "").strip().lower() or "lead"
+    return "lead"
+
+
+def scene_leads(scene, people):
+    """Leads on this scene who need a pose plate. Empty cast → album lead."""
+    by_key = {p["name"].lower(): p for p in people}
+    found, seen = [], set()
+    for raw in (scene or {}).get("characters") or []:
+        name = _figure_name(raw)
+        if not name:
+            continue
+        if _figure_role(raw) not in ("", "lead"):
+            continue
+        person = by_key.get(name.lower())
+        if person is None:
+            continue
+        key = person["name"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append(person)
+    return found or list(people[:1])
+
+
+def _who_key(who):
+    parts = []
+    for p in who or []:
+        parts.append("lead" if p.get("id") is None else str(p["id"]))
+    return "+".join(parts) or "lead"
+
+
+def _who_label(who):
+    return " · ".join(p["name"] for p in (who or []) if p.get("name")) or "Lead"
+
+
 def library(album, tier, character_id=None):
     """Chosen protagonist sheets at this album+tier, identity front last."""
     rows = db.q(
@@ -196,13 +274,19 @@ def plan(song, tier):
     if not row:
         raise LookupError(f"no storyboard for tier '{tier}'")
     sb = storyboard_service.load(row, normalized=False)
-    sheets = library(album, tier)
+    people = _album_leads(album)
+    sheets = db.q(
+        """SELECT * FROM anchors
+           WHERE scope_kind='album' AND scope_value=? AND tier=? AND chosen=1
+           ORDER BY id""",
+        album or "", tier)
     by_id = {s["id"]: s for s in sheets}
     prefer_nude = tiers.allows_nudity(tier)
     rows_out, groups = [], {}
     for scene in sb.get("scenes") or []:
         num = scene.get("scene_number")
         need = need_text(scene)
+        who = scene_leads(scene, people)
         saved = _scene_sheet_id(scene)
         sheet, score, source = None, 0.0, "none"
         if saved and saved in by_id:
@@ -210,10 +294,12 @@ def plan(song, tier):
         elif saved:
             source = "missing"
         else:
-            sheet, score = match_sheet(need, sheets, prefer_nude=prefer_nude)
+            pool = [s for s in sheets if s["character_id"] in {p["id"] for p in who}]
+            sheet, score = match_sheet(need, pool, prefer_nude=prefer_nude)
             if sheet:
                 source = "auto"
-        key = sheet["id"] if sheet else _norm(scene.get("pose") or need)[:48] or f"scene-{num}"
+        pose_key = sheet["id"] if sheet else _norm(scene.get("pose") or need)[:48] or f"scene-{num}"
+        key = f"{_who_key(who)}|{pose_key}"
         groups.setdefault(key, {
             "key": key,
             "label": sheet_name(sheet) if sheet else (scene.get("pose") or need or "unspecified")[:80],
@@ -221,6 +307,8 @@ def plan(song, tier):
             "path": sheet["path"] if sheet else None,
             "scenes": [],
             "source": source if source != "none" else "unbound",
+            "characters": who,
+            "character_label": _who_label(who),
         })
         groups[key]["scenes"].append(num)
         rows_out.append({
@@ -233,6 +321,8 @@ def plan(song, tier):
             "label": sheet_name(sheet) if sheet else "",
             "score": round(score, 3),
             "source": source,
+            "characters": who,
+            "character_label": _who_label(who),
         })
     bound = sum(1 for r in rows_out if r["sheet_id"])
     return {
@@ -300,6 +390,7 @@ def album_coverage(album, tier):
     Missing means generate or assign that pose on /anchors, then pick it.
     """
     songs = db.q("SELECT * FROM songs WHERE album=? ORDER BY title", album or "")
+    people = _album_leads(album)
     groups = {}
     for song in songs:
         if not db.one("SELECT id FROM storyboards WHERE song_id=? AND tier=?",
@@ -314,18 +405,23 @@ def album_coverage(album, tier):
             if not pose_line and not item.get("sheet_id"):
                 # Environment / no-pose scenes are not a library slot.
                 continue
-            key = (str(item["sheet_id"]) if item["sheet_id"]
-                   else _norm(pose_line)[:64]
-                   or f"scene-{song['id']}-{item['num']}")
+            who = item.get("characters") or people[:1]
+            pose_key = (str(item["sheet_id"]) if item["sheet_id"]
+                        else _norm(pose_line)[:64]
+                        or f"scene-{song['id']}-{item['num']}")
+            key = f"{_who_key(who)}|{pose_key}"
             g = groups.get(key)
             if g is None:
                 g = {
                     "key": key,
+                    "who": _who_key(who),
                     "label": (item.get("label") or item.get("pose")
                               or item.get("need") or "unspecified")[:80],
                     "sheet_id": item.get("sheet_id"),
                     "path": item.get("path"),
                     "source": item.get("source") or "unbound",
+                    "characters": who,
+                    "character_label": item.get("character_label") or _who_label(who),
                     "songs": [],
                     "binds": [],
                     "needs": [],
@@ -344,18 +440,36 @@ def album_coverage(album, tier):
                 g["path"] = item["path"]
                 g["source"] = item["source"]
     needed = sorted(groups.values(),
-                    key=lambda r: (r["sheet_id"] is not None, r["label"].lower()))
+                    key=lambda r: (r["character_label"].lower(),
+                                   r["sheet_id"] is not None, r["label"].lower()))
     sheets = []
     for row in db.q(
-            """SELECT * FROM anchors
-               WHERE scope_kind='album' AND scope_value=? AND tier=?
-                 AND character_id IS NULL
-               ORDER BY chosen DESC, id""",
+            """SELECT a.*, c.name AS character_name
+               FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
+               WHERE a.scope_kind='album' AND a.scope_value=? AND a.tier=?
+               ORDER BY a.chosen DESC, a.id""",
             album or "", tier):
         sheets.append({
             "id": row["id"], "label": sheet_name(row), "path": row["path"],
             "view": row["view"], "chosen": bool(row["chosen"]),
+            "character_id": row["character_id"],
+            "character_name": row["character_name"] or _album_lead_name(album),
         })
+    for g in needed:
+        ids = {p.get("id") for p in g["characters"]}
+        g["sheets"] = [s for s in sheets if s["character_id"] in ids]
+    people_out = []
+    for person in people:
+        n = sum(1 for g in needed
+                if any(c.get("id") == person["id"] for c in g["characters"]))
+        miss = sum(1 for g in needed if not g["sheet_id"]
+                   and any(c.get("id") == person["id"] for c in g["characters"]))
+        if n:
+            people_out.append({
+                "id": person["id"], "name": person["name"],
+                "who": "lead" if person["id"] is None else str(person["id"]),
+                "n_needed": n, "n_have": n - miss, "n_missing": miss,
+            })
     return {
         "album": album or "",
         "tier": tier,
@@ -364,6 +478,7 @@ def album_coverage(album, tier):
         "n_have": sum(1 for r in needed if r["sheet_id"]),
         "n_missing": sum(1 for r in needed if not r["sheet_id"]),
         "sheets": sheets,
+        "people": people_out,
     }
 
 

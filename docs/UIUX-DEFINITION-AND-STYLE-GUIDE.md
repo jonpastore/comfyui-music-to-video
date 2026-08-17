@@ -1114,12 +1114,16 @@ lightbox (pencil = replace, trash = delete) when it is open. Album
 date is the pencil on the card header next to the title. The Play column is G / PG-13 / R / XXX. Save,
 edit, and delete icons are the shared `glyph_save` / `glyph_edit` /
 `glyph_delete` macros. Transitions edit in the row. Remove confirms. The roster is a one-line grid: thumb (or a dashed `.pose-ph` when
-there is no sheet), pose name + songs, then the sheet dropdown, then a
-save icon (no “Keeper” label). The list scrolls (`.pose-roster`
+there is no sheet), **character · pose**, then songs, then the sheet
+dropdown, then a save icon (no “Keeper” label). A crouch for Meow P
+and a crouch for Tiger are two rows; the dropdown only lists that
+person's sheets. When more than one lead appears, character tabs
+filter the list. The list scrolls (`.pose-roster`
 `max-height: min(28rem, 50vh)`) so a hundred missing poses do not
 stretch the page. Missing poses do **not** dump as
 `Missing: crouching, …` — the count lives in the summary tag and each
-empty row is the row. **Generate…** opens a modal with a copyable Mage
+empty row is the row. Only leads need a plate (T2-30); extras and
+background stay off the roster. An empty scene cast is the album lead. **Generate…** opens a modal with a copyable Mage
 prompt from the storyboard’s pose/need text (`#pose-brief`).
 `POST /anchors/keeper` plus the save icon stamps the assignment — on
 `/anchors` and on the playlist Anchors fold. Roster thumbs open `#pose-preview`. Playlist Anchors uses

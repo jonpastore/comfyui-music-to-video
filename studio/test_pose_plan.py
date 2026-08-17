@@ -282,6 +282,55 @@ def test_album_coverage_rolls_up_songs_and_clear_unsets_keeper():
         assert db.one("SELECT chosen FROM anchors WHERE id=?", a["id"])["chosen"] == 1
         sb = json.load(open(jp))
         assert sb["scenes"][0].get("pose_sheet_id") == a["id"]
+        assert cov2["needed"][0]["character_label"]
+        assert "pose-who" in page
+
+
+def test_album_coverage_splits_the_same_pose_by_character():
+    """Tiger crouching is not the album lead crouching."""
+    with TestClient(appmod.app) as client:
+        album = f"Who Pose {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        pl = db.one("SELECT id FROM playlists WHERE name=?", album)["id"]
+        db.run("UPDATE playlists SET style_text=? WHERE id=?",
+               "Meow P — alley nights", pl)
+        client.post(f"/playlists/{pl}/characters",
+                    data={"name": "Tiger", "role": "partner"})
+        tiger = db.one("SELECT * FROM characters WHERE scope_value=? AND name=?",
+                       album, "Tiger")
+        song = _upload_song(client, "Who Pose Song", album=album)
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        json.dump({
+            "title": "T", "album": album, "version": "xxx",
+            "character_reference": "Meow P",
+            "scenes": [
+                {"scene_number": 1, "name": "Her", "pose": "crouching",
+                 "image_prompt": "crouch", "characters": [],
+                 "duration_guidance": "4s"},
+                {"scene_number": 2, "name": "Him", "pose": "crouching",
+                 "image_prompt": "crouch",
+                 "characters": [{"name": "Tiger", "role": "lead"}],
+                 "duration_guidance": "4s"},
+            ],
+        }, open(jp, "w"))
+        open(os.path.join(outdir, f"{song['slug']}_xxx.md"), "w").write("# sb\n")
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               song["id"], "xxx", jp, os.path.join(outdir, f"{song['slug']}_xxx.md"),
+               2, time.time())
+        cov = pose_plan.album_coverage(album, "xxx")
+        labels = {g["character_label"] for g in cov["needed"]}
+        assert "Meow P" in labels, labels
+        assert "Tiger" in labels, labels
+        assert len(cov["needed"]) == 2
+        assert len(cov["people"]) == 2
+        page = client.get(f"/anchors?scope_value={album}").text
+        assert "Meow P" in page
+        assert "Tiger" in page
+        assert "pose-who-tab" in page
+        assert tiger["id"]
 
 
 def test_bind_route_overrides_auto():

@@ -3200,6 +3200,19 @@ document.addEventListener("click", function (e) {
     beat.setAttribute("aria-expanded", open ? "true" : "false");
     return;
   }
+  var ptab = e.target.closest && e.target.closest(".pose-who-tab");
+  if (ptab) {
+    var panel = ptab.closest(".tier-panel") || ptab.closest("details") || ptab.parentElement;
+    var want = ptab.getAttribute("data-who") || "";
+    panel.querySelectorAll(".pose-who-tab").forEach(function (t) {
+      t.classList.toggle("active", t === ptab);
+    });
+    panel.querySelectorAll(".pose-roster-row").forEach(function (row) {
+      var parts = (row.getAttribute("data-who") || "").split("+");
+      row.classList.toggle("hidden", !!(want && parts.indexOf(want) < 0));
+    });
+    return;
+  }
   var brief = e.target.closest && e.target.closest(".js-pose-brief");
   if (brief) {
     var dlg = document.getElementById("pose-brief");
@@ -3211,6 +3224,7 @@ document.addEventListener("click", function (e) {
     if (title) title.textContent = "Generate: " + (brief.getAttribute("data-label") || "pose");
     if (meta) {
       var bits = [];
+      if (brief.getAttribute("data-who")) bits.push(brief.getAttribute("data-who"));
       if (brief.getAttribute("data-album")) bits.push(brief.getAttribute("data-album"));
       if (brief.getAttribute("data-tier")) bits.push(brief.getAttribute("data-tier"));
       if (brief.getAttribute("data-scenes")) {

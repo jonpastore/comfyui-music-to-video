@@ -1224,6 +1224,8 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
   gap: 0.1rem;
 }
 .pose-roster-copy strong { font-weight: 600; }
+.pose-who { font-weight: 600; }
+.pose-who-tabs { margin: 0.5rem 0 0.25rem; }
 .pose-roster-row img,
 .pose-roster-row .cover,
 .pose-ph {

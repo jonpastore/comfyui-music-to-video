@@ -3342,28 +3342,37 @@ async def upload_pose_sheet(request: Request, album: str = Form(...),
     path = await save_upload(image, MAX_IMAGE, dest_dir, "image",
                              prefix=f"pose_{int(time.time() * 1000)}")
     now = time.time()
+    cid = None
+    group = None
+    if key:
+        try:
+            cov = pose_plan.album_coverage(album, tier)
+            group = next((x for x in cov["needed"] if str(x["key"]) == str(key)), None)
+            who = (group or {}).get("characters") or []
+            if who:
+                cid = who[0].get("id")
+        except (LookupError, OSError, ValueError, json.JSONDecodeError):
+            group = None
     aid = db.run(
         "INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
         None, "anchor_ref", path,
         json.dumps({"scope_kind": "album", "scope_value": album, "role": "pose",
                     "pose_name": name, "pose_tier": tier, "pose_nude": is_nude,
-                    "source": "upload"}),
+                    "source": "upload", "character_id": cid}),
         now)
     view = pose_view_key(aid, is_nude)
     db.run("""UPDATE anchors SET chosen=0 WHERE scope_kind='album' AND scope_value=?
-              AND tier=? AND view=? AND character_id IS NULL""",
-           album, tier, view)
+              AND tier=? AND view=? AND character_id IS ?""",
+           album, tier, view, cid)
     new_id = db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path,
                                             chosen, created, character_id, render_json)
-                       VALUES ('album',?,?,?,?,1,?,NULL,?)""",
-                    album, tier, view, path, now,
-                    json.dumps({"source": "upload", "asset_id": aid, "pose_name": name}))
-    if key:
+                       VALUES ('album',?,?,?,?,1,?,?,?)""",
+                    album, tier, view, path, now, cid,
+                    json.dumps({"source": "upload", "asset_id": aid, "pose_name": name,
+                                "character_id": cid}))
+    if group:
         try:
-            cov = pose_plan.album_coverage(album, tier)
-            group = next((x for x in cov["needed"] if str(x["key"]) == str(key)), None)
-            if group:
-                pose_plan.stamp_binds(tier, group.get("binds") or [], new_id)
+            pose_plan.stamp_binds(tier, group.get("binds") or [], new_id)
         except (LookupError, OSError, ValueError, json.JSONDecodeError):
             pass
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
