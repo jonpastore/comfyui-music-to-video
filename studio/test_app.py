@@ -3176,24 +3176,40 @@ def test_config_page_explains_how_to_set_each_service_up():
 def test_sets_page_lists_rendered_sets_and_deleting_one_keeps_the_songs():
     with TestClient(appmod.app) as client:
         client.post("/playlists", data={"name": "Set Album"})
-        pl = db.one("SELECT * FROM playlists WHERE name='Set Album'")
+        song = _upload_song(client, "Set Album Song", album="Set Album")
+        r = client.post("/sets/new", data={"name": "Set Album Mix", "mode": "audio"})
+        assert r.status_code in (200, 303), r.text
+        row = db.one("SELECT * FROM sets WHERE name='Set Album Mix'")
+        client.post(f"/sets/{row['id']}/items",
+                    data={"song_id": song["id"], "transition": "cut", "secs": "0"})
         d = os.path.join(db.DATA, "sets")
         os.makedirs(d, exist_ok=True)
         path = os.path.join(d, "Set Album_r.mp4")
         open(path, "wb").write(b"x" * 32)
         db.run("""INSERT INTO assets (song_id, kind, path, meta_json, created)
                   VALUES (NULL,'set',?,?,?)""", path,
-               json.dumps({"playlist_id": pl["id"], "mode": "video", "tier": "r"}), time.time())
+               json.dumps({"set_id": row["id"], "mode": "video", "tier": "r"}), time.time())
 
         page = client.get("/sets").text
-        assert "Set Album" in page and "Set Album_r.mp4" in page
+        assert "Set Album Mix" in page
+        assert "Legacy renders" not in page
+        assert "Open &rarr;" not in page and "Open →" not in page
+        assert "set-fold" in page
+        assert f"/sets/{row['id']}/discard" in page
+        assert f"/sets/{row['id']}/card" in page
+        card = client.get(f"/sets/{row['id']}/card")
+        assert card.status_code == 200
+        assert "Add a song" in card.text
+        assert "<video" in page
         assert ">R<" in page or "R</span>" in page, "the tier is not shown"
 
-        asset = db.one("SELECT * FROM assets WHERE kind='set' AND path=?", path)
-        client.post(f"/sets/{asset['id']}/delete")
-        assert db.one("SELECT id FROM assets WHERE id=?", asset["id"]) is None
+        gone = client.post(f"/sets/{row['id']}/discard", follow_redirects=False)
+        assert gone.status_code == 303
+        assert db.one("SELECT id FROM sets WHERE id=?", row["id"]) is None
+        assert db.one("SELECT id FROM assets WHERE path=?", path) is None
         assert not os.path.isfile(path)
-        assert db.one("SELECT id FROM playlists WHERE id=?", pl["id"]) is not None
+        assert db.one("SELECT id FROM songs WHERE id=?", song["id"]) is not None
+        assert db.one("SELECT id FROM playlists WHERE name=?", "Set Album") is not None
 
 
 def test_new_playlist_accepts_a_cover_at_creation():

@@ -529,3 +529,19 @@ def pick_render(sid, path):
     get(sid)
     group = qc_service.lineage_group("set_rerender", set_id=sid)
     return qc_service.select("set_rerender", group, path)
+
+
+def discard(sid):
+    """Delete the set document and its assembled takes. Songs stay."""
+    row = get(sid)
+    if row["mode"] == automation.SONG_EDITOR_MODE:
+        raise LookupError("no such set")
+    for it in db.q("SELECT id FROM set_items WHERE set_id=?", sid):
+        db.delete_set_item(it["id"])
+    assets = []
+    for a in db.q("SELECT * FROM assets WHERE kind='set'"):
+        if db.jset(a).get("set_id") == sid:
+            assets.append(a)
+            db.run("DELETE FROM assets WHERE id=?", a["id"])
+    db.run("DELETE FROM sets WHERE id=?", sid)
+    return assets

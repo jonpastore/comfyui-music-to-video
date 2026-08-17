@@ -9590,25 +9590,15 @@ def sets_page(request: Request):
     editable = [set_detail(r) for r in db.q(
         "SELECT * FROM sets WHERE mode != ? ORDER BY updated DESC, id DESC",
         automation.SONG_EDITOR_MODE)]
-    names = {p["id"]: p["name"] for p in db.q("SELECT id, name FROM playlists")}
-    rows = []
-    for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC"):
-        meta = db.jset(a)
-        if meta.get("set_id") is not None:
-            continue  # shown under its own set's card above, not here too
-        row = _set_render_row(a)
-        row["playlist"] = names.get(meta.get("playlist_id"), "(deleted playlist)")
-        row["playlist_id"] = meta.get("playlist_id")
-        rows.append(row)
+    playlists = db.q("SELECT id, name FROM playlists WHERE kind='playlist' ORDER BY name")
     return templates.TemplateResponse(request, "sets.html",
-                                      {"sets": rows, "editable_sets": editable})
+                                      {"editable_sets": editable, "playlists": playlists,
+                                       "all_tiers": tiers.all_tiers()})
 
 
 @app.get("/sets/new", response_class=HTMLResponse)
 def new_set_page(request: Request):
-    playlists = db.q("SELECT id, name FROM playlists WHERE kind='playlist' ORDER BY name")
-    return templates.TemplateResponse(request, "set_new.html",
-                                      {"playlists": playlists, "all_tiers": tiers.all_tiers()})
+    return RedirectResponse("/sets", status_code=303)
 
 
 def _create_set_row(name, mode=None, tier="", playlist_id=None):
@@ -9622,8 +9612,8 @@ def _create_set_row(name, mode=None, tier="", playlist_id=None):
 @app.post("/sets/new")
 def create_set(name: str = Form(...), mode: str = Form("video"), tier: str = Form(""),
                playlist_id: BlankInt = Form(None)):
-    sid = _create_set_row(name, mode, tier, playlist_id)
-    return RedirectResponse(f"/sets/{sid}", status_code=303)
+    _create_set_row(name, mode, tier, playlist_id)
+    return RedirectResponse("/sets", status_code=303)
 
 
 @app.get("/sets/{id}", response_class=HTMLResponse)
@@ -9635,6 +9625,34 @@ def set_edit_page(request: Request, id: int, at: float = 0.0):
     ctx = {**set_detail(row, at=at), "songs": songs, "all_tiers": tiers.all_tiers(),
            "transitions": SET_TRANSITIONS}
     return templates.TemplateResponse(request, "set_edit.html", ctx)
+
+
+@app.get("/sets/{id}/card", response_class=HTMLResponse)
+def set_card(request: Request, id: int):
+    """Editor fragment for the fold on /sets. Same numbers as GET /sets/{id}."""
+    row = get_set_or_404(id)
+    if row["mode"] == automation.SONG_EDITOR_MODE:
+        raise HTTPException(404, "no such set")
+    songs = db.q("SELECT id, title FROM songs ORDER BY title")
+    ctx = {**set_detail(row), "songs": songs, "all_tiers": tiers.all_tiers(),
+           "transitions": SET_TRANSITIONS}
+    return templates.TemplateResponse(request, "_set_editor.html", ctx)
+
+
+@app.post("/sets/{id}/discard")
+def discard_set(request: Request, id: int):
+    """Delete the set document and its assembled takes. Songs stay."""
+    try:
+        assets = sets_service.discard(id)
+    except LookupError:
+        raise HTTPException(404, "no such set")
+    for a in assets:
+        if a["path"] and _within_data(a["path"]) and os.path.isfile(a["path"]):
+            try:
+                os.remove(a["path"])
+            except OSError:
+                pass
+    return RedirectResponse("/sets", status_code=303)
 
 
 def _suggest_ctx(request, id, suggested, note="", form=None, item_id=None,

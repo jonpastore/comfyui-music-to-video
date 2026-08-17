@@ -596,7 +596,14 @@ songs and look wording land. Sheet galleries stay out of that
 payload: `GET /playlists/{id}/sheets` when a character tab is shown,
 `GET /playlists/{id}/anchors` when the Anchors fold opens. Thumbs use
 `img.lazy-src[data-src]` and `hydrateLazy` (IntersectionObserver).
-Opening a fold does not eager-load hidden tabs. Topbar navigation shows `#page-loading`
+Opening a fold does not eager-load hidden tabs. **Sets:** `GET /sets` is
+collapsed cards like playlists (`details.set-fold`). There is no Open →
+second page and no Legacy renders shelf. New set is a one-line bar on
+this page. Trash deletes the document and its assembled takes (songs
+stay) after a confirm modal. Expand `hx-get`s `/sets/{id}/card` (the
+same editor `GET /sets/{id}` still serves as a full page for tests).
+A video take plays as `<video>` on the card; an audio take as `<audio>`;
+both if both exist. Topbar navigation shows `#page-loading`
 on click so a slow first byte is not a blank window
 (`test_playlists_page_is_summaries_until_the_card_loads`).
 The song page **Video model** select is `models.renderable("video")`
