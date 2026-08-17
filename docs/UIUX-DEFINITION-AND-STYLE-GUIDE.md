@@ -1075,16 +1075,23 @@ are omitted from Add; the add control has a visible edge. Each song row
 shows that track's arc role/beat when an arc exists. Album look is
 tabbed by character (album lead first, then named people, then Add)
 on one chrome row with Draft / Create art / Propose. Then
-Lead / Wardrobe / World / Sheets with tab-row help. Supporting
+Identity / Wardrobe / World / Sheets with tab-row help. Supporting
 characters use that same look form (Identity | Body, no Role cell).
 A **Lead** checkbox on the character bar is the pipeline bit (needs a
-front; offered at generate). **Story role** (partner, antagonist) is a
-compact label on that bar, not a figure role. World
+front; offered at generate). That checkbox is the only Lead control —
+the look subtab is **Identity**, not a second Lead. **Story role**
+(partner, antagonist) is a compact label on that bar, not a figure role. World
 and album premise stay on the album lead. Song-row beats are one line
-(full text in `title`). The story-arc track dump starts closed.
-New playlist is a one-line bar. Render set shows “Queuing the set”
-on submit (`.js-busy-form` / `.form-busy`). Long GPU work stays on the
-sticky job chip, not a full-page spinner. Date + pencil stay on one header line.
+(click the beat to expand; `.song-arc-beat.is-open`). Transition
+save and remove sit in one nowrap `.song-actions` cell. The story-arc
+fold is an editor: premise, continuity, and per-track role/beat/opens/closes
+save as a new snapshot (`POST /playlists/{id}/arc/save`); restore lists
+`versions/N.json`. New playlist is a one-line bar. Render set links are
+chips (`Audio mix · date`, not the raw filename). Render set shows
+“Queuing the set” on submit (`.js-busy-form` / `.form-busy`). Long GPU
+work stays on the sticky job chip, not a full-page spinner. Date + pencil
+stay on one header line. Every playlist control is `hx-post` and swaps
+the card (or the date/cover slot); Save Tiger does not 303 the list.
 Shared chrome: `.look-chrome`, `.tab` family (look/cast/wardrobe still
 aliases), `glyph_*` macros, `.field-grid`. Do not add a second icon set. Wardrobe
 is sub-tabbed G / PG-13 / R / XXX / Nude; XXX is the most graphic

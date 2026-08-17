@@ -198,7 +198,10 @@ handler), `POST .../arc/accept`, `POST .../arc/reject` (proposal is not
 saved until accepted; reject re-reads the previous file, `T2-15`),
 `POST .../arc/apply` (`song_ids`, `confirm`; more than one song without
 confirmation is 400; with confirm writes exactly those songs under
-`applied/`, `T2-16` / `test_t2_16_multi_song_apply.py`). Same routes, no
+`applied/`, `T2-16` / `test_t2_16_multi_song_apply.py`). The committed
+arc is editable (`POST .../arc/save`) and versioned (`versions/N.json`,
+`POST .../arc/restore`). Playlist POSTs answer the card fragment on
+`HX-Request` so Save Tiger does not reload `/playlists`. Same routes, no
 parallel `/api/*` tree (`wants_json`). Song-page POSTs
 (`/songs/{id}/storyboard`, lyrics, analyse, refs, clips, render, audio,
 qc, …) answer JSON to `Accept: application/json` and 303 otherwise;

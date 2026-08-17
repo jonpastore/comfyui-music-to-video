@@ -1,4 +1,4 @@
-{% from "_macros.html" import glyph_delete %}
+{% from "_macros.html" import glyph_delete, playlist_hx %}
 {# The look fields for the lead (album columns) or one supporting character.
    Fill from lyrics swaps the lead form whole; the wand replaces one field. #}
 {% set who = ("c" ~ character.id) if character else "lead" %}
@@ -6,7 +6,8 @@
 <form id="album-look-{{ playlist.id }}{% if character %}-c{{ character.id }}{% endif %}"
       method="post"
       action="{% if character %}/characters/{{ character.id }}/save{% else %}/playlists/{{ playlist.id }}/profile{% endif %}"
-      class="stack-form">
+      class="stack-form"
+      {% if character %}{{ playlist_hx("/characters/" ~ character.id ~ "/save") }}{% else %}{{ playlist_hx("/playlists/" ~ playlist.id ~ "/profile") }}{% endif %}>
   <div class="look-tabs" role="tablist">
     {% for key, label, keys in tabs %}
     <span class="look-tab-wrap">
@@ -81,7 +82,8 @@
   {% for o in (cast or []) if o.c.id != character.id %}{% set ns.has_sib = true %}{% endfor %}
   {% if ns.has_sib %}
   <form id="copy-{{ character.id }}" method="post"
-        action="/characters/{{ character.id }}/copy-from" class="clip-bar">
+        action="/characters/{{ character.id }}/copy-from" class="clip-bar"
+        {{ playlist_hx("/characters/" ~ character.id ~ "/copy-from") }}>
     {% for f in copyable_fields %}
     <label class="check">
       <input type="checkbox" name="field" value="{{ f }}"
@@ -96,6 +98,7 @@
   {% endif %}
   <form method="post" action="/characters/{{ character.id }}/delete" class="delete-character"
         data-name="{{ character.name }}"
+        {{ playlist_hx("/characters/" ~ character.id ~ "/delete") }}
         onsubmit="return confirm('Delete {{ character.name }}? Their sheets stay on disk until you remove them.');">
     <button type="submit" class="icon-btn danger-icon"
             title="Delete {{ character.name }}" aria-label="Delete {{ character.name }}">

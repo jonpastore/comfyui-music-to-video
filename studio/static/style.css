@@ -751,13 +751,53 @@ table.list th, table.list td {
   margin: 0 0 0.75rem;
 }
 .song-arc-beat {
-  font-size: 0.82rem;
-  margin: 0.15rem 0 0;
+  display: block;
+  width: 100%;
   max-width: 28rem;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.song-arc-beat.is-open {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+.song-actions {
+  white-space: nowrap;
+  width: 1%;
+}
+.song-actions .trans-edit,
+.song-actions form.inline {
+  display: inline-flex;
+  vertical-align: middle;
+}
+.set-chip {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+.set-chip:hover { border-color: var(--border-strong); }
+.cover-slot { display: contents; }
+.arc-song-edit {
+  margin: 0.75rem 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.arc-song-edit legend { font-weight: 600; }
 .form-busy { display: none; }
 form.is-busy .form-busy { display: inline; }
 form.is-busy button[type=submit] { opacity: 0.55; pointer-events: none; }

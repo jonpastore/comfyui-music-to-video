@@ -1,5 +1,5 @@
-  {% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_edit %}
-  <details class="song-fold pl-fold" open>
+  {% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_edit, playlist_hx %}
+  <details class="song-fold pl-fold" id="fold-songs-{{ d.playlist.id }}" open>
     <summary><h2>Songs</h2>
       <span class="muted">{{ d.song_count }} · {{ d.total_secs | hms }}</span></summary>
   {% if not d.rows %}
@@ -10,8 +10,7 @@
       <th></th><th>#</th><th>Song</th>
       <th class="num">Length</th>
       <th>Play</th>
-      <th>Transition</th>
-      <th></th>
+      <th class="song-actions">Transition</th>
     </tr></thead>
     <tbody>
     {% for r in d.rows %}
@@ -21,7 +20,8 @@
         <td>
           <a href="/songs/{{ r.item.song_id }}">{{ r.item.song_title }}</a>
           {% if r.arc and (r.arc.role or r.arc.beat) %}
-          <div class="song-arc-beat muted" title="{{ r.arc.role }}{% if r.arc.role and r.arc.beat %} — {% endif %}{{ r.arc.beat }}">{{ r.arc.role }}{% if r.arc.role and r.arc.beat %} — {% endif %}{{ r.arc.beat }}</div>
+          <button type="button" class="song-arc-beat muted" aria-expanded="false"
+                  title="Click to read the full beat">{{ r.arc.role }}{% if r.arc.role and r.arc.beat %} — {% endif %}{{ r.arc.beat }}</button>
           {% endif %}
         </td>
         <td class="num">{{ r.item.duration | hms }}</td>
@@ -36,9 +36,10 @@
             {% endif %}
           {% endfor %}
         </td>
-        <td>
+        <td class="song-actions">
           <form method="post" action="/playlists/{{ d.playlist.id }}/items/{{ r.item.id }}"
-                class="trans-edit">
+                class="trans-edit"
+                {{ playlist_hx("/playlists/" ~ d.playlist.id ~ "/items/" ~ r.item.id) }}>
             <select name="transition" title="Transition into the next song"
                     aria-label="Transition into the next song">
               {% for t in d.transitions %}
@@ -52,10 +53,10 @@
               {{ glyph_save() }}
             </button>
           </form>
-        </td>
-        <td>
           <form method="post" action="/playlists/{{ d.playlist.id }}/items/{{ r.item.id }}/delete"
-                class="inline" onsubmit="return confirm('Remove {{ r.item.song_title }} from this playlist? The song itself stays.');">
+                class="inline"
+                {{ playlist_hx("/playlists/" ~ d.playlist.id ~ "/items/" ~ r.item.id ~ "/delete") }}
+                onsubmit="return confirm('Remove {{ r.item.song_title }} from this playlist? The song itself stays.');">
             <button type="submit" class="icon-btn danger-icon"
                     title="Remove from playlist (the song stays)"
                     aria-label="Remove {{ r.item.song_title }} from this playlist">
@@ -71,7 +72,8 @@
   {% endif %}
 
   {% if songs %}
-  <form method="post" action="/playlists/{{ d.playlist.id }}/items" class="add-song-bar">
+  <form method="post" action="/playlists/{{ d.playlist.id }}/items" class="add-song-bar"
+        {{ playlist_hx("/playlists/" ~ d.playlist.id ~ "/items") }}>
     <label>Song
       <select name="song_id" required>
         {% for s in songs %}<option value="{{ s.id }}">{{ s.title }}</option>{% endfor %}
@@ -100,16 +102,17 @@
   {% endif %}
   </details>
 
-  <details class="song-fold pl-fold" id="fold-arc">
+  <details class="song-fold pl-fold" id="fold-arc-{{ d.playlist.id }}">
     <summary><h2>Story arc</h2>
       <span class="muted">{% if premise %}{{ premise }}{% else %}what the album is about{% endif %}</span></summary>
     {% include "_arc_panel.html" %}
   </details>
 
-  <details class="song-fold pl-fold">
+  <details class="song-fold pl-fold" id="fold-render-{{ d.playlist.id }}">
     <summary><h2>Render set</h2>
       <span class="muted">{% if d.video_tiers %}{{ d.video_tiers | join(", ") }} ready{% else %}audio mix{% endif %}</span></summary>
-    <form method="post" action="/playlists/{{ d.playlist.id }}/render" class="clip-bar js-busy-form">
+    <form method="post" action="/playlists/{{ d.playlist.id }}/render" class="clip-bar js-busy-form"
+          {{ playlist_hx("/playlists/" ~ d.playlist.id ~ "/render") }}>
       <label class="check" title="Off: one crossfaded mp3. On: one video set per ticked tier.">
         <input type="checkbox" name="include_videos" value="true"> Include videos</label>
       {% if d.video_tiers %}
@@ -135,13 +138,14 @@
     {% if d.sets %}
     <ul class="tier-links">
       {% for a in d.sets %}
-      <li><a href="{{ media_url(a.path) }}">{{ a.path.split('/')[-1] }}</a></li>
+      <li><a class="set-chip" href="{{ media_url(a.path) }}"
+             title="{{ a.path.split('/')[-1] }}">{{ a.caption }}</a></li>
       {% endfor %}
     </ul>
     {% endif %}
   </details>
 
-  <details class="song-fold pl-fold">
+  <details class="song-fold pl-fold" id="fold-look-{{ d.playlist.id }}">
     <summary><h2>Album look</h2>
       <span class="muted">{{ d.lead_name }}{% for m in d.cast %} · {{ m.c.name }}{% endfor %}</span></summary>
     <div class="look-chrome">
@@ -185,7 +189,7 @@
         <button type="button" class="icon-btn help-tip"
                 title="What album look is" aria-label="What album look is"
                 data-label="Album look"
-                data-help="The first tab is the album lead. Other tabs are named people. Tick Lead on a tab if they need a consistent face and an identity front. Story role (partner, antagonist) is a label, not that toggle. World and premise stay on the album lead. Sparkle drafts from every song's lyrics plus the cover.">
+                data-help="The first tab is this person's identity and body — not a second Lead control. Tick Lead on the character bar if they need a consistent face and an identity front. Story role (partner, antagonist) is a label, not that toggle. World and premise stay on the album lead. Sparkle drafts from every song's lyrics plus the cover.">
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
             <path fill="currentColor" d="M7.3 6.2c0-.8.5-1.3 1.3-1.3s1.3.5 1.3 1.2c0 .6-.3.9-.9 1.3-.5.4-.8.7-.8 1.3h1.3c0-.4.2-.7.7-1.1.7-.5 1.3-1 1.3-2 0-1.3-1-2.2-2.4-2.2-1.5 0-2.6 1-2.6 2.5zm1.1 5.8h1.4V10.7H8.4z"/>
@@ -247,7 +251,7 @@
     </div>
   </details>
 
-  <details class="song-fold pl-fold"
+  <details class="song-fold pl-fold" id="fold-anchors-{{ d.playlist.id }}"
            hx-get="/playlists/{{ d.playlist.id }}/anchors"
            hx-trigger="toggle once"
            hx-target="find .pl-anchors-body" hx-swap="innerHTML">
@@ -261,7 +265,8 @@
       <strong>Create album art for &ldquo;{{ d.playlist.name }}&rdquo;</strong>
       <button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button>
     </div>
-    <form method="post" action="/playlists/{{ d.playlist.id }}/artwork" class="stack-form">
+    <form method="post" action="/playlists/{{ d.playlist.id }}/artwork" class="stack-form"
+          {{ playlist_hx("/playlists/" ~ d.playlist.id ~ "/artwork") }}>
       <p class="hint">Rendered from the album look above. References are optional and
         combine: with neither, this is plain text-to-image.</p>
       <label class="check">
@@ -297,13 +302,16 @@
     </form>
   </dialog>
 
-  <details class="song-fold pl-fold">
+  <details class="song-fold pl-fold" id="fold-cover-{{ d.playlist.id }}">
     <summary><h2>Cover</h2>
       <span class="muted">{% if d.playlist.image_path %}set{% else %}none{% endif %}</span></summary>
     <p class="hint">Click the art on the card header for a full view, replace, or delete.
       The date lives on the header, next to the title.</p>
     <form method="post" action="/playlists/{{ d.playlist.id }}/image" enctype="multipart/form-data"
-          class="clip-bar">
+          class="clip-bar"
+          hx-post="/playlists/{{ d.playlist.id }}/image"
+          hx-target="#cover-slot-{{ d.playlist.id }}" hx-swap="innerHTML"
+          hx-encoding="multipart/form-data">
       <label>Replace <input type="file" name="image" accept="image/*" required></label>
       <button type="submit">Set image</button>
     </form>
@@ -337,7 +345,9 @@
         them up again</li>
       <li>the album look wording, for the same reason</li>
     </ul>
-    <form method="post" action="/playlists/{{ d.playlist.id }}/delete" class="stack-form">
+    <form method="post" action="/playlists/{{ d.playlist.id }}/delete" class="stack-form"
+          hx-post="/playlists/{{ d.playlist.id }}/delete"
+          hx-target="#playlist-{{ d.playlist.id }}" hx-swap="outerHTML">
       <input type="hidden" name="confirm" value="DELETE">
       <div class="button-row">
         <button type="submit" class="thumb-btn-danger">Delete this playlist</button>

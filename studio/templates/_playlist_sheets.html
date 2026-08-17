@@ -14,11 +14,15 @@
     {% if a.chosen %}<span class="tag done">in use</span>{% endif %}
   </figcaption>
   {% if not a.chosen %}
-  <form method="post" action="/anchors/{{ a.id }}/pick" class="inline">
+  <form method="post" action="/anchors/{{ a.id }}/pick" class="inline"
+        hx-post="/anchors/{{ a.id }}/pick"
+        hx-target="closest .playlist-body" hx-swap="innerHTML">
     <button type="submit" class="icon-btn" title="Use this sheet">Use</button>
   </form>
   {% endif %}
-  <form method="post" action="/anchors/{{ a.id }}/delete" class="inline still-del">
+  <form method="post" action="/anchors/{{ a.id }}/delete" class="inline still-del"
+        hx-post="/anchors/{{ a.id }}/delete"
+        hx-target="closest .playlist-body" hx-swap="innerHTML">
     <button type="submit" class="icon-btn danger-icon" title="Delete this sheet"
             {% if a.chosen %}disabled{% endif %}>
       {{ glyph_delete() }}

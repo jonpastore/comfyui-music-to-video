@@ -100,6 +100,9 @@ and video modal.
   changing. Functions: ~80 lines or cyclomatic ~12 before you split.
   Exempt only generated/vendor/one-unit APIs. Global rule:
   `~/.grok/rules/constitution.md`.
+- **In-page (htmx):** every playlist and song button/icon posts with
+  `HX-Request` and swaps the fragment. No full-page reload for those
+  controls. Mandate: `~/.grok/rules/constitution.md` **In-page studio**.
 - Tests: `cd studio && python3 -m pytest -q .`
 - Lint: Ruff via pre-commit (`ruff-check`). One-time: `pip install pre-commit && pre-commit install`.
 - Push and deploy are not gated on ComfyUI / Swarm jobs. This process

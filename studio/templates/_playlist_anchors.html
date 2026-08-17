@@ -81,7 +81,9 @@
       </figcaption>
       <div class="anchor-actions">
         {% if not a.chosen %}
-        <form method="post" action="/anchors/{{ a.id }}/pick">
+        <form method="post" action="/anchors/{{ a.id }}/pick"
+              hx-post="/anchors/{{ a.id }}/pick"
+              hx-target="closest .playlist-body" hx-swap="innerHTML">
           <button type="submit">Use this</button>
         </form>
         {% endif %}
@@ -89,7 +91,9 @@
                 data-anchor="{{ a.id }}"
                 data-label="{{ a.character_name or d.lead_name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
                 data-src="{{ media_url(a.path) }}">Edit</button>
-        <form method="post" action="/anchors/{{ a.id }}/delete" class="delete-anchor still-del">
+        <form method="post" action="/anchors/{{ a.id }}/delete" class="delete-anchor still-del"
+              hx-post="/anchors/{{ a.id }}/delete"
+              hx-target="closest .playlist-body" hx-swap="innerHTML">
           <button type="submit" class="icon-btn danger-icon"
                   title="Delete this sheet"
                   {% if a.chosen %}disabled title="pick another sheet first"{% endif %}>

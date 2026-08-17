@@ -78,48 +78,73 @@
 
 {% if arc %}
 <section class="arc-block">
-  <h3>{{ premise if premise else arc.premise }}</h3>
+  <h3>Committed arc</h3>
   <p class="meta">{{ song_count }} track{{ "" if song_count == 1 else "s" }}
     &middot; {{ act_count }} act{{ "" if act_count == 1 else "s" }}
     {% if row and row.model %}&middot; <span class="muted">{{ row.model }}</span>{% endif %}
     {% if row and row.created %}&middot;
       <time class="local-time muted" datetime="{{ row.created | isotime }}">{{ row.created | isotime }}</time>
     {% endif %}</p>
+  <p class="hint">Edit and save. Each save keeps the previous JSON as a version you can restore.</p>
 
-  {% if arc.continuity %}
-  <h4>Continuity</h4>
-  <p class="hint">Attached to every storyboard on this album.</p>
-  <ul>{% for c in arc.continuity %}<li>{{ c }}</li>{% endfor %}</ul>
+  {% if arc_versions %}
+  <form method="post" action="/playlists/{{ playlist.id }}/arc/restore" class="clip-bar"
+        hx-post="/playlists/{{ playlist.id }}/arc/restore"
+        hx-target="#arc-embed-{{ playlist.id }}" hx-swap="outerHTML">
+    <label>Version
+      <select name="snapshot" aria-label="Restore an earlier arc">
+        {% for v in arc_versions %}
+        <option value="{{ v.n }}">v{{ v.n }} · {{ v.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Restore</button>
+  </form>
   {% endif %}
 
-  {% for a in arc.acts %}
-  <h4>{{ a.name }}</h4>
-  <p><em>{{ a.turn }}</em></p>
-  <p class="muted">{% for sid in a.songs %}{{ titles.get(sid, sid) }}{% if not loop.last %} &middot; {% endif %}{% endfor %}</p>
-  {% endfor %}
-</section>
+  <form method="post" action="/playlists/{{ playlist.id }}/arc/save" class="stack-form"
+        hx-post="/playlists/{{ playlist.id }}/arc/save"
+        hx-target="#arc-embed-{{ playlist.id }}" hx-swap="outerHTML">
+    <label>Premise
+      <textarea name="premise" rows="3" required>{{ premise if premise else arc.premise }}</textarea>
+    </label>
+    <label>Continuity — one note per line
+      <textarea name="continuity" rows="3">{% for c in (arc.continuity or []) %}{{ c }}{% if not loop.last %}
+{% endif %}{% endfor %}</textarea>
+    </label>
 
-<details class="disclose arc-tracks">
-  <summary>Tracks
-    <span class="muted">{{ song_count }} beat{{ "" if song_count == 1 else "s" }}</span></summary>
-{% for s in arc.songs %}
-<section class="arc-block">
-  <h4>{{ s.position }}. {{ titles.get(s.song_id, s.song_id) }}</h4>
-  <p><strong>Role.</strong> {{ s.role }}</p>
-  <p><strong>Beat.</strong> {{ s.beat }}</p>
-  <p><strong>Opens.</strong> {{ s.opens }}</p>
-  <p><strong>Closes.</strong> {{ s.closes }}</p>
-  {% if s.transition_out %}
-  <p class="hint">Into the next: <code>{{ s.transition_out.kind }}</code>
-    {% if s.transition_out.secs %}{{ s.transition_out.secs }}s{% endif %}
-    {% if s.transition_out.hold %}+ {{ s.transition_out.hold }}s hold{% endif %}
-    &mdash; {{ s.transition_out.why }}
-    <span class="muted">(a default when a set is built from this album; the set editor
-      overrides every one)</span></p>
-  {% endif %}
+    {% for a in arc.acts %}
+    <h4>{{ a.name }}</h4>
+    <p><em>{{ a.turn }}</em></p>
+    <p class="muted">{% for sid in a.songs %}{{ titles.get(sid, sid) }}{% if not loop.last %} &middot; {% endif %}{% endfor %}</p>
+    {% endfor %}
+
+    {% for s in arc.songs %}
+    <fieldset class="arc-song-edit">
+      <legend>{{ s.position }}. {{ titles.get(s.song_id, s.song_id) }}</legend>
+      <label>Role
+        <input type="text" name="role_{{ s.song_id }}" value="{{ s.role or '' }}">
+      </label>
+      <label>Beat
+        <textarea name="beat_{{ s.song_id }}" rows="2">{{ s.beat or '' }}</textarea>
+      </label>
+      <label>Opens
+        <textarea name="opens_{{ s.song_id }}" rows="2">{{ s.opens or '' }}</textarea>
+      </label>
+      <label>Closes
+        <textarea name="closes_{{ s.song_id }}" rows="2">{{ s.closes or '' }}</textarea>
+      </label>
+      {% if s.transition_out %}
+      <p class="hint">Into the next: <code>{{ s.transition_out.kind }}</code>
+        {% if s.transition_out.secs %}{{ s.transition_out.secs }}s{% endif %}
+        {% if s.transition_out.hold %}+ {{ s.transition_out.hold }}s hold{% endif %}
+        &mdash; {{ s.transition_out.why }}</p>
+      {% endif %}
+    </fieldset>
+    {% endfor %}
+    <button type="submit">Save arc</button>
+  </form>
 </section>
-{% endfor %}
-</details>
 {% if titles %}
 <section class="arc-block">
   <h4>Apply per-song summaries</h4>

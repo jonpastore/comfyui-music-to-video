@@ -117,10 +117,12 @@ the file. A card is a beat in the running order, not a decoration on one.
 
 **B · Give the album a story and storyboard against it.** Write or generate an
 arc; a proposal is not on disk until accepted, and rejecting leaves the previous
-arc (`T2-15`). The playlist payload carries that arc when one is defined and
+arc (`T2-15`). The committed arc is then editable on the playlist card and
+each save is a restoreable snapshot. The playlist payload carries that arc when one is defined and
 omits it when none (`T2-37`), so a row can show it. Accept it, generate each
 song's storyboard as a scene *of that arc*, edit a scene, read a time meter that
 agrees with the song, and see which leads still have no anchor.
+Playlist and song forms stay in-page (htmx fragment swap; no full reload).
 
 **C · Find out what came back wrong.** After renders land, a queue of findings,
 each carrying what was measured against what was asked for, an editable remedy

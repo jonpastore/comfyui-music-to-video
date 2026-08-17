@@ -150,8 +150,14 @@ document.addEventListener("DOMContentLoaded", function () {
       new ResizeObserver(drawTlWaves).observe(b);
     });
   }
-  document.querySelectorAll("[data-reorder-url]").forEach(function (root) {
-    // a table reorders its rows, anything else reorders its own children
+  bindReorder(document);
+});
+
+function bindReorder(scope) {
+  var roots = (scope || document).querySelectorAll("[data-reorder-url]");
+  Array.prototype.forEach.call(roots, function (root) {
+    if (root.dataset.reorderBound) return;
+    root.dataset.reorderBound = "1";
     var body = root.tBodies ? root.tBodies[0] : root;
     var horizontal = root.dataset.axis === "x";
     var dragging = null;
@@ -190,13 +196,10 @@ document.addEventListener("DOMContentLoaded", function () {
       var form = new FormData();
       form.append("order", ids.join(","));
       var post = fetch(root.dataset.reorderUrl, {method: "POST", body: form});
-      // Opt-in reload: the table updates itself in place, but the timeline's
-      // block widths and its transition markers are server-rendered, so leaving
-      // them stale after a drop would show a set that is not the saved one.
       if (root.dataset.reload !== undefined) post.then(function () { location.reload(); });
     });
   });
-});
+}
 
 function tlSecondsAt(el, clientX) {
   var dur = parseFloat(el.dataset.duration);
@@ -598,8 +601,15 @@ document.addEventListener("click", function (e) {
     var preview = document.getElementById("fix-preview");
     preview.src = edit.dataset.src;
     // every form in the modal posts to THIS anchor
+    var body = edit.closest(".playlist-body");
+    var target = body && body.id ? "#" + body.id : "body";
     fix.querySelectorAll("form").forEach(function (f) {
       f.action = "/anchors/" + edit.dataset.anchor + "/fix";
+      f.setAttribute("hx-post", f.action);
+      f.setAttribute("hx-target", target);
+      f.setAttribute("hx-swap", "innerHTML");
+      f.setAttribute("hx-encoding", "multipart/form-data");
+      if (window.htmx) htmx.process(f);
     });
     // the mask painter reads the source off the form it belongs to
     var maskForm = fix.querySelector(".mask-form");
@@ -768,10 +778,41 @@ function hydrateLazy(root, eager) {
     window._lazyMediaObs.observe(el);
   });
 }
+document.body.addEventListener("htmx:beforeSwap", function (e) {
+  var t = e.detail && e.detail.target;
+  if (!t || !t.classList || !t.classList.contains("playlist-body")) return;
+  var open = [];
+  t.querySelectorAll("details.pl-fold[id]").forEach(function (d) {
+    if (d.open) open.push(d.id);
+  });
+  var cast = t.querySelector(".cast-tab.active");
+  var look = t.querySelector(".look-tab.active");
+  t._plChrome = {
+    open: open,
+    cast: cast ? cast.getAttribute("data-cast") : "",
+    look: look ? look.getAttribute("data-look") : ""
+  };
+});
 document.body.addEventListener("htmx:afterSwap", function (e) {
   var target = e.detail && e.detail.target ? e.detail.target : e.target;
   formatLocalTimes(target);
   hydrateLazy(target);
+  bindReorder(target);
+  var chrome = target && target._plChrome;
+  if (chrome) {
+    (chrome.open || []).forEach(function (id) {
+      var d = document.getElementById(id);
+      if (d) d.open = true;
+    });
+    if (chrome.cast) {
+      var ct = target.querySelector('.cast-tab[data-cast="' + chrome.cast + '"]');
+      if (ct) ct.click();
+    }
+    if (chrome.look) {
+      var lt = target.querySelector('.look-tab[data-look="' + chrome.look + '"]');
+      if (lt) lt.click();
+    }
+  }
   var chip = (target && target.id === "job-chip") ? target
     : document.getElementById("job-chip");
   applyRerollChip(chip);
@@ -3007,6 +3048,13 @@ document.addEventListener("click", function (e) {
 });
 
 document.addEventListener("click", function (e) {
+  var beat = e.target.closest && e.target.closest(".song-arc-beat");
+  if (beat) {
+    var open = !beat.classList.contains("is-open");
+    beat.classList.toggle("is-open", open);
+    beat.setAttribute("aria-expanded", open ? "true" : "false");
+    return;
+  }
   var tip = e.target.closest && e.target.closest(".help-tip");
   if (!tip) return;
   e.preventDefault();
@@ -3099,8 +3147,20 @@ document.addEventListener("click", function (e) {
   var pid = cover.getAttribute("data-playlist");
   var rep = document.getElementById("cover-replace");
   var del = document.getElementById("cover-delete");
-  if (rep && pid) rep.setAttribute("action", "/playlists/" + pid + "/image");
-  if (del && pid) del.setAttribute("action", "/playlists/" + pid + "/image/delete");
+  if (rep && pid) {
+    rep.setAttribute("action", "/playlists/" + pid + "/image");
+    rep.setAttribute("hx-post", "/playlists/" + pid + "/image");
+    rep.setAttribute("hx-target", "#cover-slot-" + pid);
+    rep.setAttribute("hx-swap", "innerHTML");
+    if (window.htmx) htmx.process(rep);
+  }
+  if (del && pid) {
+    del.setAttribute("action", "/playlists/" + pid + "/image/delete");
+    del.setAttribute("hx-post", "/playlists/" + pid + "/image/delete");
+    del.setAttribute("hx-target", "#cover-slot-" + pid);
+    del.setAttribute("hx-swap", "innerHTML");
+    if (window.htmx) htmx.process(del);
+  }
   if (typeof box.showModal === "function") box.showModal();
 }, true);
 

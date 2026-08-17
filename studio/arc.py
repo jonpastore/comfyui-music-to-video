@@ -24,7 +24,7 @@ content is decided. validate() enforces that rather than trusting it.
 """
 import json
 import os
-import time
+import shutil
 
 import chat
 import prompts
@@ -295,6 +295,70 @@ def discard_proposal(outdir, slug):
 def commit_proposal(arc, outdir, slug, titles=None):
     """Accept: write the committed pair. Does not write per-song files."""
     return write(arc, outdir, slug, titles)
+
+
+def _versions_dir(outdir):
+    return os.path.join(outdir, "versions")
+
+
+def snapshot(outdir, slug, label="saved"):
+    """Copy the committed JSON into versions/N.json. Returns the new n, or None."""
+    src = os.path.join(outdir, f"{slug}_arc.json")
+    if not os.path.isfile(src):
+        return None
+    dest_dir = _versions_dir(outdir)
+    os.makedirs(dest_dir, exist_ok=True)
+    seen = [int(os.path.splitext(os.path.basename(p))[0])
+            for p in os.listdir(dest_dir)
+            if p.endswith(".json") and os.path.splitext(p)[0].isdigit()]
+    n = 1 + (max(seen) if seen else 0)
+    dest = os.path.join(dest_dir, f"{n}.json")
+    shutil.copy2(src, dest)
+    with open(os.path.join(dest_dir, f"{n}.label"), "w") as f:
+        f.write(" ".join((label or "saved").split())[:80])
+    return n
+
+
+def list_snapshots(outdir):
+    """Newest first. Each row is n / label / created / path."""
+    dest_dir = _versions_dir(outdir)
+    if not os.path.isdir(dest_dir):
+        return []
+    rows = []
+    for name in os.listdir(dest_dir):
+        if not name.endswith(".json"):
+            continue
+        base = name[:-5]
+        if not base.isdigit():
+            continue
+        n = int(base)
+        path = os.path.join(dest_dir, name)
+        label_path = os.path.join(dest_dir, f"{n}.label")
+        label = ""
+        if os.path.isfile(label_path):
+            with open(label_path) as f:
+                label = f.read().strip()
+        rows.append({
+            "n": n,
+            "label": label or f"v{n}",
+            "created": os.path.getmtime(path),
+            "path": path,
+        })
+    rows.sort(key=lambda r: r["n"], reverse=True)
+    return rows
+
+
+def restore_snapshot(outdir, slug, n, titles=None):
+    """Put versions/N.json back as the committed pair. Snapshots current first."""
+    dest_dir = _versions_dir(outdir)
+    src = os.path.join(dest_dir, f"{int(n)}.json")
+    if not os.path.isfile(src):
+        raise ValueError("that arc version is gone")
+    with open(src) as f:
+        data = json.load(f)
+    snapshot(outdir, slug, label="before-restore")
+    write(data, outdir, slug, titles)
+    return data
 
 
 def apply_summaries(arc, dest_dir, song_ids, confirm=False):

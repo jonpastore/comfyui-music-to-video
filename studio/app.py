@@ -1988,6 +1988,10 @@ def wants_json(request):
     return "application/json" in (request.headers.get("accept") or "")
 
 
+def wants_hx(request):
+    return (request.headers.get("hx-request") or "").lower() in ("1", "true")
+
+
 def json_or_redirect(request, payload, loc):
     """Same route, two answers: JSON for fetch, 303 for a plain form post."""
     if wants_json(request):
@@ -5093,7 +5097,7 @@ async def add_character(id: int, request: Request):
                f"VALUES ({', '.join('?' * len(cols))})", *values)
     except sqlite3.IntegrityError:
         raise HTTPException(400, f"'{p['name']}' already has a character called {name!r}")
-    return RedirectResponse("/playlists", status_code=303)
+    return _playlist_hx(request, id)
 
 
 @app.post("/characters/{cid}/save")
@@ -5117,7 +5121,7 @@ async def save_character(cid: int, request: Request):
         db.run(f"UPDATE characters SET {field}=? WHERE id=?", value, cid)
         if field != "role":
             _save_look_version(char["scope_value"], field, value, character_id=cid)
-    return RedirectResponse("/playlists", status_code=303)
+    return _playlist_hx_album(request, char["scope_value"])
 
 
 @app.post("/characters/{cid}/describe", response_class=HTMLResponse)
@@ -5207,11 +5211,11 @@ async def copy_character_fields(cid: int, request: Request):
     if wants_json(request):
         return JSONResponse({"copied": sorted(copied), "from": source["name"],
                              "to": target["name"]})
-    return RedirectResponse("/playlists", status_code=303)
+    return _playlist_hx_album(request, target["scope_value"])
 
 
 @app.post("/characters/{cid}/delete")
-def delete_character(cid: int):
+def delete_character(request: Request, cid: int):
     """Remove a character and their anchor ROWS. The image FILES are left on
     disk -- they cost GPU time to make and are recoverable by hand.
 
@@ -5219,10 +5223,11 @@ def delete_character(cid: int):
     as max+1, so deleting the highest-numbered character and adding another
     reuses that id, and anchors still pointing at it would silently become the
     new character's."""
-    get_character_or_404(cid)
+    char = get_character_or_404(cid)
+    album = char["scope_value"]
     db.run("DELETE FROM anchors WHERE character_id=?", cid)
     db.run("DELETE FROM characters WHERE id=?", cid)
-    return RedirectResponse("/playlists", status_code=303)
+    return _playlist_hx_album(request, album)
 
 
 # The prompt is COMPOSED from the album's identity, wardrobe and body wording
@@ -5504,6 +5509,19 @@ def _drop_anchor(row):
     db.run("DELETE FROM anchors WHERE id=?", row["id"])
 
 
+def _anchor_done(request, row):
+    """HX from a playlist card stays on the card. Else the anchors page."""
+    if wants_hx(request) and row and row["scope_kind"] == "album":
+        return _playlist_hx_album(request, row["scope_value"])
+    if wants_json(request):
+        return JSONResponse({"ok": True})
+    kind = row["scope_kind"] if row else "album"
+    value = row["scope_value"] if row else ""
+    return RedirectResponse(
+        f"/anchors?scope_kind={kind}&scope_value={quote(value)}",
+        status_code=303)
+
+
 @app.post("/anchors/{id}/delete")
 def delete_anchor(request: Request, id: int):
     """Delete one anchor candidate, row and file.
@@ -5517,9 +5535,7 @@ def delete_anchor(request: Request, id: int):
     _drop_anchor(row)
     if wants_json(request):
         return JSONResponse({"deleted": [id]})
-    return RedirectResponse(
-        f"/anchors?scope_kind={row['scope_kind']}&scope_value={quote(row['scope_value'])}",
-        status_code=303)
+    return _anchor_done(request, row)
 
 
 @app.post("/anchors/delete")
@@ -5603,7 +5619,8 @@ def h_fix_anchor(args, progress):
 
 
 @app.post("/anchors/{id}/fix")
-async def start_fix_anchor(id: int, mode: str = Form(...), instruction: str = Form(""),
+async def start_fix_anchor(request: Request, id: int, mode: str = Form(...),
+                            instruction: str = Form(""),
                             face: Optional[UploadFile] = File(None), mask_data: str = Form(""),
                             pad_left: int = Form(0), pad_top: int = Form(0),
                             pad_right: int = Form(0), pad_bottom: int = Form(0)):
@@ -5652,7 +5669,7 @@ async def start_fix_anchor(id: int, mode: str = Form(...), instruction: str = Fo
         "anchor_id": id, "mode": mode, "face_path": face_path, "mask_path": mask_path,
         "pad": (pad_left, pad_top, pad_right, pad_bottom), "instruction": instruction,
         "seed": stamp % 2_000_000_000})
-    return RedirectResponse("/playlists", status_code=303)
+    return _anchor_done(request, row)
 
 
 @app.post("/anchors/{id}/pick")
@@ -5669,9 +5686,7 @@ def pick_anchor(request: Request, id: int):
     if wants_json(request):
         return JSONResponse(payload)
     row = db.one("SELECT * FROM anchors WHERE id=?", id)
-    return RedirectResponse(
-        f"/anchors?scope_kind={row['scope_kind']}&scope_value={quote(row['scope_value'])}",
-        status_code=303)
+    return _anchor_done(request, row)
 
 
 @app.post("/anchors/{id}/clear")
@@ -5683,13 +5698,12 @@ def clear_anchor(request: Request, id: int):
     db.run("UPDATE anchors SET chosen=0 WHERE id=?", id)
     if wants_json(request):
         return JSONResponse({"cleared": id, "chosen": 0})
-    return RedirectResponse(
-        f"/anchors?scope_kind={row['scope_kind']}&scope_value={quote(row['scope_value'])}",
-        status_code=303)
+    return _anchor_done(request, row)
 
 
 @app.post("/anchors/keeper")
-def set_album_pose_keeper(album: str = Form(...), tier: str = Form(...),
+def set_album_pose_keeper(request: Request, album: str = Form(...),
+                          tier: str = Form(...),
                           key: str = Form(...), sheet_id: str = Form("0")):
     """Roster dropdown: this album pose uses this sheet as keeper."""
     valid_tier_or_400(tier)
@@ -5712,6 +5726,8 @@ def set_album_pose_keeper(album: str = Form(...), tier: str = Form(...),
     elif group.get("sheet_id"):
         db.run("UPDATE anchors SET chosen=0 WHERE id=?", group["sheet_id"])
     pose_plan.stamp_binds(tier, group.get("binds"), sid)
+    if wants_hx(request):
+        return _playlist_hx_album(request, album)
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
 
 
@@ -7701,14 +7717,14 @@ def delete_song(request: Request, id: int, confirm: str = Form("")):
 # of them is something that cost a regeneration to learn.
 VIDEO_MATRIX_TIERS = ("g", "pg13", "r", "xxx")
 LOOK_TABS = (
-    ("lead", "Lead", ("identity", "body")),
+    ("identity", "Identity", ("identity", "body")),
     ("wardrobe", "Wardrobe", ("wardrobe", "nude_wardrobe")),
     ("world", "World", ("style_text", "world", "backdrop", "render_tail")),
     ("sheets", "Sheets", ("composite", "anatomy")),
 )
 # Supporting characters share the look UI but not album-wide world/composite.
 CHAR_LOOK_TABS = (
-    ("lead", "Lead", ("identity", "body")),
+    ("identity", "Identity", ("identity", "body")),
     ("wardrobe", "Wardrobe", ("wardrobe", "nude_wardrobe")),
     ("sheets", "Sheets", ("anatomy",)),
 )
@@ -7846,7 +7862,7 @@ ALBUM_FIELDS = {
 # Fields the wand can draft from a look at the album's anchor image.
 DESCRIBABLE = tuple(ALBUM_FIELDS)
 LOOK_TAB_HELP = {
-    "lead": "This character's fixed identity and body. Other named people are the other tabs.",
+    "identity": "This character's fixed face and body. The Lead checkbox on the character bar is the pipeline bit — this tab is not a second Lead control.",
     "wardrobe": "Most graphic clothed look on XXX, then refine per rating against that rating's guidelines. Nude wording is the unclothed swap.",
     "world": "Premise, places, studio backdrop, and render medium. Album-wide — not per character. Premise is what the record is ABOUT.",
     "sheets": "Multiple references means several photos of the SAME person, not a multi-character scene.",
@@ -8084,8 +8100,13 @@ def playlist_detail(p):
     # a tier can render a set only if EVERY song in the playlist has a video
     # at that tier; offering one that cannot render just moves the failure
     ready = sorted(t for t, n in tiers_with_video.items() if n == len(items)) if items else []
-    sets = [a for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC")
-            if db.jset(a).get("playlist_id") == p["id"]]
+    sets = []
+    for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC"):
+        if db.jset(a).get("playlist_id") != p["id"]:
+            continue
+        row = dict(a)
+        row["caption"] = set_caption(a)
+        sets.append(row)
     # the album profile, as (key, label, current value) for the form
     prof = album_profile(p["name"])
     profile_fields = [{"key": k, "label": ALBUM_FIELDS[k][0], "value": prof[k],
@@ -8201,6 +8222,54 @@ def album_date_iso(p):
     return time.strftime("%Y-%m-%d", time.localtime(t)) if t else ""
 
 
+def set_caption(asset):
+    """Human label for a rendered set: 'Audio mix · 2026-08-17', not the file."""
+    meta = db.jset(asset)
+    mode = meta.get("mode") or "video"
+    tier = meta.get("tier") or ""
+    created = asset["created"] if "created" in asset.keys() else None
+    when = time.strftime("%Y-%m-%d", time.localtime(created)) if created else ""
+    if mode == "audio" or not tier:
+        title = "Audio mix"
+    else:
+        title = f"{'PG-13' if tier == 'pg13' else tier.upper()} video set"
+    return f"{title} · {when}" if when else title
+
+
+def _playlist_hx(request, id, *, gone=False):
+    """HX: swap the open card. JSON: ok. Else 303 to the list."""
+    if wants_hx(request):
+        if gone:
+            return HTMLResponse("")
+        return playlist_card(request, id)
+    if wants_json(request):
+        return JSONResponse({"ok": True, "playlist_id": id, "gone": gone})
+    return RedirectResponse("/playlists", status_code=303)
+
+
+def _playlist_hx_album(request, album, *, gone=False):
+    pid = _playlist_id_for_album(album)
+    if not pid:
+        if wants_hx(request):
+            return HTMLResponse("")
+        if wants_json(request):
+            return JSONResponse({"ok": True, "gone": gone})
+        return RedirectResponse("/playlists", status_code=303)
+    return _playlist_hx(request, pid, gone=gone)
+
+
+def cover_slot_html(p):
+    if p["image_path"]:
+        url = media_url(p["image_path"])
+        return (
+            f'<button type="button" class="cover-open js-cover-open" '
+            f'data-full="{url}" data-playlist="{p["id"]}" '
+            f'title="View, replace, or delete this cover">'
+            f'<img class="cover" src="{url}" alt=""></button>'
+        )
+    return '<span class="cover cover-empty">no art</span>'
+
+
 def playlist_summary(p):
     """Collapsed card only. song_count / total_secs from playlist_service
     (T6-A2-playlists). Heavy album look / anchors load on expand."""
@@ -8260,7 +8329,8 @@ def playlist_sheets_partial(request: Request, id: int, who: str = "lead"):
 
 
 @app.post("/playlists")
-async def create_playlist(name: str = Form(...), kind: str = Form("playlist"),
+async def create_playlist(request: Request, name: str = Form(...),
+                           kind: str = Form("playlist"),
                            image: Optional[UploadFile] = File(None)):
     # Genres are set on the song at upload now (genre/subgenre/genre2/subgenre2
     # columns) -- 'genre' is no longer a creatable playlist kind.
@@ -8279,17 +8349,21 @@ async def create_playlist(name: str = Form(...), kind: str = Form("playlist"),
         dest = await save_upload(image, MAX_IMAGE, os.path.join(db.DATA, "playlists", str(pid)),
                                   "image", prefix="cover")
         db.run("UPDATE playlists SET image_path=? WHERE id=?", dest, pid)
+    if wants_hx(request):
+        return playlists_page(request)
     return RedirectResponse("/playlists", status_code=303)
 
 
 @app.post("/playlists/{id}/image")
-async def set_playlist_image(id: int, image: UploadFile = File(...)):
+async def set_playlist_image(request: Request, id: int, image: UploadFile = File(...)):
     """Cover art for the playlist card."""
     get_playlist_or_404(id)
     dest = await save_upload(image, MAX_IMAGE, os.path.join(db.DATA, "playlists", str(id)),
                               "image", prefix="cover")
     db.run("UPDATE playlists SET image_path=? WHERE id=?", dest, id)
-    return RedirectResponse("/playlists", status_code=303)
+    if wants_hx(request):
+        return HTMLResponse(cover_slot_html(get_playlist_or_404(id)))
+    return _playlist_hx(request, id)
 
 
 @app.post("/playlists/{id}/date")
@@ -8300,12 +8374,17 @@ async def set_playlist_date(request: Request, id: int):
     raw = (form.get("released") or "").strip()
     if not raw:
         db.run("UPDATE playlists SET released=NULL WHERE id=?", id)
+        shown = "no date"
+        if wants_hx(request):
+            return HTMLResponse(shown)
         return json_or_redirect(request, {"ok": True, "released": None}, "/playlists")
     try:
         stamp = time.mktime(time.strptime(raw, "%Y-%m-%d"))
     except ValueError:
         raise HTTPException(400, "date must be YYYY-MM-DD")
     db.run("UPDATE playlists SET released=? WHERE id=?", stamp, id)
+    if wants_hx(request):
+        return HTMLResponse(raw)
     return json_or_redirect(request, {"ok": True, "released": raw}, "/playlists")
 
 
@@ -8322,7 +8401,9 @@ def delete_playlist_image(request: Request, id: int):
             os.remove(real)
         except OSError:
             pass
-    return json_or_redirect(request, {"ok": True, "deleted": "cover"}, "/playlists")
+    if wants_hx(request):
+        return HTMLResponse(cover_slot_html(get_playlist_or_404(id)))
+    return _playlist_hx(request, id)
 
 
 @app.post("/playlists/{id}/profile")
@@ -8358,7 +8439,7 @@ async def save_album_profile(id: int, request: Request):
         db.run(f"UPDATE playlists SET {key}=? WHERE id=?",
                None if not value or value == default else value, id)
         _save_look_version(p["name"], key, value)
-    return RedirectResponse("/playlists", status_code=303)
+    return _playlist_hx(request, id)
 
 
 @app.post("/playlists/{id}/describe", response_class=HTMLResponse)
@@ -8472,7 +8553,8 @@ def propose_cast(request: Request, id: int):
 
 
 @app.post("/playlists/{id}/artwork")
-def create_album_artwork(id: int, model: str = Form(""), use_anchor: bool = Form(False),
+def create_album_artwork(request: Request, id: int, model: str = Form(""),
+                          use_anchor: bool = Form(False),
                           from_cover: bool = Form(False), instruction: str = Form("")):
     """Generate a new album cover from the album look.
 
@@ -8515,11 +8597,11 @@ def create_album_artwork(id: int, model: str = Form(""), use_anchor: bool = Form
     jobs.enqueue("artwork", {"playlist_id": id, "model": key, "anchor_path": anchor_path,
                              "source_path": source_path, "instruction": instruction,
                              "tier": anchor["tier"] if anchor else ""})
-    return RedirectResponse("/playlists", status_code=303)
+    return _playlist_hx(request, id)
 
 
 @app.post("/playlists/{id}/delete")
-def delete_playlist(id: int, confirm: str = Form("")):
+def delete_playlist(request: Request, id: int, confirm: str = Form("")):
     """Delete the playlist and its membership rows.
 
     Songs, renders and everything generated stay: a playlist is an ordering,
@@ -8533,11 +8615,11 @@ def delete_playlist(id: int, confirm: str = Form("")):
         os.remove(p["image_path"])
     db.run("DELETE FROM playlist_items WHERE playlist_id=?", id)
     db.run("DELETE FROM playlists WHERE id=?", id)
-    return RedirectResponse("/playlists", status_code=303)
+    return _playlist_hx(request, id, gone=True)
 
 
 @app.post("/playlists/{id}/items")
-def add_playlist_item(id: int, song_id: int = Form(...),
+def add_playlist_item(request: Request, id: int, song_id: int = Form(...),
                        transition: str = Form("fade"), secs: float = Form(2.0)):
     # No tier: membership is the song. Which tier's video (if any) is used is
     # decided when the set is rendered.
@@ -8546,7 +8628,7 @@ def add_playlist_item(id: int, song_id: int = Form(...),
     pos_row = db.one("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM playlist_items WHERE playlist_id=?", id)
     db.run("""INSERT INTO playlist_items (playlist_id, song_id, position, transition, secs)
               VALUES (?,?,?,?,?)""", id, song_id, pos_row["p"], transition, secs)
-    return RedirectResponse("/playlists", status_code=303)
+    return _playlist_hx(request, id)
 
 
 @app.post("/playlists/{id}/items/{item_id}")
@@ -8569,6 +8651,8 @@ async def edit_playlist_item(request: Request, id: int, item_id: int):
         raise HTTPException(400, "secs cannot be negative")
     db.run("UPDATE playlist_items SET transition=?, secs=? WHERE id=? AND playlist_id=?",
            transition, secs, item_id, id)
+    if wants_hx(request):
+        return _playlist_hx(request, id)
     return json_or_redirect(
         request, {"ok": True, "id": item_id, "transition": transition, "secs": secs},
         "/playlists")
@@ -8578,15 +8662,21 @@ async def edit_playlist_item(request: Request, id: int, item_id: int):
 def remove_playlist_item(request: Request, id: int, item_id: int):
     get_playlist_or_404(id)
     db.run("DELETE FROM playlist_items WHERE id=? AND playlist_id=?", item_id, id)
+    if wants_hx(request):
+        return _playlist_hx(request, id)
     return json_or_redirect(request, {"ok": True, "deleted": item_id}, "/playlists")
 
 
 @app.post("/playlists/{id}/reorder")
-def reorder_playlist(id: int, order: str = Form(...)):
+def reorder_playlist(request: Request, id: int, order: str = Form(...)):
     get_playlist_or_404(id)
     ids = [int(x) for x in order.split(",") if x.strip().isdigit()]
     for pos, item_id in enumerate(ids):
         db.run("UPDATE playlist_items SET position=? WHERE id=? AND playlist_id=?", pos, item_id, id)
+    if wants_hx(request):
+        return HTMLResponse("")
+    if wants_json(request):
+        return JSONResponse({"ok": True, "order": ids})
     return RedirectResponse("/playlists", status_code=303)
 
 
@@ -8619,6 +8709,7 @@ def _arc_template_vars(id):
             defaults[b] = chat.openai_model() if b == "openai" else grok._resolve_model(None)
         except Exception:
             defaults[b] = ""
+    outdir, _slug = album_arc_dir(pl)
     return {
         "playlist": pl, "arc": data, "row": row, "md": md, "titles": titles,
         "proposal": proposal, "backends": have, "models": models_by, "defaults": defaults,
@@ -8626,6 +8717,7 @@ def _arc_template_vars(id):
         "act_count": meter["act_count"],
         "premise": meter["premise"],
         "has_proposal": meter["has_proposal"],
+        "arc_versions": arc.list_snapshots(outdir),
     }
 
 
@@ -8688,6 +8780,7 @@ def accept_arc(request: Request, id: int):
         r["id"]: r["title"] for r in db.q(
             """SELECT s.id, s.title FROM playlist_items pi JOIN songs s ON s.id = pi.song_id
                WHERE pi.playlist_id=? ORDER BY pi.position""", id)}
+    arc.snapshot(outdir, slug, label="before-accept")
     json_path, md_path = arc.commit_proposal(data, outdir, slug, titles)
     db.run("""INSERT INTO arcs (playlist_id, json_path, md_path, model, prompt, created)
               VALUES (?,?,?,?,?,?)
@@ -8696,6 +8789,11 @@ def accept_arc(request: Request, id: int):
               created=excluded.created""",
            pl["id"], json_path, md_path, used, data.get("direction", ""), time.time())
     arc.discard_proposal(outdir, slug)
+    try:
+        if data.get("premise"):
+            arc.save_prompt(pl["name"], data["premise"], "accepted arc")
+    except ValueError:
+        pass
     return _arc_result(request, id)
 
 
@@ -8728,6 +8826,81 @@ def apply_arc(request: Request, id: int, song_ids: str = Form(""), confirm: str 
                             confirm=confirm.lower() in ("1", "true", "yes", "on"))
     except ValueError as e:
         raise HTTPException(400, str(e))
+    return _arc_result(request, id)
+
+
+@app.post("/playlists/{id}/arc/save")
+async def save_arc(request: Request, id: int):
+    """Edit the committed arc in place. Snapshots the previous JSON first."""
+    pl = get_playlist_or_404(id)
+    data = _load_arc(id)
+    if not data:
+        raise HTTPException(400, "accept an arc before editing it")
+    form = await request.form()
+    try:
+        data["premise"] = arc._screen(form.get("premise") or "", "the arc premise")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not data["premise"]:
+        raise HTTPException(400, "the arc needs a premise")
+    cont = form.get("continuity") or ""
+    data["continuity"] = [ln.strip() for ln in cont.splitlines() if ln.strip()]
+    for s in data.get("songs") or []:
+        sid = s.get("song_id")
+        if sid is None:
+            continue
+        for key in ("role", "beat", "opens", "closes"):
+            raw = form.get(f"{key}_{sid}")
+            if raw is None:
+                continue
+            try:
+                s[key] = arc._screen(raw, f"arc {key}") if raw.strip() else ""
+            except ValueError as e:
+                raise HTTPException(400, str(e))
+    songs = _playlist_tracks(id)
+    try:
+        data = arc.validate(data, [s["id"] for s in songs], SET_TRANSITIONS)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    data["album"] = pl["name"]
+    row = db.one("SELECT * FROM arcs WHERE playlist_id=?", id)
+    data["direction"] = (row["prompt"] if row else "") or ""
+    outdir, slug = album_arc_dir(pl)
+    arc.snapshot(outdir, slug, label="before-edit")
+    _persist_arc(pl, data, model=(row["model"] if row else "") or "",
+                 direction=data["direction"])
+    try:
+        arc.save_prompt(pl["name"], data["premise"], "edited arc")
+    except ValueError:
+        pass
+    return _arc_result(request, id)
+
+
+@app.post("/playlists/{id}/arc/restore")
+async def restore_arc(request: Request, id: int):
+    """Put a previous committed snapshot back as the live arc."""
+    pl = get_playlist_or_404(id)
+    form = await request.form()
+    try:
+        n = int(form.get("snapshot") or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "pick an arc version")
+    if n < 1:
+        raise HTTPException(400, "pick an arc version")
+    outdir, slug = album_arc_dir(pl)
+    titles = {s["id"]: s["title"] for s in _playlist_tracks(id)}
+    try:
+        data = arc.restore_snapshot(outdir, slug, n, titles)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    row = db.one("SELECT * FROM arcs WHERE playlist_id=?", id)
+    _persist_arc(pl, data, model=(row["model"] if row else "") or "",
+                 direction=data.get("direction") or (row["prompt"] if row else "") or "")
+    try:
+        if data.get("premise"):
+            arc.save_prompt(pl["name"], data["premise"], f"restored v{n}")
+    except ValueError:
+        pass
     return _arc_result(request, id)
 
 
@@ -8830,7 +9003,8 @@ def api_arc_reject(id: int):
 
 
 @app.post("/playlists/{id}/render")
-def render_playlist(id: int, include_videos: bool = Form(False), tier: List[str] = Form([])):
+def render_playlist(request: Request, id: int, include_videos: bool = Form(False),
+                    tier: List[str] = Form([])):
     """Render the set.
 
     Without videos it is an audio mix: one mp3, crossfaded by each item's
@@ -8854,7 +9028,7 @@ def render_playlist(id: int, include_videos: bool = Form(False), tier: List[str]
         mix = [{"audio": it["mp3_path"], "transition": it["transition"], "secs": it["secs"]}
                for it in items]
         jobs.enqueue("render_set", {"playlist_id": id, "mode": "audio", "items": mix})
-        return RedirectResponse("/playlists", status_code=303)
+        return _playlist_hx(request, id)
 
     selected = sorted(set(tier))
     if not selected:
@@ -8877,7 +9051,7 @@ def render_playlist(id: int, include_videos: bool = Form(False), tier: List[str]
         per_tier[t] = build
     for t, build in per_tier.items():
         jobs.enqueue("render_set", {"playlist_id": id, "mode": "video", "tier": t, "items": build})
-    return RedirectResponse("/playlists", status_code=303)
+    return _playlist_hx(request, id)
 
 
 # ------------------------------------------------------------------ tiers --

@@ -3,7 +3,9 @@
 {% block content %}
 <h1>Playlists</h1>
 
-<form method="post" action="/playlists" enctype="multipart/form-data" class="new-playlist-bar">
+<form method="post" action="/playlists" enctype="multipart/form-data" class="new-playlist-bar"
+      hx-post="/playlists" hx-target="body" hx-swap="innerHTML"
+      hx-encoding="multipart/form-data">
   <label>New playlist
     <input type="text" name="name" required placeholder="album name">
   </label>
@@ -18,14 +20,16 @@
   <div class="lightbox-bar">
     <strong id="cover-preview-label">Album cover</strong>
     <span class="lightbox-spacer"></span>
-    <form id="cover-replace" method="post" enctype="multipart/form-data" class="inline">
+    <form id="cover-replace" method="post" enctype="multipart/form-data" class="inline"
+          hx-encoding="multipart/form-data" hx-swap="innerHTML">
       <label class="icon-btn" title="Replace this cover" aria-label="Replace this cover">
         {{ glyph_edit() }}
         <input type="file" name="image" accept="image/*" required hidden
-               onchange="this.form.submit()">
+               onchange="if (window.htmx) htmx.trigger(this.form, 'submit'); else this.form.submit();">
       </label>
     </form>
     <form id="cover-delete" method="post" class="inline"
+          hx-swap="innerHTML"
           onsubmit="return confirm('Delete this cover?');">
       <button type="submit" class="icon-btn danger-icon"
               title="Delete this cover" aria-label="Delete this cover">
@@ -107,6 +111,7 @@
          hx-swap="innerHTML"
          hx-indicator="find .playlist-loading">
   <summary>
+    <span class="cover-slot" id="cover-slot-{{ d.playlist.id }}">
     {% if d.playlist.image_path %}
     <button type="button" class="cover-open js-cover-open"
             data-full="{{ media_url(d.playlist.image_path) }}"
@@ -117,19 +122,22 @@
     {% else %}
     <span class="cover cover-empty">no art</span>
     {% endif %}
+    </span>
     <span class="summary-text">
       <strong>{{ d.playlist.name }}</strong>
       <span class="muted summary-meta">
         <form method="post" action="/playlists/{{ d.playlist.id }}/date"
               class="album-date-edit nowrap"
+              hx-post="/playlists/{{ d.playlist.id }}/date"
+              hx-target="#album-date-{{ d.playlist.id }}" hx-swap="innerHTML"
               onclick="event.stopPropagation()">
           <label class="album-date-label" title="Set album date">
-            <span>{{ d.album_date or "no date" }}</span>
+            <span id="album-date-{{ d.playlist.id }}">{{ d.album_date or "no date" }}</span>
             {{ glyph_edit() }}
             <input type="date" name="released" value="{{ d.album_date }}"
                    aria-label="Album date"
                    onclick="event.stopPropagation()"
-                   onchange="this.form.submit()">
+                   onchange="if (window.htmx) htmx.trigger(this.form, 'submit'); else this.form.submit();">
           </label>
         </form>
         <span>&middot; {{ d.song_count }} song{{ "" if d.song_count == 1 else "s" }}
@@ -137,7 +145,7 @@
       </span>
     </span>
   </summary>
-  <div class="playlist-body">
+  <div class="playlist-body" id="pl-body-{{ d.playlist.id }}">
     <p class="playlist-loading" aria-live="polite">
       <span class="spinner" aria-hidden="true"></span>
       Loading album&hellip;

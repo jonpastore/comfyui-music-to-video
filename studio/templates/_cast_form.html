@@ -2,7 +2,9 @@
    swaps it whole, filled in -- the proposal lands in the boxes for editing and
    nothing is saved until Add character is pressed, exactly like the wand. #}
 <form id="cast-form-{{ playlist.id }}" method="post"
-      action="/playlists/{{ playlist.id }}/characters" class="stack-form">
+      action="/playlists/{{ playlist.id }}/characters" class="stack-form"
+      hx-post="/playlists/{{ playlist.id }}/characters"
+      hx-target="closest .playlist-body" hx-swap="innerHTML">
   {% if proposed %}
   <p class="hint">Drafted from the album cover{% if proposed_backend %}
     by {{ proposed_backend }}{% endif %}. Nothing is saved until you press
