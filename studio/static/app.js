@@ -1564,7 +1564,7 @@ function initSongPage() {
       styleTa.value = d.song.style_text;
       styleTa.defaultValue = d.song.style_text;
     }
-    var bpmLine = page.querySelector("section.card .meta");
+    var bpmLine = page.querySelector("#fold-analysis .meta");
     if (bpmLine && d.song.bpm) {
       var bits = [Number(d.song.bpm).toFixed(1) + " BPM"];
       if (d.song.key) bits.push("key " + d.song.key);
@@ -1574,21 +1574,25 @@ function initSongPage() {
     if (d.storyboards && d.storyboards.length) {
       var list = page.querySelector(".tier-links");
       if (!list) {
-        var sbCard = page.querySelector("#sb-form") && page.querySelector("#sb-form").closest("section.card");
+        var sbCard = page.querySelector("#sb-form") && page.querySelector("#sb-form").closest(".card");
         if (sbCard) {
           list = document.createElement("ul");
-          list.className = "tier-links";
-          sbCard.appendChild(list);
+          list.className = "tier-actions tier-links";
+          var form = page.querySelector("#sb-form");
+          sbCard.insertBefore(list, form);
         }
       }
       if (list) {
         d.storyboards.forEach(function (b) {
           var href = "/songs/" + songId + "/storyboard/" + b.tier;
           if (list.querySelector('a[href="' + href + '"]')) return;
+          var label = b.tier === "xxx" ? "XXX" : b.tier === "pg13" ? "PG-13"
+            : String(b.tier || "").toUpperCase();
           var li = document.createElement("li");
-          li.innerHTML = '<a href="' + href + '">' + b.tier + "</a> (" +
-            (b.scene_count || "?") + " scenes) · " +
-            '<a href="/songs/' + songId + "/approve/" + b.tier + '">approve grid</a>';
+          li.innerHTML = '<a class="btn" href="' + href + '">Edit ' + label +
+            ' scenes</a> <a class="btn secondary" href="/songs/' + songId +
+            "/approve/" + b.tier + '">Approve ' + label + '</a> ' +
+            '<span class="muted">' + (b.scene_count || "?") + " scenes</span>";
           list.appendChild(li);
         });
       }

@@ -67,6 +67,38 @@ def test_api_song_returns_state():
         assert "active_job" in body
 
 
+def test_song_page_folds_and_storyboard_are_buttons():
+    """Long song page: cards collapse; boards are Edit/Approve buttons."""
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Fold Song")
+        sid = song["id"]
+        page = client.get(f"/songs/{sid}").text
+        assert 'class="card song-fold"' in page
+        assert 'id="fold-storyboard"' in page
+        assert 'id="refs"' in page
+        # lyrics/style start open when empty; analysis open when not analysed
+        assert 'id="fold-analysis"' in page
+        # delete/jobs start closed
+        assert 'id="fold-delete"' in page
+        assert 'open' not in page.split('id="fold-delete"')[1][:40]
+
+        # a board turns the links into verb+object buttons
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        open(jp, "w").write('{"title":"T","scenes":[{"scene_number":1}]}')
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               sid, "xxx", jp, jp + ".md", 1, 0)
+        page = client.get(f"/songs/{sid}").text
+        assert f">Edit XXX scenes</a>" in page
+        assert f">Approve XXX</a>" in page
+        assert "approve grid" not in page.lower()
+        assert 'class="btn"' in page
+        # pose plan for a tier lives inside that tier's expand body
+        assert "tier-ref-body" in page
+
+
 def test_song_page_storyboard_form_is_dual_path():
     with TestClient(appmod.app) as client:
         song = _upload_song(client, "Async Storyboard Song")

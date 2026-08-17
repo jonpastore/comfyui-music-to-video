@@ -2,7 +2,7 @@
 {% block content %}
 <h1>Storyboard &mdash; {{ song.title }} <span class="tag">{{ tier | tiername }}</span></h1>
 <p class="meta"><a href="/songs/{{ song.id }}">&larr; back to song</a> &middot;
-   <a href="/songs/{{ song.id }}/approve/{{ tier }}">approve grid</a> &middot;
+   <a class="btn secondary" href="/songs/{{ song.id }}/approve/{{ tier }}">Approve {{ tier | tiername }}</a> &middot;
    <a href="{{ media_url(row.json_path) }}">download json</a></p>
 
 {# ---- the character this storyboard is for, at the top: a scene is read

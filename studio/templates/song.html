@@ -14,8 +14,15 @@
   <span class="muted">Whether the LYRICS are explicit. Never selects or gates a tier.</span>
 </form>
 
-<section class="card">
-  <h2>Analysis</h2>
+<details class="card song-fold" id="fold-analysis"{% if not song.bpm %} open{% endif %}>
+  <summary>
+    <h2>Analysis</h2>
+    {% if song.bpm %}
+    <span class="muted">{{ "%.1f"|format(song.bpm) }} BPM · {{ song.key or "no key" }}</span>
+    {% else %}
+    <span class="muted">not analysed</span>
+    {% endif %}
+  </summary>
   {% if song.bpm %}
   <p class="meta">{{ "%.1f"|format(song.bpm) }} BPM &middot; key {{ song.key }}
     &middot; energy {{ "%.3f"|format(song.energy) }} &middot; {{ beat_count }} beats</p>
@@ -37,11 +44,14 @@
   <p class="hint">Which of the first four beats is bar one. A set built on the
     wrong bar-one sounds wrong in a way no tuning fixes -- listen once and correct it here.</p>
   {% endif %}
-</section>
+</details>
 
 <div class="row-2col">
-  <section class="card">
-    <h2>Lyrics</h2>
+  <details class="card song-fold" id="fold-lyrics"{% if not song.lyrics %} open{% endif %}>
+    <summary>
+      <h2>Lyrics</h2>
+      <span class="muted">{% if song.lyrics %}saved{% else %}empty{% endif %}</span>
+    </summary>
     {# the paired card carries a note too, so the two boxes line up rather than
        sitting 60px apart -- and the storyboard really is built from this text #}
     <p class="muted">The words, in [Section] blocks. Whisper drafts them; edit freely.
@@ -57,27 +67,33 @@
       <button type="submit" class="secondary">Re-transcribe</button>
     </form>
     {% endif %}
-  </section>
+  </details>
 
-  <section class="card">
-    <h2>Style prompt</h2>
+  <details class="card song-fold" id="fold-style"{% if not song.style_text %} open{% endif %}>
+    <summary>
+      <h2>Style prompt</h2>
+      <span class="muted">{% if song.style_text %}saved{% else %}empty{% endif %}</span>
+    </summary>
     <p class="muted">What the track was generated from (Suno / ChatGPT). Saved with the
       song; not sent to the storyboard model or the renderer.</p>
     <form method="post" action="/songs/{{ song.id }}/style-text" class="stack-form">
       <textarea name="style_text" rows="16">{{ song.style_text or "" }}</textarea>
       <button type="submit">Save style prompt</button>
     </form>
-  </section>
+  </details>
 </div>
 
-<section class="card" id="media-menu"
+<details class="card song-fold" id="media-menu"
          data-media-count="{{ media.count }}"
          data-media-reason="{{ media.reason or '' }}"
          data-media-n-takes="{{ media.n_takes }}"
          data-media-n-audio-edits="{{ media.n_audio_edits }}"
          data-media-n-audio-original="{{ media.n_audio_original }}"
          data-media-n-renders="{{ media.n_renders }}">
-  <h2>Media</h2>
+  <summary>
+    <h2>Media</h2>
+    <span class="muted">{{ media.count }} items</span>
+  </summary>
   <p class="muted">Song-level bag: takes, audio edits, the original upload, and
     assembled renders. One list the JSON endpoint reports
     (<code>GET /api/songs/{{ song.id }}/media</code>). Unpicked takes can be
@@ -111,10 +127,13 @@
     {% endfor %}
   </ul>
   {% endif %}
-</section>
+</details>
 
-<section class="card">
-  <h2>Edit audio</h2>
+<details class="card song-fold" id="fold-edit-audio">
+  <summary>
+    <h2>Edit audio</h2>
+    <span class="muted">{% if song.mp3_path %}{{ song.mp3_path.split('/')[-1] }}{% else %}no file{% endif %}</span>
+  </summary>
   <p class="meta">Current track: <code>{{ song.mp3_path.split('/')[-1] if song.mp3_path else "none" }}</code>
     {% if audio_duration %}&middot; {{ "%.1f"|format(audio_duration) }}s{% endif %}</p>
   <form id="audio-edit-form" method="post" action="/songs/{{ song.id }}/audio" class="stack-form">
@@ -178,11 +197,14 @@
     </tbody>
   </table>
   {% endif %}
-</section>
+</details>
 
 
-<section class="card">
-  <h2>Generate audio</h2>
+<details class="card song-fold" id="fold-gen-audio">
+  <summary>
+    <h2>Generate audio</h2>
+    <span class="muted">{% if takes %}{{ takes|length }} take{{ "" if takes|length == 1 else "s" }}{% else %}no takes{% endif %}</span>
+  </summary>
   <p class="hint">
     {% if audio_model %}<code>{{ audio_model.label }}</code> &mdash; {% endif %}
     writes NEW music from style tags and optional lyrics. It is a generator, not an
@@ -269,19 +291,26 @@
     </tbody>
   </table>
   {% endif %}
-</section>
+</details>
 
 
-<section class="card">
-  <h2>Storyboard</h2>
+<details class="card song-fold" id="fold-storyboard" open>
+  <summary>
+    <h2>Storyboard</h2>
+    {% if storyboards %}
+    <span class="muted">{% for t, sb in storyboards.items() %}{{ t | tiername }}
+      {{ sb.scene_count or "?" }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+    {% else %}
+    <span class="muted">no board yet</span>
+    {% endif %}
+  </summary>
   {% if storyboards %}
-  <p class="meta">Boards already written. Open one to read and edit scenes.</p>
-  <ul class="tier-links">
+  <ul class="tier-actions tier-links">
     {% for t, sb in storyboards.items() %}
     <li>
-      <a href="/songs/{{ song.id }}/storyboard/{{ t }}">{{ t | tiername }}</a>
-      ({{ sb.scene_count or "?" }} scenes)
-      &middot; <a href="/songs/{{ song.id }}/approve/{{ t }}">approve grid</a>
+      <a class="btn" href="/songs/{{ song.id }}/storyboard/{{ t }}">Edit {{ t | tiername }} scenes</a>
+      <a class="btn secondary" href="/songs/{{ song.id }}/approve/{{ t }}">Approve {{ t | tiername }}</a>
+      <span class="muted">{{ sb.scene_count or "?" }} scenes</span>
     </li>
     {% endfor %}
   </ul>
@@ -289,18 +318,30 @@
   <p class="empty">No storyboard yet. Fill the brief and generate one.</p>
   {% endif %}
 
+  {% if storyboards %}
+  <details>
+    <summary>Write a new board</summary>
+    {% include "_storyboard_form.html" %}
+  </details>
+  {% else %}
   <h3>Write a new board</h3>
   {% include "_storyboard_form.html" %}
-</section>
+  {% endif %}
+</details>
 
-<section class="card">
-  <h2>Reference images</h2>
+<details class="card song-fold" id="refs" open>
+  <summary>
+    <h2>Reference images</h2>
+    <span class="muted">album pose plates · generate scene stills · then approve</span>
+  </summary>
   <form method="post" action="/songs/{{ song.id }}/refs">
     {% if storyboards %}
     <fieldset>
       <legend>Which rating to generate</legend>
-      <p class="hint">Tick the rating you want stills for. <strong>XXX only</strong>
-        &mdash; tick XXX, leave R off. Each ticked rating is its own job.</p>
+      <p class="hint">Tick a rating to expand its plates and coverage.
+        <strong>Pose sheets are album plates, not scene stills.</strong>
+        Generate refs draws one still per scene; those stills are what
+        Approve shows. Each ticked rating is its own job.</p>
       {# only tiers that HAVE a storyboard: there is nothing to render images
          from without one, and offering the rest just moves the failure.
          A tier also needs a CHOSEN ANCHOR -- refs are rendered from it -- so
@@ -309,77 +350,95 @@
       {% set anchor = anchor_by_tier.get(t) %}
       {% set poses = pose_library_by_tier.get(t, []) %}
       {% set prog = ref_progress_by_tier.get(t) %}
-      <div class="tier-anchor {% if not anchor %}missing{% endif %}">
-        <label class="check">
-          <input type="checkbox" name="tier" value="{{ t }}"
-                 {% if not anchor %}disabled{% endif %}
-                 {% if anchor and loop.last %}checked{% endif %}>
-          {{ t | tiername }}
-        </label>
-        {% if anchor %}
-        <a href="/anchors?scope_value={{ song.album | urlencode }}"
-           title="identity front for the {{ t }} tier -- click to manage">
-          <img class="anchor-thumb" src="{{ media_url(anchor.path) }}" alt="{{ t | tiername }} identity front">
-        </a>
-        <span class="muted">{{ poses|length }} pose sheet{{ "" if poses|length == 1 else "s" }}
-          · identity front ready</span>
-        {% else %}
-        {% set nposes = pose_count_by_tier.get(t, 0) %}
-        {% if nposes %}
-        <span class="warn">{{ nposes }} pose sheets · missing identity front</span>
-        <a href="/anchors?scope_value={{ song.album | urlencode }}">pick or generate front</a>
-        {% else %}
-        <span class="warn">no anchor for this tier</span>
-        <a href="/anchors?scope_value={{ song.album | urlencode }}">create one</a>
+      {% set pplan = pose_plan_by_tier.get(t) %}
+      <div class="tier-ref {% if not anchor %}missing{% endif %}">
+        <div class="tier-ref-head">
+          <label class="check">
+            <input type="checkbox" name="tier" value="{{ t }}"
+                   {% if not anchor %}disabled{% endif %}
+                   {% if anchor and loop.last %}checked{% endif %}>
+            {{ t | tiername }}
+          </label>
+          {% if anchor %}
+          <a href="/anchors?scope_value={{ song.album | urlencode }}"
+             title="identity front for the {{ t }} tier -- click to manage">
+            <img class="anchor-thumb" src="{{ media_url(anchor.path) }}" alt="{{ t | tiername }} identity front">
+          </a>
+          <span class="muted">{{ poses|length }} pose sheet{{ "" if poses|length == 1 else "s" }}
+            · identity front ready</span>
+          {% else %}
+          {% set nposes = pose_count_by_tier.get(t, 0) %}
+          {% if nposes %}
+          <span class="warn">{{ nposes }} pose sheets · missing identity front</span>
+          <a href="/anchors?scope_value={{ song.album | urlencode }}">pick or generate front</a>
+          {% else %}
+          <span class="warn">no anchor for this tier</span>
+          <a href="/anchors?scope_value={{ song.album | urlencode }}">create one</a>
+          {% endif %}
+          {% endif %}
+          {% if prog %}
+          <span class="muted">{{ prog.approved }}/{{ prog.scenes }} scene stills approved
+            {% if prog.clips %} · {{ prog.clips }} video part{{ "" if prog.clips == 1 else "s" }}{% endif %}</span>
+          {% endif %}
+        </div>
+        {% if not anchor and poses %}
+        <div class="pose-strip" aria-label="{{ t | tiername }} pose library">
+          {% for a in poses %}
+          <a class="pose-chip {% if a.view == 'front' %}identity{% endif %}"
+             href="/anchors?scope_value={{ song.album | urlencode }}"
+             title="{{ a.view }}">
+            <img src="{{ media_url(a.path) }}" alt="{{ a.view | viewname }}" loading="lazy">
+            <span>{{ a.view | viewname }}{% if a.character_name %} · {{ a.character_name }}{% endif %}</span>
+          </a>
+          {% endfor %}
+        </div>
         {% endif %}
-        {% endif %}
-        {% if prog %}
-        <span class="muted">{{ prog.approved }}/{{ prog.scenes }} scenes approved
-          {% if prog.clips %} · {{ prog.clips }} video part{{ "" if prog.clips == 1 else "s" }}{% endif %}</span>
-        {% endif %}
+        <div class="tier-ref-body">
+          {% if anchor and poses %}
+          <div class="pose-strip" aria-label="{{ t | tiername }} pose library">
+            {% for a in poses %}
+            <a class="pose-chip {% if a.view == 'front' %}identity{% endif %}"
+               href="/anchors?scope_value={{ song.album | urlencode }}"
+               title="{{ a.view }}">
+              <img src="{{ media_url(a.path) }}" alt="{{ a.view | viewname }}" loading="lazy">
+              <span>{{ a.view | viewname }}{% if a.character_name %} · {{ a.character_name }}{% endif %}</span>
+            </a>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if pplan %}
+          <details class="pose-plan" data-tier="{{ t }}">
+            <summary>{{ t | tiername }} pose plan
+              · {{ pplan.n_bound }}/{{ pplan.n_scenes }} scenes have a plate
+              {% if pplan.n_unbound %}
+              · {{ pplan.n_unbound }} will use identity front + scene text
+              {% endif %}
+            </summary>
+            <p class="hint">Optional. Unassigned scenes still generate from the
+              identity front and the scene prompt. Assign a plate only when a
+              scene needs a specific pose.</p>
+            <ul class="pose-plan-list">
+              {% for g in pplan.needed %}
+              <li class="{% if g.sheet_id %}bound{% else %}unbound{% endif %}">
+                {% if g.path %}
+                <img src="{{ media_url(g.path) }}" alt="" loading="lazy">
+                {% endif %}
+                <span>
+                  <strong>{{ g.label }}</strong>
+                  <span class="muted">scenes {{ g.scenes | join(", ") }}</span>
+                  {% if not g.sheet_id %}
+                  <a href="/anchors?scope_value={{ song.album | urlencode }}">assign a sheet</a>
+                  {% endif %}
+                </span>
+              </li>
+              {% endfor %}
+            </ul>
+          </details>
+          {% endif %}
+        </div>
       </div>
-      {% if poses %}
-      <div class="pose-strip" aria-label="{{ t | tiername }} pose library">
-        {% for a in poses %}
-        <a class="pose-chip {% if a.view == 'front' %}identity{% endif %}"
-           href="/anchors?scope_value={{ song.album | urlencode }}"
-           title="{{ a.view }}">
-          <img src="{{ media_url(a.path) }}" alt="{{ a.view | viewname }}" loading="lazy">
-          <span>{{ a.view | viewname }}{% if a.character_name %} · {{ a.character_name }}{% endif %}</span>
-        </a>
-        {% endfor %}
-      </div>
-      {% endif %}
       {% endfor %}
     </fieldset>
-    {% for t, pplan in pose_plan_by_tier.items() %}
-    {% if pplan %}
-    <div class="pose-plan" data-tier="{{ t }}">
-      <p class="meta">{{ t | tiername }} pose plan
-        &middot; {{ pplan.n_bound }}/{{ pplan.n_scenes }} scenes have a plate
-        {% if pplan.n_unbound %}
-        &middot; <span class="warn">{{ pplan.n_unbound }} from identity front + text</span>
-        {% endif %}
-      </p>
-      <ul class="pose-plan-list">
-        {% for g in pplan.needed %}
-        <li class="{% if g.sheet_id %}bound{% else %}unbound{% endif %}">
-          {% if g.path %}
-          <img src="{{ media_url(g.path) }}" alt="" loading="lazy">
-          {% endif %}
-          <span>
-            <strong>{{ g.label }}</strong>
-            <span class="muted">scenes {{ g.scenes | join(", ") }}</span>
-            {% if not g.sheet_id %}
-            <a href="/anchors?scope_value={{ song.album | urlencode }}">assign a sheet</a>
-            {% endif %}
-          </span>
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
-    {% endif %}
-    {% endfor %}
     <p class="hint">One still per scene. Tick <strong>XXX</strong> and press
       Generate refs. Leave Limit at 0 for every scene. Video chops a long
       scene later; you do not approve those parts.</p>
@@ -389,10 +448,13 @@
     <p class="empty">No storyboard yet -- generate one above and its tier appears here.</p>
     {% endif %}
   </form>
-</section>
+</details>
 
-<section class="card">
-  <h2>Review frames</h2>
+<details class="card song-fold" id="fold-review">
+  <summary>
+    <h2>Review &amp; video</h2>
+    <span class="muted">{% if reviews %}{{ reviews|length }} sheet{{ "" if reviews|length == 1 else "s" }}{% else %}review not run{% endif %}</span>
+  </summary>
   <form method="post" action="/songs/{{ song.id }}/classify">
     <label>Tier
       <select name="tier">
@@ -536,15 +598,18 @@
     <code>dry_run=0</code> and <code>confirm=DELETE</code>. Delete on a card
     removes that assembled file only; clips stay.</p>
   {% endif %}
-</section>
+</details>
 
 {% for plan in cleanup_plans %}
-<section class="card cleanup-card" id="cleanup-{{ plan.tier }}"
+<details class="card song-fold cleanup-card" id="cleanup-{{ plan.tier }}"
          data-cleanup-tier="{{ plan.tier }}"
          data-cleanup-n-can-delete="{{ plan.n_can_delete }}"
          data-cleanup-n-clips="{{ plan.n_clips }}"
          data-cleanup-dry-run="{{ 1 if plan.dry_run else 0 }}">
-  <h2>Clip cleanup — {{ plan.tier | tiername }}</h2>
+  <summary>
+    <h2>Clip cleanup — {{ plan.tier | tiername }}</h2>
+    <span class="muted">{{ plan.n_can_delete }} can delete</span>
+  </summary>
   <p class="meta">Dry-run from <code>plan_clip_cleanup</code>
     &middot; <span data-cleanup-n-can-delete>{{ plan.n_can_delete }}</span> can delete
     &middot; {{ plan.n_clips }} clips listed
@@ -590,11 +655,14 @@
     storyboards, findings rows, and the assembled file stay. Local via
     <code>os.remove</code>; remote only through a known
     <code>SWARM_INPUT_DIRS</code> twin — never invent a remote path.</p>
-</section>
+</details>
 {% endfor %}
 
-<section class="card">
-  <h2>QC</h2>
+<details class="card song-fold" id="fold-qc">
+  <summary>
+    <h2>QC</h2>
+    <span class="muted">{% if findings %}{{ findings|length }} finding{{ "" if findings|length == 1 else "s" }}{% else %}none open{% endif %}</span>
+  </summary>
   <form method="post" action="/songs/{{ song.id }}/qc">
     <button type="submit">Run QC</button>
   </form>
@@ -605,10 +673,13 @@
     {% include "_finding_row.html" %}
   {% endfor %}
   {% endif %}
-</section>
+</details>
 
-<section class="card">
-  <h2>Recent jobs for this song</h2>
+<details class="card song-fold" id="fold-jobs">
+  <summary>
+    <h2>Recent jobs for this song</h2>
+    <span class="muted">{% if song_jobs %}{{ song_jobs|length }}{% else %}none{% endif %}</span>
+  </summary>
   {% if not song_jobs %}
   <p class="empty">None yet.</p>
   {% else %}
@@ -639,10 +710,12 @@
     </table>
   </div>
   {% endif %}
-</section>
+</details>
 
-<section class="card">
-  <h2>Delete this song</h2>
+<details class="card song-fold" id="fold-delete">
+  <summary>
+    <h2>Delete this song</h2>
+  </summary>
   <p class="hint">Removes the song, its storyboards, refs, clips and renders --
     row and files -- permanently. Anchors belong to the album/playlist and are not touched.</p>
   <form method="post" action="/songs/{{ song.id }}/delete" class="delete-song stack-form">
@@ -651,6 +724,6 @@
     </label>
     <button type="submit" class="danger">Delete song</button>
   </form>
-</section>
+</details>
 </div>
 {% endblock %}

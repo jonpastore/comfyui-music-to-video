@@ -193,7 +193,7 @@ def test_song_page_says_missing_front_when_pose_sheets_exist():
                   VALUES ('album',?,'r','pose_21','standing.jpg',1,?)""",
                song["album"], time.time())
         page = client.get(f"/songs/{sid}").text
-        refs = page.split("Reference images")[1].split("</section>")[0]
+        refs = page.split("Reference images")[1].split('id="fold-review"')[0]
         assert "missing identity front" in refs
         assert "no anchor for this tier" not in refs
         assert "disabled" in refs
@@ -296,12 +296,12 @@ def test_song_page_lists_the_pose_library_not_just_identity_front():
                   VALUES ('album',?,'r','pose_21','kneel.jpg',1,?)""",
                song["album"], time.time())
         page = client.get(f"/songs/{sid}").text
-        refs = page.split("Reference images")[1].split("</section>")[0]
+        refs = page.split("Reference images")[1].split('id="fold-review"')[0]
         assert "2 pose sheets" in refs
         assert "identity front ready" in refs
         assert refs.count("pose-chip") == 2
         assert "anchor ready" not in refs
-        assert "scenes approved" in refs
+        assert "scene stills approved" in refs
 
 
 def test_assemble_output_has_preview_modal_and_delete():

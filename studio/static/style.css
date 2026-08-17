@@ -144,6 +144,57 @@ h4 { font-size: 1rem; }
   margin-bottom: 1.25rem;
 }
 
+/* Song page (and any long work page): one card, collapsed to a status line. */
+details.song-fold > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.55rem 0.85rem;
+  cursor: pointer;
+  list-style: none;
+}
+details.song-fold > summary::-webkit-details-marker { display: none; }
+details.song-fold > summary::before {
+  content: "▸";
+  color: var(--muted);
+  flex: none;
+}
+details.song-fold[open] > summary::before { content: "▾"; }
+details.song-fold > summary h2 { margin: 0; }
+details.song-fold > summary .muted { font-weight: 400; }
+details.song-fold[open] > summary { margin-bottom: 0.75rem; }
+
+.tier-actions {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.tier-actions li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.65rem;
+}
+
+.tier-ref {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  margin: 0.45rem 0;
+}
+.tier-ref-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+}
+.tier-ref-body { display: none; margin-top: 0.65rem; }
+.tier-ref:has(input[name="tier"]:checked) .tier-ref-body { display: block; }
+.tier-ref-body .pose-strip { margin-left: 0; }
+
 form label {
   display: flex;
   flex-direction: column;
@@ -205,6 +256,28 @@ button.secondary {
 button.secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent);
                                          background: transparent; }
 button.secondary:active:not(:disabled) { background: var(--panel); }
+
+/* Same stakes as the matching <button>, for destinations that are GET. */
+a.btn {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: 600 0.875rem/1.2 inherit;
+  padding: 0.5rem 0.9rem;
+  text-decoration: none;
+}
+a.btn:hover { background: #8fb2ff; color: var(--accent-fg); }
+a.btn.secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border-strong);
+  font-weight: 500;
+}
+a.btn.secondary:hover { border-color: var(--accent); color: var(--accent); background: transparent; }
 
 /* Repeated per-row and per-thumbnail actions. They must be reachable and must
    not compete: a table of thirty rows should not be thirty blue blocks. */

@@ -61,6 +61,9 @@ def test_t2_13c_approve_grid_lists_every_scene_not_every_clip():
         assert "Clip #0" not in page
         assert f"of {want_clips} approved" not in page
         assert "of 20 scenes approved" in page
+        assert "Generate refs" in page
+        assert "album plates" in page
+        assert "no candidates yet" not in page
 
 
 def test_t2_13c_approve_context_does_not_range_over_scene_count():

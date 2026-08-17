@@ -460,25 +460,39 @@ named lead has no chosen sheet the button is `blocked` (not disabled)
 and `.plan-blocker` names that lead (`T2-28`); extras/background do not
 block. The same panel names **missing identity front** when chosen pose
 sheets exist but none is `view=front` — never *no anchor* in that case.
+The song page is a stack of `<details class="song-fold">` cards. Analysis,
+lyrics, style, media, audio, review, video, QC, jobs and delete start
+closed once they have content. **Storyboard** and **Reference images**
+start open — that is the work. Summaries carry the one-line status so
+you do not open a card to learn it is idle.
+Storyboard destinations are buttons: *Edit {tier} scenes* and
+*Approve {tier}* (`a.btn` / `a.btn.secondary`), not bare text links.
 The song page **Reference images** checkboxes stay disabled until front
 exists; the warning is *N pose sheets · missing identity front* with a
-deep-link to `/anchors`. When front exists the same row says *N pose
-sheets · identity front ready* and a `.pose-strip` of every chosen
-sheet for that tier sits under it (identity front outlined, `viewname`
-caption, supporting-character name when present). A 40-sheet album is
-the expected case, not an overflow. Storyboard **Anchors for this tier**
-shows identity fronts only (protagonist and each lead). Captions use
-`viewname`, not the raw `pose_21` key (title attribute keeps the key).
-A 40-sheet pose library is counted under the strip (*N chosen pose
-sheets on /anchors — not used as Generate refs image1*), not dumped as
-40 figures. The XXX gallery family tab defaults
-to **Nude** when that family has rows. `POST /songs/{id}/refs` refuses
-the same reason before enqueue. Reference-image generate uses the
-chosen front sheet as image1 (identity), not a standing plate
-(`test_t2_refs_identity.py`). The same card shows a **pose plan**:
-every scene's needed pose grouped to a chosen sheet (or marked unbound).
-Generate refs freezes auto-matches and sends each bound sheet as that
-scene's image2 plate. Storyboard scene rows have a **Pose plate**
+deep-link to `/anchors`. Tick a ready rating to expand **that tier
+only**: identity thumb, `.pose-strip`, and a collapsed pose plan.
+Unticked tiers do not dump their pose cards (a 50-scene G plan must not
+sit under a ticked XXX). Pose sheets are **album plates**. Scene stills
+are what Generate refs writes; Approve shows those, never the pose
+library. Empty approve copy says so and links `#refs` — not *no
+candidates yet* (UIUX §5.9). When front exists the row says *N pose
+sheets · identity front ready* and the strip (identity front outlined,
+`viewname` caption, supporting-character name when present) sits in the
+expanded body. A 40-sheet album is the expected case, not an overflow.
+Storyboard **Anchors for this tier** shows identity fronts only
+(protagonist and each lead). Captions use `viewname`, not the raw
+`pose_21` key (title attribute keeps the key). A 40-sheet pose library
+is counted under the strip (*N chosen pose sheets on /anchors — not
+used as Generate refs image1*), not dumped as 40 figures. The XXX
+gallery family tab defaults to **Nude** when that family has rows.
+`POST /songs/{id}/refs` refuses the same reason before enqueue.
+Reference-image generate uses the chosen front sheet as image1
+(identity), not a standing plate (`test_t2_refs_identity.py`). The
+expanded tier's **pose plan** is optional and collapsed: every scene's
+needed pose grouped to a chosen sheet (or marked unbound). Unassigned
+scenes still generate from identity front + scene text. Generate refs
+freezes auto-matches and sends each bound sheet as that scene's image2
+plate. Storyboard scene rows have a **Pose plate**
 select (`POST .../scene/{n}/pose-sheet`). `GET /api/songs/{id}/pose-plan/{tier}`
 is the same object (`test_pose_plan.py`).
 **Clips & render:** assembled outputs are `.render-card` tiles — video
@@ -490,8 +504,9 @@ clips stay). htmx swaps the card out so the 22s song page does not
 reload. `GET` on the same URL is a confirm page, not a 405. A filename
 link that navigates away is the old world.
 **Generate refs checkboxes** are *which rating to enqueue*, not which
-stills to pick. Legend: “Which rating to generate”. Hint: tick XXX,
-leave R off, press Generate refs. The last ready tier is pre-checked.
+stills to pick. Checking one expands that tier's plates and coverage.
+Legend: “Which rating to generate”. Hint: tick XXX, leave R off, press
+Generate refs. The last ready tier is pre-checked.
 **Approve grid Fix** is a page dialog (`#ref-fix`), not an inline
 `<details>` that stretches one card and lifts the neighbour. Tiles stay
 even (`aspect-ratio: 3/4` thumbs, `align-items: start`). Operator
