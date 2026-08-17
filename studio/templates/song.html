@@ -284,9 +284,8 @@
 
 <section class="card">
   <h2>Storyboard</h2>
-  {% include "_storyboard_form.html" %}
-
   {% if storyboards %}
+  <p class="meta">Boards already written. Open one to read and edit scenes.</p>
   <ul class="tier-links">
     {% for t, sb in storyboards.items() %}
     <li>
@@ -296,7 +295,12 @@
     </li>
     {% endfor %}
   </ul>
+  {% else %}
+  <p class="empty">No storyboard yet. Fill the brief and generate one.</p>
   {% endif %}
+
+  <h3>Write a new board</h3>
+  {% include "_storyboard_form.html" %}
 </section>
 
 <section class="card">

@@ -5604,10 +5604,13 @@ def storyboard_form_ctx(song, tier, chat_models=None, best=None, direction=None)
             if from_board:
                 stored = from_board
         direction = stored or beat or default_direction(song, tier)
+    secs = storyboard_service.DEFAULT_SCENE_SECONDS
     return {"song": song, "tier": tier, "tiers": tiers.all_tiers(),
             "direction": direction, "pinned": tiers.PINNED.strip(),
             "tier_text": tier_tone(tier, song["album"] or ""),
             "max_direction": grok.MAX_DIRECTION,
+            "scene_seconds": secs,
+            "expect_scenes": storyboard_service.clip_count(song, secs),
             "models": chat_models if chat_models is not None else [], "best_model": best}
 
 

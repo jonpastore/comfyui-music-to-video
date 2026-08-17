@@ -1245,6 +1245,8 @@ def test_storyboard_direction_is_prefilled_from_the_tier_and_shows_its_limits():
         page = client.get(f"/songs/{sid}").text
 
         assert 'name="direction"' in page, "no direction textarea"
+        assert "This box is not the storyboard" in page
+        assert 'name="scene_seconds"' in page
         # prefilled from the FIRST tier's own wording, not from thin air.
         # all_tiers() orders builtin-first then by name, so G leads.
         assert "Tone and wardrobe (g tier)" in page
