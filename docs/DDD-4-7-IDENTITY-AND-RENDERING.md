@@ -36,7 +36,8 @@ is not a studio feature.
 |---|---|
 | `make_anchor.py` | the view table, the positive constants, `is_nude_view`, `prompt_for`, the call into `workflow()` |
 | `build_refs.py` | the graph: `workflow()`, `sampler_settings`, `assign_ref_slots`, `cast_clause`, `negative_applies` |
-| `studio/app.py` | the anchor routes, `ANCHOR_VIEWS` labels, `ANCHOR_RENDER_FLAGS`, `DENOISE_CHOICES`, the preview |
+| `studio/app.py` | the anchor routes, `ANCHOR_VIEWS` labels, `ANCHOR_RENDER_FLAGS`, `DENOISE_CHOICES`, the preview; song-page `pose_library_by_tier` (chosen sheets, not just identity front); `start_refs` freezes `pose_plan` binds into `pose_bases` |
+| `studio/pose_plan.py` | scene need-text → chosen sheet match; `plan` / `bind_scene` / `freeze_auto_binds` / `album_coverage`; no FastAPI |
 | `studio/prompts.py` | `PROMPT_TYPES` — composer fields plus `view:<key>` generated from `VIEWS` (`T7-13`), plus `backdrop`/`composite`/`pose` |
 | `studio/tiers.py` | `compose_guardrail`, `check_text` (tier-aware: g/pg13 may depict T10-18; r lyrics/narrative mention T10-18a), `screen_work_for_tier` / `screen_escalation` / `check_escalation` (T10-19 entry; T10-20 ignores override kwargs), `check_override`, `check_tier_policy` |
 | `build_song.py` | TRD-5's territory: `workflow()`, the LTX branches, `clip_plan`, `expect_from_workflow` |
@@ -50,7 +51,8 @@ photographs (`assets` kind `anchor_ref`) → generate *candidates*
 operator put it there. A named pose on an `anchor_ref` (`meta_json.pose_name`,
 optional `pose_tier`, `role=pose`) is a plate: generate uses identity
 photos as image1 and that file as image2 (`T7-20`). Assign writes an
-`anchors` row whose path *is* the upload. That is also `T6-A1`'s named JSON loop for TRD-4/TRD-7:
+`anchors` row whose path *is* the upload, and `anchor_refs` then hides
+that file from Base images. That is also `T6-A1`'s named JSON loop for TRD-4/TRD-7:
 `GET/POST /api/anchors`, `/api/anchors/refs`, `/api/anchors/{id}/pick`,
 `/api/anchors/{id}/use-as-ref` (`test_t6_a1_anchor_loop_over_json`).
 

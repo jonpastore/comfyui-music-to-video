@@ -20,6 +20,7 @@ import time
 from fastapi.testclient import TestClient
 
 import app as appmod
+import build_song
 import db
 import tiers
 
@@ -69,13 +70,14 @@ def _write_board(sid, slug, tier, scenes, scene_seconds=30.0):
     return json_path
 
 
-def _approve_refs(sid, tier, n):
-    for i in range(n):
+def _approve_refs(sid, tier, scenes):
+    heads = build_song.scene_heads(scenes, "ltx25")
+    for sn, ci in heads.items():
         db.run(
             """INSERT INTO refs
-               (song_id, tier, clip_idx, path, seed, approved, created)
-               VALUES (?,?,?,?,?,?,?)""",
-            sid, tier, i, f"/fake/t225_{sid}_{i}.png", 7000 + i, 1, time.time())
+               (song_id, tier, clip_idx, path, seed, approved, created, scene_number)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            sid, tier, ci, f"/fake/t225_{sid}_{ci}.png", 17000 + ci, 1, time.time(), sn)
 
 
 def _n_clips_jobs(sid):
@@ -92,12 +94,9 @@ def test_t2_25_mismatch_refused_before_clips_enqueue():
             "t225-enqueue", title="T2-25 Enqueue Song",
             album="T225", duration=song_length)
         song = db.one("SELECT * FROM songs WHERE id=?", sid)
-        nclips = appmod.clip_count(song, scene_seconds)
-        _approve_refs(sid, "pg13", nclips)
-
-        _write_board(sid, song["slug"], "pg13",
-                     [_scene(n, "30 sec") for n in (1, 2, 3, 4)],
-                     scene_seconds=scene_seconds)
+        scenes = [_scene(n, "30 sec") for n in (1, 2, 3, 4)]
+        _write_board(sid, song["slug"], "pg13", scenes, scene_seconds=scene_seconds)
+        _approve_refs(sid, "pg13", scenes)
         match_meter = client.get(f"/api/songs/{sid}/storyboard/pg13/meter")
         assert match_meter.status_code == 200, match_meter.text
         assert match_meter.json()["mismatch"] is False, match_meter.json()

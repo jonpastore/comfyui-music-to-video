@@ -124,7 +124,11 @@ agrees with the song, and see which leads still have no anchor.
 
 **C · Find out what came back wrong.** After renders land, a queue of findings,
 each carrying what was measured against what was asked for, an editable remedy
-prompt, and an approve button. Nothing repairs itself.
+prompt, and an approve button. Nothing repairs itself. The approve-grid Fix
+control is a dialog (Use this face / paint a spot / extend), not an inline
+form that names image-1 slots. The approve grid is scene stills and scene prompts. Video chopping is
+automatic; last-frame chain is T2-10/T2-11. A candidate can be deleted.
+A thumb opens a full-size preview dialog.
 
 ## 5. What "working" means
 
@@ -137,12 +141,12 @@ the eight things that must become true; they are not a new contract.
 | P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b` **built** (`mix_audio` RMS/s slope on a constant sine), `T1-10` **built** (full-lane `fragment` ≤ 8 KB and renders), `T1-12` **built** (`pan` by L/R energy, `lowpass_hz`/`highpass_hz` by band energy), `T1-20d` |
 | P3 | Every surface is drivable with no browser, and the page and the JSON agree. A re-render, refine, repair or anchor re-roll leaves predecessor and successor both listed and selectable | `T6-A1`…`T6-A5`, `T1-3` **built** (JSON `POST /api/sets/{id}/render` and UI `POST /sets/{id}/render` emit the same `mixer.render_set_argv`; outputs agree on duration, frames, LUFS), `T1-4` **built** (mutate stored `gain_db`; next `mixer.render_set_graph` changes), `T2-41` |
 | P4 | An album's songs are scenes of one story, demonstrably — arc content appears in the storyboard and is absent when the arc is; at xxx no scene prompt carries the mainstream lock and the tier's own wording does; the board's guardrail field is this tier's clause and save refuses another tier's wording | `T2-20`, `T2-21`, `T2-22` |
-| P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every clip, a re-plan leaving approved `(clip_idx, seed)` unchanged, the planner prompt not naming a fixed 4.8125 s quantum, its clip-length text derived from planning, TIMING still stating track length and sum-to-track, generated scenes tiling `[0, duration]` with no gap or overlap, and a larger `scene_seconds` never returning more scenes | `T2-8`, `T2-8b`, `T2-9`, `T2-12a`, `T2-13a`, `T2-13b`, `T2-13c`, `T2-14a`, `T2-14b`, `T2-14c` |
+| P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every **scene**, a re-plan leaving approved `(clip_idx, seed)` unchanged, the planner prompt not naming a fixed 4.8125 s quantum, its clip-length text derived from planning, TIMING still stating track length and sum-to-track, generated scenes tiling `[0, duration]` with no gap or overlap, and a larger `scene_seconds` never returning more scenes | `T2-8`, `T2-8b`, `T2-9`, `T2-12a`, `T2-13a`, `T2-13b`, `T2-13c`, `T2-14a`, `T2-14b`, `T2-14c` |
 | P1 | The number on the screen is the number in the file — set length, to 0.05 s, with echo, hold, beatmatch, trim and an interstitial card all in play | `T1-7`, `T1-8`, `T1-27`, `T3-11` |
 | P2 | A drawn curve reaches the audio, and is not normalised away two stages later | `T1-9a`, `T1-9b` **built** (`mix_audio` RMS/s slope on a constant sine), `T1-12` **built** (`pan` by L/R energy, filter lanes by band energy), `T1-20d` |
 | P3 | Every surface is drivable with no browser, and the page and the JSON agree | `T6-A1`…`T6-A4`, `T1-3`, `T2-41` |
 | P4 | An album's songs are scenes of one story, demonstrably — arc content appears in the storyboard and is absent when the arc is; the board's guardrail field is this tier's clause and save refuses another tier's wording | `T2-20`, `T2-21`, `T2-22` |
-| P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every clip, a re-plan leaving approved `(clip_idx, seed)` unchanged, a plan that misses the track by more than one clip refused before render, the planner prompt not naming a fixed 4.8125 s quantum, its clip-length text derived from planning, TIMING still stating track length and sum-to-track, and a larger `scene_seconds` never returning more scenes | `T2-8`, `T2-9`, `T2-12a`, `T2-13a`, `T2-13b`, `T2-13c`, `T2-13e`, `T2-14a`, `T2-14b`, `T2-14c` |
+| P5 | Requested clip length is honoured end to end: `scene_seconds` in, a legal frame count out, the approve grid showing every **scene**, a re-plan leaving approved `(clip_idx, seed)` unchanged, a plan that misses the track by more than one clip refused before render, the planner prompt not naming a fixed 4.8125 s quantum, its clip-length text derived from planning, TIMING still stating track length and sum-to-track, and a larger `scene_seconds` never returning more scenes | `T2-8`, `T2-9`, `T2-12a`, `T2-13a`, `T2-13b`, `T2-13c`, `T2-13e`, `T2-14a`, `T2-14b`, `T2-14c` |
 | P5a | Assembling a song with a 1664×960 clip among 832×480 siblings keeps the ×2 size and does not letterbox; mixed aspect is refused | `T5-7` |
 | P5b | Every clip of one song is normalised to one output fps, asserted on the assembled file | `T2-13d` |
 | P5c | A scene longer than the 15 s LTX ceiling becomes a clip chain; clip N+1 starts on clip N's last frame | `T2-10` |
@@ -296,15 +300,15 @@ unbuilt work and are not" — the ledger with line counts is DDD §1.
    `None` stays `CHUNK` — a storyboard written before the column does not
    re-time. The renderer honours that length (`T2-13a`): latent frames and
    audio trim follow the legal count, not `LTX25_LEN`/`CHUNK`. `T2-13c`
-   is **built**: the approve grid enumerates `clip_count` (duration /
-   legal `scene_seconds`), so a 20-scene storyboard on a 41-clip song
-   still lists every clip. `T2-13e` is **built**: `clip_plan` refuses
+   is **built**: the approve grid lists every scene (`clip_chain_plan`
+   heads). A 20-scene storyboard on a 195 s song is 20 tiles, not 41
+   4.8 s slices. `T2-13e` is **built**: `clip_plan` refuses
    before render when planned clip durations miss the track by more
    than one clip; assemble still clamps to the track and no longer
    treats a 4.8125 s overrun as the norm. **refs-length built**:
    `clip_plan`'s audio-only default is `n_clips_for(track,
    length_seconds)`, not `ceil(track / CHUNK)`, so `build_refs` /
-   `reroll_refs` emit one ref per legal clip, not a CHUNK-era count.
+   `reroll_refs` emit one still per scene (`--heads`), not a CHUNK-era count.
    **Per-clip expect built**: each ref graph writes
    `clip_NNN.expect.json` with `clip_seconds` / `legal_frames` for that
    scene (not CHUNK); `pipeline.gen_refs` stamps it
@@ -397,7 +401,9 @@ order and take the dependencies from here.
    (`test_t2_34_unavailable_shown.py`). **`T2-17` built**:
    `GET /api/songs/{id}/storyboard/{tier}` returns the generation prompt
    defaulted from the tier (`storyboard_generation_payload`); POST accepts
-   an edit. **`T2-18` built**: the same response carries the enforced
+   an edit. The song-page Generate control is the same enqueue over
+   `Accept: application/json` (no full-page submit); `GET /api/songs/{id}`
+   is the card refresh. **`T2-18` built**: the same response carries the enforced
    `max_characters` and PINNED flags; one character over that cap is 400
    quoting it (`test_t2_18_storyboard_limits.py`). **`T2-19` built**: two
    different edited prompts against the same recorded response yield two
@@ -415,14 +421,21 @@ order and take the dependencies from here.
    **`T2-30` built**: unanchored warning lists only leads
    (`test_t2_30_unanchored_leads_only.py`); extras/background without
    an anchor are silent.
-   **Cast slots built**: named leads with chosen sheets occupy image2/3
-   on the ref graph; extras/background never take those slots even with
-   a sheet (`test_cast_slots_only_leads_with_chosen_sheets_take_image2_and_image3`).
+   **Cast slots built**: named leads with chosen sheets occupy leftover
+   ref slots (image3 when a pose plate holds image2); extras/background
+   never take those slots even with a sheet
+   (`test_cast_slots_only_leads_with_chosen_sheets_take_image2_and_image3`).
+   **Pose plates built**: `pose_plan` binds each scene to a chosen sheet
+   (auto-match or `pose_sheet_id`); that file is image2, identity front
+   stays image1 (`test_pose_plan.py`).
    **`T2-28` built**: storyboard Generate refs is marked (`button.blocked`)
    not disabled, the plan panel names the unanchored lead, and
    `POST /songs/{id}/refs` 400s before enqueue
    (`test_t2_28_html.py`, `test_t2_28_refs_unanchored_leads.py`);
-   extras/background do not block.
+   extras/background do not block. Named pose sheets are not the identity
+   front: the song page says *N pose sheets · missing identity front*
+   instead of *no anchor* when the library is full and `view=front` is not
+   chosen.
    **refs-identity built**: per-clip refs condition on the chosen
    sheet as image1 (identity), not a standing 4748 plate; each ref is
    scored against that chosen path (`test_t2_refs_identity.py`).

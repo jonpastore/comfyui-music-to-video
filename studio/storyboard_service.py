@@ -119,6 +119,53 @@ def album_arc(album):
         return {}
 
 
+def direction_from_board(sb):
+    """Human brief from a storyboard JSON: concept + numbered scene beats.
+
+    Used when the stored prompt is a filename pointer, so the direction box
+    shows the board, not '… from foo.json'.
+    """
+    if not isinstance(sb, dict):
+        return ""
+    parts = []
+    for key in ("concept", "version_definition"):
+        text = (sb.get(key) or "").strip()
+        if text:
+            parts.append(text)
+    scenes = sb.get("scenes") or []
+    if scenes:
+        lines = ["Scenes:"]
+        for s in scenes:
+            if not isinstance(s, dict):
+                continue
+            num = s.get("scene_number") or ""
+            name = (s.get("name") or "").strip()
+            story = (s.get("story") or "").strip()
+            pose = (s.get("pose") or "").strip()
+            camera = (s.get("camera") or "").strip()
+            bit = f"{num}. {name}: {story}".strip()
+            if pose:
+                bit += f" Pose: {pose}."
+            if camera:
+                bit += f" Camera: {camera}."
+            lines.append(bit)
+        parts.append("\n".join(lines))
+    text = "\n\n".join(p for p in parts if p).strip()
+    if len(text) > grok.MAX_DIRECTION:
+        text = text[: grok.MAX_DIRECTION - 1].rstrip() + "…"
+    return text
+
+
+def direction_from_board_path(path):
+    if not path or not os.path.isfile(path):
+        return ""
+    try:
+        with open(path) as f:
+            return direction_from_board(json.load(f))
+    except (OSError, ValueError):
+        return ""
+
+
 def check_direction(direction, tier=None):
     """Screen direction. Minor refs allowed only at g/pg13 (T10-18)."""
     direction = (direction or "").strip()
@@ -180,35 +227,102 @@ def _scene_figure(entry, anchored):
     return {"name": name, "role": role, "anchored": name in anchored}
 
 
+def stamp_ref_scenes(song, tier, sb=None, scene_seconds=None):
+    """Backfill refs.scene_number from clip_chain_plan heads only.
+
+    New stills stamp scene_number at insert. A NULL row whose clip_idx is a
+    scene head is that scene's still. clip_plan is a different clip_idx
+    space and must not assign a successor-part still to the next scene.
+    """
+    pending = db.q(
+        "SELECT id, clip_idx, seed FROM refs WHERE song_id=? AND tier=? AND scene_number IS NULL",
+        song["id"], tier)
+    if not pending:
+        return 0
+    if sb is None:
+        row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?",
+                     song["id"], tier)
+        if not row:
+            return 0
+        try:
+            sb = load(row)
+        except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError):
+            return 0
+    scene_list = (sb or {}).get("scenes") or []
+    if not scene_list:
+        return 0
+    head_to_scene = {h: sn for sn, h in
+                     build_song.scene_heads(scene_list, models.default_cli("video")).items()}
+    n = 0
+    for r in pending:
+        seed = r["seed"]
+        # Old clip_plan gens used 7000+ci; rerolls used 8000–11000. Those
+        # clip_idx values are a different space. Do not hang them on a chain
+        # head that happens to share the integer.
+        if seed is not None and 7000 <= int(seed) < 17000:
+            continue
+        sn = head_to_scene.get(r["clip_idx"])
+        if sn is None:
+            continue
+        db.run("UPDATE refs SET scene_number=? WHERE id=?", sn, r["id"])
+        n += 1
+    return n
+
+
 def scenes(song, sb, tier, anchored=(), scene_seconds=None):
-    """Per-scene timing, prompts and reference frames. One clip_plan owner."""
+    """Per-scene timing, one still slot, and the video-chain length.
+
+    Timing and clip_idx come from clip_chain_plan (T2-10 / T2-11). Operator
+    stills are one per scene. Chain parts after the head are not tiles.
+    """
     anchored = set(anchored)
     scene_list = sb.get("scenes") or []
-    clip_secs = build_song.clip_seconds(scene_seconds)
-    nclips = clip_count(song, scene_seconds)
-    plan = build_song.clip_plan(scene_list, nclips=nclips) if (scene_list and nclips) else []
+    default_model = models.default_cli("video")
+    plan = build_song.clip_chain_plan(scene_list, default_model) if scene_list else []
+    nclips = len(plan)
 
+    stamp_ref_scenes(song, tier, sb, scene_seconds)
+
+    by_scene = {}
     by_clip = {}
     for r in db.q("SELECT * FROM refs WHERE song_id=? AND tier=? ORDER BY clip_idx, id",
                   song["id"], tier):
         by_clip.setdefault(r["clip_idx"], []).append(r)
+        sn = r["scene_number"]
+        if sn is not None:
+            by_scene.setdefault(sn, []).append(r)
 
-    clips_of = {}
+    parts_of = {}
     shots_of = {}
-    for ci, scene, shot in plan:
-        clips_of.setdefault(scene["scene_number"], []).append(ci)
-        shots_of.setdefault(scene["scene_number"], []).append(shot)
+    for rec in plan:
+        sn = rec.get("scene_number")
+        parts_of.setdefault(sn, []).append(rec)
+        scene = next((s for s in scene_list if s.get("scene_number") == sn), None)
+        if scene is not None:
+            shots_of.setdefault(sn, []).append(
+                build_song.shot_directive(scene, rec["clip_idx"]))
 
     rows = []
     for scene in scene_list:
         num = scene.get("scene_number")
-        idxs = clips_of.get(num, [])
+        recs = parts_of.get(num, [])
+        head = recs[0]["clip_idx"] if recs else None
+        start = recs[0]["start_s"] if recs else None
+        end = recs[-1]["end_s"] if recs else None
+        length = (end - start) if start is not None and end is not None else 0.0
         edited = float(scene.get("edited") or 0)
+        cands = list(by_scene.get(num, []))
+        if not cands and head is not None:
+            for row in by_clip.get(head, []):
+                seed = row["seed"]
+                if seed is not None and 7000 <= int(seed) < 17000:
+                    continue
+                if row["scene_number"] is None or row["scene_number"] == num:
+                    cands.append(row)
         refs = []
-        for ci in idxs:
-            cands = by_clip.get(ci, [])
+        if head is not None or cands:
             refs.append({
-                "idx": ci,
+                "idx": head,
                 "candidates": cands,
                 "approved": any(c["approved"] for c in cands),
                 "stale": bool(edited and cands and
@@ -216,10 +330,9 @@ def scenes(song, sb, tier, anchored=(), scene_seconds=None):
             })
         rows.append({
             "scene": scene, "num": num, "name": build_song.sname(scene),
-            "clips": idxs,
-            "start": idxs[0] * clip_secs if idxs else None,
-            "end": (idxs[-1] + 1) * clip_secs if idxs else None,
-            "length": len(idxs) * clip_secs,
+            "clips": [head] if head is not None else [],
+            "n_parts": len(recs) or 1,
+            "start": start, "end": end, "length": length,
             "guidance": build_song.guidance_seconds(scene),
             "shots": sorted(set(shots_of.get(num, []))),
             "refs": refs, "edited": edited,
@@ -244,7 +357,9 @@ def scene_time_report(scene_time, song_length):
 
 def coverage(rows, nclips, duration, clip_secs=None):
     intent = sum(r["guidance"] for r in rows)
-    rendered = nclips * build_song.clip_seconds(clip_secs)
+    rendered = sum((r.get("length") or 0) for r in rows)
+    if not rendered:
+        rendered = nclips * build_song.clip_seconds(clip_secs)
     # T6-A4: fill_pct is service-owned. Template interpolates only.
     if rendered:
         fill_pct = min(100.0, (intent / rendered) * 100.0)
@@ -309,6 +424,7 @@ def _scene_json(r):
         "video_model": scene.get("video_model") or "",
         "cast": r["cast"],
         "clips": r["clips"],
+        "n_parts": r.get("n_parts", 1),
         "refs": _scene_refs_json(r),
     }
 

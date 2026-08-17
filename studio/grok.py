@@ -7,12 +7,17 @@ schema is what build_refs.py and build_song.py already consume unmodified.
 """
 import base64
 import json
+import logging
 import os
 import re
 import sys
+import threading
+import time
 from collections import Counter
 
 import httpx
+
+log = logging.getLogger("meowp.grok")
 
 # STUDIO_SCRIPTS is where deploy.sh puts the pipeline scripts on the target box
 # (~/meowp-studio/scripts). Falling back to "parent of studio/" is only correct
@@ -29,11 +34,14 @@ from build_song import (  # noqa: E402
 import tiers  # noqa: E402  (ContentRefused must be catchable by type)
 
 BASE_URL = "https://api.x.ai/v1"
-# Per-CHUNK timeout for the streamed response, not a whole-generation budget.
-# Streaming means the socket is never idle for long, so this can be tight: it
-# now detects a genuinely stalled connection instead of capping how long a big
-# storyboard is allowed to take.
-STREAM_TIMEOUT = float(os.environ.get("XAI_STREAM_TIMEOUT", 120))
+# Per-CHUNK idle timeout for the streamed response, not a whole-generation
+# budget. Reasoning models (grok-4, grok-4.20-*) can think for several minutes
+# before the first SSE token; 120s was a false stall on Down Low. The socket
+# is still not allowed to sit silent forever -- this is idle-between-bytes.
+STREAM_TIMEOUT = float(os.environ.get("XAI_STREAM_TIMEOUT", 600))
+CONNECT_TIMEOUT = float(os.environ.get("XAI_CONNECT_TIMEOUT", 30))
+# How often the job log hears "still waiting" while the socket is silent.
+HEARTBEAT_SECS = float(os.environ.get("XAI_HEARTBEAT_SECS", 15))
 # Read at CALL time by _resolve_model, not bound here: the model belongs beside
 # the key (XAI_MODEL in ~/.config/morpheus/grok-mcp.env), so the box that holds
 # the credential is the box that says which model it can reach -- the same rule
@@ -207,6 +215,30 @@ def _http_error(code, detail, key):
     return RuntimeError(f"xAI chat request failed ({code}): {_scrub(detail, key)}")
 
 
+def _message_chars(messages):
+    n = 0
+    for m in messages or []:
+        c = m.get("content") if isinstance(m, dict) else None
+        if isinstance(c, str):
+            n += len(c)
+        elif isinstance(c, list):
+            for part in c:
+                if isinstance(part, dict):
+                    n += len(str(part.get("text") or ""))
+                elif isinstance(part, str):
+                    n += len(part)
+    return n
+
+
+def _comms_error(kind, model, elapsed, chars, key, detail=""):
+    """Timeout / transport failure with enough to debug from the job log."""
+    bits = [f"xAI {kind}", f"model={model}",
+            f"elapsed={elapsed:.1f}s", f"chars={chars}"]
+    if detail:
+        bits.append(_scrub(str(detail), key))
+    return RuntimeError("; ".join(bits))
+
+
 def _chat(model, messages, progress=None):
     """Streamed completion.
 
@@ -214,20 +246,54 @@ def _chat(model, messages, progress=None):
     read timeout covers the WHOLE generation, so the only knob is an ever-larger
     ceiling -- and a timeout throws away everything produced so far (this cost a
     full run at 120s). xAI has no callback/webhook API, so streaming is the actual
-    fix: STREAM_TIMEOUT applies per chunk rather than to the whole response, the
-    connection is never idle long enough to trip it, and the UI gets live progress
-    instead of staring at one opaque call for six minutes.
+    fix: STREAM_TIMEOUT applies per chunk rather than to the whole response.
+
+    Reasoning models can sit silent for minutes before the first token. The job
+    log gets a heartbeat while that happens so a hang is distinguishable from a
+    dead worker. A timeout names the model, elapsed time, and chars received.
     """
     key = _api_key()
     body = {"model": model, "messages": messages,
             "response_format": {"type": "json_object"}, "stream": True}
+    prompt_chars = _message_chars(messages)
+    t0 = time.monotonic()
     parts, chars, ticks = [], 0, 0
+    first_at = {"t": None}
+    if progress:
+        progress(f"grok: POST {model} msgs={len(messages)} prompt={prompt_chars}c "
+                 f"idle_timeout={STREAM_TIMEOUT:.0f}s")
+    log.info("chat start model=%s msgs=%s prompt_chars=%s idle_timeout=%s",
+             model, len(messages), prompt_chars, STREAM_TIMEOUT)
+
+    stop = threading.Event()
+
+    def beat():
+        while not stop.wait(HEARTBEAT_SECS):
+            elapsed = time.monotonic() - t0
+            if first_at["t"] is None:
+                msg = f"grok: waiting for first token, {elapsed:.0f}s ({model})"
+            else:
+                msg = (f"grok: streaming {chars} chars, "
+                       f"{elapsed:.0f}s elapsed ({model})")
+            if progress:
+                progress(msg)
+            log.info(msg)
+
+    ticker = threading.Thread(target=beat, name="grok-beat", daemon=True)
+    ticker.start()
     try:
         with httpx.stream(
             "POST", f"{BASE_URL}/chat/completions",
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            json=body, timeout=httpx.Timeout(STREAM_TIMEOUT, connect=30.0),
+            json=body,
+            timeout=httpx.Timeout(STREAM_TIMEOUT, connect=CONNECT_TIMEOUT),
         ) as resp:
+            hdrs = getattr(resp, "headers", None) or {}
+            req_id = hdrs.get("x-request-id") or hdrs.get("x-xai-request-id") or ""
+            if progress and req_id:
+                progress(f"grok: request-id {req_id} status={resp.status_code}")
+            log.info("chat headers model=%s status=%s request_id=%s",
+                     model, resp.status_code, req_id or "-")
             if resp.status_code >= 400:
                 raw = resp.read()  # streamed responses must be read before .text
                 try:
@@ -251,6 +317,12 @@ def _chat(model, messages, progress=None):
                     continue
                 if not delta:
                     continue
+                if first_at["t"] is None:
+                    first_at["t"] = time.monotonic()
+                    ttfb = first_at["t"] - t0
+                    if progress:
+                        progress(f"grok: first token after {ttfb:.1f}s ({model})")
+                    log.info("first token model=%s ttfb=%.2fs", model, ttfb)
                 parts.append(delta)
                 chars += len(delta)
                 # report occasionally, not per token -- progress() writes to the
@@ -258,12 +330,21 @@ def _chat(model, messages, progress=None):
                 if progress and chars // 2000 > ticks:
                     ticks = chars // 2000
                     progress(f"grok: streaming, {chars // 1000}k chars")
+    except httpx.TimeoutException as e:
+        raise _comms_error("timed out", model, time.monotonic() - t0, chars, key, e) from None
     except httpx.HTTPError as e:
-        raise RuntimeError(f"xAI chat request failed: {_scrub(str(e), key)}") from None
+        raise _comms_error("request failed", model, time.monotonic() - t0, chars, key, e) from None
+    finally:
+        stop.set()
 
     out = "".join(parts)
+    elapsed = time.monotonic() - t0
     if not out.strip():
-        raise RuntimeError("xAI returned an empty completion (no content in the stream)")
+        raise _comms_error("empty completion", model, elapsed, chars, key,
+                           "no content in the stream")
+    if progress:
+        progress(f"grok: done {chars} chars in {elapsed:.1f}s ({model})")
+    log.info("chat done model=%s chars=%s elapsed=%.2fs", model, chars, elapsed)
     return out
 
 
@@ -479,7 +560,9 @@ def _system_prompt(tier_text, style_note, n_scenes, scene_seconds, min_scenes=1,
         "(a string like \"4-8 sec\"), story (one line of scene action), camera, "
         "motion, lighting, location, characters (a list of {name, role} where "
         "role is lead, extra, or background), image_prompt, "
-        "video_motion_prompt, negative_prompt.\n\n"
+        "video_motion_prompt, negative_prompt. Also include pose: a short "
+        "body-position phrase (standing, kneeling look-back, all fours, "
+        "cowgirl, supine) used to pick a pose plate — not a camera word.\n\n"
         + _cast_block(cast) + _arc_block(arc_ctx) +
         f"camera MUST be built from this vocabulary (a different one every scene -- a "
         f"storyboard where every camera is the same is a failure): {cams}.\n\n"
@@ -1010,6 +1093,20 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
             raise
         except (ValueError, json.JSONDecodeError) as e:
             errors = str(e).split("; ")
+        except RuntimeError as e:
+            # Timeout / empty stream / transport: retry the same messages.
+            # Validation errors already retry above; a 401/403/429 is not a
+            # rewrite problem and should fail the job as-is.
+            msg = str(e)
+            retryable = ("timed out" in msg or "empty completion" in msg
+                         or "request failed" in msg)
+            auth = ("auth/permission" in msg or "credits" in msg
+                    or "rate limited" in msg)
+            if not retryable or auth:
+                raise
+            errors = [msg]
+            if progress:
+                progress(f"grok: comms retry ({e})")
 
     raise RuntimeError(f"grok storyboard generation failed after 3 attempts: {errors}")
 
@@ -1308,7 +1405,8 @@ def demo():
         httpx.stream = queued([json.dumps({"scenes": bad_guard})])
         sb2 = generate_storyboard(LYRICS, "pg13", GUARD, "neon world lock", SONG,
                                    model="grok-test", progress=calls.append)
-        assert len(calls) == 1, f"expected no retries, model was called {len(calls)}x"
+        attempts = [c for c in calls if str(c).startswith("grok: attempt")]
+        assert len(attempts) == 1, f"expected no retries, attempts={attempts} all={calls}"
         # scene 2 of this fixture arrives WITHOUT the clause; _compose must leave
         # it that way rather than injecting it (scene 1 echoes it on its own, which
         # is the model's business, not ours)
@@ -1457,6 +1555,21 @@ def demo():
             raise AssertionError("expected a RuntimeError from the failing request")
         except RuntimeError as e:
             assert fake_key not in str(e), "API key leaked into exception text"
+            assert "model=grok-test" in str(e), e
+            assert "elapsed=" in str(e), e
+
+        def timeout_stream(method, url, headers=None, json=None, timeout=None):
+            raise httpx.ReadTimeout("Read timed out")
+        httpx.stream = timeout_stream
+        try:
+            _chat("grok-test", [{"role": "user", "content": "hi"}])
+            raise AssertionError("a read timeout did not raise")
+        except RuntimeError as e:
+            assert "timed out" in str(e), e
+            assert "model=grok-test" in str(e), e
+            assert "elapsed=" in str(e), e
+            assert "chars=0" in str(e), e
+            assert fake_key not in str(e), "API key leaked into timeout text"
         finally:
             if old_env is None:
                 del os.environ[_KEY_ENV]

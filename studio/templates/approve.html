@@ -4,20 +4,16 @@
 <p class="meta"><a href="/songs/{{ song.id }}">&larr; back to song</a> &middot;
    <a href="/songs/{{ song.id }}/storyboard/{{ tier }}">storyboard &amp; timing</a></p>
 
-{% if not nclips %}
-<p class="empty">No storyboard/refs yet for this tier.</p>
-{% else %}
-
 <section class="card approve-bar">
   <form method="post" action="/songs/{{ song.id }}/approve/{{ tier }}/all">
-    <button type="submit">Approve every undecided clip</button>
+    <button type="submit">Approve every undecided scene</button>
   </form>
   <form method="post" action="/songs/{{ song.id }}/approve/{{ tier }}/all">
     <input type="hidden" name="replace" value="true">
     <button type="submit" class="danger">Approve all, replacing my picks</button>
   </form>
   <span class="muted">
-    {{ clips | selectattr("approved") | list | length }} of {{ nclips }} approved
+    {{ groups | selectattr("n_ok") | list | length }} of {{ groups | length }} scenes approved
     {% if flagged_idxs %}
     &middot; <span class="warn">{{ flagged_idxs | length }} flagged by the image review</span>
     {% endif %}
@@ -32,27 +28,135 @@
   <form method="post" action="/songs/{{ song.id }}/reroll" class="stack-form">
     <input type="hidden" name="tier" value="{{ tier }}">
     {% for i in flagged_idxs %}<input type="hidden" name="clip_idx" value="{{ i }}">{% endfor %}
-    <label>Reroll the {{ flagged_idxs | length }} flagged clip{{ "" if flagged_idxs|length == 1 else "s" }}
+    <label>Reroll the {{ flagged_idxs | length }} flagged scene{{ "" if flagged_idxs|length == 1 else "s" }}
       ({{ flagged_idxs | join(", ") }})
       <input type="text" name="note" maxlength="400"
              placeholder="what to change across all of them (optional)">
     </label>
-    <button type="submit">Reroll the flagged clips</button>
+    <button type="submit">Reroll the flagged scenes</button>
   </form>
   <p class="hint">The image review is advisory and does have false positives, so this is a
     button rather than something that happens on its own &mdash; a wrong flag would otherwise
-    spend GPU silently. Each clip gets four new seeds.</p>
+    spend GPU silently. Each scene gets four new seeds.</p>
 </section>
 {% endif %}
-<p class="hint">Approving takes the NEWEST candidate per clip &mdash; a reroll or a repair is the
-  frame you asked for most recently. The first button leaves clips you have already decided
-  alone; the second overrides them. Then unapprove the few that are wrong.
-  Keyboard: <kbd>J</kbd>/<kbd>K</kbd> move, <kbd>A</kbd> approve, <kbd>R</kbd> reroll.</p>
+<p class="hint">{{ groups | length }} scenes. Song is {{ "%.1f"|format(song_secs) }}s.
+  You edit the <strong>scene</strong> still and prompt. If a scene is longer
+  than one render, it splits and the next part starts on the last frame
+  automatically. Keyboard: <kbd>J</kbd>/<kbd>K</kbd> move,
+  <kbd>A</kbd> approve, <kbd>R</kbd> focus the note.</p>
 
-<div class="clip-grid" data-nclips="{{ nclips }}">
-  {% for clip in clips %}
-    {% include "_clip_tile.html" %}
+<div class="approve-scenes" data-nclips="{{ nclips }}">
+  {% for g in groups %}
+  <details class="scene-group" id="scene-{{ g.num or 'x' }}" {% if g.open %}open{% endif %}>
+    <summary>
+      {% if g.num is not none %}Scene {{ g.num }}{% else %}Scenes{% endif %}
+      {% if g.name %} · {{ g.name }}{% endif %}
+      {% if g.pose %}<span class="muted"> · {{ g.pose }}</span>{% endif %}
+      <span class="muted">
+        {% if g.n_ok %}· approved{% else %}· no still approved{% endif %}
+        {% if g.secs %} · {{ "%.1f"|format(g.secs) }}s{% endif %}
+        {% if g.n_parts and g.n_parts > 1 %}
+        · renders as {{ g.n_parts }} chained parts
+        {% endif %}</span>
+    </summary>
+    {% if g.num is not none %}
+    <form method="post" action="/songs/{{ song.id }}/storyboard/{{ tier }}/scene/{{ g.num }}"
+          class="stack-form scene-prompt">
+      <input type="hidden" name="next" value="/songs/{{ song.id }}/approve/{{ tier }}">
+      <label>Scene prompt
+        <span class="muted"> — save, then reroll to draw new stills</span>
+        <textarea name="image_prompt" rows="4">{{ g.prompt }}</textarea>
+      </label>
+      <button type="submit" class="secondary">Save scene prompt</button>
+    </form>
+    {% endif %}
+    <div class="clip-grid clip-grid-1">
+      {% for clip in g.clips %}
+        {% if clip.idx is not none %}
+        {% include "_clip_tile.html" %}
+        {% endif %}
+      {% endfor %}
+    </div>
+  </details>
   {% endfor %}
 </div>
-{% endif %}
+
+<dialog class="lightbox" id="ref-preview">
+  <div class="lightbox-bar">
+    <strong id="ref-preview-label"></strong>
+    <button type="button" class="lightbox-close"
+            onclick="this.closest('dialog').close()" aria-label="Close">&times;</button>
+  </div>
+  <img alt="full size still">
+</dialog>
+
+<dialog class="fix-modal" id="ref-fix">
+  <div class="modal-bar">
+    <strong>Fix <span id="ref-fix-label"></span></strong>
+    <button type="button" class="secondary"
+            onclick="this.closest('dialog').close()">Close</button>
+  </div>
+  <div class="fix-modal-body">
+    <img id="ref-fix-preview" alt="the still being repaired">
+    <div class="fix-forms">
+      <p class="hint">Keeps this composition. The result is a new candidate
+        beside it &mdash; nothing is overwritten.</p>
+
+      <form method="post" class="stack-form" id="ref-fix-face" enctype="multipart/form-data">
+        <h4>Use this face</h4>
+        <input type="hidden" name="tier" value="">
+        <input type="hidden" name="ref_id" value="">
+        <input type="hidden" name="mode" value="face">
+        <input type="hidden" name="instruction"
+               value="Replace the face of the person in image 1 with the face of the person in image 2. Keep the head shape, hair and body of image 1. Do not change pose, clothing, framing, background or lighting.">
+        <label>Face from
+          <select name="face_from">
+            {% for value, label in faces %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+            <option value="">an image I upload</option>
+          </select>
+        </label>
+        <label>Or upload one <input type="file" name="face" accept="image/*"></label>
+        <p class="hint">Puts that face on this still. Pose, body, clothes and
+          lighting stay.</p>
+        <button type="submit">Use this face</button>
+      </form>
+
+      <form method="post" class="stack-form mask-form" id="ref-fix-inpaint">
+        <h4>Repair a spot</h4>
+        <input type="hidden" name="tier" value="">
+        <input type="hidden" name="ref_id" value="">
+        <input type="hidden" name="mode" value="inpaint">
+        <input type="hidden" name="instruction"
+               value="Repair only the masked region of image 1 so it matches the rest of the frame. Do not change pose, clothing, framing, background or lighting outside the masked region.">
+        <input type="hidden" name="mask_data" value="">
+        <p class="hint">Paint the bit that is wrong, then repair it. Everything
+          you do not paint stays.</p>
+        <button type="button" class="js-paint-mask">Paint the wrong spot</button>
+        <span class="muted js-mask-state" hidden>ready</span>
+        <button type="submit" class="js-mask-submit" disabled>Repair that spot</button>
+      </form>
+
+      <form method="post" class="stack-form" id="ref-fix-outpaint">
+        <h4>Extend the frame</h4>
+        <input type="hidden" name="tier" value="">
+        <input type="hidden" name="ref_id" value="">
+        <input type="hidden" name="mode" value="outpaint">
+        <input type="hidden" name="instruction"
+               value="Extend image 1 into the new empty area, continuing the same scene, perspective and lighting. Do not change anything in the original area.">
+        <div class="field-row">
+          <label>left <input type="number" name="pad_left" value="0" min="0" max="1024" step="8"></label>
+          <label>top <input type="number" name="pad_top" value="0" min="0" max="1024" step="8"></label>
+          <label>right <input type="number" name="pad_right" value="0" min="0" max="1024" step="8"></label>
+          <label>bottom <input type="number" name="pad_bottom" value="0" min="0" max="1024" step="8"></label>
+        </div>
+        <p class="hint">Grows the picture on the sides you set. The original
+          area does not change.</p>
+        <button type="submit">Extend the frame</button>
+      </form>
+    </div>
+  </div>
+</dialog>
 {% endblock %}

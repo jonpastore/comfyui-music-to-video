@@ -48,6 +48,7 @@ import playlist_service  # TRD-6 T6-A2-playlists: song_count / total_secs — no
 import library_service  # TRD-6 T6-A2-library: library song_count — no FastAPI
 import media_service  # TRD-8 T8-16: song media bag — no FastAPI
 import nav_service  # UIUX §8 / T6-A2-nav: topbar links — no FastAPI
+import pose_plan  # scene pose → chosen sheet → refs image2
 import video_fx   # per-item video look effects -- same, pure/no deps
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -211,9 +212,12 @@ def view_family(view):
 
 
 def view_position_label(view):
-    """Row label for a camera: 'front', 'on all fours'."""
-    label = ANCHOR_VIEWS.get(view) or view or ""
-    return label.split(",")[0].strip() or view_base(view).replace("_", " ")
+    """Row label for a camera: 'front', 'on all fours', or a named pose."""
+    if view in ANCHOR_VIEWS:
+        return ANCHOR_VIEWS[view].split(",")[0].strip()
+    label = view_label(view)
+    return (label.split(",")[0].strip()
+            or view_base(view).replace("_", " "))
 # UTC ISO-8601 with the Z. The server runs UTC and the studio is used from a
 # machine that does not, so the BROWSER converts this to local time (app.js).
 # Formatting it server-side would show whichever timezone cerberus happens to
@@ -406,7 +410,8 @@ def album_anchor_tiers(album):
             # sheets exist from before the flag was turned off, they are still
             # listed rather than becoming invisible and undeletable
             group = [r for r in rows
-                     if r["tier"] == tier and ((r["view"] in NUDE_VIEWS) == nude)]
+                     if r["tier"] == tier
+                     and (_make_anchor().is_nude_view(r["view"]) == nude)]
             if not group or (nude and not allows and not group):
                 continue
             tier_rows.append({"label": label, "nude": nude, "anchors": [
@@ -489,10 +494,9 @@ def scene_seconds_for(song_id, tier):
 def clip_count(song, scene_seconds=None):
     """How many clips this track is cut into.
 
-    Comes from the AUDIO LENGTH, never from the storyboard's scene count:
-    build_song.clip_plan() spreads a 20-scene storyboard across all 41 clips of
-    a 3:16 track. Using scene_count here hid clips 20..40 from the approve grid
-    and let clip generation start with two thirds of its references missing.
+    Comes from the AUDIO LENGTH, never from the storyboard's scene count.
+    Operator stills are one per scene (clip_chain_plan heads). This count is
+    the song-quantum allocator used by T2-13 / T3-4.4, not the approve grid.
 
     That invariant SURVIVES the clip-length decision (docs/TRD-2 3.4) and this
     is how. `scene_seconds` is what the storyboard was generated with, so the
@@ -525,6 +529,37 @@ def valid_tier_or_400(name):
     if not db.one("SELECT id FROM tiers WHERE name=?", name):
         raise HTTPException(400, f"no such tier: {name}")
     return name
+
+
+def chosen_pose_count(scope_kind, scope_value, tier, character_id=None):
+    """How many chosen sheets this character has at the tier, any view.
+
+    Named pose sheets (pose_21, pose_60_nude, …) count. Generate refs still
+    needs view='front'; this number is what the UI uses to say "library is
+    full, identity front is missing" instead of "no anchor".
+    """
+    row = db.one("""SELECT COUNT(*) AS n FROM anchors
+                    WHERE scope_kind=? AND scope_value=? AND tier=?
+                      AND chosen=1 AND character_id IS ?""",
+                 scope_kind, scope_value, tier, character_id)
+    return int(row["n"]) if row else 0
+
+
+def identity_front_blocker(album, tier):
+    """Why Generate refs cannot start for this album+tier, or None.
+
+    chosen_anchor defaults to view='front'. A pose library does not satisfy
+    that gate. When sheets exist, name the count so the operator is not told
+    to create an anchor they already have.
+    """
+    if chosen_anchor("album", album or "", tier):
+        return None
+    n = chosen_pose_count("album", album or "", tier)
+    if n:
+        return (f"{n} pose sheet(s) for tier '{tier}' but none is the identity "
+                "front — Generate refs needs a chosen front sheet on /anchors")
+    return (f"no chosen anchor for tier '{tier}' on this album — "
+            "generate and pick one on /anchors first")
 
 
 def chosen_anchor(scope_kind, scope_value, tier, view="front", character_id=None):
@@ -1340,10 +1375,13 @@ def h_refs(args, progress):
             for c, a in cast_anchors(album, tier)}
     if cast:
         progress(f"cast for this tier: {', '.join(sorted(cast))}")
+    pose_bases = args.get("pose_bases") or pose_plan.scene_bases(song, tier)
+    if pose_bases:
+        progress(f"pose plates: {len(pose_bases)} scene(s)")
     results = pipeline.gen_refs(song["slug"], tier, sb["json_path"], anchor_name,
                                  song["mp3_path"], progress, limit=args.get("limit"),
                                  guard=tiers.compose_guardrail(tier, album), body=body,
-                                 cast=cast)
+                                 cast=cast, bases=pose_bases)
     now = time.time()
     bases = ref_score_bases(song, tier, args.get("anchor_path"))
     landed = list(results)
@@ -1362,10 +1400,11 @@ def h_refs(args, progress):
     for i, r in enumerate(landed):
         qc = score_generated_still(r["path"], bases, f"{tier} ref", progress)
         origin = "refine" if i >= n_gen else "gen"
+        sn = _clip_scene_number(song, tier, r["clip_idx"])
         db.run("""INSERT OR IGNORE INTO refs (song_id, tier, clip_idx, path, seed, approved,
-                                               created, origin, qc_json)
-                  VALUES (?,?,?,?,?,0,?,?,?)""",
-               sid, tier, r["clip_idx"], r["path"], r.get("seed"), now, origin, qc)
+                                               created, origin, qc_json, scene_number)
+                  VALUES (?,?,?,?,?,0,?,?,?,?)""",
+               sid, tier, r["clip_idx"], r["path"], r.get("seed"), now, origin, qc, sn)
     return {"count": len(landed)}
 
 
@@ -1384,11 +1423,17 @@ def h_reroll(args, progress):
     cast = {c["name"]: {"path": a["path"],
                         "desc": " ".join(p for p in (c["identity"], c["wardrobe"], c["body"]) if p)}
             for c, a in cast_anchors(album, tier)}
+    pose_bases = args.get("pose_bases") or pose_plan.scene_bases(song, tier)
     results = pipeline.reroll(song["slug"], tier, sb["json_path"], anchor_name,
                                song["mp3_path"], args["clip_indices"], progress,
                                guard=tiers.compose_guardrail(tier, album),
                                body=album_profile(album)["body"],
-                               note=args.get("note", ""), cast=cast)
+                               note=args.get("note", ""), cast=cast,
+                               bases=pose_bases,
+                               n=args.get("n") or 0,
+                               seed_min=args.get("seed_min", 8000),
+                               seed_max=args.get("seed_max", 11000),
+                               step=args.get("step") or "equal")
     now = time.time()
     bases = ref_score_bases(song, tier, anchor["path"] if anchor else None)
     landed = list(results)
@@ -1406,10 +1451,11 @@ def h_reroll(args, progress):
     for i, r in enumerate(landed):
         qc = score_generated_still(r["path"], bases, args.get("note") or "reroll", progress)
         origin = "refine" if i >= len(results) else "reroll"
+        sn = _clip_scene_number(song, tier, r["clip_idx"])
         db.run("""INSERT OR IGNORE INTO refs (song_id, tier, clip_idx, path, seed, approved,
-                                               created, origin, qc_json)
-                  VALUES (?,?,?,?,?,0,?,?,?)""",
-               sid, tier, r["clip_idx"], r["path"], r.get("seed"), now, origin, qc)
+                                               created, origin, qc_json, scene_number)
+                  VALUES (?,?,?,?,?,0,?,?,?,?)""",
+               sid, tier, r["clip_idx"], r["path"], r.get("seed"), now, origin, qc, sn)
     return {"count": len(landed)}
 
 
@@ -1505,10 +1551,11 @@ def h_fix_ref(args, progress):
     for r in landed:
         qc = score_generated_still(r["path"], bases, args.get("instruction") or args["mode"],
                                    progress)
+        sn = _clip_scene_number(song, tier, r["clip_idx"])
         db.run("""INSERT OR IGNORE INTO refs (song_id, tier, clip_idx, path, seed, approved,
-                                               created, origin, qc_json)
-                  VALUES (?,?,?,?,?,0,?,?,?)""",
-               sid, tier, r["clip_idx"], r["path"], r.get("seed"), now, args["mode"], qc)
+                                               created, origin, qc_json, scene_number)
+                  VALUES (?,?,?,?,?,0,?,?,?,?)""",
+               sid, tier, r["clip_idx"], r["path"], r.get("seed"), now, args["mode"], qc, sn)
     return {"count": len(landed), "mode": args["mode"]}
 
 
@@ -1517,9 +1564,8 @@ def h_clips(args, progress):
     sid, tier = args["song_id"], args["tier"]
     song = db.one("SELECT * FROM songs WHERE id=?", sid)
     sb = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", sid, tier)
-    approved = db.q("SELECT clip_idx, path FROM refs WHERE song_id=? AND tier=? AND approved=1", sid, tier)
-    ref_paths = [{"clip_idx": r["clip_idx"], "path": r["path"]} for r in approved]
     video_model = args.get("video_model") or models.default_cli("video")
+    ref_paths = _approved_scene_ref_paths(song, tier, video_model)
     if video_model == "i2v":
         progress("i2v: prompt-driven only -- this render has no beat sync or mouth movement")
     if args.get("refine"):
@@ -1527,14 +1573,33 @@ def h_clips(args, progress):
     # T2-11: a chain successor is its own job with clip_idx set; only render that
     # clip. A batch job (no clip_idx) still renders the whole song.
     only = None
+    prev_clip = None
     if "clip_idx" in args and args["clip_idx"] is not None:
         only = [int(args["clip_idx"])]
+        pred = args.get("depends_on_clip")
+        if pred is None:
+            try:
+                board = load_storyboard(sb)
+                plan = build_song.clip_chain_plan(
+                    board.get("scenes") or [], video_model)
+                item = next((p for p in plan if p["clip_idx"] == only[0]), None)
+                pred = None if item is None else item.get("depends_on")
+            except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError):
+                pred = None
+        if pred is not None:
+            landed = db.one(
+                "SELECT path FROM clips WHERE song_id=? AND tier=? AND clip_idx=?",
+                sid, tier, int(pred))
+            if not landed or not landed["path"] or not os.path.isfile(landed["path"]):
+                raise RuntimeError(
+                    f"T2-11: clip {only[0]} waits on clip {pred}, which has not landed")
+            prev_clip = landed["path"]
     results = pipeline.gen_clips(song["slug"], tier, sb["json_path"], song["mp3_path"], ref_paths,
                                   progress, video_model=video_model,
                                   ref_motion=args.get("ref_motion"),
                                   control_video=args.get("control_video"),
                                   refine=bool(args.get("refine")),
-                                  only=only)
+                                  only=only, prev_clip=prev_clip)
     for r in results:
         db.run("""INSERT INTO clips (song_id, tier, clip_idx, path, status) VALUES (?,?,?,?,'done')
                   ON CONFLICT(song_id, tier, clip_idx) DO UPDATE SET path=excluded.path, status='done'""",
@@ -1830,6 +1895,13 @@ def wants_json(request):
     return "application/json" in (request.headers.get("accept") or "")
 
 
+def json_or_redirect(request, payload, loc):
+    """Same route, two answers: JSON for fetch, 303 for a plain form post."""
+    if wants_json(request):
+        return JSONResponse(payload)
+    return RedirectResponse(loc, status_code=303)
+
+
 async def _api_body(request):
     """JSON object or form fields. T6-A1 curl loops send either."""
     ctype = request.headers.get("content-type") or ""
@@ -1914,6 +1986,26 @@ def api_songs():
     return JSONResponse({
         "song_count": nums["song_count"],
         "songs": [_json_row(s) for s in songs],
+    })
+
+
+@app.get("/api/songs/{id}")
+def api_song(id: int):
+    """One song's state for the song page. Fetch updates cards without a reload."""
+    song = get_song_or_404(id)
+    boards = db.q(
+        "SELECT tier, scene_count, created FROM storyboards WHERE song_id=? ORDER BY tier",
+        id)
+    job_rows = db.q(
+        "SELECT id, kind, status, progress, error, started, finished FROM jobs "
+        "WHERE song_id=? ORDER BY id DESC LIMIT 20", id)
+    active = next((j for j in job_rows
+                   if j["status"] in ("queued", "running", "cancelling")), None)
+    return JSONResponse({
+        "song": _json_row(song),
+        "storyboards": [_json_row(b) for b in boards],
+        "jobs": [_json_row(j) for j in job_rows],
+        "active_job": _json_row(active),
     })
 
 
@@ -2344,21 +2436,19 @@ def song_page(request: Request, id: int):
     chosen_anchors = db.q(
         """SELECT * FROM anchors WHERE scope_kind='album' AND scope_value=? AND chosen=1
            ORDER BY tier, view""", song["album"] or "")
-    # a tier is offered for clip generation only once every scene of its
-    # storyboard has an approved reference -- otherwise start_clips just 400s
-    # one click later.
+    # a tier is offered for clip generation once every SCENE has an approved
+    # still. Chain parts after the first use the previous clip's last frame.
     clips_ready_tiers = []
-    # PER TIER, because clip length is per storyboard now: two tiers of one song
-    # can be generated at different scene lengths and therefore have different
-    # clip counts. Hoisting this out of the loop, as it was, would test one
-    # tier's approvals against another tier's clip count.
     for t, sb in storyboards.items():
-        n_clips = clip_count(song, scene_seconds_for(song["id"], t))
-        if not n_clips:
+        heads = _scene_head_idxs(song, t)
+        if not heads:
             continue
-        approved_idxs = {r["clip_idx"] for r in
-                          db.q("SELECT clip_idx FROM refs WHERE song_id=? AND tier=? AND approved=1", id, t)}
-        if all(i in approved_idxs for i in range(n_clips)):
+        storyboard_service.stamp_ref_scenes(song, t)
+        approved_sns = {r["scene_number"] for r in
+                        db.q("""SELECT scene_number FROM refs
+                                WHERE song_id=? AND tier=? AND approved=1
+                                  AND scene_number IS NOT NULL""", id, t)}
+        if all(sn in approved_sns for sn in heads):
             clips_ready_tiers.append(t)
     # tiers with ANY approved ref can be image-reviewed; that is a weaker
     # condition than clips_ready_tiers on purpose -- reviewing early is the
@@ -2378,10 +2468,39 @@ def song_page(request: Request, id: int):
         reviews.append({"tier": tier, "flagged": meta.get("flagged", []),
                         "path": a["path"], "backend": meta.get("backend", "")})
     # Whether each storyboard tier can actually render references: it needs a
-    # chosen anchor for the album. start_refs 400s without one (see its own
-    # check), and answering that BEFORE the click is the whole point -- the same
-    # correction already made for tiers that have no storyboard.
-    anchor_by_tier = {t: chosen_anchor("album", song["album"] or "", t) for t in storyboards}
+    # chosen identity front. start_refs 400s without one (see its own check).
+    # Pose sheets on other views do not satisfy that gate — the page says so
+    # instead of "no anchor" when the library is already full.
+    album = song["album"] or ""
+    anchor_by_tier = {t: chosen_anchor("album", album, t) for t in storyboards}
+    pose_count_by_tier = {t: chosen_pose_count("album", album, t) for t in storyboards}
+    pose_library_by_tier = {}
+    for a in db.q("""SELECT a.*, c.name AS character_name
+                     FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
+                     WHERE a.scope_kind='album' AND a.scope_value=? AND a.chosen=1
+                     ORDER BY a.tier, c.name, a.view, a.id""", album):
+        pose_library_by_tier.setdefault(a["tier"], []).append(a)
+    ref_progress_by_tier = {}
+    for t in storyboards:
+        heads = _scene_head_idxs(song, t)
+        n_scenes = len(heads) if heads else (storyboards[t]["scene_count"] or 0)
+        head_idxs = list(heads.values())
+        n_refs = 0
+        n_approved = 0
+        storyboard_service.stamp_ref_scenes(song, t)
+        sns = list(heads)
+        if sns:
+            n_refs = db.one(
+                f"SELECT COUNT(*) n FROM refs WHERE song_id=? AND tier=? AND scene_number IN ({','.join('?'*len(sns))})",
+                id, t, *sns)["n"]
+            n_approved = db.one(
+                f"SELECT COUNT(*) n FROM refs WHERE song_id=? AND tier=? AND approved=1 AND scene_number IN ({','.join('?'*len(sns))})",
+                id, t, *sns)["n"]
+        n_clips = db.one(
+            "SELECT COUNT(*) n FROM clips WHERE song_id=? AND tier=? AND status='done'",
+            id, t)["n"]
+        ref_progress_by_tier[t] = {
+            "scenes": n_scenes, "refs": n_refs, "approved": n_approved, "clips": n_clips}
     # the video models offered for the clip pass, each named with what it is
     # designed for -- the catalogue is the single place that knows. Only WIRED
     # ones are offered: a catalogued evaluation candidate has no renderer value
@@ -2423,11 +2542,21 @@ def song_page(request: Request, id: int):
             cleanup_plans.append(cleanup_service.plan_clip_cleanup(id, t))
         except cleanup_service.UnconfirmedError:
             continue
+    pose_plan_by_tier = {}
+    for t in storyboards:
+        try:
+            pose_plan_by_tier[t] = pose_plan.plan(song, t)
+        except (LookupError, OSError, json.JSONDecodeError, ValueError):
+            pose_plan_by_tier[t] = None
     return templates.TemplateResponse(request, "song.html", {
         "song": song, "tiers": all_tiers, "storyboards": storyboards, "beat_count": beat_count,
         "approved_tiers": approved_tiers, "reviews": reviews,
         "style_assets": style_assets, "chosen_anchors": chosen_anchors,
         "clips_ready_tiers": clips_ready_tiers, "anchor_by_tier": anchor_by_tier,
+        "pose_count_by_tier": pose_count_by_tier,
+        "pose_library_by_tier": pose_library_by_tier,
+        "ref_progress_by_tier": ref_progress_by_tier,
+        "pose_plan_by_tier": pose_plan_by_tier,
         "video_models": video_models,
         "renders": renders, "song_jobs": song_jobs, "active_job": active_job,
         "models": chat_models,
@@ -2485,10 +2614,10 @@ def h_qc(args, progress):
 
 
 @app.post("/songs/{id}/qc")
-def start_qc(id: int, tier: str = Form("")):
+def start_qc(request: Request, id: int, tier: str = Form("")):
     get_song_or_404(id)
     qc_service.run_song(id, tier)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    return json_or_redirect(request, {"ok": True, "kind": "qc"}, f"/songs/{id}")
 
 
 @app.get("/qc", response_class=HTMLResponse)
@@ -2617,16 +2746,16 @@ def api_qc_recheck(fid: int):
 
 
 @app.post("/songs/{id}/analyse")
-def start_analyse(id: int):
+def start_analyse(request: Request, id: int):
     song = get_song_or_404(id)
     if not song["mp3_path"]:
         raise HTTPException(400, "no audio to analyse -- upload an mp3 first")
-    jobs.enqueue("analyse", {"song_id": id}, song_id=id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    jid = jobs.enqueue("analyse", {"song_id": id}, song_id=id)
+    return json_or_redirect(request, {"job_id": jid, "kind": "analyse"}, f"/songs/{id}")
 
 
 @app.post("/songs/{id}/downbeat-offset")
-def set_downbeat_offset(id: int, downbeat_offset: int = Form(...)):
+def set_downbeat_offset(request: Request, id: int, downbeat_offset: int = Form(...)):
     """analyse.py only guesses bar one from the first four beats -- a set
     built on the wrong guess sounds wrong in a way no tuning fixes, and a
     human fixes it in a second by ear. See db.MIGRATIONS' comment."""
@@ -2634,20 +2763,22 @@ def set_downbeat_offset(id: int, downbeat_offset: int = Form(...)):
     if not 0 <= downbeat_offset <= 3:
         raise HTTPException(400, "downbeat_offset must be 0-3")
     db.run("UPDATE songs SET downbeat_offset=? WHERE id=?", downbeat_offset, id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    return json_or_redirect(
+        request, {"ok": True, "downbeat_offset": downbeat_offset}, f"/songs/{id}")
 
 
 @app.post("/songs/{id}/explicit")
-def toggle_explicit(id: int):
+def toggle_explicit(request: Request, id: int):
     """Toggle whether this track's LYRICS are explicit. Metadata about the
     lyrics only -- never gates or selects a tier, see h_storyboard's comment."""
     song = get_song_or_404(id)
-    db.run("UPDATE songs SET explicit=? WHERE id=?", 0 if song["explicit"] else 1, id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    new = 0 if song["explicit"] else 1
+    db.run("UPDATE songs SET explicit=? WHERE id=?", new, id)
+    return json_or_redirect(request, {"ok": True, "explicit": new}, f"/songs/{id}")
 
 
 @app.post("/songs/{id}/lyrics")
-def save_lyrics(id: int, lyrics_text: str = Form(...)):
+def save_lyrics(request: Request, id: int, lyrics_text: str = Form(...)):
     get_song_or_404(id)
     # T10-18b: an xxx work refuses a minor reference in lyrics too.
     if db.one("SELECT id FROM storyboards WHERE song_id=? AND tier=?", id, "xxx"):
@@ -2658,17 +2789,18 @@ def save_lyrics(id: int, lyrics_text: str = Form(...)):
     # T10-8: supplied text is not a transcription; clear any prior backend.
     # T10-9: store_lyrics marks lyrics_edited so a re-fetch cannot discard it.
     db.store_lyrics(id, lyrics_text, source="supplied")
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    return json_or_redirect(request, {"ok": True, "lyrics": lyrics_text}, f"/songs/{id}")
 
 
 @app.post("/songs/{id}/retranscribe")
-def retranscribe_lyrics(id: int):
+def retranscribe_lyrics(request: Request, id: int):
     """Explicit re-transcribe replaces stored lyrics, including edits (T10-9)."""
     song = get_song_or_404(id)
     if not song["mp3_path"]:
         raise HTTPException(400, "this song has no audio to transcribe")
-    jobs.enqueue("transcribe", {"song_id": id, "force": True}, song_id=id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    jid = jobs.enqueue("transcribe", {"song_id": id, "force": True}, song_id=id)
+    return json_or_redirect(
+        request, {"job_id": jid, "kind": "transcribe"}, f"/songs/{id}")
 
 
 @app.post("/songs/{id}/unlock-minor")
@@ -2682,7 +2814,7 @@ def unlock_minor_route(id: int):
 
 
 @app.post("/songs/{id}/style-text")
-def save_style_text(id: int, style_text: str = Form(...)):
+def save_style_text(request: Request, id: int, style_text: str = Form(...)):
     """The prompt the TRACK was generated from. Stored, shown and editable --
     it is not sent to grok or the renderer: it describes drums and vocals, and
     the storyboard prompt is about pictures. Storyboards used to carry exactly
@@ -2690,7 +2822,7 @@ def save_style_text(id: int, style_text: str = Form(...)):
     """
     get_song_or_404(id)
     db.run("UPDATE songs SET style_text=? WHERE id=?", style_text, id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    return json_or_redirect(request, {"ok": True, "style_text": style_text}, f"/songs/{id}")
 
 
 @app.post("/songs/{id}/style")
@@ -2742,6 +2874,14 @@ def nest_anchor_groups(group_list):
                 rows = [{"position": pos, "groups": gs}
                         for pos, gs in fams[fam_key].items()]
                 families.append({"key": fam_key, "rows": rows})
+            # XXX work is nude-first. Open that family when the tab has nudes
+            # so the operator is not one click away from the sheets they came
+            # for. R/G/PG-13 stay on clothed.
+            default_key = ("nude" if name == "xxx"
+                           and any(f["key"] == "nude" and f["rows"] for f in families)
+                           else "clothed")
+            for fam in families:
+                fam["default"] = fam["key"] == default_key
             tiers.append({"name": name, "families": families})
         out.append({"scope_kind": sec["scope_kind"], "album": sec["album"],
                     "character_id": sec["character_id"],
@@ -2752,15 +2892,20 @@ def nest_anchor_groups(group_list):
 
 
 @app.get("/anchors", response_class=HTMLResponse)
-def anchors_page(request: Request, scope_kind: str = "", scope_value: str = ""):
-    # This route has always ACCEPTED scope_kind/scope_value and never applied
-    # them: every link that passes one -- six templates and four redirects, all
-    # of them "manage anchors for THIS album" -- got every anchor in the database
-    # back and rendered every one. Filtering here is what those links already
-    # promise, and it is the only bound this page has.
+def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
+                 album: str = ""):
+    # One album at a time. The generate form's album select is the same
+    # subject as the gallery; swapping the form via htmx left every album's
+    # groups on the page. `album` is the select's name so a full-page GET
+    # from that control filters without a second parameter.
     # ponytail: unfiltered /anchors is still unbounded. A LIMIT cannot go here
     # without splitting a group across the boundary and miscounting `unpicked`;
     # if it ever hurts, paginate by GROUP (scope, character, tier, view).
+    playlists = db.q("SELECT id, name FROM playlists WHERE kind='playlist' ORDER BY name")
+    names = [p["name"] for p in playlists]
+    scope_value = (scope_value or album or "").strip()
+    if not scope_value and names:
+        scope_value = names[0]
     clauses, params = [], []
     if scope_kind:
         clauses.append("a.scope_kind=?")
@@ -2787,7 +2932,19 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = ""):
                    "unpicked": sum(1 for c in v if not c["chosen"])}
                   for k, v in groups.items()]
     albums = sorted({s["album"] for s in db.q("SELECT DISTINCT album FROM songs") if s["album"]})
-    playlists = db.q("SELECT id, name FROM playlists WHERE kind='playlist' ORDER BY name")
+    coverage_by_tier = {}
+    if scope_value:
+        tiers_needed = {g["tier"] for g in group_list}
+        for row in db.q(
+                """SELECT DISTINCT sb.tier FROM storyboards sb
+                   JOIN songs s ON s.id = sb.song_id WHERE s.album=?""",
+                scope_value):
+            tiers_needed.add(row["tier"])
+        for t in sorted(tiers_needed):
+            try:
+                coverage_by_tier[t] = pose_plan.album_coverage(scope_value, t)
+            except (LookupError, OSError, ValueError, json.JSONDecodeError):
+                continue
     # Failures belong on the page the work was STARTED from. Nine sheets died to
     # a five-second ComfyUI restart and the only trace was on /jobs -- from here
     # it looked as though the button had done nothing at all, which is exactly
@@ -2807,6 +2964,7 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = ""):
         anchor_form_ctx(scope_value),
         groups=group_list, gallery=nest_anchor_groups(group_list),
         known_albums=albums, playlists=playlists,
+        coverage_by_tier=coverage_by_tier,
         failed_jobs=fresh, active_jobs=active))
 
 
@@ -2848,8 +3006,26 @@ def anchor_refs(album, character_id=None):
             continue
         if (meta.get("character_id") or None) != (character_id or None):
             continue
+        if _ref_assigned_as_sheet(a["id"], album, character_id):
+            continue
         out.append(ref_fields(a))
     return out
+
+
+def _ref_assigned_as_sheet(asset_id, album, character_id=None):
+    """True when this upload is already a chosen pose sheet (T7-20).
+
+    Assigned files live in the candidate grid. Showing them again under
+    Base images is the same photograph twice.
+    """
+    for row in db.q("""SELECT render_json FROM anchors
+                       WHERE scope_kind='album' AND scope_value=?
+                         AND chosen=1 AND character_id IS ?""",
+                    album, character_id):
+        meta = db.jset(row, "render_json")
+        if meta.get("source") == "upload" and meta.get("asset_id") == asset_id:
+            return True
+    return False
 
 
 def ref_fields(row):
@@ -3374,9 +3550,9 @@ ANCHOR_HELP = {
         "the width and height controls stop applying. This is what makes Denoise below 1.0 "
         "mean anything: with an empty latent there is nothing to preserve, which is why every "
         "value under 1.0 was labelled as returning noise.",
-        "The pairing worth knowing: press <strong>Use as reference</strong> on a sheet you have "
-        "already picked, then refine it here at 0.55. That varies a sheet you approved instead "
-        "of re-interpreting the photographs and hoping."]},
+        "The pairing worth knowing: mark a keeper with <strong>Use as this pose</strong>, "
+        "then refine it here at 0.55 from the first reference. That varies a sheet you "
+        "approved instead of re-interpreting the photographs and hoping."]},
     "denoise": {"label": "Denoise", "body": [
         "How much of the starting latent is replaced. 1.0 denoises it completely; lower values "
         "preserve some of what was already there.",
@@ -4209,7 +4385,16 @@ async def anchor_preflight(request: Request):
         blockers.append(f"{refs} reference images selected; the model conditions on "
                         f"{pipeline.MAX_ANCHOR_REFS}. Untick some.")
     if not refs:
-        blockers.append("Pick at least one saved reference image, or upload one.")
+        front = None
+        for t in tiers_sel:
+            front = chosen_anchor("album", album, t, "front")
+            if front and front["path"]:
+                break
+        if front:
+            notes.append("No base ticked — using the chosen identity front as image1 "
+                         "(empty latent + her, the measured pose-candidate path).")
+        else:
+            blockers.append("Pick at least one saved reference image, or upload one.")
 
     # The per-tier-and-view prompt boxes, through the SAME three checks the route
     # runs. Collected rather than raised, so a screening refusal and a length
@@ -4439,6 +4624,18 @@ def _collect_anchor_ref_paths(album, character_id, ref_ids, extra_paths=None,
         if not os.path.isfile(path):
             raise HTTPException(400, "a reference path does not exist")
         picked.append(path)
+    if not picked:
+        # Empty latent + her front as image1 is the measured pose-candidate
+        # path. Zero images is a stranger (plain t2i). Prefer a ticked base;
+        # fall back to the chosen identity front so Generate can mint a new
+        # pose without re-uploading photographs.
+        for wt in (work_tiers or []):
+            if not wt:
+                continue
+            front = chosen_anchor("album", album, wt, "front", character_id)
+            if front and front["path"] and os.path.isfile(front["path"]):
+                picked.append(front["path"])
+                break
     if not picked:
         raise HTTPException(400, "pick at least one saved reference image, or upload one")
     if len(picked) > pipeline.MAX_ANCHOR_REFS:
@@ -5317,6 +5514,47 @@ def pick_anchor(request: Request, id: int):
         status_code=303)
 
 
+@app.post("/anchors/{id}/clear")
+def clear_anchor(request: Request, id: int):
+    """Stop using this sheet as the pose keeper. The file stays."""
+    row = db.one("SELECT * FROM anchors WHERE id=?", id)
+    if not row:
+        raise HTTPException(404, "no such anchor candidate")
+    db.run("UPDATE anchors SET chosen=0 WHERE id=?", id)
+    if wants_json(request):
+        return JSONResponse({"cleared": id, "chosen": 0})
+    return RedirectResponse(
+        f"/anchors?scope_kind={row['scope_kind']}&scope_value={quote(row['scope_value'])}",
+        status_code=303)
+
+
+@app.post("/anchors/keeper")
+def set_album_pose_keeper(album: str = Form(...), tier: str = Form(...),
+                          key: str = Form(...), sheet_id: str = Form("0")):
+    """Roster dropdown: this album pose uses this sheet as keeper."""
+    valid_tier_or_400(tier)
+    album = (album or "").strip()
+    if not album:
+        raise HTTPException(400, "album required")
+    sid = None if sheet_id in (None, "", "0") else int(sheet_id)
+    cov = pose_plan.album_coverage(album, tier)
+    group = next((g for g in cov["needed"] if g["key"] == key), None)
+    if group is None:
+        raise HTTPException(404, "no such pose on this album")
+    if sid:
+        sheet = db.one(
+            """SELECT * FROM anchors WHERE id=? AND scope_kind='album'
+               AND scope_value=? AND tier=?""",
+            sid, album, tier)
+        if not sheet:
+            raise HTTPException(400, "that sheet is not on this album and tier")
+        _pick_anchor(sid)
+    elif group.get("sheet_id"):
+        db.run("UPDATE anchors SET chosen=0 WHERE id=?", group["sheet_id"])
+    pose_plan.stamp_binds(tier, group.get("binds"), sid)
+    return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
+
+
 def tier_tone(tier, album=""):
     """The tone/wardrobe wording that APPLIES, with the pinned clause removed.
 
@@ -5352,14 +5590,20 @@ def storyboard_form_ctx(song, tier, chat_models=None, best=None, direction=None)
     it. `direction` overrides the prefill -- used to redisplay what was actually
     sent for an already-generated storyboard."""
     if direction is None:
-        row = db.one("SELECT prompt FROM storyboards WHERE song_id=? AND tier=?", song["id"], tier)
+        row = db.one("SELECT prompt, json_path FROM storyboards WHERE song_id=? AND tier=?",
+                     song["id"], tier)
         # An album arc, when there is one, is the better starting point than the
         # tier's generic tone wording: it is what this SONG does in the story.
         # A prefill, not a cage -- the box stays editable and what is actually
         # sent is stored beside the storyboard, as it always was.
         beat = arc.for_song(album_arc(song["album"] or ""), song["id"]).get("beat", "")
-        direction = ((row["prompt"] if row else "") or beat
-                     or default_direction(song, tier))
+        stored = (row["prompt"] if row else "") or ""
+        # A filename pointer is not a brief. Prefer the board already on disk.
+        if (not stored.strip() or ".json" in stored.lower()) and row:
+            from_board = storyboard_service.direction_from_board_path(row["json_path"])
+            if from_board:
+                stored = from_board
+        direction = stored or beat or default_direction(song, tier)
     return {"song": song, "tier": tier, "tiers": tiers.all_tiers(),
             "direction": direction, "pinned": tiers.PINNED.strip(),
             "tier_text": tier_tone(tier, song["album"] or ""),
@@ -5432,10 +5676,14 @@ def storyboard_form(request: Request, id: int, tier: str):
 
 
 @app.post("/songs/{id}/storyboard")
-def start_storyboard(id: int, tier: str = Form(...), model: str = Form(""),
+def start_storyboard(request: Request, id: int, tier: str = Form(...),
+                      model: str = Form(""),
                       scene_seconds: float = Form(4.0), direction: str = Form("")):
-    enqueue_storyboard(id, tier, model, scene_seconds, direction)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    jid, direction = enqueue_storyboard(id, tier, model, scene_seconds, direction)
+    return json_or_redirect(
+        request,
+        {"job_id": jid, "kind": "storyboard", "tier": tier, "prompt": direction},
+        f"/songs/{id}")
 
 
 @app.get("/api/songs/{id}/storyboard/{tier}")
@@ -5647,9 +5895,9 @@ def refs_plan_blockers(song, tier, rows):
     """
     blockers = []
     if not chosen_anchor("album", song["album"] or "", tier):
-        blockers.append(
-            f"no chosen anchor for tier '{tier}' on this album — "
-            "generate and pick one on /anchors first")
+        msg = identity_front_blocker(song["album"] or "", tier)
+        if msg:
+            blockers.append(msg)
     for name in unanchored_leads(rows):
         blockers.append(
             f"{name} has no chosen anchor at this tier — "
@@ -5658,75 +5906,8 @@ def refs_plan_blockers(song, tier, rows):
 
 
 def storyboard_scenes(song, sb, tier, anchored=(), scene_seconds=None):
-    """Per-scene timing, prompts and reference frames for the storyboard page.
-
-    Timing comes from build_song.clip_plan() -- THE clip->scene mapping, shared
-    with build_refs/build_song/reroll_refs. Deriving it here a second time is
-    exactly the drift clip_plan's docstring exists to prevent, so this calls it.
-
-    `anchored` is the set of cast names with a chosen anchor at this tier, so a
-    scene naming somebody unanchored shows it BEFORE fifty frames render them
-    from scene text alone.
-    """
-    anchored = set(anchored)
-    scenes = sb.get("scenes") or []
-    # One divisor for the whole function: the length THIS song's clips are, from
-    # what its storyboard was generated with. None means a storyboard from
-    # before that was recorded and build_song answers CHUNK, which is exactly
-    # the old behaviour for every song already on disk.
-    clip_secs = build_song.clip_seconds(scene_seconds)
-    nclips = clip_count(song, scene_seconds)
-    plan = build_song.clip_plan(scenes, nclips=nclips) if (scenes and nclips) else []
-
-    # refs for this tier, newest candidate last, keyed by clip
-    by_clip = {}
-    for r in db.q("SELECT * FROM refs WHERE song_id=? AND tier=? ORDER BY clip_idx, id", song["id"], tier):
-        by_clip.setdefault(r["clip_idx"], []).append(r)
-
-    clips_of = {}
-    shots_of = {}
-    for ci, scene, shot in plan:
-        clips_of.setdefault(scene["scene_number"], []).append(ci)
-        shots_of.setdefault(scene["scene_number"], []).append(shot)
-
-    rows = []
-    for scene in scenes:
-        num = scene.get("scene_number")
-        idxs = clips_of.get(num, [])
-        edited = float(scene.get("edited") or 0)
-        refs = []
-        for ci in idxs:
-            cands = by_clip.get(ci, [])
-            refs.append({
-                "idx": ci,
-                "candidates": cands,
-                "approved": any(c["approved"] for c in cands),
-                # a frame rendered BEFORE the scene text was last edited no
-                # longer shows what the prompt now says. Surfaced, never
-                # auto-re-rolled: re-rolling 50 frames over a typo is worse.
-                "stale": bool(edited and cands and
-                              all((c["created"] or 0) < edited for c in cands)),
-            })
-        rows.append({
-            "scene": scene, "num": num, "name": build_song.sname(scene),
-            "clips": idxs,
-            # SECOND IMPLEMENTATION OF SCENE TIMING, removed 2026-08-13. This
-            # was idx * CHUNK, which is the studio's own copy of an arithmetic
-            # docs/TRD-2 T2-41 says has exactly one home -- and with clip length
-            # per song, a hardcoded CHUNK here would time every storyboard
-            # against 4.8125s whatever the song was generated at. One divisor,
-            # from the song, passed in.
-            "start": idxs[0] * clip_secs if idxs else None,
-            "end": (idxs[-1] + 1) * clip_secs if idxs else None,
-            "length": len(idxs) * clip_secs,
-            "guidance": build_song.guidance_seconds(scene),
-            "shots": sorted(set(shots_of.get(num, []))),
-            "refs": refs, "edited": edited,
-            "cast": [_scene_figure(n, anchored)
-                     for n in (scene.get("characters") or [])
-                     if _figure_name(n)],
-        })
-    return rows, nclips
+    """Per-scene timing, prompts and the one still slot. Delegates to the service."""
+    return storyboard_service.scenes(song, sb, tier, anchored, scene_seconds)
 
 
 # Fraction of song length. T2-23: |scene_time - song_length| beyond this
@@ -5778,26 +5959,8 @@ def refuse_if_scene_time_mismatch(song, tier):
 
 
 def coverage(rows, nclips, duration, clip_secs=None):
-    """How the storyboard's PACING INTENT compares with the track.
-
-    Not "is the video the right length" -- allocate() always spends exactly
-    nclips, so the render is always the length of the song. What can be wrong is
-    the intent: a storyboard whose duration_guidance totals 90s for a 240s track
-    is being stretched 2.7x, and every scene will run far longer than it was
-    written for. That is what this measures.
-    """
-    intent = sum(r["guidance"] for r in rows)
-    # this song's clip length, not a module constant -- one divisor, from
-    # build_song, so the meter cannot describe a different render than the page
-    rendered = nclips * build_song.clip_seconds(clip_secs)
-    return {
-        "intent": intent, "rendered": rendered, "duration": duration or 0.0,
-        "nclips": nclips, "scenes": len(rows),
-        "ratio": (rendered / intent) if intent else 0.0,
-        # within 15% either way is ordinary rounding; beyond that the pacing was
-        # written for a different length of song
-        "ok": bool(intent) and 0.85 <= (rendered / intent) <= 1.15,
-    }
+    """How the storyboard's PACING INTENT compares with the track."""
+    return storyboard_service.coverage(rows, nclips, duration, clip_secs)
 
 
 @app.get("/songs/{id}/storyboard/{tier}", response_class=HTMLResponse)
@@ -5831,15 +5994,18 @@ def view_storyboard(request: Request, id: int, tier: str):
     # storyboard is read against the character it is for. The protagonist's
     # (character_id IS NULL) first, then the cast.
     anchors = album_chosen_anchors(album, tier)
+    identity_fronts = [a for a in anchors if a["view"] == "front"]
     unanchored = unanchored_leads(rows)
     clip_secs = board["clip_seconds"]
     return templates.TemplateResponse(request, "storyboard.html", {
         "song": song, "tier": tier, "row": row, "md": md, "sb": sb,
         # the page shows THIS song's clip length, not the old constant
-        "scene_rows": rows, "anchors": anchors, "chunk": clip_secs,
+        "scene_rows": rows, "anchors": anchors,
+        "identity_fronts": identity_fronts, "chunk": clip_secs,
         "unanchored": unanchored,
         # T2-28-html: plan-panel reasons for Generate refs (marked, not disabled)
         "refs_blockers": refs_plan_blockers(song, tier, rows),
+        "pose_plan": pose_plan.plan(song, tier),
         "coverage": board["coverage"],
         "fields": EDITABLE_SCENE_FIELDS,
         # T6-A2 distinctive numbers — service-owned, data-* on the page
@@ -5918,13 +6084,17 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
         scene["edited"] = time.time()
         outdir = os.path.dirname(row["json_path"])
         grok.write_storyboard(sb, outdir, song["slug"], tier)
+    nxt = (form.get("next") or "").strip()
+    if nxt == f"/songs/{id}/approve/{tier}":
+        return RedirectResponse(f"{nxt}#scene-{num}", status_code=303)
     anchored = {c["name"] for c, _a in cast_anchors(song["album"] or "", tier)}
     rows, _ = storyboard_scenes(song, load_storyboard(row), tier, anchored,
                                 scene_seconds=row["scene_seconds"])
     r = next(x for x in rows if x["num"] == num)
     return templates.TemplateResponse(request, "_scene_row.html", {
         "song": song, "tier": tier, "r": r, "fields": EDITABLE_SCENE_FIELDS,
-        "chunk": build_song.clip_seconds(row["scene_seconds"])})
+        "chunk": build_song.clip_seconds(row["scene_seconds"]),
+        "pose_plan": pose_plan.plan(song, tier)})
 
 
 def _ref_candidate_json(row):
@@ -6065,14 +6235,50 @@ def api_storyboard_cast(id: int, tier: str):
                                     for s in payload["scenes"]]})
 
 
+@app.get("/api/albums/{album}/pose-coverage/{tier}")
+def api_album_pose_coverage(album: str, tier: str):
+    """Album pose roster: have / missing across every song board at this tier."""
+    try:
+        return JSONResponse(pose_plan.album_coverage(album, valid_tier_or_400(tier)))
+    except (LookupError, OSError, json.JSONDecodeError, ValueError) as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/songs/{id}/pose-plan/{tier}")
+def api_pose_plan(id: int, tier: str):
+    """Scenes this song needs vs chosen pose sheets. Does not write."""
+    try:
+        return JSONResponse(pose_plan.plan(get_song_or_404(id), valid_tier_or_400(tier)))
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except (OSError, json.JSONDecodeError, ValueError) as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/songs/{id}/storyboard/{tier}/scene/{num}/pose-sheet")
+def bind_scene_pose_sheet(id: int, tier: str, num: int, sheet_id: str = Form("0")):
+    """Operator override: this scene uses this chosen sheet as the pose plate."""
+    get_song_or_404(id)
+    valid_tier_or_400(tier)
+    try:
+        pose_plan.bind_scene(id, tier, num, sheet_id)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return RedirectResponse(f"/songs/{id}/storyboard/{tier}#scene-{num}", status_code=303)
+
+
 @app.post("/songs/{id}/refs")
-def start_refs(id: int, tier: List[str] = Form([]), limit: int = Form(0)):
+def start_refs(request: Request, id: int, tier: List[str] = Form([]),
+               limit: int = Form(0)):
     # Form([]) not Form(...): an unticked checkbox group is simply absent from
     # the POST, and a required field turns that into FastAPI's raw 422 validation
     # blob. Defaulting to empty lets the handler answer "select at least one
     # tier" instead.
     song = get_song_or_404(id)
     selected = sorted(set(tier))
+    jids = []
     if not selected:
         raise HTTPException(400, "select at least one tier")
     # resolve every tier's anchor up front -- one bad tier must refuse the
@@ -6085,8 +6291,7 @@ def start_refs(id: int, tier: List[str] = Form([]), limit: int = Form(0)):
             raise HTTPException(400, f"generate a storyboard for tier '{t}' first")
         anchor = chosen_anchor("album", song["album"] or "", t)
         if not anchor:
-            raise HTTPException(400, f"no chosen anchor for tier '{t}' on this album "
-                                      f"-- generate and pick one on /anchors first")
+            raise HTTPException(400, identity_front_blocker(song["album"] or "", t))
         # T2-28: named leads need chosen sheets too. Banner/cast (T2-30) is not
         # enough — refuse before a refs job is written. Extras/background stay out.
         try:
@@ -6106,11 +6311,18 @@ def start_refs(id: int, tier: List[str] = Form([]), limit: int = Form(0)):
         anchors[t] = anchor
     limit = max(0, limit)
     for t in selected:
-        # one refs job per tier, each carrying that tier's own chosen anchor --
-        # this is what makes two tiers yield two independent reference sets
-        jobs.enqueue("refs", {"song_id": id, "tier": t, "limit": limit or None,
-                               "anchor_path": anchors[t]["path"]}, song_id=id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+        # Freeze auto-matches onto the board, then hand the path map to the
+        # job so image2 is the pose plate even if the operator edits later.
+        pose_bases = pose_plan.freeze_auto_binds(song, t)
+        jid = jobs.enqueue("refs", {"song_id": id, "tier": t, "limit": limit or None,
+                               "anchor_path": anchors[t]["path"],
+                               "pose_bases": pose_bases}, song_id=id)
+        jids.append(jid)
+    return json_or_redirect(
+        request,
+        {"job_id": jids[0] if jids else None, "job_ids": jids,
+         "kind": "refs", "tiers": selected},
+        f"/songs/{id}")
 
 
 def latest_flags(sid, tier):
@@ -6129,29 +6341,120 @@ def latest_flags(sid, tier):
     return {}
 
 
+_REF_ORIGINS = frozenset({"gen", "reroll", "refine", "face", "inpaint", "outpaint"})
+
+
+def _scene_head_idxs(song, tier, video_model=None):
+    """scene_number → first clip_idx in the video chain."""
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", song["id"], tier)
+    if not row:
+        return {}
+    try:
+        sb = load_storyboard(row)
+        return build_song.scene_heads(
+            sb.get("scenes") or [], video_model or models.default_cli("video"))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError, KeyError):
+        return {}
+
+
+def _clip_scene_number(song, tier, clip_idx):
+    """scene_number for a chain-head clip_idx. None if it is not a head."""
+    for sn, head in _scene_head_idxs(song, tier).items():
+        if head == clip_idx:
+            return sn
+    return None
+
+
+def _approved_scene_ref_paths(song, tier, video_model=None):
+    """Approved stills keyed as video-chain heads for stage_refs / gen_clips."""
+    storyboard_service.stamp_ref_scenes(song, tier)
+    heads = _scene_head_idxs(song, tier, video_model)
+    by_sn = {}
+    for r in db.q(
+            """SELECT scene_number, path FROM refs
+               WHERE song_id=? AND tier=? AND approved=1 AND scene_number IS NOT NULL
+               ORDER BY id""",
+            song["id"], tier):
+        by_sn[r["scene_number"]] = r["path"]
+    return [{"clip_idx": heads[sn], "path": path}
+            for sn, path in by_sn.items() if sn in heads]
+
+
 def approve_context(song, tier):
     """Shared by the grid and by the single-tile htmx swap, so a tile rendered
     on its own carries the same flags, cast and seeds as one rendered in place."""
-    refs_rows = db.q("SELECT * FROM refs WHERE song_id=? AND tier=? ORDER BY clip_idx, id",
-                      song["id"], tier)
-    by_clip = {}
-    for r in refs_rows:
-        by_clip.setdefault(r["clip_idx"], []).append(r)
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?",
+                 song["id"], tier)
+    sb = {}
+    if row:
+        try:
+            sb = load_storyboard(row)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError, KeyError):
+            sb = {}
+    scene_rows, nclips = storyboard_service.scenes(
+        song, sb, tier, scene_seconds=scene_seconds_for(song["id"], tier))
     flags = latest_flags(song["id"], tier)
-    nclips = clip_count(song, scene_seconds_for(song["id"], tier))
     clips = []
-    for i in range(nclips):
-        cands = by_clip.get(i, [])
-        clips.append({"idx": i, "candidates": cands,
-                      "approved": any(c["approved"] for c in cands),
-                      "flag": flags.get(i)})
-    # face sources: whoever has a chosen anchor at this tier
+    groups = []
+    for r in scene_rows:
+        head = r["clips"][0] if r["clips"] else None
+        cands = r["refs"][0]["candidates"] if r["refs"] else []
+        clip = {
+            "idx": head,
+            "candidates": cands,
+            "approved": any(c["approved"] for c in cands),
+            "flag": flags.get(head) if head is not None else None,
+            "scene_name": r["name"],
+            "scene_num": r["num"],
+            "pose": (r["scene"].get("pose") or "").strip(),
+            "secs": r["length"],
+            "n_parts": r.get("n_parts", 1),
+        }
+        clips.append(clip)
+        groups.append({
+            "num": r["num"], "name": r["name"], "pose": clip["pose"],
+            "prompt": r["scene"].get("image_prompt") or "",
+            "clips": [clip],
+            "n_parts": clip["n_parts"],
+            "secs": clip["secs"],
+            "n_ok": 1 if clip["approved"] else 0,
+            "open": not clip["approved"],
+        })
+    if not groups:
+        by_idx = {}
+        for r in db.q(
+                "SELECT * FROM refs WHERE song_id=? AND tier=? ORDER BY clip_idx, id",
+                song["id"], tier):
+            by_idx.setdefault(r["clip_idx"], []).append(r)
+        for idx, cands in sorted(by_idx.items()):
+            clip = {
+                "idx": idx, "candidates": cands,
+                "approved": any(c["approved"] for c in cands),
+                "flag": flags.get(idx),
+                "scene_name": "", "scene_num": cands[0]["scene_number"],
+                "pose": "", "secs": 0, "n_parts": 1,
+            }
+            clips.append(clip)
+            groups.append({
+                "num": clip["scene_num"], "name": "", "pose": "",
+                "prompt": "", "clips": [clip], "n_parts": 1, "secs": 0,
+                "n_ok": 1 if clip["approved"] else 0,
+                "open": not clip["approved"],
+            })
     faces = []
     if chosen_anchor("album", song["album"] or "", tier):
         faces.append(("protagonist", "protagonist"))
     faces += [(str(c["id"]), c["name"]) for c, _a in cast_anchors(song["album"] or "", tier)]
+    quantum = build_song.clip_seconds(scene_seconds_for(song["id"], tier))
+    plan_secs = sum((g["secs"] or 0) for g in groups)
+    flagged = []
+    for i in flags:
+        if any(c["idx"] == i for c in clips):
+            flagged.append(i)
     return {"song": song, "tier": tier, "clips": clips, "nclips": nclips,
-            "faces": faces, "flagged_idxs": sorted(flags)}
+            "groups": groups, "faces": faces, "flagged_idxs": flagged,
+            "clip_secs": quantum, "song_secs": float(song["duration"] or 0),
+            "plan_secs": plan_secs}
 
 
 @app.get("/songs/{id}/approve/{tier}", response_class=HTMLResponse)
@@ -6172,48 +6475,119 @@ def approve_all(id: int, tier: str, replace: bool = Form(False)):
     """
     song = get_song_or_404(id)
     valid_tier_or_400(tier)
-    decided = {r["clip_idx"] for r in
-                db.q("SELECT DISTINCT clip_idx FROM refs WHERE song_id=? AND tier=? AND approved=1",
-                     id, tier)}
+    storyboard_service.stamp_ref_scenes(song, tier)
     n = 0
-    for i in range(clip_count(song, scene_seconds_for(song["id"], tier))):
-        if i in decided and not replace:
-            continue
-        newest = db.one("""SELECT id FROM refs WHERE song_id=? AND tier=? AND clip_idx=?
-                           ORDER BY id DESC LIMIT 1""", id, tier, i)
-        if not newest:
-            continue
-        db.run("UPDATE refs SET approved=0 WHERE song_id=? AND tier=? AND clip_idx=?", id, tier, i)
-        db.run("UPDATE refs SET approved=1 WHERE id=?", newest["id"])
-        n += 1
+    heads = _scene_head_idxs(song, tier)
+    if heads:
+        decided = {r["scene_number"] for r in
+                   db.q("""SELECT DISTINCT scene_number FROM refs
+                           WHERE song_id=? AND tier=? AND approved=1
+                             AND scene_number IS NOT NULL""",
+                        id, tier)}
+        for sn in heads:
+            if sn in decided and not replace:
+                continue
+            newest = db.one("""SELECT id FROM refs
+                               WHERE song_id=? AND tier=? AND scene_number=?
+                               ORDER BY id DESC LIMIT 1""", id, tier, sn)
+            if not newest:
+                continue
+            db.run("UPDATE refs SET approved=0 WHERE song_id=? AND tier=? AND scene_number=?",
+                   id, tier, sn)
+            db.run("UPDATE refs SET approved=1 WHERE id=?", newest["id"])
+            n += 1
+    else:
+        decided = {r["clip_idx"] for r in
+                   db.q("""SELECT DISTINCT clip_idx FROM refs
+                           WHERE song_id=? AND tier=? AND approved=1""",
+                        id, tier)}
+        idxs = [r["clip_idx"] for r in
+                db.q("SELECT DISTINCT clip_idx FROM refs WHERE song_id=? AND tier=?",
+                     id, tier)]
+        for i in idxs:
+            if i in decided and not replace:
+                continue
+            newest = db.one("""SELECT id FROM refs WHERE song_id=? AND tier=? AND clip_idx=?
+                               ORDER BY id DESC LIMIT 1""", id, tier, i)
+            if not newest:
+                continue
+            db.run("UPDATE refs SET approved=0 WHERE song_id=? AND tier=? AND clip_idx=?",
+                   id, tier, i)
+            db.run("UPDATE refs SET approved=1 WHERE id=?", newest["id"])
+            n += 1
     return RedirectResponse(f"/songs/{id}/approve/{tier}", status_code=303)
 
 
 @app.post("/songs/{id}/refs/{clip_idx}/approve", response_class=HTMLResponse)
 def approve_ref(request: Request, id: int, clip_idx: int, tier: str = Form(...), ref_id: int = Form(...)):
     song = get_song_or_404(id)
-    ref = db.one("SELECT * FROM refs WHERE id=? AND song_id=? AND tier=? AND clip_idx=?",
-                  ref_id, id, tier, clip_idx)
+    ref = db.one("SELECT * FROM refs WHERE id=? AND song_id=? AND tier=?",
+                  ref_id, id, tier)
     if not ref:
         raise HTTPException(404, "no such ref candidate")
     new_val = 0 if ref["approved"] else 1
     if new_val:
-        db.run("UPDATE refs SET approved=0 WHERE song_id=? AND tier=? AND clip_idx=?", id, tier, clip_idx)
+        if ref["scene_number"] is not None:
+            db.run("UPDATE refs SET approved=0 WHERE song_id=? AND tier=? AND scene_number=?",
+                   id, tier, ref["scene_number"])
+        else:
+            db.run("UPDATE refs SET approved=0 WHERE song_id=? AND tier=? AND clip_idx=?",
+                   id, tier, ref["clip_idx"])
     db.run("UPDATE refs SET approved=? WHERE id=?", new_val, ref_id)
-    # rebuilt through approve_context so the swapped-in tile carries the same
-    # flags, face sources and seeds as one rendered in the grid -- a tile that
-    # loses its Fix controls the moment you approve something is worse than none
     ctx = approve_context(song, tier)
-    clip = next((c for c in ctx["clips"] if c["idx"] == clip_idx), None)
+    clip = None
+    if ref["scene_number"] is not None:
+        clip = next((c for c in ctx["clips"] if c.get("scene_num") == ref["scene_number"]), None)
+    if clip is None:
+        want = clip_idx if clip_idx >= 0 else ref["clip_idx"]
+        clip = next((c for c in ctx["clips"] if c["idx"] == want), None)
+    if clip is None:
+        return HTMLResponse("")
     return templates.TemplateResponse(request, "_clip_tile.html", dict(ctx, clip=clip))
 
 
+def _delete_ref_row(song_id, ref_id):
+    row = db.one("SELECT * FROM refs WHERE id=? AND song_id=?", ref_id, song_id)
+    if not row:
+        raise HTTPException(404, "ref not found")
+    path = row["path"] or ""
+    db.run("DELETE FROM refs WHERE id=?", ref_id)
+    still = db.one("SELECT id FROM refs WHERE path=?", path) if path else True
+    data = os.path.realpath(db.DATA)
+    real = os.path.realpath(path) if path else ""
+    if (not still) and real and real.startswith(data + os.sep) and os.path.isfile(real):
+        try:
+            os.remove(real)
+        except OSError:
+            pass
+    return row
+
+
+@app.post("/songs/{id}/refs/{ref_id}/delete")
+def html_delete_ref(request: Request, id: int, ref_id: int, tier: str = Form(""),
+                    clip_idx: int = Form(-1)):
+    """Operator delete of one still candidate. Clips and the scene stay."""
+    get_song_or_404(id)
+    row = _delete_ref_row(id, ref_id)
+    if request.headers.get("HX-Request"):
+        song = get_song_or_404(id)
+        t = tier or row["tier"]
+        ctx = approve_context(song, t)
+        clip = next((c for c in ctx["clips"] if c["idx"] == row["clip_idx"]), None)
+        return templates.TemplateResponse(request, "_clip_tile.html", dict(ctx, clip=clip))
+    dest = f"/songs/{id}/approve/{tier}" if tier else f"/songs/{id}"
+    return RedirectResponse(dest, status_code=303)
+
+
 MAX_REROLL_NOTE = 400
+MAX_REROLL_N = 16
 
 
 @app.post("/songs/{id}/reroll")
 def start_reroll(id: int, tier: str = Form(...), clip_idx: List[int] = Form(...),
-                  note: str = Form("")):
+                  note: str = Form(""), n: int = Form(4),
+                  seed_min: int = Form(8000), seed_max: int = Form(11000),
+                  step: str = Form("equal")):
     """note: what to change about these clips.
 
     A bare re-roll is four new seeds on the same prompt -- a blind gamble that
@@ -6226,9 +6600,13 @@ def start_reroll(id: int, tier: str = Form(...), clip_idx: List[int] = Form(...)
     sb = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
     if not sb:
         raise HTTPException(400, "generate a storyboard for this tier first")
-    idxs = sorted({i for i in clip_idx if 0 <= i < clip_count(song, scene_seconds_for(song["id"], tier))})
+    heads = set(_scene_head_idxs(song, tier).values())
+    if heads:
+        idxs = sorted({i for i in clip_idx if i in heads})
+    else:
+        idxs = sorted({i for i in clip_idx if i >= 0})
     if not idxs:
-        raise HTTPException(400, "no valid clip indices given")
+        raise HTTPException(400, "no valid scene stills given")
     if len(idxs) > MAX_REROLL_CLIPS:
         raise HTTPException(400, f"too many clips to reroll at once (max {MAX_REROLL_CLIPS})")
     note = " ".join((note or "").split())
@@ -6240,7 +6618,17 @@ def start_reroll(id: int, tier: str = Form(...), clip_idx: List[int] = Form(...)
         tiers.check_override(note)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    jobs.enqueue("reroll", {"song_id": id, "tier": tier, "clip_indices": idxs, "note": note},
+    n = max(1, min(int(n or 4), MAX_REROLL_N))
+    step = "fib" if (step or "").lower() == "fib" else "equal"
+    try:
+        import reroll_refs
+        reroll_refs.seed_plan(n, seed_min, seed_max, step)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    jobs.enqueue("reroll", {"song_id": id, "tier": tier, "clip_indices": idxs, "note": note,
+                             "pose_bases": pose_plan.scene_bases(song, tier),
+                             "n": n, "seed_min": int(seed_min), "seed_max": int(seed_max),
+                             "step": step},
                  song_id=id)
     return RedirectResponse(f"/songs/{id}/approve/{tier}", status_code=303)
 
@@ -6358,15 +6746,16 @@ async def start_fix_ref(id: int, clip_idx: int, tier: str = Form(...), mode: str
 
 
 @app.post("/songs/{id}/classify")
-def start_classify(id: int, tier: str = Form(...)):
+def start_classify(request: Request, id: int, tier: str = Form(...)):
     """Vision review of a tier's approved references. Advisory only: it reports
     clips to look at, it never unapproves or deletes anything."""
     get_song_or_404(id)
     valid_tier_or_400(tier)
     if not db.one("SELECT id FROM refs WHERE song_id=? AND tier=? AND approved=1", id, tier):
         raise HTTPException(400, f"no approved references for tier '{tier}' yet")
-    jobs.enqueue("classify", {"song_id": id, "tier": tier}, song_id=id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    jid = jobs.enqueue("classify", {"song_id": id, "tier": tier}, song_id=id)
+    return json_or_redirect(
+        request, {"job_id": jid, "kind": "classify", "tier": tier}, f"/songs/{id}")
 
 
 MAX_DRIVING_VIDEO = 200 * 1024 * 1024
@@ -6394,7 +6783,8 @@ async def save_driving_video(upload, dest_dir, prefix):
 
 
 @app.post("/songs/{id}/clips")
-async def start_clips(id: int, tier: str = Form(...), video_model: str = Form(""),
+async def start_clips(request: Request, id: int, tier: str = Form(...),
+                       video_model: str = Form(""),
                        refine: bool = Form(False),
                        ref_motion: Optional[UploadFile] = File(None),
                        control_video: Optional[UploadFile] = File(None)):
@@ -6408,19 +6798,19 @@ async def start_clips(id: int, tier: str = Form(...), video_model: str = Form(""
         # render every clip build_song computes from the mp3 with no staged
         # references at all, and fail deep inside ComfyUI instead of here.
         raise HTTPException(400, "this song has no known duration -- re-upload the mp3")
-    approved_idxs = {r["clip_idx"] for r in
-                      db.q("SELECT clip_idx FROM refs WHERE song_id=? AND tier=? AND approved=1", id, tier)}
-    missing = [i for i in range(n_clips) if i not in approved_idxs]
-    if missing:
-        raise HTTPException(400, f"clips missing an approved reference: {missing}")
-    # The catalogue is the single place that knows which renderers exist -- the
-    # song page already builds its dropdown from models.renderable("video") and
-    # marks models.default_for("video"). Hardcoding the pair here meant the page
-    # offered a default the API answered with a 400.
     allowed = set(models.renderable("video").values())
     video_model = video_model or models.default_cli("video")
     if video_model not in allowed:
         raise HTTPException(400, f"video_model must be one of {sorted(allowed)}")
+    storyboard_service.stamp_ref_scenes(song, tier)
+    approved_sns = {r["scene_number"] for r in
+                    db.q("""SELECT scene_number FROM refs
+                            WHERE song_id=? AND tier=? AND approved=1
+                              AND scene_number IS NOT NULL""", id, tier)}
+    heads = _scene_head_idxs(song, tier, video_model)
+    missing = sorted(sn for sn in heads if sn not in approved_sns)
+    if missing:
+        raise HTTPException(400, f"scenes missing an approved still (scene {missing})")
     # T2-45: a mixed-model song that names a model False on every reachable
     # backend is refused here, before enqueue. None is a candidate.
     board = load_storyboard(sb)
@@ -6444,10 +6834,14 @@ async def start_clips(id: int, tier: str = Form(...), video_model: str = Form(""
         raise HTTPException(400, "ref_motion and control_video are s2v inputs -- i2v has "
                                   "neither. Switch to s2v or remove the clips.")
     refuse_if_scene_time_mismatch(song, tier)
-    enqueue_clips(id, tier, video_model, refine=bool(refine),
+    jids = enqueue_clips(id, tier, video_model, refine=bool(refine),
                   ref_motion=motion_path, control_video=control_path,
                   scenes=(board or {}).get("scenes") or [])
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    return json_or_redirect(
+        request,
+        {"job_id": jids[0] if jids else None, "job_ids": jids,
+         "kind": "clips", "tier": tier},
+        f"/songs/{id}")
 
 
 def enqueue_clips(song_id, tier, video_model, refine=False, ref_motion=None,
@@ -6464,19 +6858,26 @@ def enqueue_clips(song_id, tier, video_model, refine=False, ref_motion=None,
     plan = build_song.clip_chain_plan(scenes or [], video_model)
     if not any(p.get("depends_on") is not None for p in plan):
         return [jobs.enqueue("clips", base, song_id=song_id)]
-    # Chain refs are per split clip, not the pre-split n_clips_for count.
-    need = {p["clip_idx"] for p in plan}
-    approved = {r["clip_idx"] for r in
-                db.q("SELECT clip_idx FROM refs WHERE song_id=? AND tier=? AND approved=1",
+    # Only the first clip of each scene needs an operator still. Successors
+    # take the predecessor's last frame (T2-10 / T2-11).
+    heads = build_song.scene_heads(scenes or [], video_model)
+    song = db.one("SELECT * FROM songs WHERE id=?", song_id)
+    if song:
+        storyboard_service.stamp_ref_scenes(song, tier)
+    approved = {r["scene_number"] for r in
+                db.q("""SELECT scene_number FROM refs
+                        WHERE song_id=? AND tier=? AND approved=1
+                          AND scene_number IS NOT NULL""",
                      song_id, tier)}
-    missing = sorted(need - approved)
+    missing = sorted(sn for sn in heads if sn not in approved)
     if missing:
-        raise HTTPException(400, f"clips missing an approved reference: {missing}")
+        raise HTTPException(400, f"scenes missing an approved still (scene {missing})")
     jids = {}
     out = []
     for p in plan:
         dep = jids[p["depends_on"]] if p.get("depends_on") is not None else None
-        args = dict(base, clip_idx=p["clip_idx"])
+        args = dict(base, clip_idx=p["clip_idx"],
+                    depends_on_clip=p.get("depends_on"))
         jid = jobs.enqueue("clips", args, song_id=song_id, depends_on=dep)
         jids[p["clip_idx"]] = jid
         out.append(jid)
@@ -6484,21 +6885,70 @@ def enqueue_clips(song_id, tier, video_model, refine=False, ref_motion=None,
 
 
 @app.post("/songs/{id}/render")
-def start_render(id: int, tier: str = Form(...), fade: float = Form(0.0)):
+def start_render(request: Request, id: int, tier: str = Form(...),
+                 fade: float = Form(0.0)):
     get_song_or_404(id)
     valid_tier_or_400(tier)
-    jobs.enqueue("render_song", {"song_id": id, "tier": tier, "fade": fade}, song_id=id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    jid = jobs.enqueue("render_song", {"song_id": id, "tier": tier, "fade": fade},
+                       song_id=id)
+    return json_or_redirect(
+        request, {"job_id": jid, "kind": "render_song", "tier": tier}, f"/songs/{id}")
 
 
 @app.post("/songs/{id}/renders/{render_id}/confirm")
-def html_confirm_render(id: int, render_id: int):
+def html_confirm_render(request: Request, id: int, render_id: int):
     get_song_or_404(id)
     try:
         cleanup_service.confirm_render(render_id)
     except (LookupError, ValueError, RuntimeError) as e:
         raise HTTPException(400, str(e))
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    return json_or_redirect(
+        request, {"ok": True, "confirmed": render_id}, f"/songs/{id}")
+
+
+def _delete_render_row(song_id, render_id):
+    row = db.one("SELECT * FROM renders WHERE id=? AND song_id=?", render_id, song_id)
+    if not row:
+        raise HTTPException(404, "render not found")
+    path = row["path"] or ""
+    db.run("DELETE FROM renders WHERE id=?", render_id)
+    # Two assemble rows can share one file. Unlink only when nothing else
+    # still points at it — otherwise the sibling card 404s.
+    still = db.one("SELECT id FROM renders WHERE path=?", path) if path else True
+    data = os.path.realpath(db.DATA)
+    real = os.path.realpath(path) if path else ""
+    if (not still) and real and real.startswith(data + os.sep) and os.path.isfile(real):
+        try:
+            os.remove(real)
+        except OSError:
+            pass
+    return row
+
+
+@app.post("/songs/{id}/renders/{render_id}/delete")
+def html_delete_render(request: Request, id: int, render_id: int):
+    """Operator delete of one assembled output. T6-18 does not own this."""
+    get_song_or_404(id)
+    _delete_render_row(id, render_id)
+    if request.headers.get("HX-Request"):
+        return HTMLResponse("")
+    return json_or_redirect(request, {"ok": True, "deleted": render_id}, f"/songs/{id}")
+
+
+@app.get("/songs/{id}/renders/{render_id}/delete")
+def html_delete_render_get(id: int, render_id: int):
+    """Confirm page. A GET to this URL used to 405 / look like the studio died."""
+    get_song_or_404(id)
+    row = db.one("SELECT * FROM renders WHERE id=? AND song_id=?", render_id, id)
+    if not row:
+        raise HTTPException(404, "render not found")
+    name = os.path.basename(row["path"] or "") or f"render #{render_id}"
+    return HTMLResponse(
+        "<!doctype html><meta charset=utf-8><title>Delete render</title>"
+        f"<p>Delete assembled file <strong>{name}</strong> (#{render_id})?</p>"
+        f"<form method=post action='/songs/{id}/renders/{render_id}/delete'>"
+        "<button type=submit>Delete</button> "
+        f"<a href='/songs/{id}'>Cancel</a></form>")
 
 
 @app.post("/api/renders/{render_id}/confirm")
@@ -6559,7 +7009,8 @@ def api_cleanup_run(id: int, tier: str = Form(...), dry_run: str = Form("1"),
 
 
 @app.post("/songs/{id}/audio")
-def edit_song_audio(id: int, trim_start: float = Form(0.0), trim_end: BlankFloat = Form(None),
+def edit_song_audio(request: Request, id: int, trim_start: float = Form(0.0),
+                     trim_end: BlankFloat = Form(None),
                      gain_db: float = Form(0.0), fade_in: float = Form(0.0), fade_out: float = Form(0.0),
                      prompt: str = Form("")):
     song = get_song_or_404(id)
@@ -6585,10 +7036,10 @@ def edit_song_audio(id: int, trim_start: float = Form(0.0), trim_end: BlankFloat
     if not db.one("SELECT id FROM assets WHERE song_id=? AND kind='audio_original'", id):
         db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
                id, "audio_original", song["mp3_path"], None, time.time())
-    jobs.enqueue("edit_audio", {"song_id": id, "trim_start": trim_start, "trim_end": trim_end,
+    jid = jobs.enqueue("edit_audio", {"song_id": id, "trim_start": trim_start, "trim_end": trim_end,
                                  "gain_db": gain_db, "fade_in": fade_in, "fade_out": fade_out,
                                  "prompt": prompt, "note": note, "model": model}, song_id=id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    return json_or_redirect(request, {"job_id": jid, "kind": "edit_audio"}, f"/songs/{id}")
 
 
 # Form sanity bounds, and NOT the model's limits -- ACE-Step's own
@@ -6609,7 +7060,7 @@ def _screen_xxx_audio_text(text, where):
 
 
 @app.post("/songs/{id}/audio/generate")
-def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
+def generate_audio(request: Request, id: int, tags: str = Form(""), lyrics: str = Form(""),
                    seconds: float = Form(30.0), n: int = Form(1),
                    seed: str = Form(""), denoise: float = Form(1.0),
                    from_current: str = Form(""),
@@ -6715,12 +7166,12 @@ def generate_audio(id: int, tags: str = Form(""), lyrics: str = Form(""),
             "SELECT id FROM assets WHERE song_id=? AND kind='audio_original'", id):
         db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
                id, "audio_original", song["mp3_path"], None, time.time())
-    jobs.enqueue("audio", args, song_id=id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    jid = jobs.enqueue("audio", args, song_id=id)
+    return json_or_redirect(request, {"job_id": jid, "kind": "audio"}, f"/songs/{id}")
 
 
 @app.post("/songs/{id}/audio/{asset_id}/use")
-def use_audio_edit(id: int, asset_id: int):
+def use_audio_edit(request: Request, id: int, asset_id: int):
     get_song_or_404(id)
     # Edits only. A generated take is picked on the take, not pressed into
     # songs.mp3_path through this route -- that is how the pick used to be
@@ -6732,7 +7183,9 @@ def use_audio_edit(id: int, asset_id: int):
     if asset["kind"] == "audio_gen":
         raise HTTPException(400, "a take is picked, not used; songs.mp3_path is not the pick")
     db.run("UPDATE songs SET mp3_path=? WHERE id=?", asset["path"], id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    return json_or_redirect(
+        request, {"ok": True, "asset_id": asset_id, "mp3_path": asset["path"]},
+        f"/songs/{id}")
 
 
 @app.post("/songs/{id}/takes/{take_id}/pick")
@@ -6752,13 +7205,14 @@ def pick_song_take(request: Request, id: int, take_id: int):
 
 
 @app.post("/songs/{id}/audio/revert")
-def revert_audio(id: int):
+def revert_audio(request: Request, id: int):
     get_song_or_404(id)
     original = db.one("SELECT * FROM assets WHERE song_id=? AND kind='audio_original' ORDER BY id LIMIT 1", id)
     if not original:
         raise HTTPException(400, "no original recorded for this song")
     db.run("UPDATE songs SET mp3_path=? WHERE id=?", original["path"], id)
-    return RedirectResponse(f"/songs/{id}", status_code=303)
+    return json_or_redirect(
+        request, {"ok": True, "mp3_path": original["path"]}, f"/songs/{id}")
 
 
 @app.post("/songs/{id}/delete")
@@ -7097,15 +7551,31 @@ def api_playlist_get(id: int):
     return JSONResponse(_playlist_payload(get_playlist_or_404(id)))
 
 
+def playlist_summary(p):
+    """Collapsed card only. song_count / total_secs from playlist_service
+    (T6-A2-playlists). Heavy album look / anchors load on expand."""
+    nums = playlist_service.numbers(p["id"])
+    return {"playlist": p, "song_count": nums["song_count"],
+            "total_secs": nums["total_secs"]}
+
+
 @app.get("/playlists", response_class=HTMLResponse)
 def playlists_page(request: Request):
     # 'genre' rows can still exist in the db (a legacy row, or one inserted
     # directly rather than through this route) -- only 'playlist' rows are
     # listed here; genres belong on the song now, not as a playlist kind.
     playlists = db.q("SELECT * FROM playlists WHERE kind='playlist' ORDER BY name")
-    songs = db.q("SELECT * FROM songs ORDER BY title")
     return templates.TemplateResponse(request, "playlists.html", {
-        "playlists": [playlist_detail(p) for p in playlists], "songs": songs})
+        "playlists": [playlist_summary(p) for p in playlists]})
+
+
+@app.get("/playlists/{id}/card", response_class=HTMLResponse)
+def playlist_card(request: Request, id: int):
+    """Album body for one playlist card. Loaded when the operator opens it."""
+    p = get_playlist_or_404(id)
+    songs = db.q("SELECT * FROM songs ORDER BY title")
+    return templates.TemplateResponse(request, "_playlist_card.html", {
+        "d": playlist_detail(p), "songs": songs})
 
 
 @app.post("/playlists")

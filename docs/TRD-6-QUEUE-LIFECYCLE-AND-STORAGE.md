@@ -209,7 +209,10 @@ worker share one file, and WAL is already on.
   `scene_seconds`, `resident_gib`).
 - `T6-18` **Nothing is deleted by this document's lifecycle writes.** Assemble,
   re-render and repair never delete. The shapes here are the manifest a later
-  delete job reads. T6-18 is not weakened by T6-19.
+  delete job reads. T6-18 is not weakened by T6-19. Operator Delete of one
+  assembled output (`POST /songs/{id}/renders/{id}/delete`) is not a
+  lifecycle write: it removes that row; unlinks the file only when no
+  other render still points at it; a missing file still deletes the row.
 - `T6-19` **Operator-confirmed clip cleanup.** Confirm is a separate act from
   assemble. Dry-run lists targets `{path, host, remote, can_delete, reason}`
   and writes nothing. Explicit run: **local** host → `os.remove` at
@@ -221,6 +224,10 @@ worker share one file, and WAL is already on.
   Confirm clean, a cleanup card per confirmed tier interpolates
   `plan_clip_cleanup` (no recompute); real delete form posts `dry_run=0` +
   `confirm=DELETE` to the existing API; unconfirmed shows no delete form.
+  Assembled outputs themselves are `.render-card` tiles with operator
+  Delete of that file only (`test_assemble_output_has_preview_modal_and_delete`,
+  `test_delete_render_keeps_file_when_a_sibling_shares_the_path`,
+  `test_delete_render_works_when_the_file_is_already_gone`).
 
 ## 7. Explicitly not building
 

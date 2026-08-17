@@ -1243,7 +1243,7 @@ def _clip_records(paths, seed_re=r"clip_(\d+)"):
 
 
 def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
-             limit=None, guard="", body="", cast=None):
+             limit=None, guard="", body="", cast=None, bases=None):
     """limit=N renders only the first N clips.
 
     A full song is 40-80 references at ~15 s each, so committing to the whole
@@ -1253,13 +1253,17 @@ def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
     cast: {name: {"path": local anchor path, "desc": one line}} for the album's
     anchored supporting characters. Each anchor is copied into ComfyUI's input
     dir here -- build_refs.py names images, it does not move them.
+
+    bases: {scene_number: local pose-sheet path}. Staged as --bases so each
+    clip's image2 is that scene's plate; image1 stays the identity anchor.
     """
     bs = _slug_tier(slug, tier)
     args = ["--storyboard", storyboard_json, "--slug", bs,
             "--anchor", anchor_name, "--audio", mp3_path,
-            "--guardrail", guard, "--body", body]
+            "--guardrail", guard, "--body", body, "--heads"]
     with tempfile.TemporaryDirectory() as wf_dir:
         cast_path = None
+        bases_path = None
         if cast:
             staged = {name: {"image": install_input(c["path"]), "desc": c.get("desc", "")}
                       for name, c in cast.items() if c.get("path")}
@@ -1271,11 +1275,22 @@ def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
             args += ["--cast", cast_path]
             if progress:
                 progress(f"cast anchors staged: {', '.join(sorted(staged)) or 'none'}")
+        if bases:
+            staged_bases = {str(n): install_input(p)
+                            for n, p in bases.items() if p}
+            fd, bases_path = tempfile.mkstemp(suffix=".json", prefix="bases_")
+            with os.fdopen(fd, "w") as f:
+                json.dump(staged_bases, f)
+            args += ["--bases", bases_path]
+            if progress:
+                progress(f"pose plates staged for {len(staged_bases)} scene(s)")
         try:
             _run_script("build_refs.py", [*args, "--outdir", wf_dir], progress)
         finally:
             if cast_path:
                 os.remove(cast_path)
+            if bases_path:
+                os.remove(bases_path)
         if limit:
             keep = _workflow_jsons(wf_dir)[:int(limit)]
             keep_idx = set()
@@ -1302,14 +1317,15 @@ def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
                         expects[int(m.group(1))] = json.load(fh)
                 except Exception as e:      # noqa: BLE001 -- bookkeeping
                     _say(progress, f"could not read {f}: {e}")
-    records = [{"clip_idx": int(m.group(1)), "path": p, "seed": 7000 + int(m.group(1))}
+    records = [{"clip_idx": int(m.group(1)), "path": p, "seed": 17000 + int(m.group(1))}
                for p, m in _clip_records(paths)]
     _stamp_expect(records, expects, progress)
     return records
 
 
 def reroll(slug, tier, storyboard_json, anchor_name, mp3_path, clip_indices, progress=None,
-           guard="", body="", note="", cast=None):
+           guard="", body="", note="", cast=None, bases=None,
+           n=0, seed_min=8000, seed_max=11000, step="equal"):
     """guard/body are NOT optional in practice, whatever the defaults say.
 
     They were absent entirely until now, so every re-rolled frame was built
@@ -1326,8 +1342,12 @@ def reroll(slug, tier, storyboard_json, anchor_name, mp3_path, clip_indices, pro
             "--audio", mp3_path, "--anchor", anchor_name,
             "--clips", ",".join(str(c) for c in clip_indices),
             "--guardrail", guard, "--body", body, "--note", note]
+    if n:
+        args += ["--n", str(int(n)), "--seed-min", str(int(seed_min)),
+                 "--seed-max", str(int(seed_max)), "--step", step or "equal"]
     with tempfile.TemporaryDirectory() as wf_dir:
         cast_path = None
+        bases_path = None
         if cast:
             staged = {name: {"image": install_input(c["path"]), "desc": c.get("desc", "")}
                       for name, c in cast.items() if c.get("path")}
@@ -1335,11 +1355,20 @@ def reroll(slug, tier, storyboard_json, anchor_name, mp3_path, clip_indices, pro
             with os.fdopen(fd, "w") as f:
                 json.dump(staged, f)
             args += ["--cast", cast_path]
+        if bases:
+            staged_bases = {str(n): install_input(p)
+                            for n, p in bases.items() if p}
+            fd, bases_path = tempfile.mkstemp(suffix=".json", prefix="bases_")
+            with os.fdopen(fd, "w") as f:
+                json.dump(staged_bases, f)
+            args += ["--bases", bases_path]
         try:
             _run_script("reroll_refs.py", [*args, "--outdir", wf_dir], progress)
         finally:
             if cast_path:
                 os.remove(cast_path)
+            if bases_path:
+                os.remove(bases_path)
         paths = _submit_and_collect(wf_dir, f"reroll_{bs}", "*.png", progress)
     return [{"clip_idx": int(m.group(1)), "path": p, "seed": int(m.group(2))}
             for p, m in _clip_records(paths, r"clip_(\d+)_s(\d+)")]
@@ -1354,9 +1383,22 @@ def stage_refs(slug, tier, ref_paths):
             for rec in ref_paths]
 
 
+def attach_chain_guide_file(wf_path, prev_clip, guide_name, dest_guide=None):
+    """T2-10: write N's last frame onto clip N+1 as LTXVAddGuide (basename)."""
+    import build_song as _bs
+    with open(wf_path) as fh:
+        wf = json.load(fh)
+    guide = _bs.chain_first_frame(prev_clip, dest=dest_guide)
+    install_input(guide, guide_name)
+    wf = _bs.attach_ltxv_guide(wf, guide_name)
+    with open(wf_path, "w") as fh:
+        json.dump(wf, fh)
+    return wf
+
+
 def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None, limit=None,
               video_model=None, ref_motion=None, control_video=None, refine=False,
-              only=None):
+              only=None, prev_clip=None):
     """video_model: a renderer value from models.renderable("video") --
     'ltx25' (default) and 'ltx' are the audio-conditioned LTX paths, 's2v' is
     WAN's, and 'i2v' is prompt-driven with no audio at all. None means "ask the
@@ -1384,6 +1426,23 @@ def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None, l
         args.append("--refine")
     with tempfile.TemporaryDirectory() as wf_dir:
         _run_script("build_song.py", [*args, "--outdir", wf_dir], progress)
+        if prev_clip and only is not None:
+            for idx in {int(i) for i in only}:
+                wf_path = os.path.join(wf_dir, f"clip_{idx:03d}.json")
+                if not os.path.isfile(wf_path):
+                    raise RuntimeError(f"T2-10: no workflow for clip {idx}")
+                guide_dest = os.path.join(wf_dir, f"clip_{idx:03d}_guide.png")
+                guide_name = f"{bs}_clip_{idx:03d}_guide.png"
+                import build_song as _bs
+                _bs.chain_first_frame(prev_clip, dest=guide_dest)
+                install_input(guide_dest, f"{bs}_clip_{idx:03d}.png")
+                try:
+                    attach_chain_guide_file(
+                        wf_path, prev_clip, guide_name, dest_guide=guide_dest)
+                except ValueError as e:
+                    _say(progress, f"chain guide (still only): {e}")
+                if progress:
+                    progress(f"T2-10: clip {idx} starts on last frame of predecessor")
         if only is not None:
             keep_idx = {int(i) for i in only}
             for f in list(os.listdir(wf_dir)):

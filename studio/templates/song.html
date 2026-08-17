@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
+<div id="song-page" data-song-id="{{ song.id }}">
+<div id="song-status" class="job-status" hidden></div>
 <h1>{{ song.title }} {% if song.explicit %}<span class="tag explicit">EXPLICIT</span>{% endif %}</h1>
 <p class="meta">{{ song.album or "" }}
    {% if song.genre %}&middot; {{ song.genre }}{% if song.subgenre %} / {{ song.subgenre }}{% endif %}{% endif %}
@@ -302,31 +304,91 @@
   <form method="post" action="/songs/{{ song.id }}/refs">
     {% if storyboards %}
     <fieldset>
-      <legend>Tiers (select one or more -- each yields an independent set)</legend>
+      <legend>Which rating to generate</legend>
+      <p class="hint">Tick the rating you want stills for. <strong>XXX only</strong>
+        &mdash; tick XXX, leave R off. Each ticked rating is its own job.</p>
       {# only tiers that HAVE a storyboard: there is nothing to render images
          from without one, and offering the rest just moves the failure.
          A tier also needs a CHOSEN ANCHOR -- refs are rendered from it -- so
          that is answered here rather than as a 400 one click later. #}
       {% for t in storyboards %}
       {% set anchor = anchor_by_tier.get(t) %}
+      {% set poses = pose_library_by_tier.get(t, []) %}
+      {% set prog = ref_progress_by_tier.get(t) %}
       <div class="tier-anchor {% if not anchor %}missing{% endif %}">
         <label class="check">
-          <input type="checkbox" name="tier" value="{{ t }}" {% if not anchor %}disabled{% endif %}>
+          <input type="checkbox" name="tier" value="{{ t }}"
+                 {% if not anchor %}disabled{% endif %}
+                 {% if anchor and loop.last %}checked{% endif %}>
           {{ t | tiername }}
         </label>
         {% if anchor %}
         <a href="/anchors?scope_value={{ song.album | urlencode }}"
-           title="anchor for the {{ t }} tier -- click to manage">
-          <img class="anchor-thumb" src="{{ media_url(anchor.path) }}" alt="{{ t | tiername }} anchor">
+           title="identity front for the {{ t }} tier -- click to manage">
+          <img class="anchor-thumb" src="{{ media_url(anchor.path) }}" alt="{{ t | tiername }} identity front">
         </a>
-        <span class="muted">anchor ready</span>
+        <span class="muted">{{ poses|length }} pose sheet{{ "" if poses|length == 1 else "s" }}
+          · identity front ready</span>
+        {% else %}
+        {% set nposes = pose_count_by_tier.get(t, 0) %}
+        {% if nposes %}
+        <span class="warn">{{ nposes }} pose sheets · missing identity front</span>
+        <a href="/anchors?scope_value={{ song.album | urlencode }}">pick or generate front</a>
         {% else %}
         <span class="warn">no anchor for this tier</span>
         <a href="/anchors?scope_value={{ song.album | urlencode }}">create one</a>
         {% endif %}
+        {% endif %}
+        {% if prog %}
+        <span class="muted">{{ prog.approved }}/{{ prog.scenes }} scenes approved
+          {% if prog.clips %} · {{ prog.clips }} video part{{ "" if prog.clips == 1 else "s" }}{% endif %}</span>
+        {% endif %}
       </div>
+      {% if poses %}
+      <div class="pose-strip" aria-label="{{ t | tiername }} pose library">
+        {% for a in poses %}
+        <a class="pose-chip {% if a.view == 'front' %}identity{% endif %}"
+           href="/anchors?scope_value={{ song.album | urlencode }}"
+           title="{{ a.view }}">
+          <img src="{{ media_url(a.path) }}" alt="{{ a.view | viewname }}" loading="lazy">
+          <span>{{ a.view | viewname }}{% if a.character_name %} · {{ a.character_name }}{% endif %}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
       {% endfor %}
     </fieldset>
+    {% for t, pplan in pose_plan_by_tier.items() %}
+    {% if pplan %}
+    <div class="pose-plan" data-tier="{{ t }}">
+      <p class="meta">{{ t | tiername }} pose plan
+        &middot; {{ pplan.n_bound }}/{{ pplan.n_scenes }} scenes have a plate
+        {% if pplan.n_unbound %}
+        &middot; <span class="warn">{{ pplan.n_unbound }} from identity front + text</span>
+        {% endif %}
+      </p>
+      <ul class="pose-plan-list">
+        {% for g in pplan.needed %}
+        <li class="{% if g.sheet_id %}bound{% else %}unbound{% endif %}">
+          {% if g.path %}
+          <img src="{{ media_url(g.path) }}" alt="" loading="lazy">
+          {% endif %}
+          <span>
+            <strong>{{ g.label }}</strong>
+            <span class="muted">scenes {{ g.scenes | join(", ") }}</span>
+            {% if not g.sheet_id %}
+            <a href="/anchors?scope_value={{ song.album | urlencode }}">assign a sheet</a>
+            {% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    {% endfor %}
+    <p class="hint">One still per scene. Tick <strong>XXX</strong> and press
+      Generate refs. Leave Limit at 0 for every scene. Video chops a long
+      scene later; you do not approve those parts.</p>
     <label>Limit (0 = all) <input type="number" name="limit" value="0" min="0"></label>
     <button type="submit">Generate refs</button>
     {% else %}
@@ -350,7 +412,7 @@
   {% for rv in reviews %}
   <p>
     {{ rv.tier | tiername }}: {% if rv.flagged %}<strong>{{ rv.flagged|length }} flagged</strong> --
-      {% for f in rv.flagged %}clip {{ f.clip }} ({{ f.issue }}){% if not loop.last %}, {% endif %}{% endfor %}
+      {% for f in rv.flagged %}scene {{ f.clip }} ({{ f.issue }}){% if not loop.last %}, {% endif %}{% endfor %}
     {% else %}nothing flagged{% endif %}
     &middot; <button type="button" class="linkish"
         onclick="document.getElementById('sheet-{{ loop.index }}').showModal()">contact sheet</button>
@@ -369,7 +431,7 @@
   </p>
   {% endfor %}
 
-  <h2>Clips &amp; render</h2>
+  <h2>Video &amp; assemble</h2>
   <form method="post" action="/songs/{{ song.id }}/clips" enctype="multipart/form-data"
         class="stack-form">
     <div class="field-row">
@@ -408,7 +470,16 @@
         <strong>unproven on s2v output</strong> and roughly doubles render time: render three
         clips with and three without before committing a song to it.</p>
     </details>
-    <button type="submit">Render clips</button>
+    <button type="submit">Render video</button>
+    {% if ref_progress_by_tier %}
+    <p class="hint">Video consumes one approved still per scene. Long scenes
+      split and chain on the last frame automatically.
+      {% for t, prog in ref_progress_by_tier.items() %}
+      {{ t | tiername }}: {{ prog.approved }}/{{ prog.scenes }} scenes approved
+      {% if not loop.last %} · {% endif %}
+      {% endfor %}
+    </p>
+    {% endif %}
   </form>
 
   <form method="post" action="/songs/{{ song.id }}/render" class="stack-form">
@@ -426,22 +497,50 @@
   </form>
 
   {% if renders %}
-  <ul class="tier-links">
+  <div class="render-grid">
     {% for r in renders %}
-    <li>{{ r.tier | tiername }}: <a href="{{ media_url(r.path) }}">{{ r.path.split('/')[-1] }}</a>
-      {% if r.confirmed %}
-      <span class="tag">confirmed</span>
-      {% else %}
-      <form method="post" action="/songs/{{ song.id }}/renders/{{ r.id }}/confirm" class="inline">
-        <button type="submit" class="secondary">Confirm clean</button>
-      </form>
-      {% endif %}
-    </li>
+    <article class="render-card" data-render-id="{{ r.id }}">
+      <button type="button" class="render-preview"
+              onclick="document.getElementById('vid-render-{{ r.id }}').showModal()">
+        <video src="{{ media_url(r.path) }}" preload="metadata" muted playsinline></video>
+        <span class="render-play">preview</span>
+      </button>
+      <div class="render-meta">
+        <strong>{{ r.tier | tiername }}</strong>
+        <span class="muted">#{{ r.id }}{% if r.created %}
+          &middot; <time class="local-time" datetime="{{ r.created | isotime }}">{{ r.created | isotime }}</time>
+        {% endif %}</span>
+        <span class="muted truncate">{{ r.path.split('/')[-1] }}</span>
+        {% if r.confirmed %}
+        <span class="tag">confirmed</span>
+        {% else %}
+        <form method="post" action="/songs/{{ song.id }}/renders/{{ r.id }}/confirm" class="inline">
+          <button type="submit" class="secondary">Confirm clean</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/songs/{{ song.id }}/renders/{{ r.id }}/delete"
+              class="inline"
+              hx-post="/songs/{{ song.id }}/renders/{{ r.id }}/delete"
+              hx-target="closest .render-card" hx-swap="outerHTML"
+              hx-confirm="Delete this assembled video? Clips stay.">
+          <button type="submit" class="danger btn-sm">Delete</button>
+        </form>
+      </div>
+    </article>
+    <dialog class="video-modal" id="vid-render-{{ r.id }}">
+      <div class="modal-bar">
+        <strong>{{ r.tier | tiername }} · {{ r.path.split('/')[-1] }}</strong>
+        <button type="button" class="secondary"
+                onclick="this.closest('dialog').close()">Close</button>
+      </div>
+      <video controls preload="none" src="{{ media_url(r.path) }}"></video>
+    </dialog>
     {% endfor %}
-  </ul>
+  </div>
   <p class="hint">Confirm is separate from assemble. Clip cleanup cards appear
     only after Confirm clean — dry-run listing first; real delete needs
-    <code>dry_run=0</code> and <code>confirm=DELETE</code>.</p>
+    <code>dry_run=0</code> and <code>confirm=DELETE</code>. Delete on a card
+    removes that assembled file only; clips stay.</p>
   {% endif %}
 </section>
 
@@ -559,4 +658,5 @@
     <button type="submit" class="danger">Delete song</button>
   </form>
 </section>
+</div>
 {% endblock %}

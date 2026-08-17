@@ -23,8 +23,8 @@
       {# An album IS a playlist -- the same record, matched by the name songs
          already carry. There is no scope to choose, and the free-text box this
          replaces let you type a name nothing would ever match. #}
-      <select name="album" hx-get="/anchors/form" hx-target="#anchor-form"
-              hx-swap="outerHTML" hx-trigger="change" hx-include="#anchor-form">
+      <select name="album"
+              onchange="location.href='/anchors?scope_value='+encodeURIComponent(this.value)">
         {% for a in albums %}
         <option value="{{ a }}" {% if a == form_album %}selected{% endif %}>{{ a }}</option>
         {% else %}
@@ -402,7 +402,7 @@
        terms are this release's failure modes -- its fur colours, its tail, skin
        where fur belongs -- and other music with other artwork wants a different
        list, so one global constant could only ever be a starting point. #}
-    <div class="field-row prompt-versions" data-negative>
+    <div class="neg-toolbar prompt-versions" data-negative>
       <label>
         <span class="label-text">Saved negatives{{ help("prompt_versions") }}</span>
         <select class="negative-version-pick">
@@ -417,12 +417,11 @@
       <label>Name this version
         <input type="text" class="negative-version-label" maxlength="80"
                placeholder="e.g. after the white-tail run"></label>
-      <button type="button" class="negative-save">Save negative</button>
-      {# Inert until a real saved version is picked: the first option is the
-         album's latest and the last is the generic starting point, and neither
-         is a row that can be deleted. #}
-      <button type="button" class="version-delete danger btn-sm" disabled
-              title="Select a saved version to delete it">Delete version</button>
+      <div class="neg-actions">
+        <button type="button" class="negative-save">Save negative</button>
+        <button type="button" class="version-delete danger btn-sm" disabled
+                title="Select a saved version to delete it">Delete version</button>
+      </div>
       <input type="hidden" name="used_version" class="used-version" value="">
       <span class="negative-save-note muted row-note"></span>
     </div>
@@ -561,7 +560,8 @@
       The sheet is re-rendered from your first base image, so denoise below 1.0 is the point of
       the control: it keeps that image's composition and size and redraws the surface. The width
       and height below are <strong>ignored</strong> &mdash; the output inherits the reference's.
-      Pair it with <strong>Use as reference</strong> on a sheet you have already picked.</p>
+      The keeper sheet for the ticked view (if one is picked below) is the
+      composition you are refining.</p>
     {% else %}
     <p class="hint"><span class="tag warn-tag">returns noise below 1.0</span>
       This renders from an EMPTY latent (<code>EmptySD3LatentImage</code>), so there is no

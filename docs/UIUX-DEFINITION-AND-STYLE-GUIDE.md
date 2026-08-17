@@ -189,7 +189,8 @@ control that cannot apply still has to say why, and the reason is in the panel
 above it."* Principle 2 is this component. Every control that spends GPU time
 gets one (§5.5). Base photographs use the same candidate card (contain, not
 cover; no render-tag). Each card names the pose, picks a tier, and either
-generates a sheet or assigns the upload as the chosen sheet (`T7-20`). The
+generates a sheet or assigns the upload as the chosen sheet (`T7-20`). An
+assigned upload leaves Base images and lives only in the candidate grid. The
 corner tick is identity lock only; *Generate this pose* is a second tick.
 
 **The timeline is the set editor, not a missing DAW.** `.timeline` / `.tl-block`
@@ -395,9 +396,8 @@ named refusal (measured vs chosen), not a quiet annotation; split is
 is a clip chain: the next clip's first frame is the last frame of the one
 before (`T2-10`). Re-generating a storyboard keeps every approved reference
 (`T2-13b`); the approve grid still shows the same `(clip_idx, seed)` picks.
-The grid lists every duration-owned clip even when the storyboard has
-fewer scenes (`T2-13c`); a 20-scene board on a 41-clip song still
-renders tiles 0..40.
+The grid lists every **scene** (`T2-13c`); a 20-scene board on a 195 s
+song is 20 tiles, not 41 clip parts.
 A plan whose clip durations miss the track by more than one clip is
 refused before render (`T2-13e`); the storyboard page still allocates
 from `nclips` alone. Assembly still clamps to the track — an overrun
@@ -447,13 +447,69 @@ song's `clip_seconds`, not a constant (`T2-24`). A miss is refused
 before clips enqueue (`T2-25`). The live `meter` component is not this.
 `GET/POST /api/songs/{id}/storyboard/{tier}` is the generation prompt
 (`T2-17`–`T2-19`) and, when a board file exists, the scenes/anchors/refs
-payload (`T2-26`, `T2-27`). Unanchored **leads** only (`T2-30`).
+payload (`T2-26`, `T2-27`). The song page itself (`GET /songs/{id}`) does
+not full-submit those forms: `initSongPage` posts `Accept: application/json`
+to the same HTML routes (`wants_json`); a job id is watched in place and
+`GET /api/songs/{id}` refreshes cards. A plain form post still 303s.
+Grok storyboard comms log model, prompt size, first-token wait, and idle
+timeout (`XAI_STREAM_TIMEOUT`, default 600s) on the job line. Unanchored **leads** only (`T2-30`).
 The storyboard page **Generate refs** control uses `plan-panel`: when a
 named lead has no chosen sheet the button is `blocked` (not disabled)
 and `.plan-blocker` names that lead (`T2-28`); extras/background do not
-block. `POST /songs/{id}/refs` refuses the same reason before enqueue.
-Reference-image generate uses the chosen sheet
-as image1 (identity), not a standing plate (`test_t2_refs_identity.py`).
+block. The same panel names **missing identity front** when chosen pose
+sheets exist but none is `view=front` — never *no anchor* in that case.
+The song page **Reference images** checkboxes stay disabled until front
+exists; the warning is *N pose sheets · missing identity front* with a
+deep-link to `/anchors`. When front exists the same row says *N pose
+sheets · identity front ready* and a `.pose-strip` of every chosen
+sheet for that tier sits under it (identity front outlined, `viewname`
+caption, supporting-character name when present). A 40-sheet album is
+the expected case, not an overflow. Storyboard **Anchors for this tier**
+shows identity fronts only (protagonist and each lead). Captions use
+`viewname`, not the raw `pose_21` key (title attribute keeps the key).
+A 40-sheet pose library is counted under the strip (*N chosen pose
+sheets on /anchors — not used as Generate refs image1*), not dumped as
+40 figures. The XXX gallery family tab defaults
+to **Nude** when that family has rows. `POST /songs/{id}/refs` refuses
+the same reason before enqueue. Reference-image generate uses the
+chosen front sheet as image1 (identity), not a standing plate
+(`test_t2_refs_identity.py`). The same card shows a **pose plan**:
+every scene's needed pose grouped to a chosen sheet (or marked unbound).
+Generate refs freezes auto-matches and sends each bound sheet as that
+scene's image2 plate. Storyboard scene rows have a **Pose plate**
+select (`POST .../scene/{n}/pose-sheet`). `GET /api/songs/{id}/pose-plan/{tier}`
+is the same object (`test_pose_plan.py`).
+**Clips & render:** assembled outputs are `.render-card` tiles — video
+thumbnail (`preload=metadata`), preview `<dialog class="video-modal">`,
+Confirm clean, and Delete (`POST /songs/{id}/renders/{id}/delete` removes
+the row; the file under `DATA/renders` is unlinked only when no other
+render row still points at it; a missing file still deletes the row;
+clips stay). htmx swaps the card out so the 22s song page does not
+reload. `GET` on the same URL is a confirm page, not a 405. A filename
+link that navigates away is the old world.
+**Generate refs checkboxes** are *which rating to enqueue*, not which
+stills to pick. Legend: “Which rating to generate”. Hint: tick XXX,
+leave R off, press Generate refs. The last ready tier is pre-checked.
+**Approve grid Fix** is a page dialog (`#ref-fix`), not an inline
+`<details>` that stretches one card and lifts the neighbour. Tiles stay
+even (`aspect-ratio: 3/4` thumbs, `align-items: start`). Operator
+actions: Use this face / Paint the wrong spot / Extend the frame.
+Slot names (`image 1` / `image 2`) stay in `fix_ref.INSTRUCTION` and
+are used when the form sends an empty instruction. The grid does not
+show them (`test_approve_grid_fix_is_a_dialog_not_an_inline_form`).
+**Approve grid** and the storyboard page are **one still per scene**.
+You edit the scene prompt and pick the scene still. Clip chopping is
+not an operator step. If the scene is longer than one render, it
+splits and part 2+ starts on the last frame (T2-10 / T2-11). Reroll is n / seed min–max / equal or
+fibonacci. A candidate has Approve, Fix, Delete. Thumbs open
+`#ref-preview`. `test_approve_grid_groups_by_scene_and_puts_seed_above_the_name`.
+**Playlists:** `GET /playlists` is collapsed summaries
+(`#playlist-{id}` `data-song-count` / `data-total-secs` still
+`playlist_service.numbers`, `T6-A2-playlists`). Opening a card
+`hx-get`s `/playlists/{id}/card` and shows *Loading album…* until the
+album look / cast / anchors land. Topbar navigation shows `#page-loading`
+on click so a slow first byte is not a blank window
+(`test_playlists_page_is_summaries_until_the_card_loads`).
 The song page **Video model** select is `models.renderable("video")`
 with each option's purpose in the hint (`T2-33`). Adding a catalogue
 entry with a `cli` appears there with no template change. A model
@@ -918,17 +974,29 @@ is a `prompts` row; `apply_pose` replaces the standing clause; the generate
 form carries `name="pose"`; preview shows the saved version
 (`test_pose_is_composed_previewed_and_screened`).
 
-### 7a.5 "Use as reference" is a tile state, not a new page
+### 7a.5 Album pose roster; keeper is "Use as this pose"
 
-`T7-6` shipped: an anchor can now be the identity lock for the next sheet. The
-`T7-7` picture look is still human-judged; the compose hook FLAGs a
-human-body nude wording (including the live-studio body clause) so a dirty
-prompt does not reach the tile as a clean candidate. The front /
-three_quarter ranking harness exists offline; the GPU four-image pair is
-not measured. Photo-conditioned halves (Catatonic jobs 244/248; Street
-Cats jobs 264/268) are on disk from base photographs; Catatonic is the
-collapsed human woman, not her. The use-as-ref half has not been
-rendered (no job conditioned on a chosen anchor sheet).
+The anchors page lists **poses this album's songs need** (`pose_plan.album_coverage`,
+`GET /api/albums/{album}/pose-coverage/{tier}`): union of every storyboard
+on that album at the selected tier. Have = a chosen keeper; missing =
+generate or assign. The roster dropdown (`POST /anchors/keeper`) plus **Save** sets
+the keeper and stamps those scenes. Roster thumbs open `#pose-preview`.
+Gallery tiles use icon actions (filled check = keeper, outline =
+pick, clear, delete) with `title` help. Clear unsets `chosen`
+(`POST /anchors/{id}/clear`). The gallery tile no longer says
+"Use as reference" — that was a generate-path hook (`T7-6` JSON still
+exists) and read as the pose bind. Album names in the generate hint are
+not a hardcoded product list; the dropdown is every playlist and the
+hint no longer dumps live names.
+`T7-6` JSON shipped. The `T7-7` picture look is still human-judged; the
+compose hook FLAGs a human-body nude wording (including the live-studio
+body clause) so a dirty prompt does not reach the tile as a clean
+candidate. The front / three_quarter ranking harness exists offline; the
+GPU four-image pair is not measured. Photo-conditioned halves (Catatonic
+jobs 244/248; Street Cats jobs 264/268) are on disk from base
+photographs; Catatonic is the collapsed human woman, not her. The
+use-as-ref half has not been rendered (no job conditioned on a chosen
+anchor sheet).
 `T4-13` is a `channel_balance` FLAG on the sheet's pixels (olive/magenta vs
 grey wall), not a `BACKDROP` string; job 257 `front_nude` seed 5151 PASSes
 8.06 and sibling seed 5288 still FLAGs 14.76. In
@@ -1190,11 +1258,13 @@ pick form (`POST /songs/{id}/takes/{id}/pick`); a picked take shows a
 write `songs.mp3_path` as the pick.
 
 **`T6-19` assemble / cleanup card:** Confirm clean is separate from
-Assemble. After a render is confirmed, the song page shows a **Clip
-cleanup** card for that tier: dry-run listing from
-`cleanup_service.plan_clip_cleanup` (`path`, `host`, `remote`,
-`can_delete`, `reason`, `n_can_delete`) — interpolate only, no
-recompute (`T6-A4`). Real delete form posts `dry_run=0` and
+Assemble. Assembled files themselves are previewable cards on the song
+page (thumbnail, modal, operator Delete of that file only —
+`test_assemble_output_has_preview_modal_and_delete`). After a render is
+confirmed, the song page shows a **Clip cleanup** card for that tier:
+dry-run listing from `cleanup_service.plan_clip_cleanup` (`path`,
+`host`, `remote`, `can_delete`, `reason`, `n_can_delete`) — interpolate
+only, no recompute (`T6-A4`). Real delete form posts `dry_run=0` and
 `confirm=DELETE` to `POST /api/songs/{id}/cleanup`; default remains
 dry-run. Unconfirmed renders keep the Confirm button and get **no**
 cleanup delete form. T6-18 stays: lifecycle writes never delete.

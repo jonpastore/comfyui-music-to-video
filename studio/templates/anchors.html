@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Anchors</h1>
-<p class="hint">An anchor is the identity sheet a later clip is built from. Pick a rating
-  and a view, lock it with the base photographs, then generate candidates and choose one.
-  Scene refs and clips inherit whoever you pick here.</p>
+<p class="hint">This album&rsquo;s pose library. Songs on the album list the poses
+  they need; each pose has one keeper sheet for the selected tier. Scene
+  reference images (the still LTX starts from) are generated on the
+  <strong>song</strong> page after keepers exist. Pick a keeper below, or
+  generate a missing pose with <strong>Generate anchors</strong>.</p>
 
 {% if failed_jobs %}
 {# a failed batch used to be invisible from here: the button appeared to do
@@ -59,18 +61,90 @@
   </ul>
 </section>
 
+{% if coverage_by_tier %}
+<section class="card" id="album-pose-roster">
+  <h2>Poses this album&rsquo;s songs need</h2>
+  <p class="hint">Union of every storyboard on this album. Pick the keeper
+    sheet in the dropdown. Generate a missing pose below if the list has
+    nothing that fits.</p>
+  {% set ns = namespace(shown="", n=-1) %}
+  {% for t, cov in coverage_by_tier.items() %}
+    {% if cov.n_needed > ns.n %}
+      {% set ns.shown = t %}
+      {% set ns.n = cov.n_needed %}
+    {% endif %}
+  {% endfor %}
+  {% if not ns.shown %}{% set ns.shown = coverage_by_tier.keys() | first %}{% endif %}
+  <div class="tier-tabs" data-album="coverage">
+    {% for t, cov in coverage_by_tier.items() %}
+    <button type="button" class="tier-tab {% if t == ns.shown %}active{% endif %}"
+            data-tier="{{ t }}">{{ t | tiername }}
+      <span class="muted">({{ cov.n_have }}/{{ cov.n_needed }})</span></button>
+    {% endfor %}
+  </div>
+  {% for t, cov in coverage_by_tier.items() %}
+  <div class="tier-panel {% if t != ns.shown %}hidden{% endif %}"
+       data-album="coverage" data-tier="{{ t }}">
+    {% if not cov.needed %}
+    <p class="empty">No storyboard on this album at {{ t | tiername }} yet.</p>
+    {% else %}
+    <ul class="pose-roster">
+      {% for g in cov.needed %}
+      <li class="pose-roster-row {% if g.sheet_id %}have{% else %}missing{% endif %}"
+          data-pose-key="{{ g.key }}">
+        {% if g.path %}
+        <button type="button" class="pose-roster-open"
+                data-full="{{ media_url(g.path) }}"
+                data-label="{{ g.label }}"
+                title="Preview this keeper">
+          <img src="{{ media_url(g.path) }}" alt="">
+        </button>
+        {% else %}
+        <span class="cover cover-empty">none</span>
+        {% endif %}
+        <span>
+          <strong>{{ g.label }}</strong>
+          <span class="muted">
+            {{ g.n_scenes }} scene{{ "" if g.n_scenes == 1 else "s" }}
+            · {% for s in g.songs %}<a href="/songs/{{ s.id }}">{{ s.title }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+          </span>
+          <form method="post" action="/anchors/keeper" class="pose-keeper-form">
+            <input type="hidden" name="album" value="{{ cov.album }}">
+            <input type="hidden" name="tier" value="{{ cov.tier }}">
+            <input type="hidden" name="key" value="{{ g.key }}">
+            <label>Keeper
+              <select name="sheet_id">
+                <option value="0">none</option>
+                {% for sh in cov.sheets %}
+                <option value="{{ sh.id }}" {% if g.sheet_id == sh.id %}selected{% endif %}>
+                  {{ sh.label }}{% if sh.chosen %} · keeper{% endif %}
+                </option>
+                {% endfor %}
+              </select>
+            </label>
+            <button type="submit">Save</button>
+          </form>
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
 <section class="card">
-  <h2>Generate anchor candidates</h2>
+  <h2>Generate a missing pose</h2>
+  <p class="hint">Tick at least one <strong>tier</strong> and one <strong>view</strong>.
+    Generate still mints sheets. If no base is ticked, the chosen identity
+    front is image1 (empty latent + her). Then <strong>Save</strong> the
+    keeper in the dropdown above.</p>
   {% include "_anchor_form.html" %}
-  {% if known_albums %}
-  <p class="hint">Albums that songs already refer to: {{ known_albums | join(", ") }}.
-    An album with no playlist record cannot be picked above &mdash; create it on
-    <a href="/playlists">Playlists</a> and its anchors, cast and look all attach to that name.</p>
-  {% endif %}
 </section>
 
 {% if not gallery %}
-<p class="empty">No anchors generated yet.</p>
+<p class="empty">No pose sheets on this album yet. Generate or assign one above.</p>
 {% else %}
 {% for section in gallery %}
 <section class="card gallery-section">
@@ -86,15 +160,15 @@
        data-album="{{ section.tab_id }}" data-tier="{{ t.name }}">
     <div class="family-tabs" role="tablist" aria-label="{{ t.name | tiername }} sheets">
       {% for fam in t.families %}
-      <button type="button" class="family-tab {% if loop.first %}active{% endif %}"
-              data-family="{{ fam.key }}" aria-selected="{{ loop.first | lower }}">
+      <button type="button" class="family-tab {% if fam.default %}active{% endif %}"
+              data-family="{{ fam.key }}" aria-selected="{{ fam.default | lower }}">
         {{ fam.key | capitalize }}
         <span class="muted">({{ fam.rows | length }})</span>
       </button>
       {% endfor %}
     </div>
     {% for fam in t.families %}
-    <div class="family-panel {% if not loop.first %}hidden{% endif %}"
+    <div class="family-panel {% if not fam.default %}hidden{% endif %}"
          data-family="{{ fam.key }}">
       {% if not fam.rows %}
       <p class="empty">No {{ fam.key }} sheets in this tier.</p>
@@ -116,6 +190,14 @@
 {# ONE lightbox for the page, its src swapped on click -- not one dialog per
    candidate. A group can hold a dozen sheets and every page has several groups;
    a modal each would be hundreds of elements to show one image at a time. #}
+<dialog class="lightbox" id="pose-preview">
+  <div class="lightbox-bar">
+    <strong id="pose-preview-label"></strong>
+    <button type="button" class="lightbox-close"
+            onclick="this.closest('dialog').close()" aria-label="Close">&times;</button>
+  </div>
+  <img alt="">
+</dialog>
 <dialog class="lightbox" id="anchor-lightbox">
   <div class="lightbox-bar">
     {# which sheet you are looking at. A grid of near-identical candidates is

@@ -92,6 +92,22 @@ Service modules, same shape:
     cleanup_service.py     TRD-6   T6-19 operator-confirmed clip cleanup
                                    (song page card interpolates plan_clip_cleanup)
     media_service.py       TRD-8   song media bag (takes / edits / original / renders)
+    app.py POST/GET        TRD-6   operator Delete of one assembled output
+      /songs/{id}/renders/{id}/delete
+                                   (row gone even if mp4 missing; unlink only
+                                   when no sibling shares the path)
+    approve.html #ref-fix  TRD-3   Fix is a dialog; empty instruction uses
+                                   fix_ref.INSTRUCTION; tiles stay even
+    approve.html                   one tile per scene; no part/clip tiles
+    build_song.apply_chain_guide   T2-10 last frame → LTXVAddGuide on successor
+    enqueue_clips                  only scene-head stills required
+    build_refs --heads             one still per scene
+    POST /songs/{id}/refs/{id}/delete
+                                   one still candidate; file unlinked only
+                                   when no sibling shares the path
+    approve_context        TRD-2   one tile per scene (clip_chain_plan heads);
+                                   seed above scene name; origin tag
+                                   only for gen/reroll/refine/face/inpaint/outpaint
 
 `arc.py` and `automation.py` are already FastAPI-free and become their
 dependencies rather than being folded in. The boundary rule that decides what
@@ -123,7 +139,9 @@ HTML `/playlists` card and JSON `GET /api/playlists/{id}` share
 `playlist_service.numbers()` (`test_t6_a2_html_and_json_report_the_same_playlist_numbers`,
 `T6-A2-playlists`: song_count, total_secs; song_count is service-owned so a
 template `len` recompute fails the stub arm; `arc` still only when defined,
-T2-37). Library HTML `GET /` / `GET /songs` (`#library` `data-song-count`)
+T2-37). The list page is summaries only; album look, cast and the
+anchor gallery land from `GET /playlists/{id}/card` when the operator
+opens the card (`test_playlists_page_is_summaries_until_the_card_loads`). Library HTML `GET /` / `GET /songs` (`#library` `data-song-count`)
 and JSON `GET /api/songs` share `library_service.numbers()`
 (`test_t6_a2_html_and_json_report_the_same_library_numbers`, `T6-A2-library`:
 song_count is service-owned so a template `len` recompute fails the stub
@@ -172,7 +190,10 @@ saved until accepted; reject re-reads the previous file, `T2-15`),
 `POST .../arc/apply` (`song_ids`, `confirm`; more than one song without
 confirmation is 400; with confirm writes exactly those songs under
 `applied/`, `T2-16` / `test_t2_16_multi_song_apply.py`). Same routes, no
-parallel `/api/*` tree (`wants_json`). `GET/POST /api/songs/{id}/storyboard/{tier}`,
+parallel `/api/*` tree (`wants_json`). Song-page POSTs
+(`/songs/{id}/storyboard`, lyrics, analyse, refs, clips, render, audio,
+qc, …) answer JSON to `Accept: application/json` and 303 otherwise;
+`GET /api/songs/{id}` is the page state. `GET/POST /api/songs/{id}/storyboard/{tier}`,
 `.../scene/{n}`, `.../meter`, `.../cast`. The generation prompt and
 **the limits that apply to it** travel in the same response (`T2-18`).
 `GET/POST /api/songs/{id}/storyboard/{tier}` (`T2-17` **built**: GET
@@ -535,7 +556,7 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    renderer: `h_storyboard` upserts the storyboard row and does not touch
    `refs`, so re-planning leaves the approved `(clip_idx, seed)` set
    identical (`T2-13b`); `approve_context` enumerates `clip_count`, so a
-   20-scene storyboard on a 41-clip song still lists every clip (`T2-13c`).
+   20-scene storyboard lists 20 scene tiles, not 41 clip parts (`T2-13c`).
    **`T2-13e` built.** `clip_plan` with an `audio_path` sums
    `clip_seconds(length_seconds)` (CHUNK when missing) and refuses when
    that total misses the track by more than one clip. `main()` therefore
@@ -699,13 +720,17 @@ compose arm red. Mutation: dump without the check → writer arm red.
 Mutation: return names without role → API arm red. `T2-30` is not this.
 
 `T2-28` is **built**. `refs_plan_blockers(song, tier, rows)` lists the
-missing album protagonist sheet and each unanchored lead (extras /
-background never). The storyboard page plan-panel paints those as
+missing album protagonist **identity front** (`chosen_anchor` view
+`front`) and each unanchored lead (extras / background never). Named
+pose sheets do not satisfy that gate; `identity_front_blocker` names
+the pose-sheet count so the operator is not told to create an anchor
+they already have. The storyboard page plan-panel paints those as
 `.plan-blocker` and marks Generate refs with `button.blocked` (never
 `disabled`). `start_refs` / `POST /songs/{id}/refs` raises 400 with
-the same lead name and writes no refs job. Mutation: disable the
+the same reason and writes no refs job. Mutation: disable the
 button → HTML arm red. Mutation: enqueue without the check → post arm
-red (`test_t2_28_html.py`, `test_t2_28_refs_unanchored_leads.py`).
+red (`test_t2_28_html.py`, `test_t2_28_refs_unanchored_leads.py`,
+`test_identity_front_blocker_names_pose_library_when_front_is_missing`).
 
 **refs-identity is built.** `start_refs` resolves `chosen_anchor` and
 freezes its path into the refs job. `h_refs` stages that path via

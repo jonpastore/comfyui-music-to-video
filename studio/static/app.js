@@ -1,7 +1,8 @@
 // Minimal SSE watcher for job progress -- no htmx-sse extension needed.
-function watchJob(jobId, targetId) {
+function watchJob(jobId, targetId, onDone) {
   var el = document.getElementById(targetId);
   if (!el || !jobId) return;
+  el.hidden = false;
   var es = new EventSource("/jobs/" + jobId + "/stream");
   es.onmessage = function (e) {
     var data = JSON.parse(e.data);
@@ -9,6 +10,10 @@ function watchJob(jobId, targetId) {
       (data.error || data.progress || "");
     if (data.status === "done" || data.status === "failed" || data.status === "cancelled") {
       es.close();
+      if (typeof onDone === "function") {
+        onDone(data);
+        return;
+      }
       // No surprise reload. The line reports the outcome and offers the refresh;
       // an automatic one threw away whatever you were typing in a textarea.
       var btn = document.createElement("button");
@@ -434,7 +439,8 @@ function paintMask(form) {
     cancel.addEventListener("click", function () { dlg.close(); dlg.remove(); });
     done.addEventListener("click", function () {
       form.querySelector("[name=mask_data]").value = mask.toDataURL("image/png");
-      form.querySelector(".js-mask-state").textContent = "mask ready";
+      var state = form.querySelector(".js-mask-state");
+      if (state) { state.hidden = false; state.textContent = "ready"; }
       form.querySelector(".js-mask-submit").disabled = false;
       dlg.close(); dlg.remove();
     });
@@ -445,6 +451,37 @@ function paintMask(form) {
 document.addEventListener("click", function (e) {
   var btn = e.target.closest(".js-paint-mask");
   if (btn) paintMask(btn.closest(".mask-form"));
+});
+
+// Approve-grid Fix: one dialog, not an inline <details> that stretches the
+// neighbour card up the row.
+document.addEventListener("click", function (e) {
+  var btn = e.target.closest(".js-ref-fix");
+  if (!btn) return;
+  var dlg = document.getElementById("ref-fix");
+  if (!dlg) return;
+  var label = document.getElementById("ref-fix-label");
+  var preview = document.getElementById("ref-fix-preview");
+  if (label) label.textContent = btn.dataset.label || "";
+  if (preview) preview.src = btn.dataset.src || "";
+  dlg.querySelectorAll("form").forEach(function (f) {
+    f.action = btn.dataset.action;
+    var tier = f.querySelector("[name=tier]");
+    var ref = f.querySelector("[name=ref_id]");
+    if (tier) tier.value = btn.dataset.tier || "";
+    if (ref) ref.value = btn.dataset.ref || "";
+  });
+  var maskForm = dlg.querySelector(".mask-form");
+  if (maskForm) {
+    maskForm.dataset.src = btn.dataset.src || "";
+    var data = maskForm.querySelector("[name=mask_data]");
+    var state = maskForm.querySelector(".js-mask-state");
+    var submit = maskForm.querySelector(".js-mask-submit");
+    if (data) data.value = "";
+    if (state) { state.hidden = true; state.textContent = "ready"; }
+    if (submit) submit.disabled = true;
+  }
+  dlg.showModal();
 });
 
 // ---- click a column heading to sort a list table --------------------------
@@ -543,7 +580,8 @@ document.addEventListener("click", function (e) {
     if (maskForm) {
       maskForm.dataset.src = edit.dataset.src;
       maskForm.querySelector("[name=mask_data]").value = "";
-      maskForm.querySelector(".js-mask-state").textContent = "nothing painted yet";
+      var state = maskForm.querySelector(".js-mask-state");
+      if (state) { state.hidden = true; state.textContent = "ready"; }
       maskForm.querySelector(".js-mask-submit").disabled = true;
     }
     fix.showModal();
@@ -638,6 +676,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initAnchorPaste();
   initViewCheckAll();
   initJobForms();       // every page, not just the ones with an anchor grid
+  initSongPage();       // song page forms: fetch, no full-page submit
   initRunHistory();
   initAnchorPlan();
 });
@@ -1290,6 +1329,7 @@ function initAnchorBatch() {
   var panel = document.getElementById("anchor-batch");
   var list = document.getElementById("anchor-batch-list");
   var note = document.getElementById("anchor-batch-note");
+  if (!list) return;
   var done = 0, failed = 0, total = list.children.length;
 
   function viewname(v) { return (v || "").replace(/_/g, " "); }
@@ -1479,6 +1519,140 @@ function initJobForms() {
       if (cell) cell.textContent = (retry ? "retry failed: " : "cancel failed: ") + err.message;
       if (btn) btn.disabled = false;      // it did not happen, so let it be tried again
     });
+  });
+}
+
+// Song page: every control is a fetch. The same POST still 303s without JS.
+function initSongPage() {
+  var page = document.getElementById("song-page");
+  if (!page) return;
+  var songId = page.getAttribute("data-song-id");
+  var status = document.getElementById("song-status") || document.getElementById("job-status");
+
+  function flash(msg, isErr) {
+    if (!status) return;
+    status.hidden = false;
+    status.textContent = msg;
+    status.classList.toggle("err", !!isErr);
+  }
+
+  function paintSong(d) {
+    if (!d || !d.song) return;
+    var title = page.querySelector("h1");
+    if (title) {
+      var tag = title.querySelector(".tag.explicit");
+      if (d.song.explicit && !tag) {
+        title.insertAdjacentHTML("beforeend", ' <span class="tag explicit">EXPLICIT</span>');
+      } else if (!d.song.explicit && tag) {
+        tag.remove();
+      }
+    }
+    var expBtn = page.querySelector('form[action$="/explicit"] button');
+    if (expBtn) expBtn.textContent = d.song.explicit ? "Mark clean" : "Mark explicit";
+    var lyricsTa = page.querySelector('textarea[name="lyrics_text"]');
+    if (lyricsTa && d.song.lyrics != null && lyricsTa.value === lyricsTa.defaultValue) {
+      lyricsTa.value = d.song.lyrics;
+      lyricsTa.defaultValue = d.song.lyrics;
+    }
+    var styleTa = page.querySelector('textarea[name="style_text"]');
+    if (styleTa && d.song.style_text != null && styleTa.value === styleTa.defaultValue) {
+      styleTa.value = d.song.style_text;
+      styleTa.defaultValue = d.song.style_text;
+    }
+    var bpmLine = page.querySelector("section.card .meta");
+    if (bpmLine && d.song.bpm) {
+      var bits = [Number(d.song.bpm).toFixed(1) + " BPM"];
+      if (d.song.key) bits.push("key " + d.song.key);
+      if (d.song.energy != null) bits.push("energy " + Number(d.song.energy).toFixed(3));
+      bpmLine.textContent = bits.join(" · ");
+    }
+    if (d.storyboards && d.storyboards.length) {
+      var list = page.querySelector(".tier-links");
+      if (!list) {
+        var sbCard = page.querySelector("#sb-form") && page.querySelector("#sb-form").closest("section.card");
+        if (sbCard) {
+          list = document.createElement("ul");
+          list.className = "tier-links";
+          sbCard.appendChild(list);
+        }
+      }
+      if (list) {
+        d.storyboards.forEach(function (b) {
+          var href = "/songs/" + songId + "/storyboard/" + b.tier;
+          if (list.querySelector('a[href="' + href + '"]')) return;
+          var li = document.createElement("li");
+          li.innerHTML = '<a href="' + href + '">' + b.tier + "</a> (" +
+            (b.scene_count || "?") + " scenes) · " +
+            '<a href="/songs/' + songId + "/approve/" + b.tier + '">approve grid</a>';
+          list.appendChild(li);
+        });
+      }
+    }
+  }
+
+  function refreshSong() {
+    return api("/api/songs/" + songId).then(paintSong);
+  }
+
+  function followJob(d) {
+    var jid = d.job_id || (d.job_ids && d.job_ids[0]);
+    if (!jid) {
+      flash("Saved.");
+      return refreshSong();
+    }
+    var el = document.getElementById("job-status");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "job-status";
+      el.className = "job-status";
+      page.insertBefore(el, page.firstChild.nextSibling);
+    }
+    el.hidden = false;
+    flash("Queued job #" + jid + (d.kind ? " (" + d.kind + ")" : ""));
+    watchJob(jid, "job-status", function (job) {
+      var line = "job #" + job.id + " (" + (job.status || "") + "): " +
+        (job.error || job.progress || job.status);
+      flash(line, job.status === "failed");
+      if (job.status === "done") refreshSong();
+    });
+  }
+
+  page.addEventListener("submit", function (e) {
+    var form = e.target.closest("form");
+    if (!form || !page.contains(form)) return;
+    if (e.defaultPrevented) return;
+    var action = form.getAttribute("action") || "";
+    if (action.indexOf("/jobs/") === 0) return;
+    if (form.hasAttribute("hx-post") || form.hasAttribute("hx-get")) return;
+    e.preventDefault();
+    var btn = e.submitter || form.querySelector("button[type=submit], button:not([type])");
+    if (btn) btn.disabled = true;
+    var dest = (e.submitter && e.submitter.getAttribute("formaction")) || action;
+    api(dest, new FormData(form))
+      .then(function (d) {
+        if (d.deleted != null && form.classList.contains("delete-song")) {
+          location.href = "/";
+          return;
+        }
+        if (d.explicit !== undefined && form.getAttribute("action") &&
+            form.getAttribute("action").indexOf("/explicit") !== -1) {
+          if (btn) btn.textContent = d.explicit ? "Mark clean" : "Mark explicit";
+          var tag = page.querySelector("h1 .tag.explicit");
+          if (d.explicit && !tag) {
+            page.querySelector("h1").insertAdjacentHTML(
+              "beforeend", ' <span class="tag explicit">EXPLICIT</span>');
+          } else if (!d.explicit && tag) {
+            tag.remove();
+          }
+          flash(d.explicit ? "Marked explicit." : "Marked clean.");
+          return;
+        }
+        if (d.job_id || (d.job_ids && d.job_ids.length)) return followJob(d);
+        flash("Saved.");
+        return refreshSong();
+      })
+      .catch(function (err) { flash(err.message, true); })
+      .then(function () { if (btn) btn.disabled = false; });
   });
 }
 
@@ -1984,4 +2158,52 @@ document.addEventListener("DOMContentLoaded", function () {
 // htmx swaps the anchor form wholesale, so the counts have to be re-attached
 document.body.addEventListener("htmx:afterSwap", function () {
   document.querySelectorAll("textarea.counted").forEach(updateCount);
+});
+
+(function () {
+  var overlay = document.getElementById("page-loading");
+  var label = document.getElementById("page-loading-label");
+  if (!overlay) return;
+  document.querySelectorAll("header nav a, header a.brand").forEach(function (a) {
+    a.addEventListener("click", function (e) {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return;
+      var href = a.getAttribute("href") || "";
+      if (!href || href.charAt(0) === "#") return;
+      if (label) {
+        label.textContent = href.indexOf("/playlists") === 0
+          ? "Loading playlists…" : "Loading…";
+      }
+      overlay.hidden = false;
+    });
+  });
+  window.addEventListener("pageshow", function () { overlay.hidden = true; });
+  document.querySelectorAll("dialog.video-modal").forEach(function (d) {
+    d.addEventListener("close", function () {
+      d.querySelectorAll("video").forEach(function (v) { v.pause(); });
+    });
+  });
+})();
+
+document.addEventListener("click", function (e) {
+  var btn = e.target.closest(".pose-roster-open");
+  if (!btn) return;
+  var dlg = document.getElementById("pose-preview");
+  if (!dlg) return;
+  var img = dlg.querySelector("img");
+  img.src = btn.getAttribute("data-full") || "";
+  var lab = document.getElementById("pose-preview-label");
+  if (lab) lab.textContent = btn.getAttribute("data-label") || "";
+  dlg.showModal();
+});
+
+document.addEventListener("click", function (e) {
+  var btn = e.target.closest(".js-ref-preview");
+  if (!btn) return;
+  var dlg = document.getElementById("ref-preview");
+  if (!dlg) return;
+  var img = dlg.querySelector("img");
+  img.src = btn.getAttribute("data-full") || "";
+  var lab = document.getElementById("ref-preview-label");
+  if (lab) lab.textContent = btn.getAttribute("data-label") || "";
+  dlg.showModal();
 });

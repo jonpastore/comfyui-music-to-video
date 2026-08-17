@@ -432,6 +432,11 @@ MIGRATIONS = [
     "ALTER TABLE renders ADD COLUMN confirmed_at REAL",
     "ALTER TABLE assets ADD COLUMN confirmed INTEGER DEFAULT 0",
     "ALTER TABLE assets ADD COLUMN confirmed_at REAL",
+    # Operator stills are per scene. clip_idx is the video-chain head the
+    # still is staged as; scene_number is what the approve grid groups on.
+    # NULL = a row from before this column; stamp_ref_scenes backfills
+    # chain-head rows only, and never 7000–16999 clip_plan-era seeds.
+    "ALTER TABLE refs ADD COLUMN scene_number INTEGER",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and

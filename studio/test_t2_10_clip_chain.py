@@ -5,6 +5,7 @@ first frame is clip N's last frame — asserted by extracting both frames
 and comparing them, not by asserting the chain was planned. The graph
 uses LTXVAddGuide (TRD-2 W1-7 / TRD-5 §6), not a from-scratch handoff.
 """
+import json
 import os
 import subprocess
 import sys
@@ -144,5 +145,47 @@ def test_t2_10_successor_graph_uses_ltxv_add_guide(tmp_path):
     # DualCFGGuider must consume the guided conditioning, not the pre-guide pair.
     guider = next(n for n in successor.values() if n["class_type"] == "LTXVDualCFGGuider")
     guide_id = next(k for k, n in successor.items() if n["class_type"] == "LTXVAddGuide")
+    guided2, path2 = build_song.apply_chain_guide(
+        build_song.workflow(1, SCENE, "ref.png", "song.mp3", "c", "w", "",
+                            video_model="ltx25"),
+        prev, dest_guide=str(tmp_path / "guide2.png"))
+    assert any(n["class_type"] == "LTXVAddGuide" for n in guided2.values())
+    assert os.path.isfile(path2)
+
     assert guider["inputs"]["positive"] == [guide_id, 0]
     assert guider["inputs"]["negative"] == [guide_id, 1]
+
+
+def test_t2_10_gen_clips_successor_loadimage_is_staged_basename(tmp_path, monkeypatch):
+    """Runtime: attach_chain_guide_file writes LTXVAddGuide with a basename.
+
+    Mutation: attach_ltxv_guide gets an absolute temp path → LoadImage 404s
+    on the backend. Mutation: no LTXVAddGuide written back to the graph.
+    """
+    from conftest import _real_module
+    pipeline = _real_module("pipeline")
+    assert pipeline is not None
+
+    prev = str(tmp_path / "clip_n.mp4")
+    _two_tone_clip(prev, last_colour="red", first_colour="blue")
+    wf = build_song.workflow(
+        1, SCENE, "ref.png", "song.mp3", "c", "w", "", video_model="ltx25")
+    wf_path = str(tmp_path / "clip_001.json")
+    with open(wf_path, "w") as f:
+        json.dump(wf, f)
+    monkeypatch.setattr(pipeline, "install_input",
+                        lambda path, name=None: name or os.path.basename(path))
+    guide_name = "slug_xxx_clip_001_guide.png"
+    pipeline.attach_chain_guide_file(
+        wf_path, prev, guide_name, dest_guide=str(tmp_path / "guide.png"))
+    with open(wf_path) as f:
+        out = json.load(f)
+    guides = [n for n in out.values() if n.get("class_type") == "LTXVAddGuide"]
+    assert len(guides) == 1, out
+    img_id = guides[0]["inputs"]["image"][0]
+    loaded = out[img_id]
+    while loaded["class_type"] != "LoadImage":
+        loaded = out[loaded["inputs"]["image"][0]]
+    name = loaded["inputs"]["image"]
+    assert name == guide_name, name
+    assert not os.path.isabs(name), name

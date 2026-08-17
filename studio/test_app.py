@@ -416,7 +416,7 @@ def test_explicit_flag_set_at_upload_and_toggled_and_shown():
 def test_explicit_not_passed_to_grok_or_pipeline(patch_stub):
     gen_refs_calls = []
 
-    def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="", cast=None):
+    def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="", cast=None, bases=None):
         gen_refs_calls.append(dict(slug=slug, tier=tier, anchor=anchor, limit=limit,
                                     guard=guard, body=body))
         return []
@@ -572,7 +572,7 @@ def test_body_consistency_wording_reaches_every_reference_prompt(patch_stub):
     body text has to be in EVERY frame's prompt, not only the anchor's."""
     seen = []
 
-    def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="", cast=None):
+    def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="", cast=None, bases=None):
         seen.append(body)
         return []
 
@@ -1262,6 +1262,36 @@ def test_storyboard_direction_is_prefilled_from_the_tier_and_shows_its_limits():
         assert "Mainstream music-video tone" not in r.text
 
 
+def test_direction_box_loads_board_not_a_json_filename_pointer():
+    """A stored prompt that only names the file is not a brief."""
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Pointer Dir Song", album="Pointer Dir Album")
+        sid = song["id"]
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        json.dump({
+            "concept": "She waits nude in a wet alley and leads them in.",
+            "version_definition": "Graphic adult sexual content.",
+            "scenes": [{
+                "scene_number": 1, "name": "Alley",
+                "story": "She stands in the steam, one hand between her thighs.",
+                "pose": "standing three-quarter, tail aside",
+                "camera": "wide low",
+            }],
+        }, open(jp, "w"))
+        db.run("""INSERT INTO storyboards
+                  (song_id, tier, json_path, md_path, scene_count, created, prompt)
+                  VALUES (?,?,?,?,?,?,?)""",
+               sid, "xxx", jp, jp.replace(".json", ".md"), 1, time.time(),
+               "official graphic xxx 16 scenes from back_alley_pussy_xxx.json")
+        page = client.get(f"/songs/{sid}/storyboard-form?tier=xxx").text
+        assert "back_alley_pussy_xxx.json" not in page
+        assert "She waits nude in a wet alley" in page
+        assert "standing three-quarter, tail aside" in page
+        assert "Alley Invitation" not in page or "Alley:" in page
+
+
 def test_storyboard_direction_reaches_grok_and_the_tier_goes_with_it():
     with TestClient(appmod.app) as client:
         song = _upload_song(client, "Direction Sent Song", album="Dir Album")
@@ -1707,15 +1737,16 @@ def _png_bytes(w=8, h=8):
     return data
 
 
-def _a_ref(sid, tier, clip_idx=0, seed=7000, approved=0):
+def _a_ref(sid, tier, clip_idx=0, seed=7000, approved=0, scene_number=None):
     """A refs row whose file actually exists -- start_fix_ref refuses one whose
     frame is missing on disk, which is the honest behaviour."""
     d = os.path.join(db.DATA, "fixtures")
     os.makedirs(d, exist_ok=True)
     path = os.path.join(d, f"ref_{sid}_{tier}_{clip_idx}_{seed}.png")
     open(path, "wb").write(_png_bytes())
-    db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created, origin)
-              VALUES (?,?,?,?,?,?,?,'gen')""", sid, tier, clip_idx, path, seed, approved, time.time())
+    db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created, origin, scene_number)
+              VALUES (?,?,?,?,?,?,?,'gen',?)""",
+           sid, tier, clip_idx, path, seed, approved, time.time(), scene_number)
     return db.one("SELECT * FROM refs WHERE path=?", path)
 
 
@@ -1890,6 +1921,104 @@ def test_approve_grid_shows_seeds_and_puts_review_flags_on_the_frame():
         tile1 = page.split('data-clip="1"')[1].split("</div>")[0]
         assert "broken" in tile1, tile1[:300]
         assert "flagged" in page
+
+
+def test_approve_grid_fix_is_a_dialog_not_an_inline_form():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Fix Dialog Song", album="Fix Dialog Album")
+        sid = song["id"]
+        _a_ref(sid, "r", 0, seed=7001)
+        _a_ref(sid, "r", 0, seed=7002)
+        page = client.get(f"/songs/{sid}/approve/r").text
+        assert 'id="ref-fix"' in page
+        assert "js-ref-fix" in page
+        assert "Use this face" in page
+        assert "Paint the wrong spot" in page
+        assert "Fix this frame" not in page
+        assert "Swap face" not in page
+        assert "nothing painted yet" not in page
+        assert 'name="instruction"' in page
+        assert "Naming" not in page
+        assert 'class="fix-block"' not in page
+        assert 'id="ref-preview"' in page
+        assert "js-ref-preview" in page
+
+
+def test_approve_grid_groups_by_scene_and_puts_seed_above_the_name():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Grouped Approve Song", album="Grouped Approve Album")
+        sid = song["id"]
+        dest = os.path.join(db.DATA, "storyboards", "grouped-approve")
+        os.makedirs(dest, exist_ok=True)
+        path = os.path.join(dest, "grouped.json")
+        board = {"scenes": [
+            {"scene_number": 1, "name": "Alley Invitation", "pose": "standing",
+             "image_prompt": "alley", "length_seconds": 15},
+            {"scene_number": 2, "name": "Fingers", "pose": "wide stance",
+             "image_prompt": "fingers", "length_seconds": 15},
+        ]}
+        with open(path, "w") as f:
+            json.dump(board, f)
+        db.run("""INSERT INTO storyboards (song_id, tier, json_path, md_path, created)
+                  VALUES (?,?,?,?,?)""", sid, "r", path, path + ".md", time.time())
+        _a_ref(sid, "r", 0, seed=17000, scene_number=1)
+        db.run("UPDATE refs SET origin=? WHERE song_id=? AND clip_idx=0",
+               "pose-library scene 1 Alley Invitation", sid)
+        page = client.get(f"/songs/{sid}/approve/r").text
+        assert 'class="scene-group"' in page
+        assert "Alley Invitation" in page
+        assert "clip-grid-1" in page
+        assert "Scene prompt" in page
+        assert 'name="image_prompt"' in page
+        assert "cand-seed" in page
+        tile0 = page.split('data-clip="0"')[1].split('data-clip="')[0]
+        assert "17000" in tile0
+        assert "Alley Invitation" in tile0
+        assert 'class="tag">pose-library scene 1 Alley Invitation' not in tile0
+        assert ">Reroll<" in page
+        assert "what to change" in page
+        assert 'class="clip-title"' in page
+        assert "Scene 1" in page
+        assert "Part 1" not in page
+        assert "Clip #0" not in page
+        assert "Images to generate" in page
+        assert "seed stepping" in page
+        assert 'name="n"' in page
+        assert 'name="seed_min"' in page
+        assert 'name="seed_max"' in page
+        assert 'name="step"' in page
+        assert f'/songs/{sid}/refs/' in page and "/delete" in page
+        assert "Save scene prompt" in page
+
+
+def test_reroll_seed_plan_equal_and_fib():
+    import reroll_refs
+    assert reroll_refs.seed_plan(4, 8000, 11000, "equal") == [8000, 9000, 10000, 11000]
+    assert reroll_refs.seed_plan(1, 8000, 11000, "equal") == [8000]
+    fib = reroll_refs.seed_plan(4, 8000, 11000, "fib")
+    assert fib[0] == 8000 and fib[-1] == 11000
+    gaps = [fib[i + 1] - fib[i] for i in range(len(fib) - 1)]
+    assert gaps == sorted(gaps)
+    assert gaps[-1] >= gaps[0]
+
+
+def test_delete_ref_candidate_removes_row_and_keeps_siblings():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Delete Ref Song")
+        sid = song["id"]
+        a = _a_ref(sid, "r", 0, seed=7000)
+        b = _a_ref(sid, "r", 0, seed=8000)
+        gone = client.post(f"/songs/{sid}/refs/{a['id']}/delete",
+                           data={"tier": "r", "clip_idx": 0},
+                           follow_redirects=False)
+        assert gone.status_code in (200, 303)
+        assert db.one("SELECT id FROM refs WHERE id=?", a["id"]) is None
+        assert db.one("SELECT id FROM refs WHERE id=?", b["id"]) is not None
+        hx = client.post(f"/songs/{sid}/refs/{b['id']}/delete",
+                         data={"tier": "r", "clip_idx": 0},
+                         headers={"HX-Request": "true"})
+        assert hx.status_code == 200
+        assert db.one("SELECT id FROM refs WHERE id=?", b["id"]) is None
 
 
 def test_models_page_names_every_model_and_what_it_is_for():
@@ -2910,7 +3039,7 @@ def test_album_anchors_group_by_tier_with_versions_and_opposite_views():
         # a nude front has no nude back, so there is nothing to pair with
         assert rows["Nude"]["anchors"][0]["opposite"] is None
 
-        page = client.get("/playlists").text
+        page = client.get(f"/playlists/{db.one('SELECT id FROM playlists WHERE name=?', album)['id']}/card").text
         assert "tier-tab" in page and "anchor-tile" in page
         assert "v2" in page, "version numbers are not shown"
 
@@ -6754,17 +6883,29 @@ def test_anchors_page_applies_the_scope_it_is_given():
     with TestClient(appmod.app) as client:
         _anchor_group("Scoped Album A", n=2)
         _anchor_group("Scoped Album B", n=2)
+        client.post("/playlists", data={"name": "Scoped Album A"})
+        client.post("/playlists", data={"name": "Scoped Album B"})
 
-        both = client.get("/anchors").text
-        assert "Scoped Album A" in both and "Scoped Album B" in both, "unfiltered lost a group"
+        # no query: the form's first album, not every album at once.
+        # Other albums still appear in the <select>; the GALLERY must not.
+        landing = client.get("/anchors").text
+        assert "Scoped Album A" in landing and "protagonist" in landing
+        assert "Scoped Album B ·" not in landing.replace("&middot;", "·")
+        assert landing.count("gallery-section") == 1
+
+        only_b = client.get("/anchors", params={"album": "Scoped Album B"}).text
+        assert "Scoped Album B" in only_b and "protagonist" in only_b
+        assert only_b.count("gallery-section") == 1
+        assert "Scoped Album A ·" not in only_b.replace("&middot;", "·")
 
         only_a = client.get("/anchors", params={"scope_value": "Scoped Album A"}).text
-        assert "Scoped Album A" in only_a, "the album asked for is missing"
-        assert "Scoped Album B" not in only_a, "scope_value was accepted and ignored"
+        assert "Scoped Album A" in only_a
+        assert only_a.count("gallery-section") == 1
+        assert "Scoped Album B ·" not in only_a.replace("&middot;", "·")
 
         # scope_kind narrows on its own: these rows are all scope_kind='album'
-        assert "Scoped Album A" not in client.get(
-            "/anchors", params={"scope_kind": "song"}).text
+        song_only = client.get("/anchors", params={"scope_kind": "song"}).text
+        assert song_only.count("gallery-section") == 0
 
 
 def test_album_profile_is_screened_like_every_other_prompt_path():

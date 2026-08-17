@@ -107,9 +107,12 @@ approved. This is the single largest consistency lever available and it is
 unwired.
 
 - `T7-6` **A chosen anchor can be used as the identity reference for a new
-  sheet.** The `anchors` gallery gets "use as reference"; the row's `path` goes
-  through `pipeline.install_input` exactly as `gen_refs` does it. Not a re-upload
-  — the same file, no copy.
+  sheet.** `POST /anchors/{id}/use-as-ref` (and `/api/anchors/{id}/use-as-ref`)
+  still insert the row's `path` as an `anchor_ref` with no copy —
+  `pipeline.install_input` at generate time. The gallery tile no longer
+  shows that button: **Use as this pose** is `chosen=1` (the keeper for
+  that pose + tier). Growing the library from an approved sheet is a
+  generate-form action, not a second button on every tile.
 - `T7-7` With an anchor as image1, a variation sheet **keeps the identity across
   views**, measured rather than asserted: render `front` and `three_quarter` from
   one anchor and compare against the same pair rendered from the raw photographs.
@@ -292,7 +295,7 @@ been seen red is a claim about a check, not about the code. Commits are on
 | `T7-17` composed and previewed | **built** for `T7-13`/`T7-14`/`T7-15`/`T7-16` | `d5526cb` + `view:` types + pose | the preview runs the real composer; a saved `view:front` reaches `prompt_for` (`test_view_framing_type_reaches_the_composer`); a saved `pose` reaches preview (`test_pose_is_composed_previewed_and_screened`) |
 | `T7-18` screened and walked | **built** for `T7-13`/`T7-14`/`T7-15`/`T7-16` | `d5526cb` | `view:` / backdrop / composite / pose go through `screen_prompt_field` / `prompts.save`; the negation walker covers studio `ANCHOR_PROFILE_FIELDS` defaults, not only `make_anchor`'s constants |
 | `T7-19` per-view prompt box | **built** | `415584d` | an edit reaches only its own view; the sibling view composes its own. Mutation: the back sheet came back holding `"FRONT VIEW character reference sheet of ..."` — the reported symptom |
-| `T7-20` named uploaded poses | **built** | this change | An operator names a base image, optionally assigns a tier, and either generates a sheet for that pose (identity photos + that plate) or assigns the upload itself as the chosen sheet. Upload cap is 24. Custom `pose_<id>` views omit the standing backdrop clause. Mutation: 95/20/40 score stores 20; assign creates a chosen `anchors` row from the file |
+| `T7-20` named uploaded poses | **built** | this change | An operator names a base image, optionally assigns a tier, and either generates a sheet for that pose (identity photos + that plate) or assigns the upload itself as the chosen sheet. An assigned upload drops out of Base images (`anchor_refs` skips `source=upload` chosen rows). Upload cap is 24. Custom `pose_<id>` views omit the standing backdrop clause. Mutation: 95/20/40 score stores 20; assign creates a chosen `anchors` row from the file; `test_named_pose_meta_and_assign` asserts the asset is gone from `anchor_refs` |
 
 Suite at the last clean measurement: **241 passed, 194 `def test_`**,
 `check_integration.py` / `tiers.py` / `models.py` / `prompts.py` OK. Baseline

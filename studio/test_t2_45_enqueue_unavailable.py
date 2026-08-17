@@ -19,6 +19,7 @@ import time
 from fastapi.testclient import TestClient
 
 import app as appmod
+import build_song
 import db
 import jobs
 import models
@@ -78,24 +79,24 @@ def _write_board(sid, slug, tier, scenes):
     return json_path
 
 
-def _a_ref(sid, tier, clip_idx, seed=7000):
+def _a_ref(sid, tier, clip_idx, seed=7000, scene_number=None):
     d = os.path.join(db.DATA, "fixtures")
     os.makedirs(d, exist_ok=True)
     path = os.path.join(d, f"ref_{sid}_{tier}_{clip_idx}_{seed}.png")
     open(path, "wb").write(b"\x89PNG\r\n\x1a\n" + b"\0" * 16)
-    db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created, origin)
-              VALUES (?,?,?,?,?,1,?, 'gen')""",
-           sid, tier, clip_idx, path, seed, time.time())
+    db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created, origin, scene_number)
+              VALUES (?,?,?,?,?,1,?, 'gen', ?)""",
+           sid, tier, clip_idx, path, seed, time.time(), scene_number)
 
 
 def _ready_song(slug, scenes):
     sid = db.upsert_song(slug, title=slug, duration=12.0)
     song = db.one("SELECT * FROM songs WHERE id=?", sid)
     _write_board(sid, song["slug"], "pg13", scenes)
-    n = appmod.clip_count(song, appmod.scene_seconds_for(sid, "pg13"))
-    assert n > 0, "fixture duration produced no clips"
-    for i in range(n):
-        _a_ref(sid, "pg13", i, seed=8000 + i)
+    heads = build_song.scene_heads(scenes, "ltx25")
+    assert heads, "fixture produced no scene heads"
+    for sn, ci in heads.items():
+        _a_ref(sid, "pg13", ci, seed=17000 + ci, scene_number=sn)
     return sid
 
 

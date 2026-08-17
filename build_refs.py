@@ -19,8 +19,8 @@ import argparse, json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import guardrail  # noqa: E402  (applied here, NOT stored in the storyboard)
 from build_song import (allocate, audio_duration, shot_directive, sname,
-                        normalize, clip_plan, clip_seconds, legal_frames,
-                        LTX_FPS)  # noqa: E402  (shared allocation)
+                        normalize, clip_plan, clip_chain_plan, clip_seconds,
+                        legal_frames, LTX_FPS)  # noqa: E402  (shared allocation)
 
 # Lightning LoRA settings: 4 steps at cfg 1.0. NOTE: at cfg 1.0 ComfyUI skips
 # the negative pass entirely, so scene negative_prompt has no effect -- the
@@ -391,6 +391,8 @@ def main():
     ap.add_argument("--slug", required=True)
     ap.add_argument("--anchor", required=True, help="identity reference, as named in ComfyUI/input")
     ap.add_argument("--base", help="optional 16:9 composition base, as named in ComfyUI/input")
+    ap.add_argument("--bases", help="json {scene_number: comfy_filename} pose plates; "
+                                    "wins over --base for that scene")
     ap.add_argument("--latent", choices=["empty", "image"], default="empty")
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
@@ -406,9 +408,15 @@ def main():
                                     "characters. A scene attaches the ones its 'characters' "
                                     "list names; extras and background need no anchor.")
     ap.add_argument("--outdir", required=True)
+    ap.add_argument("--heads", action="store_true",
+                    help="one still per scene (first clip of the video chain)")
     args = ap.parse_args()
 
     cast = json.load(open(args.cast)) if args.cast else {}
+    per_scene_base = {}
+    if args.bases:
+        raw_bases = json.load(open(args.bases))
+        per_scene_base = {int(k): v for k, v in raw_bases.items() if v}
     sb = normalize(json.load(open(args.storyboard)))
     scenes = sb["scenes"]
     world = sb.get("album_world_reference") or sb.get("world_reference", "")
@@ -418,14 +426,31 @@ def main():
 
     if args.audio:
         dur = audio_duration(args.audio)
-        plan_clips = clip_plan(scenes, args.audio)
+        if args.heads:
+            plan_clips = []
+            seen = set()
+            for rec in clip_chain_plan(scenes):
+                sn = rec.get("scene_number")
+                if sn in seen:
+                    continue
+                seen.add(sn)
+                scene = next(s for s in scenes if s.get("scene_number") == sn)
+                plan_clips.append((rec["clip_idx"], scene,
+                                   shot_directive(scene, rec["clip_idx"])))
+        else:
+            plan_clips = clip_plan(scenes, args.audio)
         i = len(plan_clips)
         counts = [sum(1 for _, s, _ in plan_clips if s is sc) for sc in scenes]
         for ci, scene, shot in plan_clips:
             # distinct seed per clip -> a different composition of the same
-            # scene, with the anchor still pinning the character
-            wf = workflow(scene, args.anchor, args.base, args.latent,
-                          args.width, args.height, 7000 + ci,
+            # scene, with the anchor still pinning the character.
+            # --heads uses 17000+ so a re-gen cannot collide with UNIQUE
+            # (song, tier, clip_idx, seed) rows from the old 4.8s allocator
+            # (those used 7000+ci on clip_idx 0..n).
+            seed = (17000 + ci) if args.heads else (7000 + ci)
+            plate = per_scene_base.get(int(scene.get("scene_number") or 0), args.base)
+            wf = workflow(scene, args.anchor, plate, args.latent,
+                          args.width, args.height, seed,
                           shot, args.guardrail, world, character, args.body,
                           extra_refs=scene_cast(scene, cast), tier=tier)
             wf["18"] = {"class_type": "SaveImage", "inputs": {
@@ -450,7 +475,8 @@ def main():
         num = scene["scene_number"]
         if want and num not in want:
             continue
-        wf = workflow(scene, args.anchor, args.base, args.latent,
+        plate = per_scene_base.get(int(num), args.base)
+        wf = workflow(scene, args.anchor, plate, args.latent,
                       args.width, args.height, 7000 + num,
                       shot_directive(scene, num), args.guardrail, world, character,
                       args.body, extra_refs=scene_cast(scene, cast), tier=tier)

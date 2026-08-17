@@ -73,14 +73,14 @@ def _write_board(sid, slug, tier, scenes, scene_seconds):
     return json_path
 
 
-def _a_ref(sid, tier, clip_idx, seed=7000):
+def _a_ref(sid, tier, clip_idx, seed=7000, scene_number=None):
     d = os.path.join(db.DATA, "fixtures")
     os.makedirs(d, exist_ok=True)
     path = os.path.join(d, f"ref_{sid}_{tier}_{clip_idx}_{seed}.png")
     open(path, "wb").write(b"\x89PNG\r\n\x1a\n" + b"\0" * 16)
-    db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created, origin)
-              VALUES (?,?,?,?,?,1,?, 'gen')""",
-           sid, tier, clip_idx, path, seed, time.time())
+    db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created, origin, scene_number)
+              VALUES (?,?,?,?,?,1,?, 'gen', ?)""",
+           sid, tier, clip_idx, path, seed, time.time(), scene_number)
 
 
 def _clips_jobs(sid):
@@ -167,8 +167,7 @@ def test_t2_11_start_clips_wires_depends_on_and_claim_waits():
         sid = db.upsert_song("t211-chain", title="Chain", duration=30.0)
         song = db.one("SELECT * FROM songs WHERE id=?", sid)
         _write_board(sid, song["slug"], "pg13", scenes, scene_seconds=30.0)
-        for p in plan:
-            _a_ref(sid, "pg13", p["clip_idx"], seed=9000 + p["clip_idx"])
+        _a_ref(sid, "pg13", plan[0]["clip_idx"], seed=9000, scene_number=1)
 
         before = _clips_jobs(sid)
         with TestClient(appmod.app) as client:
@@ -252,7 +251,7 @@ def test_t2_11_no_chain_still_one_batch_job():
         n = appmod.clip_count(song, 10.0)
         assert n > 0
         for i in range(n):
-            _a_ref(sid, "pg13", i, seed=9100 + i)
+            _a_ref(sid, "pg13", i, seed=9100 + i, scene_number=i + 1)
 
         before_ids = {j["id"] for j in _clips_jobs(sid)}
         with TestClient(appmod.app) as client:
@@ -268,3 +267,72 @@ def test_t2_11_no_chain_still_one_batch_job():
         assert "clip_idx" not in args, args
     finally:
         _restore_fleet(was)
+
+
+def test_t2_11_reroll_accepts_chain_head_past_song_quantum():
+    """Reroll is bounded on chain heads, not n_clips_for.
+
+    Mutation: start_reroll uses clip_count → head 2 of a 30s scene is 400.
+    """
+    scenes = [_scene(1, 30.0), _scene(2, 30.0)]
+    plan = build_song.clip_chain_plan(scenes, "ltx25")
+    heads = [p["clip_idx"] for p in plan if p["depends_on"] is None]
+    assert heads == [0, 2], heads
+    sid = db.upsert_song("t211-reroll-head", title="Reroll", duration=60.0)
+    song = db.one("SELECT * FROM songs WHERE id=?", sid)
+    _write_board(sid, song["slug"], "pg13", scenes, scene_seconds=30.0)
+    assert appmod.clip_count(song, 30.0) == 2
+    with TestClient(appmod.app) as client:
+        r = client.post(
+            f"/songs/{sid}/reroll",
+            data={"tier": "pg13", "clip_idx": "2", "n": "1"},
+            follow_redirects=False)
+    assert r.status_code == 303, r.text
+
+
+def test_t2_11_over_ceiling_scene_needs_only_head_still():
+    """A 30s ltx25 scene is two clips. Only the head still is required.
+
+    Mutation: require a still for clip 1 → 400 even with the scene approved.
+    """
+    was = _pin_fleet()
+    try:
+        scenes = [_scene(1, 30.0)]
+        plan = build_song.clip_chain_plan(scenes, "ltx25")
+        assert len(plan) == 2
+        sid = db.upsert_song("t211-head-only", title="Head", duration=30.0)
+        song = db.one("SELECT * FROM songs WHERE id=?", sid)
+        _write_board(sid, song["slug"], "pg13", scenes, scene_seconds=30.0)
+        _a_ref(sid, "pg13", plan[0]["clip_idx"], seed=9200, scene_number=1)
+        before_ids = {j["id"] for j in _clips_jobs(sid)}
+        with TestClient(appmod.app) as client:
+            r = client.post(
+                f"/songs/{sid}/clips",
+                data={"tier": "pg13", "video_model": "ltx25"},
+                follow_redirects=False)
+        assert r.status_code == 303, r.text
+        created = [j for j in _clips_jobs(sid) if j["id"] not in before_ids]
+        assert len(created) == 2, created
+    finally:
+        _restore_fleet(was)
+
+
+def test_t2_11_h_clips_refuses_missing_predecessor(tmp_path):
+    """h_clips raises if the predecessor file is not on disk.
+
+    Mutation: skip the file check and submit anyway → successor has no guide.
+    """
+    import pytest
+    scenes = [_scene(1, 30.0)]
+    sid = db.upsert_song("t211-missing-pred", title="Missing", duration=30.0)
+    song = db.one("SELECT * FROM songs WHERE id=?", sid)
+    _write_board(sid, song["slug"], "pg13", scenes, scene_seconds=30.0)
+    _a_ref(sid, "pg13", 0, seed=9300, scene_number=1)
+    db.run("""INSERT INTO clips (song_id, tier, clip_idx, path, status)
+              VALUES (?,?,?,?,'done')""",
+           sid, "pg13", 0, str(tmp_path / "gone.mp4"))
+    with pytest.raises(RuntimeError, match="T2-11"):
+        appmod.h_clips(
+            {"song_id": sid, "tier": "pg13", "video_model": "ltx25",
+             "clip_idx": 1, "depends_on_clip": 0},
+            lambda m: None)

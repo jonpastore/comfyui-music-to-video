@@ -9,19 +9,30 @@
        against the anchor it will be rendered from ---- #}
 <section class="card">
   <h2>Anchors for this tier</h2>
-  {% if anchors %}
+  {% set fronts = identity_fronts %}
+  {% if fronts %}
   <div class="anchor-strip">
-    {% for a in anchors %}
+    {% for a in fronts %}
     <figure>
-      <img src="{{ media_url(a.path) }}" alt="{{ a.view }} anchor" loading="lazy">
-      <figcaption>{{ a.view }}{% if a.character_name %} &middot; {{ a.character_name }}{% endif %}</figcaption>
+      <img src="{{ media_url(a.path) }}" alt="{{ a.view | viewname }} anchor" loading="lazy" title="{{ a.view }}">
+      <figcaption>{{ a.character_name or "protagonist" }} &middot; {{ a.view | viewname }}</figcaption>
     </figure>
     {% endfor %}
   </div>
+  {% elif anchors %}
+  <p class="warn">{{ anchors|length }} pose sheet{{ "" if anchors|length == 1 else "s" }}
+    · missing identity front.
+    Generate refs uses the chosen front as image1, not the pose library.
+    <a href="/anchors?scope_value={{ song.album | urlencode }}">pick or generate front</a>.</p>
   {% else %}
-  <p class="empty">No chosen anchor for the <code>{{ tier | tiername }}</code> tier &mdash;
-    reference generation cannot run without one.
+  <p class="empty">No chosen sheets for the <code>{{ tier | tiername }}</code> tier &mdash;
+    Generate refs needs a chosen identity front.
     <a href="/anchors?scope_value={{ song.album | urlencode }}">create one</a>.</p>
+  {% endif %}
+  {% if anchors|length > fronts|length %}
+  <p class="muted">{{ anchors|length - fronts|length }} chosen pose sheet{{ "" if (anchors|length - fronts|length) == 1 else "s" }}
+    on <a href="/anchors?scope_value={{ song.album | urlencode }}">/anchors</a>
+    &mdash; not used as Generate refs image1.</p>
   {% endif %}
   {% if unanchored %}
   <p class="warn">Named in scenes but not anchored at this tier:
@@ -90,8 +101,9 @@
 
 <section class="card">
   <h2>Scenes</h2>
-  <p class="hint">Times come from <code>build_song.clip_plan()</code> &mdash; the same mapping
-    the renderer uses, so what is listed here is what will be rendered. Editing a scene
+  <p class="hint">Times come from <code>build_song.clip_chain_plan()</code> &mdash;
+    one still and one prompt per scene. A long scene splits for the renderer
+    automatically (last frame of part N starts part N+1). Editing a scene
     rewrites the storyboard JSON in place; frames already rendered from the old text are
     marked <span class="tag warn-tag">stale</span> rather than thrown away.</p>
   {% for r in scene_rows %}
@@ -114,8 +126,19 @@
         <p class="plan-blocker">{{ b }}</p>
         {% endfor %}
       {% else %}
-        <p class="plan-line">Generate reference stills for {{ tier | tiername }}
-          from this storyboard and the chosen anchor.</p>
+        <p class="plan-line">Generate reference stills for {{ tier | tiername }}.
+          image1 is the chosen identity front.
+          {% if pose_plan %}
+          image2 is the bound pose sheet
+          ({{ pose_plan.n_bound }}/{{ pose_plan.n_scenes }} scenes).
+          {% if pose_plan.n_unbound %}
+          {{ pose_plan.n_unbound }} scene{{ "" if pose_plan.n_unbound == 1 else "s" }}
+          have no plate yet and will render from text.
+          {% endif %}
+          {% else %}
+          scene stills use storyboard text (cast fronts as extra refs).
+          {% endif %}
+        </p>
       {% endif %}
     </div>
     <label>Limit (0 = all) <input type="number" name="limit" value="0" min="0"></label>

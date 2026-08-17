@@ -211,6 +211,20 @@ check this project had.
 `T6-A1`'s named loop here, shared with TRD-7: save operator base photographs,
 generate candidates for a named tier+view, pick one, use that sheet as the next
 identity lock — over JSON, no HTML. `test_t6_a1_anchor_loop_over_json`.
+Named pose sheets (`pose_<asset_id>`, `pose_<asset_id>_nude`) are the
+pose library. They do **not** satisfy `chosen_anchor(..., view="front")`.
+Generate refs still needs one chosen **identity front** per album+tier;
+the song page and storyboard plan-panel say so when the library is full
+and that row is missing. The song page **Reference images** card lists
+every chosen sheet for that tier in a `.pose-strip` (label via
+`viewname`, character name when the sheet is not the protagonist) and
+says *N pose sheets · identity front ready* — not a single thumb that
+reads *anchor ready*. Generate refs then binds each scene to one of
+those sheets (`pose_plan`) and uses it as image2. Clips still consume
+approved scene refs, not the strip; the clips form prints approved/scene
+counts per tier so a full library is not mistaken for a ready clip pass.
+`test_song_page_lists_the_pose_library_not_just_identity_front`,
+`test_pose_plan.py`.
 
 ### The positive half of each one-sided criterion
 

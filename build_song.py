@@ -524,13 +524,19 @@ def clips_for_scene(scene, default_model="ltx25", origin=0.0):
 
 
 def clips_for_scenes(scenes, default_model="ltx25"):
-    """T2-48: each scene splits on its own model ceiling and tiles itself."""
+    """T2-48: each scene splits on its own model ceiling and tiles itself.
+
+    start_s is song-absolute: the next scene begins where the last part ended.
+    """
     plan = []
+    t = 0.0
     for scene in scenes:
-        for rec in clips_for_scene(scene, default_model, origin=0.0):
+        for rec in clips_for_scene(scene, default_model, origin=t):
             item = dict(rec)
             item["scene_number"] = scene.get("scene_number")
             plan.append(item)
+        if plan:
+            t = plan[-1]["end_s"]
     return plan
 
 
@@ -553,6 +559,16 @@ def clip_chain_plan(scenes, default_model="ltx25"):
         item["depends_on"] = dep
         out.append(item)
     return out
+
+
+def scene_heads(scenes, default_model="ltx25"):
+    """scene_number → first clip_idx in clip_chain_plan. Operator stills live here."""
+    heads = {}
+    for rec in clip_chain_plan(scenes, default_model):
+        sn = rec.get("scene_number")
+        if sn not in heads:
+            heads[sn] = rec["clip_idx"]
+    return heads
 
 
 def scene_over_ceiling(scene, default_model="ltx25"):
@@ -679,7 +695,9 @@ def ltx25_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard
     # Missing length_seconds is a pre-T2-12a scene and stays CHUNK (81).
     seconds = clip_seconds(scene.get("length_seconds"))
     length = legal_frames(seconds, LTX_FPS)
-    start = round(i * seconds, 4)
+    start = scene.get("start_s")
+    start = 0.0 if start is None else float(start)
+    start = round(start, 4)
 
     wf = {
         "1": {"class_type": "UNETLoader", "inputs": {"unet_name": LTX25_MODEL,
@@ -762,7 +780,8 @@ def ltx_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
     pos = (f"{shot_directive(scene, i)} {char_lock} {world_lock} Motion: {motion} "
            f"Camera: {scene.get('camera','')} Lighting: {scene.get('lighting','')}")
     pos = guardrail.build_prompt(pos, guard, f"scene {i}", tier=tier)
-    start = round(i * CHUNK, 4)
+    start = scene.get("start_s")
+    start = round(0.0 if start is None else float(start), 4)
 
     wf = {
         "1": {"class_type": "UNETLoader", "inputs": {"unet_name": LTX_MODEL,
@@ -955,6 +974,12 @@ def attach_ltxv_guide(wf, image, frame_idx=0, strength=1.0):
     return wf
 
 
+def apply_chain_guide(wf, prev_clip, dest_guide=None):
+    """Extract N's last frame and attach it as clip N+1's frame-0 guide. T2-10."""
+    guide = chain_first_frame(prev_clip, dest=dest_guide)
+    return attach_ltxv_guide(wf, guide), guide
+
+
 def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
              video_model="s2v", ref_motion=None, control_video=None, refine=False,
              guide_image=None, prev_clip=None, tier=None):
@@ -982,7 +1007,8 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
     pos = f"{shot_directive(scene, i)} {char_lock} {world_lock} Motion: {motion} Camera: {scene.get('camera','')} Lighting: {scene.get('lighting','')}"
     pos = guardrail.build_prompt(pos, guard, f"scene {i}", tier=tier)
     neg = scene.get("negative_prompt", "")
-    start = round(i * CHUNK, 4)
+    start = scene.get("start_s")
+    start = round(0.0 if start is None else float(start), 4)
 
     if video_model in ("ltx", "ltx25"):
         # a separate builder per family: LTX shares none of WAN's node graph, and
@@ -1113,20 +1139,20 @@ def main():
     sb = normalize(json.load(open(args.storyboard)))
     scenes = sb["scenes"]
     dur = audio_duration(args.audio)
-    # T2-48: a scene over its own model ceiling becomes a chain of
-    # model-sized clips. Absent that, clip_plan still maps the song.
-    if any(scene_over_ceiling(s, args.video_model) for s in scenes):
-        plan_clips = []
-        for rec in clips_for_scenes(scenes, default_model=args.video_model):
-            scene = next(s for s in scenes if s["scene_number"] == rec["scene_number"])
-            clip_scene = dict(scene)
-            clip_scene["length_seconds"] = rec["duration_s"]
-            clip_scene["frames"] = rec["frames"]
-            clip_scene["video_model"] = rec["model"]
+    # One planner: scene heads + ceiling splits. Song-length 4.8s slicing
+    # is not an operator unit.
+    plan_clips = []
+    for rec in clips_for_scenes(scenes, default_model=args.video_model):
+        scene = next(s for s in scenes if s["scene_number"] == rec["scene_number"])
+        clip_scene = dict(scene)
+        clip_scene["length_seconds"] = rec["duration_s"]
+        clip_scene["start_s"] = rec["start_s"]
+        clip_scene["frames"] = rec["frames"]
+        clip_scene["video_model"] = rec["model"]
+        i = rec.get("clip_idx")
+        if i is None:
             i = len(plan_clips)
-            plan_clips.append((i, clip_scene, shot_directive(clip_scene, i)))
-    else:
-        plan_clips = clip_plan(scenes, args.audio)
+        plan_clips.append((i, clip_scene, shot_directive(clip_scene, i)))
     refuse_plan_miss(plan_clips, dur)
     nclips = len(plan_clips)
     # grok._compose stores the rating as version; T10-18 reads it here so a

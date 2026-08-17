@@ -116,7 +116,7 @@ def test_h_refs_and_start_refs_use_chosen_sheet_not_plate(monkeypatch, tmp_path)
     score_bases = []
 
     def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None,
-                  guard="", body="", cast=None):
+                  guard="", body="", cast=None, bases=None):
         seen.append({"anchor": anchor, "slug": slug, "tier": tier})
         out = str(tmp_path / "ref_out.png")
         _png(out)

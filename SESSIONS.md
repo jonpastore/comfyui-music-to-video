@@ -11,6 +11,8 @@ If a file you need is claimed, do something else or ask Jon — do not edit arou
 
 | file / area | session | doing what | since |
 |---|---|---|---|
+| `studio/app.py` (refs/approve/clips/storyboard_scenes), `studio/storyboard_service.py`, `studio/pipeline.py` (gen_refs seed / gen_clips guide), `studio/db.py` (refs.scene_number), `build_refs.py`, `build_song.py` (scene_heads), `reroll_refs.py`, `studio/templates/{approve,_clip_tile,_scene_row,song,storyboard}.html`, T2-10/11/13c tests, TRD-2/PRD/DDD/UIUX | Grok — **released** | Scene-only refs UI + T2-10/T2-11. Not deployed. Live song 3 needs Generate refs then approve new stills. | 2026-08-17 |
+| **cerberus meowp-studio deploy** (`~/meowp-studio/app`, `meowp-studio.service`) | Grok — **held** | commit scene-only + deploy from clean worktree. Queue idle. | 2026-08-17 |
 | **gamingpc Comfy** `100.107.235.105:8188` (`~/comfy-backend`, docker) | Grok — **held** | #535 grind-stack copy + donor Z-Image t2i + non-overlapping 2511 jobs (O1 empty+botharms, O13, angles). Not p_*/o12a. Do not stitch donors onto pose FAIL. | 2026-08-16 |
 | `anchor5/roadmap/**` (docs + synced pngs) | Grok — **released** | Per-option runbook, QC.md, CATALOG-MODELS.md, sheets synced from cerberus/gamingpc. | 2026-08-16 |
 | `docs/ROADMAP-2026-08-16-POSE-ANATOMY.md`, `docs/MEASURED-2026-08-16-POSE-ANATOMY.md`, `CONTINUATION-2026-08-16-pose-anatomy.md`, `docs/TRD-4-CHARACTER-ANCHORS.md` (T4-20 note only), `docs/PRD-4-7-IDENTITY-AND-RENDERING.md` (P11 one clause), `docs/DDD-4-7-IDENTITY-AND-RENDERING.md` (grind paragraph), `docs/UIUX-DEFINITION-AND-STYLE-GUIDE.md` (§7a.6 one sentence) | Grok — **released** | O14 last-resort 2511 LoRA train plan (gamingpc). No trainer install. | 2026-08-16 |

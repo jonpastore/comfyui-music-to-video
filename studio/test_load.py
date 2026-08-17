@@ -292,7 +292,7 @@ def test_video_set_is_per_tier_and_all_or_nothing(client):
     assert db.one("SELECT COALESCE(MAX(id),0) AS m FROM jobs")["m"] == before
 
     # only the tier that covers every song is offered on the card
-    page = client.get("/playlists").text
+    page = client.get(f"/playlists/{pl}/card").text
     assert 'value="pg13"' in page
 
     r2 = client.post(f"/playlists/{pl}/render",
@@ -330,7 +330,7 @@ def test_album_profile_fields_have_hints_and_the_wand_drafts_from_the_anchor(cli
     pl = db.run("INSERT INTO playlists (name, kind, created) VALUES (?, 'playlist', ?)",
                 name, time.time())
 
-    page = client.get("/playlists").text
+    page = client.get(f"/playlists/{pl}/card").text
     # the hard-won rules sit next to the box you type into
     assert "at cfg 1.0 the negative prompt is skipped" in page
     assert "PER BODY PART" in page

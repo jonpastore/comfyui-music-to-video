@@ -78,7 +78,10 @@ def test_t2_48_mixed_scenes_each_use_own_ceiling():
     assert all(c["model"] == "s2v" for c in s2v)
     assert all(c["model"] == "ltx25" for c in ltx)
     _tiles(s2v, 30.0)
-    _tiles(ltx, 30.0)
+    assert abs(ltx[0]["start_s"] - s2v[-1]["end_s"]) < 1e-6
+    assert abs(ltx[-1]["end_s"] - 60.0) < 1e-6
+    for a, b in zip(ltx, ltx[1:]):
+        assert abs(a["end_s"] - b["start_s"]) < 1e-9
 
 
 def test_t2_48_compose_stamps_per_model_tiles():
