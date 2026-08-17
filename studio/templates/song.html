@@ -305,15 +305,22 @@
     {% endif %}
   </summary>
   {% if storyboards %}
-  <ul class="tier-actions tier-links">
+  <div class="tier-actions tier-links">
     {% for t, sb in storyboards.items() %}
-    <li>
-      <a class="btn" href="/songs/{{ song.id }}/storyboard/{{ t }}">Edit {{ t | tiername }} scenes</a>
-      <a class="btn secondary" href="/songs/{{ song.id }}/approve/{{ t }}">Approve {{ t | tiername }}</a>
-      <span class="muted">{{ sb.scene_count or "?" }} scenes</span>
-    </li>
+    <details class="tier-board" data-tier="{{ t }}"
+             {% if loop.last %}open{% endif %}
+             hx-get="/songs/{{ song.id }}/storyboard/{{ t }}/panel"
+             hx-trigger="{{ 'load, toggle once' if loop.last else 'toggle once' }}"
+             hx-target="find .tier-board-body" hx-swap="innerHTML">
+      <summary>
+        <span>{{ t | tiername }} · {{ sb.scene_count or "?" }} scenes</span>
+        <a class="btn secondary" href="/songs/{{ song.id }}/approve/{{ t }}"
+           onclick="event.stopPropagation()">Approve {{ t | tiername }}</a>
+      </summary>
+      <div class="tier-board-body"><p class="muted">Loading scenes…</p></div>
+    </details>
     {% endfor %}
-  </ul>
+  </div>
   {% else %}
   <p class="empty">No storyboard yet. Fill the brief and generate one.</p>
   {% endif %}

@@ -91,12 +91,54 @@ def test_song_page_folds_and_storyboard_are_buttons():
                   VALUES (?,?,?,?,?,?)""",
                sid, "xxx", jp, jp + ".md", 1, 0)
         page = client.get(f"/songs/{sid}").text
-        assert f">Edit XXX scenes</a>" in page
+        assert f"/songs/{sid}/storyboard/xxx/panel" in page
         assert f">Approve XXX</a>" in page
+        assert "Edit XXX scenes" not in page
         assert "approve grid" not in page.lower()
-        assert 'class="btn"' in page
+        assert 'class="tier-board"' in page
         # pose plan for a tier lives inside that tier's expand body
         assert "tier-ref-body" in page
+        panel = client.get(f"/songs/{sid}/storyboard/xxx/panel")
+        assert panel.status_code == 200, panel.text
+        assert "board_json" in panel.text
+        assert "Save" in panel.text
+        assert "Generate" in panel.text
+        assert "Scenes and timing" in panel.text
+
+
+def test_storyboard_save_and_restore_roundtrip():
+    """CRUD on the live board: save JSON, snapshot, edit, restore."""
+    import json as _json
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Board CRUD Song")
+        sid = song["id"]
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        board = {
+            "title": "T", "character_reference": "her, adult feline woman",
+            "scenes": [{
+                "scene_number": 1, "name": "One",
+                "image_prompt": "alley", "story": "walk",
+            }],
+        }
+        jp = os.path.join(outdir, f"{song['slug']}_r.json")
+        _json.dump(board, open(jp, "w"))
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               sid, "r", jp, jp.replace(".json", ".md"), 1, 0)
+        snap = client.post(f"/songs/{sid}/storyboard/r/versions",
+                           data={"label": "keep"}, headers=J)
+        assert snap.status_code == 200, snap.text
+        assert snap.json()["version"]["n"] == 1
+        board["scenes"][0]["name"] = "Two"
+        saved = client.post(f"/songs/{sid}/storyboard/r/save",
+                            data={"board_json": _json.dumps(board)}, headers=J)
+        assert saved.status_code == 200, saved.text
+        assert _json.load(open(jp))["scenes"][0]["name"] == "Two"
+        rest = client.post(f"/songs/{sid}/storyboard/r/versions/restore",
+                           data={"n": "1"}, headers=J)
+        assert rest.status_code == 200, rest.text
+        assert _json.load(open(jp))["scenes"][0]["name"] == "One"
 
 
 def test_song_page_storyboard_form_is_dual_path():

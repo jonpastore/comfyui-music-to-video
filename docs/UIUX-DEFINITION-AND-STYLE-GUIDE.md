@@ -465,8 +465,12 @@ lyrics, style, media, audio, review, video, QC, jobs and delete start
 closed once they have content. **Storyboard** and **Reference images**
 start open — that is the work. Summaries carry the one-line status so
 you do not open a card to learn it is idle.
-Storyboard destinations are buttons: *Edit {tier} scenes* and
-*Approve {tier}* (`a.btn` / `a.btn.secondary`), not bare text links.
+Storyboard editing lives **on the song page**, not a second interface.
+Each written tier is a `.tier-board` that `hx-get`s
+`/songs/{id}/storyboard/{tier}/panel` (JSON textarea, Save, Generate,
+named versions, coverage, scenes and timing). *Approve {tier}* stays a
+button. `GET /songs/{id}/storyboard/{tier}` remains for T6-A2 numbers.
+`initSongPage` posts every control as JSON.
 The song page **Reference images** checkboxes stay disabled until front
 exists; the warning is *N pose sheets · missing identity front* with a
 deep-link to `/anchors`. Tick a ready rating to expand **that tier

@@ -493,6 +493,12 @@ false.
 
 ## 5. The storyboard page
 
+The operator edits the board **on the song page** (`#fold-storyboard` →
+`.tier-board` → `/songs/{id}/storyboard/{tier}/panel`). Save / Generate /
+named versions / scene rows are the same HTML routes `initSongPage`
+posts as JSON. `GET /songs/{id}/storyboard/{tier}` stays as the T6-A2
+HTML surface (same `storyboard_service.payload()` numbers).
+
 ### 5.1 The time meter
 
 - `T2-23` The API reports total scene time against song length, and flags a

@@ -26,6 +26,7 @@ import media_service
 import playlist_service
 import sets_service
 import storyboard_service
+import storyboard_versions
 import tiers
 
 
@@ -68,6 +69,11 @@ def test_t6_a3_sets_service_imports_nothing_from_fastapi():
 def test_t6_a3_storyboard_service_imports_nothing_from_fastapi():
     names = _fastapi_imports(storyboard_service.__file__)
     assert names == [], f"storyboard_service imports FastAPI: {names}"
+
+
+def test_t6_a3_storyboard_versions_imports_nothing_from_fastapi():
+    names = _fastapi_imports(storyboard_versions.__file__)
+    assert names == [], f"storyboard_versions imports FastAPI: {names}"
 
 
 def test_t6_a3_arc_service_imports_nothing_from_fastapi():

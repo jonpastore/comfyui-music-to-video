@@ -49,6 +49,7 @@ import library_service  # TRD-6 T6-A2-library: library song_count — no FastAPI
 import media_service  # TRD-8 T8-16: song media bag — no FastAPI
 import nav_service  # UIUX §8 / T6-A2-nav: topbar links — no FastAPI
 import pose_plan  # scene pose → chosen sheet → refs image2
+import storyboard_versions
 import video_fx   # per-item video look effects -- same, pure/no deps
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -5964,16 +5965,14 @@ def coverage(rows, nclips, duration, clip_secs=None):
     return storyboard_service.coverage(rows, nclips, duration, clip_secs)
 
 
-@app.get("/songs/{id}/storyboard/{tier}", response_class=HTMLResponse)
-def view_storyboard(request: Request, id: int, tier: str):
-    song = get_song_or_404(id)
-    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
+def storyboard_page_ctx(song, tier):
+    """Shared ctx for the standalone page (T6-A2) and the in-song panel."""
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?",
+                 song["id"], tier)
     if not row:
         raise HTTPException(404, "no storyboard for this tier yet")
-    # T6-A2: numbers from storyboard_service.payload — same function the JSON
-    # GET uses. Template interpolates; it does not recompute scene_count.
     try:
-        board = storyboard_service.payload(id, tier)
+        board = storyboard_service.payload(song["id"], tier)
     except LookupError as e:
         raise HTTPException(404, str(e)) from None
     except RuntimeError as e:
@@ -5991,31 +5990,117 @@ def view_storyboard(request: Request, id: int, tier: str):
     sb_secs = row["scene_seconds"] if row else None
     rows, nclips = storyboard_scenes(song, sb, tier, {c["name"] for c, _a in cast},
                                      scene_seconds=sb_secs)
-    # the anchors this tier will actually render from, at the top, because a
-    # storyboard is read against the character it is for. The protagonist's
-    # (character_id IS NULL) first, then the cast.
     anchors = album_chosen_anchors(album, tier)
     identity_fronts = [a for a in anchors if a["view"] == "front"]
-    unanchored = unanchored_leads(rows)
     clip_secs = board["clip_seconds"]
-    return templates.TemplateResponse(request, "storyboard.html", {
+    raw = {}
+    try:
+        raw = json.load(open(row["json_path"])) if row["json_path"] else sb
+    except (OSError, json.JSONDecodeError, TypeError):
+        raw = sb
+    return {
         "song": song, "tier": tier, "row": row, "md": md, "sb": sb,
-        # the page shows THIS song's clip length, not the old constant
+        "board_json": json.dumps(raw, indent=1),
         "scene_rows": rows, "anchors": anchors,
         "identity_fronts": identity_fronts, "chunk": clip_secs,
-        "unanchored": unanchored,
-        # T2-28-html: plan-panel reasons for Generate refs (marked, not disabled)
+        "unanchored": unanchored_leads(rows),
         "refs_blockers": refs_plan_blockers(song, tier, rows),
         "pose_plan": pose_plan.plan(song, tier),
         "coverage": board["coverage"],
         "fields": EDITABLE_SCENE_FIELDS,
-        # T6-A2 distinctive numbers — service-owned, data-* on the page
         "scene_time": board["scene_time"],
         "song_length": board["song_length"],
         "clip_seconds": clip_secs,
         "scene_count": board["scene_count"],
         "mismatch": board["mismatch"],
-    })
+        "versions": storyboard_versions.list_versions(row["json_path"], tier),
+    }
+
+
+@app.get("/songs/{id}/storyboard/{tier}", response_class=HTMLResponse)
+def view_storyboard(request: Request, id: int, tier: str):
+    song = get_song_or_404(id)
+    return templates.TemplateResponse(
+        request, "storyboard.html", storyboard_page_ctx(song, tier))
+
+
+@app.get("/songs/{id}/storyboard/{tier}/panel", response_class=HTMLResponse)
+def storyboard_panel(request: Request, id: int, tier: str):
+    """Fragment the song page hx-gets so 50 scenes are not in GET /songs/{id}."""
+    song = get_song_or_404(id)
+    return templates.TemplateResponse(
+        request, "_storyboard_panel.html", storyboard_page_ctx(song, tier))
+
+
+@app.post("/songs/{id}/storyboard/{tier}/save")
+async def save_storyboard_board(request: Request, id: int, tier: str):
+    """Write the textarea JSON as the live board. Snapshot first if asked."""
+    song = get_song_or_404(id)
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
+    if not row:
+        raise HTTPException(404, "no storyboard for this tier yet")
+    form = await request.form()
+    raw = (form.get("board_json") or "").strip()
+    try:
+        sb = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise HTTPException(400, f"storyboard is not JSON: {e}") from None
+    try:
+        models.refuse_unknown_video_model(sb.get("scenes") if isinstance(sb, dict) else None)
+        jp, mp, n = storyboard_versions.save_board(
+            sb, os.path.dirname(row["json_path"]), song["slug"], tier)
+    except (ValueError, LookupError) as e:
+        raise HTTPException(400, str(e)) from None
+    db.run("UPDATE storyboards SET json_path=?, md_path=?, scene_count=? WHERE id=?",
+           jp, mp, n, row["id"])
+    if wants_json(request):
+        return JSONResponse({"ok": True, "scene_count": n, "tier": tier})
+    return RedirectResponse(f"/songs/{id}#fold-storyboard", status_code=303)
+
+
+@app.post("/songs/{id}/storyboard/{tier}/versions")
+async def snapshot_storyboard(request: Request, id: int, tier: str):
+    song = get_song_or_404(id)
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
+    if not row:
+        raise HTTPException(404, "no storyboard for this tier yet")
+    form = await request.form()
+    try:
+        ver = storyboard_versions.snapshot(
+            row["json_path"], row["md_path"], tier, form.get("label") or "")
+    except LookupError as e:
+        raise HTTPException(400, str(e)) from None
+    if wants_json(request):
+        return JSONResponse({"ok": True, "version": ver})
+    return RedirectResponse(f"/songs/{id}#fold-storyboard", status_code=303)
+
+
+@app.post("/songs/{id}/storyboard/{tier}/versions/restore")
+async def restore_storyboard(request: Request, id: int, tier: str):
+    song = get_song_or_404(id)
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?", id, tier)
+    if not row:
+        raise HTTPException(404, "no storyboard for this tier yet")
+    form = await request.form()
+    try:
+        n = int(form.get("n") or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "which version?")
+    try:
+        jp, mp = storyboard_versions.restore(
+            row["json_path"], row["md_path"], tier, n, song["slug"])
+    except (LookupError, ValueError) as e:
+        raise HTTPException(400, str(e)) from None
+    nscenes = 0
+    try:
+        nscenes = len(json.load(open(jp)).get("scenes") or [])
+    except (OSError, json.JSONDecodeError, TypeError):
+        pass
+    db.run("UPDATE storyboards SET json_path=?, md_path=?, scene_count=? WHERE id=?",
+           jp, mp, nscenes, row["id"])
+    if wants_json(request):
+        return JSONResponse({"ok": True, "restored": n, "scene_count": nscenes})
+    return RedirectResponse(f"/songs/{id}#fold-storyboard", status_code=303)
 
 
 @app.post("/songs/{id}/storyboard/{tier}/scene/{num}", response_class=HTMLResponse)

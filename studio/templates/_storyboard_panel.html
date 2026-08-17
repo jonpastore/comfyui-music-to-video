@@ -1,0 +1,67 @@
+{# In-song editor for one tier. Lazy-loaded so a 50-scene board is not
+   poured into GET /songs/{id}. Save / generate / versions are forms so
+   initSongPage posts them as JSON. #}
+<div class="sb-panel" data-tier="{{ tier }}">
+  <form method="post" action="/songs/{{ song.id }}/storyboard/{{ tier }}/save"
+        class="stack-form sb-save">
+    <label>Storyboard
+      <textarea name="board_json" class="sb-json" rows="14"
+                spellcheck="false">{{ board_json }}</textarea>
+    </label>
+    <div class="sb-toolbar">
+      <button type="submit">Save</button>
+      <button type="submit" form="sb-gen-{{ tier }}">Generate</button>
+      {% if versions %}
+      <label class="sb-ver">Version
+        <select name="n" form="sb-restore-{{ tier }}">
+          {% for v in versions %}
+          <option value="{{ v.n }}">{{ v.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit" form="sb-restore-{{ tier }}" class="secondary">Restore</button>
+      <button type="submit" form="sb-snap-{{ tier }}" class="secondary">Save version</button>
+      {% else %}
+      <button type="submit" form="sb-snap-{{ tier }}" class="secondary">Save version</button>
+      {% endif %}
+      <a class="btn secondary" href="/songs/{{ song.id }}/approve/{{ tier }}">Approve {{ tier | tiername }}</a>
+    </div>
+  </form>
+
+  <form id="sb-gen-{{ tier }}" method="post" action="/songs/{{ song.id }}/storyboard">
+    <input type="hidden" name="tier" value="{{ tier }}">
+    <input type="hidden" name="direction" value="{{ row.prompt or '' }}">
+  </form>
+  <form id="sb-snap-{{ tier }}" method="post"
+        action="/songs/{{ song.id }}/storyboard/{{ tier }}/versions">
+    <input type="hidden" name="label" value="">
+  </form>
+  <form id="sb-restore-{{ tier }}" method="post"
+        action="/songs/{{ song.id }}/storyboard/{{ tier }}/versions/restore">
+  </form>
+
+  <section class="sb-meter" id="storyboard-meter-{{ tier }}"
+           data-scene-time="{{ scene_time }}"
+           data-song-length="{{ song_length }}"
+           data-clip-seconds="{{ clip_seconds }}"
+           data-scene-count="{{ scene_count }}"
+           data-mismatch="{{ 'true' if mismatch else 'false' }}"
+           data-fill-pct="{{ coverage.fill_pct }}">
+    <p class="meta">{{ scene_count }} scenes ·
+      {{ coverage.intent | hms }} written ·
+      song {{ coverage.rendered | hms }}
+      {% if mismatch %}
+      · <span class="warn">scene time {{ scene_time }}s ≠ song {{ song_length }}s</span>
+      {% endif %}
+    </p>
+  </section>
+
+  <details class="sb-scenes" open>
+    <summary>Scenes and timing</summary>
+    {% for r in scene_rows %}
+      {% include "_scene_row.html" %}
+    {% else %}
+      <p class="empty">This storyboard has no scenes.</p>
+    {% endfor %}
+  </details>
+</div>

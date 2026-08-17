@@ -1576,7 +1576,7 @@ function initSongPage() {
       if (!list) {
         var sbCard = page.querySelector("#sb-form") && page.querySelector("#sb-form").closest(".card");
         if (sbCard) {
-          list = document.createElement("ul");
+          list = document.createElement("div");
           list.className = "tier-actions tier-links";
           var form = page.querySelector("#sb-form");
           sbCard.insertBefore(list, form);
@@ -1584,16 +1584,23 @@ function initSongPage() {
       }
       if (list) {
         d.storyboards.forEach(function (b) {
-          var href = "/songs/" + songId + "/storyboard/" + b.tier;
-          if (list.querySelector('a[href="' + href + '"]')) return;
+          if (list.querySelector('[data-tier="' + b.tier + '"]')) return;
           var label = b.tier === "xxx" ? "XXX" : b.tier === "pg13" ? "PG-13"
             : String(b.tier || "").toUpperCase();
-          var li = document.createElement("li");
-          li.innerHTML = '<a class="btn" href="' + href + '">Edit ' + label +
-            ' scenes</a> <a class="btn secondary" href="/songs/' + songId +
-            "/approve/" + b.tier + '">Approve ' + label + '</a> ' +
-            '<span class="muted">' + (b.scene_count || "?") + " scenes</span>";
-          list.appendChild(li);
+          var det = document.createElement("details");
+          det.className = "tier-board";
+          det.dataset.tier = b.tier;
+          det.setAttribute("hx-get", "/songs/" + songId + "/storyboard/" + b.tier + "/panel");
+          det.setAttribute("hx-trigger", "toggle once");
+          det.setAttribute("hx-target", "find .tier-board-body");
+          det.setAttribute("hx-swap", "innerHTML");
+          det.innerHTML = "<summary><span>" + label + " · " +
+            (b.scene_count || "?") + " scenes</span> " +
+            '<a class="btn secondary" href="/songs/' + songId + "/approve/" +
+            b.tier + '" onclick="event.stopPropagation()">Approve ' + label +
+            "</a></summary><div class=\"tier-board-body\"><p class=\"muted\">Loading scenes…</p></div>";
+          list.appendChild(det);
+          if (typeof htmx !== "undefined") htmx.process(det);
         });
       }
     }

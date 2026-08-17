@@ -725,7 +725,8 @@ missing album protagonist **identity front** (`chosen_anchor` view
 `front`) and each unanchored lead (extras / background never). Named
 pose sheets do not satisfy that gate; `identity_front_blocker` names
 the pose-sheet count so the operator is not told to create an anchor
-they already have. The storyboard page plan-panel paints those as
+they already have. The song-page storyboard panel (and the storyboard
+page plan-panel) paints those as
 `.plan-blocker` and marks Generate refs with `button.blocked` (never
 `disabled`). `start_refs` / `POST /songs/{id}/refs` raises 400 with
 the same reason and writes no refs job. Mutation: disable the
