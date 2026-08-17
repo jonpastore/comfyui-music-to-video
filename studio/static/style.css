@@ -1962,6 +1962,10 @@ label.icon-btn {
   padding: 0.4rem;
 }
 .anchor-tile.picked { border-color: var(--accent); }
+img.lazy-src, video.lazy-src {
+  background: var(--panel-raised, var(--panel));
+  min-height: 4rem;
+}
 .anchor-tile img {
   width: 100%;
   border-radius: 4px;

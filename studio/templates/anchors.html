@@ -98,7 +98,7 @@
                 data-full="{{ media_url(g.path) }}"
                 data-label="{{ g.label }}"
                 title="Preview this keeper">
-          <img src="{{ media_url(g.path) }}" alt="">
+          <img class="lazy-src" data-src="{{ media_url(g.path) }}" alt="" loading="lazy" decoding="async">
         </button>
         {% else %}
         <span class="cover cover-empty">none</span>

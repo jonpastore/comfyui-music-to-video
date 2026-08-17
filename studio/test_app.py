@@ -3084,9 +3084,12 @@ def test_album_anchors_group_by_tier_with_versions_and_opposite_views():
         # a nude front has no nude back, so there is nothing to pair with
         assert rows["Nude"]["anchors"][0]["opposite"] is None
 
-        page = client.get(f"/playlists/{db.one('SELECT id FROM playlists WHERE name=?', album)['id']}/card").text
-        assert "tier-tab" in page and "anchor-tile" in page
-        assert "v2" in page, "version numbers are not shown"
+        pid = db.one("SELECT id FROM playlists WHERE name=?", album)["id"]
+        page = client.get(f"/playlists/{pid}/card").text
+        assert f'hx-get="/playlists/{pid}/anchors"' in page
+        gal = client.get(f"/playlists/{pid}/anchors").text
+        assert "tier-tab" in gal and "anchor-tile" in gal
+        assert "v2" in gal, "version numbers are not shown"
 
 
 def test_publishing_never_sends_an_adult_tier_somewhere_that_forbids_it():

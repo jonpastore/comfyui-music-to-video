@@ -199,31 +199,10 @@
               character = none %}
         {% include "_album_look_form.html" %}
       {% endwith %}
-      <div class="anchor-row">
-        {% for a in d.anchors if not a.character_name %}
-        <figure class="anchor-tile {% if a.chosen %}picked{% endif %}"
-                data-character="{{ d.lead_name }}">
-          <button type="button" class="js-ref-preview thumb-open"
-                  data-full="{{ media_url(a.path) }}"
-                  data-label="{{ d.lead_name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
-                  title="Open this sheet">
-            <img src="{{ media_url(a.path) }}" loading="lazy" alt="">
-          </button>
-          <figcaption>
-            <span class="tile-meta">{{ a.tier | tiername }} · {{ a.view | viewname }}{% if a.version %} · v{{ a.version }}{% endif %}</span>
-            {% if a.chosen %}<span class="tag done">in use</span>{% endif %}
-          </figcaption>
-          <form method="post" action="/anchors/{{ a.id }}/delete" class="inline still-del">
-            <button type="submit" class="icon-btn danger-icon"
-                    title="Delete this sheet" {% if a.chosen %}disabled{% endif %}>
-              {{ glyph_delete() }}
-            </button>
-          </form>
-        </figure>
-        {% else %}
-        <p class="empty">No lead sheets yet.
-          <a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">Generate on Anchors</a></p>
-        {% endfor %}
+      <div class="anchor-row"
+           hx-get="/playlists/{{ d.playlist.id }}/sheets?who=lead"
+           hx-trigger="revealed once" hx-swap="innerHTML">
+        <p class="muted">Loading sheets&hellip;</p>
       </div>
     </div>
     {% for m in d.cast %}
@@ -253,58 +232,12 @@
               cast = d.cast, copyable_fields = d.copyable_fields %}
         {% include "_album_look_form.html" %}
       {% endwith %}
-      <p class="hint">Sheets for {{ m.c.name }}.
-        <button type="button" class="secondary btn-sm js-pick-anchor"
-                data-dialog="pick-{{ m.c.id }}">Choose a sheet</button></p>
-      <div class="anchor-row">
-        {% for a in d.anchors if a.character_name == m.c.name %}
-        <figure class="anchor-tile {% if a.chosen %}picked{% endif %}">
-          <button type="button" class="js-ref-preview thumb-open"
-                  data-full="{{ media_url(a.path) }}"
-                  data-label="{{ m.c.name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
-                  title="Open this sheet">
-            <img src="{{ media_url(a.path) }}" loading="lazy" alt="">
-          </button>
-          <figcaption>
-            <span class="tile-meta">{{ a.tier | tiername }} · {{ a.view | viewname }}{% if a.version %} · v{{ a.version }}{% endif %}</span>
-            {% if a.chosen %}<span class="tag done">in use</span>{% endif %}
-          </figcaption>
-          {% if not a.chosen %}
-          <form method="post" action="/anchors/{{ a.id }}/pick" class="inline">
-            <button type="submit" class="icon-btn" title="Use this sheet">Use</button>
-          </form>
-          {% endif %}
-          <form method="post" action="/anchors/{{ a.id }}/delete" class="inline still-del">
-            <button type="submit" class="icon-btn danger-icon" title="Delete this sheet"
-                    {% if a.chosen %}disabled{% endif %}>
-              {{ glyph_delete() }}
-            </button>
-          </form>
-        </figure>
-        {% else %}
-        <p class="empty">No sheets for {{ m.c.name }} yet.</p>
-        {% endfor %}
+      <p class="hint">Sheets for {{ m.c.name }}.</p>
+      <div class="anchor-row"
+           hx-get="/playlists/{{ d.playlist.id }}/sheets?who={{ m.c.name | urlencode }}"
+           hx-trigger="revealed once" hx-swap="innerHTML">
+        <p class="muted">Loading sheets&hellip;</p>
       </div>
-      <dialog class="confirm-modal" id="pick-{{ m.c.id }}">
-        <div class="modal-bar">
-          <strong>Choose a sheet for {{ m.c.name }}</strong>
-          {{ modal_close() }}
-        </div>
-        <div class="anchor-row">
-          {% for a in d.anchors if a.character_name == m.c.name and not a.chosen %}
-          <figure class="anchor-tile">
-            <img src="{{ media_url(a.path) }}" alt="">
-            <figcaption>{{ a.tier | tiername }} · {{ a.view | viewname }}</figcaption>
-            <form method="post" action="/anchors/{{ a.id }}/pick">
-              <button type="submit">Use this</button>
-            </form>
-          </figure>
-          {% else %}
-          <p class="empty">Every sheet for {{ m.c.name }} is already in use, or none exist.
-            <a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">Generate on Anchors</a></p>
-          {% endfor %}
-        </div>
-      </dialog>
     </div>
     {% endfor %}
     <div class="cast-panel hidden" data-cast="add">
@@ -314,116 +247,13 @@
     </div>
   </details>
 
-  <details class="song-fold pl-fold">
+  <details class="song-fold pl-fold"
+           hx-get="/playlists/{{ d.playlist.id }}/anchors"
+           hx-trigger="toggle once"
+           hx-target="find .pl-anchors-body" hx-swap="innerHTML">
     <summary><h2>Anchors</h2>
       <span class="muted">{{ d.anchor_count }} sheets</span></summary>
-    {% if d.pose_need %}
-    <h3>Poses this album needs</h3>
-    {% for cov in d.pose_need %}
-    <details class="disclose" {% if loop.first %}open{% endif %}>
-      <summary>{{ cov.tier | tiername }}
-        · {{ cov.n_have }}/{{ cov.n_needed }}
-        {% if cov.n_missing %} · {{ cov.n_missing }} missing{% endif %}</summary>
-      <ul class="pose-need">
-        {% for g in cov.needed %}
-        <li class="{% if g.sheet_id %}have{% else %}missing{% endif %}">
-          {% if g.path %}
-          <img src="{{ media_url(g.path) }}" alt="" loading="lazy">
-          {% endif %}
-          <span>
-            <strong>{{ g.label }}</strong>
-            <span class="muted">{{ g.n_scenes }} scene{{ "" if g.n_scenes == 1 else "s" }}
-              · {% for s in g.songs %}<a href="/songs/{{ s.id }}">{{ s.title }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</span>
-            {% if not g.sheet_id %}
-            <a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">create this pose</a>
-            {% endif %}
-          </span>
-        </li>
-        {% endfor %}
-      </ul>
-    </details>
-    {% endfor %}
-    {% endif %}
-    <div class="section-head">
-      <span class="section-actions">
-        <label class="inline-label">Character
-          <select class="anchor-character-filter" data-album="{{ d.playlist.id }}">
-            <option value="">all characters</option>
-            {% for name, n in d.anchor_characters %}
-            <option value="{{ name }}">{{ name }} ({{ n }})</option>
-            {% endfor %}
-          </select>
-        </label>
-      </span>
-    </div>
-
-    {% if d.anchor_tiers %}
-    <div class="tier-tabs" data-album="{{ d.playlist.id }}">
-      {% for t in d.anchor_tiers %}
-      <button type="button" class="tier-tab {% if loop.first %}active{% endif %}"
-              data-tier="{{ t.name }}">
-        {{ t.name | tiername }} <span class="muted">({{ t.count }})</span>
-      </button>
-      {% endfor %}
-    </div>
-
-    {% for t in d.anchor_tiers %}
-    <div class="tier-panel {% if not loop.first %}hidden{% endif %}"
-         data-album="{{ d.playlist.id }}" data-tier="{{ t.name }}">
-      {% for group in t.rows %}
-      <h4 class="anchor-row-head">
-        {{ group.label }}
-        {% if group.nude %}<span class="tag">nudity permitted by this tier</span>{% endif %}
-      </h4>
-      <div class="anchor-row">
-        {% for a in group.anchors %}
-        <figure class="anchor-tile {% if a.chosen %}picked{% endif %}"
-                data-character="{{ a.character_name or 'protagonist' }}">
-          <button type="button" class="js-ref-preview thumb-open anchor-open"
-                  data-full="{{ media_url(a.path) }}"
-                  data-opposite="{{ media_url(a.opposite) if a.opposite else '' }}"
-                  data-label="{{ a.character_name or d.lead_name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
-                  title="Open this sheet">
-            <img src="{{ media_url(a.path) }}" loading="lazy"
-                 alt="{{ a.character_name or d.lead_name }}, {{ a.tier | tiername }}, {{ a.view | viewname }}">
-          </button>
-          <figcaption>
-            <strong>{{ a.character_name or d.lead_name }}</strong>
-            &middot; {{ a.view | viewname }}{% if a.version %}
-            &middot; v{{ a.version }}{% endif %}
-            {% if a.chosen %}<span class="tag done">in use</span>{% endif %}
-            <br>
-            <time class="local-time muted" datetime="{{ a.created | isotime }}">
-              {{ a.created | isotime }}</time>
-          </figcaption>
-          <div class="anchor-actions">
-            {% if not a.chosen %}
-            <form method="post" action="/anchors/{{ a.id }}/pick">
-              <button type="submit">Use this</button>
-            </form>
-            {% endif %}
-            <button type="button" class="anchor-edit"
-                    data-anchor="{{ a.id }}"
-                    data-label="{{ a.character_name or d.lead_name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
-                    data-src="{{ media_url(a.path) }}">Edit</button>
-            <form method="post" action="/anchors/{{ a.id }}/delete" class="delete-anchor still-del">
-              <button type="submit" class="icon-btn danger-icon"
-                      title="Delete this sheet"
-                      {% if a.chosen %}disabled title="pick another sheet first"{% endif %}>
-                {{ glyph_delete() }}
-              </button>
-            </form>
-          </div>
-        </figure>
-        {% endfor %}
-      </div>
-      {% endfor %}
-    </div>
-    {% endfor %}
-    {% else %}
-    <p class="empty">None yet.</p>
-    {% endif %}
-    <p><a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">Manage anchors for this album</a></p>
+    <div class="pl-anchors-body"><p class="muted">Loading sheets&hellip;</p></div>
   </details>
 
   <dialog class="confirm-modal" id="art-{{ d.playlist.id }}">

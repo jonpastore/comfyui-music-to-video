@@ -584,8 +584,12 @@ fibonacci. A candidate has Approve, Fix, Delete. Thumbs open
 **Playlists:** `GET /playlists` is collapsed summaries
 (`#playlist-{id}` `data-song-count` / `data-total-secs` still
 `playlist_service.numbers`, `T6-A2-playlists`). Opening a card
-`hx-get`s `/playlists/{id}/card` and shows *Loading album…* until the
-album look / cast / anchors land. Topbar navigation shows `#page-loading`
+`hx-get`s `/playlists/{id}/card` and shows *Loading album…* until
+songs and look wording land. Sheet galleries stay out of that
+payload: `GET /playlists/{id}/sheets` when a character tab is shown,
+`GET /playlists/{id}/anchors` when the Anchors fold opens. Thumbs use
+`img.lazy-src[data-src]` and `hydrateLazy` (IntersectionObserver).
+Opening a fold does not eager-load hidden tabs. Topbar navigation shows `#page-loading`
 on click so a slow first byte is not a blank window
 (`test_playlists_page_is_summaries_until_the_card_loads`).
 The song page **Video model** select is `models.renderable("video")`

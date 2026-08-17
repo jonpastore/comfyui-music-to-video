@@ -1,0 +1,109 @@
+{% from "_macros.html" import glyph_delete %}
+{# Full album sheet gallery. Loaded when the Anchors fold opens. #}
+{% if d.pose_need %}
+<h3>Poses this album needs</h3>
+{% for cov in d.pose_need %}
+<details class="disclose" {% if loop.first %}open{% endif %}>
+  <summary>{{ cov.tier | tiername }}
+    · {{ cov.n_have }}/{{ cov.n_needed }}
+    {% if cov.n_missing %} · {{ cov.n_missing }} missing{% endif %}</summary>
+  <ul class="pose-need">
+    {% for g in cov.needed %}
+    <li class="{% if g.sheet_id %}have{% else %}missing{% endif %}">
+      {% if g.path %}
+      <img class="lazy-src" data-src="{{ media_url(g.path) }}" alt="" loading="lazy" decoding="async">
+      {% endif %}
+      <span>
+        <strong>{{ g.label }}</strong>
+        <span class="muted">{{ g.n_scenes }} scene{{ "" if g.n_scenes == 1 else "s" }}
+          · {% for s in g.songs %}<a href="/songs/{{ s.id }}">{{ s.title }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</span>
+        {% if not g.sheet_id %}
+        <a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">create this pose</a>
+        {% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+</details>
+{% endfor %}
+{% endif %}
+<div class="section-head">
+  <span class="section-actions">
+    <label class="inline-label">Character
+      <select class="anchor-character-filter" data-album="{{ d.playlist.id }}">
+        <option value="">all characters</option>
+        {% for name, n in d.anchor_characters %}
+        <option value="{{ name }}">{{ name }} ({{ n }})</option>
+        {% endfor %}
+      </select>
+    </label>
+  </span>
+</div>
+
+{% if d.anchor_tiers %}
+<div class="tier-tabs" data-album="{{ d.playlist.id }}">
+  {% for t in d.anchor_tiers %}
+  <button type="button" class="tier-tab {% if loop.first %}active{% endif %}"
+          data-tier="{{ t.name }}">
+    {{ t.name | tiername }} <span class="muted">({{ t.count }})</span>
+  </button>
+  {% endfor %}
+</div>
+
+{% for t in d.anchor_tiers %}
+<div class="tier-panel {% if not loop.first %}hidden{% endif %}"
+     data-album="{{ d.playlist.id }}" data-tier="{{ t.name }}">
+  {% for group in t.rows %}
+  <h4 class="anchor-row-head">
+    {{ group.label }}
+    {% if group.nude %}<span class="tag">nudity permitted by this tier</span>{% endif %}
+  </h4>
+  <div class="anchor-row">
+    {% for a in group.anchors %}
+    <figure class="anchor-tile {% if a.chosen %}picked{% endif %}"
+            data-character="{{ a.character_name or 'protagonist' }}">
+      <button type="button" class="js-ref-preview thumb-open anchor-open"
+              data-full="{{ media_url(a.path) }}"
+              data-opposite="{{ media_url(a.opposite) if a.opposite else '' }}"
+              data-label="{{ a.character_name or d.lead_name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
+              title="Open this sheet">
+        <img class="lazy-src" data-src="{{ media_url(a.path) }}" loading="lazy" decoding="async"
+             alt="{{ a.character_name or d.lead_name }}, {{ a.tier | tiername }}, {{ a.view | viewname }}">
+      </button>
+      <figcaption>
+        <strong>{{ a.character_name or d.lead_name }}</strong>
+        &middot; {{ a.view | viewname }}{% if a.version %}
+        &middot; v{{ a.version }}{% endif %}
+        {% if a.chosen %}<span class="tag done">in use</span>{% endif %}
+        <br>
+        <time class="local-time muted" datetime="{{ a.created | isotime }}">
+          {{ a.created | isotime }}</time>
+      </figcaption>
+      <div class="anchor-actions">
+        {% if not a.chosen %}
+        <form method="post" action="/anchors/{{ a.id }}/pick">
+          <button type="submit">Use this</button>
+        </form>
+        {% endif %}
+        <button type="button" class="anchor-edit"
+                data-anchor="{{ a.id }}"
+                data-label="{{ a.character_name or d.lead_name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
+                data-src="{{ media_url(a.path) }}">Edit</button>
+        <form method="post" action="/anchors/{{ a.id }}/delete" class="delete-anchor still-del">
+          <button type="submit" class="icon-btn danger-icon"
+                  title="Delete this sheet"
+                  {% if a.chosen %}disabled title="pick another sheet first"{% endif %}>
+            {{ glyph_delete() }}
+          </button>
+        </form>
+      </div>
+    </figure>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+{% else %}
+<p class="empty">None yet.</p>
+{% endif %}
+<p><a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">Manage anchors for this album</a></p>

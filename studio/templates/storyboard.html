@@ -14,7 +14,7 @@
   <div class="anchor-strip">
     {% for a in fronts %}
     <figure>
-      <img src="{{ media_url(a.path) }}" alt="{{ a.view | viewname }} anchor" loading="lazy" title="{{ a.view }}">
+      <img class="lazy-src" data-src="{{ media_url(a.path) }}" alt="{{ a.view | viewname }} anchor" loading="lazy" decoding="async" title="{{ a.view }}">
       <figcaption>{{ a.character_name or "protagonist" }} &middot; {{ a.view | viewname }}</figcaption>
     </figure>
     {% endfor %}
@@ -120,6 +120,12 @@
     automatically (last frame of part N starts part N+1). Editing a scene
     rewrites the storyboard JSON in place; frames already rendered from the old text are
     marked <span class="tag warn-tag">stale</span> rather than thrown away.</p>
+  <div class="scene-list-head">
+    <span aria-hidden="true"></span>
+    <span>Scene</span>
+    <span class="scene-col-time">Time</span>
+    <span>Pose</span>
+  </div>
   {% for r in scene_rows %}
     {% include "_scene_row.html" %}
   {% else %}
@@ -162,7 +168,7 @@
 </section>
 
 <section class="card">
-  <details>
+  <details class="disclose">
     <summary>Markdown</summary>
     <pre class="storyboard-md">{{ md }}</pre>
   </details>

@@ -463,6 +463,13 @@ def test_playlist_card_summary_and_drag_order(client):
     assert "<h2>Cast</h2>" not in card
     assert "new-playlist-bar" in page
     assert "look-chrome" in card
+    assert f'hx-get="/playlists/{pl}/anchors"' in card
+    assert "Loading sheets" in card
+    gal = client.get(f"/playlists/{pl}/anchors")
+    assert gal.status_code == 200
+    assert "<html" not in gal.text.lower()
+    sheets = client.get(f"/playlists/{pl}/sheets", params={"who": "lead"})
+    assert sheets.status_code == 200
     assert "character-row" not in card
     assert "trans-edit" in card
     assert "tier-cell" in card

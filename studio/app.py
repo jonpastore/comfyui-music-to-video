@@ -8099,13 +8099,10 @@ def playlist_detail(p):
     arc_by_sid = {s.get("song_id"): s for s in (arc_data.get("songs") or [])}
     for r in rows:
         r["arc"] = arc_by_sid.get(r["item"]["song_id"])
-    anchor_tiers, all_anchors = album_anchor_tiers(p["name"])
-    # how many sheets each character has, for the filter -- an anchor you cannot
-    # find among fifty is one you will regenerate rather than reuse
-    per_character = {}
-    for a in all_anchors:
-        per_character[a["character_name"] or "protagonist"] = \
-            per_character.get(a["character_name"] or "protagonist", 0) + 1
+    n_sheets = db.one(
+        """SELECT COUNT(*) n FROM anchors
+           WHERE scope_kind='album' AND scope_value=?""", p["name"])["n"]
+    anchor_tiers, all_anchors, per_character, pose_need = [], [], {}, []
     # the cast, with how many anchors each has -- an unanchored character is the
     # thing worth seeing here, since naming one in a scene achieves nothing
     cast = []
@@ -8120,14 +8117,6 @@ def playlist_detail(p):
     artwork_models = [{"key": e["key"], "label": e["label"], "available": e["available"],
                        "default": e["key"] == artwork_default}
                       for e in models.catalog(role="artwork")]
-    pose_need = []
-    for t in VIDEO_MATRIX_TIERS:
-        try:
-            cov = pose_plan.album_coverage(p["name"], t)
-        except (LookupError, OSError, ValueError):
-            continue
-        if cov.get("n_needed"):
-            pose_need.append(cov)
     return {"playlist": p, "rows": rows, "song_count": song_count,
             "count": song_count, "total_secs": total,
             "video_tiers": ready, "sets": sets, "profile_fields": profile_fields,
@@ -8137,9 +8126,11 @@ def playlist_detail(p):
             "wardrobe_tiers": wardrobe_tiers,
             "has_lyrics": has_lyrics,
             "anchors": all_anchors, "anchor_tiers": anchor_tiers,
-            "anchor_count": len(all_anchors),
+            "anchor_count": n_sheets,
             "anchor_characters": sorted(per_character.items()),
-            "character_count": len(per_character) or 1,
+            "character_count": db.one(
+                "SELECT COUNT(*) n FROM characters WHERE scope_value=?",
+                p["name"])["n"] or 1,
             "artwork_models": artwork_models, "has_anchor": has_anchor,
             "cast": cast, "character_fields": CHARACTER_FIELDS,
             "copyable_fields": COPYABLE_CHARACTER_FIELDS,
@@ -8150,6 +8141,28 @@ def playlist_detail(p):
             "pose_need": pose_need,
             "released": p["released"] if "released" in p.keys() else None,
             "album_date": album_date_iso(p)}
+
+
+def playlist_gallery(p):
+    """Sheets + pose roster. Loaded when the Anchors fold opens, not on card."""
+    prof = album_profile(p["name"])
+    anchor_tiers, all_anchors = album_anchor_tiers(p["name"])
+    per_character = {}
+    for a in all_anchors:
+        per_character[a["character_name"] or "protagonist"] = \
+            per_character.get(a["character_name"] or "protagonist", 0) + 1
+    pose_need = []
+    for t in VIDEO_MATRIX_TIERS:
+        try:
+            cov = pose_plan.album_coverage(p["name"], t)
+        except (LookupError, OSError, ValueError):
+            continue
+        if cov.get("n_needed"):
+            pose_need.append(cov)
+    return {"playlist": p, "anchors": all_anchors, "anchor_tiers": anchor_tiers,
+            "anchor_count": len(all_anchors),
+            "anchor_characters": sorted(per_character.items()),
+            "lead_name": lead_display_name(prof), "pose_need": pose_need}
 
 
 def _playlist_payload(p):
@@ -8218,6 +8231,32 @@ def playlist_card(request: Request, id: int):
     ctx = {"d": playlist_detail(p), "songs": songs, "playlist": p}
     ctx.update(_arc_template_vars(id))
     return templates.TemplateResponse(request, "_playlist_card.html", ctx)
+
+
+@app.get("/playlists/{id}/anchors", response_class=HTMLResponse)
+def playlist_anchors_partial(request: Request, id: int):
+    """Gallery for the Anchors fold. Not part of the first card payload."""
+    p = get_playlist_or_404(id)
+    return templates.TemplateResponse(request, "_playlist_anchors.html", {
+        "d": playlist_gallery(p)})
+
+
+@app.get("/playlists/{id}/sheets", response_class=HTMLResponse)
+def playlist_sheets_partial(request: Request, id: int, who: str = "lead"):
+    """Chosen (and other) sheets for one look tab. Loads when that tab is shown."""
+    p = get_playlist_or_404(id)
+    g = playlist_gallery(p)
+    if who == "lead":
+        rows = [a for a in g["anchors"] if not a.get("character_name")]
+        name = g["lead_name"]
+        pick_id = ""
+    else:
+        rows = [a for a in g["anchors"] if a.get("character_name") == who]
+        name = who
+        char = next((c for c in album_cast(p["name"]) if c["name"] == who), None)
+        pick_id = str(char["id"]) if char else ""
+    return templates.TemplateResponse(request, "_playlist_sheets.html", {
+        "d": g, "sheets": rows, "who_name": name, "pick_id": pick_id})
 
 
 @app.post("/playlists")

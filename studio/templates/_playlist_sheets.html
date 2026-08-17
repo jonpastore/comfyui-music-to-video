@@ -1,0 +1,32 @@
+{% from "_macros.html" import glyph_delete, modal_close %}
+{# Sheets for one look tab. Loaded when the tab is shown (hx-trigger=revealed). #}
+{% if sheets %}
+{% for a in sheets %}
+<figure class="anchor-tile {% if a.chosen %}picked{% endif %}">
+  <button type="button" class="js-ref-preview thumb-open"
+          data-full="{{ media_url(a.path) }}"
+          data-label="{{ who_name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
+          title="Open this sheet">
+    <img class="lazy-src" data-src="{{ media_url(a.path) }}" loading="lazy" alt="" decoding="async">
+  </button>
+  <figcaption>
+    <span class="tile-meta">{{ a.tier | tiername }} · {{ a.view | viewname }}{% if a.version %} · v{{ a.version }}{% endif %}</span>
+    {% if a.chosen %}<span class="tag done">in use</span>{% endif %}
+  </figcaption>
+  {% if not a.chosen %}
+  <form method="post" action="/anchors/{{ a.id }}/pick" class="inline">
+    <button type="submit" class="icon-btn" title="Use this sheet">Use</button>
+  </form>
+  {% endif %}
+  <form method="post" action="/anchors/{{ a.id }}/delete" class="inline still-del">
+    <button type="submit" class="icon-btn danger-icon" title="Delete this sheet"
+            {% if a.chosen %}disabled{% endif %}>
+      {{ glyph_delete() }}
+    </button>
+  </form>
+</figure>
+{% endfor %}
+{% else %}
+<p class="empty">No sheets for {{ who_name }} yet.
+  <a href="/anchors?scope_value={{ d.playlist.name | urlencode }}">Generate on Anchors</a></p>
+{% endif %}

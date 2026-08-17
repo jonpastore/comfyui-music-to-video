@@ -551,7 +551,9 @@ document.addEventListener("click", function (e) {
     });
     tab.classList.add("active");
     document.querySelectorAll('.tier-panel[data-album="' + album + '"]').forEach(function (p) {
-      p.classList.toggle("hidden", p.dataset.tier !== tab.dataset.tier);
+      var on = p.dataset.tier === tab.dataset.tier;
+      p.classList.toggle("hidden", !on);
+      if (on) revealLazy(p);
     });
     return;
   }
@@ -721,6 +723,18 @@ document.addEventListener("DOMContentLoaded", function () {
 // Off-screen plates / stills / clips stay as data-src until they approach
 // the viewport. Native loading=lazy is not enough after an htmx panel swap
 // of fifty scenes: the browser still queues every <video preload=metadata>.
+function revealLazy(root) {
+  if (!root) return;
+  if (window.htmx) {
+    root.querySelectorAll("[hx-get]").forEach(function (el) {
+      if (el.getAttribute("hx-trigger") && el.getAttribute("hx-trigger").indexOf("revealed") !== -1) {
+        window.htmx.trigger(el, "revealed");
+      }
+    });
+  }
+  hydrateLazy(root);
+}
+
 function hydrateLazy(root, eager) {
   var scope = root && root.querySelectorAll ? root : document;
   var nodes = scope.querySelectorAll("img.lazy-src[data-src], video.lazy-src[data-src]");
@@ -764,7 +778,7 @@ document.body.addEventListener("htmx:afterSwap", function (e) {
 });
 document.addEventListener("toggle", function (e) {
   if (e.target && e.target.tagName === "DETAILS" && e.target.open) {
-    hydrateLazy(e.target, true);
+    hydrateLazy(e.target);
   }
 }, true);
 
@@ -3014,7 +3028,9 @@ document.addEventListener("click", function (e) {
       t.classList.toggle("active", t === look);
     });
     (look.closest("form") || document).querySelectorAll(".look-panel").forEach(function (p) {
-      p.classList.toggle("hidden", p.getAttribute("data-look") !== key);
+      var on = p.getAttribute("data-look") === key;
+      p.classList.toggle("hidden", !on);
+      if (on) revealLazy(p);
     });
     return;
   }
@@ -3026,7 +3042,9 @@ document.addEventListener("click", function (e) {
       t.classList.toggle("active", t === wtab);
     });
     wroot.querySelectorAll(".wardrobe-panel").forEach(function (p) {
-      p.classList.toggle("hidden", p.getAttribute("data-ward") !== wkey);
+      var on = p.getAttribute("data-ward") === wkey;
+      p.classList.toggle("hidden", !on);
+      if (on) revealLazy(p);
     });
     return;
   }
@@ -3038,7 +3056,9 @@ document.addEventListener("click", function (e) {
       t.classList.toggle("active", t === ctab);
     });
     box.querySelectorAll(".cast-panel").forEach(function (p) {
-      p.classList.toggle("hidden", p.getAttribute("data-cast") !== key);
+      var on = p.getAttribute("data-cast") === key;
+      p.classList.toggle("hidden", !on);
+      if (on) revealLazy(p);
     });
     return;
   }

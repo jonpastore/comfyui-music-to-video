@@ -383,7 +383,7 @@
           {% if anchor %}
           <a href="/anchors?scope_value={{ song.album | urlencode }}"
              title="identity front for the {{ t }} tier -- click to manage">
-            <img class="anchor-thumb" src="{{ media_url(anchor.path) }}" alt="{{ t | tiername }} identity front">
+            <img class="anchor-thumb lazy-src" data-src="{{ media_url(anchor.path) }}" alt="{{ t | tiername }} identity front" loading="lazy" decoding="async">
           </a>
           <span class="muted">{{ poses|length }} pose sheet{{ "" if poses|length == 1 else "s" }}
             · identity front ready</span>
@@ -408,7 +408,7 @@
           <a class="pose-chip {% if a.view == 'front' %}identity{% endif %}"
              href="/anchors?scope_value={{ song.album | urlencode }}"
              title="{{ a.view }}">
-            <img src="{{ media_url(a.path) }}" alt="{{ a.view | viewname }}" loading="lazy">
+            <img class="lazy-src" data-src="{{ media_url(a.path) }}" alt="{{ a.view | viewname }}" loading="lazy" decoding="async">
             <span>{{ a.view | viewname }}{% if a.character_name %} · {{ a.character_name }}{% endif %}</span>
           </a>
           {% endfor %}
@@ -421,7 +421,7 @@
             <a class="pose-chip {% if a.view == 'front' %}identity{% endif %}"
                href="/anchors?scope_value={{ song.album | urlencode }}"
                title="{{ a.view }}">
-              <img src="{{ media_url(a.path) }}" alt="{{ a.view | viewname }}" loading="lazy">
+              <img class="lazy-src" data-src="{{ media_url(a.path) }}" alt="{{ a.view | viewname }}" loading="lazy" decoding="async">
               <span>{{ a.view | viewname }}{% if a.character_name %} · {{ a.character_name }}{% endif %}</span>
             </a>
             {% endfor %}
@@ -442,7 +442,7 @@
               {% for g in pplan.needed %}
               <li class="{% if g.sheet_id %}bound{% else %}unbound{% endif %}">
                 {% if g.path %}
-                <img src="{{ media_url(g.path) }}" alt="" loading="lazy">
+                <img class="lazy-src" data-src="{{ media_url(g.path) }}" alt="" loading="lazy" decoding="async">
                 {% endif %}
                 <span>
                   <strong>{{ g.label }}</strong>

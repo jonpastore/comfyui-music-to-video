@@ -1,3 +1,4 @@
+{% from "_macros.html" import glyph_delete %}
 {# One anchor group: scope + character + tier + view, with its candidates.
    Its OWN partial so a finished sheet can be dropped into the page without a
    reload, and without JavaScript rebuilding this markup -- a second copy in JS
@@ -20,8 +21,8 @@
       </label>
       {# click to see it full size: a character sheet is judged on the face and
          the hands, and neither is legible in a grid thumbnail #}
-      <img class="thumb" src="{{ media_url(c.path) }}" alt="" loading="lazy"
-           data-full="{{ media_url(c.path) }}" tabindex="0" role="button"
+      <img class="thumb lazy-src" data-src="{{ media_url(c.path) }}" alt="" loading="lazy"
+           data-full="{{ media_url(c.path) }}" tabindex="0" role="button" decoding="async"
            title="Open full size">
       {# What this one was rendered AT. A CFG sweep puts every guidance value in
          this same grid -- same tier, same view -- so without the settings on
@@ -60,7 +61,7 @@
           <button type="submit" class="icon-btn danger"
                   title="Delete this file"
                   aria-label="Delete">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M6 2h4l.4 1H14v1H2V3h3.6L6 2zm1 4v6H6V6h1zm3 0v6H9V6h1zM3.5 5h9l-.6 8.2A1 1 0 0 1 11 14H5a1 1 0 0 1-1-.8L3.5 5z"/></svg>
+            {{ glyph_delete() }}
           </button>
         </form>
       </div>
