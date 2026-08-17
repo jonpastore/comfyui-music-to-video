@@ -582,7 +582,9 @@ splits and part 2+ starts on the last frame (T2-10 / T2-11). Reroll is n / seed 
 fibonacci. A candidate has Approve, Fix, Delete. Thumbs open
 `#ref-preview`. `test_approve_grid_groups_by_scene_and_puts_seed_above_the_name`.
 **Library:** upload accepts popular audio (mp3 / wav / flac / ogg / m4a / …),
-not mp3-only. Bulk genre bar is one icon row. Per-row **Set** opens a
+not mp3-only. The bulk genre bar (`#bulk-genre`) is hidden until at least
+one row is ticked; `#bulk-count` sits **below** the controls and reads
+`N songs selected` (or `would_change` after a preview POST). Per-row **Set** opens a
 taxonomy modal with Ask AI (`POST /songs/genres/suggest`, title/lyrics/style
 against `genres.json`). Video column is G/PG-13/R/XXX chips; only rendered
 tiers are links. Delete is the shared trash icon and still confirms.
@@ -1111,16 +1113,23 @@ writes a `prompts` version that can be loaded back. The cover thumb expands the 
 lightbox (pencil = replace, trash = delete) when it is open. Album
 date is the pencil on the card header next to the title. The Play column is G / PG-13 / R / XXX. Save,
 edit, and delete icons are the shared `glyph_save` / `glyph_edit` /
-`glyph_delete` macros. Transitions edit in the row. Remove confirms. The roster is a one-line row: pose name + songs, then the sheet
-dropdown, then a save icon (no “Keeper” label). Missing poses list at
-the top of the fold. **Generate…** opens a modal with a copyable Mage
+`glyph_delete` macros. Transitions edit in the row. Remove confirms. The roster is a one-line grid: thumb (or a dashed `.pose-ph` when
+there is no sheet), pose name + songs, then the sheet dropdown, then a
+save icon (no “Keeper” label). Missing poses do **not** dump as
+`Missing: crouching, …` — the count lives in the summary tag and each
+empty row is the row. **Generate…** opens a modal with a copyable Mage
 prompt from the storyboard’s pose/need text (`#pose-brief`).
 `POST /anchors/keeper` plus the save icon stamps the assignment — on
 `/anchors` and on the playlist Anchors fold. Roster thumbs open `#pose-preview`. Playlist Anchors uses
 character tabs and Clothed/Nude family tabs. On `/anchors` the gallery tabs are **tier → character → clothed/nude**.
 Delete selected applies to one pose group only; an emptied row is
-removed. The generate form’s tiers / views / prompts / render blocks
-are collapsible. A missing pose can take an uploaded third-party sheet
+removed. The generate form’s tiers / views / prompts / negative /
+render blocks are collapsible (`details.disclose[data-fold]`); ticking a
+tier or view must not collapse an open fold (`window._afOpen` restores
+them after the `#anchor-form` outerHTML swap). Upload / Save prompt /
+Save negative / Delete version are `icon-btn` + `glyph_*`. Render’s
+everyday knobs stay visible; size / latent / sweep and sampler sit in
+nested discloses with the same caret. A missing pose can take an uploaded third-party sheet
 (`POST /anchors/upload-pose`). Gallery tiles use icon
 actions (filled check = keeper, outline =
 pick, clear, delete) with `title` help. The Fix dialog has a help icon
@@ -1281,9 +1290,11 @@ both are *interface* failures before they are code failures:
   *"Select all N shown"*, because the header sort and filters are live and the
   operator cannot see what is off-screen.
 - **The pre-write count is part of the control, not a toast.** `#bulk-count`
-  shows `would_change` from a `preview` POST, and that number is the write's
-  `changed` — the 12-vs-9 case. A confirmation that overstates once is a
-  confirmation nobody reads again.
+  sits below the genre selects and is hidden until a song is ticked. It
+  shows `N songs selected`, then `would_change` from a `preview` POST, and
+  that number is the write's `changed` — the 12-vs-9 case. A confirmation
+  that overstates once is a confirmation nobody reads again.
+  `#bulk-genre` itself stays hidden while nothing is selected.
 
 ### 7b.4a Lyrics provenance is on the song row, not inferred
 

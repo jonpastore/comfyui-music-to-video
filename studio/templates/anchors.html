@@ -68,10 +68,7 @@
   {% for t, cov in coverage_by_tier.items() %}{% set miss.n = miss.n + cov.n_missing %}{% endfor %}
   <details class="disclose" {% if miss.n %}open{% endif %}>
   <summary><h2>Poses this album&rsquo;s songs need</h2>
-    {% if miss.n %}<span class="tag warn-tag">{{ miss.n }} missing</span>{% endif %}
-    <span class="muted">pick a sheet or generate a prompt</span></summary>
-  <p class="hint">The dropdown is the assignment. Save (disk icon) writes it.
-    Missing poses open a prompt you can send to Mage.</p>
+    {% if miss.n %}<span class="tag warn-tag">{{ miss.n }} missing</span>{% endif %}</summary>
   {% set ns = namespace(shown="", n=-1) %}
   {% for t, cov in coverage_by_tier.items() %}
     {% if cov.n_needed > ns.n %}
@@ -93,10 +90,6 @@
     {% if not cov.needed %}
     <p class="empty">No storyboard on this album at {{ t | tiername }} yet.</p>
     {% else %}
-    {% if cov.n_missing %}
-    <p class="notice">Missing:
-      {% for g in cov.needed if not g.sheet_id %}{{ g.label }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
-    {% endif %}
     <ul class="pose-roster">
       {% for g in cov.needed %}
       {% with album=cov.album, tier=cov.tier, sheets=cov.sheets, hx=false %}

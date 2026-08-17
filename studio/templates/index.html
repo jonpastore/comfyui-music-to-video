@@ -61,9 +61,8 @@
    below the change. A blank genre means LEAVE ALONE -- see app.bulk_set_genres;
    that is why there is no "clear" option here, which would have to be its own
    deliberate control rather than an empty select. #}
-<section class="card bulk-bar" id="bulk-genre">
+<section class="card bulk-bar" id="bulk-genre" hidden>
   <div class="clip-bar">
-    <span class="muted" id="bulk-count">no songs selected</span>
     <label>Genre
       <select id="bulk-genre-select">
         <option value="">(leave alone)</option>
@@ -93,6 +92,7 @@
       {{ glyph_save() }}
     </button>
   </div>
+  <p class="hint" id="bulk-count" hidden></p>
   <p class="hint" id="bulk-note"></p>
 </section>
 <div class="table-scroll">

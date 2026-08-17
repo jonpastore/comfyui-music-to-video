@@ -1,4 +1,4 @@
-{% from "_macros.html" import help, help_dialogs with context %}
+{% from "_macros.html" import help, help_dialogs, glyph_save, glyph_delete with context %}
 {# Generate anchor candidates.
 
    Its own partial because the ticked TIERS decide what is shown below them:
@@ -48,7 +48,7 @@
     </label>
   </div>
 
-  <details class="disclose" {% if selected_tiers %}open{% endif %}>
+  <details class="disclose" data-fold="tiers" {% if selected_tiers %}open{% endif %}>
     <summary>Tiers
       <span class="muted">{% if selected_tiers %}{{ selected_tiers | join(", ") }}{% else %}none ticked{% endif %}</span></summary>
   <fieldset>
@@ -68,7 +68,7 @@
   </fieldset>
   </details>
 
-  <details class="disclose" {% if selected_views %}open{% endif %}>
+  <details class="disclose" data-fold="views" {% if selected_views %}open{% endif %}>
     <summary>Views
       <span class="muted">{% if sheet_count %}{{ sheet_count }} sheet{{ "" if sheet_count == 1 else "s" }}{% else %}none ticked{% endif %}</span></summary>
   <fieldset class="views-fieldset">
@@ -155,7 +155,7 @@
 
   {# ---- base images: kept, not re-uploaded every time ---- #}
   {% if saved_refs %}
-  <details class="disclose" open>
+  <details class="disclose" data-fold="refs" open>
     <summary>Base images
       <span class="muted">{{ saved_refs | length }}</span></summary>
   <fieldset>
@@ -242,13 +242,17 @@
       box, or drop an image on this form.</p>
     {# Save keeps the images without generating anything, so a set of references
        can be built up and come back to. Same form, different action. #}
-    <button type="submit" formnovalidate formaction="/anchors/refs"
+    <button type="submit" class="icon-btn" formnovalidate formaction="/anchors/refs"
             hx-post="/anchors/refs" hx-target="#anchor-form" hx-swap="outerHTML"
-            hx-encoding="multipart/form-data" hx-include="#anchor-form">Upload</button>
+            hx-encoding="multipart/form-data" hx-include="#anchor-form"
+            title="Upload reference images" aria-label="Upload reference images">
+      <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+    </button>
   </div>
 
   {% if tier_panels %}
-  <details class="disclose">
+  <details class="disclose" data-fold="prompts">
     <summary>Prompts
       <span class="muted">per tier and view</span></summary>
   {# ---- the rules that apply, above the box they govern ---- #}
@@ -350,11 +354,13 @@
             <input type="text" class="prompt-version-label" data-tier="{{ p.name }}"
                    data-view="{{ vb.key }}"
                    maxlength="80" placeholder="e.g. tighter fur wording"></label>
-          <button type="button" class="prompt-save" data-tier="{{ p.name }}"
-                  data-view="{{ vb.key }}">Save prompt</button>
-          <button type="button" class="version-delete danger btn-sm" data-tier="{{ p.name }}"
-                  data-view="{{ vb.key }}"
-                  disabled title="Select a saved version to delete it">Delete version</button>
+          <button type="button" class="icon-btn prompt-save" data-tier="{{ p.name }}"
+                  data-view="{{ vb.key }}" title="Save this prompt"
+                  aria-label="Save this prompt">{{ glyph_save() }}</button>
+          <button type="button" class="icon-btn danger-icon version-delete"
+                  data-tier="{{ p.name }}" data-view="{{ vb.key }}"
+                  disabled title="Delete the selected version"
+                  aria-label="Delete the selected version">{{ glyph_delete() }}</button>
           <input type="hidden" name="used_version" class="used-version"
                  data-tier="{{ p.name }}" data-view="{{ vb.key }}" value="">
           <span class="prompt-save-note muted row-note" data-tier="{{ p.name }}"
@@ -404,6 +410,8 @@
      refusal used to be a 400 discovered after submitting -- a poor way to learn
      that a sweep needs a single view. Computed by the server from the same
      functions the submit runs, so the two cannot disagree. #}
+  <details class="disclose" data-fold="negative">
+    <summary>Negative prompt</summary>
   <fieldset>
     <legend>Negative prompt{{ help("negative") }}</legend>
     {# The one control on this page that can silently do nothing, so it says so.
@@ -434,9 +442,11 @@
         <input type="text" class="negative-version-label" maxlength="80"
                placeholder="e.g. after the white-tail run"></label>
       <div class="neg-actions">
-        <button type="button" class="negative-save">Save negative</button>
-        <button type="button" class="version-delete danger btn-sm" disabled
-                title="Select a saved version to delete it">Delete version</button>
+        <button type="button" class="icon-btn negative-save" title="Save this negative"
+                aria-label="Save this negative">{{ glyph_save() }}</button>
+        <button type="button" class="icon-btn danger-icon version-delete" disabled
+                title="Delete the selected version" aria-label="Delete the selected version">
+          {{ glyph_delete() }}</button>
       </div>
       <input type="hidden" name="used_version" class="used-version" value="">
       <span class="negative-save-note muted row-note"></span>
@@ -445,6 +455,7 @@
               maxlength="{{ max_negative }}"
               placeholder="white fur, cream fur, lighter patches, white tail, human skin, extra limbs, deformed tail, text, watermark, blurry">{{ negative or "" }}</textarea>
   </fieldset>
+  </details>
 
   {# ---- exactly what gets sent ---- #}
   <details class="prompt-preview">
@@ -463,7 +474,7 @@
   </div>
 
   {# ---- render settings: the knobs that actually exist for this model ---- #}
-  <details class="disclose">
+  <details class="disclose" data-fold="render">
     <summary>Render
       <span class="muted">{% if runs %}{{ runs[0].summary }}{% else %}defaults{% endif %}</span></summary>
   <fieldset>
@@ -514,6 +525,9 @@
       </label>
     </div>
 
+    <details class="disclose" data-fold="render-more">
+      <summary>Size, latent, sweep
+        <span class="muted">sheet size, denoise, CFG sweep</span></summary>
     {# ---- CFG sweep: the same sheet at every guidance value ---- #}
     <div class="field-row">
       <label>
@@ -588,8 +602,9 @@
       control above to start from your first reference and the lower values refine it instead.</p>
     {% endif %}
 
-    <details>
-      <summary>Sampler &mdash; only if you know why</summary>
+    <details class="disclose" data-fold="sampler">
+      <summary>Sampler
+        <span class="muted">steps, CFG extras, seed</span></summary>
       <div class="field-row">
         <label>
           <span class="label-text">Steps{{ help("steps") }}</span>
@@ -637,6 +652,7 @@
         &mdash; composition here is seed-dominated, and comparing two random seeds tells you
         nothing about what you changed. The candidates within one sheet are spaced off it
         (seed, +137, +274&hellip;), and a CFG sweep reuses it at every guidance value.</p>
+    </details>
     </details>
   </fieldset>
   </details>

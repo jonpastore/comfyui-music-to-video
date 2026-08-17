@@ -2325,6 +2325,24 @@ def test_anchor_form_does_not_preselect_a_tier_or_view():
         assert re.search(r'data-scope="nude"[^>]*checked', both)
 
 
+def test_anchor_form_folds_and_actions_are_icons():
+    """Ticking a tier swaps #anchor-form outerHTML. data-fold ids plus
+    window._afOpen keep open discloses; Upload / Save / Delete version
+    are icon-btn so they match the rest of the studio."""
+    js = open(os.path.join(os.path.dirname(appmod.__file__), "static", "app.js")).read()
+    assert "window._afOpen" in js
+    assert 'details.disclose[data-fold]' in js
+    with TestClient(appmod.app) as client:
+        client.post("/playlists", data={"name": "Fold Album"})
+        form = client.get("/anchors/form", params={"album": "Fold Album"}).text
+    for fold in ("tiers", "views", "negative", "render"):
+        assert f'data-fold="{fold}"' in form
+    assert 'class="icon-btn"' in form
+    assert ">Upload<" not in form
+    assert "Save negative" not in form
+    assert "Delete version" not in form
+
+
 def test_anchor_form_needs_a_real_album_and_at_least_one_image():
     with TestClient(appmod.app) as client:
         files = [("images", ("a.png", _png_bytes(), "image/png"))]

@@ -262,6 +262,9 @@ def test_album_coverage_rolls_up_songs_and_clear_unsets_keeper():
         assert "pose-roster-open" in page
         assert "Save this assignment" in page
         assert "js-pose-brief" in page or "missing" in page
+        assert "pick a sheet or generate a prompt" not in page
+        assert "Missing:" not in page
+        assert "pose-ph" in page or "pose-roster-open" in page
         assert "Use as this pose" in page
         assert "Use as reference" not in page
         assert "Catatonic" not in page

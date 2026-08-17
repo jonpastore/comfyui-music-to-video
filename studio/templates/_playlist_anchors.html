@@ -6,17 +6,11 @@
 <details class="disclose" {% if miss.n %}open{% endif %}>
   <summary>Poses this album needs
     {% if miss.n %}<span class="tag warn-tag">{{ miss.n }} missing</span>{% endif %}</summary>
-<p class="hint">The dropdown is the assignment. Save writes it. Missing poses
-  open a prompt for Mage.</p>
 {% for cov in d.pose_need %}
 <details class="disclose" {% if cov.n_missing %}open{% endif %}>
   <summary>{{ cov.tier | tiername }}
     · {{ cov.n_have }}/{{ cov.n_needed }}
     {% if cov.n_missing %} · {{ cov.n_missing }} missing{% endif %}</summary>
-  {% if cov.n_missing %}
-  <p class="notice">Missing:
-    {% for g in cov.needed if not g.sheet_id %}{{ g.label }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
-  {% endif %}
   <ul class="pose-roster">
     {% for g in cov.needed %}
     {% with album=d.playlist.name, tier=cov.tier, sheets=cov.sheets, hx=true %}

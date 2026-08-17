@@ -170,6 +170,10 @@ details.pose-plan > summary,
 details.disclose > summary {
   list-style: none;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 details.song-fold > summary::-webkit-details-marker,
 details.tier-board > summary::-webkit-details-marker,
@@ -181,6 +185,16 @@ details.sb-lock-fields > summary::-webkit-details-marker,
 details.shot-detail > summary::-webkit-details-marker,
 details.pose-plan > summary::-webkit-details-marker,
 details.disclose > summary::-webkit-details-marker { display: none; }
+details.song-fold > summary::marker,
+details.tier-board > summary::marker,
+details.scene > summary::marker,
+details.sb-scenes > summary::marker,
+details.sb-all-clips > summary::marker,
+details.sb-raw-json > summary::marker,
+details.sb-lock-fields > summary::marker,
+details.shot-detail > summary::marker,
+details.pose-plan > summary::marker,
+details.disclose > summary::marker { content: none; }
 details.song-fold > summary::before,
 details.tier-board > summary::before,
 details.scene > summary::before,
@@ -1184,14 +1198,14 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
 }
 .pose-roster { list-style: none; padding: 0; margin: 0.4rem 0 0; }
 .pose-roster-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 3rem minmax(7rem, 1fr) auto auto auto;
   align-items: center;
-  gap: 0.7rem;
+  gap: 0.45rem 0.7rem;
   padding: 0.45rem 0;
   border-bottom: 1px solid var(--border);
 }
 .pose-roster-copy {
-  flex: 1 1 12rem;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1199,12 +1213,18 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
 }
 .pose-roster-copy strong { font-weight: 600; }
 .pose-roster-row img,
-.pose-roster-row .cover {
+.pose-roster-row .cover,
+.pose-ph {
   width: 3rem;
   height: 4rem;
   object-fit: cover;
   border-radius: 4px;
-  flex: none;
+}
+.pose-ph {
+  display: block;
+  border: 1px dashed var(--border);
+  background: var(--panel-raised, var(--panel));
+  box-sizing: border-box;
 }
 .pose-roster-row.missing { opacity: 0.95; }
 .pose-roster-row .warn { display: block; }
@@ -1213,11 +1233,11 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
   align-items: center;
   gap: 0.35rem;
   margin: 0;
-  flex: none;
+  grid-column: 3;
 }
 .pose-keeper-form select { min-width: 10rem; max-width: 16rem; }
-.pose-roster-row .js-pose-brief { flex: none; }
-.pose-upload { margin: 0; }
+.pose-roster-row .js-pose-brief { grid-column: 4; }
+.pose-upload { margin: 0; grid-column: 5; }
 .pose-upload .icon-btn { cursor: pointer; }
 .visually-hidden {
   position: absolute;
@@ -2398,6 +2418,7 @@ button.clip-nav svg { width: 1.2rem; height: 1.2rem; }
 table.list th.pick, table.list td.pick { width: 1.5rem; text-align: center; }
 .bulk-bar { margin-bottom: 0.75rem; padding: 0.6rem 0.8rem; }
 .bulk-bar .clip-bar { margin: 0; align-items: flex-end; }
+.bulk-bar #bulk-count { margin: 0.45rem 0 0; }
 .bulk-bar.busy { opacity: 0.6; pointer-events: none; }
 .cell-genre { white-space: nowrap; }
 .cell-genre .js-genre-set { margin-left: 0.35rem; font-size: 0.75rem; }

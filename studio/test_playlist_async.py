@@ -198,6 +198,8 @@ def test_playlist_anchors_have_keeper_save_and_family_tabs():
     assert "family-tabs" in gal or "None yet" in gal
     assert "data-filter" in gal or "None yet" in gal
     assert "Keeper" not in gal or "pose-roster" in gal
+    assert "Missing:" not in gal
+    assert "pick a sheet or generate a prompt" not in gal
 
 
 def test_playlist_js_reloads_anchors_after_in_page_save():

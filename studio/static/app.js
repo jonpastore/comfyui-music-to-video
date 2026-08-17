@@ -822,11 +822,26 @@ document.body.addEventListener("htmx:beforeSwap", function (e) {
     look: look ? look.getAttribute("data-look") : ""
   };
 });
+document.body.addEventListener("htmx:beforeSwap", function (e) {
+  var form = document.getElementById("anchor-form");
+  var tgt = e.detail && e.detail.target;
+  if (!form || !tgt || tgt.id !== "anchor-form") return;
+  window._afOpen = [];
+  form.querySelectorAll("details.disclose[data-fold]").forEach(function (d) {
+    if (d.open) window._afOpen.push(d.getAttribute("data-fold"));
+  });
+});
 document.body.addEventListener("htmx:afterSwap", function (e) {
   var target = e.detail && e.detail.target ? e.detail.target : e.target;
   formatLocalTimes(target);
   hydrateLazy(target);
   bindReorder(target);
+  var af = document.getElementById("anchor-form");
+  if (af && window._afOpen) {
+    af.querySelectorAll("details.disclose[data-fold]").forEach(function (d) {
+      if (window._afOpen.indexOf(d.getAttribute("data-fold")) >= 0) d.open = true;
+    });
+  }
   var chrome = target && target._plChrome;
   if (chrome) {
     (chrome.open || []).forEach(function (id) {
@@ -2514,9 +2529,12 @@ function initLibraryBulk() {
     all.indeterminate = n > 0 && n < vis.length;
     all.title = "Select all " + vis.length + " shown";
     if (!n) {
-      count.textContent = "no songs selected";
+      bar.hidden = true;
+      if (count) { count.hidden = true; count.textContent = ""; }
       return;
     }
+    bar.hidden = false;
+    if (count) count.hidden = false;
     var genre = val("bulk-genre-select"), genre2 = val("bulk-genre2-select");
     if (!genre && !genre2) {
       count.textContent = n + " song" + (n === 1 ? "" : "s") + " selected";

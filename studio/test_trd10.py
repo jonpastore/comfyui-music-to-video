@@ -205,6 +205,7 @@ def test_t10_7_prewrite_count_equals_rows_changed():
     with TestClient(appmod.app) as client:
         page = client.get("/")
         assert 'id="bulk-count"' in page.text
+        assert re.search(r'id="bulk-genre"[^>]*\bhidden\b', page.text)
         pre = client.post("/songs/genres", json={**payload, "preview": True})
         assert pre.status_code == 200, pre.text
         body = pre.json()
