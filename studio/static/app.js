@@ -2229,6 +2229,17 @@ document.addEventListener("click", function (e) {
 });
 
 document.addEventListener("click", function (e) {
+  var clip = e.target.closest(".js-clip-preview");
+  if (clip) {
+    var vdlg = document.getElementById("clip-preview");
+    if (!vdlg) return;
+    var vid = vdlg.querySelector("video");
+    vid.src = clip.getAttribute("data-video") || "";
+    var vlab = document.getElementById("clip-preview-label");
+    if (vlab) vlab.textContent = clip.getAttribute("data-label") || "Clip";
+    if (typeof vdlg.showModal === "function") vdlg.showModal();
+    return;
+  }
   var btn = e.target.closest(".js-ref-preview");
   if (!btn) return;
   var dlg = document.getElementById("ref-preview");
@@ -2237,5 +2248,10 @@ document.addEventListener("click", function (e) {
   img.src = btn.getAttribute("data-full") || "";
   var lab = document.getElementById("ref-preview-label");
   if (lab) lab.textContent = btn.getAttribute("data-label") || "";
-  dlg.showModal();
+  if (typeof dlg.showModal === "function") dlg.showModal();
 });
+document.addEventListener("close", function (e) {
+  if (e.target && e.target.id === "clip-preview") {
+    e.target.querySelectorAll("video").forEach(function (v) { v.pause(); });
+  }
+}, true);

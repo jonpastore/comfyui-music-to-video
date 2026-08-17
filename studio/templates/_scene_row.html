@@ -61,7 +61,11 @@
   <form method="post" action="/songs/{{ song.id }}/storyboard/{{ tier }}/scene/{{ r.num }}/pose-sheet"
         class="pose-bind field-row">
     {% if s.path %}
-    <img class="anchor-thumb" src="{{ media_url(s.path) }}" alt="" loading="lazy">
+    <button type="button" class="js-ref-preview thumb-open"
+            data-full="{{ media_url(s.path) }}"
+            data-label="scene {{ r.num }} pose plate">
+      <img class="anchor-thumb" src="{{ media_url(s.path) }}" alt="" loading="lazy">
+    </button>
     {% endif %}
     <label>Pose plate
       <select name="sheet_id">
@@ -101,7 +105,11 @@
     {% for c in r.refs %}
     <figure class="ref-frame {% if c.approved %}approved{% endif %} {% if c.stale %}stale{% endif %}">
       {% if c.candidates %}
-      <img src="{{ media_url(c.candidates[-1].path) }}" alt="scene {{ r.num }} still" loading="lazy">
+      <button type="button" class="js-ref-preview thumb-open"
+              data-full="{{ media_url(c.candidates[-1].path) }}"
+              data-label="scene {{ r.num }} still">
+        <img src="{{ media_url(c.candidates[-1].path) }}" alt="scene {{ r.num }} still" loading="lazy">
+      </button>
       {% else %}
       <div class="ref-empty">not rendered</div>
       {% endif %}
@@ -118,5 +126,23 @@
   </div>
   {% else %}
   <p class="empty">No reference frame for this scene yet.</p>
+  {% endif %}
+
+  {% if r.videos %}
+  <div class="scene-clips">
+    {% for v in r.videos %}
+    <figure class="clip-frame">
+      <button type="button" class="js-clip-preview thumb-open"
+              data-video="{{ media_url(v.path) }}"
+              data-label="scene {{ r.num }} clip {{ v.clip_idx }}">
+        <video src="{{ media_url(v.path) }}" preload="metadata" muted playsinline></video>
+      </button>
+      <figcaption>
+        clip {{ v.clip_idx }}
+        {% if v.status %}<span class="tag">{{ v.status }}</span>{% endif %}
+      </figcaption>
+    </figure>
+    {% endfor %}
+  </div>
   {% endif %}
 </section>

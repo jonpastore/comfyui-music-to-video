@@ -46,42 +46,39 @@
   {% endif %}
 </details>
 
-<div class="row-2col">
-  <details class="card song-fold" id="fold-lyrics"{% if not song.lyrics %} open{% endif %}>
-    <summary>
-      <h2>Lyrics</h2>
-      <span class="muted">{% if song.lyrics %}saved{% else %}empty{% endif %}</span>
-    </summary>
-    {# the paired card carries a note too, so the two boxes line up rather than
-       sitting 60px apart -- and the storyboard really is built from this text #}
-    <p class="muted">The words, in [Section] blocks. Whisper drafts them; edit freely.
-      This is what the storyboard is written from. Edits survive a re-fetch.</p>
-    <form method="post" action="/songs/{{ song.id }}/lyrics" class="stack-form">
-      <textarea name="lyrics_text" rows="16">{{ song.lyrics or "" }}</textarea>
-      <button type="submit">Save lyrics</button>
-    </form>
-    {% if song.mp3_path %}
-    <form method="post" action="/songs/{{ song.id }}/retranscribe" class="stack-form"
-          onsubmit="return confirm('Re-transcribe replaces the current lyrics, including any edits. Continue?');">
-      <p class="hint">{{ lyrics_replace_warning }}</p>
-      <button type="submit" class="secondary">Re-transcribe</button>
-    </form>
-    {% endif %}
-  </details>
-
-  <details class="card song-fold" id="fold-style"{% if not song.style_text %} open{% endif %}>
-    <summary>
-      <h2>Style prompt</h2>
-      <span class="muted">{% if song.style_text %}saved{% else %}empty{% endif %}</span>
-    </summary>
-    <p class="muted">What the track was generated from (Suno / ChatGPT). Saved with the
-      song; not sent to the storyboard model or the renderer.</p>
-    <form method="post" action="/songs/{{ song.id }}/style-text" class="stack-form">
-      <textarea name="style_text" rows="16">{{ song.style_text or "" }}</textarea>
-      <button type="submit">Save style prompt</button>
-    </form>
-  </details>
-</div>
+<details class="card song-fold" id="fold-words"{% if not song.lyrics and not song.style_text %} open{% endif %}>
+  <summary>
+    <h2>Lyrics &amp; style</h2>
+    <span class="muted">{% if song.lyrics or song.style_text %}saved{% else %}empty{% endif %}</span>
+  </summary>
+  <div class="row-2col">
+    <div>
+      <h3>Lyrics</h3>
+      <p class="muted">The words, in [Section] blocks. Whisper drafts them; edit freely.
+        This is what the storyboard is written from. Edits survive a re-fetch.</p>
+      <form method="post" action="/songs/{{ song.id }}/lyrics" class="stack-form">
+        <textarea name="lyrics_text" rows="16">{{ song.lyrics or "" }}</textarea>
+        <button type="submit">Save lyrics</button>
+      </form>
+      {% if song.mp3_path %}
+      <form method="post" action="/songs/{{ song.id }}/retranscribe" class="stack-form"
+            onsubmit="return confirm('Re-transcribe replaces the current lyrics, including any edits. Continue?');">
+        <p class="hint">{{ lyrics_replace_warning }}</p>
+        <button type="submit" class="secondary">Re-transcribe</button>
+      </form>
+      {% endif %}
+    </div>
+    <div>
+      <h3>Style prompt</h3>
+      <p class="muted">What the track was generated from (Suno / ChatGPT). Saved with the
+        song; not sent to the storyboard model or the renderer.</p>
+      <form method="post" action="/songs/{{ song.id }}/style-text" class="stack-form">
+        <textarea name="style_text" rows="16">{{ song.style_text or "" }}</textarea>
+        <button type="submit">Save style prompt</button>
+      </form>
+    </div>
+  </div>
+</details>
 
 <details class="card song-fold" id="media-menu"
          data-media-count="{{ media.count }}"

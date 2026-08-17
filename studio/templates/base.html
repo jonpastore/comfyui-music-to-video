@@ -37,6 +37,22 @@
     </div>
     <div id="jobs-modal-body"></div>
   </dialog>
+  <dialog class="lightbox" id="ref-preview">
+    <div class="lightbox-bar">
+      <strong id="ref-preview-label"></strong>
+      <button type="button" class="lightbox-close"
+              onclick="this.closest('dialog').close()" aria-label="Close">&times;</button>
+    </div>
+    <img alt="full size">
+  </dialog>
+  <dialog class="video-modal" id="clip-preview">
+    <div class="modal-bar">
+      <strong id="clip-preview-label">Clip</strong>
+      <button type="button" class="secondary"
+              onclick="this.closest('dialog').close()">Close</button>
+    </div>
+    <video controls preload="metadata"></video>
+  </dialog>
   <div id="page-loading" hidden>
     <span class="spinner" aria-hidden="true"></span>
     <span id="page-loading-label">Loading&hellip;</span>

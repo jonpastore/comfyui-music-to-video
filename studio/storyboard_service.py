@@ -345,6 +345,14 @@ def scenes(song, sb, tier, anchored=(), scene_seconds=None):
         if sn is not None:
             by_scene.setdefault(sn, []).append(r)
 
+    videos_of = {}
+    for v in db.q(
+            """SELECT clip_idx, path, status FROM clips
+               WHERE song_id=? AND tier=? ORDER BY clip_idx""",
+            song["id"], tier):
+        if v["path"]:
+            videos_of[v["clip_idx"]] = v
+
     parts_of = {}
     shots_of = {}
     for rec in plan:
@@ -381,9 +389,12 @@ def scenes(song, sb, tier, anchored=(), scene_seconds=None):
                 "stale": bool(edited and cands and
                               all((c["created"] or 0) < edited for c in cands)),
             })
+        videos = [videos_of[rec["clip_idx"]] for rec in recs
+                  if rec["clip_idx"] in videos_of]
         rows.append({
             "scene": scene, "num": num, "name": build_song.sname(scene),
             "clips": [head] if head is not None else [],
+            "videos": videos,
             "n_parts": len(recs) or 1,
             "start": start, "end": end, "length": length,
             "guidance": build_song.guidance_seconds(scene),

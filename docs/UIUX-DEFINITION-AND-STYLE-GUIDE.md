@@ -461,9 +461,11 @@ and `.plan-blocker` names that lead (`T2-28`); extras/background do not
 block. The same panel names **missing identity front** when chosen pose
 sheets exist but none is `view=front` — never *no anchor* in that case.
 The song page is a stack of `<details class="song-fold">` cards. Analysis,
-lyrics, style, media, audio, review, video, QC, jobs and delete start
-closed once they have content. **Storyboard** and **Reference images**
-start open — that is the work. Summaries carry the one-line status so
+lyrics & style (one fold, two columns), media, audio, review, video, QC,
+jobs and delete start closed once they have content. **Storyboard** and
+**Reference images** start open — that is the work. Scene stills, pose
+plates and rendered clips are `.js-ref-preview` / `.js-clip-preview`
+thumbs; click opens `#ref-preview` or `#clip-preview` in `base.html`. Summaries carry the one-line status so
 you do not open a card to learn it is idle.
 Storyboard editing lives **on the song page**, not a second interface.
 Each written tier is a `.tier-board` that `hx-get`s

@@ -75,6 +75,8 @@ def test_song_page_folds_and_storyboard_are_buttons():
         page = client.get(f"/songs/{sid}").text
         assert 'class="card song-fold"' in page
         assert 'id="fold-storyboard"' in page
+        assert 'id="fold-words"' in page
+        assert 'id="fold-lyrics"' not in page
         assert 'id="refs"' in page
         # lyrics/style start open when empty; analysis open when not analysed
         assert 'id="fold-analysis"' in page
@@ -104,6 +106,7 @@ def test_song_page_folds_and_storyboard_are_buttons():
         assert "Save" in panel.text
         assert "Generate" in panel.text
         assert "Scenes and timing" in panel.text
+        assert 'id="ref-preview"' in client.get("/").text
 
 
 def test_storyboard_save_and_restore_roundtrip():

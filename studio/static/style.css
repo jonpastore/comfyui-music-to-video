@@ -204,6 +204,34 @@ details.song-fold[open] > summary { margin-bottom: 0.75rem; }
 }
 .sb-ver { margin: 0; }
 
+.thumb-open {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+}
+.thumb-open img, .thumb-open video {
+  display: block;
+  max-width: 100%;
+}
+.scene-clips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+.clip-frame { margin: 0; }
+.clip-frame video {
+  width: 10rem;
+  height: 6rem;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #000;
+}
+.clip-frame figcaption { font-size: 0.8rem; color: var(--muted); }
+
 .tier-ref {
   border: 1px solid var(--border);
   border-radius: 8px;
