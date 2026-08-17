@@ -94,7 +94,14 @@ and video modal.
 
 ## How to work here
 
+- **Small files:** new studio code goes in a focused module, not another
+  slab on `studio/app.py` (already over the ceiling). Soft ~400 lines,
+  do not grow past ~600 when a seam exists. Extract the slice you are
+  changing. Functions: ~80 lines or cyclomatic ~12 before you split.
+  Exempt only generated/vendor/one-unit APIs. Global rule:
+  `~/.grok/rules/constitution.md`.
 - Tests: `cd studio && python3 -m pytest -q .`
+- Lint: Ruff via pre-commit (`ruff-check`). One-time: `pip install pre-commit && pre-commit install`.
 - Push and deploy are not gated on ComfyUI / Swarm jobs. This process
   is not the renderer; a studio restart does not cancel fleet work.
   Do not poll `jobs` for running clips before push or deploy.
