@@ -518,8 +518,9 @@ error and does not fade on failure. Bind status is **Pinned** (operator chose), 
 the old “saved bind · standing” string. The pose word sits beside the
 help. `GET /api/songs/{id}/pose-plan/{tier}` is the same object
 (`test_pose_plan.py`).
-Scene media is a **preview table** (pose plate | reference stills |
-clips). Stills show every candidate, **Use this still** approves one.
+Scene media is stacked rows: pose word + plate controls on one
+nowrap row; **reference stills** and **clips** each scroll sideways
+(no wrap). Stills show every candidate, **Use this still** approves one.
 Reroll carries note, `n`, seed min/max, and equal/fib stepping.
 Fix (face / inpaint / outpaint) and Delete sit on the still.
 **Render clip** defaults to first clip only; Auto post is T5 LTX refine;

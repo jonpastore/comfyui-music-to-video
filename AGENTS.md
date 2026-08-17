@@ -75,8 +75,8 @@ On session start: `jarvis-memory__sync`, then this project's
 - Do not file 244 TRD criteria. Specs stay in `docs/TRD-*`. File the
   next product slice.
 - Grind / autopilot: main thread orchestrates. Max 3 parallel worktree
-  agents unless asked. Product order below beats a random task. Never
-  deploy mid-render. You stay on pictures and decisions. Landers update
+  agents unless asked. Product order below beats a random task. You stay
+  on pictures and decisions. Landers update
   TRD/PRD/DDD/UIUX in the same commit as the code (see above).
 - Models: this session plans and reasons on **grok-4.6**. Execution
   subagents (`explore`, `general-purpose`, implementers) use **grok-4.5**
@@ -95,9 +95,12 @@ and video modal.
 ## How to work here
 
 - Tests: `cd studio && python3 -m pytest -q .`
-- Never deploy mid-render. Deploy from a clean detached worktree at HEAD:
-  rsync to `cerberus:~/meowp-studio`, then `systemctl --user restart` the
-  studio unit. Smoke the pages.
+- Push and deploy are not gated on ComfyUI / Swarm jobs. This process
+  is not the renderer; a studio restart does not cancel fleet work.
+  Do not poll `jobs` for running clips before push or deploy.
+- Deploy from a clean detached worktree at HEAD: rsync to
+  `cerberus:~/meowp-studio`, then `systemctl --user restart` the studio
+  unit. Smoke the pages.
 - Live studio is `100.103.148.120:8000`. The worker is single-threaded.
 - Parallel slices: Grok worktrees (`isolation=worktree`). Do not let two
   writers share `studio/*.py` in this tree.
