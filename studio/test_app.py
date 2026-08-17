@@ -2125,6 +2125,13 @@ def test_clips_one_scene_head_only_does_not_need_every_scene(patch_stub):
         assert body["scene"] == 1
         wait_job(body["job_id"])
         assert seen and seen[-1] == [0], seen
+        r2 = client.post(
+            f"/songs/{sid}/clips",
+            data={"tier": "r", "clip_idx": "0"},
+            headers={"Accept": "application/json"})
+        assert r2.status_code == 200, r2.text
+        wait_job(r2.json()["job_id"])
+        assert seen[-1] == [0], seen
 
 
 def test_driving_clips_are_refused_for_i2v_which_has_no_such_input():

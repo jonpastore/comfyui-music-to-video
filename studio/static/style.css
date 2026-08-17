@@ -899,6 +899,11 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
   gap: 0.5rem;
 }
 .save-note { min-height: 1rem; font-size: 0.85rem; }
+img.lazy-src, video.lazy-src {
+  background: var(--panel);
+  min-width: 3rem;
+  min-height: 4rem;
+}
 
 .scene-preview {
   width: 100%;
@@ -1090,6 +1095,8 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
 
 /* ---- cast ---- */
 .cast-chips { margin: 0.3rem 0; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.cast-offer { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+.cast-offer li { margin: 0.2rem 0; }
 .character-row {
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -1574,7 +1581,38 @@ table.sortcols th.sort-desc::after { content: " \2193"; color: var(--accent); }
 .model-head h2 { margin: 0; }
 
 dialog.video-modal { max-width: 90vw; }
+dialog.video-modal > .modal-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
 dialog.video-modal video { max-width: 100%; max-height: 70vh; display: block; }
+.clip-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.clip-stage video { flex: 1; min-width: 0; }
+button.clip-nav {
+  flex: none;
+  width: 2.2rem;
+  height: 4rem;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+}
+button.clip-nav:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--panel);
+}
+button.clip-nav:disabled { opacity: 0.35; }
+button.clip-nav svg { width: 1.2rem; height: 1.2rem; }
+.clip-actions { margin-top: 0.6rem; }
+.clip-actions .field-row { flex-wrap: wrap; align-items: center; }
 
 /* A saved-and-gone confirmation: appears with the swap, fades out on its own.
    Nothing to clear, because the element is replaced by the next swap anyway. */

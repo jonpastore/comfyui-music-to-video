@@ -84,9 +84,9 @@ CREATE TABLE IF NOT EXISTS jobs (
 -- Scoped by album NAME, exactly as anchors.scope_value already is, so nothing
 -- new has to be linked up.
 --
--- Extras and background characters deliberately have no row: the storyboard is
--- told to name only main actors, because only a main actor needs an anchor to
--- stay consistent across 50 frames.
+-- Extras and background characters deliberately have no row: the storyboard
+-- may name them, but only a main actor needs an anchor and pose plates to
+-- stay consistent across 50 frames. A characters row is a lead.
 CREATE TABLE IF NOT EXISTS characters (
   id INTEGER PRIMARY KEY,
   scope_value TEXT NOT NULL,         -- album name

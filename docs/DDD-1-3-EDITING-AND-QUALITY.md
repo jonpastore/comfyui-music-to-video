@@ -765,6 +765,16 @@ lead. Mutation: list every unanchored name → extra arm red.
 Mutation: never list → lead arm red. Mutation: fix API only → HTML
 arm red (`test_t2_30_unanchored_leads_only.py`).
 
+`T2-49` is **built**. `h_storyboard` offers `offered_cast(album)` — every
+`characters` row — not `cast_anchors`. A missing front is a T2-28 refs
+block, not a writer silence. `_cast_block` tells the model those names
+are the only leads besides the protagonist, and that extras/background
+may always be invented. `generate_storyboard` runs `apply_offered_cast`
+so an invented lead is stored as an extra. The generate form, generation
+payload, storyboard page and `GET .../cast` list `album_leads` with
+`has_front` / `used`. Mutation: `cast_anchors` filter → offer arm red
+(`test_t2_49_album_leads.py`).
+
 **Cast slots** are **built**. `build_refs.scene_cast` returns only leads
 (and bare names as legacy leads) that have a chosen sheet; those occupy
 image2/image3. Extras and background never take those slots even when a

@@ -54,7 +54,7 @@
               data-full="{{ media_url(c.path) }}"
               data-label="scene {{ clip.scene_num or clip.idx }} · seed {{ c.seed if c.seed is not none else '?' }}{% if clip.scene_name %} · {{ clip.scene_name }}{% endif %}"
               title="full size">
-        <img src="{{ media_url(c.path) }}" alt="scene {{ clip.scene_num or clip.idx }} candidate" loading="lazy">
+        <img class="lazy-src" data-src="{{ media_url(c.path) }}" alt="scene {{ clip.scene_num or clip.idx }} candidate" loading="lazy" decoding="async">
       </button>
       <p class="cand-seed">seed <code>{{ c.seed if c.seed is not none else "?" }}</code>
         {% set origin = c.origin or "gen" %}

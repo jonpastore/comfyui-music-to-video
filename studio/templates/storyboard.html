@@ -34,6 +34,20 @@
     on <a href="/anchors?scope_value={{ song.album | urlencode }}">/anchors</a>
     &mdash; not used as Generate refs image1.</p>
   {% endif %}
+  {% if album_leads %}
+  <p class="hint">Album leads (need identity fronts and pose plates):
+    {% for c in album_leads %}
+    <span class="tag {% if not c.has_front and c.used %}warn-tag{% endif %}">
+      {{ c.name }}{% if c.role %} &middot; {{ c.role }}{% endif %}
+      {% if c.used %}{% if c.has_front %} &middot; used{% else %} &middot; used, no front{% endif %}
+      {% else %} &middot; not named on this board{% endif %}
+    </span>
+    {% endfor %}
+    {% if album_playlist %}
+    <a href="/playlists#playlist-{{ album_playlist.id }}">album cast</a>
+    {% endif %}
+  </p>
+  {% endif %}
   {% if unanchored %}
   <p class="warn">Named in scenes but not anchored at this tier:
     <strong>{{ unanchored | join(", ") }}</strong>.

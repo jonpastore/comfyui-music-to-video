@@ -374,3 +374,5 @@ def test_bind_route_json_reports_source():
         assert ">Reroll<" in page
         assert "what to change" in page
         assert 'name="seed_min"' in page
+        assert 'class="lazy-src"' in page
+        assert "data-src=" in page

@@ -679,7 +679,48 @@ document.addEventListener("DOMContentLoaded", function () {
   initSongPage();       // song page forms: fetch, no full-page submit
   initRunHistory();
   initAnchorPlan();
+  hydrateLazy(document);
 });
+
+// Off-screen plates / stills / clips stay as data-src until they approach
+// the viewport. Native loading=lazy is not enough after an htmx panel swap
+// of fifty scenes: the browser still queues every <video preload=metadata>.
+function hydrateLazy(root) {
+  var scope = root && root.querySelectorAll ? root : document;
+  var nodes = scope.querySelectorAll("img.lazy-src[data-src], video.lazy-src[data-src]");
+  if (!nodes.length) return;
+  function load(el) {
+    var src = el.getAttribute("data-src");
+    if (!src) return;
+    el.src = src;
+    el.removeAttribute("data-src");
+    el.classList.remove("lazy-src");
+  }
+  if (!("IntersectionObserver" in window)) {
+    Array.prototype.forEach.call(nodes, load);
+    return;
+  }
+  if (!window._lazyMediaObs) {
+    window._lazyMediaObs = new IntersectionObserver(function (ents) {
+      ents.forEach(function (ent) {
+        if (!ent.isIntersecting) return;
+        load(ent.target);
+        window._lazyMediaObs.unobserve(ent.target);
+      });
+    }, {rootMargin: "240px 0px", threshold: 0.01});
+  }
+  Array.prototype.forEach.call(nodes, function (el) {
+    window._lazyMediaObs.observe(el);
+  });
+}
+document.body.addEventListener("htmx:afterSwap", function (e) {
+  hydrateLazy(e.detail && e.detail.target ? e.detail.target : e.target);
+});
+document.addEventListener("toggle", function (e) {
+  if (e.target && e.target.tagName === "DETAILS" && e.target.open) {
+    hydrateLazy(e.target);
+  }
+}, true);
 
 // Paste / drop images onto the anchors form as base photographs.
 // Delegated on document so it survives the form being swapped by htmx.
@@ -2342,30 +2383,159 @@ document.addEventListener("click", function (e) {
   dlg.showModal();
 });
 
-document.addEventListener("click", function (e) {
-  var clip = e.target.closest(".js-clip-preview");
-  if (clip) {
-    var vdlg = document.getElementById("clip-preview");
-    if (!vdlg) return;
-    var vid = vdlg.querySelector("video");
-    var list = (clip.getAttribute("data-playlist") || "").split("|").filter(Boolean);
-    if (!list.length) list = [clip.getAttribute("data-video") || ""];
-    var i = 0;
-    function playAt() {
-      if (i >= list.length) return;
-      vid.src = list[i];
-      vid.play();
-    }
-    vid.onended = function () {
-      i += 1;
-      if (i < list.length) playAt();
-    };
-    var vlab = document.getElementById("clip-preview-label");
-    if (vlab) vlab.textContent = clip.getAttribute("data-label") || "Clip";
-    playAt();
-    if (typeof vdlg.showModal === "function") vdlg.showModal();
-    return;
+(function () {
+  var vdlg = document.getElementById("clip-preview");
+  if (!vdlg) return;
+  var vid = vdlg.querySelector("video");
+  var items = [];
+  var idx = 0;
+
+  function thumbs() {
+    var nodes = document.querySelectorAll(".js-clip-preview[data-video]");
+    return Array.prototype.slice.call(nodes).sort(function (a, b) {
+      var na = parseInt(a.getAttribute("data-clip-idx") || "0", 10);
+      var nb = parseInt(b.getAttribute("data-clip-idx") || "0", 10);
+      return na - nb;
+    });
   }
+
+  function current() { return items[idx] || null; }
+
+  function show(i) {
+    if (!items.length) return;
+    idx = (i + items.length) % items.length;
+    var el = items[idx];
+    vid.src = el.getAttribute("data-video") || "";
+    vid.play();
+    var lab = document.getElementById("clip-preview-label");
+    if (lab) lab.textContent = el.getAttribute("data-label") || "Clip";
+    var pos = document.getElementById("clip-preview-pos");
+    if (pos) pos.textContent = (idx + 1) + " / " + items.length;
+    var prev = document.getElementById("clip-prev");
+    var next = document.getElementById("clip-next");
+    if (prev) prev.disabled = items.length < 2;
+    if (next) next.disabled = items.length < 2;
+    var motion = document.getElementById("clip-motion");
+    if (motion) motion.value = el.getAttribute("data-motion") || "";
+    var wrap = document.getElementById("clip-motion-wrap");
+    if (wrap) wrap.hidden = true;
+    var stillBtn = document.getElementById("clip-open-still");
+    if (stillBtn) stillBtn.disabled = !el.getAttribute("data-still");
+  }
+
+  function openFrom(el) {
+    items = thumbs();
+    var at = items.indexOf(el);
+    if (at < 0) {
+      items = [el];
+      at = 0;
+    }
+    show(at);
+    if (typeof vdlg.showModal === "function") vdlg.showModal();
+  }
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest("#clip-prev")) { e.preventDefault(); show(idx - 1); return; }
+    if (e.target.closest("#clip-next")) { e.preventDefault(); show(idx + 1); return; }
+    var clip = e.target.closest(".js-clip-preview");
+    if (!clip) return;
+    if (clip.getAttribute("data-playlist") && !clip.getAttribute("data-video")) {
+      var list = (clip.getAttribute("data-playlist") || "").split("|").filter(Boolean);
+      if (!list.length) return;
+      items = list.map(function (src, n) {
+        var fake = document.createElement("button");
+        fake.setAttribute("data-video", src);
+        fake.setAttribute("data-label", (clip.getAttribute("data-label") || "Clip") + " · part " + (n + 1));
+        return fake;
+      });
+      show(0);
+      if (typeof vdlg.showModal === "function") vdlg.showModal();
+      return;
+    }
+    if (clip.getAttribute("data-video")) openFrom(clip);
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (!vdlg.open) return;
+    var t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
+    if (e.key === "ArrowLeft") { e.preventDefault(); show(idx - 1); }
+    if (e.key === "ArrowRight") { e.preventDefault(); show(idx + 1); }
+  });
+
+  function songId() {
+    var page = document.getElementById("song-page");
+    return page && page.getAttribute("data-song-id");
+  }
+
+  function note(msg, bad) {
+    say2(document.getElementById("clip-preview-note"), msg, bad);
+  }
+
+  var rerender = document.getElementById("clip-rerender");
+  if (rerender) rerender.addEventListener("click", function () {
+    var el = current();
+    var sid = songId();
+    if (!el || !sid) return note("no clip", true);
+    var fd = new FormData();
+    fd.append("tier", el.getAttribute("data-tier") || "");
+    if (el.getAttribute("data-scene")) fd.append("scene", el.getAttribute("data-scene"));
+    if (el.getAttribute("data-clip-idx") != null) fd.append("clip_idx", el.getAttribute("data-clip-idx"));
+    if (document.getElementById("clip-refine") && document.getElementById("clip-refine").checked) {
+      fd.append("refine", "true");
+    }
+    note("queueing…");
+    api("/songs/" + sid + "/clips", fd).then(function (d) {
+      note(d.job_id ? ("queued job #" + d.job_id) : "queued");
+      if (d.job_id && typeof refreshQueue === "function") refreshQueue();
+    }).catch(function (err) { note(err.message, true); });
+  });
+
+  var editBtn = document.getElementById("clip-edit-motion");
+  if (editBtn) editBtn.addEventListener("click", function () {
+    var wrap = document.getElementById("clip-motion-wrap");
+    if (wrap) wrap.hidden = !wrap.hidden;
+  });
+
+  var saveMotion = document.getElementById("clip-save-motion");
+  if (saveMotion) saveMotion.addEventListener("click", function () {
+    var el = current();
+    var sid = songId();
+    var scene = el && el.getAttribute("data-scene");
+    var tier = el && el.getAttribute("data-tier");
+    if (!el || !sid || !scene || !tier) return note("this clip has no scene prompt", true);
+    var fd = new FormData();
+    fd.append("video_motion_prompt", document.getElementById("clip-motion").value);
+    note("saving…");
+    api("/songs/" + sid + "/storyboard/" + tier + "/scene/" + scene, fd).then(function () {
+      el.setAttribute("data-motion", document.getElementById("clip-motion").value);
+      note("saved — re-render to apply");
+    }).catch(function (err) { note(err.message, true); });
+  });
+
+  var stillBtn = document.getElementById("clip-open-still");
+  if (stillBtn) stillBtn.addEventListener("click", function () {
+    var el = current();
+    var still = el && el.getAttribute("data-still");
+    if (!still) return note("no approved still on this clip", true);
+    vdlg.close();
+    var dlg = document.getElementById("ref-preview");
+    if (!dlg) return;
+    dlg.querySelector("img").src = still;
+    var lab = document.getElementById("ref-preview-label");
+    if (lab) lab.textContent = "approved still — fix or reroll, then re-render the clip";
+    if (typeof dlg.showModal === "function") dlg.showModal();
+    var scene = el.getAttribute("data-scene");
+    var row = scene && document.getElementById("scene-" + scene);
+    if (row) row.scrollIntoView({block: "nearest"});
+  });
+
+  vdlg.addEventListener("close", function () {
+    vid.pause();
+  });
+})();
+
+document.addEventListener("click", function (e) {
   var btn = e.target.closest(".js-ref-preview");
   if (!btn) return;
   var dlg = document.getElementById("ref-preview");
@@ -2376,8 +2546,3 @@ document.addEventListener("click", function (e) {
   if (lab) lab.textContent = btn.getAttribute("data-label") || "";
   if (typeof dlg.showModal === "function") dlg.showModal();
 });
-document.addEventListener("close", function (e) {
-  if (e.target && e.target.id === "clip-preview") {
-    e.target.querySelectorAll("video").forEach(function (v) { v.pause(); });
-  }
-}, true);

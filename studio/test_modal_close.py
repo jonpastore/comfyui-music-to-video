@@ -36,6 +36,16 @@ def test_base_lightboxes_use_modal_close():
     assert "lightbox-close" not in src
 
 
+def test_clip_preview_has_nav_and_repair_actions():
+    src = open(os.path.join(TEMPLATES, "base.html"), encoding="utf-8").read()
+    assert 'id="clip-prev"' in src
+    assert 'id="clip-next"' in src
+    assert 'id="clip-rerender"' in src
+    assert 'id="clip-edit-motion"' in src
+    assert 'id="clip-open-still"' in src
+    assert "lightbox-spacer" in src
+
+
 def test_css_modal_close_is_not_a_circle():
     css = open(os.path.join(HERE, "static", "style.css"), encoding="utf-8").read()
     block = re.search(r"button\.modal-close\s*\{[^}]+\}", css)

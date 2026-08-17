@@ -641,6 +641,50 @@ def album_cast(album):
     return db.q("SELECT * FROM characters WHERE scope_value=? ORDER BY name", album or "")
 
 
+def offered_cast(album):
+    """Album characters the storyboard writer may name as leads.
+
+    A chosen front is not required. T2-49: generate has to know Tiger and
+    Panther exist from the character row, or it invents a stranger and the
+    scene cannot stay consistent later. Missing fronts block Generate refs
+    (T2-28), not the writer.
+    """
+    out = []
+    for c in album_cast(album):
+        desc = " ".join(p for p in (c["role"], c["identity"], c["wardrobe"]) if p)
+        out.append((c["name"], desc or "album lead"))
+    return out
+
+
+def album_leads_for_form(album, tier, named=None):
+    """Consistency characters for the generate form and storyboard page."""
+    named = {str(n).strip().lower() for n in (named or []) if str(n).strip()}
+    rows = []
+    for c in album_cast(album):
+        front = chosen_anchor("album", album or "", tier, "front", c["id"])
+        name = c["name"]
+        rows.append({
+            "id": c["id"],
+            "name": name,
+            "role": c["role"] or "",
+            "identity": (c["identity"] or "").strip(),
+            "has_front": bool(front and front["path"]),
+            "used": name.lower() in named,
+        })
+    return rows
+
+
+def named_scene_leads(rows):
+    return sorted({n["name"] for r in rows for n in (r.get("cast") or [])
+                   if n.get("role") == "lead" and n.get("name")})
+
+
+def album_playlist(album):
+    if not album:
+        return None
+    return db.one("SELECT * FROM playlists WHERE name=? AND kind='playlist'", album)
+
+
 def cast_anchors(album, tier):
     """[(character_row, anchor_row)] for cast members with a chosen anchor at
     this tier. A character without one is skipped rather than failing the job:
@@ -1342,13 +1386,14 @@ def h_storyboard(args, progress):
     #
     # Duplicated tone wording is cosmetic. A tier that cannot say what it
     # permits is the file whose job is to be true saying something false.
-    # The cast the model is allowed to name. Only characters with an anchor at
-    # THIS tier: naming someone with no anchor produces a scene the renderer
-    # cannot keep consistent, which is the problem the cast exists to solve.
-    cast = [(c["name"], " ".join(p for p in (c["role"], c["identity"], c["wardrobe"]) if p))
-            for c, _a in cast_anchors(song["album"] or "", tier)]
+    # Album characters are offered as leads whether or not they have a
+    # chosen front yet (T2-49). A missing front blocks Generate refs, not
+    # the writer -- otherwise Tiger/Panther never reach the board.
+    cast = offered_cast(song["album"] or "")
     if cast:
         progress(f"cast offered to the storyboard: {', '.join(n for n, _ in cast)}")
+    else:
+        progress("cast offered to the storyboard: protagonist only")
     # Where this song sits in the album's story, if the album has one. Passed
     # separately from style_note on purpose: that is the album's LOOK and this is
     # its STORY, and folding one into the other is how the two stop being
@@ -1400,9 +1445,9 @@ def h_refs(args, progress):
     # just the anchor's -- see build_refs.workflow
     album = song["album"] or ""
     body = album_profile(album)["body"]
-    # Supporting characters with a chosen anchor at this tier. A scene attaches
-    # only the ones it NAMES; extras and background characters are deliberately
-    # never named by the storyboard and so never get an anchor slot.
+    # Supporting leads with a chosen front at this tier. A scene attaches
+    # only the ones it NAMES as leads. Extras and background may be named
+    # on the board; they never take an image2/image3 slot.
     cast = {c["name"]: {"path": a["path"],
                         "desc": " ".join(p for p in (c["identity"], c["wardrobe"], c["body"]) if p)}
             for c, a in cast_anchors(album, tier)}
@@ -5644,11 +5689,14 @@ def storyboard_form_ctx(song, tier, chat_models=None, best=None, direction=None)
             if from_board:
                 stored = from_board
         direction = stored or beat or default_direction(song, tier)
+    album = song["album"] or ""
     return {"song": song, "tier": tier, "tiers": tiers.all_tiers(),
             "direction": direction, "pinned": tiers.PINNED.strip(),
             "tier_text": tier_tone(tier, song["album"] or ""),
             "max_direction": grok.MAX_DIRECTION,
-            "models": chat_models if chat_models is not None else [], "best_model": best}
+            "models": chat_models if chat_models is not None else [], "best_model": best,
+            "album_leads": album_leads_for_form(album, tier),
+            "album_playlist": album_playlist(album)}
 
 
 def storyboard_generation_payload(song, tier):
@@ -5668,6 +5716,7 @@ def storyboard_generation_payload(song, tier):
         "max_characters": ctx["max_direction"],
         "pinned_added_at_use": True,
         "pinned_editable": False,
+        "album_leads": ctx["album_leads"],
     }
 
 
@@ -5745,7 +5794,10 @@ def api_storyboard_prompt(id: int, tier: str):
         payload = storyboard_service.payload(song["id"], tier)
     except (LookupError, ValueError, RuntimeError) as e:
         _svc_http(e)
+    board_leads = payload.get("album_leads")
     payload.update(gen)
+    if board_leads is not None:
+        payload["album_leads"] = board_leads
     return JSONResponse(payload)
 
 
@@ -6029,6 +6081,7 @@ def storyboard_page_ctx(song, tier):
     sb_secs = row["scene_seconds"] if row else None
     rows, nclips = storyboard_scenes(song, sb, tier, {c["name"] for c, _a in cast},
                                      scene_seconds=sb_secs)
+    album_leads = album_leads_for_form(album, tier, named_scene_leads(rows))
     anchors = album_chosen_anchors(album, tier)
     identity_fronts = [a for a in anchors if a["view"] == "front"]
     clip_secs = board["clip_seconds"]
@@ -6043,6 +6096,8 @@ def storyboard_page_ctx(song, tier):
         "scene_rows": rows, "anchors": anchors,
         "identity_fronts": identity_fronts, "chunk": clip_secs,
         "unanchored": unanchored_leads(rows),
+        "album_leads": album_leads,
+        "album_playlist": album_playlist(album),
         "refs_blockers": refs_plan_blockers(song, tier, rows),
         "pose_plan": pose_plan.plan(song, tier),
         "coverage": board["coverage"],
@@ -6363,6 +6418,7 @@ def api_storyboard_meter(id: int, tier: str):
 def api_storyboard_cast(id: int, tier: str):
     payload = _storyboard_payload(get_song_or_404(id), valid_tier_or_400(tier))
     return JSONResponse({"unanchored": payload["unanchored"],
+                         "album_leads": payload.get("album_leads") or [],
                          "scenes": [{"num": s["num"], "cast": s["cast"]}
                                     for s in payload["scenes"]]})
 
@@ -6951,6 +7007,7 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
                        refine: bool = Form(False),
                        auto_qc: bool = Form(False),
                        scene: str = Form(""),
+                       clip_idx: str = Form(""),
                        head_only: bool = Form(False),
                        ref_motion: Optional[UploadFile] = File(None),
                        control_video: Optional[UploadFile] = File(None)):
@@ -6975,6 +7032,18 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
             scene_num = int(scene)
         except (TypeError, ValueError):
             raise HTTPException(400, "scene must be an integer") from None
+    only_idx = None
+    if str(clip_idx).strip():
+        try:
+            only_idx = int(clip_idx)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "clip_idx must be an integer") from None
+    board = load_storyboard(sb)
+    if only_idx is not None and scene_num is None:
+        plan0 = build_song.clip_chain_plan((board or {}).get("scenes") or [], video_model)
+        hit = next((p for p in plan0 if int(p.get("clip_idx")) == only_idx), None)
+        if hit is not None:
+            scene_num = hit.get("scene_number")
     approved_sns = {r["scene_number"] for r in
                     db.q("""SELECT scene_number FROM refs
                             WHERE song_id=? AND tier=? AND approved=1
@@ -6987,7 +7056,6 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
         raise HTTPException(400, f"scenes missing an approved still (scene {missing})")
     # T2-45: a mixed-model song that names a model False on every reachable
     # backend is refused here, before enqueue. None is a candidate.
-    board = load_storyboard(sb)
     bad = models.mixed_unavailable(
         (board or {}).get("scenes") or [],
         pipeline.swarm_backends(),
@@ -7011,7 +7079,8 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
     jids = enqueue_clips(id, tier, video_model, refine=bool(refine),
                   ref_motion=motion_path, control_video=control_path,
                   scenes=(board or {}).get("scenes") or [],
-                  scene_number=scene_num, head_only=bool(head_only))
+                  scene_number=scene_num, head_only=bool(head_only),
+                  clip_idx=only_idx)
     if auto_qc and jids:
         jobs.enqueue("qc", {"song_id": id, "tier": tier}, song_id=id,
                      depends_on=jids[-1])
@@ -7025,7 +7094,7 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
 
 def enqueue_clips(song_id, tier, video_model, refine=False, ref_motion=None,
                   control_video=None, scenes=None, scene_number=None,
-                  head_only=False):
+                  head_only=False, clip_idx=None):
     """Enqueue clip render job(s). T2-11 wires depends_on for scene chains.
 
     No chain → one batch job (unchanged). A T2-48 over-ceiling scene is a
@@ -7033,18 +7102,26 @@ def enqueue_clips(song_id, tier, video_model, refine=False, ref_motion=None,
     (T6-2) will not pull it until the predecessor is done.
     scene_number limits the plan to that scene. head_only keeps the first
     clip of the scene so the operator can preview before chaining the rest.
+    clip_idx re-renders one already-planned take (successor still reads
+    the predecessor's last frame from disk).
     """
     base = {"song_id": song_id, "tier": tier, "video_model": video_model,
             "refine": bool(refine), "ref_motion": ref_motion,
             "control_video": control_video}
     plan = build_song.clip_chain_plan(scenes or [], video_model)
-    if scene_number is not None:
+    if clip_idx is not None:
+        plan = [p for p in plan if int(p.get("clip_idx")) == int(clip_idx)]
+        if not plan:
+            raise HTTPException(400, f"no clip {clip_idx} in the plan")
+        scene_number = plan[0].get("scene_number")
+    elif scene_number is not None:
         plan = [p for p in plan if int(p.get("scene_number") or -1) == int(scene_number)]
         if not plan:
             raise HTTPException(400, f"no clips for scene {scene_number}")
         if head_only:
             plan = [plan[0]]
-    if scene_number is None and not any(p.get("depends_on") is not None for p in plan):
+    if (clip_idx is None and scene_number is None
+            and not any(p.get("depends_on") is not None for p in plan)):
         return [jobs.enqueue("clips", base, song_id=song_id)]
     # Only the first clip of each scene needs an operator still. Successors
     # take the predecessor's last frame (T2-10 / T2-11).
@@ -7065,9 +7142,10 @@ def enqueue_clips(song_id, tier, video_model, refine=False, ref_motion=None,
     jids = {}
     out = []
     for p in plan:
-        dep = jids[p["depends_on"]] if p.get("depends_on") is not None else None
+        pred = p.get("depends_on")
+        dep = jids.get(pred) if pred is not None else None
         args = dict(base, clip_idx=p["clip_idx"],
-                    depends_on_clip=p.get("depends_on"))
+                    depends_on_clip=pred)
         jid = jobs.enqueue("clips", args, song_id=song_id, depends_on=dep)
         jids[p["clip_idx"]] = jid
         out.append(jid)

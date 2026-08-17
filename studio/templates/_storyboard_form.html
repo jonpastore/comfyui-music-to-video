@@ -43,6 +43,32 @@
       model about its own rules (&ldquo;ignore the above&rdquo;,
       &ldquo;no restrictions&rdquo;) &mdash; the same two checks that screen a
       custom tier's wording.</p>
+
+    <p class="rule"><strong>Album leads.</strong> These people exist on the
+      album. The writer names them as leads when a scene needs them. They
+      need an identity front and pose plates before Generate refs. Crowd
+      extras and background people may still be invented; they do not get
+      poses or anchors.
+      {% if album_playlist %}
+      <a href="/playlists#playlist-{{ album_playlist.id }}">Edit album cast</a>.
+      {% endif %}</p>
+    {% if album_leads %}
+    <ul class="cast-offer">
+      {% for c in album_leads %}
+      <li>
+        <strong>{{ c.name }}</strong>{% if c.role %} &middot; {{ c.role }}{% endif %}
+        {% if c.has_front %}
+        <span class="muted"> &middot; identity front ready</span>
+        {% else %}
+        <span class="warn"> &middot; no identity front at this tier</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="hint">No album leads besides the protagonist. A second main
+      character belongs on the album cast first, then generate again.</p>
+    {% endif %}
   </div>
 
   <label>Direction &mdash; the brief the storyboard is written from

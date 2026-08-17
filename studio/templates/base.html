@@ -47,9 +47,36 @@
   <dialog class="video-modal" id="clip-preview">
     <div class="modal-bar">
       <strong id="clip-preview-label">Clip</strong>
+      <span id="clip-preview-pos" class="muted"></span>
+      <span class="lightbox-spacer"></span>
       {{ modal_close() }}
     </div>
-    <video controls preload="metadata"></video>
+    <div class="clip-stage">
+      <button type="button" class="clip-nav clip-nav-prev" id="clip-prev"
+              aria-label="Previous clip">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M10.2 2.2 4.4 8l5.8 5.8 1.4-1.4L7.2 8l4.4-4.4z"/></svg>
+      </button>
+      <video controls preload="metadata"></video>
+      <button type="button" class="clip-nav clip-nav-next" id="clip-next"
+              aria-label="Next clip">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M5.8 2.2 4.4 3.6 8.8 8l-4.4 4.4 1.4 1.4L11.6 8z"/></svg>
+      </button>
+    </div>
+    <div class="clip-actions" id="clip-actions">
+      <p class="hint">If the face or body is wrong, fix the still first. If motion
+        or wardrobe is wrong, edit the prompt and re-render this clip.</p>
+      <div class="field-row">
+        <button type="button" id="clip-rerender">Re-render clip</button>
+        <label class="check"><input type="checkbox" id="clip-refine" value="true"> Refine</label>
+        <button type="button" class="secondary" id="clip-edit-motion">Edit motion prompt</button>
+        <button type="button" class="secondary" id="clip-open-still">The still is wrong</button>
+      </div>
+      <label id="clip-motion-wrap" hidden>Motion prompt
+        <textarea id="clip-motion" rows="3"></textarea>
+        <button type="button" id="clip-save-motion">Save prompt</button>
+      </label>
+      <span class="save-note" id="clip-preview-note" aria-live="polite"></span>
+    </div>
   </dialog>
   <div id="page-loading" hidden>
     <span class="spinner" aria-hidden="true"></span>

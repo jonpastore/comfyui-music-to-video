@@ -515,12 +515,26 @@ def payload(song_id, tier):
                          if not n["anchored"] and n.get("role") == "lead"})
     # T6-A2: HTML /songs/{id}/storyboard/{tier} and GET /api/... report these
     # from this function. scene_count is not len(scenes) at the template.
+    album = song["album"] or ""
+    album_leads = []
+    for c in album_cast(album):
+        front = chosen_anchor("album", album, tier, "front", c["id"])
+        album_leads.append({
+            "id": c["id"],
+            "name": c["name"],
+            "role": c["role"] or "",
+            "has_front": bool(front and front["path"]),
+            "used": any(n["name"].lower() == c["name"].lower()
+                        for r in rows for n in r["cast"]
+                        if n.get("role") == "lead"),
+        })
     return {
         "song_id": song["id"],
         "tier": tier,
         "scenes": [_scene_json(r) for r in rows],
         "coverage": cov,
         "unanchored": unanchored,
+        "album_leads": album_leads,
         "scene_seconds": sb_secs,
         "nclips": nclips,
         "anchors": anchors_by_character(song["album"] or "", tier),

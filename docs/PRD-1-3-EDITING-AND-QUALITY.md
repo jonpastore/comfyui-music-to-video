@@ -422,6 +422,12 @@ order and take the dependencies from here.
    **`T2-30` built**: unanchored warning lists only leads
    (`test_t2_30_unanchored_leads_only.py`); extras/background without
    an anchor are silent.
+   **`T2-49` built**: storyboard generate is offered every album
+   character (Tiger, Panther, …) even when that character has no chosen
+   front yet. Those names are the only leads besides the protagonist.
+   Extras and background may be invented and do not need poses or
+   anchors (`test_t2_49_album_leads.py`). The generate form lists them
+   and whether this tier has an identity front.
    **Cast slots built**: named leads with chosen sheets occupy leftover
    ref slots (image3 when a pose plate holds image2); extras/background
    never take those slots even with a sheet

@@ -68,6 +68,17 @@
         action="/songs/{{ song.id }}/storyboard/{{ tier }}/versions/restore">
   </form>
 
+  {% if album_leads %}
+  <p class="hint">Album leads:
+    {% for c in album_leads %}
+    <span class="tag {% if not c.has_front and c.used %}warn-tag{% endif %}">
+      {{ c.name }}{% if not c.used %} &middot; not named{% elif not c.has_front %} &middot; no front{% endif %}
+    </span>
+    {% endfor %}
+    Extras and background may be named on a scene without a pose or anchor.
+  </p>
+  {% endif %}
+
   <section class="sb-meter" id="storyboard-meter-{{ tier }}"
            data-scene-time="{{ scene_time }}"
            data-song-length="{{ song_length }}"
@@ -91,7 +102,7 @@
   </section>
 
   {% if all_videos %}
-  <details class="sb-all-clips" open>
+  <details class="sb-all-clips">
     <summary>{{ all_videos | length }} rendered clip{{ "" if all_videos|length == 1 else "s" }}
       · one per scene unless a scene is longer than one render</summary>
     <div class="scene-clips">
@@ -99,8 +110,10 @@
       <figure class="clip-frame">
         <button type="button" class="js-clip-preview thumb-open"
                 data-video="{{ media_url(v.path) }}"
-                data-label="{{ tier | tiername }} clip {{ v.clip_idx }}">
-          <video src="{{ media_url(v.path) }}" preload="metadata" muted playsinline></video>
+                data-label="{{ tier | tiername }} clip {{ v.clip_idx }}"
+                data-tier="{{ tier }}"
+                data-clip-idx="{{ v.clip_idx }}">
+          <video class="lazy-src" data-src="{{ media_url(v.path) }}" preload="none" muted playsinline></video>
         </button>
         <figcaption>#{{ v.clip_idx }}</figcaption>
       </figure>

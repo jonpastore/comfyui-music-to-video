@@ -521,6 +521,12 @@ Auto QC enqueues `qc` after the clip. WAN S2V is a later hop, not this
 button. There is no separate Approve refs page.
 Stills and clips show `.qc-tag`: confidence, identity, and the
 assessment sentence. Wardrobe may change; physical identity must not.
+Scene plates, stills and clip thumbs use `data-src` + `.lazy-src`;
+the file is requested when the thumb approaches the viewport. Clip
+thumbs are `preload=none`. The all-clips strip starts closed.
+`#clip-preview` has prev/next, Close on the right, and repair actions:
+re-render this clip (optional refine), edit the motion prompt, or open
+the approved still. Arrow keys step clips.
 **Modals:** every `<dialog>` dismisses with `modal_close()` — ghost X,
 `.modal-close`, never an accent circle and never a mix of Close / ×
 (`test_modal_close_is_one_icon`). Confirm actions stay Cancel / Delete.
@@ -578,9 +584,14 @@ song's `clip_seconds`, not a constant (`T2-24`). The live `meter`
 component is not this.
 Every named scene figure carries `lead` / `extra` / `background`
 (`T2-29`). `GET .../cast` returns `role` on each figure; the scene
-row shows it. The unanchored-lead warning (`T2-30`) is **built**:
-the page banner and scene-row `warn-tag` / "no anchor" fire only for
-leads without a chosen anchor; extras and background are silent.
+row shows it as **figures**, not only main actors. The unanchored-lead
+warning (`T2-30`) is **built**: the page banner and scene-row
+`warn-tag` / "no anchor" fire only for leads without a chosen anchor;
+extras and background are silent. Album leads are listed on the
+generate form and the storyboard (`T2-49`) even when they have no
+identity front yet — Generate refs still waits for that front
+(`T2-28`). A second main character is an album-cast row, not a
+stranger the writer invented.
 `T2-28` is **built** on the storyboard page: Generate refs is marked
 via `button.blocked` and the plan panel names the unanchored lead;
 `POST /songs/{id}/refs` 400s before a refs job is written

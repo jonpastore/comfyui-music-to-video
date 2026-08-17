@@ -132,6 +132,36 @@ def normalize_scene_figures(characters):
     return out
 
 
+def classify_offered_figures(characters, lead_names):
+    """Album members stay leads. Anyone else marked lead becomes extra.
+
+    T2-49: only album-defined characters (and the protagonist, who is not
+    listed here) need consistency. A one-off the writer invented as a lead
+    must not block Generate refs or demand a pose plate.
+    """
+    leads = {str(n).strip().lower() for n in (lead_names or []) if str(n).strip()}
+    out = []
+    for fig in normalize_scene_figures(characters):
+        key = fig["name"].lower()
+        if key in leads:
+            fig["role"] = "lead"
+        elif fig["role"] == "lead":
+            fig["role"] = "extra"
+        out.append(fig)
+    return out
+
+
+def apply_offered_cast(sb, lead_names):
+    """Stamp album leads and coerce invented leads on a generated board."""
+    if not isinstance(sb, dict):
+        return sb
+    names = [str(n).strip() for n in (lead_names or []) if str(n).strip()]
+    sb["album_leads"] = names
+    for s in sb.get("scenes") or []:
+        s["characters"] = classify_offered_figures(s.get("characters"), names)
+    return sb
+
+
 def require_figure_roles(sb):
     """T2-29: every named figure carries lead / extra / background."""
     if not isinstance(sb, dict):
@@ -468,25 +498,35 @@ def _exemplar_prompt(exemplar, exemplar_md):
 def _cast_block(cast):
     """Tell the model who can be named and to classify each as lead/extra/background.
 
-    Only leads consume a Qwen-Image-Edit reference slot. Naming the crowd as
-    leads would burn both spare slots on people whose appearance nobody needs
-    to keep consistent, and starve the scene that has a genuine second lead.
+    Album members are the only people besides the protagonist who may be
+    leads. They need identity anchors and pose plates so they stay consistent.
+    Extras and background may always be invented; they do not get either.
+    Naming the crowd as leads would burn both spare Qwen slots on people
+    whose look nobody needs to keep, and starve a genuine second lead.
     """
+    extras = (
+        "You MAY name extras and background people (a bartender, a crowd, a "
+        "one-off dancer) in a scene's \"characters\" list with role extra or "
+        "background. They do not get anchors or pose plates.\n"
+        "Give every scene a \"characters\" key: a list of {\"name\", \"role\"} "
+        "objects for everyone besides the protagonist who appears. role is "
+        "lead, extra, or background. An empty list is correct when she is alone.\n\n")
     if not cast:
-        return ("There is ONE recurring character, the protagonist, described above. "
-                "Give every scene a \"characters\" key of []: no other character is "
-                "anchored, so none may be named.\n\n")
+        return (
+            "There is ONE consistency character, the protagonist, described above. "
+            "Do not invent a second lead. A lead needs anchors and pose plates; "
+            "only the protagonist is one unless the album lists others.\n"
+            + extras)
     lines = "\n".join(f"- {name}: {desc}" for name, desc in cast)
     return (
-        "CAST. Besides the protagonist, these named characters exist for this "
-        f"release:\n{lines}\n"
-        "Give every scene a \"characters\" key: a list of {\"name\", \"role\"} "
-        "objects for everyone named in that scene. Use the names EXACTLY as written. "
-        "role is one of lead, extra, background. Leads are main actors who need an "
-        "anchor. Extras and background may be named but do not need one. A scene "
-        "can carry at most two leads besides the protagonist.\n"
-        "An empty list is correct and common -- most scenes are the protagonist "
-        "alone.\n\n")
+        "CAST. Besides the protagonist, these named characters exist on this "
+        "album and are LEADS when they appear -- they require identity anchors "
+        f"and pose plates so they stay consistent:\n{lines}\n"
+        "Use those names EXACTLY when a scene needs them. Do not invent a new "
+        "lead. If the lyrics or story call for a second person and they match "
+        "one of these, name that lead. A scene can carry at most two leads "
+        "besides the protagonist.\n"
+        + extras)
 
 
 def _arc_string(arc_ctx):
@@ -1081,6 +1121,9 @@ def generate_storyboard(lyrics, tier, guardrail, style_note, song, model=None,
                           character_reference=obj.get("character_reference"),
                           world_reference=obj.get("world_reference"),
                           arc_ctx=arc_ctx)
+            # T2-49: album members stay leads. A one-off the writer marked
+            # lead becomes extra so it cannot block refs or demand a plate.
+            apply_offered_cast(sb, [name for name, _desc in (cast or ())])
             # T2-19: the edited prompt is part of the board, not only the
             # request. Two different directions must yield two different
             # storyboards even against the same recorded model response.

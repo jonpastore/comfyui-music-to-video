@@ -30,7 +30,7 @@
 
   {% if r.cast %}
   <p class="cast-chips">
-    <span class="muted">main actors:</span>
+    <span class="muted">figures:</span>
     {% for c in r.cast %}
     {# T2-30: only leads need anchors; extras/background without one are fine. #}
     {% set needs_anchor = c.role == 'lead' and not c.anchored %}
@@ -77,7 +77,7 @@
     <button type="button" class="js-ref-preview thumb-open"
             data-full="{{ media_url(s.path) }}"
             data-label="scene {{ r.num }} pose plate">
-      <img class="anchor-thumb" src="{{ media_url(s.path) }}" alt="" loading="lazy">
+      <img class="anchor-thumb lazy-src" data-src="{{ media_url(s.path) }}" alt="" loading="lazy" decoding="async">
     </button>
     {% else %}
     <span class="anchor-thumb pose-thumb-empty" aria-hidden="true"></span>
@@ -153,7 +153,7 @@
             <button type="button" class="js-ref-preview thumb-open"
                     data-full="{{ media_url(ns.plate.path) }}"
                     data-label="scene {{ r.num }} pose plate">
-              <img src="{{ media_url(ns.plate.path) }}" alt="scene {{ r.num }} pose plate" loading="lazy">
+              <img class="lazy-src" data-src="{{ media_url(ns.plate.path) }}" alt="scene {{ r.num }} pose plate" loading="lazy" decoding="async">
             </button>
             <figcaption>plate{% if ns.plate.label %} · {{ ns.plate.label }}{% endif %}</figcaption>
           </figure>
@@ -172,7 +172,7 @@
               <button type="button" class="js-ref-preview thumb-open"
                       data-full="{{ media_url(c.path) }}"
                       data-label="scene {{ r.num }} still · seed {{ c.seed if c.seed is not none else '?' }}">
-                <img src="{{ media_url(c.path) }}" alt="scene {{ r.num }} still" loading="lazy">
+                <img class="lazy-src" data-src="{{ media_url(c.path) }}" alt="scene {{ r.num }} still" loading="lazy" decoding="async">
               </button>
               <figcaption>
                 still{% if c.seed is not none %} · {{ c.seed }}{% endif %}
@@ -244,6 +244,8 @@
         </td>
         <td class="preview-clips">
           {% if r.videos %}
+          {% set stills = (r.refs[0].candidates if r.refs else []) %}
+          {% set approved = (stills | selectattr('approved') | list) %}
           <div class="scene-clips">
             {% if r.videos | length > 1 %}
             <button type="button" class="js-clip-preview secondary"
@@ -254,8 +256,13 @@
             <figure class="clip-frame">
               <button type="button" class="js-clip-preview thumb-open"
                       data-video="{{ media_url(v.path) }}"
-                      data-label="scene {{ r.num }} clip {{ loop.index }}{% if r.videos|length > 1 %} / {{ r.videos|length }}{% endif %}">
-                <video src="{{ media_url(v.path) }}" preload="metadata" muted playsinline></video>
+                      data-label="scene {{ r.num }} clip {{ loop.index }}{% if r.videos|length > 1 %} / {{ r.videos|length }}{% endif %}"
+                      data-tier="{{ tier }}"
+                      data-scene="{{ r.num }}"
+                      data-clip-idx="{{ v.clip_idx }}"
+                      data-motion="{{ r.scene.video_motion_prompt or '' }}"
+                      {% if approved %}data-still="{{ media_url(approved[-1].path) }}"{% endif %}>
+                <video class="lazy-src" data-src="{{ media_url(v.path) }}" preload="none" muted playsinline></video>
               </button>
               <figcaption>
                 clip {{ loop.index }}{% if r.videos|length > 1 %} / {{ r.videos|length }}{% endif %}
