@@ -39,16 +39,6 @@
   {% endif %}
 </section>
 
-{% if active_job %}
-<div id="job-status" class="job-status">job #{{ active_job.id }} ({{ active_job.kind }}) [{{ active_job.status }}]: {{ active_job.progress or "queued" }}</div>
-<script>watchJob({{ active_job.id }}, "job-status");</script>
-{% if active_job.status in ("queued", "running") %}
-<form method="post" action="/jobs/{{ active_job.id }}/cancel">
-  <button type="submit" class="secondary">Cancel</button>
-</form>
-{% endif %}
-{% endif %}
-
 <div class="row-2col">
   <section class="card">
     <h2>Lyrics</h2>

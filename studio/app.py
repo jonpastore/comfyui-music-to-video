@@ -9395,16 +9395,15 @@ QUEUE_REFRESH_SECS = 5
 
 
 def queue_ctx():
-    """The work in flight, for the panel any page can include.
+    """The work in flight, for the sticky chip and the jobs modal.
 
     Deliberately GLOBAL. There is one serialized worker and one GPU, so a set
     render really does wait behind an anchor sweep started from another tab --
     a queue filtered to "this page's" jobs would show an empty list while the
-    thing actually blocking you ran invisibly. That was the state of every page
-    except /jobs.
+    thing actually blocking you ran invisibly.
 
     Polling stops when nothing is moving. A page that polls forever is a page
-    that never lets the machine idle, and the panel says which state it is in
+    that never lets the machine idle, and the chip says which state it is in
     rather than looking identical either way.
     """
     now = time.time()
@@ -9425,8 +9424,10 @@ def queue_ctx():
     waiting = [entry(j) for j in rows if j["status"] == "queued"]
     recent = [entry(j) for j in rows if j["status"] not in ("running", "cancelling", "queued")]
     recent.reverse()                       # newest of the finished ones first
+    rows_out = active + waiting + recent
     return {"queue_active": active, "queue_waiting": waiting, "queue_recent": recent,
-            "queue_rows": active + waiting + recent,
+            "queue_rows": rows_out,
+            "queue_latest": rows_out[0] if rows_out else None,
             "queue_n_running": len(active),
             "queue_n_waiting": len(waiting),
             "queue_n_recent": len(recent),
@@ -9461,20 +9462,15 @@ def queue_payload(ctx=None):
 
 
 @app.get("/queue", response_class=HTMLResponse)
-def queue_panel(request: Request):
-    """The queue panel, as the same fragment every page embeds.
-
-    One route and one template, included wherever work is started, rather than
-    a mini job list per page -- five copies of this markup would be five copies
-    to keep in step with what a job row can say.
-
-    Accept: application/json returns the same numbers the fragment prints
-    (T6-A2). One ctx, both answers.
+def queue_panel(request: Request, chip: int = 0):
+    """Queue fragment. chip=1 is the sticky topbar summary; default is the
+    modal / T6-A2 list. JSON is the same numbers either way.
     """
     ctx = queue_ctx()
     if wants_json(request):
         return JSONResponse(queue_payload(ctx))
-    return templates.TemplateResponse(request, "_queue.html", ctx)
+    tmpl = "_job_chip.html" if chip else "_queue.html"
+    return templates.TemplateResponse(request, tmpl, ctx)
 
 
 @app.post("/jobs/{id}/retry")

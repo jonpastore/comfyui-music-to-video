@@ -110,11 +110,10 @@ Ranked by impact.
    lines.** In an application whose primary act is stepping through images and
    judging them — with a keyboard-navigated dialog already built — this is the
    accessibility basic that is not optional and not a polish item.
-3. **The queue is bolted to the top of every page.** `base.html` htmx-loads
-   `/queue` on load and it then polls itself, on nearly every page; `/jobs` has
-   to switch it off with an empty block because two pollers on one page is one
-   too many. Presence-on-every-page is right; a block of page content that
-   pushes the work down is not (§5.5).
+3. **The queue used to be a slab at the top of every page.** Fixed: sticky
+   `#job-chip` in `.topbar` shows the latest job and status; click opens
+   `#jobs-modal` with the list and icon actions. `/queue` is still the
+   fragment (chip or list). Polling backs off when idle.
 4. **The layout is a 1200px text document, and the content is media.** `main`
    is `max-width: 1200px` with 1.5rem padding, so a contact sheet, an anchor
    grid and a set timeline are all poured into a column sized for prose.
@@ -611,16 +610,15 @@ frame came from the consultation and it is the most useful thing it returned:
 
 | level | question it answers | today |
 |---|---|---|
-| shell | is anything happening at all? | the `#queue-panel` slab, on nearly every page |
+| shell | is anything happening at all? | sticky `#job-chip` in `.topbar`; click opens `#jobs-modal` |
 | page | what is happening **to this song / anchor / set**? | nothing |
 | action | what will *this button* start, where, and at what cost? | `plan-panel`, on one form |
 
-**Shell.** The queue becomes a strip in the topbar, not a panel in `main`. One
-line, always the same place: `3 running · 12 queued · 1 failed · cerberus`, the
-whole strip a link to `/jobs`, expanding to the current panel's content so
-nothing is lost. `/jobs` stops needing its empty-block exception — one poller
-per page becomes structural instead of a per-page opt-out. **Polling backs off
-when nothing is queued or running**: an idle studio should not be talking to
+**Shell.** `#job-chip` sits in the sticky `.topbar`, not a panel in `main`.
+It shows the latest job (kind, id, status) plus running/waiting counts.
+Click opens `#jobs-modal` with the `/queue` list and icon actions (log /
+cancel / retry). `/jobs` keeps the full table. **Polling backs off when
+nothing is queued or running**: an idle studio should not be talking to
 itself.
 
 **Page.** Every page that can start work carries a small block for *its own*

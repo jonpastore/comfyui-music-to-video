@@ -5666,21 +5666,26 @@ def test_every_page_shows_the_queue_and_stops_polling_when_it_drains(patch_stub)
     _jobs_panel.html, the only self-refreshing component in the app, was
     included by exactly one page.
 
-    The panel is GLOBAL on purpose. One serialized worker and one GPU means a
+    The chip is GLOBAL on purpose. One serialized worker and one GPU means a
     set render really does wait behind an anchor sweep started in another tab;
     a queue filtered to this page's own jobs would show an empty list while the
     thing actually blocking you ran invisibly.
     """
+    css = open(os.path.join(os.path.dirname(appmod.__file__), "static", "style.css")).read()
+    assert re.search(r"\.topbar\s*\{[^}]*position:\s*sticky", css), \
+        ".topbar is not a sticky header"
     patch_stub("pipeline", gen_anchor=lambda *a, **k: [])
     with TestClient(appmod.app) as client:
-        # the placeholder is on every page, and fetches itself
-        for path in ("/", "/anchors", "/playlists", "/sets", "/tiers", "/models", "/config"):
+        # the chip is on every page, including /jobs. The list is not bolted
+        # into main -- it loads into #jobs-modal when the chip is clicked.
+        for path in ("/", "/anchors", "/playlists", "/sets", "/tiers",
+                     "/models", "/config", "/jobs"):
             page = client.get(path).text
-            assert 'id="queue-panel"' in page and 'hx-get="/queue"' in page, \
-                f"{path} cannot show what it queued"
-        # ...except /jobs, which IS the queue and has its own poll. Two pollers
-        # on one page is one poller too many.
-        assert 'hx-get="/queue"' not in client.get("/jobs").text
+            assert 'id="job-chip"' in page and "/queue?chip=1" in page, \
+                f"{path} has no sticky job chip"
+            assert 'id="jobs-modal"' in page, f"{path} has no jobs modal"
+            assert 'id="queue-panel"' not in page, \
+                f"{path} still bolts the queue list into the page"
 
         # Polls if and only if there is work. Asserted as an INVARIANT rather
         # than by draining the queue first: it is global by design, other tests
@@ -5707,6 +5712,7 @@ def test_every_page_shows_the_queue_and_stops_polling_when_it_drains(patch_stub)
         jid = db.one("SELECT id FROM jobs WHERE kind='anchor' ORDER BY id DESC")["id"]
         try:
             busy = client.get("/queue").text
+            chip = client.get("/queue?chip=1").text
         finally:
             hold.set()
         assert "every 5s" in busy, "a busy queue is not refreshing"
@@ -5715,6 +5721,10 @@ def test_every_page_shows_the_queue_and_stops_polling_when_it_drains(patch_stub)
         assert "Generate anchor candidates" in busy, "the queue does not say WHAT is running"
         # cancelable from wherever you are, without leaving the page
         assert f'action="/jobs/{jid}/cancel"' in busy
+        assert "icon-btn" in busy, "queue actions are not icons"
+        assert f"#{jid}" in chip and "running" in chip, "chip hides the live job"
+        assert "Generate anchor candidates" in chip
+        assert "data-open-jobs" in chip
         wait_job(jid)
 
         # a job that finished a moment ago is still visible -- a render that

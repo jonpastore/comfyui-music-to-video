@@ -1483,9 +1483,14 @@ function initAnchorBatch() {
 // "idle -- not polling / Nothing queued." for the whole render. Called wherever
 // work is enqueued asynchronously.
 function refreshQueue() {
-  var panel = document.getElementById("queue-panel");
-  if (!panel || typeof htmx === "undefined") return;
-  htmx.ajax("GET", "/queue", {target: "#queue-panel", swap: "outerHTML"});
+  if (typeof htmx === "undefined") return;
+  var chip = document.getElementById("job-chip");
+  if (chip) htmx.ajax("GET", "/queue?chip=1", {target: "#job-chip", swap: "outerHTML"});
+  var dlg = document.getElementById("jobs-modal");
+  var body = document.getElementById("jobs-modal-body");
+  if (dlg && dlg.open && body) {
+    htmx.ajax("GET", "/queue", {target: "#jobs-modal-body", swap: "innerHTML"});
+  }
 }
 
 // ---- Retry and Cancel, on every page that shows a job ----------------------
@@ -1600,19 +1605,10 @@ function initSongPage() {
       flash("Saved.");
       return refreshSong();
     }
-    var el = document.getElementById("job-status");
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "job-status";
-      el.className = "job-status";
-      page.insertBefore(el, page.firstChild.nextSibling);
-    }
-    el.hidden = false;
+    refreshQueue();
     flash("Queued job #" + jid + (d.kind ? " (" + d.kind + ")" : ""));
-    watchJob(jid, "job-status", function (job) {
-      var line = "job #" + job.id + " (" + (job.status || "") + "): " +
-        (job.error || job.progress || job.status);
-      flash(line, job.status === "failed");
+    watchJob(jid, "song-status", function (job) {
+      refreshQueue();
       if (job.status === "done") refreshSong();
     });
   }
@@ -2159,6 +2155,31 @@ document.addEventListener("DOMContentLoaded", function () {
 document.body.addEventListener("htmx:afterSwap", function () {
   document.querySelectorAll("textarea.counted").forEach(updateCount);
 });
+
+(function () {
+  var dlg = document.getElementById("jobs-modal");
+  if (!dlg) return;
+  function openJobs() {
+    var body = document.getElementById("jobs-modal-body");
+    if (body && typeof htmx !== "undefined") {
+      htmx.ajax("GET", "/queue", {target: "#jobs-modal-body", swap: "innerHTML"});
+    }
+    if (typeof dlg.showModal === "function") dlg.showModal();
+  }
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest("[data-open-jobs]")) return;
+    e.preventDefault();
+    if (dlg.open) dlg.close();
+    else openJobs();
+  });
+  dlg.addEventListener("click", function (e) {
+    var r = dlg.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right ||
+        e.clientY < r.top || e.clientY > r.bottom) {
+      dlg.close();
+    }
+  });
+})();
 
 (function () {
   var overlay = document.getElementById("page-loading");

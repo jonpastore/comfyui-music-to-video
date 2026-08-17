@@ -1,0 +1,20 @@
+{# Sticky topbar chip. Click opens #jobs-modal. Polls only while work moves. #}
+<button type="button" id="job-chip" class="job-chip
+        {% if queue_latest %}job-chip-{{ queue_latest.job.status }}{% else %}job-chip-idle{% endif %}"
+        data-open-jobs aria-haspopup="dialog" aria-controls="jobs-modal"
+        {% if queue_refresh_secs %}hx-get="/queue?chip=1"
+        hx-trigger="every {{ queue_refresh_secs }}s" hx-swap="outerHTML"{% endif %}>
+  {% if queue_latest %}
+  <span class="job-chip-kind">{{ queue_latest.desc }}</span>
+  <span class="job-chip-meta">#{{ queue_latest.job.id }} · {{ queue_latest.job.status }}</span>
+  {% if queue_latest.job.progress or queue_latest.job.error %}
+  <span class="job-chip-progress truncate">{{ queue_latest.job.error or queue_latest.job.progress }}</span>
+  {% endif %}
+  {% else %}
+  <span class="muted">idle</span>
+  {% endif %}
+  {% if queue_n_running or queue_n_waiting %}
+  <span class="muted job-chip-counts">{{ queue_n_running }} running &middot;
+    {{ queue_n_waiting }} waiting</span>
+  {% endif %}
+</button>

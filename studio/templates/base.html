@@ -20,23 +20,28 @@
       <a href="{{ link.href }}">{{ link.label }}</a>
       {% endfor %}
     </nav>
+    <button type="button" id="job-chip" class="job-chip" data-open-jobs
+            aria-haspopup="dialog" aria-controls="jobs-modal"
+            hx-get="/queue?chip=1" hx-trigger="load" hx-swap="outerHTML">
+      <span class="muted">jobs</span>
+    </button>
   </header>
+  <dialog class="jobs-modal" id="jobs-modal">
+    <div class="modal-bar">
+      <strong>Jobs</strong>
+      <span>
+        <a href="/jobs">all jobs</a>
+        <button type="button" class="secondary"
+                onclick="this.closest('dialog').close()">Close</button>
+      </span>
+    </div>
+    <div id="jobs-modal-body"></div>
+  </dialog>
   <div id="page-loading" hidden>
     <span class="spinner" aria-hidden="true"></span>
     <span id="page-loading-label">Loading&hellip;</span>
   </div>
   <main>
-    {# The queue, on every page that can start work -- which is nearly all of
-       them. Loaded by htmx rather than rendered inline so no route has to add
-       queue_ctx() to its context: a placeholder that fetches itself on load and
-       is then replaced by a fragment that polls itself.
-
-       /jobs turns it off with `{% block queue %}{% endblock %}`; its own panel
-       is the same information in full, and two pollers on one page is one
-       poller too many. #}
-    {% block queue %}
-    <div id="queue-panel" hx-get="/queue" hx-trigger="load" hx-swap="outerHTML"></div>
-    {% endblock %}
     {% block content %}{% endblock %}
   </main>
 </body>

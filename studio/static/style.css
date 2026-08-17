@@ -45,18 +45,84 @@ body {
 a { color: var(--accent); }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
   display: flex;
   align-items: center;
-  gap: 2rem;
-  padding: 0.75rem 1.5rem;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  padding: 0.6rem 1.5rem;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
 }
 
-.topbar .brand { font-weight: 700; text-decoration: none; color: var(--text); }
-.topbar nav { display: flex; gap: 1.25rem; }
+.topbar .brand { font-weight: 700; text-decoration: none; color: var(--text); flex: none; }
+.topbar nav { display: flex; gap: 1.1rem; flex-wrap: wrap; }
 .topbar nav a { text-decoration: none; color: var(--muted); }
 .topbar nav a:hover { color: var(--text); }
+
+.job-chip {
+  margin-left: auto;
+  max-width: min(36rem, 48vw);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2rem;
+  padding: 0.2rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+}
+.job-chip:hover { border-color: var(--accent); }
+.job-chip-running, .job-chip-cancelling { border-color: var(--accent); }
+.job-chip-failed { border-color: var(--danger, #c44); color: var(--danger, #c44); }
+.job-chip-kind { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-chip-meta { color: var(--muted); flex: none; }
+.job-chip-progress { color: var(--muted); max-width: 12rem; }
+.job-chip-counts { flex: none; }
+
+.jobs-modal {
+  width: min(52rem, 96vw);
+  max-height: 80vh;
+  overflow: auto;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 1rem;
+}
+.jobs-modal::backdrop { background: rgba(0, 0, 0, 0.7); }
+.jobs-modal .modal-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+.jobs-modal .queue-panel { border: 0; padding: 0; margin: 0; box-shadow: none; }
+.jobs-modal .queue-head a { display: none; }
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  vertical-align: middle;
+}
+.icon-btn:hover { color: var(--text); border-color: var(--border); }
+.queue-actions { white-space: nowrap; }
+.queue-actions .inline { display: inline; }
 
 main { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
 
@@ -483,6 +549,8 @@ dialog.sheet-modal .modal-bar {
 
 @media (max-width: 860px) {
   .row-2col, .image-note-row { grid-template-columns: 1fr; }
+  .job-chip { max-width: 100%; }
+  .job-chip-progress { display: none; }
 }
 
 /* Album profile field: label, wand, hint, then the box. */
@@ -1698,7 +1766,7 @@ button.linkish.danger, .linkish.danger {
   font-weight: inherit; text-decoration: underline; cursor: pointer;
 }
 
-/* ---- the queue panel, on every page that can start work ------------------ */
+/* ---- the queue list, loaded into #jobs-modal from the sticky chip -------- */
 .queue-panel {
   border: 1px solid var(--border);
   border-radius: 8px;
