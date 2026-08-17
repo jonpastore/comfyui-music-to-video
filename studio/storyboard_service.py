@@ -10,6 +10,7 @@ in a route handler.
 import json
 import math
 import os
+import sqlite3
 import time
 from urllib.parse import quote
 
@@ -267,6 +268,57 @@ def stamp_ref_scenes(song, tier, sb=None, scene_seconds=None):
         db.run("UPDATE refs SET scene_number=? WHERE id=?", sn, r["id"])
         n += 1
     return n
+
+
+def remap_legacy_refs(song, tier, video_model=None):
+    """Move clip_plan-era stills onto clip_chain_plan heads.
+
+    Old gens keyed refs by the 4.8s allocator (song 3: 0..49). Operator
+    stills are one slot per scene. Every old clip that clip_plan assigned
+    to a scene becomes a candidate on that scene's chain head.
+    Rows that already have scene_number are left alone (T2-13b).
+    """
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?",
+                 song["id"], tier)
+    if not row:
+        return {"moved": 0, "stamped": 0, "skipped": 0}
+    try:
+        sb = load(row)
+    except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError):
+        return {"moved": 0, "stamped": 0, "skipped": 0}
+    scenes = sb.get("scenes") or []
+    nclips = clip_count(song, row["scene_seconds"])
+    if not scenes or not nclips:
+        return {"moved": 0, "stamped": 0, "skipped": 0}
+    old_of = {}
+    for ci, scene, _shot in build_song.clip_plan(scenes, nclips=nclips):
+        old_of[ci] = scene.get("scene_number")
+    heads = build_song.scene_heads(
+        scenes, video_model or models.default_cli("video"))
+    pending = db.q(
+        """SELECT id, clip_idx, seed FROM refs
+           WHERE song_id=? AND tier=? AND scene_number IS NULL""",
+        song["id"], tier)
+    moved = stamped = skipped = 0
+    for r in pending:
+        sn = old_of.get(r["clip_idx"])
+        if sn is None or sn not in heads:
+            skipped += 1
+            continue
+        head = heads[sn]
+        try:
+            db.run("UPDATE refs SET scene_number=?, clip_idx=? WHERE id=?",
+                   sn, head, r["id"])
+        except sqlite3.IntegrityError:
+            db.run("UPDATE refs SET scene_number=? WHERE id=?", sn, r["id"])
+            stamped += 1
+            continue
+        if head != r["clip_idx"]:
+            moved += 1
+        else:
+            stamped += 1
+    return {"moved": moved, "stamped": stamped, "skipped": skipped,
+            "heads": dict(heads), "n_old": len(old_of)}
 
 
 def scenes(song, sb, tier, anchored=(), scene_seconds=None):

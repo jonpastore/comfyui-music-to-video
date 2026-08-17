@@ -102,6 +102,7 @@ Service modules, same shape:
     build_song.apply_chain_guide   T2-10 last frame → LTXVAddGuide on successor
     enqueue_clips                  only scene-head stills required
     build_refs --heads             one still per scene
+    remap_legacy_refs              clip_plan 0..n → scene heads (live BAP)
     POST /songs/{id}/refs/{id}/delete
                                    one still candidate; file unlinked only
                                    when no sibling shares the path

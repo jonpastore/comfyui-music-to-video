@@ -70,6 +70,53 @@ def test_t2_13c_approve_context_does_not_range_over_scene_count():
     assert "storyboard_service.scenes" in src
 
 
+def test_remap_legacy_refs_moves_clip_plan_rows_onto_heads():
+    """Song-3 shape: 4.8s allocator stills become one candidate pile per scene.
+
+    Mutation: assign by clip_idx==head → old clip 3 (scene 2) lands on
+    scene 4. Mutation: skip the remap → 7000-seed rows stay invisible.
+    """
+    import storyboard_service
+    duration = 19.25
+    scenes = [{
+        "scene_number": n, "name": f"S{n}",
+        "image_prompt": f"scene {n}",
+    } for n in (1, 2)]
+    sid = db.upsert_song("t213c-remap", title="Remap", album="T", duration=duration)
+    song = db.one("SELECT * FROM songs WHERE id=?", sid)
+    _board(sid, song["slug"], scenes)
+    nclips = appmod.clip_count(song)
+    assert nclips == 4, nclips
+    plan = build_song.clip_plan(scenes, nclips=nclips)
+    old = {}
+    for ci, sc, _ in plan:
+        old.setdefault(sc["scene_number"], []).append(ci)
+    assert old[1] == [0, 1] and old[2] == [2, 3], old
+    heads = build_song.scene_heads(scenes, "ltx25")
+    assert heads == {1: 0, 2: 1}, heads
+    for i in range(4):
+        db.run("""INSERT INTO refs (song_id, tier, clip_idx, path, seed, approved, created)
+                  VALUES (?,?,?,?,?,1,?)""",
+               sid, "pg13", i, f"/tmp/remap_{i}.png", 7000 + i, time.time())
+    out = storyboard_service.remap_legacy_refs(song, "pg13")
+    assert out["moved"] + out["stamped"] == 4, out
+    assert out["skipped"] == 0, out
+    assert out["moved"] >= 2, out
+    again = storyboard_service.remap_legacy_refs(song, "pg13")
+    assert again["moved"] == 0 and again["stamped"] == 0, again
+    rows = db.q("SELECT clip_idx, scene_number, seed FROM refs WHERE song_id=? ORDER BY seed",
+                sid)
+    by_scene = {}
+    for r in rows:
+        by_scene.setdefault(r["scene_number"], []).append((r["clip_idx"], r["seed"]))
+    assert set(ci for ci, _ in by_scene[1]) == {0}, by_scene
+    assert {s for _, s in by_scene[1]} == {7000, 7001}, by_scene
+    assert set(ci for ci, _ in by_scene[2]) == {1}, by_scene
+    assert {s for _, s in by_scene[2]} == {7002, 7003}, by_scene
+    staged = appmod._approved_scene_ref_paths(song, "pg13")
+    assert {r["clip_idx"] for r in staged} == {0, 1}, staged
+
+
 def test_stamp_ref_scenes_skips_clip_plan_era_seeds():
     """Live 7000+ci rows must not be hung on a chain head.
 
