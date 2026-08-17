@@ -598,12 +598,16 @@ payload: `GET /playlists/{id}/sheets` when a character tab is shown,
 `img.lazy-src[data-src]` and `hydrateLazy` (IntersectionObserver).
 Opening a fold does not eager-load hidden tabs. **Sets:** there is one
 editor. `GET /sets` is that editor for the most recently updated set
-(same template as `GET /sets/{id}`). A selector at the top switches
-sets; Create mints one and lands on it; trash deletes the document and
-its assembled takes (songs stay). No shelf, no Open →, no Legacy
-renders. A video take plays as `<video>` in the Rendered list; audio as
-`<audio>`.
-Topbar navigation shows `#page-loading`
+(same template as `GET /sets/{id}`). `#set-page` is `hx-boost` so Save /
+Add / Render / selector do not reload the chrome. A selector at the top
+switches sets; Create mints one and lands on it; trash deletes the
+document and its assembled takes (songs stay). No shelf, no Open →, no
+Legacy renders. A video take plays as `<video>` in the Rendered list;
+audio as `<audio>`. Probe and waveform peaks are cached per file mtime
+so a second open is not twelve ffprobes. **Models:** each card has Use
+when / Not for. A T2I role lists local Qwen (empty refs) and Z-Image
+(peaches). Civitai search lives on this page; the key is on Config.
+Suno is documented as unwired. Topbar navigation shows `#page-loading`
 on click so a slow first byte is not a blank window
 (`test_playlists_page_is_summaries_until_the_card_loads`).
 The song page **Video model** select is `models.renderable("video")`

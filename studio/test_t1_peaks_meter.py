@@ -189,5 +189,5 @@ def test_join_drag_handler_still_targets_tl_join():
     assert "drawTlWaves" in js
     assert "data-peaks" in js
     assert "data-meter-url" in open(
-        os.path.join(os.path.dirname(__file__), "templates", "set_edit.html"),
+        os.path.join(os.path.dirname(__file__), "templates", "_set_editor.html"),
         encoding="utf-8").read()

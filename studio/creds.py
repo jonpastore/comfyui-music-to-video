@@ -38,6 +38,9 @@ PROVIDERS = {
     "openai": {"label": "OpenAI", "env": "OPENAI_API_KEY",
                "file": os.path.expanduser("~/.config/morpheus/openai.env"),
                "note": "second album-arc backend"},
+    "civitai": {"label": "Civitai", "env": "CIVITAI_API_KEY",
+                "file": os.path.expanduser("~/.config/meowp-studio/civitai.env"),
+                "note": "search and download LoRAs onto the ComfyUI box"},
     # A webhook URL is a BEARER secret: anyone holding it can post to the channel,
     # there is no second factor, and it cannot be scoped. So it goes through the
     # same door as the API keys rather than into a config file in the repo --
@@ -278,7 +281,6 @@ def demo():
         #    NON-secret setting reads with the same precedence from the same
         #    files -- that is how the model name travels beside the key
         global ENV_FILE
-        real_env_file = ENV_FILE
         test_env_file = os.path.join(tempfile.mkdtemp(), ".env")
         with open(test_env_file, "w") as f:
             f.write("OPENAI_API_KEY=sk-from-dotenv\nSTUDIO_OPENAI_MODEL=gpt-test-9\n")

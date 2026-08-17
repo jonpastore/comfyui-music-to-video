@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import glyph_delete %}
 {% block content %}
+<div id="set-page" hx-boost="true" hx-target="#set-page" hx-select="#set-page" hx-swap="outerHTML">
 <h1>Sets</h1>
 <p class="hint">A set is a document: songs in an order, each with its own trim, gain and
   transition. Rendering never destroys the last take. Video takes play below
@@ -8,7 +9,8 @@
 
 <div class="set-switch">
   <label>Set
-    <select onchange="location.href='/sets/'+this.value" aria-label="Choose a set">
+    <select aria-label="Choose a set"
+            onchange="if (window.htmx) htmx.ajax('GET','/sets/'+this.value,{target:'#set-page',select:'#set-page',swap:'outerHTML'}); else location.href='/sets/'+this.value">
       {% for s in all_sets %}
       <option value="{{ s.id }}" {% if s.id == set.id %}selected{% endif %}>{{ s.name }}</option>
       {% endfor %}
@@ -48,4 +50,5 @@
 </dialog>
 
 {% include "_set_editor.html" %}
+</div>
 {% endblock %}

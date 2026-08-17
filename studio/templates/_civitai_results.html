@@ -1,0 +1,28 @@
+{% if err %}
+<p class="warn">{{ err }}</p>
+{% elif not rows %}
+<p class="empty">No matches.</p>
+{% else %}
+<table class="list">
+  <thead><tr><th>LoRA</th><th>Base</th><th>File</th><th></th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td><strong>{{ r.name }}</strong>
+        {% if r.nsfw %}<span class="tag">nsfw</span>{% endif %}</td>
+      <td class="muted">{{ r.base_model }}</td>
+      <td class="muted">{{ r.file }} · {{ r.size_mb }} MB</td>
+      <td>
+        {% if r.version_id %}
+        <form method="post" action="/models/civitai/download"
+              hx-post="/models/civitai/download" hx-target="closest td" hx-swap="innerHTML">
+          <input type="hidden" name="version_id" value="{{ r.version_id }}">
+          <button type="submit">Download</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}

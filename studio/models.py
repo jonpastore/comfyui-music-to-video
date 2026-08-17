@@ -46,12 +46,13 @@ OBJECT_INFO_TIMEOUT = 10
 # What a model is chosen FOR. One role per decision point in the UI.
 ROLES = {
     "reference": "Reference stills -- one image per clip, from the anchor",
+    "t2i": "Text-to-image -- new pictures with no paid host",
     "video": "Clips -- the animated 4.8125s segments",
     "refine": "Optional second pass over a rendered clip",
     "artwork": "Album covers, generated from the album look",
     "storyboard": "Writing the shot list from the lyrics",
     "vision": "Reviewing rendered frames, and describing an anchor",
-    "audio": "Generative audio repair",
+    "audio": "Generative audio -- new music or a repair bridge",
     # NOT the same thing as "vision". A vision model LOOKS at a frame and says
     # something about it; an encoder turns a reference image into features
     # another model conditions on, and never produces words or pixels. They were
@@ -255,6 +256,8 @@ CATALOG = {
             "patchifies 2x2 and needs /16. The album's 896x1216 anchor becomes "
             "880x1192 -> latent 110x149, and 149 is odd: a hard crash in 0.4s, seven "
             "times running. Set it false and feed a /16-clean anchor."),
+        "when": "Cheap local t2i on peaches (2080 Ti). The only image model that card can run.",
+        "not_for": "Anchors or identity stills — unproven; Qwen Edit is the lock.",
         "notes": [
             "UNPROVEN FOR ANCHORS. Every anchor this project has rendered came from "
             "Qwen-Image-Edit 2511, which takes the uploaded samples as direct image "
@@ -273,6 +276,8 @@ CATALOG = {
         "loader": "UNETLoader",
         "default": True,
         "cli": "qwen",
+        "when": "Every anchor and every scene still. Identity lock.",
+        "not_for": "Plain text-to-image with no photo of her — use t2i / artwork.",
         "purpose": (
             "Turns the anchor into this scene's still. An EDIT model, not a text-to-image "
             "model: it takes up to three reference images and keeps the person in them, "
@@ -307,6 +312,8 @@ CATALOG = {
             "origin": "chosen",
             "kind": "provisional",
         },
+        "when": "Vocal passages after an approved still. Music drives the mouth and the beat.",
+        "not_for": "Instrumental-only shots (use i2v) or first-pass stills (use Qwen Edit).",
         "purpose": (
             "Animates an approved reference frame using THE AUDIO. Takes the scene's motion "
             "prompt, the reference image and a wav2vec2 encoding of that clip's 4.8125 "
@@ -339,6 +346,8 @@ CATALOG = {
             "origin": "chosen",
             "kind": "provisional",
         },
+        "when": "Instrumental / no-lip-sync shots from an approved still.",
+        "not_for": "Vocals — no audio input, so mouths will not track the lyric.",
         "purpose": (
             "Animates a still from the prompt alone. Two experts run in sequence: the high-"
             "noise model establishes motion and structure, the low-noise one refines detail "
@@ -382,6 +391,8 @@ CATALOG = {
             "method": "pipeline.sample_vram /system_stats during a refine submit",
             "resolution": "832x480",
         },
+        "when": "Default clip renderer. Longer scenes (up to ~15s cost wall). Audio-conditioned.",
+        "not_for": "Identity without naming the species in the prompt — char_lock must be filled.",
         "purpose": (
             "The current audio-conditioned path, and the same contract as 2.3: approved "
             "reference frame, scene prompt, and the clip's audio fused as a joint AV latent "
@@ -534,6 +545,48 @@ CATALOG = {
         "companions": {"wan_2.1_vae.safetensors": "VAELoader",
                        "umt5_xxl_fp8_e4m3fn_scaled.safetensors": "CLIPLoader"},
     },
+    "qwen_t2i": {
+        "role": "t2i",
+        "proven": "stable",
+        "weights_gib": 19.12,
+        "label": "Qwen-Image-Edit 2511 — no refs (local, free)",
+        "file": "qwen_image_edit_2511_fp8mixed.safetensors",
+        "loader": "UNETLoader",
+        "default": True,
+        "purpose": (
+            "Plain text-to-image on the box you already paid for. Same weights as "
+            "anchors and covers; leave every reference slot empty and it is t2i."),
+        "when": "New pictures without a host bill. Covers, extras, backgrounds.",
+        "not_for": "Keeping Meow P's face — attach her identity front and use the reference role.",
+        "notes": [
+            "Create album art on the playlist with neither Use the lead identity "
+            "front nor Modify the current cover ticked.",
+            "Do not pay a hosted t2i API for this. The fleet already has the file.",
+        ],
+        "companions": {
+            "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors": "LoraLoaderModelOnly",
+            "qwen_2.5_vl_7b_fp8_scaled.safetensors": "CLIPLoader",
+            "qwen_image_vae.safetensors": "VAELoader"},
+    },
+    "z_image_t2i": {
+        "role": "t2i",
+        "proven": "opportunistic",
+        "weights_gib": 6.7,
+        "label": "Z-Image Turbo — peaches 2080 Ti (local, free)",
+        "file": "z_image_turbo_fp8mix.safetensors",
+        "loader": "UNETLoader",
+        "purpose": (
+            "The only image model the 2080 Ti can run. Use it to keep peaches "
+            "busy on text-to-image while the 5090s do Qwen Edit and LTX."),
+        "when": "Background plates and extras on peaches. Warm ~8.6s at 1024x576.",
+        "not_for": "Identity sheets. No Omni checkpoint, so a face photo does not lock her.",
+        "notes": [
+            "Measured 2026-08-12 on peaches. Feed /16-clean sizes; 896x1216 crashes.",
+            "Unwired as a picker default — generate via a Z-Image workflow on Swarm, "
+            "or wait until artwork accepts cli=zimage.",
+        ],
+        "companions": {"ae.safetensors": "VAELoader"},
+    },
     "qwen_artwork": {
         "role": "artwork",
         "proven": "stable",   # same weights as the reference path, already rendering covers
@@ -543,6 +596,8 @@ CATALOG = {
         "loader": "UNETLoader",
         "default": True,
         "cli": "qwen",
+        "when": "Album covers. Also the free local t2i when you attach no reference.",
+        "not_for": "Paying Midjourney / Flux hosts — this is the same weights already on the box.",
         "purpose": (
             "Generates the album cover from the album look, on the same model that renders "
             "every reference frame. Given a chosen anchor it uses it as a reference, so the "
@@ -635,6 +690,8 @@ CATALOG = {
         "loader": "CheckpointLoaderSimple",
         "default": True,
         "cli": "ace_step",
+        "when": "Local new music or a generated bridge to splice. Free. On peaches as fp16.",
+        "not_for": "Suno-quality songs as a drop-in, or surgical mid-track edits (ffmpeg slices, this fills).",
         "purpose": (
             "Writes new music from a style tag list and optional lyrics. It is a "
             "GENERATOR, not an editor: it cannot cut a region out of an existing track, "

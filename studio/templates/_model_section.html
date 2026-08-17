@@ -28,6 +28,8 @@
     </header>
 
     <p>{{ m.purpose }}</p>
+    {% if m.when %}<p><strong>Use when.</strong> {{ m.when }}</p>{% endif %}
+    {% if m.not_for %}<p><strong>Not for.</strong> {{ m.not_for }}</p>{% endif %}
     <p class="meta"><code>{{ m.file }}</code> &middot; loaded by <code>{{ m.loader }}</code></p>
 
     {% if m.missing %}
@@ -42,10 +44,10 @@
     </ul>
     {% endif %}
 
-    {% if role == "video" and not m.cli %}
-    <p class="hint">Catalogued for evaluation only &mdash; not wired to the renderer, so it is
-      not offered as a render choice and cannot be made the default.</p>
-    {% elif defaults.get(role) != m.key and m.available is not false %}
+    {% if (role == "video" or role == "t2i") and not m.cli %}
+    <p class="hint">Catalogued so you can see it is on the box. Not a picker default
+      until a generate path names its <code>cli</code>.</p>
+    {% elif role != "t2i" and defaults.get(role) != m.key and m.available is not false %}
     <form method="post" action="/models/{{ role }}/default"
           hx-post="/models/{{ role }}/default" hx-target="#role-{{ role }}"
           hx-swap="outerHTML">

@@ -10,6 +10,33 @@
 
 <div id="fleet-panel" hx-get="/models/fleet" hx-trigger="load" hx-swap="outerHTML"></div>
 
+<section class="card">
+  <h2>Civitai LoRAs</h2>
+  <p class="hint">Search the public catalog and download a <code>.safetensors</code>
+    into <code>~/ComfyUI/models/loras</code> on this box. Applying a LoRA to
+    Qwen Edit is a later generate-form control; this step only lands the file.
+    {% if not civitai_set %}<strong>No API key</strong> — store one on
+    <a href="/config">Config</a> first.{% endif %}</p>
+  <form class="field-row" hx-get="/models/civitai" hx-target="#civitai-out"
+        hx-swap="innerHTML">
+    <label>Search
+      <input type="search" name="q" placeholder="qwen 2511 pose, fur, …"></label>
+    <label>Base model
+      <input type="text" name="base" placeholder="optional, e.g. Qwen"></label>
+    <button type="submit" {% if not civitai_set %}disabled{% endif %}>Search</button>
+  </form>
+  <div id="civitai-out"></div>
+</section>
+
+<section class="card">
+  <h2>Suno.com</h2>
+  <p>There is no official Suno generation API we can call without a brittle
+    unofficial client. <strong>Do not pay Suno for a first draft</strong> until
+    that exists. Local <strong>ACE-Step</strong> (below, Audio) already writes
+    new music from style tags and lyrics on peaches. Upload a finished Suno
+    mp3 to the Library the same as any other track.</p>
+</section>
+
 {% for role, role_label in roles.items() %}
 {% include "_model_section.html" %}
 {% endfor %}

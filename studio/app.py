@@ -48,6 +48,7 @@ import library_service  # TRD-6 T6-A2-library: library song_count — no FastAPI
 import media_service  # TRD-8 T8-16: song media bag — no FastAPI
 import nav_service  # UIUX §8 / T6-A2-nav: topbar links — no FastAPI
 import pose_plan  # scene pose → chosen sheet → refs image2
+import civitai  # Civitai LoRA search/download — registers download_lora handler
 import storyboard_versions
 import video_fx   # per-item video look effects -- same, pure/no deps
 
@@ -10315,7 +10316,9 @@ def models_page(request: Request):
     The point is that adding a model is a catalogue entry, not a code edit, and
     that nobody has to read build_song.py to find out what renders the clips.
     """
-    return templates.TemplateResponse(request, "models.html", models_ctx())
+    ctx = models_ctx()
+    ctx["civitai_set"] = bool(creds.get("civitai"))
+    return templates.TemplateResponse(request, "models.html", ctx)
 
 
 def role_section(request, role, saved=""):
@@ -10349,6 +10352,31 @@ def set_storyboard_default(request: Request, key: str = Form("")):
     if request.headers.get("HX-Request"):
         return role_section(request, "storyboard", saved=key or "highest available")
     return RedirectResponse("/models", status_code=303)
+
+
+@app.get("/models/civitai", response_class=HTMLResponse)
+def civitai_search_page(request: Request, q: str = "", base: str = ""):
+    err, rows = "", []
+    if not creds.get("civitai"):
+        err = "Store a Civitai API key on Config first."
+    else:
+        try:
+            rows = civitai.search(q, base_model=base or None)
+        except RuntimeError as e:
+            err = str(e)
+    return templates.TemplateResponse(request, "_civitai_results.html",
+                                      {"rows": rows, "err": err, "q": q, "base": base})
+
+
+@app.post("/models/civitai/download")
+def civitai_download(request: Request, version_id: int = Form(...)):
+    if not creds.get("civitai"):
+        raise HTTPException(400, "Store a Civitai API key on Config first")
+    jid = jobs.enqueue("download_lora", {"version_id": version_id})
+    if wants_hx(request):
+        return HTMLResponse(
+            f'<p class="hint">Queued download #{jid} — watch the job chip.</p>')
+    return RedirectResponse("/jobs", status_code=303)
 
 
 @app.post("/models/{role}/default")

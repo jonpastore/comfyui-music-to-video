@@ -3527,6 +3527,21 @@ def test_set_editor_page_404s_for_an_unknown_id():
         assert client.post("/sets/999999", data={"name": "x", "mode": "audio"}).status_code == 404
 
 
+def test_sets_editor_is_boosted_and_models_lists_t2i_and_civitai():
+    with TestClient(appmod.app) as client:
+        client.post("/sets/new", data={"name": "Boost Set", "mode": "audio"})
+        page = client.get("/sets").text
+        assert 'id="set-page"' in page
+        assert 'hx-boost="true"' in page
+        models_page = client.get("/models").text
+        assert "Text-to-image" in models_page
+        assert "Civitai LoRAs" in models_page
+        assert "Suno.com" in models_page
+        assert "Use when." in models_page
+        miss = client.get("/models/civitai").text
+        assert "Civitai API key" in miss
+
+
 # ---- SETS_MIXING_PLAN.md: beatmatch.py / effects.py / video_fx.py wired in,
 # and the shared "impossible transition" guard -----------------------------
 

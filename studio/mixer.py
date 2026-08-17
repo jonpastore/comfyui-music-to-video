@@ -18,9 +18,22 @@ import effects
 import video_fx
 
 _NOOP = lambda *a, **k: None
+_probe_cache = {}
+_peaks_cache = {}
+
+
+def _file_key(path):
+    st = os.stat(path)
+    return (path, st.st_mtime_ns, st.st_size)
 
 
 def probe(path):
+    try:
+        key = _file_key(path)
+    except OSError:
+        key = None
+    if key and key in _probe_cache:
+        return _probe_cache[key]
     r = subprocess.run(
         ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", path],
         capture_output=True, text=True)
@@ -31,7 +44,7 @@ def probe(path):
     streams = data.get("streams", [])
     vstream = next((s for s in streams if s["codec_type"] == "video"), None)
     astream = next((s for s in streams if s["codec_type"] == "audio"), None)
-    return {
+    out = {
         "duration": float(fmt["duration"]) if fmt.get("duration") else 0.0,
         "width": int(vstream["width"]) if vstream else 0,
         "height": int(vstream["height"]) if vstream else 0,
@@ -43,6 +56,9 @@ def probe(path):
         # T3-4.3-ch: channel count as requested. Always present; 0 when no audio.
         "channels": int(astream["channels"]) if astream and astream.get("channels") is not None else 0,
     }
+    if key:
+        _probe_cache[key] = out
+    return out
 
 
 def _parse_rate(rate):
@@ -167,6 +183,12 @@ def peaks_from_path(audio_path, z=0):
         return {"pairs": [], "reason": "no_audio"}
     if not os.path.isfile(audio_path):
         return {"pairs": [], "reason": "missing"}
+    try:
+        key = _file_key(audio_path)
+    except OSError:
+        key = None
+    if key and key in _peaks_cache:
+        return _peaks_cache[key]
     raw = subprocess.run(
         ["ffmpeg", "-v", "error", "-i", audio_path, "-ac", "1", "-ar", "8000",
          "-f", "f32le", "-"],
@@ -178,8 +200,12 @@ def peaks_from_path(audio_path, z=0):
     samples = list(struct.unpack("<" + "f" * n, raw.stdout[:n * 4]))
     pairs = peaks(samples, z=z)
     if not pairs:
-        return {"pairs": [], "reason": "unreadable"}
-    return {"pairs": pairs, "reason": None}
+        out = {"pairs": [], "reason": "unreadable"}
+    else:
+        out = {"pairs": pairs, "reason": None}
+    if key:
+        _peaks_cache[key] = out
+    return out
 
 
 # Nice steps for the set-editor ruler. The last tick is always the duration
