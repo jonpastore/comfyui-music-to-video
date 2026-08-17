@@ -111,6 +111,29 @@ def test_t10_19_work_with_lyrics_child_cannot_become_xxx_can_become_r():
         assert args.get("tier") == "r"
 
 
+def test_t10_19_r_negative_prompt_blocklist_does_not_block_xxx():
+    """R boards write PINNED-shaped negatives. That is a do-not-draw list.
+
+    Mutation: keep negative_prompt in collect_work_fields → T10-26 reads
+    'minors' + 'nudity' and Hard to Handle xxx cannot enqueue.
+    """
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "T10-19 Neg Block", album="T10-19 Album Neg")
+        sid, slug = song["id"], song["slug"]
+        db.store_lyrics(sid, CLEAN_LYRICS, source="supplied")
+        _real_storyboard(
+            sid, "r", slug,
+            [dict(_scene(1), image_prompt=CLEAN_PROMPT,
+                  negative_prompt=(
+                      "minors, children, daylight, nudity, suggestive pose, "
+                      "sensual, school, text, watermark"))],
+        )
+        jid = storyboard_service.enqueue(sid, "xxx", direction="adult alley night")
+        assert jid
+        job = db.one("SELECT * FROM jobs WHERE id=?", jid)
+        assert job["kind"] == "storyboard"
+
+
 def test_t10_19_clean_song_escalates_via_enqueue():
     """Positive half through the shared entry point."""
     with TestClient(appmod.app) as client:

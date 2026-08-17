@@ -353,9 +353,13 @@ def set_allow_nudity(name, allow):
 
 # Scene / board fields that land in (or compose into) a render prompt.
 # story is scene text, not the T10-18a narrative allowance.
+# negative_prompt is NOT here: it enumerates forbidden terms (PINNED-shaped
+# "minors, children, school" plus R-tier "nudity, sensual"). T10-19/T10-26
+# would treat that do-not-draw list as depicting a sexualised minor and
+# block every xxx generate on a song that already has an R board.
 _WORK_SCENE_FIELDS = (
     "image_prompt", "video_motion_prompt", "story", "camera", "motion",
-    "lighting", "location", "negative_prompt", "name",
+    "lighting", "location", "name",
 )
 _WORK_BOARD_FIELDS = (
     "character_reference", "album_world_reference", "direction", "prompt",
