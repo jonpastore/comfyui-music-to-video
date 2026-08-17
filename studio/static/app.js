@@ -153,6 +153,17 @@ document.addEventListener("DOMContentLoaded", function () {
   bindReorder(document);
 });
 
+function fillDeferredFold(d) {
+  if (!d || !window.htmx) return;
+  var url = d.getAttribute("hx-get");
+  if (!url) return;
+  var spec = d.getAttribute("hx-target") || "";
+  var dest = spec.indexOf("find ") === 0 ? d.querySelector(spec.slice(5)) : d;
+  if (!dest) return;
+  if (dest.querySelector(".anchor-tile, .pose-roster, .family-tabs, .pose-need")) return;
+  htmx.ajax("GET", url, {target: dest, swap: "innerHTML"});
+}
+
 function bindReorder(scope) {
   var roots = (scope || document).querySelectorAll("[data-reorder-url]");
   Array.prototype.forEach.call(roots, function (root) {
@@ -802,7 +813,9 @@ document.body.addEventListener("htmx:afterSwap", function (e) {
   if (chrome) {
     (chrome.open || []).forEach(function (id) {
       var d = document.getElementById(id);
-      if (d) d.open = true;
+      if (!d) return;
+      d.open = true;
+      fillDeferredFold(d);
     });
     if (chrome.cast) {
       var ct = target.querySelector('.cast-tab[data-cast="' + chrome.cast + '"]');

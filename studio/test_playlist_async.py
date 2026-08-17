@@ -1,5 +1,6 @@
 """Playlist POSTs stay on the page; the committed arc is editable + versioned."""
 import json
+import os
 import time
 
 import arc
@@ -197,3 +198,9 @@ def test_playlist_anchors_have_keeper_save_and_family_tabs():
     assert "family-tabs" in gal or "None yet" in gal
     assert "data-filter" in gal or "None yet" in gal
     assert "Keeper" not in gal or "pose-roster" in gal
+
+
+def test_playlist_js_reloads_anchors_after_in_page_save():
+    js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
+    assert "fillDeferredFold" in js
+    assert "htmx.ajax" in js
