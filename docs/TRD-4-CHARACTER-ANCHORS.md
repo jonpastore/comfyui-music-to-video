@@ -1,8 +1,10 @@
 # TRD-4 · Character anchors and identity
 
-Status: written 2026-08-13. Owned by no previous document: TRD-2 owns the
-storyboard that *names* a character and TRD-3 owns *measuring* whether a render
-kept them, and nothing owned the sheet that defines who they are.
+Status: **rewritten 2026-08-17** for Jarvis **#529** (D1–D10). The 2026-08-13
+text still owns who she is and T4-1…T4-20. This pass puts the classified
+pose library in sqlite, keeps gap-from-board from binding, and retunes
+T4-11 colour to the operator photographs. Source of truth:
+`docs/PROMPT-2026-08-15-PIPELINE-REQUIREMENTS.md`.
 
 Acceptance criteria are `T4-n` and each **can fail**. Every claim below was
 checked against the code before it was written down; where the brief that
@@ -104,11 +106,16 @@ exception losing to an observation is the observation winning.
   `test_no_positive_prompt_constant_tries_to_negate` walks every constant in
   `POSITIVE_CONSTANTS` with no exemptions. *Mutation: re-add `DEFAULT_BODY` →
   red.*
-- `T4-11` **Body colouring is a pure positive assertion naming the parts.**
-  "Her entire body from shoulders to feet is covered in the same sleek jet-black
-  fur as her face, uniform in shade and texture on shoulders, arms, torso, hips,
-  thighs and calves." The part list is the load-bearing half: "identical head to
-  toe" is a summary a model can satisfy by averaging, and a list is not.
+- `T4-11` **Body colouring is a pure positive assertion naming the parts,
+  matching the operator photographs.** Charcoal-brown / espresso — the
+  colour of `anchor5/` / the UI pair — not jet-black. "Her entire body
+  from shoulders to feet is covered in the same sleek charcoal-brown
+  fur as her face, uniform in shade and texture on shoulders, arms,
+  torso, hips, thighs and calves." The part list is the load-bearing
+  half: "identical head to toe" is a summary a model can satisfy by
+  averaging, and a list is not. A compose that still says jet-black
+  fails this (D10). `T4-22` is the colour half if the parts check is
+  already green.
 - `T4-12` **Reference images are named by slot** — "the character in image 1 is
   the identity reference", "image 2 is the wardrobe reference" — while the
   existing composite instruction that every reference shows *the same single
@@ -150,7 +157,7 @@ in a document is stale the moment the constants move.
     <identity, from the album profile>
     <nude_wardrobe, from the album profile — no wardrobe clause at all>
     Her entire body from shoulders to feet is covered in the same sleek
-    jet-black fur as her face, uniform in shade and texture on shoulders,
+    charcoal-brown fur as her face, uniform in shade and texture on shoulders,
     arms, torso, hips, thighs and calves.
     <anatomy, from the album profile>
     Even neutral studio lighting.
@@ -185,6 +192,36 @@ in a document is stale the moment the constants move.
   criterion and it does not land in `make_anchor.py`. Measured
   2026-08-16: `docs/MEASURED-2026-08-16-POSE-ANATOMY.md`.
   Mutation: compositing anatomy onto a pose-FAIL sheet fails this.
+
+## 6a. The classified library (D1, D2, D10)
+
+Stages A–E from the 2026-08-15 stills loop stay: classify, gap against
+**this** board, C1/C2, reclassify, anatomy last on exposing geometry.
+Gap reads the board; it does not bind (`T2-51`).
+
+- `T4-21` **`classification_json` lives in the DB**, album +
+  `character_id` (NULL = protagonist), versioned document. Same fields
+  as `anchor5/image-classification.json`: id, path, kind, view, pose,
+  wardrobe, usable, notes, seed. Queryable by view / pose / wardrobe /
+  usable. *Mutation: the only store is a sidecar file → red.*
+  (`test_t4_21_classification_json.py`)
+- `T4-22` **Sidecar files are not the store.** Reading
+  `anchor5/image-classification.json` as the album library fails this
+  once a DB document exists. Sidecars may seed an import; they are not
+  the runtime source. (`test_t4_21_classification_json.py`)
+- `T4-23` **Gap reads the open song's ceiling board and writes
+  coverage holes only.** It does not write `scene_pose_map`. *Mutation:
+  gap upserts a map row → red.* (`test_t2_51_classify_cannot_write_map.py`)
+- `T4-24` **Ceiling-tier pose generate.** Library sheets are generated
+  at the highest ticked tier this run. If the ceiling allows nudity
+  (r, xxx), generate clothed **and** nude coverage. If it does not
+  (g, pg13), clothed only. No anatomy pass on a g/pg13 ceiling. Never
+  invent a higher tier than the ceiling. *Mutation: g-only run emits a
+  nude view or an anatomy job → red. Mutation: r ceiling emits clothed
+  only and calls coverage green → red.* (`test_t4_24_ceiling_generate.py`)
+
+Use-as-ref / map / image1 only from keepers with `usable≠skip`
+(`T7-23`). `usable=skip` never enters a slot.
 
 ## 7. Explicitly not building
 
@@ -311,7 +348,21 @@ character."* — the capability loss stated in full.
 
 ---
 
-## 9. Status against the tree, 2026-08-15
+## 9. Status against the tree, 2026-08-17
+
+#529 library rows. T4-1…T4-20 stay in the 2026-08-15 ledger below.
+
+| criterion | state | commit | evidence |
+|---|---|---|---|
+| `T4-21` / `T4-22` `classification_json` in DB | **not built** | — | Intended: `test_t4_21_classification_json.py`. Tree: sidecar `anchor5/image-classification.json` only |
+| `T4-23` gap reads the board, does not bind | **not built** | — | Intended: `test_t2_51_classify_cannot_write_map.py`. No gap-vs-board studio output |
+| `T4-24` ceiling-tier pose generate (clothed+nude iff r/xxx) | **not built** | — | Intended: `test_t4_24_ceiling_generate.py`. Sidecar `batch_edit` only |
+| `T4-11` / D10 colour (charcoal-brown, not jet-black) | **partial** | `4032aba` | Parts list **built**. Composed default still says jet-black. D10 colour not asserted |
+| `T4-20` pose QC before anatomy | **process** | 2026-08-16 | `docs/MEASURED-2026-08-16-POSE-ANATOMY.md`. Studio graph unchanged |
+
+---
+
+## 9. Status against the tree, 2026-08-15 (pre-#529; kept)
 
 A ledger, not an edit to the criteria above: a criterion rewritten to describe
 what was built stops being a criterion. Commits are on `main`; `667debc` is

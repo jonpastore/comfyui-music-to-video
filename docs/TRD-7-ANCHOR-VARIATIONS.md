@@ -1,10 +1,11 @@
 # TRD-7 · Anchor variations on the build_refs workflow
 
-Status: written 2026-08-13. Owns the gap between what `build_refs.workflow()`
-accepts and what the anchors UI can reach, and the prompts a wider set of views
-needs. TRD-4 owns *who the character is* and how the positive prompt is built;
-this document owns *how many different sheets of them you can ask for* and
-whether they stay the same person.
+Status: **rewritten 2026-08-17** for Jarvis **#529** (D2, D5, D10). The
+2026-08-13 text still owns views, T7-1…T7-20, and the one-resolver
+denoise rule. This pass couples C1/C2 to that resolver, keeps location
+plates off the identity lock, and restricts use-as-ref to keepers.
+Source of truth: `docs/PROMPT-2026-08-15-PIPELINE-REQUIREMENTS.md`.
+The §9 ledger below was the stale closeout; #529 rows sit first.
 
 Acceptance criteria are `T7-n` and each **can fail**. Every claim in §1 was read
 off the code before it was written down.
@@ -128,6 +129,9 @@ unwired.
   nothing in the UI saying so. Either the form has a plate slot or `make_anchor`
   stops assigning one — silently is the one option that is out. *Mutation: pick
   two references, confirm the second is not silently promoted to image2.*
+  **Location plates are a different object** (`T2-53` / `T7-22`): attached
+  at scene-ref time, never as her identity lock, never silently as
+  image1.
 - `T7-10` **Slot names are real.** `T4-12`'s naming applies here: image 1 is the
   identity reference, image 2 the wardrobe or plate reference, image 3 the third
   view of the same character. `"the character in image 3 is reference 3"` is
@@ -194,6 +198,33 @@ species-neutral"*, which stops being true the moment a view is `seated`.
   and nothing here moves them.
 - No new storage for variations. A variation is an `anchors` row like any other,
   scoped by album, tier, view and character exactly as today.
+- No storyboard on the generate-anchors form. Coverage vs the open song
+  is a chip, not a wizard.
+
+## 5a. C1 / C2 and keepers (D2, D10)
+
+One resolver decides latent, denoise labels, and whether pose text
+must match the source. Labels cannot promise a hop the graph omits
+(same shape as `T7-8`).
+
+- `T7-21` **C1 vs C2 is one resolver.** C1 same-pose edit: image
+  latent, denoise 1.0, pose text matches the source. C2 new-pose:
+  empty 896×1216, her keepers as image1, pose text is the asked pose
+  (replaces the standing clause, `T7-16`, never beside it). *Mutation:
+  C2 uses image latent of a stranger plate → red. Mutation: C1 empty
+  latent while the label says same-pose → red. Mutation: pose text
+  sits beside the standing clause → red.* (`test_t7_21_c1_c2_resolver.py`)
+- `T7-22` **Location plates never become image1.** They attach at
+  scene-ref time (`T2-53`). `T7-9` stands: no silent plate on the
+  character sheet. *Mutation: a location plate path is passed as
+  `--anchor` → red.* (`test_t2_53_location_plates.py`)
+- `T7-23` **Use-as-ref / map / image1 only from keepers with
+  `usable≠skip`.** `usable=skip` never enters a slot. *Mutation: a
+  skip row is chosen as a map keeper or image1 → red.*
+  (`test_t7_23_usable_skip.py`)
+- `T7-24` **Ceiling-tier library generate** is `T4-24`. This document
+  owns the C1/C2 graphs that run it, not a second copy of the ceiling
+  rule.
 
 ## 6. How every criterion is verified
 
@@ -263,7 +294,24 @@ chatgpt, independently — `docs/reviews/TRD47-*-2026-08-13.md`).
 
 ---
 
-## 9. Status against the tree, 2026-08-13
+## 9. Status against the tree, 2026-08-17
+
+#529 variation rows. T7-1…T7-20 stay in the 2026-08-13 ledger below.
+That ledger's high built-rate is the **old** one-shot world.
+
+| criterion | state | commit | what was measured |
+|---|---|---|---|
+| `T7-21` C1/C2 resolver (latent + denoise labels + pose-match) | **not built** | — | Intended: `test_t7_21_c1_c2_resolver.py`. `T7-8` image-latent is reachable; it is not wired as C1 vs C2 for the loop |
+| `T7-22` location plates ≠ identity lock | **not built** | — | Intended: `test_t2_53_location_plates.py`. No `location_plates` |
+| `T7-23` use-as-ref only keepers `usable≠skip` | **not built** | — | Intended: `test_t7_23_usable_skip.py`. No `usable` field on studio keepers |
+| `T7-24` / `T4-24` ceiling-tier generate | **not built** | — | Intended: `test_t4_24_ceiling_generate.py` |
+| `T7-8` `latent_mode="image"` reachable | **partial** | `d3f2f6a` | Graph + labels exist. Not the C1/C2 loop resolver |
+| `T7-9` no silent composition plate | **built** (character sheet) | `d3f2f6a` | `base=None`. Does not cover location plates (`T7-22`) |
+| `T7-16` pose replaces the standing clause | **built** | `test_pose_replaces_the_view_stance_and_does_not_sit_beside_it` | Keep. C1/C2 must use this, not append |
+
+---
+
+## 9. Status against the tree, 2026-08-13 (pre-#529; kept)
 
 Written by session B after building §2–§5, and stated as a LEDGER rather than
 folded into the criteria above — a criterion edited to describe what was built

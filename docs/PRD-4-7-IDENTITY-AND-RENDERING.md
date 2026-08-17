@@ -1,10 +1,13 @@
 # PRD · Identity, variations, rendering and the queue (TRD 4-7)
 
-Status: written 2026-08-13. **Refreshed 2026-08-16 against the TRD-4/5/6/7
-ledgers at `d782d2e`.** Covers `docs/TRD-4-CHARACTER-ANCHORS.md` (18),
-`docs/TRD-5-CLIP-RENDERING-AND-REFINE.md` (10),
-`docs/TRD-6-QUEUE-LIFECYCLE-AND-STORAGE.md` (25),
-`docs/TRD-7-ANCHOR-VARIATIONS.md` (19) — **72 criteria**, counted not quoted.
+Status: written 2026-08-13. **Rewritten 2026-08-17 for Jarvis #529
+(D1–D10).** Covers `docs/TRD-4-CHARACTER-ANCHORS.md`,
+`docs/TRD-5-CLIP-RENDERING-AND-REFINE.md`,
+`docs/TRD-6-QUEUE-LIFECYCLE-AND-STORAGE.md`,
+`docs/TRD-7-ANCHOR-VARIATIONS.md`. The four documents are the machinery
+for the same loop as PRD-1-3: classified library → C1/C2 at the
+ceiling → Accept-gated map → per-scene keeper + location plate → LTX
+first → decoded s2v hop. Do not implement from Jarvis #528.
 Sequencing: `docs/PLAN-TRD-4-7.md`. Design: `docs/DDD-4-7-IDENTITY-AND-RENDERING.md`.
 Sibling: `docs/PRD-1-3-EDITING-AND-QUALITY.md`.
 Built-state lives in those TRD ledgers, not in this file.
@@ -84,19 +87,17 @@ project; *"no garments, no underwear, no straps"* put a leather harness on a nud
 sheet. Every positive constant is walked by a test with no exemptions, and a new
 prompt type that says "no" fails the suite — deliberately.
 
-**3.2 Identity comes from the text, not from the reference image.** Measured with
-a one-variable differential: same reference, same seed, same box; the species
-named in the prompt gives a feline throughout, unnamed gives an ordinary human
-woman by the halfway point. This is why `T3-28` forbids "swap the reference
-image" as a remedy and why `T2-32`'s refusal message has to say so — a studio
-that suggests the wrong fix teaches the operator the wrong lesson. The
-storyboard side is `T2-31`: `write_storyboard` / `save_scene` refuse an
-empty `character_reference` and name that identity comes from the text.
-The QC side is `qc.check_identity_wrong`: the proposed remedy is edit the
-text, then re-render, and a swap-the-reference wording is refused on
-record, edit and approve. The same lesson is the rest of image QC
-(`T3-33.a`): a FLAG/REJECT still's remedy is the next prompt rewrite, not
-a different seed.
+**3.2 Identity is the text plus her photographs as image1 (D10).** Text
+names species/body. Image1 is her. A plate that is not her is refused.
+Measured with two one-variable differentials: (a) same photos, same
+seed, same box; species named gives a feline throughout, unnamed gives
+an ordinary human woman by the halfway point; (b) perfect text, stranger
+plate as image1 → the plate person. This is why `T3-28` forbids
+"swap in a stranger plate" as a remedy and why `T2-32`'s message names
+**both** halves — not "the text, not the photo". `T2-31` still refuses
+an empty `character_reference`. `T2-56` requires the accepted keeper
+for **that** scene as image1. `T3-33.a` still says image FLAG/REJECT
+content findings are edit-text; `T3-35` adds settings remedies.
 
 **3.3 Two clauses that contradict each other do not average — the model picks.**
 Day 4 measured it: the nude clause asserted bare skin beside "entire body covered
@@ -146,41 +147,41 @@ copies. Do not offer those families as `role=reference` defaults.
 | P10 | A killed worker leaves no half-written job; a long render does not hold the write lock | `T6-14`…`T6-16` |
 | P11 | Pose QC before anatomy. Empty latent is not the identity lock for a new pose. Photoreal is not image2. Anatomy only on a pose PASS. Training a 2511 LoRA is last resort (gamingpc), not the default path | `T3-33.b`, `T4-20` |
 | P12 | Qwen-Image-Edit 2511 holds her stills. LTX/WAN animate an approved still. Pony/Krea/Flux are not a second identity stack. `models.py` may grow `family`/`when`/`not_for`; it does not grow a Pony default | DDD-4-7 §1a, `T4-20`, `T2-35` |
+| P13 | The #529 loop: coverage → library → Accept-gated map → per-scene keeper + location plate → LTX first → optional decoded s2v hop. One front sheet is not image1 for every scene. D7 look NOT MEASURED | `T2-50`…`T2-56`, `T4-21`…`T4-24`, `T5-11`…`T5-15`, `T7-21`…`T7-23` |
 
 **P5's path is built; the picture look is not.** `T7-6` shipped: with
 use-as-ref ticked, `gen_anchor`'s images list is exactly that sheet.
-`gen_refs` still passes a chosen anchor as image1 for every scene (TRD-2
-refs-identity). `T7-7` has the offline ranking harness
-(`t7_7_identity_differential`). The GPU four-image set is still
-**NOT MEASURED**. Photo-conditioned halves on disk (Catatonic jobs
-244/248; Street Cats jobs 264/268) used base photographs, not a chosen
-anchor as image1. The use-as-ref half has never been rendered.
-`t7_7_claim` refuses unpinned bytes. The compose hook FLAGs a
-human-body nude compose through `run_artefact`. That is not the picture
-measurement. **0 chosen studio anchors** — the factory is still on step 1.
+`gen_refs` still passes **one** chosen front as image1 for every scene
+(old world). Product is `T2-56`: the accepted keeper for that scene.
+`T7-7` has the offline ranking harness. The GPU four-image set is still
+**NOT MEASURED**. **0 chosen studio anchors** — the factory is still on
+step 1.
+
+**P13 (the loop) is not built.** Coverage list, Accept-gated map,
+location plates, LTX-first, decoded s2v hop: see TRD-2 `T2-50`…`T2-56`
+and TRD-5 `T5-11`…`T5-15`.
 
 ## 5. Priorities
 
 Full ordering and dependencies are `docs/PLAN-TRD-4-7.md` §3-§4. The product-level
 statement of it:
 
-1. **Make a view cheap** (P4). `T7-1`/`T7-2`/`T7-3` landed: one `VIEWS` table,
-   nudity derived, required cameras compose and appear in the form. GPU
+1. **Anchors on-model and the #529 loop.** Coverage → classified
+   library → C1/C2 at the ceiling → Accept-gated map → per-scene
+   keeper + location plate → LTX first → optional decoded s2v hop.
+   This beats the timeline. 0 chosen studio anchors live.
+2. **Make a view cheap** (P4). `T7-1`/`T7-2`/`T7-3` landed. GPU
    new-view sheets remain NOT MEASURED.
-2. **Make the words editable and versioned** (P6). The operator's real loop is
-   tune-render-compare. `view:<key>` (`T7-13`), `backdrop`, `composite`, and
-   album `pose` (`T7-16`) are versioned. Named uploads (`T7-20`) remain the
-   plate path. GPU leftover is `T7-7` / new-view sheets, not the pose type.
-3. **Prove identity holds** (P5's `T7-7`). Harness built. GPU four-image set
-   **NOT MEASURED**.
-4. **TRD-4 string/policy rows** (P1–P3, P3a) are **built**. `T4-13` is
-   measured on job 257; sibling seed 5288 still FLAGs.
-5. **`--refine` is honest as a graph** (P7 / `T5-1`). GPU look (`T5-2`) and
-   peak VRAM (`T5-5`) stay **NOT MEASURED**. Variant B does not fit (`T5-6`).
-6. **The queue is built in full** (P8–P10). Ledger: `T6-1`…`T6-A10`. `T6-18`
-   still deletes nothing. An earlier draft of this line said "last, except
-   `T6-13a`"; Jon decided 2026-08-13 to build TRD-6 in full, and the
-   landers did.
+3. **Prove identity holds** (P5's `T7-7` + D10 colour). Harness built.
+   GPU four-image set **NOT MEASURED**. Body clause still says
+   jet-black (`T4-11` **partial**).
+4. **C1/C2 resolver** (`T7-21`) and location plates (`T7-22`) — not
+   built. `T7-8` image-latent is reachable; it is not the loop.
+5. **`--refine` is honest as a graph** (P7 / `T5-1`). D7 hop
+   (`T5-12`) is not built and NOT MEASURED. Variant B does not fit
+   (`T5-6`).
+6. **The queue is built in full** (P8–P10). Ledger: `T6-1`…`T6-A10`.
+   `T6-18` still deletes nothing.
 
 ## 6. Scope
 

@@ -440,8 +440,8 @@ own permission wording is in the scene text (`T2-21`).
 The board's declared `guardrail` is this tier's `compose_guardrail`
 clause; saving a board that carries another tier's wording is refused
 (`T2-22`). Saving a board whose `character_reference` is empty is
-refused; the message says identity comes from the text, not the
-reference image (`T2-31`, `T2-32`). Saving a scene that names a
+refused; the message names both halves of D10 — the text lock plus
+her photographs as image1 (`T2-31`, `T2-32`). Saving a scene that names a
 `video_model` absent from `models.renderable("video")` is refused,
 naming the scene number and the bad value (`T2-44`); it is not
 silently defaulted and not deferred to render.
@@ -505,14 +505,16 @@ is counted under the strip (*N chosen pose sheets on /anchors — not
 used as Generate refs image1*), not dumped as 40 figures. The XXX
 gallery family tab defaults to **Nude** when that family has rows.
 `POST /songs/{id}/refs` refuses the same reason before enqueue.
-Reference-image generate uses the chosen front sheet as image1
-(identity), not a standing plate (`test_t2_refs_identity.py`). The
-expanded tier's **pose plan** is optional and collapsed: every scene's
-needed pose grouped to a chosen sheet (or marked unbound). Unassigned
-scenes still generate from identity front + scene text. Generate refs
-freezes auto-matches and sends each bound sheet as that scene's image2
-plate. Storyboard scene rows have a **Pose plate**
-select (`POST .../scene/{n}/pose-sheet`). The plate thumb is a
+Reference-image generate uses the **accepted keeper for that scene**
+as image1 (`T2-56`), not one chosen front for every scene, and never a
+standing plate (`test_t2_refs_identity.py` still guards the plate
+refusal). The tree still pins the album front — that is the leftover.
+The expanded tier's **pose map** is drafted, then Accept per scene
+(`T2-52`); generate refs from draft/rejected is refused. A coverage
+meter (`T2-50`) sits above the map. Location plate per unique
+location key (`T2-53`) is a still, not a character sheet. Storyboard
+scene rows have a **Pose keeper** select after Accept
+(`POST .../scene/{n}/pose-sheet` is today's auto-bind leftover). The plate thumb is a
 `button.thumb-open` (neutral, not the accent fill). Save actions are labeled floppies (Save JSON, Save lock, Save plate,
 Save scene) so two disks are not the same control. Every icon has
 `title` and `aria-label`. A `.save-note` reports saved / pinned / the
@@ -542,8 +544,12 @@ bar with Use this still / Fix / Delete; tall prev/next sit beside the
 image; Left/Right arrows step stills in that scene. Clip thumbs walk
 forward from ~0.2s until the frame is not black.
 **Render clip** sits on the Clips heading row with First clip only,
-Auto post (LTX refine), and Auto QC as one nowrap option bar. First
-clip only is the default. WAN S2V is a later hop, not this button.
+Auto post (LTX refine on the LTX take, `T5-14`), and Auto QC as one
+nowrap option bar. First clip only is the default. Every scene is
+LTX first (`T5-11`). `needs_lip_sync` beside camera (`T2-55`) marks
+the decoded s2v hop; the control says **NOT MEASURED** until a GPU
+pair exists (`T3-37`, UIUX 7a.3). When the hop ran, the LTX
+predecessor and the s2v successor are both listed (`T6-A5`).
 There is no separate Approve refs page.
 Stills and clips show `.qc-tag`: confidence, identity, and the
 assessment sentence. Wardrobe may change; physical identity must not.
@@ -616,10 +622,12 @@ entry with a `cli` appears there with no template change. A model
 `where()` says False on every reachable backend is shown disabled,
 not offered; a confirmed model stays selectable (`T2-34`).
 A scene may name its own `video_model` beside `camera` (`T2-42`,
-`T2-43`). The field is editable on the scene row
-(`EDITABLE_SCENE_FIELDS`) and returned on
-`GET /api/songs/{id}/storyboard/{tier}`; absent means the job
-picker applies.
+`T2-43`) as a renderer pin. The lip-sync fact is `needs_lip_sync`
+beside camera, not instead of it (`T2-55`). It does not skip LTX.
+Both are editable on the scene row (`EDITABLE_SCENE_FIELDS`) and
+returned on `GET /api/songs/{id}/storyboard/{tier}`; absent
+`video_model` means the job picker applies; absent `needs_lip_sync`
+means LTX only.
 The generation prompt itself is API data (`T2-17`):
 `GET /api/songs/{id}/storyboard/{tier}` returns the same defaulted-from-tier
 string the direction box prefills; the HTML is not the only place that
@@ -1226,6 +1234,35 @@ one the operator has to see, because only the first is worth waiting for.
 A repair never shows a landed dest beside a finding that is still only
 approved (`T6-14`): land and the findings stamp commit together, so a killed
 worker cannot paint half a job.
+
+### 7a.7 The #529 loop surfaces — no wizard
+
+No wizard. No storyboard on the generate-anchors form (7a.1 already
+says so). Every control the backend cannot honour is marked, never
+inert (7a.3). D7 is unmeasured until the GPU pair exists — say so
+on the control.
+
+**Anchors page.** Library chips from `classification_json` (view /
+pose / wardrobe / usable). Coverage vs the open song's ceiling
+board (`T2-50`). C1 / C2 job type on generate (`T7-21`). QC remedy
+line (`T3-35`). Keeper / reject; `usable=skip` never enters a
+slot (`T7-23`). Ceiling + ticked-lower backfill is visible
+(`T2-54`): r+pg13 shows both; a g run offers no nude.
+
+**Storyboard page.** Coverage meter (needs vs keepers, no bind).
+Draft map + Accept per scene (`T2-52`), same shape as the arc
+wand. Location plate per unique key (`T2-53`); unset / studio is
+grey-studio and no plate. `needs_lip_sync` beside camera. Ceiling
+and ticked-lower boards visible.
+
+**Refs page.** Generate from the accepted map only. Each scene
+shows which keeper and which location plate it used (`T2-56`).
+A draft or rejected row has no Generate.
+
+**Clips page.** LTX predecessor + s2v successor both listed when
+the hop ran. Refine sibling on the LTX take, not on s2v. The
+lip-sync control is marked NOT MEASURED until `T3-37` has a
+pinned pair.
 
 ## 7b. The surfaces TRD 8-10 adds
 

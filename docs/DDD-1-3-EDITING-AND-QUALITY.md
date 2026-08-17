@@ -1,8 +1,11 @@
 # DDD · Design for TRD 1-3
 
-Status: written 2026-08-13. Product framing and sequencing:
-`docs/PRD-1-3-EDITING-AND-QUALITY.md`. Contract: `docs/TRD-1-TIMELINE-AND-MIXING.md`,
+Status: written 2026-08-13. **Rewritten 2026-08-17 for Jarvis #529
+(D1–D10).** Product framing: `docs/PRD-1-3-EDITING-AND-QUALITY.md`.
+Contract: `docs/TRD-1-TIMELINE-AND-MIXING.md`,
 `docs/TRD-2-STORY-ARC-AND-STORYBOARDS.md`, `docs/TRD-3-QC-AND-REMEDIATION.md`.
+The one-line pipeline (one front sheet → every scene → one
+`video_model`) is retired. Design below is the loop.
 Rules inherited from `TRD-6 §0` are cited, never restated. `T6-A7` (a
 measurement that cannot fail is not evidence) is **built** as
 `test_t6_a7_measurement_can_fail.py` — equal control/mutated refused; product
@@ -271,6 +274,21 @@ only that column. Easy is `mixer.master_engaged` reading `mode_audience ==
 Still needed, and no more than this:
 
     ALTER TABLE sets ADD COLUMN out_fps REAL;                        -- NULL = derive from items
+
+    -- #529 loop (D1, D4, D5, D7). Minimum; do not over-schema.
+    -- classification_json: album, character_id NULL=protagonist,
+    --   versioned document, same fields as image-classification.json
+    -- pose_coverage: song, tier, derived from board vs library
+    -- scene_pose_map: song, tier, scene_number → keeper id/path,
+    --   status draft|accepted|rejected
+    -- location_plates: album or song, location key → asset path
+    -- scenes.needs_lip_sync (or video_model kept plus this flag)
+    -- clips retain predecessor/successor (T6-A5) for LTX take,
+    --   s2v hop, LTX refine
+
+One resolver for clip hops: LTX always; s2v if `needs_lip_sync`; T5-A
+if refine. Labels cannot promise a hop the graph omits. Classify never
+writes `scene_pose_map`. A nude map row on g/pg13 is refused.
 
 Peaks are **not** a table. They are a binary min/max array written beside the
 song by the existing `analyse` job and served decimated (§5.4).
@@ -673,13 +691,14 @@ would false-positive) and `save_scene` / `h_storyboard` refuse it.
 A clean scene edit still writes. Mutation: drop the stamp → generation
 arm red. Mutation: write without the check → save arm red.
 
-`T2-31` / `T2-32` are **built**. `grok.write_storyboard` refuses an
-empty, whitespace, or missing `character_reference` before creating
-files. `save_scene` and `_apply_scene_fields` return 400 with
-`grok.EMPTY_CHARACTER_REFERENCE`: identity comes from the text, not
-the reference image; an empty lock renders a stranger in every clip.
-A filled lock still writes. Mutation: dump without the check → writer
-arm red. Mutation: write the scene without the check → save arm red.
+`T2-31` is **built**; `T2-32` is **partial**. `grok.write_storyboard`
+refuses an empty, whitespace, or missing `character_reference` before
+creating files. `save_scene` and `_apply_scene_fields` return 400 with
+`grok.EMPTY_CHARACTER_REFERENCE`. D10: identity is the text lock plus
+her photographs as image1; a stranger plate is refused. The shipped
+message still says "the text, not the reference image" — old world.
+An empty lock still renders a stranger in every clip. A filled lock
+still writes. Mutation: dump without the check → writer arm red.
 `T2-23` is **built**. `GET /api/songs/{id}/storyboard/{tier}/meter`
 reports `scene_time` (sum of scene `duration_guidance`), `song_length`
 (the song duration), `tolerance` (`SCENE_TIME_TOLERANCE`, 0.15 of song
@@ -757,15 +776,14 @@ button → HTML arm red. Mutation: enqueue without the check → post arm
 red (`test_t2_28_html.py`, `test_t2_28_refs_unanchored_leads.py`,
 `test_identity_front_blocker_names_pose_library_when_front_is_missing`).
 
-**refs-identity is built.** `start_refs` resolves `chosen_anchor` and
-freezes its path into the refs job. `h_refs` stages that path via
-`install_input` and passes it to `pipeline.gen_refs` as `--anchor`.
-`build_refs.workflow` loads it on node 7 / image1 (identity lock). A
-standing plate (seed 4748, unchosen anchors row, pose `anchor_ref`)
-never becomes image1 and never the `score_generated_still` base. An
-intentional composition base takes image2 only. Mutation: plate as
-`--anchor` → image1 arm red. Mutation: enqueue plate while a chosen
-sheet exists → enqueue arm red. `studio/test_t2_refs_identity.py`.
+**refs-identity is partial — old one-sheet world.** `start_refs`
+resolves `chosen_anchor` (the album front) and freezes that path as
+image1 for **every** scene. Standing 4748 plate is refused (keep).
+Product is `T2-56`: image1 is the accepted keeper for **that** scene,
+plus the location plate when the scene has one. `test_t2_refs_identity.py`
+guards the old lock; `test_t2_56_per_scene_keeper.py` is the #529
+check and is **not built**. `pose_plan` auto-binds image2 without
+Accept (`T2-51`/`T2-52` **not built**).
 
 `T2-30` is **built**. `unanchored_leads(rows)` returns names of figures
 with `role == "lead"` and no chosen anchor. Storyboard HTML banner,

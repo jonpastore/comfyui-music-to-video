@@ -1,8 +1,11 @@
 # PRD · The studio's editing and quality surface (TRD 1-3)
 
-Status: written 2026-08-13. **Refreshed 2026-08-16 against the TRD-1/2/3
-ledgers at `d782d2e`.** Covers `docs/TRD-1-TIMELINE-AND-MIXING.md`,
+Status: written 2026-08-13. **Rewritten 2026-08-17 for Jarvis #529
+(D1–D10).** Covers `docs/TRD-1-TIMELINE-AND-MIXING.md`,
 `docs/TRD-2-STORY-ARC-AND-STORYBOARDS.md`, `docs/TRD-3-QC-AND-REMEDIATION.md`.
+The product loop is coverage → library → Accept-gated map → per-scene
+stills + location plates → LTX → optional decoded s2v hop → LTX refine.
+One chosen front sheet as image1 for every scene is the old world.
 Design that satisfies it: `docs/DDD-1-3-EDITING-AND-QUALITY.md`.
 Built-state lives in those TRD ledgers, not in this file.
 
@@ -68,11 +71,13 @@ boundary is the bind address and nothing else (`TRD-6 §0.1`). Every requirement
 below is written for a single person producing a catalogue, not for a team and
 not for a tenant.
 
-The work is albums of music videos: a song becomes a storyboard, the storyboard
-becomes reference frames and clips, the clips assemble into a song video, and
-songs assemble into sets. Identity — one character, recognisably the same across
-an album — is the thing the whole pipeline is trying to hold onto, and it is what
-this project has most often lost.
+The work is albums of music videos. The factory loop is: ceiling-tier
+storyboard → coverage list of needed poses → classified library →
+Accept-gated pose→scene map → per-scene refs (that keeper + location
+plate) → LTX 2.5 first → optional decoded s2v hop on lip scenes →
+assemble. Identity — one character, recognisably the same across an
+album — is the text lock plus her photographs as image1. A stranger
+plate as image1 is how this project has most often lost her.
 
 ## 2. The product, in one sentence
 
@@ -115,14 +120,17 @@ draw a level curve, hear a proxy, render a real 20-second preview of one join,
 render the whole thing — and the length shown while editing is the length of
 the file. A card is a beat in the running order, not a decoration on one.
 
-**B · Give the album a story and storyboard against it.** Write or generate an
-arc; a proposal is not on disk until accepted, and rejecting leaves the previous
-arc (`T2-15`). The committed arc is then editable on the playlist card and
-each save is a restoreable snapshot. The playlist payload carries that arc when one is defined and
-omits it when none (`T2-37`), so a row can show it. Accept it, generate each
-song's storyboard as a scene *of that arc*, edit a scene, read a time meter that
-agrees with the song, and see which leads still have no anchor.
-Playlist and song forms stay in-page (htmx fragment swap; no full reload).
+**B · Give the album a story, cover the poses, then bind.** Write or
+generate an arc; a proposal is not on disk until accepted (`T2-15`).
+Generate each song's ceiling-tier storyboard as a scene *of that arc*.
+**Analyze** writes a coverage list (`T2-50`) — it does not bind.
+Review the classified library; expand missing poses at the ceiling
+(`T4-24`). **Map** drafts keeper → scene; the operator Accepts per
+scene (`T2-52`), same shape as the arc wand. Generate refs only from
+accepted bindings, with that scene's keeper as image1 and the location
+plate when the scene has one (`T2-56`, `T2-53`). `needs_lip_sync`
+sits beside camera (`T2-55`). Playlist and song forms stay in-page
+(htmx fragment swap; no full reload). No wizard.
 
 **C · Find out what came back wrong.** After renders land, a queue of findings,
 each carrying what was measured against what was asked for, an editable remedy
@@ -154,25 +162,32 @@ the eight things that must become true; they are not a new contract.
 | P5c | A scene longer than the 15 s LTX ceiling becomes a clip chain; clip N+1 starts on clip N's last frame | `T2-10` |
 | P6 | Every rendered artefact is measured against the workflow that asked for it, never against a constant. A mixed-model clip is judged at its native fps, not the song's output fps. An interpolated clip is judged at RIFE `(n-1)*m+1` frames and `make_postproc.out_fps`, not `n*m` / `fps*m`. A silent or near-silent take is rejected on measured low/mid/high band energy, not peak volume. A take with DC offset above `DC_OFFSET_LIMIT` is flagged. An assembled song's clip count is judged against `len(build_song.clip_plan)`, not `scene_count` | `T3-2`, `T3-4`, `T3-7`, `T3-8`, `T3-9`, `T3-4.3-dc`, `T3-4.4-nclips` **built** (`test_t3_4_4_nclips.py`), `T2-13f` |
 | P7 | A finding arrives actionable — measured, expected, unit, a remedy class, and an editable prompt — and nothing runs without approval. A dismissed finding stays off the queue until the artefact itself changes. The remedy that RUNS is the stored prompts row. Approving produces a new candidate; original and repair are both listed and scored | `T3-18`, `T3-19` **built** (`GET /qc` finding-row + `test_t3_19_finding_row.py`: two HTML approvals submit two jobs), `T3-20`, `T3-21`, `T3-22`, `T3-27` |
-| P8 | Identity failures are attributed to the text, never to the reference image | `T2-31`, `T2-32`, `T3-17`, `T3-28` |
+| P8 | Identity is the text lock plus her photographs as image1. Empty `character_reference` is refused. A stranger plate as image1 is refused. Identity-wrong remedy is edit the text, not swap a stranger plate | `T2-31`, `T2-32`, `T2-56`, `T3-17`, `T3-28`, `T3-35` |
+| P9 | A board produces a coverage list of needed poses; classify does not write the pose→scene map | `T2-50`, `T2-51` |
+| P10 | Scene refs generate only from an accepted map row; one chosen front is not image1 for every scene | `T2-52`, `T2-56` |
+| P11 | One location plate per location key, reused; unset/studio has no plate | `T2-53` |
+| P12 | Ceiling + ticked-lower backfill: r+pg13 writes both; r-only does not write pg13; g ceiling writes no nude | `T2-54`, `T4-24` |
+| P13 | Every scene is LTX first. Marked lip scenes then the decoded s2v hop. D7 look is NOT MEASURED until a GPU pair | `T2-55`, `T5-11`, `T5-12`, `T3-37` |
 | P8a | An image FLAG/REJECT content finding's remedy is the next prompt rewrite, not "re-render with a different seed". Identity-wrong already said "edit the text"; blank, uniform, transparent, lighting and portrait findings say the same | `T3-28`, `T3-33.a` |
 
-**P8 is the one to defend hardest.** It is measured, not theoretical: same
-reference, same seed, same box, species named in the prompt or not — named gives
-a feline throughout, unnamed gives an ordinary human woman by the halfway point
-keeping only the harness. A remedy that proposes swapping the reference image
-teaches the operator a false lesson, which is why `T3-28` forbids it by name.
-`qc.check_identity_wrong` (via `qc.run`) proposes "edit the text, then
-re-render"; `record` / `set_remedy` / `approve` refuse a swap-the-reference
-wording. `T3-33.a` extends that lesson to the rest of image QC: a blank,
-uniform, transparent, lighting-cast or portrait-crop finding's remedy
-is the same class — edit the text — not a different seed. A missing
-file or a downscaled still stay structural. `T3-17` scores that artefact against the chosen anchor
-regardless of cause — it does not require an empty `character_reference`.
-The picture still has to be looked at — this is the score and the remedy,
-not a gate. The storyboard-side pair is `T2-31` / `T2-32`: saving an empty
-`character_reference` is refused, and the message says identity comes
-from the text, not the reference image.
+**P8 is the one to defend hardest.** D10: text names species/body;
+image1 is her photographs; a plate that is not her is refused. The
+2026-08-12 differential still holds: same photos, same seed, species
+named or not — named gives a feline throughout, unnamed gives an
+ordinary human woman by the halfway point keeping only the harness.
+The missing half is: photos omitted or a stranger plate as image1 →
+also a stranger, even with perfect text. A remedy that proposes
+swapping in a stranger plate teaches the operator a false lesson,
+which is why `T3-28` forbids it by name. Using **her** photos as
+image1 is required (`T2-56`). `T3-33.a` still says image FLAG/REJECT
+content findings are edit-text; `T3-35` adds settings remedies
+(latent / denoise / CFG / pose-match / plate-absent / body-colour).
+`T2-31` still refuses an empty `character_reference`. `T2-32`'s
+message names both halves — not "the text, not the photo".
+
+**P9–P13 are the #529 loop and they are not built.** Anchors-on-model
+and this loop beat the timeline (`§6.0`). Do not mark them built until
+the named tests can go red.
 
 ## 6. Sequencing — the part the TRDs do not have
 
@@ -185,16 +200,16 @@ a preference.
 Asked which capability he wanted next, in his own terms rather than by criterion
 id, and the answer re-orders everything below:
 
-1. **Anchors that stay on-model** — identity and variations. Session B's work,
-   already in flight.
-2. **Know when a render is wrong** — QC's repair path. The measuring half is
-   built; `approve()` enqueues a dest ≠ source (`T3-6`/`T3-18`). GPU
-   actuators are wired: `dispatch_repair` asks `where()`/`fits()`/`resolve()`
-   and dest is the `fix_ref` / `gen_postproc` file (`T3-23`). Image
-   FLAG/REJECT is a prompt rewrite (`T3-33.a`).
-3. **Clips at the length you asked for** — `scene_seconds` is an optional
-   pin. Unpinned, the writer chooses scene count and length; generate does
-   not ask for `ceil(duration / 4s)` or `n_clips_for(duration)`.
+1. **Anchors that stay on-model** and the **#529 loop** (coverage →
+   library → Accept-gated map → per-scene refs + location plates → LTX
+   → optional s2v hop). This beats the timeline. 0 chosen studio
+   anchors live — the factory is still on step 1.
+2. **Know when a sheet or clip is wrong** — QC's repair path plus
+   pose-before-anatomy (`T3-33.b`) and the D7 look (`T3-37`, NOT
+   MEASURED). Image FLAG/REJECT is a prompt rewrite (`T3-33.a`);
+   settings remedies are `T3-35`.
+3. **Clips at the length you asked for** — song length still owns clip
+   count. LTX first (`T5-11`); s2v is a hop, not a skip.
 
 **The set timeline went last and is now built** including peaks-from-data
 and the on-demand loudness meter. §6's P1 below was written with the
@@ -434,16 +449,16 @@ order and take the dependencies from here.
    ref slots (image3 when a pose plate holds image2); extras/background
    never take those slots even with a sheet
    (`test_cast_slots_only_leads_with_chosen_sheets_take_image2_and_image3`).
-   **Pose plates built**: `pose_plan` binds each scene to a chosen sheet
-   (auto-match or `pose_sheet_id`); that file is image2, identity front
-   stays image1 (`test_pose_plan.py`). The row shows Pinned / Suggested
-   with a help icon and a floppy save that reports saved or the error;
-   the plate thumb is not an accent button. Scene stills and clips sit
-   in a labeled preview table; reroll N stills, pick one, then render
-   the first LTX clip before the rest of the scene. Wardrobe in the
-   prompt is allowed (clothes on a nude plate). QC reports
-   **confidence** and an **identity assessment** of physical attributes
-   (face, fur, body, anatomy) — not clothes.
+   **Pose plates leftover (auto-bind, no Accept):** `pose_plan` binds
+   each scene to a chosen sheet and puts that file on image2; identity
+   front stays image1 for every scene (`test_pose_plan.py`). Product is
+   `T2-51`/`T2-52`/`T2-56`: draft map + Accept; that scene's keeper is
+   image1. The row's Pinned / Suggested UI can stay as the Accept
+   surface. Scene stills and clips sit in a labeled preview table;
+   reroll N stills, pick one, then render the first LTX clip before
+   the rest of the scene. Wardrobe in the prompt is allowed. QC
+   reports **confidence** and an **identity assessment** of physical
+   attributes (face, fur, body, anatomy) — not clothes.
    **`T2-28` built**: storyboard Generate refs is marked (`button.blocked`)
    not disabled, the plan panel names the unanchored lead, and
    `POST /songs/{id}/refs` 400s before enqueue

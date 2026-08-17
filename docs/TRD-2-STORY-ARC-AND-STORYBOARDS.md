@@ -1,9 +1,11 @@
 # TRD-2 · Story arc and storyboards
 
-Status: **reviewed 2026-08-12** (draft written earlier the same day). Inputs:
-`docs/STORYBOARD_UI_RECONCILIATION.md` (what already exists),
-`docs/RECONCILIATION_2026-08-12.md` (the day's measurements),
-`docs/EXTERNAL_REVIEW_2026-08-12.md` (outside opinion, verified).
+Status: **rewritten 2026-08-17** for Jarvis **#529** (D1–D10). The 2026-08-12
+review still owns clip-length, arc, and the T2-1…T2-49 ledger. This pass
+adds the coverage → Accept-gated map → per-scene keeper → location plate
+loop and retires the one-front-sheet world. Source of truth for the loop:
+`docs/PROMPT-2026-08-15-PIPELINE-REQUIREMENTS.md`. Do not implement from
+Jarvis **#528**.
 
 Acceptance criteria are numbered `T2-n` and are written so that each one **can
 fail**. A criterion that cannot fail is not a criterion.
@@ -41,9 +43,11 @@ Two supporting problems, both measured rather than assumed:
 - **`scene_seconds` cannot lengthen a scene.** `n_scenes = max(len(sections),
   ceil(duration / scene_seconds))`. A 25-section song returns 25 scenes whether
   15s or 30s is requested. Nothing in the UI reveals this. **Decided in §3.4.**
-- **The reference image does not carry identity — the text does.** A storyboard
-  whose `character_reference` is empty renders a stranger in every clip and
-  passes every deterministic check while doing it.
+- **Identity is the text lock plus her photographs as image1 (D10).** A
+  storyboard whose `character_reference` is empty still renders a stranger
+  (`T2-31`). A plate that is not her, used as image1, is also a stranger.
+  The old sentence *"the reference image does not carry identity"* is
+  retired: her photos are the identity lock; a stranger plate is refused.
 
 ## 2. What is NOT in scope, because it already exists
 
@@ -384,11 +388,13 @@ at a given index. `T2-10` requires clip N+1's first frame to be clip N's last �
 the whole limitation.
 
 - `T2-42` A scene may carry a `video_model`; absent, the render's
-  `--video-model` applies.
-- `T2-43` It lives in the **storyboard, beside `camera`**. "This shot needs lip
-  sync" is a directorial fact about the scene, not a render setting. Editable
-  through `EDITABLE_SCENE_FIELDS` and readable over JSON like every other scene
-  field.
+  `--video-model` applies. A named model is a renderer pin, not the
+  lip-sync fact. Lip-sync no longer means "skip LTX" — that is `T2-55`.
+- `T2-43` `video_model` lives in the **storyboard, beside `camera`**.
+  Editable through `EDITABLE_SCENE_FIELDS` and readable over JSON like
+  every other scene field. The directorial fact "this shot needs lip
+  sync" is `needs_lip_sync` (`T2-55`), not a `video_model=s2v` that
+  skips LTX.
 - `T2-44` A scene naming a model absent from `models.renderable("video")` is
   **refused at save**, naming the scene number and the bad value — not at render
   time and not silently defaulted.
@@ -405,9 +411,71 @@ the whole limitation.
   and the two output clips carry the models' own frame counts and fps. Asserting
   the plan holds two model names proves the field posts, not that two renderers
   ran.
-- `T2-48` Per-scene model and per-model ceilings compose: a 30 s scene marked
-  `s2v` splits into s2v-sized clips, a 30 s scene on `ltx25` into 15 s ones, and
-  each tiles its own scene exactly (`T2-8b`).
+- `T2-48` Per-scene model and per-model ceilings compose: a 30 s LTX
+  take splits on the LTX ceiling; each s2v hop window on a marked lip
+  scene splits on the s2v ceiling (`T5-9`). A 15 s LTX take becomes
+  several s2v windows when the hop runs. Each tiles its own scene
+  exactly (`T2-8b`). Song length still owns clip count.
+
+## 6b. The #529 loop — coverage, map, plates (D1, D4, D5)
+
+The one-front-sheet world is retired. Analyze does not bind. Classify
+does not write the map. Generate refs does not reuse one chosen front
+as image1 for every scene.
+
+- `T2-50` **Analyze-for-poses is a first-class board output.** Given a
+  ceiling-tier storyboard, the studio writes a coverage list of
+  required `(pose, view, wardrobe, exposure)` per scene. It does **not**
+  attach files, write `refs`, or write `scene_pose_map`. *Mutation:
+  analyze inserts a map row or a refs job → red.* Positive: a 3-scene
+  board with kneeling / standing / all-fours yields those three needs
+  and zero map rows (`test_t2_50_coverage_list.py`).
+- `T2-51` **The pose→scene map is drafted, never written by classify.**
+  After coverage is green, the studio drafts keeper → scene from
+  classified tags + scene text. Status is `draft`. Classify, even with
+  the same tags, writes no `scene_pose_map` row. *Mutation: classify
+  upserts a map row → red.* (`test_t2_51_classify_cannot_write_map.py`)
+- `T2-52` **Accept is required per scene, same shape as `T2-15`.**
+  Rejecting a draft leaves the previous accepted binding (or none).
+  Accepting persists `status=accepted`. Generate refs reads only
+  accepted bindings; a draft or rejected scene writes no still.
+  *Mutation: generate refs from a draft row → red. Mutation: reject
+  overwrites the previous accepted keeper → red.*
+  (`test_t2_52_map_accept.py`)
+- `T2-53` **One backdrop image per unique location key**, reused by
+  every scene and every ticked tier that names that location. Generate
+  or upload. Unset / `"studio"` keeps the grey-studio prompt and no
+  plate. This is not `make_anchor.BACKDROP` on a character sheet.
+  *Mutation: two scenes with the same key load two different plates →
+  red. Mutation: a character sheet path is stored as the location
+  plate → red.* (`test_t2_53_location_plates.py`)
+- `T2-54` **Ceiling + ticked-lower backfill of boards.** The run's
+  ceiling is the highest ticked tier. Every **lower** ticked tier gets
+  its own board (that tier's guardrail + the wardrobe it permits).
+  Unticked tiers get nothing. Never invent a **higher** tier than the
+  ceiling (no nude board from a g run; no xxx from an r ceiling).
+  r+pg13 writes both; r-only does not write pg13; g ceiling writes no
+  nude. *Mutation: r-only writes a pg13 board → red. Mutation: g
+  ceiling writes a nude view or r/xxx board → red.*
+  (`test_t2_54_ceiling_backfill.py`)
+- `T2-55` **`needs_lip_sync` is the directorial fact.** It lives beside
+  `camera` (not instead of it), is editable, and is readable over JSON.
+  True means LTX first, then the decoded s2v hop (`T5-12`). False /
+  absent means LTX only. It does not skip LTX. *Mutation:
+  `needs_lip_sync=true` emits only an s2v graph → red. Mutation: the
+  flag is omitted from `_scene_json` → GET arm red.*
+  (`test_t2_55_needs_lip_sync.py`)
+- `T2-56` **`gen_refs` image1 is the accepted keeper for that scene.**
+  Plus her other views as extra refs if present, and the location plate
+  when the scene has one. One chosen front sheet as image1 for every
+  scene fails this. T2-27 (per-scene refs) stays; the *source* of the
+  still is what changes. *Mutation: every scene's image1 is the album
+  front → red. Mutation: an unbound / draft / rejected scene still
+  generates → red.* (`test_t2_56_per_scene_keeper.py`)
+
+A nude map row on g/pg13 is refused (pairs with `T4-6` / `T7-2`).
+`T2-13b` still holds: accepted map rows and approved refs survive
+re-plan of the same board.
 
 ## 4. Generation flows
 
@@ -548,11 +616,14 @@ Only leads need anchors.
 - `T2-31` Saving a storyboard with an empty `character_reference` is refused,
   with a message naming the consequence. Measured 2026-08-12: without it, every
   clip renders an ordinary human and every deterministic check passes.
-- `T2-32` The refusal message says that identity comes from the **text**, not
-  from the reference image. A message that suggests attaching a reference would
-  teach the wrong lesson — the one-variable differential (species named in the
-  prompt or not, same reference, same seed, same box) is what established this,
-  and TRD-3 `T3-28` refuses the same wrong remedy on the QC side.
+- `T2-32` The refusal message names both halves of D10: the **text** names
+  species/body, and **image1 is her photographs**. A message that says
+  identity is "the text, not the photo" is the old one-sheet world and
+  fails this. A message that suggests swapping in a stranger plate is
+  also refused — TRD-3 `T3-28` is the QC twin. The measured 2026-08-12
+  differential still holds: species omitted, same photos, same seed →
+  ordinary human. The missing half is: photos omitted or a stranger
+  plate as image1 → also a stranger, even with perfect text.
 
 ## 6. Model selection
 
@@ -700,11 +771,48 @@ timing — `clip_chain_plan` is the one the operator and renderer share.
 | `T2-36` help text carried | assert a control with no help text is absent from the payload rather than present-and-empty, and that warnings are marked distinctly from notes |
 | `T2-16` multi-song apply | with confirmation it writes to exactly the songs confirmed, asserted by count |
 | `T2-37` arc in the playlist payload | assert a playlist WITHOUT an arc omits the field, so "always present" cannot pass for it |
+| `T2-50` coverage list | a 3-scene board yields those three needs **and** zero map/refs rows |
+| `T2-51` classify cannot write the map | after classify, map row count is unchanged; draft map is a different call |
+| `T2-52` Accept required | accepting persists; generate refs from the accepted row writes a still |
+| `T2-53` location plate reuse | two scenes with the same key load the **same** path; a generated plate is stored |
+| `T2-54` ceiling backfill | r+pg13 **writes both** boards; g ceiling writes a g board (clothed) |
+| `T2-55` needs_lip_sync | true emits LTX **then** the hop graph; false emits LTX only |
+| `T2-56` per-scene keeper | two accepted scenes with two keepers produce two different image1 paths |
 
 
 ---
 
-## Status against the tree, 2026-08-15
+## Status against the tree, 2026-08-17
+
+**#529 loop rows are the product.** Older T2-1…T2-49 rows stay. A
+criterion that still describes one chosen front as image1 for every
+scene, or lip-sync as skip-LTX, is **partial** or **not built** even
+if a check for the old world is green.
+
+Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
+not folded into the criteria above — *a criterion edited to describe what was
+built is no longer a criterion, it is a changelog with a prefix.*
+
+**"built" means a check can go red, not that the code exists.** `T4-10` read as
+done all day while `app.ALBUM_FIELDS["body"]` quietly beat it, so a ledger that
+repeats that is worse than none. Production is `c01c977`+; `origin/main` is
+current.
+
+| criterion | state | commit | what was measured |
+|---|---|---|---|
+| `T2-50` coverage list from the board (no bind) | **not built** | — | Intended: `test_t2_50_coverage_list.py`. Analyze writes `(pose, view, wardrobe, exposure)` per scene and zero `scene_pose_map` / refs rows. Tree: not a first-class studio output |
+| `T2-51` classify cannot write the map | **not built** | — | Intended: `test_t2_51_classify_cannot_write_map.py`. No `scene_pose_map` table. `pose_plan` auto-binds without Accept |
+| `T2-52` Accept-gated pose→scene map | **not built** | — | Intended: `test_t2_52_map_accept.py`. Same shape as T2-15. Generate refs from draft/rejected must fail |
+| `T2-53` location plate per location key | **not built** | — | Intended: `test_t2_53_location_plates.py`. No `location_plates`. `make_anchor.BACKDROP` is a character-sheet clause, not this |
+| `T2-54` ceiling + ticked-lower backfill | **not built** | — | Intended: `test_t2_54_ceiling_backfill.py`. r+pg13 writes both; r-only does not write pg13; g ceiling writes no nude |
+| `T2-55` `needs_lip_sync` = LTX first then D7 | **not built** | — | Intended: `test_t2_55_needs_lip_sync.py`. Tree: T2-42/43 still treat lip-sync as `video_model=s2v` (skip LTX) |
+| `T2-56` per-scene accepted keeper as image1 | **not built** | — | Intended: `test_t2_56_per_scene_keeper.py`. Tree: `test_t2_refs_identity.py` still pins one chosen front as image1 for every scene |
+| `T2-32` D10 wording (text + her image1) | **partial** | `test_t2_31_empty_reference.py` | Empty lock still refused (T2-31 **built**). Message still says identity comes from the text, not the photo — old world. D10 rewrite not asserted |
+| `T2-42` / `T2-43` `video_model` field | **partial** | `test_t2_42_scene_video_model.py` | Field posts and lives beside camera. Product meaning of lip-sync is now T2-55, **not built** |
+
+---
+
+## Status against the tree, 2026-08-15 (pre-#529; kept)
 
 Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
 not folded into the criteria above — *a criterion edited to describe what was
@@ -752,7 +860,7 @@ current.
 | **`T2-20` distinctive arc string in the generated board** | **built** | `album_arc` | same recorded response with and without `arc_ctx`; beat/continuity token present only when the arc is. Mutation: drop `arc_ctx` from `_compose` → red. Mutation: always stamp the token → the absent-arc arm fails |
 | **`T2-21` at xxx, no scene carries the mainstream clause** | **built** | `_xxx_scene_text` | `rear-entrance_xxx.json` as the recorded model response; after `_compose` no scene `image_prompt` / `video_motion_prompt` contains *"fully clothed, tasteful and non-graphic"* or *"no explicit gesture"*, and *"Explicit adult content is permitted"* is in the scene text. Mutation: leave scene prompts untouched → red. Mutation: strip the lock and do not stamp the xxx wording → red |
 | **`T2-22` own clause on the board; foreign wording refused at save** | **built** | `guardrail` | `_compose` stamps `guardrail` as `tiers.compose_guardrail(tier)` (not the passed argument). `save_scene` / `h_storyboard` refuse when another tier's stored wording appears. Mutation: drop the stamp → generation arm red. Mutation: copy the argument → red when the argument is not the clause. Mutation: write without the check → save arm red |
-| **`T2-31` / `T2-32` empty `character_reference` refused at save** | **built** | `test_t2_31_empty_reference.py` | `write_storyboard` raises before creating files; `save_scene` / `_apply_scene_fields` return 400. Message says identity comes from the text, not the reference image, and names the stranger-in-every-clip consequence. Whitespace and a missing key are empty. A filled lock still writes. Mutation: dump without the check → writer arm red. Mutation: write the scene without the check → save arm red. Mutation: point at the reference image as the fix → T2-32 red |
+| **`T2-31` / `T2-32` empty `character_reference` refused at save** | **T2-31 built; T2-32 partial** | `test_t2_31_empty_reference.py` | Empty lock still refused. Shipped message still says identity comes from the text, not the photo — old world. D10 wording is the 2026-08-17 `T2-32` row |
 | **`T2-23` API reports scene time vs song length and flags a miss** | **built** | `scene_time_report` | `GET /api/songs/{id}/storyboard/{tier}/meter` returns `scene_time`, `song_length`, `tolerance` (`SCENE_TIME_TOLERANCE` = 0.15 of song length) and `mismatch`. 120s of guidance on a 120s song is not flagged; 20s on the same song is. Mutation: always return the numbers, never set `mismatch` → miss arm red. Mutation: always set `mismatch` → match arm red. The live `meter` component and `T2-25` are not this |
 | **`T2-24` meter reports this song's `clip_seconds`** | **built** | `api_storyboard_meter` | `GET .../meter` returns `clip_seconds` from `build_song.clip_seconds(scene_seconds)`, not `CHUNK`. Same song at 15 s and 30 s yields two lengths. Mutation: hardcode 4.8125 → both arms equal. Mutation: return raw `scene_seconds` → 15.0 is not the legal 8n+1 length. The live `meter` component and `T2-25` are not this |
 | **`T2-33` picker reads `renderable()`** | **built** | `test_t2_33_picker_renderable.py` | add a catalogue model with a cli and it appears in `GET /songs/{id}` video_model options with no template change; option values match `models.renderable("video").values()`. Mutation: hardcode s2v+i2v+ltx → the probe cli is absent |
@@ -765,8 +873,8 @@ current.
 | **`T2-49` generate is offered album leads without a chosen front** | **built** | `test_t2_49_album_leads.py` | `h_storyboard` passes `offered_cast` (every `characters` row), not `cast_anchors`. `_cast_block` names them as leads and still allows extras/background when the album is empty. `classify_offered_figures` keeps album names as lead and demotes an invented lead to extra. Form / `storyboard_generation_payload` list each name and whether this tier has a front. A board that names none of them says so. Mutation: filter through `cast_anchors` → offer arm red. Mutation: empty block still forbids naming anyone → extras arm red. Mutation: keep an invented lead → coerce arm red |
 | **Cast slots: leads only on image2/3** | **built** | `test_app.py::test_cast_slots_only_leads_with_chosen_sheets_take_image2_and_image3` | `scene_cast` keeps `role == "lead"` (bare name = lead) with a chosen sheet; extras/background with sheets are dropped. Workflow image2/image3 match the lead files only; a scene of only extras has no image2/3. Mutation: attach every anchored name → extra arm red. Mutation: drop leads → lead arm red |
 | **`T2-28` unanchored lead flagged before refs render** | **built** | `test_t2_28_refs_unanchored_leads.py` / `test_t2_28_html.py` | UI/API list the lead (`T2-30`). `POST /songs/{id}/refs` 400s and writes no refs job when `unanchored_leads` is non-empty for that tier; the album protagonist sheet alone is not enough. Anchored lead + unanchored extra/background still 303s. Storyboard Generate refs is `button.blocked` (not disabled); `.plan-blocker` names that lead (`refs_plan_blockers`). Mutation: enqueue with banner only → miss arm red. Mutation: always refuse → match arm red. Mutation: refuse extras → extra arm red. Mutation: disable the button → disabled arm red. **Identity front:** `chosen_anchor(..., view="front")` is the only sheet that unlocks Generate refs. Named pose sheets (`pose_21`, `pose_60_nude`) do not. When they exist and front does not, the song page and plan-panel say *N pose sheets · missing identity front*, not *no anchor* (`test_identity_front_blocker_names_pose_library_when_front_is_missing`). |
-| **refs-identity chosen sheet as image1** | **built** | `test_t2_refs_identity.py` | `start_refs` freezes `chosen_anchor` path into the job; `h_refs` `install_input`s that path and hands it to `gen_refs` as `--anchor`; `build_refs.workflow` loads it on node 7 / image1. A standing plate (`standing_s4748`, unchosen anchors row, pose `anchor_ref`) is never image1 and never the score base. An intentional `--base` plate takes image2 only. Mutation: pass plate as `--anchor` → image1 arm red. Mutation: enqueue with plate path while a chosen sheet exists → enqueue arm red. Mutation: score bases against the plate → score arm red |
-| **pose plate per scene as image2** | **built** | `test_pose_plan.py` | `pose_plan.plan` lists every scene's needed pose (scene `pose`, else story/camera/prompt) against the album's chosen sheets. A saved `pose_sheet_id` wins; otherwise a family-token match auto-binds. `start_refs` freezes matches onto the board and passes `{scene_number: path}` as `pose_bases`. `build_refs --bases` puts that file on image2; image1 stays the identity front. Unbound scenes omit image2 (old path). Operator override: `POST /songs/{id}/storyboard/{tier}/scene/{n}/pose-sheet`. Mutation: all-fours scene binds the standing sheet → match arm red. Mutation: `--bases` writes the plate on image1 → identity arm red |
+| **refs-identity chosen sheet as image1** | **partial** (old one-sheet world) | `test_t2_refs_identity.py` | Still pins one chosen **front** as image1 for every scene. Standing 4748 plate is refused (keep). Product is now `T2-56`: accepted keeper for **that** scene is image1. Mutation that would go red for #529: every scene's image1 is the album front |
+| **pose plate per scene as image2** | **partial** (auto-bind, no Accept) | `test_pose_plan.py` | `pose_plan` auto-binds a chosen sheet to image2. Classify-shaped matching writes the bind without Accept. Product is `T2-51`/`T2-52`: draft map + Accept; generate refs from accepted only |
 | **refs-score vs chosen anchor** | **built** | `test_score_all_stills.py` | `ref_score_bases` hands the album's chosen sheet to `score_candidate` for `h_refs` / `h_reroll` / `h_fix_ref`. A job plate, broken source, or empty bases is not enough. Mutation: pass job plate as bases → red. Mutation: score fix_ref vs source → red |
 | **`T2-42` scene may carry `video_model`** | **built** | `test_t2_42_scene_video_model.py` | scene JSON carries `video_model` beside `camera`; GET returns it; unmarked stays empty and `clips_for_scene` takes the job `--video-model`. Mutation: omit from `_scene_json` → GET arm red. Mutation: invent a default onto an unmarked scene → absent arm red |
 | **`T2-43` beside `camera`, editable** | **built** | `test_t2_42_scene_video_model.py` | lives in the storyboard beside `camera`; `EDITABLE_SCENE_FIELDS` includes it; GET/POST JSON and the scene-row form write it. Mutation: leave off `EDITABLE_SCENE_FIELDS` → save arm red. Mutation: show it anywhere except beside camera → HTML arm red |

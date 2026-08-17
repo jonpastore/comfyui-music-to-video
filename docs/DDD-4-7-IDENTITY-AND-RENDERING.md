@@ -5,10 +5,10 @@ Sequencing and review record: `docs/PLAN-TRD-4-7.md`,
 `docs/reviews/PLAN-TRD-4-7-RECOMMENDATIONS-2026-08-13.md`. Sibling:
 `docs/DDD-1-3-EDITING-AND-QUALITY.md`.
 
-**Read off the tree at `f9ca597` plus session B's `415584d` / `4032aba` /
-`d315c6f`.** **Refreshed 2026-08-16 against the TRD-4/5/6/7 ledgers at
-`d782d2e`.** Built-state is those ledgers. Every claim that is a measurement
-names what it was read from.
+**Rewritten 2026-08-17 for Jarvis #529 (D1–D10).** Built-state is the
+TRD-4/5/7 ledgers. The one-line pipeline (operator photos → one chosen
+front → `gen_refs` image1 for every scene → `ltx25` or `s2v`) is
+retired. Every claim that is a measurement names what it was read from.
 
 ---
 
@@ -44,17 +44,51 @@ is not a studio feature.
 | `studio/jobs.py`, `pipeline.py`, `db.py` | TRD-6's territory. `qc_service.listed` / `select` / `record_pair` own T6-A5: predecessor and successor both listed and selectable. `h_render_set`, `refine_generated_still`, `h_repair` and `h_anchor` call `record_pair`. |
 | `studio/vision.py` | `score_candidate(path, bases, prompt)` — advisory identity+prompt match; a failure stores the xAI/local error and the backend that actually failed (not `available()`'s hope); `h_anchor` and `h_fix_anchor` write `anchors.qc_json`; `h_refs` / `h_reroll` / `h_fix_ref` write `refs.qc_json` with bases from `ref_score_bases` (chosen anchor, not job plate / broken source — `test_h_refs_scores_vs_chosen_anchor`); `h_artwork` writes `assets.qc_json` on the generate and on a refine sibling; `persist_still_qc` writes `artefacts.qc_json` on an `h_repair` dest still and a standalone refine dest; `qc_tag` shows the named failure, never "vision unknown" (`T3-31`, `T4-19`) |
 
-**The pipeline, and it is not a loop of adding bases:** operator base
-photographs (`assets` kind `anchor_ref`) → generate *candidates*
-(`anchors` rows) → pick `chosen=1` → that sheet feeds storyboard
-*reference frames* → clips. A pose plate is not a base image unless the
-operator put it there. A named pose on an `anchor_ref` (`meta_json.pose_name`,
-optional `pose_tier`, `role=pose`) is a plate: generate uses identity
-photos as image1 and that file as image2 (`T7-20`). Assign writes an
-`anchors` row whose path *is* the upload, and `anchor_refs` then hides
-that file from Base images. That is also `T6-A1`'s named JSON loop for TRD-4/TRD-7:
-`GET/POST /api/anchors`, `/api/anchors/refs`, `/api/anchors/{id}/pick`,
-`/api/anchors/{id}/use-as-ref` (`test_t6_a1_anchor_loop_over_json`).
+**The pipeline is the #529 loop**, and it is not "one front sheet for
+every scene":
+
+```
+operator base photographs (assets kind anchor_ref)
+        │
+        ▼
+classify → classification_json (DB, album + character, versioned)
+        │
+        ▼
+ceiling-tier storyboard exists
+        │
+        ▼
+analyze → pose_coverage (no bind, T2-50)
+        │
+        ▼
+gap vs this board → C1 same-pose / C2 new-pose at the ceiling (T4-24, T7-21)
+        │
+        ▼
+QC each landing (T3-34); keeper / reject; usable≠skip (T7-23)
+        │
+        ▼
+draft scene_pose_map → operator Accept per scene (T2-51, T2-52)
+        │
+        ▼
+gen_refs: image1 = accepted keeper for THAT scene
+          location plate when the scene has one (T2-53, T2-56)
+        │
+        ▼
+LTX 2.5 first (T5-11)
+        │
+        ├─ unmarked → LTX only; T5-A refine on the LTX take (T5-14)
+        │
+        ▼ needs_lip_sync
+decoded s2v hop: control_video = LTX frames, ref_image = scene still
+(T5-12, T5-13). D7 look NOT MEASURED (T3-37).
+        │
+        ▼ assemble; song length owns clip count
+```
+
+A pose plate is not a base image unless the operator put it there.
+Location plates are a different object (`location_plates`), never her
+identity lock (`T7-22`). Named pose uploads stay `T7-20`.
+`T6-A1`'s JSON loop (`GET/POST /api/anchors`, pick, use-as-ref) still
+holds for generating keepers; it does not write the map.
 
 ## 1a. Stacks, families, and when to use them
 
@@ -100,25 +134,32 @@ Ask what you are trying to change. One family per hop.
 
 ### Flows (still → clip)
 
+The #529 loop above is the product. The still stack on a C1/C2 job:
+
 ```
-operator photos (anchor_ref)
+operator photos (anchor_ref) as image1
         │
         ▼
-2511 studio (Lightning) or 2511 grind (50-step)
+C1: image latent + denoise 1.0 + pose text matches source
+C2: empty 896×1216 + her keepers, never a stranger plate (T7-21)
         │
         ├─ pose FAIL ──► do not draw anatomy (T3-33.b)
         │
         ▼ pose PASS
 SNOFS Qwen v1.3 / labiaplasty v4 / Inpaint CN
         │
-        ▼ pick chosen=1
-gen_refs (2511, chosen sheet = image1)
+        ▼ keeper (usable≠skip)
+Accept-gated map → gen_refs image1 = that scene's keeper
         │
-        ▼ approved ref still
-ltx25 (default) or wan22_s2v
+        ▼ approved scene still + location plate
+LTX 2.5 first; optional decoded s2v hop; T5-A on the LTX take
         │
         ▼ assemble; song length owns clip count
 ```
+
+One resolver for C1/C2 (latent + denoise labels + pose hint). One
+resolver for clip hops (LTX always; s2v if `needs_lip_sync`; T5-A if
+refine). Labels cannot promise a hop the graph omits.
 
 Parked off this path: Phr00t AIO, Klein 9B, Pony donor, Krea/Flux
 t2i, O14 training on gamingpc. Flux.1 Kontext and Flux.2 are
@@ -259,16 +300,18 @@ whose whole point is not doing that.
 
 ## 4. The identity lock
 
-Identity comes from the text, not from the reference image. Saving a
-storyboard whose `character_reference` is empty is refused
-(`T2-31` / `T2-32` / `grok.EMPTY_CHARACTER_REFERENCE`). When a sheet or
-clip is wrong from the first frame, the QC remedy is edit the text, then
-re-render (`T3-28` / `qc.check_identity_wrong`). The rest of image QC
-uses that same class (`T3-33.a` / `qc.IMAGE_PROMPT_REWRITE_CHECKS`):
-blank, uniform, transparent, lighting and portrait findings say edit
-the text, not "re-render with a different seed". Swapping the reference
-image is refused — measured 2026-08-12: same reference, same seed, same
-box; species named or not is the one variable.
+Identity is the text plus her photographs as image1 (D10). Saving a
+storyboard whose `character_reference` is empty is refused (`T2-31`).
+`T2-32`'s message names both halves; the shipped string still says
+"the text, not the photo" (**partial**). When a sheet or clip is wrong
+from the first frame, the QC remedy is edit the text, then re-render
+(`T3-28` / `qc.check_identity_wrong`) — not swap a stranger plate.
+Using **her** photos as image1 is required (`T2-56`). `T3-33.a` still
+says image FLAG/REJECT content findings are edit-text; `T3-35` adds
+settings remedies (latent / denoise / CFG / pose-match / plate-absent /
+body-colour). Measured 2026-08-12: same photos, same seed, same box;
+species named or not is one variable. The other variable is her
+photos vs a stranger plate.
 
 `T7-6` shipped (`d315c6f`): "use as reference" on an anchor tile, the row points
 at the sheet's own file with no copy, deleting the ref keeps the file, deleting
@@ -450,7 +493,13 @@ code rather than in documents.
   truthy album default still beats the constant at compose time — that is
   why the walker exists.
 - **`DENOISE_CHOICES`' labels vs `latent_mode`** — §4, `T7-8`. One resolver, or
-  the label and the graph drift the moment either moves.
+  the label and the graph drift the moment either moves. `T7-21` is
+  the same resolver for C1/C2 (**not built**).
+- **Clip-hop labels vs the graph** — LTX always; s2v if
+  `needs_lip_sync`; T5-A if refine. A control that says "lip-sync"
+  must not emit s2v-only (`T5-11`, **not built**).
+- **`classification_json` vs `anchor5/*.json`** — the DB document is
+  the store (`T4-21`). Sidecars are not (**not built**).
 
 ## 8. How this design is verified
 

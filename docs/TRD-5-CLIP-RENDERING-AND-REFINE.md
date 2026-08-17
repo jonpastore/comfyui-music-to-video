@@ -1,8 +1,10 @@
 # TRD-5 · Clip rendering and refine
 
-Status: written 2026-08-13. Owned by no previous document. TRD-2 owns what a
-storyboard asks for and TRD-3 owns measuring what came back; the graph that
-turns one into the other was specified nowhere.
+Status: **rewritten 2026-08-17** for Jarvis **#529** (D6–D9). The 2026-08-13
+text still owns T5-A refine, ceilings, and the latent forbid. This pass
+requires LTX first on every scene and a decoded s2v hop on marked lip
+scenes. Source of truth:
+`docs/PROMPT-2026-08-15-PIPELINE-REQUIREMENTS.md`.
 
 Acceptance criteria are `T5-n` and each **can fail**. Everything asserted about
 the fleet below was queried live on 2026-08-13, not remembered.
@@ -144,9 +146,53 @@ measurement beside it. The **values** are renderer facts and belong here.
   also `4(2n)+1` — so **frames ≡ 1 (mod 8) serves both**, one rule and no
   per-model fork. Verified against cerberus; both accept `max: 16384`.
 
+## 5a. LTX first, then the decoded s2v hop (D6, D7, D8)
+
+Every scene renders LTX 2.5 first from the scene ref + location plate
+(if any). Lip-sync is a second, **decoded** hop on marked scenes only.
+The latent forbid in §1 **stands**: LTX VAE ≠ `wan_2.1_vae`. The hop
+is pixels, which is why it is allowed.
+
+- `T5-11` **Every scene's first clip graph is `ltx25`.** `needs_lip_sync`
+  does not skip LTX. Unmarked scenes are LTX only. *Mutation:
+  `video_model=s2v` or `needs_lip_sync=true` as the first hop → red.*
+  (`test_t5_11_ltx_always_first.py`)
+- `T5-12` **D7 hop graph.** On `needs_lip_sync` scenes, after the LTX
+  take lands:
+  - `ref_image` = the accepted scene still (her)
+  - `control_video` = the LTX take, loaded as IMAGE frames
+    (`LoadVideosFromFolder` — not `LoadVideo`, not an LTX latent)
+  - windowed to the s2v ceiling (~4.8125 s, `T5-9` chosen)
+  - `audio` = that clip's trim window
+  - deliverable is the s2v clip
+  - the LTX take stays listed as predecessor (`T6-A5`)
+  *Mutation: `control_video` is an LTX latent or `LoadVideo` → red.
+  Mutation: hop overwrites the LTX file → red. Mutation: `ref_image`
+  is the album front, not the scene still → red.*
+  (`test_t5_12_d7_hop.py`)
+- `T5-13` **`skip_first_frames` / trim so each s2v window reads the
+  matching slice of the LTX take, not always frame 0.** Window 2 of a
+  15 s LTX take does not start at frame 0. *Mutation: every window
+  loads the LTX file from index 0 → red.* (`test_t5_13_s2v_window.py`)
+- `T5-14` **T5-A refine stays on the LTX take.** It is not a third LTX
+  job on s2v frames. It is not the WAN i2v-low refiner. *Mutation:
+  `--refine` attaches to the s2v successor → red. Mutation: a third
+  LTX graph is submitted on s2v pixels as "correction" → red.*
+  (`test_t5_14_refine_on_ltx_take.py`)
+- `T5-15` **No LTX latent into WAN.** A graph that wires an LTX VAE
+  latent into a WAN node is refused. Stands as the explicit
+  not-building half of §1. *Mutation: hand off node 21/22 samples to
+  `wan22_i2v_low` → red.* (`test_t5_15_no_latent_handoff.py`)
+
+D7's picture look is `T3-37` and is **NOT MEASURED** until a pinned
+same-scene GPU pair exists. Fallback: s2v-from-still (no
+`control_video`), recorded as a finding, not a silent drop.
+
 ## 6. Explicitly not building
 
-- **No WAN refiner on LTX output.** §1.
+- **No WAN refiner on LTX output.** §1 / `T5-15`.
+- **No LTX latent into WAN.** `T5-15`.
+- **No third LTX "correction" pass on s2v frames.** `T5-14`.
 - **No frame handoff from scratch** for chained clips: `LTXVAddGuide` is
   installed and `build_song.attach_ltxv_guide` wires it. Do not invent a
   second mechanism. TRD-2 `T2-10` owns the criterion; this graph is how.
@@ -202,7 +248,23 @@ this document owns the node. The sentence stays "do not reinvent", not
 
 ---
 
-## Status against the tree, 2026-08-13
+## Status against the tree, 2026-08-17
+
+#529 clip-graph rows. T5-1…T5-10 stay in the 2026-08-13 ledger below.
+
+| criterion | state | commit | what was measured |
+|---|---|---|---|
+| `T5-11` LTX always first | **not built** | — | Intended: `test_t5_11_ltx_always_first.py`. Tree: T2-42/43 still let `video_model=s2v` skip LTX |
+| `T5-12` decoded s2v hop (`control_video` = LTX frames) | **not built**; **NOT MEASURED** | — | Intended: `test_t5_12_d7_hop.py`. No hop graph. No GPU pair (`T3-37`) |
+| `T5-13` `skip_first_frames` matches the LTX slice | **not built** | — | Intended: `test_t5_13_s2v_window.py` |
+| `T5-14` T5-A refine on the LTX take, not on s2v | **partial** | `test_clip_length.py` | `_refine_ltx` attaches A on an LTX graph. No s2v successor exists, so "not on s2v" is untested. Labels must not promise a hop the graph omits |
+| `T5-15` no LTX latent into WAN | **built** (forbid) | `test_clip_length.py` | Early-return LTX path never reaches the WAN refine block. Keep: do not wire them. Intended positive: a graph that tries the handoff is refused (`test_t5_15_no_latent_handoff.py` **not built**) |
+| `T5-1`/`T5-3`/`T5-4` refine on LTX | **built** (graph) | `test_clip_length.py` | `_refine_ltx` attaches a second pass; silent no-op is gone |
+| `T5-2` output MAD + sharpness | **built** (decoded pair); GPU pair **NOT MEASURED** | `test_t5_2_refine_mad.py` | Same as 2026-08-13 row |
+
+---
+
+## Status against the tree, 2026-08-13 (pre-#529; kept)
 
 Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
 not folded into the criteria above — *a criterion edited to describe what was

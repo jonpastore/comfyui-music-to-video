@@ -305,6 +305,6 @@ sidecar (not the studio loop).
 | D9 D7 look (lips + her + blocking) | no pinned pair |
 | D10 identity = text + her image1; charcoal-brown | measured on stills; 0 chosen studio anchors |
 | sqlite `classification_json` | sidecar `anchor5/*.json` only |
-| Docs TRD-2/3/4/5/7 + PRDs + DDDs + UIUX describe this loop | **not rewritten** — still the one-sheet world |
+| Docs TRD-2/3/4/5/7 + PRDs + DDDs + UIUX describe this loop | **rewritten 2026-08-17** — T2-50…T2-56, T3-34…T3-37, T4-21…T4-24, T5-11…T5-15, T7-21…T7-23. All **not built** except where a pre-#529 check already covers a forbid (T5-15 latent, T3-28 no stranger swap). Code still the leftover |
 
 **Product:** 0 chosen anchors live. Factory is still on step 1.

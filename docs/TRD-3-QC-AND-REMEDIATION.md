@@ -1,10 +1,10 @@
 # TRD-3 · Output QC and remediation
 
-Status: draft for review, written 2026-08-12. Supersedes `docs/OUTPUT_QC_PLAN.md` *(absorbed and removed 2026-08-13; in git history)*,
-which was written earlier the same day and **predates the scope**: it covers
-images and clips only, and it hardcodes expected values that the clip-length
-decision has since invalidated. Where this document contradicts that one, this
-one is right and §2.3 says why.
+Status: **rewritten 2026-08-17** for Jarvis **#529** (D1–D10). The 2026-08-12
+draft still owns tiers 0–3 and the T3-1…T3-33 ledger. This pass adds pose-
+library QC, settings remedies, and the D7 lip-hop look. Source of truth
+for the loop: `docs/PROMPT-2026-08-15-PIPELINE-REQUIREMENTS.md`.
+Supersedes `docs/OUTPUT_QC_PLAN.md` *(absorbed and removed 2026-08-13; in git history)*.
 
 Inputs: `docs/OUTPUT_QC_PLAN.md`, `docs/RECONCILIATION_2026-08-12.md`,
 `docs/EXTERNAL_REVIEW_2026-08-12.md`, and the fleet measurements recorded in
@@ -288,7 +288,46 @@ alpha not fully transparent.
   anus. Anatomy QC runs only on a pose PASS: human-shaped vulva/anus,
   pigment from `looking-back.jpg` + `standing.jpg`, cleft lit, no
   panties, no photoreal identity leak. A pose FAIL must not be
-  inpainted, scribbled, or composited. Not a VLM gate.
+  inpainted, scribbled, or composited. InstantX Union is pose only.
+  Vanilla 2511 undraws genitals — SNOFS / Inpainting CN / crop-stitch
+  after PASS. Anatomy samples retone to her source photos. Never
+  photoreal as image2. Operator grind:
+  `docs/MEASURED-2026-08-16-POSE-ANATOMY.md`. Twin: `T4-20`. Not a
+  VLM gate.
+
+### 4.1a Pose-library stills and the D7 hop (D2, D9)
+
+New poses (job types C1 same-pose edit / C2 new-pose) run the same
+still QC as anchors. Image-latent sheets inherit source size on
+purpose; that is not a resolution reject.
+
+- `T3-34` **A C1/C2 landing is scored like an anchor** (`T3-31`
+  confidence, identity, hallucinations). Advisory, not a gate. Missing
+  `qc_json` on a landed pose sheet fails this. *Mutation: skip
+  `score_candidate` on C2 → red.* (`test_t3_34_pose_still_qc.py`)
+- `T3-35` **Settings remedies are named**, not only "edit the text".
+  A pose FAIL / identity FAIL finding lists the applicable class:
+  `latent` / `denoise` / `CFG` / `pose-match` / `plate-absent` /
+  `body-colour`. C1 (same-pose) that used empty latent is `latent`.
+  C2 whose pose text does not match the asked pose is `pose-match`.
+  A stranger plate as image1 is `plate-absent` (her photos missing),
+  never "swap in a different stranger". Jet-black body vs charcoal-
+  brown source photos is `body-colour`. *Mutation: only `edit-text`
+  on a plate-as-image1 FAIL → red.* (`test_t3_35_settings_remedies.py`)
+- `T3-36` **Image-latent sheets that inherit source WxH are not
+  `resolution` REJECT.** Empty-latent 896×1216 is still checked
+  against the request. *Mutation: VAEEncode of a 1024×1024 photo
+  REJECT `resolution` because expect is 896×1216 → red.*
+  (`test_t3_36_image_latent_size.py`)
+- `T3-37` **D7 pair look: lips move, she is still her, LTX blocking
+  is still readable.** NOT MEASURED until a same-scene GPU pair
+  (LTX-only vs LTX+s2v-control) is pinned. Do not rank on warm px.
+  Missing pair raises `NOT MEASURED`; `skip` is not a reading. If
+  the pictures fail, the fallback is today's s2v-from-still (no
+  `control_video`), recorded as a finding, not a silent drop of the
+  hop. *Mutation: mark D7 built from a warm-px score → red.
+  Mutation: hop omitted with no finding → red.*
+  (`test_t3_37_d7_look.py`)
 
 ### 4.2 Clips
 
@@ -763,7 +802,22 @@ check is true, and forcing the check true SUBMITS.
 
 ---
 
-## Status against the tree, 2026-08-13
+## Status against the tree, 2026-08-17
+
+#529 QC rows. T3-1…T3-33 stay in the 2026-08-13 ledger below.
+
+| criterion | state | commit | what was measured |
+|---|---|---|---|
+| `T3-34` C1/C2 landing scored like an anchor | **not built** | — | Intended: `test_t3_34_pose_still_qc.py`. Pose-library generate is sidecar `batch_edit`, not the studio loop |
+| `T3-35` settings remedies (latent / denoise / CFG / pose-match / plate-absent / body-colour) | **not built** | — | Intended: `test_t3_35_settings_remedies.py`. Image FLAG/REJECT is still `edit-text` only (`T3-33.a`) |
+| `T3-36` image-latent sheets do not FAIL for inheriting source size | **not built** | — | Intended: `test_t3_36_image_latent_size.py`. `T3-4.1-resolution` compares exact WxH with no image-latent exemption |
+| `T3-37` D7 look (lips + her + blocking) | **not built**; **NOT MEASURED** | — | Intended: `test_t3_37_d7_look.py`. No same-scene GPU pair. Do not rank on warm px |
+| `T3-33.b` pose QC before anatomy | **process** | `T4-20` | Eye gates in `anchor5/poses/cleanrun/qc-pose-*.json`. Not a VLM. Studio graph unchanged |
+| `T3-28` identity-wrong never swaps a stranger plate | **built** (keep) | `test_t3_28_identity_wrong_remedy.py` | Remedy is edit the text, not swap a stranger plate. D10 adds: her photos as image1 are required; a missing-her finding is `plate-absent` (`T3-35`), not a swap |
+
+---
+
+## Status against the tree, 2026-08-13 (pre-#529; kept)
 
 Written by session A, in the shape session B set in TRD-4/TRD-7: a **ledger**,
 not folded into the criteria above — *a criterion edited to describe what was
