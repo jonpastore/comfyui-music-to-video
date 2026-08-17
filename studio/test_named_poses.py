@@ -26,8 +26,8 @@ def test_qc_tag_shows_identity_and_notes_when_they_diverge():
         "confidence": 20, "identity": 20, "prompt": 40,
         "notes": "human face, two tails",
     })})
-    assert "20% match" in tag
-    assert "id 20%" in tag
+    assert "confidence 20%" in tag
+    assert "identity 20%" in tag
     assert "pose 40%" in tag
     assert "human face" in tag
 

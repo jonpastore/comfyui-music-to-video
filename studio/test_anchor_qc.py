@@ -89,7 +89,7 @@ def test_candidate_tile_shows_confidence():
         media_url=lambda p: "/media?p=" + p,
     )
     assert "81%" in html
-    assert "vision" in html.lower() or "match" in html.lower()
+    assert "confidence" in html.lower() or "vision" in html.lower()
 
 
 def test_qc_tag_does_not_hide_xai_or_local_failure_as_unknown():
@@ -113,7 +113,7 @@ def test_qc_tag_does_not_hide_xai_or_local_failure_as_unknown():
 
     assert appmod.qc_tag({"qc_json": None}) == ""
     assert appmod.qc_tag({"qc_json": json.dumps({"confidence": None})}) == ""
-    assert appmod.qc_tag({"qc_json": json.dumps({"confidence": 64})}) == "64% match"
+    assert appmod.qc_tag({"qc_json": json.dumps({"confidence": 64})}) == "confidence 64%"
 
 
 def test_score_candidate_does_not_hide_xai_or_local_failure(monkeypatch, tmp_path):

@@ -204,16 +204,32 @@ def test_t2_13_no_module_outside_build_song_computes_clip_count():
 
 
 def test_t2_13_user_prompt_clip_count_comes_from_n_clips_for(monkeypatch):
-    """T2-13: _user_prompt does not compute ceil(dur / CHUNK).
+    """T2-13: pinned _user_prompt does not compute ceil(dur / CHUNK).
 
     Mutation: restore math.ceil(dur / CHUNK) → 195.792 / CHUNK is 41 and this fails.
     """
     grok = _grok()
     monkeypatch.setattr(grok, "n_clips_for", lambda duration, scene_seconds=None: 7)
     song = {"title": "T", "album": "A", "duration": 195.792, "genre": "pop"}
-    text = grok._user_prompt("[Verse]\nwords", song, "pg13", 7)
+    text = grok._user_prompt("[Verse]\nwords", song, "pg13", 7, scene_seconds=30.0)
     assert "7 clips" in text
     assert "41 clips" not in text
+
+
+def test_unpinned_user_prompt_does_not_ask_for_a_clip_count():
+    """Unpinned generate must not name ceil(duration / CHUNK).
+
+    Back Alley Pussy is 237.67 s → 50 clips at CHUNK. That is why different
+    song lengths kept landing on 50. Mutation: restore
+    n_clips_for(dur, None) in TIMING → "50 clips" and this fails.
+    """
+    grok = _grok()
+    song = {"title": "T", "album": "A", "duration": 237.67, "genre": "pop"}
+    text = grok._user_prompt("[Verse]\nwords", song, "xxx", None)
+    assert "50 clips" not in text
+    assert "Generate None" not in text
+    assert not re.search(r"\b\d+\s+clips\b", text)
+    assert "You choose how many scenes" in text
 
 
 def test_generate_storyboard_asks_for_n_clips_for_not_raw_seconds():

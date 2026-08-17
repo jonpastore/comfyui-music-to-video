@@ -298,6 +298,36 @@ def score_generated_still(path, bases, prompt="", progress=None):
         })
 
 
+def score_landed_clip(path, song, tier, clip_idx, progress=None):
+    """First-frame identity score vs her photographs (and the approved still).
+
+    Wardrobe is not an identity defect. Never a gate. A missing ffmpeg
+    frame or a vision miss stores nothing and does not fail the clip job.
+    """
+    if not path or not os.path.isfile(path):
+        return None
+    dest = path + ".qc.png"
+    try:
+        import build_song as _bs
+        _bs.extract_video_frame(path, "first", dest=dest)
+    except Exception as e:
+        if progress:
+            progress(f"clip qc frame skipped: {e}")
+        return None
+    bases = list(ref_score_bases(song, tier))
+    still = db.one(
+        """SELECT path FROM refs WHERE song_id=? AND tier=? AND clip_idx=?
+           AND approved=1""",
+        song["id"], tier, clip_idx)
+    if still and still["path"] and still["path"] not in bases:
+        bases.append(still["path"])
+    qc = score_generated_still(
+        dest, bases, "clip first frame; score physical identity, not wardrobe",
+        progress)
+    db.run("UPDATE clips SET qc_json=? WHERE path=?", qc, path)
+    return qc
+
+
 def refine_generated_still(src, progress=None, extra=None):
     """Postproc repair: a NEW file beside src. Never overwrite (T3-6)."""
     root, ext = os.path.splitext(src)
@@ -348,9 +378,11 @@ def qc_tag(row):
             short = f"{backend} {short}".strip()
         return f"vision: {short[:48]}"
     ident, prompt = s.get("identity"), s.get("prompt")
-    tag = f"{int(n)}% match"
-    if ident is not None and prompt is not None and (ident != n or prompt != n):
-        tag += f" · id {int(ident)}% · pose {int(prompt)}%"
+    tag = f"confidence {int(n)}%"
+    if ident is not None:
+        tag += f" · identity {int(ident)}%"
+    if prompt is not None and (ident is None or prompt != ident or prompt != n):
+        tag += f" · pose {int(prompt)}%"
     notes = (s.get("notes") or "").strip()
     if notes:
         tag += f" — {notes[:80]}"
@@ -1605,6 +1637,10 @@ def h_clips(args, progress):
         db.run("""INSERT INTO clips (song_id, tier, clip_idx, path, status) VALUES (?,?,?,?,'done')
                   ON CONFLICT(song_id, tier, clip_idx) DO UPDATE SET path=excluded.path, status='done'""",
                sid, tier, r["clip_idx"], r["path"])
+        try:
+            score_landed_clip(r["path"], song, tier, r["clip_idx"], progress)
+        except Exception as e:
+            progress(f"clip identity qc skipped: {e}")
     return {"count": len(results)}
 
 
@@ -2549,6 +2585,8 @@ def song_page(request: Request, id: int):
             pose_plan_by_tier[t] = pose_plan.plan(song, t)
         except (LookupError, OSError, json.JSONDecodeError, ValueError):
             pose_plan_by_tier[t] = None
+    face_tier = "xxx" if "xxx" in storyboards else (next(iter(storyboards), "") or "")
+    faces = _face_choices(song, face_tier) if face_tier else []
     return templates.TemplateResponse(request, "song.html", {
         "song": song, "tiers": all_tiers, "storyboards": storyboards, "beat_count": beat_count,
         "approved_tiers": approved_tiers, "reviews": reviews,
@@ -2558,6 +2596,7 @@ def song_page(request: Request, id: int):
         "pose_library_by_tier": pose_library_by_tier,
         "ref_progress_by_tier": ref_progress_by_tier,
         "pose_plan_by_tier": pose_plan_by_tier,
+        "faces": faces,
         "video_models": video_models,
         "renders": renders, "song_jobs": song_jobs, "active_job": active_job,
         "models": chat_models,
@@ -6015,6 +6054,10 @@ def storyboard_page_ctx(song, tier):
         "mismatch": board["mismatch"],
         "versions": storyboard_versions.list_versions(row["json_path"], tier),
         "all_videos": [v for r in rows for v in (r.get("videos") or [])],
+        "faces": _face_choices(song, tier),
+        "flagged_idxs": sorted(latest_flags(song["id"], tier)),
+        "ref_flags": latest_flags(song["id"], tier),
+        "nclips": nclips,
     }
 
 
@@ -6172,12 +6215,14 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
         outdir = os.path.dirname(row["json_path"])
         grok.write_storyboard(sb, outdir, song["slug"], tier)
     nxt = (form.get("next") or "").strip()
-    if nxt == f"/songs/{id}/approve/{tier}":
+    if nxt.startswith(f"/songs/{id}"):
         return RedirectResponse(f"{nxt}#scene-{num}", status_code=303)
     anchored = {c["name"] for c, _a in cast_anchors(song["album"] or "", tier)}
     rows, _ = storyboard_scenes(song, load_storyboard(row), tier, anchored,
                                 scene_seconds=row["scene_seconds"])
     r = next(x for x in rows if x["num"] == num)
+    if wants_json(request):
+        return JSONResponse({"ok": True, "num": num, "changed": changed})
     return templates.TemplateResponse(request, "_scene_row.html", {
         "song": song, "tier": tier, "r": r, "fields": EDITABLE_SCENE_FIELDS,
         "chunk": build_song.clip_seconds(row["scene_seconds"]),
@@ -6343,9 +6388,10 @@ def api_pose_plan(id: int, tier: str):
 
 
 @app.post("/songs/{id}/storyboard/{tier}/scene/{num}/pose-sheet")
-def bind_scene_pose_sheet(id: int, tier: str, num: int, sheet_id: str = Form("0")):
+def bind_scene_pose_sheet(request: Request, id: int, tier: str, num: int,
+                          sheet_id: str = Form("0")):
     """Operator override: this scene uses this chosen sheet as the pose plate."""
-    get_song_or_404(id)
+    song = get_song_or_404(id)
     valid_tier_or_400(tier)
     try:
         pose_plan.bind_scene(id, tier, num, sheet_id)
@@ -6353,7 +6399,19 @@ def bind_scene_pose_sheet(id: int, tier: str, num: int, sheet_id: str = Form("0"
         raise HTTPException(404, str(e))
     except ValueError as e:
         raise HTTPException(400, str(e))
-    return RedirectResponse(f"/songs/{id}/storyboard/{tier}#scene-{num}", status_code=303)
+    plan = pose_plan.plan(song, tier)
+    row = next((s for s in plan["scenes"] if s["num"] == num), None) or {}
+    path = row.get("path")
+    return json_or_redirect(request, {
+        "ok": True,
+        "num": num,
+        "source": row.get("source") or "none",
+        "sheet_id": row.get("sheet_id"),
+        "path": path,
+        "url": media_url(path) if path else None,
+        "label": row.get("label") or "",
+        "pose": row.get("pose") or "",
+    }, f"/songs/{id}#scene-{num}")
 
 
 @app.post("/songs/{id}/refs")
@@ -6429,6 +6487,14 @@ def latest_flags(sid, tier):
 
 
 _REF_ORIGINS = frozenset({"gen", "reroll", "refine", "face", "inpaint", "outpaint"})
+
+
+def _face_choices(song, tier):
+    faces = []
+    if chosen_anchor("album", song["album"] or "", tier):
+        faces.append(("protagonist", "protagonist"))
+    faces += [(str(c["id"]), c["name"]) for c, _a in cast_anchors(song["album"] or "", tier)]
+    return faces
 
 
 def _scene_head_idxs(song, tier, video_model=None):
@@ -6546,12 +6612,13 @@ def approve_context(song, tier):
 
 @app.get("/songs/{id}/approve/{tier}", response_class=HTMLResponse)
 def approve_grid(request: Request, id: int, tier: str):
-    song = get_song_or_404(id)
-    return templates.TemplateResponse(request, "approve.html", approve_context(song, tier))
+    get_song_or_404(id)
+    valid_tier_or_400(tier)
+    return RedirectResponse(f"/songs/{id}#fold-storyboard", status_code=303)
 
 
 @app.post("/songs/{id}/approve/{tier}/all")
-def approve_all(id: int, tier: str, replace: bool = Form(False)):
+def approve_all(request: Request, id: int, tier: str, replace: bool = Form(False)):
     """Approve one candidate for every clip that has none.
 
     At fifty frames, clicking Approve fifty times is the slow path and the
@@ -6602,7 +6669,9 @@ def approve_all(id: int, tier: str, replace: bool = Form(False)):
                    id, tier, i)
             db.run("UPDATE refs SET approved=1 WHERE id=?", newest["id"])
             n += 1
-    return RedirectResponse(f"/songs/{id}/approve/{tier}", status_code=303)
+    return json_or_redirect(
+        request, {"ok": True, "n": n, "replace": bool(replace)},
+        f"/songs/{id}#fold-storyboard")
 
 
 @app.post("/songs/{id}/refs/{clip_idx}/approve", response_class=HTMLResponse)
@@ -6621,6 +6690,9 @@ def approve_ref(request: Request, id: int, clip_idx: int, tier: str = Form(...),
             db.run("UPDATE refs SET approved=0 WHERE song_id=? AND tier=? AND clip_idx=?",
                    id, tier, ref["clip_idx"])
     db.run("UPDATE refs SET approved=? WHERE id=?", new_val, ref_id)
+    if wants_json(request):
+        return JSONResponse({"ok": True, "approved": bool(new_val), "ref_id": ref_id,
+                             "clip_idx": ref["clip_idx"], "scene_number": ref["scene_number"]})
     ctx = approve_context(song, tier)
     clip = None
     if ref["scene_number"] is not None:
@@ -6662,7 +6734,9 @@ def html_delete_ref(request: Request, id: int, ref_id: int, tier: str = Form("")
         ctx = approve_context(song, t)
         clip = next((c for c in ctx["clips"] if c["idx"] == row["clip_idx"]), None)
         return templates.TemplateResponse(request, "_clip_tile.html", dict(ctx, clip=clip))
-    dest = f"/songs/{id}/approve/{tier}" if tier else f"/songs/{id}"
+    if wants_json(request):
+        return JSONResponse({"ok": True, "deleted": ref_id})
+    dest = f"/songs/{id}#fold-storyboard" if tier else f"/songs/{id}"
     return RedirectResponse(dest, status_code=303)
 
 
@@ -6671,7 +6745,7 @@ MAX_REROLL_N = 16
 
 
 @app.post("/songs/{id}/reroll")
-def start_reroll(id: int, tier: str = Form(...), clip_idx: List[int] = Form(...),
+def start_reroll(request: Request, id: int, tier: str = Form(...), clip_idx: List[int] = Form(...),
                   note: str = Form(""), n: int = Form(4),
                   seed_min: int = Form(8000), seed_max: int = Form(11000),
                   step: str = Form("equal")):
@@ -6712,12 +6786,14 @@ def start_reroll(id: int, tier: str = Form(...), clip_idx: List[int] = Form(...)
         reroll_refs.seed_plan(n, seed_min, seed_max, step)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    jobs.enqueue("reroll", {"song_id": id, "tier": tier, "clip_indices": idxs, "note": note,
+    jid = jobs.enqueue("reroll", {"song_id": id, "tier": tier, "clip_indices": idxs, "note": note,
                              "pose_bases": pose_plan.scene_bases(song, tier),
                              "n": n, "seed_min": int(seed_min), "seed_max": int(seed_max),
                              "step": step},
                  song_id=id)
-    return RedirectResponse(f"/songs/{id}/approve/{tier}", status_code=303)
+    return json_or_redirect(
+        request, {"job_id": jid, "kind": "reroll", "tier": tier, "n": n},
+        f"/songs/{id}#fold-storyboard")
 
 
 FIX_MODES = ("face", "inpaint", "outpaint")
@@ -6829,7 +6905,7 @@ async def start_fix_ref(id: int, clip_idx: int, tier: str = Form(...), mode: str
         # so reusing the frame's own seed would silently drop the result
         "seed": stamp % 2_000_000_000,
     }, song_id=id)
-    return RedirectResponse(f"/songs/{id}/approve/{tier}", status_code=303)
+    return RedirectResponse(f"/songs/{id}#fold-storyboard", status_code=303)
 
 
 @app.post("/songs/{id}/classify")
@@ -6873,6 +6949,9 @@ async def save_driving_video(upload, dest_dir, prefix):
 async def start_clips(request: Request, id: int, tier: str = Form(...),
                        video_model: str = Form(""),
                        refine: bool = Form(False),
+                       auto_qc: bool = Form(False),
+                       scene: str = Form(""),
+                       head_only: bool = Form(False),
                        ref_motion: Optional[UploadFile] = File(None),
                        control_video: Optional[UploadFile] = File(None)):
     song = get_song_or_404(id)
@@ -6890,11 +6969,19 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
     if video_model not in allowed:
         raise HTTPException(400, f"video_model must be one of {sorted(allowed)}")
     storyboard_service.stamp_ref_scenes(song, tier)
+    scene_num = None
+    if str(scene).strip():
+        try:
+            scene_num = int(scene)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "scene must be an integer") from None
     approved_sns = {r["scene_number"] for r in
                     db.q("""SELECT scene_number FROM refs
                             WHERE song_id=? AND tier=? AND approved=1
                               AND scene_number IS NOT NULL""", id, tier)}
     heads = _scene_head_idxs(song, tier, video_model)
+    if scene_num is not None:
+        heads = {sn: idx for sn, idx in heads.items() if int(sn) == scene_num}
     missing = sorted(sn for sn in heads if sn not in approved_sns)
     if missing:
         raise HTTPException(400, f"scenes missing an approved still (scene {missing})")
@@ -6923,31 +7010,47 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
     refuse_if_scene_time_mismatch(song, tier)
     jids = enqueue_clips(id, tier, video_model, refine=bool(refine),
                   ref_motion=motion_path, control_video=control_path,
-                  scenes=(board or {}).get("scenes") or [])
+                  scenes=(board or {}).get("scenes") or [],
+                  scene_number=scene_num, head_only=bool(head_only))
+    if auto_qc and jids:
+        jobs.enqueue("qc", {"song_id": id, "tier": tier}, song_id=id,
+                     depends_on=jids[-1])
     return json_or_redirect(
         request,
         {"job_id": jids[0] if jids else None, "job_ids": jids,
-         "kind": "clips", "tier": tier},
+         "kind": "clips", "tier": tier, "scene": scene_num,
+         "head_only": bool(head_only)},
         f"/songs/{id}")
 
 
 def enqueue_clips(song_id, tier, video_model, refine=False, ref_motion=None,
-                  control_video=None, scenes=None):
+                  control_video=None, scenes=None, scene_number=None,
+                  head_only=False):
     """Enqueue clip render job(s). T2-11 wires depends_on for scene chains.
 
     No chain → one batch job (unchanged). A T2-48 over-ceiling scene is a
     chain: one job per clip, successor depends_on predecessor so _claim
     (T6-2) will not pull it until the predecessor is done.
+    scene_number limits the plan to that scene. head_only keeps the first
+    clip of the scene so the operator can preview before chaining the rest.
     """
     base = {"song_id": song_id, "tier": tier, "video_model": video_model,
             "refine": bool(refine), "ref_motion": ref_motion,
             "control_video": control_video}
     plan = build_song.clip_chain_plan(scenes or [], video_model)
-    if not any(p.get("depends_on") is not None for p in plan):
+    if scene_number is not None:
+        plan = [p for p in plan if int(p.get("scene_number") or -1) == int(scene_number)]
+        if not plan:
+            raise HTTPException(400, f"no clips for scene {scene_number}")
+        if head_only:
+            plan = [plan[0]]
+    if scene_number is None and not any(p.get("depends_on") is not None for p in plan):
         return [jobs.enqueue("clips", base, song_id=song_id)]
     # Only the first clip of each scene needs an operator still. Successors
     # take the predecessor's last frame (T2-10 / T2-11).
     heads = build_song.scene_heads(scenes or [], video_model)
+    if scene_number is not None:
+        heads = {sn: idx for sn, idx in heads.items() if int(sn) == int(scene_number)}
     song = db.one("SELECT * FROM songs WHERE id=?", song_id)
     if song:
         storyboard_service.stamp_ref_scenes(song, tier)

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import modal_close %}
 {% block content %}
 <h1>Anchors</h1>
 <p class="hint">This album&rsquo;s pose library. Songs on the album list the poses
@@ -193,8 +194,7 @@
 <dialog class="lightbox" id="pose-preview">
   <div class="lightbox-bar">
     <strong id="pose-preview-label"></strong>
-    <button type="button" class="secondary lightbox-close"
-            onclick="this.closest('dialog').close()">Close</button>
+    {{ modal_close() }}
   </div>
   <img alt="">
 </dialog>
@@ -208,7 +208,7 @@
     <span class="lightbox-spacer"></span>
     <a class="lightbox-download" download>Download</a>
     <button type="button" class="thumb-btn-danger lightbox-delete">Delete</button>
-    <button type="button" class="secondary lightbox-close">Close</button>
+    {{ modal_close() }}
   </div>
   <img alt="anchor candidate, full size">
   <p class="lightbox-help muted">

@@ -347,7 +347,7 @@ def scenes(song, sb, tier, anchored=(), scene_seconds=None):
 
     videos_of = {}
     for v in db.q(
-            """SELECT clip_idx, path, status FROM clips
+            """SELECT clip_idx, path, status, qc_json FROM clips
                WHERE song_id=? AND tier=? ORDER BY clip_idx""",
             song["id"], tier):
         if v["path"]:

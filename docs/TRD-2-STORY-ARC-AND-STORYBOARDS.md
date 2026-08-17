@@ -233,7 +233,9 @@ of a 3:16 track.
 
 **Decided 2026-08-17:** the storyboard dictates the scene count. Generate
 does not pin `ceil(duration / 4s)` (that minted 50 clip-shaped scenes on
-Hard to Handle). An explicit `scene_seconds` still pins `n_clips_for` for
+Hard to Handle) and the unpinned user prompt does not name
+`n_clips_for(duration)` either (that minted 50 on a ~4 min track at
+`CHUNK`). An explicit `scene_seconds` still pins `n_clips_for` for
 tests and anyone who asks. The operator grid is those scenes. Video parts
 past the first of a scene are last-frame chained (T2-10 / T2-11), not
 tiles. `n_clips_for` is the optional pin, not the default.
@@ -731,6 +733,7 @@ current.
 | **`T2-13f` clip QC expectation is native fps** | **built** | `test_t2_13f_native_fps.py` | mixed s2v@16.0 / LTX@16.8312 each pass their own fps check; `clip_qc_expect` ignores the song fps. Mutation: copy song fps onto the clip → the other model flags |
 | **`T2-13e` plan that misses the track by more than one clip is refused before render** | **built** | `test_t2_13e_plan_miss.py` | `clip_plan` with a known track raises when `|sum(clip_seconds) - track|` exceeds one clip; `main()` writes no clip graphs. A miss of exactly one clip, and nclips-only display, still allocate. `assemble_song` keeps `-t audio_dur` and no longer says clips are quantised so the video always overruns. Mutation: allocate and return → red. Mutation: restore the old comment → red |
 | **`T2-14a` no fixed clip quantum in the planner prompt** | **built** | `_user_prompt` | return value has no `CHUNK` formatting, no "Nothing shorter or longer can be produced", no `duration_guidance`-to-multiples instruction. Mutation: restore any one → red. `_system_prompt` no longer names 4.8125 s either |
+| unpinned generate does not pin `n_clips_for` | **built** | `test_unpinned_user_prompt_does_not_ask_for_a_clip_count` | `scene_seconds` empty → no "N clips", no "Generate None". 237.67 s at CHUNK is 50; naming that count is the defect. Mutation: restore `n_clips_for(dur, None)` in TIMING → red |
 | **`T2-14b` clip-length text derived from planning** | **built** | `_user_prompt` | TIMING clip-length line is `clip_seconds(scene_seconds)`, not a new constant. Same song at 15 s and 30 s yields two statements. Mutation: swap 4.8125 for 15.0 and keep the sentence shape → `T2-14a` passes and this fails |
 | **`T2-14c` TIMING purpose** | **built** | `_user_prompt` | TIMING still states track length and sum-to-track. Mutation: delete the TIMING block wholesale → `T2-14a` passes and this fails |
 | **`T2-5` arc prompt restore** | **built** | `restore_prompt` | edit saves a new `arc` version; previous row stays readable; restore puts that text back as current (`test_t2_5_arc_prompt_restore.py`). Mutation: delete restore → current stays the edit. Mutation: overwrite on edit → previous id is gone |

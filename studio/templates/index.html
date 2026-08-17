@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import modal_close %}
 {% block content %}
 <h1>Library</h1>
 
@@ -111,7 +112,7 @@
 <dialog class="video-modal" id="vid-{{ e.song.id }}">
   <div class="modal-bar">
     <strong>{{ e.song.title }}</strong>
-    <button type="button" class="secondary" onclick="this.closest('dialog').close()">Close</button>
+    {{ modal_close() }}
   </div>
   {% for v in e.videos %}
   <p class="meta">{{ v.tier | tiername }} &middot;

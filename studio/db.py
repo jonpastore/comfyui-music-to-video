@@ -393,6 +393,7 @@ MIGRATIONS = [
     # T3-31 on every generated still, not only anchors. Advisory.
     "ALTER TABLE refs ADD COLUMN qc_json TEXT",
     "ALTER TABLE assets ADD COLUMN qc_json TEXT",
+    "ALTER TABLE clips ADD COLUMN qc_json TEXT",
     # h_repair dest and standalone refine land here, not only as named
     # candidate rows. NULL on every artefact that predates scoring.
     "ALTER TABLE artefacts ADD COLUMN qc_json TEXT",

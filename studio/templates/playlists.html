@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import modal_close %}
 {% block content %}
 <h1>Playlists</h1>
 
@@ -19,7 +20,7 @@
 <dialog class="lightbox" id="anchor-lightbox">
   <div class="modal-bar">
     <strong id="lightbox-label"></strong>
-    <button type="button" class="secondary" onclick="this.closest('dialog').close()">Close</button>
+    {{ modal_close() }}
   </div>
   {# front and back side by side; the CSS stacks them on a narrow screen #}
   <div class="lightbox-pair" id="lightbox-pair"></div>
@@ -28,7 +29,7 @@
 <dialog class="fix-modal" id="anchor-fix">
   <div class="modal-bar">
     <strong>Fix <span id="fix-label"></span></strong>
-    <button type="button" class="secondary" onclick="this.closest('dialog').close()">Close</button>
+    {{ modal_close() }}
   </div>
   <div class="fix-modal-body">
     <img id="fix-preview" alt="the sheet being repaired">

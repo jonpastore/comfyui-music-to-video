@@ -1595,10 +1595,8 @@ function initSongPage() {
           det.setAttribute("hx-target", "find .tier-board-body");
           det.setAttribute("hx-swap", "innerHTML");
           det.innerHTML = "<summary><span>" + label + " · " +
-            (b.scene_count || "?") + " scenes</span> " +
-            '<a class="btn secondary" href="/songs/' + songId + "/approve/" +
-            b.tier + '" onclick="event.stopPropagation()">Approve ' + label +
-            "</a></summary><div class=\"tier-board-body\"><p class=\"muted\">Loading scenes…</p></div>";
+            (b.scene_count || "?") + " scenes</span></summary>" +
+            "<div class=\"tier-board-body\"><p class=\"muted\">Loading scenes…</p></div>";
           list.appendChild(det);
           if (typeof htmx !== "undefined") htmx.process(det);
         });
@@ -1635,6 +1633,8 @@ function initSongPage() {
     var btn = e.submitter || form.querySelector("button[type=submit], button:not([type])");
     if (btn) btn.disabled = true;
     var dest = (e.submitter && e.submitter.getAttribute("formaction")) || action;
+    var note = saveNoteNear(form);
+    if (note) say2(note, "saving…");
     api(dest, new FormData(form))
       .then(function (d) {
         if (d.deleted != null && form.classList.contains("delete-song")) {
@@ -1655,12 +1655,126 @@ function initSongPage() {
           return;
         }
         if (d.job_id || (d.job_ids && d.job_ids.length)) return followJob(d);
+        if (form.classList.contains("pose-bind")) {
+          paintPoseBind(form, d);
+          say2(note, d.source === "saved" ? "pinned" : (d.sheet_id ? "saved" : "cleared"));
+          return;
+        }
+        if (form.classList.contains("still-pick")) {
+          var fig = form.closest(".ref-frame");
+          if (fig) fig.classList.toggle("approved", !!d.approved);
+          var pickBtn = form.querySelector("button");
+          if (pickBtn) pickBtn.textContent = d.approved ? "Unapprove" : "Use this still";
+          if (d.approved) {
+            var cell = form.closest(".preview-stills");
+            if (cell) {
+              cell.querySelectorAll(".ref-frame").forEach(function (other) {
+                if (other === fig) return;
+                other.classList.remove("approved");
+                var ob = other.querySelector(".still-pick button");
+                if (ob) ob.textContent = "Use this still";
+                var tag = other.querySelector(".tag.done");
+                if (tag) tag.remove();
+              });
+              if (fig && !fig.querySelector(".tag.done")) {
+                var cap = fig.querySelector("figcaption");
+                if (cap) {
+                  var t = document.createElement("span");
+                  t.className = "tag done";
+                  t.textContent = "approved";
+                  cap.appendChild(document.createTextNode(" "));
+                  cap.appendChild(t);
+                }
+              }
+            }
+          } else if (fig) {
+            var gone = fig.querySelector(".tag.done");
+            if (gone) gone.remove();
+          }
+          if (note) say2(note, d.approved ? "approved" : "unapproved");
+          return;
+        }
+        if (note) {
+          if (form.id && form.id.indexOf("sb-snap-") === 0) say2(note, "version saved");
+          else if (form.id && form.id.indexOf("sb-restore-") === 0) say2(note, "restored");
+          else say2(note, "saved");
+          return;
+        }
         flash("Saved.");
         return refreshSong();
       })
-      .catch(function (err) { flash(err.message, true); })
+      .catch(function (err) {
+        if (note) say2(note, err.message, true);
+        else flash(err.message, true);
+      })
       .then(function () { if (btn) btn.disabled = false; });
   });
+
+  page.addEventListener("change", function (e) {
+    var sel = e.target.closest && e.target.closest(".pose-bind select[name=sheet_id]");
+    if (!sel || !page.contains(sel)) return;
+    sayPending(sel.form && sel.form.querySelector(".save-note"), "not saved yet");
+  });
+
+  page.addEventListener("click", function (e) {
+    var tip = e.target.closest && e.target.closest(".help-tip");
+    if (!tip || !page.contains(tip)) return;
+    var form = tip.closest("form");
+    var helpNote = form && form.querySelector(".save-note");
+    if (helpNote && tip.title) sayPending(helpNote, tip.title);
+  });
+}
+
+var POSE_BIND_COPY = {
+  saved: ["Pinned", "Pinned: you chose this plate. Generate refs uses it as the pose (image2). Change the list and save to pick another, or clear bind to let the matcher decide."],
+  auto: ["Suggested", "Suggested: the matcher picked this from the scene pose word. Not pinned — save to keep this plate if you regenerate refs."],
+  missing: ["Missing sheet", "The pinned sheet is gone from the album. Pick another plate and save."],
+  none: ["No plate", "No plate. Generate refs uses identity front only. Pick a plate and save to pin one."]
+};
+
+function saveNoteNear(form) {
+  if (!form) return null;
+  return form.querySelector(".save-note")
+    || (form.closest(".preview-stills") && form.closest(".preview-stills").querySelector(".save-note"))
+    || (form.closest(".preview-clips") && form.closest(".preview-clips").querySelector(".save-note"))
+    || (form.closest(".sb-panel") && form.closest(".sb-panel").querySelector(".save-note"));
+}
+
+function sayPending(el, msg) {
+  if (!el) return;
+  el.textContent = msg || "";
+  el.className = (el.className.replace(/\s*flash-(ok|fail)\b/g, "").replace(/\s+/g, " ").trim());
+}
+
+function paintPoseBind(form, d) {
+  if (!form || !d) return;
+  var src = d.source || "none";
+  var pair = POSE_BIND_COPY[src] || POSE_BIND_COPY.none;
+  var label = form.querySelector(".pose-bind-label");
+  var help = form.querySelector(".help-tip");
+  if (label) {
+    label.setAttribute("data-source", src);
+    label.textContent = pair[0];
+  }
+  if (help) {
+    help.title = pair[1];
+    help.setAttribute("aria-label", "What " + pair[0] + " means");
+  }
+  var btn = form.querySelector(".thumb-open");
+  var img = btn && btn.querySelector("img");
+  if (d.url) {
+    if (img) {
+      img.src = d.url;
+    } else if (btn) {
+      var next = document.createElement("img");
+      next.className = "anchor-thumb";
+      next.src = d.url;
+      next.alt = "";
+      next.loading = "lazy";
+      btn.insertBefore(next, btn.firstChild);
+    }
+    if (btn) btn.setAttribute("data-full", d.url);
+  }
 }
 
 // ---- Anchors: view full size, multi-select, and nothing reloads the page -----
@@ -1746,7 +1860,7 @@ function initAnchors() {
     var img = e.target.closest(THUMB_SEL);
     if (img) { show(img.closest(ITEM_SEL)); return; }
     // backdrop or the close button dismisses; clicking the image itself does not
-    if (box && box.open && (e.target === box || e.target.closest(".lightbox-close"))) box.close();
+    if (box && box.open && (e.target === box || e.target.closest(".modal-close, .lightbox-close"))) box.close();
   });
 
   document.addEventListener("keydown", function (e) {

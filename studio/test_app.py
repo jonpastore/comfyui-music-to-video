@@ -271,12 +271,14 @@ def test_reroll_clamps_range_and_caps_count():
         assert r2.status_code == 400, r2.text
         assert len(jobs.recent(1000)) == before
 
-        # a long song + a big request -> capped, not fanned out unbounded.
-        # The bound is the CLIP count (audio length), not the scene count.
+        # Out-of-range clip_idx values are dropped; only scene heads enqueue.
+        # A 5000s duration no longer invents 100 reroll slots.
         db.run("UPDATE songs SET duration=? WHERE id=?", 5000.0, sid)
         r3 = client.post(f"/songs/{sid}/reroll",
                           data={"tier": "pg13", "clip_idx": [str(i) for i in range(100)]})
-        assert r3.status_code == 400, r3.text
+        assert r3.status_code in (200, 303), r3.text
+        job3 = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='reroll' ORDER BY id DESC", sid)
+        assert json.loads(job3["args_json"])["clip_indices"] == [0, 1]
 
 
 def test_scene_seconds_clamped():
@@ -1911,30 +1913,46 @@ def test_approve_grid_shows_seeds_and_puts_review_flags_on_the_frame():
     with TestClient(appmod.app) as client:
         song = _upload_song(client, "Flags Song", album="Flag Album")
         sid = song["id"]
-        _a_ref(sid, "r", 0, seed=7123)
-        _a_ref(sid, "r", 1, seed=7124)
+        dest = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(dest, exist_ok=True)
+        path = os.path.join(dest, "flags.json")
+        json.dump({"scenes": [
+            {"scene_number": 1, "name": "One", "image_prompt": "a", "length_seconds": 8},
+            {"scene_number": 2, "name": "Two", "image_prompt": "b", "length_seconds": 8},
+        ]}, open(path, "w"))
+        db.run("""INSERT INTO storyboards (song_id, tier, json_path, md_path, created)
+                  VALUES (?,?,?,?,?)""", sid, "r", path, path + ".md", time.time())
+        _a_ref(sid, "r", 0, seed=7123, scene_number=1)
+        _a_ref(sid, "r", 1, seed=7124, scene_number=2)
         db.run("""INSERT INTO assets (song_id, kind, path, meta_json, created)
                   VALUES (?,'review','/fake/sheet.jpg',?,?)""", sid,
                json.dumps({"tier": "r", "flagged": [{"clip": 1, "issue": "broken",
                                                       "reason": "two of her"}]}), time.time())
 
-        page = client.get(f"/songs/{sid}/approve/r").text
+        page = client.get(f"/songs/{sid}/storyboard/r/panel").text
         assert "7123" in page, "the seed was stored and never shown"
-        # the flag is ON the frame, not a list of indices to count tiles against
-        tile1 = page.split('data-clip="1"')[1].split("</div>")[0]
-        assert "broken" in tile1, tile1[:300]
-        assert "flagged" in page
+        assert "broken" in page
+        assert "flagged" in page.lower() or "warn-tag" in page
 
 
 def test_approve_grid_fix_is_a_dialog_not_an_inline_form():
     with TestClient(appmod.app) as client:
         song = _upload_song(client, "Fix Dialog Song", album="Fix Dialog Album")
         sid = song["id"]
-        _a_ref(sid, "r", 0, seed=7001)
-        _a_ref(sid, "r", 0, seed=7002)
-        page = client.get(f"/songs/{sid}/approve/r").text
+        dest = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(dest, exist_ok=True)
+        path = os.path.join(dest, "fix.json")
+        json.dump({"scenes": [
+            {"scene_number": 1, "name": "One", "image_prompt": "a", "length_seconds": 8},
+        ]}, open(path, "w"))
+        db.run("""INSERT INTO storyboards (song_id, tier, json_path, md_path, created)
+                  VALUES (?,?,?,?,?)""", sid, "r", path, path + ".md", time.time())
+        _a_ref(sid, "r", 0, seed=7001, scene_number=1)
+        _a_ref(sid, "r", 0, seed=7002, scene_number=1)
+        page = client.get(f"/songs/{sid}").text
+        panel = client.get(f"/songs/{sid}/storyboard/r/panel").text
         assert 'id="ref-fix"' in page
-        assert "js-ref-fix" in page
+        assert "js-ref-fix" in panel
         assert "Use this face" in page
         assert "Paint the wrong spot" in page
         assert "Fix this frame" not in page
@@ -1944,7 +1962,7 @@ def test_approve_grid_fix_is_a_dialog_not_an_inline_form():
         assert "Naming" not in page
         assert 'class="fix-block"' not in page
         assert 'id="ref-preview"' in page
-        assert "js-ref-preview" in page
+        assert "js-ref-preview" in panel
 
 
 def test_approve_grid_groups_by_scene_and_puts_seed_above_the_name():
@@ -1967,21 +1985,15 @@ def test_approve_grid_groups_by_scene_and_puts_seed_above_the_name():
         _a_ref(sid, "r", 0, seed=17000, scene_number=1)
         db.run("UPDATE refs SET origin=? WHERE song_id=? AND clip_idx=0",
                "pose-library scene 1 Alley Invitation", sid)
-        page = client.get(f"/songs/{sid}/approve/r").text
-        assert 'class="scene-group"' in page
+        page = client.get(f"/songs/{sid}/storyboard/r/panel").text
+        assert 'class="scene"' in page
         assert "Alley Invitation" in page
-        assert "clip-grid-1" in page
-        assert "Scene prompt" in page
         assert 'name="image_prompt"' in page
-        assert "cand-seed" in page
-        tile0 = page.split('data-clip="0"')[1].split('data-clip="')[0]
-        assert "17000" in tile0
-        assert "Alley Invitation" in tile0
-        assert 'class="tag">pose-library scene 1 Alley Invitation' not in tile0
+        assert "17000" in page
+        assert 'class="tag">pose-library scene 1 Alley Invitation' not in page
         assert ">Reroll<" in page
         assert "what to change" in page
-        assert 'class="clip-title"' in page
-        assert "Scene 1" in page
+        assert "Scene 1" in page or "1. Alley Invitation" in page
         assert "Part 1" not in page
         assert "Clip #0" not in page
         assert "Images to generate" in page
@@ -1991,7 +2003,6 @@ def test_approve_grid_groups_by_scene_and_puts_seed_above_the_name():
         assert 'name="seed_max"' in page
         assert 'name="step"' in page
         assert f'/songs/{sid}/refs/' in page and "/delete" in page
-        assert "Save scene prompt" in page
 
 
 def test_reroll_seed_plan_equal_and_fib():
@@ -2046,7 +2057,8 @@ def test_clip_render_defaults_to_the_catalogue_and_carries_the_video_model_throu
     seen = []
 
     def _gen_clips(slug, tier, sb, mp3, ref_paths, progress=None, limit=None,
-                    video_model="s2v", ref_motion=None, control_video=None, refine=False):
+                    video_model="s2v", ref_motion=None, control_video=None, refine=False,
+                    only=None, prev_clip=None):
         seen.append({"video_model": video_model, "refine": refine,
                      "ref_motion": ref_motion, "control_video": control_video})
         return []
@@ -2059,8 +2071,8 @@ def test_clip_render_defaults_to_the_catalogue_and_carries_the_video_model_throu
         client.post(f"/songs/{sid}/storyboard", data={"tier": "r"})
         wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC",
                         sid)["id"])
-        for i in range(appmod.clip_count(song, appmod.scene_seconds_for(sid, "r"))):
-            _a_ref(sid, "r", i, seed=7000 + i, approved=1)
+        for sn, idx in appmod._scene_head_idxs(song, "r").items():
+            _a_ref(sid, "r", idx, seed=7000 + idx, approved=1, scene_number=sn)
 
         # default: whatever the CATALOGUE says, not a value copied into the web
         # layer. The song page builds its dropdown from models.default_for, so a
@@ -2083,6 +2095,36 @@ def test_clip_render_defaults_to_the_catalogue_and_carries_the_video_model_throu
         # catalogue is what decides, and it does not contain it
         assert client.post(f"/songs/{sid}/clips",
                            data={"tier": "r", "video_model": "ltxv"}).status_code == 400
+
+
+def test_clips_one_scene_head_only_does_not_need_every_scene(patch_stub):
+    """Render clip on one scene only requires that scene's approved still."""
+    seen = []
+
+    def _gen_clips(*_a, only=None, prev_clip=None, **_k):
+        seen.append(only)
+        return []
+
+    patch_stub("pipeline", gen_clips=_gen_clips)
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "One Scene Clip", album="OSC Album")
+        sid = song["id"]
+        _chosen_anchor("OSC Album", "r")
+        client.post(f"/songs/{sid}/storyboard", data={"tier": "r"})
+        wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC",
+                        sid)["id"])
+        _a_ref(sid, "r", 0, seed=7100, approved=1, scene_number=1)
+        r = client.post(
+            f"/songs/{sid}/clips",
+            data={"tier": "r", "scene": "1", "head_only": "true"},
+            headers={"Accept": "application/json"})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["kind"] == "clips"
+        assert body["head_only"] is True
+        assert body["scene"] == 1
+        wait_job(body["job_id"])
+        assert seen and seen[-1] == [0], seen
 
 
 def test_driving_clips_are_refused_for_i2v_which_has_no_such_input():

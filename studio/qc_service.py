@@ -913,8 +913,8 @@ def persist_still_qc(path, src=None, prompt="", bases=None, progress=None,
 
     Named landers already write qc_json on their candidate row. h_repair
     dest and standalone refine land as artefacts; those dests still get
-    a score. A clip dest is left alone. Scoring never overwrites src and
-    never heals (T3-18)."""
+    a score. Clip mp4s are scored by `score_landed_clip` (first frame).
+    Scoring never overwrites src and never heals (T3-18)."""
     if not path or not os.path.isfile(path):
         return None
     if not _is_still(path, kind):
@@ -925,7 +925,7 @@ def persist_still_qc(path, src=None, prompt="", bases=None, progress=None,
         bases.append(src)
     import app as appmod
     qc = appmod.score_generated_still(path, bases, prompt or "", progress)
-    for table in ("anchors", "refs", "assets"):
+    for table in ("anchors", "refs", "assets", "clips"):
         db.run(f"UPDATE {table} SET qc_json=? WHERE path=?", qc, path)
     if db.one("SELECT path FROM artefacts WHERE path=?", path) is None:
         jobs.land(path)

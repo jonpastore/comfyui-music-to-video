@@ -86,6 +86,12 @@ On session start: `jarvis-memory__sync`, then this project's
 Operator guide (Grok vs Claude, compaction, UI): 
 `~/.grok/docs/GROK-OPERATOR-GUIDE.pdf`.
 
+**Modals:** every `<dialog>` dismiss control is the shared `modal_close()`
+icon (ghost X, class `.modal-close`). Not an accent circle, not the word
+Close on some surfaces and × on others. Confirm actions stay labeled
+(Cancel / Delete). Same icon on every lightbox, jobs modal, help panel,
+and video modal.
+
 ## How to work here
 
 - Tests: `cd studio && python3 -m pytest -q .`

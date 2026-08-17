@@ -1,3 +1,4 @@
+{% from "_macros.html" import modal_close %}
 {# One album-profile field. Swapped whole by the wand, so the hx-* attributes
    have to live on this wrapper: the replacement is what keeps working.
 
@@ -32,7 +33,7 @@
   <dialog class="help-modal" id="help-{{ f.key }}">
     <div class="modal-bar">
       <strong>{{ f.label }}</strong>
-      <button type="button" onclick="this.closest('dialog').close()">Close</button>
+      {{ modal_close() }}
     </div>
     <p>{{ f.hint }}</p>
     {% if f.wand %}

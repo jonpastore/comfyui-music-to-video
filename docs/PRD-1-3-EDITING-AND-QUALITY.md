@@ -190,8 +190,9 @@ id, and the answer re-orders everything below:
    actuators are wired: `dispatch_repair` asks `where()`/`fits()`/`resolve()`
    and dest is the `fix_ref` / `gen_postproc` file (`T3-23`). Image
    FLAG/REJECT is a prompt rewrite (`T3-33.a`).
-3. **Clips at the length you asked for** — `scene_seconds` finally meaning
-   something.
+3. **Clips at the length you asked for** — `scene_seconds` is an optional
+   pin. Unpinned, the writer chooses scene count and length; generate does
+   not ask for `ceil(duration / 4s)` or `n_clips_for(duration)`.
 
 **The set timeline went last and is now built** including peaks-from-data
 and the on-demand loudness meter. §6's P1 below was written with the
@@ -427,7 +428,14 @@ order and take the dependencies from here.
    (`test_cast_slots_only_leads_with_chosen_sheets_take_image2_and_image3`).
    **Pose plates built**: `pose_plan` binds each scene to a chosen sheet
    (auto-match or `pose_sheet_id`); that file is image2, identity front
-   stays image1 (`test_pose_plan.py`).
+   stays image1 (`test_pose_plan.py`). The row shows Pinned / Suggested
+   with a help icon and a floppy save that reports saved or the error;
+   the plate thumb is not an accent button. Scene stills and clips sit
+   in a labeled preview table; reroll N stills, pick one, then render
+   the first LTX clip before the rest of the scene. Wardrobe in the
+   prompt is allowed (clothes on a nude plate). QC reports
+   **confidence** and an **identity assessment** of physical attributes
+   (face, fur, body, anatomy) — not clothes.
    **`T2-28` built**: storyboard Generate refs is marked (`button.blocked`)
    not disabled, the plan panel names the unanchored lead, and
    `POST /songs/{id}/refs` 400s before enqueue

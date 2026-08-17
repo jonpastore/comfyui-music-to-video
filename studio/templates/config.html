@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import modal_close %}
 {% block content %}
 <h1>Publishing</h1>
 {# API keys. WRITE-ONLY on purpose: this page has no login, and a value that is
@@ -158,7 +159,7 @@
   <dialog class="help-modal" id="svc-{{ key }}">
     <div class="modal-bar">
       <strong>Setting up {{ s.label }}</strong>
-      <button type="button" class="secondary" onclick="this.closest('dialog').close()">Close</button>
+      {{ modal_close() }}
     </div>
     <p><strong>Adult content:</strong> {{ s.adult_note }}</p>
     <p><strong>API:</strong> {{ s.api }}<br>

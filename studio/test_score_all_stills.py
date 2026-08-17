@@ -23,6 +23,40 @@ def _score(path, bases, prompt="", progress=None):
             "notes": "scored", "backend": "stub"}
 
 
+def test_score_system_wardrobe_is_not_identity():
+    vision = _real_module("vision")
+    text = vision.SCORE_SYSTEM.lower()
+    assert "wardrobe does not lower identity" in text
+    assert "physical" in text
+
+
+def test_score_landed_clip_stores_qc_json(monkeypatch, tmp_path):
+    clip = str(tmp_path / "c.mp4")
+    frame = str(tmp_path / "c.mp4.qc.png")
+    open(clip, "wb").write(b"mp4")
+    _png(frame)
+    monkeypatch.setattr(appmod.vision, "score_candidate", _score)
+
+    def _extract(path, which="first", dest=None):
+        dest = dest or (path + ".qc.png")
+        open(dest, "wb").write(open(frame, "rb").read())
+        return dest
+
+    import build_song
+    monkeypatch.setattr(build_song, "extract_video_frame", _extract)
+    sid = db.upsert_song("qc-clip", title="QC Clip", duration=8.0)
+    db.run("""INSERT INTO clips (song_id, tier, clip_idx, path, status)
+              VALUES (?,?,?,?,?)""", sid, "xxx", 0, clip, "done")
+    song = db.one("SELECT * FROM songs WHERE id=?", sid)
+    raw = appmod.score_landed_clip(clip, song, "xxx", 0)
+    assert raw
+    row = db.one("SELECT qc_json FROM clips WHERE path=?", clip)
+    assert row and row["qc_json"]
+    got = json.loads(row["qc_json"])
+    assert got["confidence"] == 61
+    assert got["identity"] == 70
+
+
 def test_score_generated_still_json_and_failure(monkeypatch, tmp_path):
     monkeypatch.setattr(appmod.vision, "score_candidate", _score)
     p = _png(str(tmp_path / "a.png"))

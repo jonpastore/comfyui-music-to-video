@@ -257,9 +257,12 @@ alpha not fully transparent.
   the operator's base images and the prompt that produced it.** That
   includes generate, reroll, `fix_ref`, `fix_anchor`, artwork, an
   `h_repair` dest still, and a standalone `refine_generated_still`
-  dest. **Landed refs (`h_refs`, `h_reroll`, `h_fix_ref`) score against
-  the album's chosen anchor** via `ref_score_bases` — not a standing
-  plate on the job args, not the broken source, and not empty bases.
+  dest. **Landed clips** get the same score on the first frame
+  (`score_landed_clip` → `clips.qc_json`). **Landed refs (`h_refs`,
+  `h_reroll`, `h_fix_ref`) score against the album's chosen anchor**
+  via `ref_score_bases` — not a standing plate on the job args, not
+  the broken source, and not empty bases. Identity is physical
+  (face, species, fur, body, anatomy). Wardrobe does not lower it.
   Storing any `qc_json` is not enough; `score_candidate` must receive
   that path as bases. The score is stored on the candidate row
   (`qc_json`) and on the landed artefact when dest is not a
@@ -819,7 +822,8 @@ current.
 | `T3-25` remote output move | **built** | `test_qc_approve.py` | `can_move_output` is callable; remote repair is refused by that name (`test_t3_25_remote_repair_refused_by_name_until_check_is_true`); forcing the check true SUBMITS (`test_t3_25_forced_true_remote_repair_is_submitted`) |
 | `T3-26` whether the refiner helps | **built** | this slice | fail-closed labelled-set measurement, not opportunistic: no-op / worse scores produce a finding that says not helping (`test_t3_26_no_improve_finding_says_not_helping`); an improvement reports help (`test_t3_26_improved_labelled_set_reports_help`); empty set, missing file, missing score raise NOT MEASURED; catalogue `proven: opportunistic` is not the answer |
 | `T3-33.b` pose QC before anatomy QC | **process** | this slice | Eye gates in `anchor5/poses/cleanrun/qc-pose-*.json`. Pose FAIL (human face patch, missing arm, wrong camera, tail covering the hole) does not get anatomy. Not a VLM gate. Stack notes: `docs/MEASURED-2026-08-16-POSE-ANATOMY.md` (`T4-20`). |
-| `T3-31` vision score on generated stills | **built** | this slice | `score_generated_still` runs on anchors, refs, rerolls (`test_h_reroll_stores_qc_json`), `fix_ref`, `fix_anchor` and artwork. `persist_still_qc` scores `h_repair` dest and standalone `refine_generated_still` dest onto `artefacts.qc_json`. Stored `confidence` is clamped to `min(identity, prompt)` so a 95% composition score cannot hide a 20% identity miss (`test_parse_score_confidence_is_min_of_identity_and_prompt`). The tile shows id/pose when they diverge, plus the VL note. Still advisory — not a gate |
+| `T3-31` vision score on generated stills | **built** | this slice | `score_generated_still` runs on anchors, refs, rerolls (`test_h_reroll_stores_qc_json`), `fix_ref`, `fix_anchor` and artwork. `persist_still_qc` scores `h_repair` dest and standalone `refine_generated_still` dest onto `artefacts.qc_json`. Stored `confidence` is clamped to `min(identity, prompt)` so a 95% composition score cannot hide a 20% identity miss (`test_parse_score_confidence_is_min_of_identity_and_prompt`). The tile shows **confidence / identity / pose** plus the VL note. Wardrobe does not lower identity (`test_score_system_wardrobe_is_not_identity`). Still advisory — not a gate |
+| `T3-31` clip first-frame identity | **built** | `score_landed_clip` | After a clip lands, first frame is scored the same way vs her photographs and the approved still. Stored on `clips.qc_json`. Shown on the scene preview. Mutation: skip extract → no `qc_json`. Clothes in the still/clip do not fail identity |
 | `T3-31` refs scored vs chosen anchor | **built** | this slice | `ref_score_bases` resolves the album's chosen sheet for `h_refs` / `h_reroll` / `h_fix_ref`. `score_candidate` bases are that path, not a job plate, the broken source, or empty. Storing any `qc_json` is not enough (`test_h_refs_scores_vs_chosen_anchor`, `test_h_reroll_scores_vs_chosen_anchor`, `test_h_fix_ref_scores_vs_chosen_anchor`). Mutation: pass job plate as bases → red. Mutation: score fix_ref vs source → red |
 | `T3-21` original and repair listed and scored | **built** | this slice | after `h_repair`, `qc_service.pair(fid)` returns original and dest (`test_t3_21_original_and_repair_are_listed_and_scored`): both landed artefacts, both with findings and a `qc.summarise` verdict. dest ≠ src alone is T3-6 |
 | `T3-22` dismissed stays dismissed | **built** | this slice | same bytes stay dismissed (`test_t3_22_dismissed_stays_dismissed_until_artefact_changes`); rewriting the file reopens the same `(path, check)` row. `findings.artefact_hash` is the change detector |

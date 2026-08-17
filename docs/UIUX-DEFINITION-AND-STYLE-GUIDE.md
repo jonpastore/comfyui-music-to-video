@@ -405,6 +405,8 @@ The storyboard planner prompt does not tell the model clips are a fixed
 4.8125 s (`T2-14a`). The song-page Direction box is the **brief**, not
 the board; existing G/XXX links open the scenes. Scene count is the
 board's; there is no clip-count or scene-seconds setter on generate.
+Unpinned generate does not name `n_clips_for(duration)` (that is 50
+clips on a ~4 min track). An explicit `scene_seconds` still pins.
 Its clip-length line is `clip_seconds(scene_seconds)`,
 so two plannings produce two TIMING statements (`T2-14b`). TIMING still
 states track length and requires scene durations to sum to it (`T2-14c`).
@@ -472,8 +474,8 @@ you do not open a card to learn it is idle.
 Storyboard editing lives **on the song page**, not a second interface.
 Each written tier is a `.tier-board` that `hx-get`s
 `/songs/{id}/storyboard/{tier}/panel` (JSON textarea, Save, Generate,
-named versions, coverage, scenes and timing). *Approve {tier}* stays a
-button. `GET /songs/{id}/storyboard/{tier}` remains for T6-A2 numbers.
+named versions, coverage, scenes and timing). Approve-all lives on the song storyboard panel. `GET /songs/{id}/approve/{tier}`
+303s to the song page. `GET /songs/{id}/storyboard/{tier}` remains for T6-A2 numbers.
 `initSongPage` posts every control as JSON.
 The song page **Reference images** checkboxes stay disabled until front
 exists; the warning is *N pose sheets · missing identity front* with a
@@ -501,8 +503,27 @@ needed pose grouped to a chosen sheet (or marked unbound). Unassigned
 scenes still generate from identity front + scene text. Generate refs
 freezes auto-matches and sends each bound sheet as that scene's image2
 plate. Storyboard scene rows have a **Pose plate**
-select (`POST .../scene/{n}/pose-sheet`). `GET /api/songs/{id}/pose-plan/{tier}`
-is the same object (`test_pose_plan.py`).
+select (`POST .../scene/{n}/pose-sheet`). The plate thumb is a
+`button.thumb-open` (neutral, not the accent fill). Save actions on the
+row and the storyboard toolbar are `.icon-btn` floppy icons; a
+`.save-note` reports saved / pinned / the error and does not fade on
+failure. Bind status is **Pinned** (operator chose), **Suggested**
+(matcher), **Missing sheet**, or **No plate**, with a help icon — not
+the old “saved bind · standing” string. The pose word sits beside the
+help. `GET /api/songs/{id}/pose-plan/{tier}` is the same object
+(`test_pose_plan.py`).
+Scene media is a **preview table** (pose plate | reference stills |
+clips). Stills show every candidate, **Use this still** approves one.
+Reroll carries note, `n`, seed min/max, and equal/fib stepping.
+Fix (face / inpaint / outpaint) and Delete sit on the still.
+**Render clip** defaults to first clip only; Auto post is T5 LTX refine;
+Auto QC enqueues `qc` after the clip. WAN S2V is a later hop, not this
+button. There is no separate Approve refs page.
+Stills and clips show `.qc-tag`: confidence, identity, and the
+assessment sentence. Wardrobe may change; physical identity must not.
+**Modals:** every `<dialog>` dismisses with `modal_close()` — ghost X,
+`.modal-close`, never an accent circle and never a mix of Close / ×
+(`test_modal_close_is_one_icon`). Confirm actions stay Cancel / Delete.
 **Clips & render:** assembled outputs are `.render-card` tiles — video
 thumbnail (`preload=metadata`), preview `<dialog class="video-modal">`,
 Confirm clean, and Delete (`POST /songs/{id}/renders/{id}/delete` removes

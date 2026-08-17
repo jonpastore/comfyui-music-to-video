@@ -94,7 +94,7 @@ def test_song_page_folds_and_storyboard_are_buttons():
                sid, "xxx", jp, jp + ".md", 1, 0)
         page = client.get(f"/songs/{sid}").text
         assert f"/songs/{sid}/storyboard/xxx/panel" in page
-        assert f">Approve XXX</a>" in page
+        assert f"/songs/{sid}/approve/xxx" not in page
         assert "Edit XXX scenes" not in page
         assert "approve grid" not in page.lower()
         assert 'class="tier-board"' in page

@@ -594,6 +594,16 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    `clips_for_scene` / `main()` take `--video-model`.
    `EDITABLE_SCENE_FIELDS` includes `video_model`; the scene row
    shows it beside camera (`test_t2_42_scene_video_model.py`).
+   Pose-plate bind is a floppy `.icon-btn` plus a `.save-note`
+   (saved / pinned / error). Status is Pinned / Suggested / Missing
+   sheet / No plate with a help icon, not “saved bind”.
+   Scene preview is plate / stills / clips. Reroll note, seed range,
+   Fix, and Delete live on the still. `GET /songs/{id}/approve/{tier}`
+   303s to the song page. `POST /clips` accepts `scene` + `head_only`.
+   `auto_qc` enqueues `qc` on that job. Dialogs share `modal_close()`.
+   Stills and clips show `qc_tag`: confidence, identity, pose, notes.
+   `SCORE_SYSTEM` does not treat wardrobe as an identity miss.
+   `score_landed_clip` writes `clips.qc_json` from the first frame.
    **`T2-44` built.** `models.refuse_unknown_video_model` refuses a
    named model absent from `renderable("video")` at save.
    **`T2-46` built.** A scene requesting `ref_motion` or `control_video`
@@ -612,7 +622,9 @@ and submit skips `.expect.json` (**refs-length per-clip**,
 `grok._user_prompt` no longer names a fixed 4.8125 s quantum, does not say
 nothing shorter or longer can be produced, and does not tell the model to
 round `duration_guidance` to multiples of a constant. `_system_prompt` no
-longer names 4.8125 s either. `T2-14b` is **built**: the TIMING clip-length
+longer names 4.8125 s either. Unpinned generate (`scene_seconds` empty)
+does not name `n_clips_for(duration)` either — that is 50 clips on
+237.67 s at `CHUNK`. `T2-14b` is **built**: the TIMING clip-length
 line is `clip_seconds(scene_seconds)`, so one song at two `scene_seconds`
 produces two statements — a new constant 15.0 would keep the sentence shape
 and fail this. `T2-14c` is **built**: the return value still states track

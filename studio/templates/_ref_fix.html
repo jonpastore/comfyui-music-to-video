@@ -1,0 +1,70 @@
+{% from "_macros.html" import modal_close %}
+{# Face / inpaint / outpaint for one still. One dialog per page; JS fills
+   action, tier, ref_id from the Fix button. #}
+<dialog class="fix-modal" id="ref-fix">
+  <div class="modal-bar">
+    <strong>Fix <span id="ref-fix-label"></span></strong>
+    {{ modal_close() }}
+  </div>
+  <div class="fix-modal-body">
+    <img id="ref-fix-preview" alt="the still being repaired">
+    <div class="fix-forms">
+      <p class="hint">Keeps this composition. The result is a new candidate
+        beside it &mdash; nothing is overwritten.</p>
+
+      <form method="post" class="stack-form" id="ref-fix-face" enctype="multipart/form-data">
+        <h4>Use this face</h4>
+        <input type="hidden" name="tier" value="">
+        <input type="hidden" name="ref_id" value="">
+        <input type="hidden" name="mode" value="face">
+        <input type="hidden" name="instruction"
+               value="Replace the face of the person in image 1 with the face of the person in image 2. Keep the head shape, hair and body of image 1. Do not change pose, clothing, framing, background or lighting.">
+        <label>Face from
+          <select name="face_from">
+            {% for value, label in faces %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+            <option value="">an image I upload</option>
+          </select>
+        </label>
+        <label>Or upload one <input type="file" name="face" accept="image/*"></label>
+        <p class="hint">Puts that face on this still. Pose, body, clothes and
+          lighting stay.</p>
+        <button type="submit">Use this face</button>
+      </form>
+
+      <form method="post" class="stack-form mask-form" id="ref-fix-inpaint">
+        <h4>Repair a spot</h4>
+        <input type="hidden" name="tier" value="">
+        <input type="hidden" name="ref_id" value="">
+        <input type="hidden" name="mode" value="inpaint">
+        <input type="hidden" name="instruction"
+               value="Repair only the masked region of image 1 so it matches the rest of the frame. Do not change pose, clothing, framing, background or lighting outside the masked region.">
+        <input type="hidden" name="mask_data" value="">
+        <p class="hint">Paint the bit that is wrong, then repair it. Everything
+          you do not paint stays.</p>
+        <button type="button" class="js-paint-mask">Paint the wrong spot</button>
+        <span class="muted js-mask-state" hidden>ready</span>
+        <button type="submit" class="js-mask-submit" disabled>Repair that spot</button>
+      </form>
+
+      <form method="post" class="stack-form" id="ref-fix-outpaint">
+        <h4>Extend the frame</h4>
+        <input type="hidden" name="tier" value="">
+        <input type="hidden" name="ref_id" value="">
+        <input type="hidden" name="mode" value="outpaint">
+        <input type="hidden" name="instruction"
+               value="Extend image 1 into the new empty area, continuing the same scene, perspective and lighting. Do not change anything in the original area.">
+        <div class="field-row">
+          <label>left <input type="number" name="pad_left" value="0" min="0" max="1024" step="8"></label>
+          <label>top <input type="number" name="pad_top" value="0" min="0" max="1024" step="8"></label>
+          <label>right <input type="number" name="pad_right" value="0" min="0" max="1024" step="8"></label>
+          <label>bottom <input type="number" name="pad_bottom" value="0" min="0" max="1024" step="8"></label>
+        </div>
+        <p class="hint">Grows the picture on the sides you set. The original
+          area does not change.</p>
+        <button type="submit">Extend the frame</button>
+      </form>
+    </div>
+  </div>
+</dialog>

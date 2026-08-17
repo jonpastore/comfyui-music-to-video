@@ -9,7 +9,9 @@
                 spellcheck="false">{{ board_json }}</textarea>
     </label>
     <div class="sb-toolbar">
-      <button type="submit">Save</button>
+      <button type="submit" class="icon-btn" title="Save storyboard" aria-label="Save storyboard">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 2h8l2 2v10H3zm2 0v4h6V2zm-1 8v3h8v-3z"/></svg>
+      </button>
       <button type="submit" form="sb-gen-{{ tier }}">Generate</button>
       {% if versions %}
       <label class="sb-ver">Version
@@ -20,13 +22,39 @@
         </select>
       </label>
       <button type="submit" form="sb-restore-{{ tier }}" class="secondary">Restore</button>
-      <button type="submit" form="sb-snap-{{ tier }}" class="secondary">Save version</button>
+      <button type="submit" form="sb-snap-{{ tier }}" class="icon-btn"
+              title="Save version" aria-label="Save version">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 2h8l2 2v10H3zm2 0v4h6V2zm-1 8v3h8v-3zM9 9V7H7v2H5v2h2v2h2v-2h2V9z"/></svg>
+      </button>
       {% else %}
-      <button type="submit" form="sb-snap-{{ tier }}" class="secondary">Save version</button>
+      <button type="submit" form="sb-snap-{{ tier }}" class="icon-btn"
+              title="Save version" aria-label="Save version">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 2h8l2 2v10H3zm2 0v4h6V2zm-1 8v3h8v-3zM9 9V7H7v2H5v2h2v2h2v-2h2V9z"/></svg>
+      </button>
       {% endif %}
-      <a class="btn secondary" href="/songs/{{ song.id }}/approve/{{ tier }}">Approve {{ tier | tiername }}</a>
+      <span class="save-note" aria-live="polite"></span>
     </div>
   </form>
+  <div class="sb-toolbar">
+    <form method="post" action="/songs/{{ song.id }}/approve/{{ tier }}/all" class="inline">
+      <button type="submit" class="secondary">Approve remaining</button>
+    </form>
+    <form method="post" action="/songs/{{ song.id }}/approve/{{ tier }}/all" class="inline">
+      <input type="hidden" name="replace" value="true">
+      <button type="submit" class="danger">Approve all, replace picks</button>
+    </form>
+  </div>
+  {% if flagged_idxs %}
+  <form method="post" action="/songs/{{ song.id }}/reroll" class="stack-form">
+    <input type="hidden" name="tier" value="{{ tier }}">
+    {% for i in flagged_idxs %}<input type="hidden" name="clip_idx" value="{{ i }}">{% endfor %}
+    <label>Reroll the {{ flagged_idxs | length }} flagged scene{{ "" if flagged_idxs|length == 1 else "s" }}
+      <input type="text" name="note" maxlength="400" class="js-reroll-note"
+             placeholder="what to change across all of them (optional)">
+    </label>
+    <button type="submit">Reroll flagged</button>
+  </form>
+  {% endif %}
 
   <form id="sb-gen-{{ tier }}" method="post" action="/songs/{{ song.id }}/storyboard">
     <input type="hidden" name="tier" value="{{ tier }}">
@@ -45,6 +73,7 @@
            data-song-length="{{ song_length }}"
            data-clip-seconds="{{ clip_seconds }}"
            data-scene-count="{{ scene_count }}"
+           data-nclips="{{ nclips }}"
            data-mismatch="{{ 'true' if mismatch else 'false' }}"
            data-fill-pct="{{ coverage.fill_pct }}">
     <p class="meta">{{ scene_count }} scenes ·

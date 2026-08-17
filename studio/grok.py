@@ -594,25 +594,37 @@ def _user_prompt(lyrics, song, tier, n_scenes, scene_seconds=None):
     the renderer is no longer bound to.
     """
     dur = float(song.get("duration") or 0.0)
-    total_clips = n_clips_for(dur, scene_seconds)
     mins, secs = divmod(int(dur), 60)
-    clip_line = ""
     if scene_seconds:
+        total_clips = n_clips_for(dur, scene_seconds)
         clip_s = clip_seconds(scene_seconds)
         frames = legal_frames(scene_seconds, LTX_FPS)
-        clip_line = f"- Planned clip length is {clip_s:.4f} s ({frames} frames).\n"
+        timing = (
+            f"TIMING (hard constraints from the renderer):\n"
+            f"- Track length: {dur:.1f} seconds ({mins}:{secs:02d}).\n"
+            f"- Planned clip length is {clip_s:.4f} s ({frames} frames).\n"
+            f"- The whole track is {total_clips} clips.\n"
+            f"- The scene durations must add up to roughly {dur:.0f} seconds. Spend more "
+            f"clips on choruses, drops and instrumental passages; fewer on short spoken lines.\n\n"
+        )
+        closer = f"Generate {n_scenes} scenes covering the whole song."
+    else:
+        # Unpinned: do not name n_clips_for(duration). That is ceil(track /
+        # CHUNK) and it minted 50 clip-shaped "scenes" on ~4 min tracks.
+        timing = (
+            f"TIMING (hard constraints from the renderer):\n"
+            f"- Track length: {dur:.1f} seconds ({mins}:{secs:02d}).\n"
+            f"- The scene durations must add up to roughly {dur:.0f} seconds. Spend more "
+            f"time on choruses, drops and instrumental passages; fewer on short spoken lines.\n\n"
+        )
+        closer = "You choose how many scenes. Cover the whole song."
     return (
         f"Song: \"{song.get('title', '')}\" from the album \"{song.get('album', '')}\" "
         f"({song.get('genre', '')}). Content tier: {tier}.\n\n"
-        f"TIMING (hard constraints from the renderer):\n"
-        f"- Track length: {dur:.1f} seconds ({mins}:{secs:02d}).\n"
-        f"{clip_line}"
-        f"- The whole track is {total_clips} clips.\n"
-        f"- The scene durations must add up to roughly {dur:.0f} seconds. Spend more "
-        f"clips on choruses, drops and instrumental passages; fewer on short spoken lines.\n\n"
+        f"{timing}"
         "Lyrics (Suno-style [Section] tags mark scene boundaries -- respect them as "
         f"scene boundaries):\n{lyrics}\n\n"
-        f"Generate {n_scenes} scenes covering the whole song."
+        f"{closer}"
     )
 
 

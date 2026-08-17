@@ -319,3 +319,58 @@ def test_bind_route_overrides_auto():
         assert p["scenes"][0]["sheet_id"] == s2["id"]
         assert p["scenes"][0]["source"] == "saved"
         assert s1["id"] != s2["id"]
+
+
+def test_bind_route_json_reports_source():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Json Bind Song", album="Json Bind Album")
+        dest = os.path.join(db.DATA, "pose-plan")
+        os.makedirs(dest, exist_ok=True)
+        path = os.path.join(dest, "json-bind.png")
+        open(path, "wb").write(_png_bytes())
+        sheet = _sheet(song["album"], "r", "pose_stand", path, "standing")
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_r.json")
+        json.dump({
+            "title": "T", "album": song["album"], "version": "r",
+            "character_reference": "her",
+            "scenes": [{
+                "scene_number": 1, "name": "One", "image_prompt": "alley",
+                "camera": "wide", "pose": "standing",
+                "duration_guidance": "5s",
+                "cue": "x", "story": "s", "motion": "m", "lighting": "l",
+                "video_motion_prompt": "v", "negative_prompt": "",
+            }],
+        }, open(jp, "w"))
+        open(os.path.join(outdir, f"{song['slug']}_r.md"), "w").write("# sb\n")
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               song["id"], "r", jp, os.path.join(outdir, f"{song['slug']}_r.md"),
+               1, time.time())
+        r = client.post(
+            f"/songs/{song['id']}/storyboard/r/scene/1/pose-sheet",
+            data={"sheet_id": str(sheet["id"])},
+            headers={"Accept": "application/json"})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["ok"] is True
+        assert body["source"] == "saved"
+        assert body["sheet_id"] == sheet["id"]
+        assert body["url"]
+        page = client.get(f"/songs/{song['id']}/storyboard/r").text
+        assert "saved bind" not in page
+        assert "Use this plate" not in page
+        assert 'aria-label="Save this plate for the scene"' in page
+        assert "help-tip" in page
+        assert "Pinned" in page
+        assert "Save scene 1" in page
+        assert "icon-btn" in page
+        assert "scene-preview" in page
+        assert "Reference stills" in page
+        assert "Pose plate" in page
+        assert ">Clips<" in page or ">Clips</th>" in page
+        assert "First clip only" in page
+        assert ">Reroll<" in page
+        assert "what to change" in page
+        assert 'name="seed_min"' in page

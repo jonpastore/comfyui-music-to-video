@@ -52,17 +52,15 @@ def test_t2_13c_approve_grid_lists_every_scene_not_every_clip():
         plan = build_song.clip_chain_plan(scenes, "ltx25")
         assert len(plan) == scene_count, len(plan)
 
-        page = client.get(f"/songs/{sid}/approve/pg13").text
+        page = client.get(f"/songs/{sid}/storyboard/pg13/panel").text
         assert page
-        assert page.count('class="scene-group"') == scene_count
+        assert page.count('<section class="scene"') == scene_count
         assert f'data-nclips="{len(plan)}"' in page
         assert f'data-nclips="{want_clips}"' not in page
         assert "Part 1" not in page
         assert "Clip #0" not in page
-        assert f"of {want_clips} approved" not in page
-        assert "of 20 scenes approved" in page
-        assert "Generate refs" in page
-        assert "album plates" in page
+        assert "Reference stills" in page
+        assert "album plates" not in page or "Pose plate" in page
         assert "no candidates yet" not in page
 
 

@@ -1,3 +1,4 @@
+{% from "_macros.html" import modal_close %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -29,10 +30,9 @@
   <dialog class="jobs-modal" id="jobs-modal">
     <div class="modal-bar">
       <strong>Jobs</strong>
-      <span>
+      <span class="modal-bar-actions">
         <a href="/jobs">all jobs</a>
-        <button type="button" class="secondary"
-                onclick="this.closest('dialog').close()">Close</button>
+        {{ modal_close() }}
       </span>
     </div>
     <div id="jobs-modal-body"></div>
@@ -40,16 +40,14 @@
   <dialog class="lightbox" id="ref-preview">
     <div class="lightbox-bar">
       <strong id="ref-preview-label"></strong>
-      <button type="button" class="secondary lightbox-close"
-              onclick="this.closest('dialog').close()">Close</button>
+      {{ modal_close() }}
     </div>
     <img alt="full size">
   </dialog>
   <dialog class="video-modal" id="clip-preview">
     <div class="modal-bar">
       <strong id="clip-preview-label">Clip</strong>
-      <button type="button" class="secondary"
-              onclick="this.closest('dialog').close()">Close</button>
+      {{ modal_close() }}
     </div>
     <video controls preload="metadata"></video>
   </dialog>

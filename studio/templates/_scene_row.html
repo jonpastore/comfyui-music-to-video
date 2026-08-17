@@ -58,6 +58,19 @@
 
   {% if pose_plan %}
   {% for s in pose_plan.scenes if s.num == r.num %}
+  {% if s.source == "saved" %}
+    {% set bind_label = "Pinned" %}
+    {% set bind_help = "Pinned: you chose this plate. Generate refs uses it as the pose (image2). Change the list and save to pick another, or clear bind to let the matcher decide." %}
+  {% elif s.source == "auto" %}
+    {% set bind_label = "Suggested" %}
+    {% set bind_help = "Suggested: the matcher picked this from the scene pose word. Not pinned — save to keep this plate if you regenerate refs." %}
+  {% elif s.source == "missing" %}
+    {% set bind_label = "Missing sheet" %}
+    {% set bind_help = "The pinned sheet is gone from the album. Pick another plate and save." %}
+  {% else %}
+    {% set bind_label = "No plate" %}
+    {% set bind_help = "No plate. Generate refs uses identity front only. Pick a plate and save to pin one." %}
+  {% endif %}
   <form method="post" action="/songs/{{ song.id }}/storyboard/{{ tier }}/scene/{{ r.num }}/pose-sheet"
         class="pose-bind field-row">
     {% if s.path %}
@@ -66,6 +79,8 @@
             data-label="scene {{ r.num }} pose plate">
       <img class="anchor-thumb" src="{{ media_url(s.path) }}" alt="" loading="lazy">
     </button>
+    {% else %}
+    <span class="anchor-thumb pose-thumb-empty" aria-hidden="true"></span>
     {% endif %}
     <label>Pose plate
       <select name="sheet_id">
@@ -77,79 +92,199 @@
         {% endfor %}
       </select>
     </label>
-    <button type="submit" class="secondary">Use this plate</button>
-    <span class="muted">
-      {% if s.source == "saved" %}saved bind
-      {% elif s.source == "auto" %}auto-matched
-      {% elif s.source == "missing" %}saved sheet is gone
-      {% else %}unbound{% endif %}
-      {% if r.scene.pose %} · {{ r.scene.pose }}{% endif %}
+    <button type="submit" class="icon-btn" title="Save this plate for the scene"
+            aria-label="Save this plate for the scene">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 2h8l2 2v10H3zm2 0v4h6V2zm-1 8v3h8v-3z"/></svg>
+    </button>
+    <span class="pose-bind-meta">
+      <span class="pose-bind-label" data-source="{{ s.source }}">{{ bind_label }}</span>
+      <button type="button" class="icon-btn help-tip" title="{{ bind_help }}"
+              aria-label="What {{ bind_label }} means">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <path fill="currentColor" d="M7.3 6.2c0-.8.5-1.3 1.3-1.3s1.3.5 1.3 1.2c0 .6-.3.9-.9 1.3-.5.4-.8.7-.8 1.3h1.3c0-.4.2-.7.7-1.1.7-.5 1.3-1 1.3-2 0-1.3-1-2.2-2.4-2.2-1.5 0-2.6 1-2.6 2.5zm1.1 5.8h1.4V10.7H8.4z"/>
+        </svg>
+      </button>
+      {% if r.scene.pose %}
+      <span class="pose-word"
+            title="The scene's pose word. The matcher uses this to suggest a plate.">{{ r.scene.pose }}</span>
+      {% endif %}
     </span>
+    <span class="save-note" aria-live="polite"></span>
   </form>
   {% endfor %}
   {% endif %}
 
   <form class="scene-form stack-form"
-        hx-post="/songs/{{ song.id }}/storyboard/{{ tier }}/scene/{{ r.num }}"
-        hx-target="#scene-{{ r.num }}" hx-swap="outerHTML">
+        method="post"
+        action="/songs/{{ song.id }}/storyboard/{{ tier }}/scene/{{ r.num }}">
     {% for f in fields %}
     <label>{{ f.replace("_", " ") }}
       <textarea name="{{ f }}" rows="{{ 5 if f == 'image_prompt' else 2 }}">{{ r.scene[f] or "" }}</textarea>
     </label>
     {% endfor %}
-    <button type="submit">Save scene {{ r.num }}</button>
+    <div class="scene-save-row">
+      <button type="submit" class="icon-btn" title="Save scene {{ r.num }}"
+              aria-label="Save scene {{ r.num }}">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 2h8l2 2v10H3zm2 0v4h6V2zm-1 8v3h8v-3z"/></svg>
+      </button>
+      <span class="save-note" aria-live="polite"></span>
+    </div>
   </form>
 
-  {% if r.refs %}
-  <div class="scene-refs">
-    {% for c in r.refs %}
-    <figure class="ref-frame {% if c.approved %}approved{% endif %} {% if c.stale %}stale{% endif %}">
-      {% if c.candidates %}
-      <button type="button" class="js-ref-preview thumb-open"
-              data-full="{{ media_url(c.candidates[-1].path) }}"
-              data-label="scene {{ r.num }} still">
-        <img src="{{ media_url(c.candidates[-1].path) }}" alt="scene {{ r.num }} still" loading="lazy">
-      </button>
-      {% else %}
-      <div class="ref-empty">not rendered</div>
-      {% endif %}
-      <figcaption>
-        scene still
-        {% if c.approved %}<span class="tag done">approved</span>{% endif %}
-        {% if c.stale %}<span class="tag warn-tag" title="rendered before this scene's text was last edited">stale</span>{% endif %}
-        {% if c.candidates | length > 1 %}
-        <span class="muted">{{ c.candidates | length }} candidates</span>
-        {% endif %}
-      </figcaption>
-    </figure>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="empty">No reference frame for this scene yet.</p>
+  {% set ns = namespace(plate=None, head=None) %}
+  {% if pose_plan %}
+    {% for s in pose_plan.scenes if s.num == r.num %}{% set ns.plate = s %}{% endfor %}
   {% endif %}
-
-  {% if r.videos %}
-  <div class="scene-clips">
-    {% if r.videos | length > 1 %}
-    <button type="button" class="js-clip-preview secondary"
-            data-playlist="{% for v in r.videos %}{{ media_url(v.path) }}{% if not loop.last %}|{% endif %}{% endfor %}"
-            data-label="scene {{ r.num }} ({{ r.videos | length }} parts)">Play scene</button>
-    {% endif %}
-    {% for v in r.videos %}
-    <figure class="clip-frame">
-      <button type="button" class="js-clip-preview thumb-open"
-              data-video="{{ media_url(v.path) }}"
-              data-label="scene {{ r.num }}{% if r.videos|length > 1 %} part {{ loop.index }}/{{ r.videos|length }}{% endif %}">
-        <video src="{{ media_url(v.path) }}" preload="metadata" muted playsinline></video>
-      </button>
-      <figcaption>
-        {% if r.videos|length > 1 %}part {{ loop.index }}/{{ r.videos|length }}
-        {% else %}scene video{% endif %}
-        · {{ "%.1f"|format(r.length / (r.videos|length or 1)) }}s
-        {% if v.status %}<span class="tag">{{ v.status }}</span>{% endif %}
-      </figcaption>
-    </figure>
-    {% endfor %}
-  </div>
-  {% endif %}
+  {% if r.refs %}{% set ns.head = r.refs[0].idx %}{% elif r.clips %}{% set ns.head = r.clips[0] %}{% endif %}
+  <table class="scene-preview">
+    <thead>
+      <tr>
+        <th>Pose plate</th>
+        <th>Reference stills</th>
+        <th>Clips</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="preview-plate">
+          {% if ns.plate and ns.plate.path %}
+          <figure class="ref-frame">
+            <button type="button" class="js-ref-preview thumb-open"
+                    data-full="{{ media_url(ns.plate.path) }}"
+                    data-label="scene {{ r.num }} pose plate">
+              <img src="{{ media_url(ns.plate.path) }}" alt="scene {{ r.num }} pose plate" loading="lazy">
+            </button>
+            <figcaption>plate{% if ns.plate.label %} · {{ ns.plate.label }}{% endif %}</figcaption>
+          </figure>
+          {% else %}
+          <p class="empty">No plate bound.</p>
+          {% endif %}
+          <p class="hint">Wardrobe may change. Face, fur, body and anatomy must stay her. QC reports confidence and that assessment.</p>
+        </td>
+        <td class="preview-stills">
+          {% set cands = (r.refs[0].candidates if r.refs else []) %}
+          {% if cands %}
+          <div class="scene-refs">
+            {% for c in cands %}
+            <figure class="ref-frame clip-tile {% if c.approved %}approved{% endif %}"
+                    tabindex="0" data-clip="{{ ns.head }}">
+              <button type="button" class="js-ref-preview thumb-open"
+                      data-full="{{ media_url(c.path) }}"
+                      data-label="scene {{ r.num }} still · seed {{ c.seed if c.seed is not none else '?' }}">
+                <img src="{{ media_url(c.path) }}" alt="scene {{ r.num }} still" loading="lazy">
+              </button>
+              <figcaption>
+                still{% if c.seed is not none %} · {{ c.seed }}{% endif %}
+                {% if c.approved %}<span class="tag done">approved</span>{% endif %}
+                {% if ref_flags and ns.head is not none and ref_flags.get(ns.head) %}
+                <span class="tag warn-tag" title="{{ ref_flags[ns.head].reason }}">{{ ref_flags[ns.head].issue }}</span>
+                {% endif %}
+                {% set origin = c.origin or "gen" %}
+                {% if origin in ("gen", "reroll", "refine", "face", "inpaint", "outpaint") %}
+                <span class="tag">{{ origin }}</span>
+                {% endif %}
+                {% set q = c | qctag %}
+                {% if q %}<span class="qc-tag" title="physical identity vs her photographs. Clothes do not lower identity.">{{ q }}</span>{% endif %}
+              </figcaption>
+              {% if ns.head is not none %}
+              <form method="post" action="/songs/{{ song.id }}/refs/{{ ns.head }}/approve"
+                    class="inline still-pick">
+                <input type="hidden" name="tier" value="{{ tier }}">
+                <input type="hidden" name="ref_id" value="{{ c.id }}">
+                <button type="submit" class="btn-sm js-approve">{{ "Unapprove" if c.approved else "Use this still" }}</button>
+              </form>
+              <button type="button" class="secondary btn-sm js-ref-fix"
+                      data-action="/songs/{{ song.id }}/refs/{{ ns.head }}/fix"
+                      data-tier="{{ tier }}"
+                      data-ref="{{ c.id }}"
+                      data-src="{{ media_url(c.path) }}"
+                      data-label="scene {{ r.num }} · seed {{ c.seed if c.seed is not none else '?' }}">Fix</button>
+              <form method="post" action="/songs/{{ song.id }}/refs/{{ c.id }}/delete"
+                    class="inline">
+                <input type="hidden" name="tier" value="{{ tier }}">
+                <input type="hidden" name="clip_idx" value="{{ ns.head }}">
+                <button type="submit" class="danger btn-sm">Delete</button>
+              </form>
+              {% endif %}
+            </figure>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="empty">No reference stills yet.</p>
+          {% endif %}
+          <span class="save-note" aria-live="polite"></span>
+          {% if ns.head is not none %}
+          <form method="post" action="/songs/{{ song.id }}/reroll" class="reroll-form">
+            <input type="hidden" name="tier" value="{{ tier }}">
+            <input type="hidden" name="clip_idx" value="{{ ns.head }}">
+            <label>what to change
+              <input type="text" name="note" maxlength="400" class="js-reroll-note"
+                     placeholder="optional">
+            </label>
+            <label>Images to generate
+              <input type="number" name="n" value="4" min="1" max="16">
+            </label>
+            <label>min
+              <input type="number" name="seed_min" value="8000" min="0">
+            </label>
+            <label>max
+              <input type="number" name="seed_max" value="11000" min="0">
+            </label>
+            <label>seed stepping
+              <select name="step">
+                <option value="equal">equal</option>
+                <option value="fib">fibonacci</option>
+              </select>
+            </label>
+            <button type="submit">Reroll</button>
+            <span class="save-note" aria-live="polite"></span>
+          </form>
+          {% endif %}
+        </td>
+        <td class="preview-clips">
+          {% if r.videos %}
+          <div class="scene-clips">
+            {% if r.videos | length > 1 %}
+            <button type="button" class="js-clip-preview secondary"
+                    data-playlist="{% for v in r.videos %}{{ media_url(v.path) }}{% if not loop.last %}|{% endif %}{% endfor %}"
+                    data-label="scene {{ r.num }} ({{ r.videos | length }} parts)">Play scene</button>
+            {% endif %}
+            {% for v in r.videos %}
+            <figure class="clip-frame">
+              <button type="button" class="js-clip-preview thumb-open"
+                      data-video="{{ media_url(v.path) }}"
+                      data-label="scene {{ r.num }} clip {{ loop.index }}{% if r.videos|length > 1 %} / {{ r.videos|length }}{% endif %}">
+                <video src="{{ media_url(v.path) }}" preload="metadata" muted playsinline></video>
+              </button>
+              <figcaption>
+                clip {{ loop.index }}{% if r.videos|length > 1 %} / {{ r.videos|length }}{% endif %}
+                · {{ "%.1f"|format(r.length / (r.videos|length or 1)) }}s
+                {% if v.status %}<span class="tag">{{ v.status }}</span>{% endif %}
+                {% set qv = v | qctag %}
+                {% if qv %}<span class="qc-tag" title="first-frame physical identity vs her photographs. Clothes do not lower identity.">{{ qv }}</span>{% endif %}
+              </figcaption>
+            </figure>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="empty">No clips yet.</p>
+          {% endif %}
+          <form method="post" action="/songs/{{ song.id }}/clips" class="stack-form scene-clip-gen">
+            <input type="hidden" name="tier" value="{{ tier }}">
+            <input type="hidden" name="scene" value="{{ r.num }}">
+            <label class="check"><input type="checkbox" name="head_only" value="true" checked>
+              First clip only</label>
+            <label class="check"><input type="checkbox" name="refine" value="true">
+              Auto post (LTX refine)</label>
+            <label class="check"><input type="checkbox" name="auto_qc" value="true">
+              Auto QC after</label>
+            <button type="submit">Render clip</button>
+            <span class="save-note" aria-live="polite"></span>
+          </form>
+          <p class="hint">LTX first from the approved still. WAN S2V is a later hop from that take, not a direct render.</p>
+        </td>
+      </tr>
+    </tbody>
+  </table>
 </section>

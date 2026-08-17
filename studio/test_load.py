@@ -11,6 +11,7 @@ Run: python3 -m pytest test_load.py -q
 import asyncio
 import itertools
 import json
+import os
 import socket
 import threading
 import time
@@ -39,10 +40,18 @@ def _make_song(prefix="song"):
 
 
 def _make_storyboard(song_id, tier, scene_count):
+    song = db.one("SELECT * FROM songs WHERE id=?", song_id)
+    slug = (song["slug"] if song else f"s{song_id}") or f"s{song_id}"
+    outdir = os.path.join(db.DATA, "storyboards", slug)
+    os.makedirs(outdir, exist_ok=True)
+    path = os.path.join(outdir, f"{slug}_{tier}.json")
+    scenes = [{"scene_number": i, "name": f"S{i}", "image_prompt": "x",
+               "length_seconds": 4.0} for i in range(1, scene_count + 1)]
+    json.dump({"title": "T", "scenes": scenes}, open(path, "w"))
     db.run(
         """INSERT INTO storyboards (song_id, tier, json_path, md_path, scene_count, created)
            VALUES (?,?,?,?,?,?)""",
-        song_id, tier, "/fake/sb.json", "/fake/sb.md", scene_count, time.time(),
+        song_id, tier, path, path + ".md", scene_count, time.time(),
     )
 
 
@@ -411,6 +420,7 @@ def test_playlist_card_summary_and_drag_order(client):
 
 def test_approval_grid_multi_candidate_and_clip_gating(client):
     sid = _make_song("approve")
+    db.run("UPDATE songs SET duration=? WHERE id=?", 18.0, sid)
     tier = "pg13"
     _make_storyboard(sid, tier, scene_count=3)
 
@@ -419,9 +429,9 @@ def test_approval_grid_multi_candidate_and_clip_gating(client):
     ref1 = _make_ref(sid, tier, 1, seed=333)
     ref2 = _make_ref(sid, tier, 2, seed=444)
 
-    grid = client.get(f"/songs/{sid}/approve/{tier}")
-    assert grid.status_code == 200
-    assert "Clip 0" in grid.text and "Clip 1" in grid.text and "Clip 2" in grid.text
+    grid = client.get(f"/songs/{sid}/approve/{tier}", follow_redirects=False)
+    assert grid.status_code == 303
+    assert f"/songs/{sid}" in (grid.headers.get("location") or "")
 
     r = client.post(f"/songs/{sid}/refs/0/approve", data={"tier": tier, "ref_id": ref0a})
     assert r.status_code == 200
@@ -438,7 +448,7 @@ def test_approval_grid_multi_candidate_and_clip_gating(client):
     # clip_idx 1 and 2 still have no approved ref -> /clips must refuse, not 500
     r3 = client.post(f"/songs/{sid}/clips", data={"tier": tier}, follow_redirects=False)
     assert r3.status_code == 400, r3.text
-    assert "1" in r3.text and "2" in r3.text
+    assert "missing an approved still" in r3.text
 
     client.post(f"/songs/{sid}/refs/1/approve", data={"tier": tier, "ref_id": ref1})
     client.post(f"/songs/{sid}/refs/2/approve", data={"tier": tier, "ref_id": ref2})
