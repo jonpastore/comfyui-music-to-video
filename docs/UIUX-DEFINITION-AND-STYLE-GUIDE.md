@@ -465,7 +465,9 @@ lyrics & style (one fold, two columns), media, audio, review, video, QC,
 jobs and delete start closed once they have content. **Storyboard** and
 **Reference images** start open — that is the work. Scene stills, pose
 plates and rendered clips are `.js-ref-preview` / `.js-clip-preview`
-thumbs; click opens `#ref-preview` or `#clip-preview` in `base.html`. Summaries carry the one-line status so
+thumbs; click opens `#ref-preview` or `#clip-preview` in `base.html`.
+A scene lists **every** rendered part (not only the head) and Play scene
+runs them in order. The panel also has an all-clips strip and Assemble. Summaries carry the one-line status so
 you do not open a card to learn it is idle.
 Storyboard editing lives **on the song page**, not a second interface.
 Each written tier is a `.tier-board` that `hx-get`s

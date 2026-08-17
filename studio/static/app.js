@@ -2234,9 +2234,21 @@ document.addEventListener("click", function (e) {
     var vdlg = document.getElementById("clip-preview");
     if (!vdlg) return;
     var vid = vdlg.querySelector("video");
-    vid.src = clip.getAttribute("data-video") || "";
+    var list = (clip.getAttribute("data-playlist") || "").split("|").filter(Boolean);
+    if (!list.length) list = [clip.getAttribute("data-video") || ""];
+    var i = 0;
+    function playAt() {
+      if (i >= list.length) return;
+      vid.src = list[i];
+      vid.play();
+    }
+    vid.onended = function () {
+      i += 1;
+      if (i < list.length) playAt();
+    };
     var vlab = document.getElementById("clip-preview-label");
     if (vlab) vlab.textContent = clip.getAttribute("data-label") || "Clip";
+    playAt();
     if (typeof vdlg.showModal === "function") vdlg.showModal();
     return;
   }

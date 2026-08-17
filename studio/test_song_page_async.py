@@ -109,6 +109,38 @@ def test_song_page_folds_and_storyboard_are_buttons():
         assert 'id="ref-preview"' in client.get("/").text
 
 
+def test_scenes_lists_every_rendered_clip_on_a_split_scene():
+    """A long scene is several files. The row must list each, not only the head."""
+    import json as _json
+    import storyboard_service
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Split Clip Song")
+        sid = song["id"]
+        db.run("UPDATE songs SET duration=30 WHERE id=?", sid)
+        song = db.one("SELECT * FROM songs WHERE id=?", sid)
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        scenes = [{
+            "scene_number": 1, "name": "Long", "length_seconds": 30.0,
+            "video_model": "ltx25", "image_prompt": "alley",
+            "character_reference": "her",
+        }]
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        _json.dump({"title": "T", "character_reference": "her", "scenes": scenes},
+                   open(jp, "w"))
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""", sid, "xxx", jp, jp + ".md", 1, 0)
+        for i in (0, 1):
+            path = os.path.join(db.DATA, f"c{i}.mp4")
+            open(path, "wb").write(b"x")
+            db.run("INSERT INTO clips (song_id,tier,clip_idx,path,status) VALUES (?,?,?,?,?)",
+                   sid, "xxx", i, path, "done")
+        rows, n = storyboard_service.scenes(
+            song, {"scenes": scenes}, "xxx")
+        assert n >= 2, n
+        assert [v["clip_idx"] for v in rows[0]["videos"]] == [0, 1]
+
+
 def test_storyboard_save_and_restore_roundtrip():
     """CRUD on the live board: save JSON, snapshot, edit, restore."""
     import json as _json

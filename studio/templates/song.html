@@ -302,12 +302,13 @@
     {% endif %}
   </summary>
   {% if storyboards %}
+  {% set open_tier = 'xxx' if 'xxx' in storyboards else storyboards.keys()|list|last %}
   <div class="tier-actions tier-links">
     {% for t, sb in storyboards.items() %}
     <details class="tier-board" data-tier="{{ t }}"
-             {% if loop.last %}open{% endif %}
+             {% if t == open_tier %}open{% endif %}
              hx-get="/songs/{{ song.id }}/storyboard/{{ t }}/panel"
-             hx-trigger="{{ 'load, toggle once' if loop.last else 'toggle once' }}"
+             hx-trigger="{{ 'load, toggle once' if t == open_tier else 'toggle once' }}"
              hx-target="find .tier-board-body" hx-swap="innerHTML">
       <summary>
         <span>{{ t | tiername }} · {{ sb.scene_count or "?" }} scenes</span>

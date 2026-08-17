@@ -6014,6 +6014,7 @@ def storyboard_page_ctx(song, tier):
         "scene_count": board["scene_count"],
         "mismatch": board["mismatch"],
         "versions": storyboard_versions.list_versions(row["json_path"], tier),
+        "all_videos": [v for r in rows for v in (r.get("videos") or [])],
     }
 
 

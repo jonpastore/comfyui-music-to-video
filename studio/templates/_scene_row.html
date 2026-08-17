@@ -130,15 +130,22 @@
 
   {% if r.videos %}
   <div class="scene-clips">
+    {% if r.videos | length > 1 %}
+    <button type="button" class="js-clip-preview secondary"
+            data-playlist="{% for v in r.videos %}{{ media_url(v.path) }}{% if not loop.last %}|{% endif %}{% endfor %}"
+            data-label="scene {{ r.num }} ({{ r.videos | length }} parts)">Play scene</button>
+    {% endif %}
     {% for v in r.videos %}
     <figure class="clip-frame">
       <button type="button" class="js-clip-preview thumb-open"
               data-video="{{ media_url(v.path) }}"
-              data-label="scene {{ r.num }} clip {{ v.clip_idx }}">
+              data-label="scene {{ r.num }}{% if r.videos|length > 1 %} part {{ loop.index }}/{{ r.videos|length }}{% endif %}">
         <video src="{{ media_url(v.path) }}" preload="metadata" muted playsinline></video>
       </button>
       <figcaption>
-        clip {{ v.clip_idx }}
+        {% if r.videos|length > 1 %}part {{ loop.index }}/{{ r.videos|length }}
+        {% else %}scene video{% endif %}
+        · {{ "%.1f"|format(r.length / (r.videos|length or 1)) }}s
         {% if v.status %}<span class="tag">{{ v.status }}</span>{% endif %}
       </figcaption>
     </figure>

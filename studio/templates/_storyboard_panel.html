@@ -56,6 +56,29 @@
     </p>
   </section>
 
+  {% if all_videos %}
+  <details class="sb-all-clips" open>
+    <summary>{{ all_videos | length }} rendered clip{{ "" if all_videos|length == 1 else "s" }}
+      · one per scene unless a scene is longer than one render</summary>
+    <div class="scene-clips">
+      {% for v in all_videos %}
+      <figure class="clip-frame">
+        <button type="button" class="js-clip-preview thumb-open"
+                data-video="{{ media_url(v.path) }}"
+                data-label="{{ tier | tiername }} clip {{ v.clip_idx }}">
+          <video src="{{ media_url(v.path) }}" preload="metadata" muted playsinline></video>
+        </button>
+        <figcaption>#{{ v.clip_idx }}</figcaption>
+      </figure>
+      {% endfor %}
+    </div>
+    <form method="post" action="/songs/{{ song.id }}/render" class="header-action">
+      <input type="hidden" name="tier" value="{{ tier }}">
+      <button type="submit">Assemble stitched {{ tier | tiername }} video</button>
+    </form>
+  </details>
+  {% endif %}
+
   <details class="sb-scenes" open>
     <summary>Scenes and timing</summary>
     {% for r in scene_rows %}
