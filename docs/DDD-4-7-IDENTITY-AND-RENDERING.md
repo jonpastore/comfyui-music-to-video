@@ -528,7 +528,8 @@ code rather than in documents.
 - **Clip-hop labels vs the graph** — LTX always; s2v if
   `needs_lip_sync`; T5-A if refine. A control that says "lip-sync"
   must not emit s2v-only (`T5-11` **built**,
-  `test_t5_11_ltx_always_first.py`). T5-12 hop is not built.
+  `test_t5_11_ltx_always_first.py`). T5-12 hop graph **built**
+  (`test_t5_12_d7_hop.py`); look is `T3-37` NOT MEASURED.
 - **`classification_json` vs `anchor5/*.json`** — the DB document is
   the store (`T4-21` **built**, `test_t4_21_classification_json.py`).
   Sidecars seed `import_sidecar` only (`T4-22` **built**); `library()`

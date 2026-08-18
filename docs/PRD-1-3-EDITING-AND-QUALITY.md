@@ -511,10 +511,11 @@ order and take the dependencies from here.
    clip is refused or split. The planner divisor is unchanged.
    **`T2-47` partial**: hop 0 is LTX even when a scene is marked `s2v`
    (`T5-11` **built**, `test_t5_11_ltx_always_first.py`). Mixed native
-   frames return with the T5-12 hop (`test_t2_47_mixed_model.py`).
+   frames return with the T5-12 hop (`test_t5_12_d7_hop.py` **built**;
+   `test_t2_47_mixed_model.py`).
    **`T2-48` partial**: hop 0 splits a 30 s scene on the LTX ceiling
    even when marked `s2v`; s2v hop windows are T5-12
-   (`test_t2_48_ceilings_compose.py`).
+   (`test_t5_12_d7_hop.py` **built**; `test_t2_48_ceilings_compose.py`).
    **`T2-45` built**: a mixed-model song is refused before enqueue when
    any named model is `False` on every reachable backend
    (`test_t2_45_enqueue_unavailable.py`); `None` stays a candidate.

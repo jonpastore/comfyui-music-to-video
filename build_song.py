@@ -545,12 +545,16 @@ def clips_for_scenes(scenes, default_model="ltx25"):
 
 
 def clip_chain_plan(scenes, default_model="ltx25"):
-    """[{clip_idx, depends_on, ...}] for the render plan. T2-11 / T2-48.
+    """[{clip_idx, depends_on, ...}] for the render plan. T2-11 / T2-48 / T5-12.
 
-    Consecutive clips that share a scene_number form a chain: clip N+1 needs
-    clip N's last frame, so depends_on is the predecessor's clip_idx. The first
-    clip of each scene, and every under-ceiling single-clip scene, has
-    depends_on=None so independent scenes stay parallel.
+    Consecutive LTX clips that share a scene_number form a chain: clip N+1
+    needs clip N's last frame, so depends_on is the predecessor's clip_idx.
+    The first clip of each scene, and every under-ceiling single-clip scene,
+    has depends_on=None so independent scenes stay parallel.
+
+    T5-12: on needs_lip_sync scenes, after that scene's LTX parts, append
+    s2v windows (CHUNK / T5-9) with depends_on = the LTX predecessor.
+    Unmarked scenes stay LTX-only.
     """
     parts = clips_for_scenes(scenes, default_model)
     out = []
@@ -562,6 +566,35 @@ def clip_chain_plan(scenes, default_model="ltx25"):
         item["clip_idx"] = i
         item["depends_on"] = dep
         out.append(item)
+    by_scene = {}
+    for s in scenes:
+        sn = s.get("scene_number")
+        if sn is not None:
+            by_scene[sn] = s
+    ltx_by_scene = {}
+    for item in out:
+        ltx_by_scene.setdefault(item.get("scene_number"), []).append(item)
+    for sn, scene in by_scene.items():
+        if not scene.get("needs_lip_sync"):
+            continue
+        for ltx in ltx_by_scene.get(sn, []):
+            windows = split_to_ceiling(ltx["duration_s"], "s2v")
+            t = float(ltx["start_s"])
+            for part in windows:
+                hop = {
+                    "start_s": t,
+                    "end_s": t + part,
+                    "duration_s": part,
+                    "model": "s2v",
+                    "frames": legal_frames(part, FPS),
+                    "fps": FPS,
+                    "scene_number": sn,
+                    "clip_idx": len(out),
+                    "depends_on": ltx["clip_idx"],
+                    "control_clip_idx": ltx["clip_idx"],
+                }
+                out.append(hop)
+                t += part
     return out
 
 
@@ -1143,21 +1176,25 @@ def main():
     sb = normalize(json.load(open(args.storyboard)))
     scenes = sb["scenes"]
     dur = audio_duration(args.audio)
-    # One planner: scene heads + ceiling splits. Song-length 4.8s slicing
-    # is not an operator unit.
+    # One planner: scene heads + ceiling splits + T5-12 s2v hops.
+    # Song-length 4.8s slicing is not an operator unit.
+    plan_recs = clip_chain_plan(scenes, default_model=args.video_model)
+    heads = scene_heads(scenes, default_model=args.video_model)
     plan_clips = []
-    for rec in clips_for_scenes(scenes, default_model=args.video_model):
+    ltx_plan_clips = []
+    for rec in plan_recs:
         scene = next(s for s in scenes if s["scene_number"] == rec["scene_number"])
         clip_scene = dict(scene)
         clip_scene["length_seconds"] = rec["duration_s"]
         clip_scene["start_s"] = rec["start_s"]
         clip_scene["frames"] = rec["frames"]
         clip_scene["video_model"] = rec["model"]
-        i = rec.get("clip_idx")
-        if i is None:
-            i = len(plan_clips)
-        plan_clips.append((i, clip_scene, shot_directive(clip_scene, i)))
-    refuse_plan_miss(plan_clips, dur)
+        i = rec["clip_idx"]
+        entry = (i, clip_scene, shot_directive(clip_scene, i), rec)
+        plan_clips.append(entry)
+        if rec["model"] != "s2v":
+            ltx_plan_clips.append((i, clip_scene, shot_directive(clip_scene, i)))
+    refuse_plan_miss(ltx_plan_clips, dur)
     nclips = len(plan_clips)
     # grok._compose stores the rating as version; T10-18 reads it here so a
     # g/pg13 storyboard depicting a child is not refused at the builder.
@@ -1171,20 +1208,35 @@ def main():
 
     os.makedirs(args.outdir, exist_ok=True)
     per_scene = {}
-    for i, scene, _shot in plan_clips:
-        # one reference per clip (build_refs.py --audio), so consecutive clips in
-        # a scene are different compositions rather than the same still
-        ref = f"{args.slug}_clip_{i:03d}.png"
-        # T5-11: hop 0 is ltx25. video_model=s2v / needs_lip_sync do not
-        # skip LTX. T5-12 hop is not this emit.
-        model = scene.get("video_model") or "ltx25"
-        # T2-46: a scene field is the request. Job-level --ref-motion is
-        # the fallback so a whole-song upload still fills s2v clips.
+    for i, scene, _shot, rec in plan_clips:
+        model = rec["model"]
+        is_hop = model == "s2v" and rec.get("control_clip_idx") is not None
+        if is_hop:
+            # T5-12: ref_image = accepted scene still (head), not a hop-local png.
+            head = heads.get(scene["scene_number"], i)
+            ref = f"{args.slug}_clip_{head:03d}.png"
+            # control_video = LTX SaveVideo path (LoadVideosFromFolder), not
+            # LoadVideo / not an LTX latent. Distinct hop SaveVideo below.
+            ltx_idx = rec["control_clip_idx"]
+            control = f"{args.slug}/clip_{ltx_idx:03d}"
+            ref_motion = None
+            refine = False
+        else:
+            # one reference per clip (build_refs.py --audio), so consecutive
+            # clips in a scene are different compositions rather than the same
+            ref = f"{args.slug}_clip_{i:03d}.png"
+            # T5-11: hop 0 is ltx25. video_model=s2v / needs_lip_sync do not
+            # skip LTX.
+            # T2-46: a scene field is the request. Job-level --ref-motion is
+            # the fallback so a whole-song upload still fills s2v clips.
+            control = scene.get("control_video") or args.control_video
+            ref_motion = scene.get("ref_motion") or args.ref_motion
+            refine = args.refine
         wf = workflow(i, scene, ref, audio_name, char, world, guard,
                       video_model=model,
-                      ref_motion=scene.get("ref_motion") or args.ref_motion,
-                      control_video=scene.get("control_video") or args.control_video,
-                      refine=args.refine,
+                      ref_motion=ref_motion,
+                      control_video=control,
+                      refine=refine,
                       tier=tier)
         # Attach the save to whichever node actually produces the VIDEO, found by
         # class rather than by a per-family id table. That table was
@@ -1195,8 +1247,10 @@ def main():
         # family would have re-earned that bug; asking the graph does not.
         video_node = next(k for k, n in wf.items() if n["class_type"] == "CreateVideo")
         # T5-4 / T6-A5: refine writes beside the unrefined clip, never over it.
+        # T5-12: hop SaveVideo uses its own clip_idx prefix so the LTX take
+        # is not overwritten.
         prefix = f"{args.slug}/clip_{i:03d}"
-        if args.refine:
+        if refine:
             prefix += "_refined"
         wf["99"] = {"class_type": "SaveVideo", "inputs": {
             "video": [video_node, 0],
@@ -1208,7 +1262,7 @@ def main():
             json.dump(expect_from_workflow(wf), f)
         n_so_far, _ = per_scene.get(scene["scene_number"], (0, ref))
         per_scene[scene["scene_number"]] = (n_so_far + 1, ref)
-    plan = [(num, sname(next(s for _, s, _ in plan_clips if s["scene_number"] == num)), n, ref)
+    plan = [(num, sname(next(s for _, s, _, _ in plan_clips if s["scene_number"] == num)), n, ref)
             for num, (n, ref) in per_scene.items()]
 
     print(f"{args.slug} {dur:.1f}s -> {nclips} clips of {CHUNK:.4f}s "

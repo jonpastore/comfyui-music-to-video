@@ -82,8 +82,8 @@ def test_t5_11_emit_needs_lip_sync_is_not_hop0(tmp_path, monkeypatch):
     kinds = _classes(wf)
     assert "EmptyLTXVLatentVideo" in kinds, kinds
     assert "WanSoundImageToVideo" not in kinds
-    hop_graphs = [p for p in outdir.glob("clip_*.json") if ".expect." not in p.name]
-    assert len(hop_graphs) == 1
+    # T5-12 may append s2v hop graphs after; hop 0 must still be LTX.
+    assert (outdir / "clip_000.json").is_file()
 
 
 def test_t5_11_unmarked_is_ltx_only(tmp_path, monkeypatch):

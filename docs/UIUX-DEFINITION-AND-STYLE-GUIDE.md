@@ -395,8 +395,9 @@ is NULL (generated before the column) still reads as `CHUNK`. The renderer
 emits that same legal length (`T2-13a`): latent frames and the audio-trim
 window follow `clip_seconds`, not a hardcoded `LTX25_LEN`/`CHUNK`; a NULL
 `length_seconds` still renders 81 frames of `CHUNK`. Hop 0 is LTX (`T5-11` **built**, `test_t5_11_ltx_always_first.py`):
-`video_model=s2v` does not skip LTX. When the T5-12 hop runs, a
-mixed-model job keeps each clip's **native** frames and fps
+`video_model=s2v` does not skip LTX. The T5-12 hop graph is **built**
+(`test_t5_12_d7_hop.py`); look is NOT MEASURED (`T3-37`). When that
+hop runs, a mixed-model job keeps each clip's **native** frames and fps
 (`T2-47`): s2v is 77@16.0, ltx25 is 81@16.8312; the editor must not
 show one fps as if both renderers produced it. Starting that job is
 refused before enqueue when any named model is unavailable on every
@@ -574,9 +575,10 @@ Auto post (LTX refine on the LTX take, `T5-14`), and Auto QC as one
 nowrap option bar. First clip only is the default. Every scene is
 LTX first (`T5-11` **built**, `test_t5_11_ltx_always_first.py`).
 `needs_lip_sync` beside camera (`T2-55`) marks
-the decoded s2v hop; the control says **NOT MEASURED** until a GPU
-pair exists (`T3-37`, UIUX 7a.3). When the hop ran, the LTX
-predecessor and the s2v successor are both listed (`T6-A5`).
+the decoded s2v hop (`T5-12` graph **built**, `test_t5_12_d7_hop.py`);
+the look says **NOT MEASURED** until a GPU pair exists (`T3-37`,
+UIUX 7a.3). When the hop ran, the LTX predecessor and the s2v
+successor are both listed (`T6-A5`).
 There is no separate Approve refs page.
 Stills and clips show `.qc-tag`: confidence, identity, and the
 assessment sentence. Wardrobe may change; physical identity must not.

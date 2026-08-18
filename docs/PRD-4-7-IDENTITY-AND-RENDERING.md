@@ -207,9 +207,9 @@ statement of it:
    `test_t2_53_location_plates.py`). Use-as-ref / map / image1 refuse
    `usable=skip` (`T7-23` **built**, `test_t7_23_usable_skip.py`).
    `T7-8` image-latent is the form control; the loop uses T7-21.
-5. **`--refine` is honest as a graph** (P7 / `T5-1`). D7 hop
-   (`T5-12`) is not built and NOT MEASURED. Variant B does not fit
-   (`T5-6`).
+5. **`--refine` is honest as a graph** (P7 / `T5-1`). D7 hop graph
+   (`T5-12`) is **built** (`test_t5_12_d7_hop.py`); look is
+   NOT MEASURED (`T3-37`). Variant B does not fit (`T5-6`).
 6. **The queue is built in full** (P8–P10). Ledger: `T6-1`…`T6-A10`.
    `T6-18` still deletes nothing.
 
