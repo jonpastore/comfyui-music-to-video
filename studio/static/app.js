@@ -569,6 +569,7 @@ document.addEventListener("click", function (e) {
       p.classList.toggle("hidden", !on);
       if (on) revealLazy(p);
     });
+    if (album === "coverage") rememberRosterTier(tab.dataset.tier);
     return;
   }
 
@@ -2201,6 +2202,86 @@ function applyRerollChip(chip) {
   });
   if (any) _appliedReroll[key] = true;
 }
+
+// Coverage roster tab. Reload used to pick the tier with the most rows (G
+// with 97 beats XXX with 26), so an upload from XXX landed back on G.
+function coverageAlbumName() {
+  var q = new URLSearchParams(location.search);
+  return q.get("scope_value") || q.get("album") ||
+    ((document.querySelector("#anchor-form [name=album]") || {}).value) || "";
+}
+function rememberRosterTier(tier) {
+  var album = coverageAlbumName();
+  if (album && tier) {
+    try { sessionStorage.setItem("meowp-roster-tier:" + album, tier); } catch (err) {}
+  }
+}
+function restoreRosterTier() {
+  var tabs = document.querySelector('.tier-tabs[data-album="coverage"]');
+  if (!tabs) return;
+  var q = new URLSearchParams(location.search).get("roster_tier");
+  var album = coverageAlbumName();
+  var want = q;
+  if (!want && album) {
+    try { want = sessionStorage.getItem("meowp-roster-tier:" + album) || ""; } catch (err) {}
+  }
+  if (!want) return;
+  var tab = tabs.querySelector('.tier-tab[data-tier="' + want + '"]');
+  if (tab && !tab.classList.contains("active")) tab.click();
+}
+
+function paintUploadedPose(form, d) {
+  var row = form.closest(".pose-roster-row");
+  if (!row) return;
+  row.classList.remove("missing");
+  row.classList.add("have");
+  var src = d.media_url || "";
+  var ph = row.querySelector(".pose-ph");
+  if (ph && src) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pose-roster-open";
+    btn.setAttribute("data-full", src);
+    btn.setAttribute("data-label", d.label || "");
+    btn.title = "Preview this sheet";
+    btn.innerHTML = '<img class="lazy-src" alt="" decoding="async">';
+    btn.querySelector("img").setAttribute("src", src);
+    ph.replaceWith(btn);
+  }
+  var sel = row.querySelector("select[name=sheet_id]");
+  if (sel && d.id) {
+    var opt = document.createElement("option");
+    opt.value = String(d.id);
+    opt.textContent = (d.label || "uploaded") + " · in use";
+    opt.selected = true;
+    sel.appendChild(opt);
+  }
+  var brief = row.querySelector(".js-pose-brief");
+  if (brief) brief.remove();
+  var ta = row.querySelector(".pose-brief-text");
+  if (ta) ta.remove();
+  form.remove();
+}
+
+document.addEventListener("submit", function (e) {
+  var form = e.target.closest && e.target.closest(".pose-upload");
+  if (!form) return;
+  if (form.getAttribute("hx-post")) return;
+  e.preventDefault();
+  var file = form.querySelector('input[type="file"]');
+  if (!file || !file.files || !file.files.length) return;
+  var tier = (form.querySelector('[name="tier"]') || {}).value || "";
+  api(form.action, new FormData(form)).then(function (d) {
+    rememberRosterTier(d.tier || tier);
+    paintUploadedPose(form, d);
+  }).catch(function (err) {
+    var row = form.closest(".pose-roster-row");
+    var note = row && row.querySelector(".pose-roster-copy .muted");
+    if (note) note.textContent = "not uploaded: " + err.message;
+  });
+});
+
+restoreRosterTier();
 
 // ---- Anchors: view full size, multi-select, and nothing reloads the page -----
 function initAnchors() {

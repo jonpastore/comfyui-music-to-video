@@ -1163,7 +1163,10 @@ them after the `#anchor-form` outerHTML swap). Upload / Save prompt /
 Save negative / Delete version are `icon-btn` + `glyph_*`. Render’s
 everyday knobs stay visible; size / latent / sweep and sampler sit in
 nested discloses with the same caret. A missing pose can take an uploaded third-party sheet
-(`POST /anchors/upload-pose`). Gallery tiles use icon
+(`POST /anchors/upload-pose`). That post stays on the roster
+tier you were in (JSON in-page; a no-JS redirect keeps
+`roster_tier=`). It does not dump you back on G because G
+has more rows. Gallery tiles use icon
 actions (filled check = keeper, outline =
 pick, clear, delete) with `title` help. The Fix dialog has a help icon
 per action; Close sits on the far right; submit enqueues a new candidate

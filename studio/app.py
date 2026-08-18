@@ -3017,7 +3017,7 @@ def nest_anchor_groups(group_list):
 
 @app.get("/anchors", response_class=HTMLResponse)
 def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
-                 album: str = ""):
+                 album: str = "", roster_tier: str = ""):
     # One album at a time. The generate form's album select is the same
     # subject as the gallery; swapping the form via htmx left every album's
     # groups on the page. `album` is the select's name so a full-page GET
@@ -3084,11 +3084,15 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
                "view": db.jset(j, "args_json").get("view", "")}
               for j in db.q("""SELECT * FROM jobs WHERE kind='anchor'
                                AND status IN ('queued','running') ORDER BY id""")]
+    shown_roster = (roster_tier or "").strip()
+    if shown_roster not in coverage_by_tier:
+        shown_roster = ""
     return templates.TemplateResponse(request, "anchors.html", dict(
         anchor_form_ctx(scope_value),
         groups=group_list, gallery=nest_anchor_groups(group_list),
         known_albums=albums, playlists=playlists,
         coverage_by_tier=coverage_by_tier,
+        roster_tier=shown_roster,
         failed_jobs=fresh, active_jobs=active))
 
 
@@ -3379,7 +3383,16 @@ async def upload_pose_sheet(request: Request, album: str = Form(...),
             pose_plan.stamp_binds(tier, group.get("binds") or [], new_id)
         except (LookupError, OSError, ValueError, json.JSONDecodeError):
             pass
-    return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
+    loc = f"/anchors?scope_value={quote(album)}&roster_tier={quote(tier)}"
+    if wants_json(request):
+        return JSONResponse({
+            "ok": True, "id": new_id, "path": path, "media_url": media_url(path),
+            "label": name, "key": key, "tier": tier, "album": album,
+            "chosen": True,
+        })
+    if wants_hx(request):
+        return _playlist_hx_album(request, album)
+    return RedirectResponse(loc, status_code=303)
 
 
 @app.post("/anchors/refs/{asset_id}/delete")

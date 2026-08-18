@@ -248,9 +248,21 @@ def test_upload_pose_becomes_chosen_sheet(tmp_path):
                         files={"image": ("side.png", png, "image/png")},
                         follow_redirects=False)
         assert r.status_code == 303, r.text
+        assert "roster_tier=xxx" in (r.headers.get("location") or "")
         row = db.one("SELECT * FROM anchors WHERE scope_value=? AND chosen=1", album)
         assert row is not None
         assert "side-lying" in (row["render_json"] or "")
+        js = client.post("/anchors/upload-pose",
+                         data={"album": album, "tier": "xxx", "key": "side-lying-2",
+                               "label": "side-lying two"},
+                         files={"image": ("side2.png", _png_bytes(), "image/png")},
+                         headers={"Accept": "application/json"})
+        assert js.status_code == 200, js.text
+        body = js.json()
+        assert body["ok"] is True
+        assert body["tier"] == "xxx"
+        assert body["media_url"]
+        assert body["chosen"] is True
 
 
 def test_storyboard_strip_uses_pose_name_not_view_key():

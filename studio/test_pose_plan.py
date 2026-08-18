@@ -4,6 +4,7 @@ image1 stays the identity front. A bound pose sheet takes image2.
 """
 import json
 import os
+import re
 import time
 
 from fastapi.testclient import TestClient
@@ -292,6 +293,53 @@ def test_album_coverage_rolls_up_songs_and_clear_unsets_keeper():
         assert "Classify this pose" in page
         assert 'id="lightbox-pose-key"' in page
         assert "Save pose classification" in page
+
+
+def test_roster_tier_query_beats_the_largest_need_count():
+    """G can have 97 rows and still must not steal the tab after an XXX upload."""
+    with TestClient(appmod.app) as client:
+        album = f"Roster Tier {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        song = _upload_song(client, "Roster Tier Song", album=album)
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+
+        def _board(tier, poses):
+            jp = os.path.join(outdir, f"{song['slug']}_{tier}.json")
+            json.dump({
+                "title": "T", "album": album, "version": tier,
+                "character_reference": "her",
+                "scenes": [{
+                    "scene_number": i + 1, "name": f"S{i+1}",
+                    "image_prompt": "door", "camera": "front",
+                    "pose": pose, "duration_guidance": "5s",
+                } for i, pose in enumerate(poses)],
+            }, open(jp, "w"))
+            md = os.path.join(outdir, f"{song['slug']}_{tier}.md")
+            open(md, "w").write("# sb\n")
+            db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                      VALUES (?,?,?,?,?,?)""",
+                   song["id"], tier, jp, md, len(poses), time.time())
+
+        _board("g", ["stand a", "stand b", "stand c"])
+        _board("xxx", ["cowgirl"])
+
+        def _hidden(html, tier):
+            m = re.search(
+                r'class="tier-panel([^"]*)"\s+data-album="coverage" data-tier="%s"'
+                % re.escape(tier), html)
+            assert m, tier
+            return "hidden" in m.group(1)
+
+        default = client.get(f"/anchors?scope_value={album}").text
+        assert _hidden(default, "g") is False
+        assert _hidden(default, "xxx") is True
+        pinned = client.get(f"/anchors?scope_value={album}&roster_tier=xxx").text
+        assert _hidden(pinned, "xxx") is False
+        assert _hidden(pinned, "g") is True
+        js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
+        assert "rememberRosterTier" in js
+        assert "paintUploadedPose" in js
 
 
 def test_lightbox_classify_posts_keeper_json_and_stamps_pose_name():

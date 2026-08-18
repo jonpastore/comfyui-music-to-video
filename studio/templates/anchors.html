@@ -69,13 +69,15 @@
   <details class="disclose" {% if miss.n %}open{% endif %}>
   <summary><h2>Poses this album&rsquo;s songs need</h2>
     {% if miss.n %}<span class="tag warn-tag">{{ miss.n }} missing</span>{% endif %}</summary>
-  {% set ns = namespace(shown="", n=-1) %}
+  {% set ns = namespace(shown=roster_tier | default(""), n=-1) %}
+  {% if not ns.shown %}
   {% for t, cov in coverage_by_tier.items() %}
     {% if cov.n_needed > ns.n %}
       {% set ns.shown = t %}
       {% set ns.n = cov.n_needed %}
     {% endif %}
   {% endfor %}
+  {% endif %}
   {% if not ns.shown %}{% set ns.shown = coverage_by_tier.keys() | first %}{% endif %}
   <div class="tier-tabs" data-album="coverage">
     {% for t, cov in coverage_by_tier.items() %}
