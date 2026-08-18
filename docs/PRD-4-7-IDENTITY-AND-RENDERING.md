@@ -83,7 +83,10 @@ What they need from these four, in their own terms:
    Assign as sheet. Intertwined sex uses that multi-body plate as the
    lock, not three solo fronts. Kitty, Panther, and the other models
    live once: an upload is a shared anchors row any album can
-   reference, not a copy under each album folder."* (`T7-20`, `T4-25`)
+   reference, not a copy under each album folder. Historical
+   Street Cats actor plates promote into that shared library;
+   Meow P's album-generated candidates stay on that album."*
+   (`T7-20`, `T4-25`)
 
 ## 3. The product rules
 

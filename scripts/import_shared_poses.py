@@ -99,16 +99,40 @@ def _character_id(name):
     return row["id"] if row else None
 
 
+def _basename_key(path):
+    return os.path.basename(path or "").lower().replace(" ", "_")
+
+
+def _should_promote(row):
+    """Album-scoped operator plates → shared. Meow P NULL candidates stay.
+
+    Matches render_json.shared_pending (the first 28 Kitty/actor promotes) or a
+    historical Street Cats basename in SKIP_SUBSTR. Protagonist candidates
+    (character_id IS NULL, no actors stamp, not a SKIP plate) stay album-scoped.
+    """
+    if (row["scope_kind"] or "") != "album":
+        return False
+    key = _basename_key(row["path"])
+    if any(s in key for s in SKIP_SUBSTR):
+        return True
+    try:
+        meta = json.loads(row["render_json"] or "{}")
+    except (TypeError, ValueError):
+        meta = {}
+    if not meta.get("shared_pending"):
+        return False
+    if row["character_id"] is None and not (meta.get("actors") or []):
+        return False
+    return True
+
+
 def promote_pending():
-    """Flip live album-scoped shared_pending rows to scope_kind=shared."""
-    rows = db.q("SELECT id, render_json FROM anchors")
+    """Flip album-scoped operator plates to scope_kind=shared."""
+    rows = db.q("""SELECT id, scope_kind, character_id, path, render_json
+                   FROM anchors""")
     n = 0
     for r in rows:
-        try:
-            meta = json.loads(r["render_json"] or "{}")
-        except (TypeError, ValueError):
-            continue
-        if not meta.get("shared_pending"):
+        if not _should_promote(r):
             continue
         db.run("""UPDATE anchors SET scope_kind=?, scope_value=? WHERE id=?""",
                db.SHARED_KIND, db.SHARED_VALUE, r["id"])
@@ -118,7 +142,7 @@ def promote_pending():
 
 
 def main():
-    if "--promote-pending" in sys.argv:
+    if "--promote-pending" in sys.argv or "--promote" in sys.argv:
         return promote_pending()
     dest = db.shared_anchor_dir()
     now = time.time()

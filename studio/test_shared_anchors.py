@@ -1,4 +1,5 @@
 """T4-25: one anchors row, any album can reference it. No per-album file copy."""
+import importlib.util
 import json
 import os
 import time
@@ -8,6 +9,14 @@ from fastapi.testclient import TestClient
 import app as appmod
 import db
 from test_app import _png_bytes
+
+
+def _import_shared_poses():
+    path = os.path.join(os.path.dirname(__file__), "..", "scripts", "import_shared_poses.py")
+    spec = importlib.util.spec_from_file_location("import_shared_poses", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def _album(client, name):
@@ -119,3 +128,53 @@ def test_assign_as_sheet_writes_shared():
         sheet = db.one("SELECT * FROM anchors WHERE path=?", path)
         assert sheet["scope_kind"] == db.SHARED_KIND
         assert sheet["chosen"] == 1
+
+
+def test_promote_skip_substr_plates_shared_across_albums():
+    """Historical SKIP_SUBSTR album rows flip to shared; Meow P NULL stays."""
+    with TestClient(appmod.app) as client:
+        a1 = _album(client, f"Promote Src {time.time_ns()}")
+        a2 = _album(client, f"Promote Dst {time.time_ns()}")
+        panther = _character(a1, "Panther", "partner")
+        _character(a2, "Panther", "partner")
+        dest = os.path.join(db.DATA, "uploads", "anchors", "album", a1)
+        os.makedirs(dest, exist_ok=True)
+        now = time.time()
+        actor_path = os.path.join(dest, f"panther-blowjob-nude_{time.time_ns()}.png")
+        meow_path = os.path.join(dest, f"meowp_candidate_{time.time_ns()}.png")
+        open(actor_path, "wb").write(_png_bytes())
+        open(meow_path, "wb").write(_png_bytes())
+        view = f"pose_promote_{time.time_ns()}_nude"
+        actor_id = db.run(
+            """INSERT INTO anchors (scope_kind, scope_value, tier, view, path,
+                                    chosen, created, character_id, render_json)
+               VALUES ('album',?,?,?,?,1,?,?,?)""",
+            a1, "xxx", view, actor_path, now, panther["id"],
+            json.dumps({"source": "upload", "pose_name": "panther blowjob nude",
+                        "actors": ["Panther"]}))
+        meow_id = db.run(
+            """INSERT INTO anchors (scope_kind, scope_value, tier, view, path,
+                                    chosen, created, character_id, render_json)
+               VALUES ('album',?,?,?,?,1,?,?,?)""",
+            a1, "xxx", "front", meow_path, now, None,
+            json.dumps({"source": "generate"}))
+
+        mod = _import_shared_poses()
+        assert mod.promote_pending() == 0
+
+        actor = db.one("SELECT * FROM anchors WHERE id=?", actor_id)
+        assert actor["scope_kind"] == db.SHARED_KIND
+        assert actor["scope_value"] == db.SHARED_VALUE
+        meow = db.one("SELECT * FROM anchors WHERE id=?", meow_id)
+        assert meow["scope_kind"] == "album"
+        assert meow["scope_value"] == a1
+
+        dst_panther = db.one("SELECT * FROM characters WHERE scope_value=? AND name=?",
+                             a2, "Panther")
+        src = appmod.chosen_anchor("album", a1, "xxx", view, panther["id"])
+        dst = appmod.chosen_anchor("album", a2, "xxx", view, dst_panther["id"])
+        assert src is not None and dst is not None
+        assert src["id"] == actor_id
+        assert dst["id"] == actor_id
+        assert dst["path"] == src["path"]
+        assert appmod.chosen_anchor("album", a2, "xxx", "front") is None
