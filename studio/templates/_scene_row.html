@@ -116,7 +116,7 @@
                 data-sheet-id="{{ s.sheet_id or 0 }}"
                 data-label="{{ s.label or 'pose plate' }}"
                 title="Open the pose plate full size">
-          <img class="anchor-thumb lazy-src" data-src="{{ media_url(s.path) }}" alt="" loading="lazy" decoding="async">
+          <img class="anchor-thumb lazy-src" data-src="{{ media_url(s.path) }}" alt="" decoding="async">
         </button>
         {% else %}
         <span class="anchor-thumb pose-thumb-empty" aria-hidden="true"></span>
@@ -154,7 +154,7 @@
                 data-label="{{ sh.label }}{% if sh.nude %} · nude{% endif %}">
           {% if sh.path %}
           <img class="pose-pick-thumb" src="{{ media_url(sh.path) }}?w=360"
-               alt="{{ sh.label }}" loading="lazy" decoding="async">
+               alt="" decoding="async">
           {% else %}
           <span class="pose-pick-thumb pose-thumb-empty" aria-hidden="true"></span>
           {% endif %}

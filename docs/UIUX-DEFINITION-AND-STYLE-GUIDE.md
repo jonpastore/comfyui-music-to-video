@@ -553,11 +553,14 @@ dropdown is gone. Layout is a column: the pose textarea, then
 `.pose-under` (current plate thumb + Save plate + Pinned/Suggested),
 then a taller horizontal `.pose-picks` strip. A strip thumb opens
 `#pose-gallery` (`js-pose-open`, same `.lightbox` / `.still-stage`
-chrome as `#ref-preview` — not that dialog). The bar has Search
-(`#pose-gallery-q`), Gallery (`#pose-gallery-grid`, a filterable
-grid of every plate), and **Set as pose** (`#pose-gallery-use`)
-which writes hidden `sheet_id` and posts the bind. `none` clears
-the bind without opening the viewer. Save actions are labeled floppies (Save JSON, Save lock, Save plate,
+chrome as `#ref-preview` — not that dialog). The bar has a search
+field (`#pose-gallery-q`, icon on the right; focus swaps that icon
+for a clear ×), Gallery (`#pose-gallery-grid`; typing a query opens
+the matching grid), and a save icon on the far right
+(`#pose-gallery-use`). Clicking a grid cell or the save icon writes
+hidden `sheet_id` and posts the bind immediately. `none` clears
+the bind without opening the viewer. Broken plate files show an empty
+tile, not the pose name as alt text. Save actions are labeled floppies (Save JSON, Save lock, Save plate,
 Save scene) so two disks are not the same control. Every icon has
 `title` and `aria-label`. A `.save-note` reports saved / pinned / the
 error and does not fade on failure. Bind status is **Pinned** (operator chose), **Suggested**

@@ -1,4 +1,4 @@
-{% from "_macros.html" import modal_close, media_nav_prev, media_nav_next %}
+{% from "_macros.html" import modal_close, media_nav_prev, media_nav_next, glyph_save %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -93,16 +93,30 @@
   <dialog class="lightbox" id="pose-gallery">
     <div class="lightbox-bar">
       <strong id="pose-gallery-label">Pose plate</strong>
-      <label class="pose-gallery-search">Search
+      <span class="pose-gallery-search">
         <input type="search" id="pose-gallery-q" placeholder="name or view"
                autocomplete="off" aria-label="Search pose plates">
-      </label>
+        <button type="button" class="pose-gallery-icon" id="pose-gallery-search-btn"
+                tabindex="-1" aria-hidden="true" title="Search">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="6.5" cy="6.5" r="4.2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.5" d="M9.6 9.6 13.2 13.2"/>
+          </svg>
+        </button>
+        <button type="button" class="pose-gallery-icon" id="pose-gallery-clear"
+                hidden title="Clear search" aria-label="Clear search">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="1.5" d="M4 4l8 8M12 4l-8 8"/>
+          </svg>
+        </button>
+      </span>
       <button type="button" class="secondary" id="pose-gallery-grid"
-              aria-pressed="false" title="Show every plate as a grid">Gallery</button>
+              aria-pressed="false" title="Show every matching plate as a grid">Gallery</button>
       <span id="pose-gallery-pos" class="lightbox-pos muted"></span>
-      <button type="button" id="pose-gallery-use"
-              title="Set this sheet as the scene pose plate">Set as pose</button>
       <span class="lightbox-spacer"></span>
+      <button type="button" class="icon-btn" id="pose-gallery-use"
+              title="Save this plate as the scene pose"
+              aria-label="Save this plate as the scene pose">{{ glyph_save() }}</button>
       {{ modal_close() }}
     </div>
     <div class="still-stage" id="pose-gallery-stage">

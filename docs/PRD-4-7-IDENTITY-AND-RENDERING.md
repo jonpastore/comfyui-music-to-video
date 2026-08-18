@@ -245,7 +245,7 @@ images list the whole chosen pose library per tier, not a single
 identity-front thumb. Generate refs checkboxes enqueue a rating (tick
 XXX only for XXX). Generate refs binds each
 storyboard scene to a chosen pose sheet (auto-match on `pose` / story,
-operator override on the scene row: strip + `#pose-gallery` search / gallery / Set as pose) and uses that sheet as image2.
+operator override on the scene row: strip + `#pose-gallery` search / gallery / save-on-select) and uses that sheet as image2.
 Identity front stays image1. The anchors page shows the album pose
 roster (have/missing across every song board) and **Use as this pose**
 is the keeper; the full-size lightbox classifies the open sheet onto

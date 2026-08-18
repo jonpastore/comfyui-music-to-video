@@ -2023,11 +2023,10 @@ function initSongPage() {
       .then(function () { if (btn) btn.disabled = false; });
   });
 
-  page.addEventListener("change", function (e) {
-    var radio = e.target.closest && e.target.closest(".pose-bind input[name=sheet_id]");
-    if (!radio || !page.contains(radio)) return;
-    markPosePick(radio.form, radio.value);
-    sayPending(radio.form && radio.form.querySelector(".save-note"), "not saved yet");
+  page.addEventListener("click", function (e) {
+    var none = e.target.closest && e.target.closest(".js-pose-none");
+    if (!none || !page.contains(none)) return;
+    applyPose(none.closest(".pose-bind"), "0");
   });
 
 }
@@ -2138,13 +2137,37 @@ function paintStillApprove(fig, approved) {
 function markPosePick(form, sheetId) {
   if (!form) return;
   var want = String(sheetId == null ? 0 : sheetId);
+  var hid = form.querySelector('input[name=sheet_id]');
+  if (hid) hid.value = want;
   form.querySelectorAll(".pose-pick").forEach(function (lab) {
+    var id = lab.getAttribute("data-sheet-id");
+    if (id == null) {
+      var inp = lab.querySelector("input[name=sheet_id]");
+      id = inp ? inp.value : "";
+    }
+    var on = String(id) === want;
+    lab.classList.toggle("on", on);
     var inp = lab.querySelector("input[name=sheet_id]");
-    var on = inp && inp.value === want;
-    lab.classList.toggle("on", !!on);
-    if (inp) inp.checked = !!on;
+    if (inp) inp.checked = on;
   });
 }
+
+function applyPose(form, sheetId) {
+  if (!form) return;
+  markPosePick(form, sheetId);
+  if (typeof form.requestSubmit === "function") form.requestSubmit();
+  else form.submit();
+}
+
+document.addEventListener("error", function (e) {
+  var img = e.target;
+  if (!img || img.tagName !== "IMG") return;
+  if (!img.classList.contains("pose-pick-thumb") &&
+      !(img.closest && img.closest(".pose-under"))) return;
+  img.classList.add("pose-thumb-empty");
+  img.removeAttribute("src");
+  img.alt = "";
+}, true);
 
 function paintPoseBind(form, d) {
   if (!form || !d) return;
@@ -2163,21 +2186,38 @@ function paintPoseBind(form, d) {
     help.setAttribute("data-help", pair[1]);
   }
   markPosePick(form, d.sheet_id);
-  var btn = form.querySelector(".thumb-open");
-  var img = btn && btn.querySelector("img");
-  if (d.url) {
-    if (img) {
-      img.src = d.url;
-    } else if (btn) {
-      var next = document.createElement("img");
-      next.className = "anchor-thumb";
-      next.src = d.url;
-      next.alt = "";
-      next.loading = "lazy";
-      btn.insertBefore(next, btn.firstChild);
+  var under = form.querySelector(".pose-under");
+  var btn = under && under.querySelector(".thumb-open");
+  var empty = under && under.querySelector(":scope > .pose-thumb-empty");
+  if (d.url && under) {
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "js-pose-open thumb-open";
+      if (empty) empty.replaceWith(btn);
+      else under.insertBefore(btn, under.firstChild);
     }
-    if (btn) btn.setAttribute("data-full", d.url);
+    btn.setAttribute("data-full", d.url);
+    btn.setAttribute("data-thumb", d.url);
+    btn.setAttribute("data-sheet-id", String(d.sheet_id || 0));
+    btn.setAttribute("data-label", d.label || "pose plate");
+    btn.title = "Open the pose plate full size";
+    var img = btn.querySelector("img");
+    if (!img) {
+      img = document.createElement("img");
+      img.className = "anchor-thumb";
+      img.alt = "";
+      btn.appendChild(img);
+    }
+    img.src = d.url;
+  } else if (btn) {
+    var span = document.createElement("span");
+    span.className = "anchor-thumb pose-thumb-empty";
+    span.setAttribute("aria-hidden", "true");
+    btn.replaceWith(span);
   }
+  var on = form.querySelector(".pose-pick.on");
+  if (on && on.scrollIntoView) on.scrollIntoView({inline: "nearest", block: "nearest"});
 }
 
 (function () {
@@ -2188,6 +2228,8 @@ function paintPoseBind(form, d) {
   var gridBtn = document.getElementById("pose-gallery-grid");
   var thumbs = document.getElementById("pose-gallery-thumbs");
   var useBtn = document.getElementById("pose-gallery-use");
+  var searchBtn = document.getElementById("pose-gallery-search-btn");
+  var clearBtn = document.getElementById("pose-gallery-clear");
   var form = null;
   var items = [];
   var shown = [];
@@ -2210,6 +2252,19 @@ function paintPoseBind(form, d) {
     if (thumbs) thumbs.hidden = !on;
     dlg.classList.toggle("gallery-on", !!on);
     if (gridBtn) gridBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+
+  function syncSearchIcon() {
+    var focused = q && document.activeElement === q;
+    if (searchBtn) searchBtn.hidden = !!focused;
+    if (clearBtn) clearBtn.hidden = !focused;
+  }
+
+  function applyCurrent() {
+    var el = current();
+    if (!form || !el) return;
+    applyPose(form, el.getAttribute("data-sheet-id") || "0");
+    dlg.close();
   }
 
   function paintGrid() {
@@ -2277,6 +2332,7 @@ function paintPoseBind(form, d) {
     show(at < 0 ? 0 : at);
     if (typeof dlg.showModal === "function") dlg.showModal();
     if (q) q.focus();
+    syncSearchIcon();
   }
 
   document.addEventListener("click", function (e) {
@@ -2294,6 +2350,7 @@ function paintPoseBind(form, d) {
     if (cell) {
       e.preventDefault();
       show(parseInt(cell.getAttribute("data-i"), 10) || 0);
+      applyCurrent();
       return;
     }
     var btn = e.target.closest(".js-pose-open");
@@ -2303,23 +2360,31 @@ function paintPoseBind(form, d) {
     }
   });
 
-  if (q) q.addEventListener("input", function () { show(idx); });
+  if (q) {
+    q.addEventListener("input", function () {
+      if (q.value.trim()) setGallery(true);
+      show(idx);
+    });
+    q.addEventListener("focus", syncSearchIcon);
+    q.addEventListener("blur", syncSearchIcon);
+  }
+  if (clearBtn) {
+    clearBtn.addEventListener("pointerdown", function (e) {
+      e.preventDefault();
+      if (q) {
+        q.value = "";
+        q.focus();
+      }
+      show(0);
+    });
+  }
 
   if (gridBtn) gridBtn.addEventListener("click", function () {
     setGallery(thumbs && thumbs.hidden);
     show(idx);
   });
 
-  if (useBtn) useBtn.addEventListener("click", function () {
-    var el = current();
-    if (!form || !el) return;
-    var sid = el.getAttribute("data-sheet-id") || "0";
-    markPosePick(form, sid);
-    sayPending(form.querySelector(".save-note"), "not saved yet");
-    if (typeof form.requestSubmit === "function") form.requestSubmit();
-    else form.submit();
-    dlg.close();
-  });
+  if (useBtn) useBtn.addEventListener("click", applyCurrent);
 
   document.addEventListener("keydown", function (e) {
     if (!dlg.open) return;

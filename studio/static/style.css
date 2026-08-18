@@ -1364,19 +1364,39 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
 }
 #pose-gallery .lightbox-bar { flex-wrap: wrap; }
 .pose-gallery-search {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.35rem;
   margin: 0;
-  font-size: var(--text-sm);
-  flex: 1 1 12rem;
+  flex: 1 1 14rem;
   min-width: 10rem;
 }
 .pose-gallery-search input {
-  flex: 1 1 auto;
+  width: 100%;
   min-width: 8rem;
-  width: auto;
+  padding-right: 2.1rem;
 }
+.pose-gallery-search input[type="search"]::-webkit-search-cancel-button {
+  appearance: none;
+}
+.pose-gallery-icon {
+  position: absolute;
+  right: 0.2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.pose-gallery-icon[hidden] { display: none; }
+.pose-gallery-icon svg { width: 1rem; height: 1rem; display: block; }
+.pose-gallery-icon:hover { color: var(--text); }
 .pose-gallery-thumbs[hidden] { display: none; }
 #pose-gallery.gallery-on {
   background: var(--panel);

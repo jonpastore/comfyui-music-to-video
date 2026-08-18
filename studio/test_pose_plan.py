@@ -826,8 +826,11 @@ def test_bind_route_json_reports_source():
         assert 'id="pose-gallery"' in page
         assert 'id="pose-gallery-q"' in page
         assert 'id="pose-gallery-grid"' in page
-        assert "Set as pose" in page
+        assert 'id="pose-gallery-use"' in page
+        assert 'id="pose-gallery-clear"' in page
+        assert "Set as pose" not in page
         assert "js-pose-open" in page
+        assert 'type="hidden" name="sheet_id"' in page.split("pose-bind", 1)[-1].split("</form>", 1)[0]
         bind = page.split("pose-bind", 1)[-1].split("</form>", 1)[0]
         assert "js-ref-preview" not in bind
         assert ">Clips<" in page or ">Clips</h4>" in page
