@@ -143,6 +143,8 @@ body:has(#library) main {
   list-style: none;
 }
 #fold-upload > summary::-webkit-details-marker { display: none; }
+#fold-upload > summary::before { content: "▸ "; }
+#fold-upload[open] > summary::before { content: "▾ "; }
 #fold-upload > summary h2 { display: inline; }
 #library {
   flex: 1;

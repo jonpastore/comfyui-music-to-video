@@ -68,6 +68,9 @@ def test_library_groups_by_album_and_collapses_upload():
         _upload_song(client, "Lib Group Two", album="Grouped Alb")
         page = client.get("/").text
         assert 'id="fold-upload"' in page
+        css = open(os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
+        assert '#fold-upload > summary::before' in css
+        assert '#fold-upload[open] > summary::before' in css
         tag = page.split('id="fold-upload"', 1)[1][:80]
         assert "open" not in tag
         assert 'class="album-group-head"' in page
