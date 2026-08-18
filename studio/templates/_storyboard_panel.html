@@ -149,7 +149,8 @@
       · one per scene unless a scene is longer than one render</summary>
     <div class="scene-clips">
       {% for v in all_videos %}
-      <figure class="clip-frame">
+      <figure class="clip-frame clip-tile">
+        <div class="still-thumb">
         <button type="button" class="js-clip-preview thumb-open"
                 data-video="{{ media_url(v.path) }}"
                 data-label="{{ tier | tiername }} clip {{ v.clip_idx }}"
@@ -159,6 +160,7 @@
           <video src="{{ media_url(v.path) }}" preload="metadata" muted playsinline></video>
           <span class="clip-play" aria-hidden="true">play</span>
         </button>
+        </div>
         <figcaption>#{{ v.clip_idx }}</figcaption>
       </figure>
       {% endfor %}

@@ -377,7 +377,14 @@
                 title="Play every part of this scene in order">Play scene</button>
         {% endif %}
         {% for v in r.videos %}
-        <figure class="clip-frame clip-tile">
+        <figure class="clip-frame clip-tile js-clip-preview"
+                data-video="{{ media_url(v.path) }}"
+                data-label="scene {{ r.num }} clip {{ loop.index }}{% if r.videos|length > 1 %} / {{ r.videos|length }}{% endif %}"
+                data-tier="{{ tier }}"
+                data-scene="{{ r.num }}"
+                data-clip-idx="{{ v.clip_idx }}"
+                data-motion="{{ r.scene.video_motion_prompt or '' }}"
+                {% if approved %}data-still="{{ media_url(approved[-1].path) }}"{% endif %}>
           <div class="still-thumb">
             <button type="button" class="js-clip-preview thumb-open"
                     data-video="{{ media_url(v.path) }}"
@@ -388,6 +395,9 @@
                     data-motion="{{ r.scene.video_motion_prompt or '' }}"
                     title="Play clip {{ loop.index }}"
                     {% if approved %}data-still="{{ media_url(approved[-1].path) }}"{% endif %}>
+              {% if approved %}
+              <img class="clip-poster" src="{{ media_url(approved[-1].path) }}" alt="" decoding="async">
+              {% endif %}
               <video src="{{ media_url(v.path) }}"
                      {% if approved %}poster="{{ media_url(approved[-1].path) }}"{% endif %}
                      preload="metadata" muted playsinline></video>

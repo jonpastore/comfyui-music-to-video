@@ -156,6 +156,8 @@ def test_scenes_lists_every_rendered_clip_on_a_split_scene():
         assert "data-src=" not in strip.split("</div>", 1)[0]
         assert 'src="' in strip
         assert "poster=" in strip
+        assert 'class="clip-poster"' in strip
+        assert "clip-frame clip-tile js-clip-preview" in strip
 
 
 def test_scene_row_reads_clip_jobs_when_chip_is_qc():

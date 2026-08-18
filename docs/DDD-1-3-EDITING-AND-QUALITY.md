@@ -670,9 +670,10 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    `.media-strip.scene-clips` (`paintClipPlaceholders`). The strip is
    also filled from `jobs` (`clip_pending` / `clip_failed`) so the
    chip going QC does not blank the row. A landed take is a
-   `<video src>` with `preload=metadata`, `poster` from the approved
-   still, and a play badge into `#clip-preview` — not `lazy-src`
-   (`test_song_page_async.py` / `test_pose_plan.py`). Reroll note,
+   reserved 3:4 `.still-thumb`, `<img class="clip-poster">` from the
+   approved still, `<video src>` with `preload=metadata`, and a play
+   badge. Click the well or the caption opens `#clip-preview`. Not
+   `lazy-src` (`test_song_page_async.py`). Reroll note,
    seed range, Fix, and Delete live on the still. `GET /songs/{id}/approve/{tier}`
    303s to the song page. `POST /clips` accepts `scene` + `head_only`.
    `auto_qc` enqueues `qc` on that job. Dialogs share `modal_close()`.

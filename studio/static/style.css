@@ -442,11 +442,25 @@ button.thumb-open:active:not(:disabled) {
   padding-bottom: 0.35rem;
 }
 .clip-frame { margin: 0; width: 190px; }
-.clip-frame .thumb-open { position: relative; display: block; width: 100%; }
-.clip-frame video {
+.clip-frame.clip-tile { cursor: pointer; }
+/* .clip-tile is a column flex. A <video> with no decoded frame is 0×0, so the
+   well and the play badge (absolute inside overflow:hidden) vanished. Reserve
+   the 3:4 frame on the thumb, not on the video's intrinsic size. */
+.clip-frame .still-thumb,
+.clip-frame .thumb-open {
+  position: relative;
+  display: block;
   width: 100%;
   aspect-ratio: 3 / 4;
-  height: auto;
+  flex: none;
+  background: var(--letterbox);
+}
+.clip-frame video,
+.clip-frame .clip-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   border-radius: 4px;
   background: var(--letterbox);
@@ -457,6 +471,7 @@ button.thumb-open:active:not(:disabled) {
   position: absolute;
   right: 0.4rem;
   bottom: 0.4rem;
+  z-index: 1;
   background: rgba(0, 0, 0, 0.65);
   color: #fff;
   font-size: 0.75rem;
