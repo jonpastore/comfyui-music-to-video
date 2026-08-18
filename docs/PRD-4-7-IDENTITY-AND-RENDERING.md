@@ -97,7 +97,8 @@ plate as image1 → the plate person. This is why `T3-28` forbids
 **both** halves — not "the text, not the photo". `T2-31` still refuses
 an empty `character_reference`. `T2-56` requires the accepted keeper
 for **that** scene as image1. `T3-33.a` still says image FLAG/REJECT
-content findings are edit-text; `T3-35` adds settings remedies.
+content findings are edit-text; `T3-35` **built**
+(`test_t3_35_settings_remedies.py`) adds settings remedies.
 
 **3.3 Two clauses that contradict each other do not average — the model picks.**
 Day 4 measured it: the nude clause asserted bare skin beside "entire body covered

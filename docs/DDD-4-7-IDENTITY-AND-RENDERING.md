@@ -6,7 +6,7 @@ Sequencing and review record: `docs/PLAN-TRD-4-7.md`,
 `docs/DDD-1-3-EDITING-AND-QUALITY.md`.
 
 **Rewritten 2026-08-17 for Jarvis #529 (D1–D10).** Reconciled
-2026-08-18: `T2-50`, `T4-11` (charcoal-brown compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`), `T4-21`…`T4-24`, `T7-21`…`T7-23` **built**; `T2-51`
+2026-08-18: `T2-50`, `T4-11` (charcoal-brown compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`), `T4-21`…`T4-24`, `T7-21`…`T7-23` **built**; `T3-35` **built** (`test_t3_35_settings_remedies.py`); `T2-51`
 **partial** (classify writes no map; draft/Accept is `T2-52`).
 `T2-56` **built** (`test_t2_56_per_scene_keeper.py`): accepted keeper
 for that scene is image1. `T2-53` / `T7-22` **built**
@@ -323,9 +323,10 @@ When a sheet or clip is wrong from the first frame, the QC remedy is
 edit the text, then re-render
 (`T3-28` / `qc.check_identity_wrong`) — not swap a stranger plate.
 Using **her** photos as image1 is required (`T2-56`). `T3-33.a` still
-says image FLAG/REJECT content findings are edit-text; `T3-35` adds
-settings remedies (latent / denoise / CFG / pose-match / plate-absent /
-body-colour). Measured 2026-08-12: same photos, same seed, same box;
+says image FLAG/REJECT content findings are edit-text; `T3-35` **built**
+(`test_t3_35_settings_remedies.py`) adds settings remedies
+(latent / denoise / CFG / pose-match / plate-absent / body-colour).
+Measured 2026-08-12: same photos, same seed, same box;
 species named or not is one variable. The other variable is her
 photos vs a stranger plate.
 

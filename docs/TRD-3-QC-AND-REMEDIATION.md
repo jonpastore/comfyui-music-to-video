@@ -61,6 +61,7 @@ not been shown to separate known-good from known-bad does not gate anything.
 | **T3-22** dismissed stays dismissed until the artefact changes | **`qc_service.record`** + `findings.artefact_hash`; same check reopens when the file bytes change |
 | **T3-28** identity-wrong never proposes swapping the reference image | **`qc.check_identity_wrong`** / **`qc.identity_wrong_remedy`**; `record` / `set_remedy` / `approve` refuse the swap wording |
 | **T3-33.a** image FLAG/REJECT remedy is the next prompt rewrite | **`qc.IMAGE_PROMPT_REWRITE_CHECKS`**; `not_uniform` / `not_blank` / `alpha` / lighting / portrait / identity-look / identity-wrong are `edit-text`. Structural `opens` / `resolution` stay re-render / pinned. Video seed remedies are not this criterion |
+| **T3-35** settings remedies named on pose/identity FAIL | **`qc.resolve_settings_remedy`** / **`qc.check_identity_wrong`** (`studio/qc_settings.py`); classes `latent` / `denoise` / `CFG` / `pose-match` / `plate-absent` / `body-colour`. T3-33.a blank/uniform/alpha stay `edit-text` |
 | **T3-33.b** pose QC before anatomy QC | Operator eye gates (`anchor5/poses/cleanrun/qc-pose-*.json`). Pose FAIL does not get anatomy. Not a VLM. Twin: `T4-20` |
 
 **§4 and §6 below read as unbuilt work and are not.** An audit found this table
@@ -809,7 +810,7 @@ check is true, and forcing the check true SUBMITS.
 | criterion | state | commit | what was measured |
 |---|---|---|---|
 | `T3-34` C1/C2 landing scored like an anchor | **built** | `test_t3_34_pose_still_qc.py` | Pose-gap `anchor` jobs (`source=pose-gap`) enqueue the decided pose clause as `prompt` (not empty). C1 and C2 `h_anchor` landings call `score_candidate` and store `qc_json` (`confidence` / `identity` / `prompt`). Mutation: skip `score_candidate` on C2 → red. Mutation: empty enqueue prompt → red |
-| `T3-35` settings remedies (latent / denoise / CFG / pose-match / plate-absent / body-colour) | **not built** | — | Intended: `test_t3_35_settings_remedies.py`. Image FLAG/REJECT is still `edit-text` only (`T3-33.a`) |
+| `T3-35` settings remedies (latent / denoise / CFG / pose-match / plate-absent / body-colour) | **built** | `test_t3_35_settings_remedies.py` | `qc.resolve_settings_remedy` + `check_identity_wrong` finding `remedy_class`. C1 empty latent → `latent`. C2 pose mismatch → `pose-match`. Stranger/missing-her image1 → `plate-absent` (never swap-stranger). Jet-black vs charcoal → `body-colour`. Mutation: plate-as-image1 FAIL still only `edit-text` → red. T3-33.a blank/uniform/alpha stay `edit-text` |
 | `T3-36` image-latent sheets do not FAIL for inheriting source size | **not built** | — | Intended: `test_t3_36_image_latent_size.py`. `T3-4.1-resolution` compares exact WxH with no image-latent exemption |
 | `T3-37` D7 look (lips + her + blocking) | **not built**; **NOT MEASURED** | — | Intended: `test_t3_37_d7_look.py`. No same-scene GPU pair. Do not rank on warm px |
 | `T3-33.b` pose QC before anatomy | **process** | `T4-20` | Eye gates in `anchor5/poses/cleanrun/qc-pose-*.json`. Not a VLM. Studio graph unchanged |

@@ -7,7 +7,9 @@ against the chosen anchor (cause-agnostic). The threshold setter is not
 in this file. T3-26's labelled-set refiner measurement lives here too.
 T3-28's identity-wrong remedy: edit the text, never swap the reference image.
 T3-33.a: every image FLAG/REJECT content finding's remedy is the next prompt
-rewrite, not "re-render with a different seed".
+rewrite, not "re-render with a different seed". T3-35: pose/identity FAIL
+names a settings class (latent / denoise / CFG / pose-match / plate-absent /
+body-colour) when expect diagnoses one; blank/uniform/alpha stay edit-text.
 
 ffprobe, ffmpeg's own analysis filters, PIL and numpy. No model, no opinion.
 
@@ -41,6 +43,17 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import effects  # noqa: E402  -- the ONE loudness implementation lives there
 import mixer    # noqa: E402  -- probe(), SET_DURATION_TOLERANCE, spliced_duration
+import qc_settings  # noqa: E402  -- T3-35 named settings remedies
+
+REMEDY_LATENT = qc_settings.REMEDY_LATENT
+REMEDY_DENOISE = qc_settings.REMEDY_DENOISE
+REMEDY_CFG = qc_settings.REMEDY_CFG
+REMEDY_POSE_MATCH = qc_settings.REMEDY_POSE_MATCH
+REMEDY_PLATE_ABSENT = qc_settings.REMEDY_PLATE_ABSENT
+REMEDY_BODY_COLOUR = qc_settings.REMEDY_BODY_COLOUR
+SETTINGS_REMEDY_CLASSES = qc_settings.SETTINGS_REMEDY_CLASSES
+SETTINGS_REMEDY_TEXT = qc_settings.SETTINGS_REMEDY_TEXT
+resolve_settings_remedy = qc_settings.resolve_settings_remedy
 
 
 # ---------------------------------------------------------------- verdicts --
@@ -339,6 +352,7 @@ _DEFAULT_REMEDY = {
     REMEDY_LOUDNORM: "re-run loudnorm",
     REMEDY_UPSCALE: "upscale pass",
     REMEDY_EDIT_TEXT: "edit the text, then re-render",
+    **SETTINGS_REMEDY_TEXT,
 }
 
 
@@ -359,7 +373,8 @@ def actuator_for(remedy_class, kind=None):
     kind = (kind or "").lower()
     if remedy_class == REMEDY_UPSCALE:
         return "gen_postproc", "ltx25_latent_upscaler"
-    if remedy_class == REMEDY_EDIT_TEXT:
+    if (remedy_class == REMEDY_EDIT_TEXT
+            or remedy_class in SETTINGS_REMEDY_CLASSES):
         return "fix_ref", "qwen_image_edit_2511"
     if remedy_class in (REMEDY_LOUDNORM, REMEDY_REASSEMBLE):
         return "gen_postproc", "ltx25_latent_upscaler"
@@ -1670,21 +1685,34 @@ def identity_wrong_remedy(text=None):
     return text
 
 
-def check_identity_wrong(path, expect, kind="clip"):
-    """Identity wrong from the first frame. Offline: expect-driven.
+def _wants_pose_or_identity_fail(expect):
+    if expect.get("identity_wrong") or expect.get("first_frame_identity") == "wrong":
+        return True
+    verdict = expect.get("pose_fail") or expect.get("pose_verdict")
+    return verdict in (True, "fail", "FAIL", FLAG, REJECT)
 
-    T3-30: path + expect, no database. The finding's remedy is edit the
+
+def check_identity_wrong(path, expect, kind="clip"):
+    """Identity / pose FAIL from the first frame. Offline: expect-driven.
+
+    T3-30: path + expect, no database. T3-28: default remedy is edit the
     text; swapping the reference is refused by identity_wrong_remedy.
+    T3-35: a pose/identity FAIL names the settings class expect diagnoses.
     """
     expect = expect or {}
-    if not (expect.get("identity_wrong")
-            or expect.get("first_frame_identity") == "wrong"):
+    if not _wants_pose_or_identity_fail(expect):
         return []
+    cls = resolve_settings_remedy(expect) or REMEDY_EDIT_TEXT
+    text = SETTINGS_REMEDY_TEXT.get(cls) or IDENTITY_WRONG_REMEDY
     return [finding(
         path, kind, IDENTITY_WRONG, FLAG,
-        "identity is wrong from the first frame — edit the text, then re-render",
-        expect.get("identity_wrong") or "wrong", "feline", None,
-        identity_wrong_remedy())]
+        "identity is wrong from the first frame — edit the text, then re-render"
+        if cls == REMEDY_EDIT_TEXT
+        else f"identity/pose FAIL — {text}",
+        expect.get("identity_wrong") or expect.get("pose_fail") or "wrong",
+        "feline", None,
+        identity_wrong_remedy(text),
+        remedy_class=cls)]
 
 
 def measure_alpha(path):
@@ -1722,7 +1750,6 @@ def check_image(path, expect):
     if not os.path.isfile(path):
         return [finding(path, "image", "opens", REJECT, "file does not exist",
                         remedy="re-render")]
-    size = os.path.getsize(path)
     # NO size floor on images, deliberately. A blank render is TINY -- a 256x192
     # all-black PNG is 244 bytes, and an 896x1216 one is not much more, because
     # a uniform image is exactly what PNG compresses best. A byte floor would

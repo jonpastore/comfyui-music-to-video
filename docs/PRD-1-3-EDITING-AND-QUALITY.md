@@ -38,7 +38,8 @@ rating videos stay on the card in `#media-player`), and the library list
 (`test_t6_a2_html_and_json_report_the_same_library_numbers`,
 `T6-A2-library` — same `library_service.numbers()` for song_count on
 HTML `GET /` / `GET /songs` and JSON `GET /api/songs`; `GET /songs` is
-200 never 405), and the topbar nav
+200 never 405; the list groups by album and the upload fold is
+collapsed when songs exist), and the topbar nav
 (`test_uiux_nav.py` / `test_uiux_nav_html_and_json_share_one_list`,
 `T6-A2-nav` — same `nav_service.links()` for HTML `base.html` `<nav>`
 and JSON `GET /api/nav`; probe monkeypatch mutation).
@@ -181,7 +182,8 @@ also a stranger, even with perfect text. A remedy that proposes
 swapping in a stranger plate teaches the operator a false lesson,
 which is why `T3-28` forbids it by name. Using **her** photos as
 image1 is required (`T2-56`). `T3-33.a` still says image FLAG/REJECT
-content findings are edit-text; `T3-35` adds settings remedies
+content findings are edit-text; `T3-35` **built**
+(`test_t3_35_settings_remedies.py`) adds settings remedies
 (latent / denoise / CFG / pose-match / plate-absent / body-colour).
 `T2-31` **built** still refuses an empty `character_reference`. `T2-32`
 **built**: the shipped message names both halves — not "the text, not
@@ -229,7 +231,8 @@ id, and the answer re-orders everything below:
 2. **Know when a sheet or clip is wrong** — QC's repair path plus
    pose-before-anatomy (`T3-33.b`) and the D7 look (`T3-37`, NOT
    MEASURED). Image FLAG/REJECT is a prompt rewrite (`T3-33.a`);
-   settings remedies are `T3-35`.
+   settings remedies are `T3-35` **built**
+   (`test_t3_35_settings_remedies.py`).
 3. **Clips at the length you asked for** — song length still owns clip
    count. LTX first (`T5-11`); s2v is a hop, not a skip.
 
@@ -553,7 +556,10 @@ order and take the dependencies from here.
    check with no remedy refuses rather than offering a button.
    `T3-33.a` is built: image content FLAG/REJECT remedies are `edit-text`
    (the next prompt rewrite); "re-render with a different seed" is
-   refused by the check, not offered as the default.
+   refused by the check, not offered as the default. `T3-35` **built**
+   (`test_t3_35_settings_remedies.py`): pose/identity FAIL names
+   `latent` / `denoise` / `CFG` / `pose-match` / `plate-absent` /
+   `body-colour`; plate-as-image1 FAIL is not only `edit-text`.
 10. Pose QC then anatomy QC (`T3-33.b`): the operator judges the
     picture. Anatomy is not drawn, inpainted, or composited onto a
     pose FAIL (missing arm, human face patch, wrong camera, tail

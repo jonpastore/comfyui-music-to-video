@@ -311,7 +311,11 @@ pre-empt `finding-row` with one. An identity-wrong finding's remedy is
 "swap the reference image". An image FLAG/REJECT content finding
 (blank, uniform, transparent, lighting, portrait) uses that same
 wording (`T3-33.a`); the queue must not offer "re-render with a
-different seed" on a still. A silence finding (`T3-9`) shows low / mid /
+different seed" on a still. A pose/identity FAIL names the settings
+class (`T3-35` **built**, `test_t3_35_settings_remedies.py`):
+`latent` / `denoise` / `CFG` / `pose-match` / `plate-absent` /
+`body-colour`. A stranger plate as image1 is `plate-absent`, never
+"swap the reference". A silence finding (`T3-9`) shows low / mid /
 high band energy, not a peak; a take that only clicked is empty. An
 edge-silence finding (`T3-4.3-edge`) shows leading / trailing seconds
 against `EDGE_SILENCE_LIMIT_S`, not whole-file band energy. An assembled-song
@@ -1318,8 +1322,10 @@ anatomy. C1 / C2 job type on generate (`T7-21` **built**,
 `test_t7_21_c1_c2_resolver.py`): same-pose is image latent + denoise
 1.0; new-pose is empty 896×1216 + her keepers; labels match the graph.
 Those landings are scored like an anchor (`T3-34` **built**,
-`test_t3_34_pose_still_qc.py`). QC remedy
-line (`T3-35`). Keeper / reject; `usable=skip` never enters a
+`test_t3_34_pose_still_qc.py`). Pose/identity FAIL names a
+settings remedy (`T3-35` **built**, `test_t3_35_settings_remedies.py`):
+latent / denoise / CFG / pose-match / plate-absent / body-colour;
+blank/uniform/alpha stay edit-text (`T3-33.a`). Keeper / reject; `usable=skip` never enters a
 slot (`T7-23` **built**, `test_t7_23_usable_skip.py`). Ceiling + ticked-lower backfill (`T2-54` **built**,
 `test_t2_54_ceiling_backfill.py`): r+pg13 writes both boards; a g run
 writes a clothed g board and no nude. No new route this slice — each
