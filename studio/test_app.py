@@ -62,6 +62,22 @@ def _chosen_anchor(album, tier, path="anchor.png", view="front"):
               VALUES ('album', ?, ?, ?, ?, 1, ?)""", album, tier, view, path, time.time())
 
 
+def test_library_groups_by_album_and_collapses_upload():
+    with TestClient(appmod.app) as client:
+        _upload_song(client, "Lib Group One", album="Grouped Alb")
+        _upload_song(client, "Lib Group Two", album="Grouped Alb")
+        page = client.get("/").text
+        assert 'id="fold-upload"' in page
+        tag = page.split('id="fold-upload"', 1)[1][:80]
+        assert "open" not in tag
+        assert 'class="album-group-head"' in page
+        assert "Grouped Alb" in page
+        assert 'list="album-names"' in page
+        assert 'value="Grouped Alb"' in page
+        assert "library-scroll" in page
+        assert "album-song" in page
+
+
 def test_empty_state_pages_200():
     with TestClient(appmod.app) as client:
         for path in ("/", "/playlists", "/tiers", "/jobs", "/anchors"):
@@ -1084,9 +1100,11 @@ def test_library_routes_answer_json_and_still_redirect_a_form_post():
         # renders, so it can never drift from it
         row = client.get(f"/songs/{sid}/row")
         assert row.status_code == 200, row.text
-        assert f'<tr data-song="{sid}"' in row.text
+        assert f'data-song="{sid}"' in row.text
         assert 'class="pick-song"' in row.text and "cell-genre" in row.text
         assert "js-genre-set" in row.text
+        assert "data-album=" in row.text
+        assert "song-added" in row.text
         assert "tier-cell" in row.text
         assert "js-media-play" in row.text or "tier-cell miss" in row.text
         assert "danger-icon" in row.text
@@ -1097,6 +1115,12 @@ def test_library_routes_answer_json_and_still_redirect_a_form_post():
             os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
         assert 'accept="audio/*' in page or ".wav" in page
         assert 'id="genre-set"' in page
+        assert 'id="fold-upload"' in page
+        assert 'id="upload-album"' in page
+        assert 'list="album-names"' in page
+        assert "library-scroll" in page
+        assert "album-fold" in open(
+            os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
         wav = client.post("/songs", data={"title": "Wav Upload"}, headers=J,
                           files={"mp3": ("t.wav", b"RIFF....WAVEfmt ", "audio/wav")})
         assert wav.status_code == 200, wav.text

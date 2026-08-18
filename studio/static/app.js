@@ -2726,12 +2726,90 @@ function initLibraryBulk() {
   });
 
   function paintGenre(row, g) {
-    var cell = row.querySelector(".genre-text") || row.querySelector(".cell-genre");
+    var cell = row.querySelector(".genre-text");
     if (!cell) return;
-    var first = (g.genre || "") + (g.subgenre ? " / " + g.subgenre : "");
-    var second = g.genre2 ? g.genre2 + (g.subgenre2 ? " / " + g.subgenre2 : "") : "";
-    cell.textContent = first;
-    if (second) { cell.appendChild(document.createElement("br")); cell.append(second); }
+    cell.textContent = "";
+    [g.genre, g.subgenre, g.genre2, g.subgenre2].forEach(function (name) {
+      if (!name) return;
+      var tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = name;
+      cell.appendChild(tag);
+    });
+  }
+
+  function fillUploadGenres(album) {
+    var head = document.querySelector('tr.album-group-head[data-album="' + album + '"]');
+    if (!head) return;
+    setSel("genre-select", head.getAttribute("data-genre"));
+    setSel("subgenre-select", head.getAttribute("data-subgenre"));
+    setSel("genre2-select", head.getAttribute("data-genre2"));
+    setSel("subgenre2-select", head.getAttribute("data-subgenre2"));
+  }
+
+  var albumIn = document.getElementById("upload-album");
+  if (albumIn) {
+    albumIn.addEventListener("change", function () {
+      fillUploadGenres((albumIn.value || "").trim());
+    });
+    albumIn.addEventListener("input", function () {
+      fillUploadGenres((albumIn.value || "").trim());
+    });
+  }
+
+  function setGroupOpen(head, open) {
+    if (!head) return;
+    var btn = head.querySelector(".album-fold");
+    if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+    var row = head.nextElementSibling;
+    while (row && !row.classList.contains("album-group-head")) {
+      row.classList.toggle("hidden", !open);
+      row = row.nextElementSibling;
+    }
+  }
+
+  document.addEventListener("click", function (e) {
+    var fold = e.target.closest && e.target.closest("button.album-fold");
+    if (!fold) return;
+    var head = fold.closest("tr.album-group-head");
+    var open = fold.getAttribute("aria-expanded") !== "true";
+    setGroupOpen(head, open);
+  });
+
+  function ensureAlbumGroup(body, album, genres) {
+    var sel = 'tr.album-group-head[data-album="' + album.replace(/"/g, '\\"') + '"]';
+    var head = body.querySelector(sel);
+    if (head) return head;
+    var tr = document.createElement("tr");
+    tr.className = "album-group-head";
+    tr.setAttribute("data-album", album);
+    tr.setAttribute("data-genre", (genres && genres.genre) || "");
+    tr.setAttribute("data-subgenre", (genres && genres.subgenre) || "");
+    tr.setAttribute("data-genre2", (genres && genres.genre2) || "");
+    tr.setAttribute("data-subgenre2", (genres && genres.subgenre2) || "");
+    tr.innerHTML = '<td colspan="10"><button type="button" class="album-fold" aria-expanded="true">'
+      + (album || "No album") + ' <span class="muted">(1)</span></button></td>';
+    body.insertBefore(tr, body.firstChild);
+    var list = document.getElementById("album-names");
+    if (list && album) {
+      var opt = document.createElement("option");
+      opt.value = album;
+      list.appendChild(opt);
+    }
+    return tr;
+  }
+
+  function recountGroup(head) {
+    if (!head) return;
+    var n = 0;
+    var row = head.nextElementSibling;
+    while (row && !row.classList.contains("album-group-head")) {
+      if (row.getAttribute("data-song")) n += 1;
+      row = row.nextElementSibling;
+    }
+    var muted = head.querySelector(".muted");
+    if (muted) muted.textContent = "(" + n + ")";
+    if (!n) head.remove();
   }
 
   var genreDlg = document.getElementById("genre-set");
@@ -2820,8 +2898,24 @@ function initLibraryBulk() {
         // here -- so it can never drift from what the table renders
         return fetch("/songs/" + d.song_id + "/row").then(function (r) { return r.text(); })
           .then(function (html) {
-            var body = document.querySelector("table.list tbody");
-            if (body) body.insertAdjacentHTML("afterbegin", html);
+            var body = document.querySelector("#library table.list tbody");
+            var wrap = document.createElement("tbody");
+            wrap.innerHTML = html.trim();
+            var row = wrap.querySelector("tr[data-song]");
+            if (body && row) {
+              var album = row.getAttribute("data-album") || "";
+              var genres = {
+                genre: row.getAttribute("data-genre") || "",
+                subgenre: row.getAttribute("data-subgenre") || "",
+                genre2: row.getAttribute("data-genre2") || "",
+                subgenre2: row.getAttribute("data-subgenre2") || ""
+              };
+              var head = ensureAlbumGroup(body, album, genres);
+              row.classList.remove("hidden");
+              head.after(row);
+              setGroupOpen(head, true);
+              recountGroup(head);
+            }
             upload.reset();
             refresh();
             busy(false, "Uploaded " + d.title + ". Transcribe and analyse are queued.");
@@ -2844,7 +2938,16 @@ function initLibraryBulk() {
     var row = form.closest("tr[data-song]");
     busy(true, "deleting…");
     api(form.action, new FormData(form))
-      .then(function () { row.remove(); refresh(); busy(false, "Deleted."); })
+      .then(function () {
+        var head = row.previousElementSibling;
+        while (head && !head.classList.contains("album-group-head")) {
+          head = head.previousElementSibling;
+        }
+        row.remove();
+        recountGroup(head);
+        refresh();
+        busy(false, "Deleted.");
+      })
       .catch(function (err) { busy(false, "Not deleted: " + err.message); });
   });
 

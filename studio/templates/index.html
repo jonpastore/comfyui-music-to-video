@@ -5,12 +5,29 @@
 
 <script id="genre-data" type="application/json">{{ genre_data | tojson }}</script>
 
-<section class="card">
-  <h2>Upload a song</h2>
+{% set ns = namespace(albums=[], empty=false) %}
+{% for e in songs %}
+  {% set a = e.song.album or "" %}
+  {% if a %}
+    {% if a not in ns.albums %}{% set ns.albums = ns.albums + [a] %}{% endif %}
+  {% else %}
+    {% set ns.empty = true %}
+  {% endif %}
+{% endfor %}
+{% if ns.empty %}{% set ns.albums = ns.albums + [""] %}{% endif %}
+<details class="card" id="fold-upload" {% if not songs %}open{% endif %}>
+  <summary><h2>Upload a song</h2></summary>
   <form method="post" action="/songs" enctype="multipart/form-data" class="stack-form">
     <div class="field-row">
       <label>Title <input type="text" name="title" required></label>
-      <label>Album <input type="text" name="album"></label>
+      <label>Album
+        <input type="text" name="album" id="upload-album" list="album-names"
+               autocomplete="off"
+               title="Pick an existing album or type a new name">
+        <datalist id="album-names">
+          {% for a in ns.albums if a %}<option value="{{ a }}"></option>{% endfor %}
+        </datalist>
+      </label>
       <label>File
         <input type="file" name="mp3" required
                accept="audio/*,.mp3,.wav,.flac,.ogg,.oga,.m4a,.aac,.opus,.wma,.aiff,.aif">
@@ -46,7 +63,7 @@
       </button>
     </div>
   </form>
-</section>
+</details>
 
 {# T6-A2-library: song_count from library_service.numbers, not songs | length. #}
 <div id="library" data-song-count="{{ song_count }}">
@@ -95,26 +112,45 @@
   <p class="hint" id="bulk-count" hidden></p>
   <p class="hint" id="bulk-note"></p>
 </section>
-<div class="table-scroll">
-<table class="list sortcols" data-song-count="{{ song_count }}">
+<div class="table-scroll library-scroll">
+<table class="list" data-song-count="{{ song_count }}">
   <thead><tr>
-    {# not data-sort: a checkbox column has no order, and the toggle must not
-       re-sort the table out from under the click #}
     <th class="pick"><input type="checkbox" id="pick-all" title="Select all shown"></th>
-    <th data-sort>Title</th>
-    <th data-sort>Album</th>
-    <th data-sort>Genre</th>
-    <th data-sort class="num">Length</th>
-    <th data-sort class="num">BPM</th>
-    <th data-sort>Key</th>
-    <th data-sort class="num">Energy</th>
-    <th data-sort>Added</th>
-    <th data-sort>Video</th>
-    <th data-sort>Sets</th>
+    <th>Title</th>
+    <th>Genre</th>
+    <th class="num">Length</th>
+    <th class="num">BPM</th>
+    <th>Key</th>
+    <th class="num">Energy</th>
+    <th>Video</th>
+    <th>Sets</th>
     <th></th>
   </tr></thead>
   <tbody>
-  {% for e in songs %}{% include "_song_row.html" %}
+  {% for album in ns.albums %}
+    {% set gns = namespace(rows=[], last=none) %}
+    {% for e in songs if (e.song.album or "") == album %}
+      {% set gns.rows = gns.rows + [e] %}
+      {% set gns.last = e %}
+    {% endfor %}
+    {% if gns.rows %}
+    <tr class="album-group-head" data-album="{{ album }}"
+        data-genre="{{ gns.last.song.genre or '' }}"
+        data-subgenre="{{ gns.last.song.subgenre or '' }}"
+        data-genre2="{{ gns.last.song.genre2 or '' }}"
+        data-subgenre2="{{ gns.last.song.subgenre2 or '' }}">
+      <td colspan="10">
+        <button type="button" class="album-fold" aria-expanded="false"
+                title="Show songs in {{ album or 'No album' }}">
+          {{ album or "No album" }}
+          <span class="muted">({{ gns.rows | length }})</span>
+        </button>
+      </td>
+    </tr>
+    {% for e in gns.rows %}
+      {% include "_song_row.html" %}
+    {% endfor %}
+    {% endif %}
   {% endfor %}
   </tbody>
 </table>

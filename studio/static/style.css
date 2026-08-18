@@ -125,6 +125,58 @@ a { color: var(--accent); }
 .queue-actions .inline { display: inline; }
 
 main { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+html:has(#library), body:has(#library) { height: 100%; }
+body:has(#library) {
+  display: flex;
+  flex-direction: column;
+}
+body:has(#library) main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  padding-bottom: 0.75rem;
+}
+#fold-upload > summary {
+  cursor: pointer;
+  list-style: none;
+}
+#fold-upload > summary::-webkit-details-marker { display: none; }
+#fold-upload > summary h2 { display: inline; }
+#library {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#library .library-scroll {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 10rem;
+  overflow: auto;
+}
+tr.album-group-head td {
+  background: var(--panel);
+  font-weight: 600;
+  position: sticky;
+  top: 2.1rem;
+  z-index: 2;
+  border-bottom: 1px solid var(--border-strong);
+}
+button.album-fold {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  padding: 0.15rem 0;
+  cursor: pointer;
+}
+button.album-fold[aria-expanded="true"]::before { content: "▾ "; }
+button.album-fold[aria-expanded="false"]::before { content: "▸ "; }
+.song-added { margin-top: 0.15rem; font-size: 0.8rem; }
+.cell-genre .genre-text { display: inline-flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
 
 /* Sizes, not just weight. These only set font-weight before, so every heading
    level took the browser's default size -- h1 at ~30px on a dense internal

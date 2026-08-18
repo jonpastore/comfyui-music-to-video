@@ -595,7 +595,15 @@ not an operator step. If the scene is longer than one render, it
 splits and part 2+ starts on the last frame (T2-10 / T2-11). Reroll is n / seed min–max / equal or
 fibonacci. A candidate has Approve, Fix, Delete. Thumbs open
 `#ref-preview`. `test_approve_grid_groups_by_scene_and_puts_seed_above_the_name`.
-**Library:** upload accepts popular audio (mp3 / wav / flac / ogg / m4a / …),
+**Library:** **Upload a song** is a collapsed `<details id="fold-upload">`
+(open only when the library is empty). Album is a text field with
+`datalist` of existing album names; picking one fills genre / sub /
+secondary from the **first song on that album** (oldest `created`).
+There is no playlist-level genre column yet. The table groups by album,
+collapsed; expand a group to see songs. Added date sits under the
+title. Genre is chips (primary + secondary), not the word **Set** —
+the pencil opens the taxonomy modal. `.library-scroll` fills leftover
+viewport height and scrolls. Upload accepts popular audio (mp3 / wav / flac / ogg / m4a / …),
 not mp3-only. The bulk genre bar (`#bulk-genre`) is hidden until at least
 one row is ticked; `#bulk-count` sits **below** the controls and reads
 `N songs selected` (or `would_change` after a preview POST). Per-row **Set** opens a
