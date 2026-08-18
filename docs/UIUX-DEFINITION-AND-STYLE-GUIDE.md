@@ -440,8 +440,9 @@ own permission wording is in the scene text (`T2-21`).
 The board's declared `guardrail` is this tier's `compose_guardrail`
 clause; saving a board that carries another tier's wording is refused
 (`T2-22`). Saving a board whose `character_reference` is empty is
-refused; the message names both halves of D10 — the text lock plus
-her photographs as image1 (`T2-31`, `T2-32`). Saving a scene that names a
+refused; the shipped message names both halves of D10 — the text lock
+plus her photographs as image1 (`T2-31` **built**, `T2-32` **built**).
+Saving a scene that names a
 `video_model` absent from `models.renderable("video")` is refused,
 naming the scene number and the bad value (`T2-44`); it is not
 silently defaulted and not deferred to render.

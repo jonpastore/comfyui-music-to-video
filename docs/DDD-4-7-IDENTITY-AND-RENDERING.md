@@ -317,9 +317,10 @@ whose whole point is not doing that.
 
 Identity is the text plus her photographs as image1 (D10). Saving a
 storyboard whose `character_reference` is empty is refused (`T2-31`).
-`T2-32`'s message names both halves; the shipped string still says
-"the text, not the photo" (**partial**). When a sheet or clip is wrong
-from the first frame, the QC remedy is edit the text, then re-render
+`T2-32` is **built**: the refusal names both halves — the text lock
+plus her photographs as image1 — not "the text, not the photo".
+When a sheet or clip is wrong from the first frame, the QC remedy is
+edit the text, then re-render
 (`T3-28` / `qc.check_identity_wrong`) — not swap a stranger plate.
 Using **her** photos as image1 is required (`T2-56`). `T3-33.a` still
 says image FLAG/REJECT content findings are edit-text; `T3-35` adds

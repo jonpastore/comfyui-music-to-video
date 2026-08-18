@@ -1276,8 +1276,9 @@ def describe_anchor(image_path, field, model=None, progress=None):
 
 
 EMPTY_CHARACTER_REFERENCE = (
-    "character_reference is empty; identity comes from the text, "
-    "not the reference image. An empty lock renders a stranger in every clip"
+    "character_reference is empty; identity is the text lock "
+    "(species/body) plus her photographs as image1. An empty lock "
+    "renders a stranger in every clip"
 )
 
 

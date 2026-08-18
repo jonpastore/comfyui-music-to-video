@@ -3,14 +3,17 @@
 docs/TRD-2 §5.4: an empty lock renders a stranger in every clip while
 every deterministic check still passes. Saving that board is refused.
 
-T2-32: the refusal says identity comes from the text, not the
-reference image. A message that suggests attaching a reference teaches
-the wrong lesson (TRD-3 T3-28 is the QC-side pair).
+T2-32: the refusal names both D10 halves — the text lock (species/body)
+plus her photographs as image1. A message that says identity comes from
+the text, not the photo, is the old one-sheet world and fails. A
+message that suggests attaching a reference teaches the wrong lesson
+(TRD-3 T3-28 is the QC-side pair).
 
 Mutation: write_storyboard dumps without the check → writer arm fails.
 Mutation: save_scene / _apply_scene_fields write without the check →
 save arm fails.
-Mutation: message names the reference image as the fix → T2-32 fails.
+Mutation: restore "identity comes from the text, not the reference
+image" → T2-32 fails.
 """
 import json
 import os
@@ -65,8 +68,15 @@ def _write_board(sid, slug, tier, character_reference):
 def _assert_t2_32_message(text):
     low = text.lower()
     assert "text" in low, text
-    assert "reference image" in low or "not the reference" in low, text
     assert "identity" in low, text
+    assert "species" in low, text
+    assert "body" in low, text
+    assert "image1" in low, text
+    assert "photograph" in low, text
+    # Old one-sheet world: identity comes from the text, not the photo.
+    assert "comes from the text" not in low, text
+    assert "not the reference" not in low, text
+    assert "not the photo" not in low, text
     assert "swap" not in low
     assert "attach" not in low
     assert "replace the reference" not in low

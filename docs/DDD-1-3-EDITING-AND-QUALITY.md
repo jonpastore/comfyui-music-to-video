@@ -710,14 +710,15 @@ would false-positive) and `save_scene` / `h_storyboard` refuse it.
 A clean scene edit still writes. Mutation: drop the stamp → generation
 arm red. Mutation: write without the check → save arm red.
 
-`T2-31` is **built**; `T2-32` is **partial**. `grok.write_storyboard`
+`T2-31` is **built**; `T2-32` is **built**. `grok.write_storyboard`
 refuses an empty, whitespace, or missing `character_reference` before
 creating files. `save_scene` and `_apply_scene_fields` return 400 with
-`grok.EMPTY_CHARACTER_REFERENCE`. D10: identity is the text lock plus
-her photographs as image1; a stranger plate is refused. The shipped
-message still says "the text, not the reference image" — old world.
-An empty lock still renders a stranger in every clip. A filled lock
-still writes. Mutation: dump without the check → writer arm red.
+`grok.EMPTY_CHARACTER_REFERENCE`. The message names both D10 halves:
+the text lock (species/body) plus her photographs as image1. A stranger
+plate is refused. An empty lock still renders a stranger in every clip.
+A filled lock still writes. Mutation: dump without the check → writer
+arm red. Mutation: restore "identity comes from the text, not the
+reference image" → T2-32 red.
 `T2-23` is **built**. `GET /api/songs/{id}/storyboard/{tier}/meter`
 reports `scene_time` (sum of scene `duration_guidance`), `song_length`
 (the song duration), `tolerance` (`SCENE_TIME_TOLERANCE`, 0.15 of song

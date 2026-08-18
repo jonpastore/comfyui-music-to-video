@@ -183,8 +183,9 @@ which is why `T3-28` forbids it by name. Using **her** photos as
 image1 is required (`T2-56`). `T3-33.a` still says image FLAG/REJECT
 content findings are edit-text; `T3-35` adds settings remedies
 (latent / denoise / CFG / pose-match / plate-absent / body-colour).
-`T2-31` still refuses an empty `character_reference`. `T2-32`'s
-message names both halves — not "the text, not the photo".
+`T2-31` **built** still refuses an empty `character_reference`. `T2-32`
+**built**: the shipped message names both halves — not "the text, not
+the photo".
 
 **P9 is partial.** `T2-50` **built** (`test_t2_50_coverage_list.py`):
 analyze writes `(pose, view, wardrobe, exposure)` per scene and no
