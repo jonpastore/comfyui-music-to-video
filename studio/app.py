@@ -48,6 +48,7 @@ import library_service  # TRD-6 T6-A2-library: library song_count — no FastAPI
 import media_service  # TRD-8 T8-16: song media bag — no FastAPI
 import nav_service  # UIUX §8 / T6-A2-nav: topbar links — no FastAPI
 import pose_plan  # scene pose → chosen sheet → refs image2
+import scene_pose_map  # T2-51 / T2-52: Accept-gated keeper→scene map
 import classification  # T4-21 / T4-22: album pose library in sqlite
 import civitai  # Civitai LoRA search/download — registers download_lora handler
 import storyboard_versions
@@ -6189,6 +6190,12 @@ def refs_plan_blockers(song, tier, rows):
         blockers.append(
             f"{name} has no chosen anchor at this tier — "
             "anchor them, or stop naming them as a lead")
+    sid = song["id"] if "id" in song.keys() else None
+    if sid:
+        try:
+            scene_pose_map.require_accepted(sid, tier)
+        except (LookupError, ValueError) as e:
+            blockers.append(str(e))
     return blockers
 
 
@@ -6822,6 +6829,48 @@ async def api_pose_generate(request: Request, id: int,
         _svc_http(e)
 
 
+@app.post("/api/songs/{id}/storyboard/{tier}/pose-map")
+def api_pose_map_draft(id: int, tier: str,
+                       character_id: Optional[int] = None):
+    """T2-51: draft keeper→scene. Classify never writes this."""
+    try:
+        return JSONResponse(scene_pose_map.draft(
+            get_song_or_404(id)["id"], valid_tier_or_400(tier),
+            character_id=character_id))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
+
+
+@app.get("/api/songs/{id}/storyboard/{tier}/pose-map")
+def api_pose_map_list(id: int, tier: str):
+    """T2-51 / T2-52: current draft/accepted/rejected bindings."""
+    try:
+        return JSONResponse(scene_pose_map.listed(
+            get_song_or_404(id)["id"], valid_tier_or_400(tier)))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
+
+
+@app.post("/api/songs/{id}/storyboard/{tier}/scene/{num}/pose-map/accept")
+def api_pose_map_accept(id: int, tier: str, num: int):
+    """T2-52: persist status=accepted for this scene."""
+    try:
+        return JSONResponse(scene_pose_map.accept(
+            get_song_or_404(id)["id"], valid_tier_or_400(tier), num))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
+
+
+@app.post("/api/songs/{id}/storyboard/{tier}/scene/{num}/pose-map/reject")
+def api_pose_map_reject(id: int, tier: str, num: int):
+    """T2-52: leave the previous accepted keeper (or none)."""
+    try:
+        return JSONResponse(scene_pose_map.reject(
+            get_song_or_404(id)["id"], valid_tier_or_400(tier), num))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
+
+
 @app.get("/api/songs/{id}/pose-plan/{tier}")
 def api_pose_plan(id: int, tier: str):
     """Scenes this song needs vs chosen pose sheets. Does not write."""
@@ -6902,9 +6951,16 @@ def start_refs(request: Request, id: int, tier: List[str] = Form([]),
         anchors[t] = anchor
     limit = max(0, limit)
     for t in selected:
-        # Freeze auto-matches onto the board, then hand the path map to the
-        # job so image2 is the pose plate even if the operator edits later.
-        pose_bases = pose_plan.freeze_auto_binds(song, t)
+        # T2-52: draft/rejected map rows are not a bind. Empty map keeps
+        # the leftover pose_plan auto-bind for unmapped songs.
+        try:
+            scene_pose_map.require_accepted(id, t)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        if scene_pose_map.has_rows(id, t):
+            pose_bases = scene_pose_map.accepted_bases(song, t)
+        else:
+            pose_bases = pose_plan.freeze_auto_binds(song, t)
         jid = jobs.enqueue("refs", {"song_id": id, "tier": t, "limit": limit or None,
                                "anchor_path": anchors[t]["path"],
                                "pose_bases": pose_bases}, song_id=id)

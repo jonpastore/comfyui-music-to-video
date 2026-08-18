@@ -279,7 +279,10 @@ only, no anatomy; studio `anchor` jobs, not `batch_edit`; C1/C2
 graphs `T7-21` **built**, `test_t7_21_c1_c2_resolver.py`),
 and `classification_json` (`T4-21`/`T4-22`: album, character_id
 NULL=protagonist, versioned document, same fields as
-image-classification.json; sidecars seed import only).
+image-classification.json; sidecars seed import only),
+and `scene_pose_map` (`T2-51`/`T2-52` **built**: song, tier,
+scene_number → keeper id/path, status `draft|accepted|rejected`;
+`prev_*` holds the last accepted bind so reject leaves it).
 Switching audience writes only that column. Easy is `mixer.master_engaged`
 reading `mode_audience == "easy"` on the item dict — the same application
 point as a gain curve (`T1-18`, `T1-20c`, `T1-20d`).
@@ -288,9 +291,7 @@ Still needed, and no more than this:
 
     ALTER TABLE sets ADD COLUMN out_fps REAL;                        -- NULL = derive from items
 
-    -- #529 loop (D4, D5, D7). Minimum; do not over-schema.
-    -- scene_pose_map: song, tier, scene_number → keeper id/path,
-    --   status draft|accepted|rejected
+    -- #529 loop (D5, D7). Minimum; do not over-schema.
     -- location_plates: album or song, location key → asset path
     -- scenes.needs_lip_sync (or video_model kept plus this flag)
     -- clips retain predecessor/successor (T6-A5) for LTX take,
@@ -792,9 +793,10 @@ image1 for **every** scene. Standing 4748 plate is refused (keep).
 Product is `T2-56`: image1 is the accepted keeper for **that** scene,
 plus the location plate when the scene has one. `test_t2_refs_identity.py`
 guards the old lock; `test_t2_56_per_scene_keeper.py` is the #529
-check and is **not built**. `pose_plan` auto-binds image2 without
-Accept (`T2-51` **partial** — classify writes no map;
-`T2-52` Accept-gated draft **not built**).
+check and is **not built**. `scene_pose_map` is the Accept-gated
+map (`T2-51`/`T2-52` **built**, `test_t2_52_map_accept.py`).
+`start_refs` 400s on draft/rejected. Unmapped songs still
+`pose_plan.freeze_auto_binds` (leftover until `T2-56`).
 
 `T2-30` is **built**. `unanchored_leads(rows)` returns names of figures
 with `role == "lead"` and no chosen anchor. Storyboard HTML banner,

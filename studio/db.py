@@ -667,8 +667,8 @@ CREATE TABLE IF NOT EXISTS advice_proposals (
 
 POSE_COVERAGE_SCHEMA = """
 -- T2-50: analyze-for-poses writes one row per scene. A coverage list, not
--- a bind. Classify and generate-refs do not write here. scene_pose_map is
--- a later table (T2-51) and is not created by analyze.
+-- a bind. Classify and generate-refs do not write here. scene_pose_map
+-- (T2-51 / T2-52) is a different table; analyze does not create those rows.
 CREATE TABLE IF NOT EXISTS pose_coverage (
   id INTEGER PRIMARY KEY,
   song_id INTEGER NOT NULL,
@@ -698,6 +698,27 @@ CREATE TABLE IF NOT EXISTS classification_json (
 
 CREATE INDEX IF NOT EXISTS idx_classification_json
   ON classification_json(album, character_id, version_number);
+"""
+
+SCENE_POSE_MAP_SCHEMA = """
+-- T2-51 / T2-52: draft keeper → scene. Classify never writes here.
+-- status is draft|accepted|rejected. prev_* is the last accepted bind
+-- so reject leaves it (T2-15 shape). A nude row on g/pg13 is refused.
+CREATE TABLE IF NOT EXISTS scene_pose_map (
+  id INTEGER PRIMARY KEY,
+  song_id INTEGER NOT NULL,
+  tier TEXT NOT NULL,
+  scene_number INTEGER NOT NULL,
+  keeper_id TEXT,
+  path TEXT,
+  status TEXT NOT NULL,
+  prev_keeper_id TEXT,
+  prev_path TEXT,
+  created REAL NOT NULL,
+  updated REAL NOT NULL,
+  UNIQUE(song_id, tier, scene_number));
+
+CREATE INDEX IF NOT EXISTS idx_scene_pose_map ON scene_pose_map(song_id, tier);
 """
 
 
@@ -774,6 +795,7 @@ def conn():
         c.executescript(LINEAGE_SCHEMA)
         c.executescript(POSE_COVERAGE_SCHEMA)
         c.executescript(CLASSIFICATION_JSON_SCHEMA)
+        c.executescript(SCENE_POSE_MAP_SCHEMA)
         _migrate(c)
         _local.c = c
     return c

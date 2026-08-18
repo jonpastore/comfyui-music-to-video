@@ -39,8 +39,9 @@ is not a studio feature.
 |---|---|
 | `make_anchor.py` | the view table, the positive constants, `is_nude_view`, `prompt_for`, the call into `workflow()` |
 | `build_refs.py` | the graph: `workflow()`, `sampler_settings`, `assign_ref_slots`, `cast_clause`, `negative_applies` |
-| `studio/app.py` | the anchor routes, `ANCHOR_VIEWS` labels, `ANCHOR_RENDER_FLAGS`, `DENOISE_CHOICES`, the preview; song-page `pose_library_by_tier` (chosen sheets, not just identity front); `start_refs` freezes `pose_plan` binds into `pose_bases` |
-| `studio/pose_plan.py` | scene need-text → chosen sheet match; `plan` / `bind_scene` / `freeze_auto_binds` / `album_coverage`; no FastAPI. Not the T2-50 writer |
+| `studio/app.py` | the anchor routes, `ANCHOR_VIEWS` labels, `ANCHOR_RENDER_FLAGS`, `DENOISE_CHOICES`, the preview; song-page `pose_library_by_tier` (chosen sheets, not just identity front); `start_refs` refuses draft/rejected `scene_pose_map` rows and uses accepted bases (`T2-52`) |
+| `studio/pose_plan.py` | leftover unmapped image2 match; `plan` / `bind_scene` / `freeze_auto_binds` / `album_coverage`; no FastAPI. Not the T2-50 writer or the Accept-gated map |
+| `studio/scene_pose_map.py` | T2-51 draft keeper→scene; T2-52 Accept/Reject per scene; `require_accepted` / `accepted_bases`; no FastAPI. Classify never writes here |
 | `studio/pose_coverage.py` | T2-50 analyze-for-poses (writes `pose_coverage` only); T4-23 `gap` reads the open song's ceiling board vs `classification.keepers` and emits holes only; T4-24 `generate` delegates to `pose_generate`; no FastAPI; does not import `pose_plan`; analyze/gap never write `scene_pose_map` |
 | `studio/pose_generate.py` | T4-24 ceiling-tier pose generate from gap holes; clothed+nude iff r/xxx; g/pg13 clothed only, no anatomy; T7-21 `resolve_c1_c2` (C1 image latent + denoise 1.0 + source pose vs C2 empty 896×1216 + her keepers); denoise labels shared with `app.denoise_choices`; enqueues studio `anchor` jobs (`source=pose-gap`); no FastAPI; not `batch_edit` |
 | `studio/classification.py` | T4-21 / T4-22 album pose library; versioned `classification_json` in sqlite; `library` / `query` / `save` / `import_sidecar` / `keepers` (`usable≠skip`); no FastAPI. Sidecar is import seed only |
@@ -516,7 +517,8 @@ code rather than in documents.
 - **Gap vs the open song's ceiling board** — `pose_coverage.gap` /
   `GET /api/songs/{id}/pose-gap` (`T4-23` **built**,
   `test_t2_51_classify_cannot_write_map.py`). Holes only. Classify and
-  gap write no `scene_pose_map` row. Draft map is still T2-51.
+  gap write no `scene_pose_map` row. Draft map is `T2-51` **built**;
+  Accept is `T2-52` **built** (`test_t2_52_map_accept.py`).
 - **Ceiling-tier pose generate** — `pose_generate.generate` /
   `POST /api/songs/{id}/pose-generate` (`T4-24` **built**,
   `test_t4_24_ceiling_generate.py`). Highest ticked tier this run.

@@ -510,7 +510,8 @@ as image1 (`T2-56`), not one chosen front for every scene, and never a
 standing plate (`test_t2_refs_identity.py` still guards the plate
 refusal). The tree still pins the album front — that is the leftover.
 The expanded tier's **pose map** is drafted, then Accept per scene
-(`T2-52`); generate refs from draft/rejected is refused. A coverage
+(`T2-52` **built**, `test_t2_52_map_accept.py`); generate refs from
+draft/rejected is refused (`POST /songs/{id}/refs` 400). A coverage
 meter (`T2-50` **built**, `test_t2_50_coverage_list.py`) sits above
 the map and reads `pose_coverage` from
 `POST /api/songs/{id}/storyboard/{tier}/analyze-poses`; holes vs keepers
@@ -1295,7 +1296,9 @@ reads `pose_coverage` after
 `POST /api/songs/{id}/storyboard/{tier}/analyze-poses` (`T2-50`
 **built**) and holes from `GET /api/songs/{id}/pose-gap` (`T4-23`
 **built**). Generate those holes at the run ceiling is
-`POST /api/songs/{id}/pose-generate` (`T4-24` **built**). Draft map + Accept per scene (`T2-52`), same shape as
+`POST /api/songs/{id}/pose-generate` (`T4-24` **built**). Draft map + Accept per scene (`T2-52` **built**,
+`test_t2_52_map_accept.py`; `POST .../pose-map` + `.../accept` /
+`.../reject`), same shape as
 the arc wand. Location plate per unique key (`T2-53`); unset / studio is
 grey-studio and no plate. `needs_lip_sync` beside camera. Ceiling
 and ticked-lower boards visible.

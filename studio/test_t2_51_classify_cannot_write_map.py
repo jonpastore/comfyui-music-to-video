@@ -4,7 +4,7 @@ docs/TRD-4 §6a T4-23: gap reads the open song's ceiling board, compares
 classification_json keepers (usable≠skip), and emits coverage holes only.
 
 docs/TRD-2 §6b T2-51: classify, even with the same tags, writes no map
-row. Draft map is a later call.
+row. Draft map is a different call (`POST .../pose-map`).
 
 Mutation: gap or classify upserts a map row → red.
 Mutation: a covered need appears in holes → red.
@@ -145,8 +145,6 @@ def test_t4_23_gap_emits_holes_only_and_classify_writes_no_map():
     ]})
     assert classified["version_number"] == 1
     assert _map_rows(sid) == []
-    assert not db.one(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='scene_pose_map'")
 
     got = storyboard_service.pose_gap(sid)
 
@@ -171,8 +169,6 @@ def test_t4_23_gap_emits_holes_only_and_classify_writes_no_map():
 
     assert _coverage_n(sid) == cov_before
     assert _map_rows(sid) == []
-    assert not db.one(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='scene_pose_map'")
     assert db.one("SELECT COUNT(*) AS n FROM refs WHERE song_id=?", sid)["n"] == refs_before
     assert list(db.q("SELECT id, kind FROM jobs WHERE song_id=?", sid)) == jobs_before
 
@@ -211,36 +207,26 @@ def test_t4_23_sidecar_does_not_close_a_hole():
 def test_t2_51_classify_and_gap_leave_an_existing_map_untouched():
     """If the map table already exists, neither classify nor gap inserts."""
     tiers.ensure_builtins()
-    db.run("""CREATE TABLE IF NOT EXISTS scene_pose_map (
-                id INTEGER PRIMARY KEY,
-                song_id INTEGER NOT NULL,
-                tier TEXT NOT NULL,
-                scene_number INTEGER NOT NULL,
-                keeper_id TEXT,
-                path TEXT,
-                status TEXT)""")
-    try:
-        stamp = f"t251-{time.time_ns()}"
-        album = f"T251 {stamp}"
-        sid = db.upsert_song(
-            stamp, title="T2-51 Map Guard", album=album, duration=8.0)
-        song = db.one("SELECT * FROM songs WHERE id=?", sid)
-        _write_board(sid, song["slug"], "r", [
-            _scene(1, "kneeling", "medium"),
-        ], album)
-        before = _map_rows(sid)
-        assert before == []
+    stamp = f"t251-{time.time_ns()}"
+    album = f"T251 {stamp}"
+    sid = db.upsert_song(
+        stamp, title="T2-51 Map Guard", album=album, duration=8.0)
+    song = db.one("SELECT * FROM songs WHERE id=?", sid)
+    _write_board(sid, song["slug"], "r", [
+        _scene(1, "kneeling", "medium"),
+    ], album)
+    before = _map_rows(sid)
+    assert before == []
 
-        classification.save(album, {"images": [
-            _image("kneel", pose="kneel", view="front", usable="pose"),
-        ]})
-        got = storyboard_service.pose_gap(sid)
-        assert got["n_holes"] == 0, got
-        assert _map_rows(sid) == []
-        n = db.one("SELECT COUNT(*) AS n FROM scene_pose_map")["n"]
-        assert n == 0, n
-    finally:
-        db.run("DROP TABLE IF EXISTS scene_pose_map")
+    classification.save(album, {"images": [
+        _image("kneel", pose="kneel", view="front", usable="pose"),
+    ]})
+    got = storyboard_service.pose_gap(sid)
+    assert got["n_holes"] == 0, got
+    assert _map_rows(sid) == []
+    n = db.one(
+        "SELECT COUNT(*) AS n FROM scene_pose_map WHERE song_id=?", sid)["n"]
+    assert n == 0, n
 
 
 def test_t4_23_api_returns_holes_only():
@@ -267,3 +253,45 @@ def test_t4_23_api_returns_holes_only():
         assert "needs" not in body
     assert _map_rows(sid) == []
     assert _coverage_n(sid) == 0
+
+
+def test_t2_51_draft_map_is_a_different_call():
+    """After classify, map row count is unchanged; draft writes status=draft."""
+    import scene_pose_map
+    tiers.ensure_builtins()
+    stamp = f"t251-draft-{time.time_ns()}"
+    album = f"T251D {stamp}"
+    sid = db.upsert_song(
+        stamp, title="T2-51 Draft Song", album=album, duration=8.0)
+    song = db.one("SELECT * FROM songs WHERE id=?", sid)
+    _write_board(sid, song["slug"], "r", [
+        _scene(1, "kneeling", "medium"),
+    ], album)
+    classification.save(album, {"images": [
+        _image("kneel-front", pose="kneel", view="front", wardrobe="clothed",
+               usable="pose"),
+    ]})
+    assert _map_rows(sid) == []
+    storyboard_service.pose_gap(sid)
+    assert _map_rows(sid) == []
+
+    with TestClient(appmod.app) as client:
+        posted = client.post(f"/api/songs/{sid}/storyboard/r/pose-map")
+        assert posted.status_code == 200, posted.text
+        body = posted.json()
+        assert body["n_rows"] == 1, body
+        assert body["n_draft"] == 1, body
+        assert body["scenes"][0]["status"] == "draft", body
+        assert body["scenes"][0]["keeper_id"] == "kneel-front", body
+
+    rows = _map_rows(sid, "r")
+    assert len(rows) == 1, rows
+    assert rows[0]["status"] == "draft"
+    assert rows[0]["keeper_id"] == "kneel-front"
+    classification.save(album, {"images": [
+        _image("kneel-front", pose="kneel", view="front", wardrobe="clothed",
+               usable="pose"),
+    ]})
+    assert len(_map_rows(sid, "r")) == 1
+    listed = scene_pose_map.listed(sid, "r")
+    assert listed["n_draft"] == 1

@@ -163,8 +163,8 @@ the eight things that must become true; they are not a new contract.
 | P6 | Every rendered artefact is measured against the workflow that asked for it, never against a constant. A mixed-model clip is judged at its native fps, not the song's output fps. An interpolated clip is judged at RIFE `(n-1)*m+1` frames and `make_postproc.out_fps`, not `n*m` / `fps*m`. A silent or near-silent take is rejected on measured low/mid/high band energy, not peak volume. A take with DC offset above `DC_OFFSET_LIMIT` is flagged. An assembled song's clip count is judged against `len(build_song.clip_plan)`, not `scene_count` | `T3-2`, `T3-4`, `T3-7`, `T3-8`, `T3-9`, `T3-4.3-dc`, `T3-4.4-nclips` **built** (`test_t3_4_4_nclips.py`), `T2-13f` |
 | P7 | A finding arrives actionable — measured, expected, unit, a remedy class, and an editable prompt — and nothing runs without approval. A dismissed finding stays off the queue until the artefact itself changes. The remedy that RUNS is the stored prompts row. Approving produces a new candidate; original and repair are both listed and scored | `T3-18`, `T3-19` **built** (`GET /qc` finding-row + `test_t3_19_finding_row.py`: two HTML approvals submit two jobs), `T3-20`, `T3-21`, `T3-22`, `T3-27` |
 | P8 | Identity is the text lock plus her photographs as image1. Empty `character_reference` is refused. A stranger plate as image1 is refused. Identity-wrong remedy is edit the text, not swap a stranger plate | `T2-31`, `T2-32`, `T2-56`, `T3-17`, `T3-28`, `T3-35` |
-| P9 | A board produces a coverage list of needed poses; classify does not write the pose→scene map | `T2-50`, `T2-51` |
-| P10 | Scene refs generate only from an accepted map row; one chosen front is not image1 for every scene | `T2-52`, `T2-56` |
+| P9 | A board produces a coverage list of needed poses; classify does not write the pose→scene map | `T2-50`, `T2-51` **built** |
+| P10 | Scene refs generate only from an accepted map row; one chosen front is not image1 for every scene | `T2-52` **built**; `T2-56` not |
 | P11 | One location plate per location key, reused; unset/studio has no plate | `T2-53` |
 | P12 | Ceiling + ticked-lower backfill: r+pg13 writes both; r-only does not write pg13; g ceiling writes no nude | `T2-54`, `T4-24` |
 | P13 | Every scene is LTX first. Marked lip scenes then the decoded s2v hop. D7 look is NOT MEASURED until a GPU pair | `T2-55`, `T5-11`, `T5-12`, `T3-37` |
@@ -194,10 +194,12 @@ holes only, no `scene_pose_map`. `T4-24` ceiling-tier pose generate
 **built** (`test_t4_24_ceiling_generate.py`): holes → studio jobs at
 the run ceiling; clothed+nude iff r/xxx; g/pg13 clothed only, no
 anatomy. `T7-21` C1/C2 resolver **built** (`test_t7_21_c1_c2_resolver.py`).
-`T2-51` is **partial**: classify + gap write zero map rows
-(`test_t2_51_classify_cannot_write_map.py`); the draft map itself is
-`T2-52` and is **not built**. **P10–P13 are not built** except the
-pieces named above. P12's generate half is `T4-24`; C1/C2 graphs are
+`T2-51` **built** (`test_t2_51_classify_cannot_write_map.py`):
+classify + gap write zero map rows; `POST .../pose-map` drafts
+`status=draft`. `T2-52` **built** (`test_t2_52_map_accept.py`):
+Accept/Reject per scene; `start_refs` refuses draft/rejected;
+accepted writes a still. **P10 is partial** (`T2-56` not built —
+image1 is still the album front). **P11–P13 are not built**. P12's generate half is `T4-24`; C1/C2 graphs are
 `T7-21`; board backfill `T2-54` is still not. Anchors-on-model and
 this loop beat the timeline (`§6.0`). Do not mark a row built until
 the named test can go red.
@@ -462,11 +464,11 @@ order and take the dependencies from here.
    ref slots (image3 when a pose plate holds image2); extras/background
    never take those slots even with a sheet
    (`test_cast_slots_only_leads_with_chosen_sheets_take_image2_and_image3`).
-   **Pose plates leftover (auto-bind, no Accept):** `pose_plan` binds
-   each scene to a chosen sheet and puts that file on image2; identity
-   front stays image1 for every scene (`test_pose_plan.py`). Product is
-   `T2-51`/`T2-52`/`T2-56`: draft map + Accept; that scene's keeper is
-   image1. The row's Pinned / Suggested UI can stay as the Accept
+   **`T2-51`/`T2-52` built**: draft map + Accept per scene
+   (`test_t2_51_classify_cannot_write_map.py`,
+   `test_t2_52_map_accept.py`). `start_refs` refuses draft/rejected.
+   Identity front still image1 for every scene (`test_t2_refs_identity.py`)
+   — product leftover is `T2-56`. The row's Pinned / Suggested UI can stay as the Accept
    surface. Scene stills and clips sit in a labeled preview table;
    reroll N stills, pick one, then render the first LTX clip before
    the rest of the scene. Wardrobe in the prompt is allowed. QC

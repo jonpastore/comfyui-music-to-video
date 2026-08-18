@@ -137,8 +137,6 @@ def test_t2_50_coverage_list_from_board_writes_no_map_or_refs():
     assert n_rows == 3, n_rows
 
     assert _map_rows(sid, "xxx") == []
-    assert not db.one(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='scene_pose_map'")
     assert db.one("SELECT COUNT(*) AS n FROM refs WHERE song_id=?", sid)["n"] == refs_before
     jobs_after = list(db.q("SELECT id, kind FROM jobs WHERE song_id=?", sid))
     assert jobs_after == jobs_before, jobs_after
