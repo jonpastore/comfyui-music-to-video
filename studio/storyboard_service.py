@@ -655,6 +655,12 @@ def pose_coverage_list(song_id, tier):
     return pose_coverage.listed(song_id, tier)
 
 
+def pose_gap(song_id, character_id=None):
+    """T4-23: ceiling-board needs vs classification keepers. Holes only."""
+    import pose_coverage
+    return pose_coverage.gap(song_id, character_id=character_id)
+
+
 def persist_arc(pl, data, model="", direction=""):
     songs = playlist_tracks(pl["id"])
     titles = {s["id"]: s["title"] for s in songs}

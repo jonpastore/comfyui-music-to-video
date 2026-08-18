@@ -1,12 +1,14 @@
-"""T2-50: analyze-for-poses writes a coverage list, not a bind.
+"""T2-50 / T4-23: board coverage list, then gap vs keepers.
 
-Given a ceiling-tier storyboard, persist (pose, view, wardrobe, exposure)
-per scene. Does not write refs, jobs, or scene_pose_map. Does not import
-pose_plan.
+Analyze persists (pose, view, wardrobe, exposure) per scene. Gap reads the
+open song's ceiling board, compares to classification_json keepers, and
+emits holes only. Neither writes refs, jobs, or scene_pose_map. Does not
+import pose_plan.
 """
 import re
 import time
 
+import classification
 import db
 import storyboard_service
 import tiers
@@ -178,19 +180,7 @@ def analyze(song_id, tier):
     """
     song = storyboard_service.require_song(song_id)
     storyboard_service.require_tier(tier)
-    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?",
-                 song["id"], tier)
-    if not row:
-        raise LookupError(f"no storyboard for tier '{tier}'")
-    sb = storyboard_service.load(row, normalized=False)
-    needs = []
-    for scene in sb.get("scenes") or []:
-        if not isinstance(scene, dict):
-            continue
-        item = need_from_scene(scene, tier)
-        if item["scene_number"] is None:
-            continue
-        needs.append(item)
+    needs = _needs_from_board(song["id"], tier)
     now = time.time()
     with db.transaction():
         db.run("DELETE FROM pose_coverage WHERE song_id=? AND tier=?",
@@ -208,4 +198,101 @@ def analyze(song_id, tier):
         "tier": tier,
         "n_scenes": len(needs),
         "needs": needs,
+    }
+
+
+def _tier_rank(name):
+    return list(tiers.BUILTIN).index(name) if name in tiers.BUILTIN else -1
+
+
+def ceiling_tier(song_id):
+    """Highest storyboard tier on this song. That board is the ceiling."""
+    song = storyboard_service.require_song(song_id)
+    rows = db.q("SELECT DISTINCT tier FROM storyboards WHERE song_id=?",
+                song["id"])
+    if not rows:
+        raise LookupError("no storyboard")
+    return max((r["tier"] for r in rows), key=_tier_rank)
+
+
+def _needs_from_board(song_id, tier):
+    song = storyboard_service.require_song(song_id)
+    storyboard_service.require_tier(tier)
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?",
+                 song["id"], tier)
+    if not row:
+        raise LookupError(f"no storyboard for tier '{tier}'")
+    sb = storyboard_service.load(row, normalized=False)
+    needs = []
+    for scene in sb.get("scenes") or []:
+        if not isinstance(scene, dict):
+            continue
+        item = need_from_scene(scene, tier)
+        if item["scene_number"] is None:
+            continue
+        needs.append(item)
+    return needs
+
+
+def _keeper_key(image):
+    pose_raw = image.get("pose") or ""
+    view_raw = image.get("view") or ""
+    pose = _match(pose_raw, _POSE_CANON) or _slug(pose_raw)
+    view = _match(view_raw, _VIEW_CANON, default=_slug(view_raw) or "front")
+    wardrobe = _norm(image.get("wardrobe") or "")
+    if wardrobe in ("nude", "naked", "unclothed", "undressed"):
+        wardrobe = "nude"
+    else:
+        wardrobe = "clothed"
+    return (pose, view, wardrobe)
+
+
+def _need_key(item):
+    return (item["pose"], item["view"], item["wardrobe"])
+
+
+def gap(song_id, character_id=None):
+    """T4-23: ceiling-board needs vs classification keepers. Holes only.
+
+    Reads the open song's highest storyboard. Does not write pose_coverage,
+    refs, jobs, or scene_pose_map. usable=skip never covers a need.
+    """
+    song = storyboard_service.require_song(song_id)
+    album = (song["album"] or "").strip()
+    if not album:
+        raise ValueError("an album is needed to compare coverage")
+    tier = ceiling_tier(song["id"])
+    needs = _needs_from_board(song["id"], tier)
+    covered = {_keeper_key(im) for im in
+               classification.keepers(album, character_id)["images"]}
+    grouped = {}
+    for item in needs:
+        key = _need_key(item)
+        if key in covered:
+            continue
+        hole = grouped.get(key)
+        if hole is None:
+            hole = {
+                "pose": item["pose"],
+                "view": item["view"],
+                "wardrobe": item["wardrobe"],
+                "exposure": item["exposure"],
+                "scenes": [],
+            }
+            grouped[key] = hole
+        num = item["scene_number"]
+        if num not in hole["scenes"]:
+            hole["scenes"].append(num)
+        if item["exposure"] == "exposed":
+            hole["exposure"] = "exposed"
+    holes = sorted(grouped.values(), key=lambda h: (h["scenes"][:1] or [0])[0])
+    n_covered = sum(1 for item in needs if _need_key(item) in covered)
+    return {
+        "song_id": song["id"],
+        "album": album,
+        "tier": tier,
+        "n_needs": len(needs),
+        "n_covered": n_covered,
+        "n_holes": len(holes),
+        "holes": holes,
     }

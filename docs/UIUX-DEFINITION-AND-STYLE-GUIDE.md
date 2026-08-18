@@ -513,7 +513,8 @@ The expanded tier's **pose map** is drafted, then Accept per scene
 (`T2-52`); generate refs from draft/rejected is refused. A coverage
 meter (`T2-50` **built**, `test_t2_50_coverage_list.py`) sits above
 the map and reads `pose_coverage` from
-`POST /api/songs/{id}/storyboard/{tier}/analyze-poses`. Location plate per unique
+`POST /api/songs/{id}/storyboard/{tier}/analyze-poses`; holes vs keepers
+are `GET /api/songs/{id}/pose-gap` (`T4-23` **built**). Location plate per unique
 location key (`T2-53`) is a still, not a character sheet. Storyboard
 scene rows have a **Pose keeper** select after Accept
 (`POST .../scene/{n}/pose-sheet` is today's auto-bind leftover). The plate thumb is a
@@ -1265,7 +1266,10 @@ pose / wardrobe / usable). The document is sqlite
 wardrobe / usable) and `POST` to save; `POST .../import` seeds from a
 sidecar path. Chips UI still pending; the store is the API, not
 `anchor5/image-classification.json`. Coverage vs the open song's ceiling
-board (`T2-50`). C1 / C2 job type on generate (`T7-21`). QC remedy
+board is `GET /api/songs/{id}/pose-gap` (`T4-23` **built**,
+`test_t2_51_classify_cannot_write_map.py`): holes only, keepers from
+`classification_json` with `usable≠skip`; chips UI still pending.
+C1 / C2 job type on generate (`T7-21`). QC remedy
 line (`T3-35`). Keeper / reject; `usable=skip` never enters a
 slot (`T7-23`). Ceiling + ticked-lower backfill is visible
 (`T2-54`): r+pg13 shows both; a g run offers no nude.
@@ -1273,6 +1277,7 @@ slot (`T7-23`). Ceiling + ticked-lower backfill is visible
 **Storyboard page.** Coverage meter (needs vs keepers, no bind)
 reads `pose_coverage` after
 `POST /api/songs/{id}/storyboard/{tier}/analyze-poses` (`T2-50`
+**built**) and holes from `GET /api/songs/{id}/pose-gap` (`T4-23`
 **built**). Draft map + Accept per scene (`T2-52`), same shape as
 the arc wand. Location plate per unique key (`T2-53`); unset / studio is
 grey-studio and no plate. `needs_lip_sync` beside camera. Ceiling

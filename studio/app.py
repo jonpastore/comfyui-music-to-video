@@ -6790,6 +6790,16 @@ def api_song_pose_coverage(id: int, tier: str):
         _svc_http(e)
 
 
+@app.get("/api/songs/{id}/pose-gap")
+def api_pose_gap(id: int, character_id: Optional[int] = None):
+    """T4-23: ceiling-board needs vs classification keepers. Holes only."""
+    try:
+        return JSONResponse(storyboard_service.pose_gap(
+            get_song_or_404(id)["id"], character_id=character_id))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
+
+
 @app.get("/api/songs/{id}/pose-plan/{tier}")
 def api_pose_plan(id: int, tier: str):
     """Scenes this song needs vs chosen pose sheets. Does not write."""

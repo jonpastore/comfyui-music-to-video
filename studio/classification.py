@@ -118,6 +118,16 @@ def library(album, character_id=None):
     }
 
 
+def keepers(album, character_id=None):
+    """Library images that may cover a board need. usable=skip never covers."""
+    lib = library(album, character_id)
+    lib["images"] = [
+        im for im in lib["images"]
+        if (im.get("usable") or "").strip().lower() != "skip"
+    ]
+    return lib
+
+
 def query(album, character_id=None, view=None, pose=None, wardrobe=None,
           usable=None):
     """Images from the latest DB document, filtered by the given fields."""

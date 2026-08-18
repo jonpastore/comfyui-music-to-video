@@ -188,8 +188,10 @@ message names both halves — not "the text, not the photo".
 **P9 is partial.** `T2-50` **built** (`test_t2_50_coverage_list.py`):
 analyze writes `(pose, view, wardrobe, exposure)` per scene and no
 map/refs rows. `T4-21`/`T4-22` classification_json in sqlite **built**
-(`test_t4_21_classification_json.py`). `T2-51` (classify cannot write
-the map) is **not built**. **P10–P13 are not built** (the rest of the
+(`test_t4_21_classification_json.py`). `T4-23` gap-vs-board **built**
+(`test_t2_51_classify_cannot_write_map.py`): ceiling needs vs keepers,
+holes only, no `scene_pose_map`. `T2-51` (draft map; classify cannot
+write it) is **not built**. **P10–P13 are not built** (the rest of the
 loop). Anchors-on-model and this loop beat the timeline (`§6.0`). Do
 not mark them built until the named tests can go red.
 

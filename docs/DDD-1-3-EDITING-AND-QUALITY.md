@@ -269,6 +269,8 @@ separated row exists), the interstitial card
 (`T6-A5`: predecessor/successor pair, either selectable), and
 `pose_coverage` (`T2-50`: song, tier, scene_number, pose, view, wardrobe,
 exposure — board needs only; analyze writes this table and nothing else),
+`GET /api/songs/{id}/pose-gap` (`T4-23` **built**: ceiling board vs
+`classification_json` keepers; holes only; no table; no `scene_pose_map`),
 and `classification_json` (`T4-21`/`T4-22`: album, character_id
 NULL=protagonist, versioned document, same fields as
 image-classification.json; sidecars seed import only).

@@ -801,7 +801,7 @@ current.
 | criterion | state | commit | what was measured |
 |---|---|---|---|
 | `T2-50` coverage list from the board (no bind) | **built** | `test_t2_50_coverage_list.py` | Analyze writes `(pose, view, wardrobe, exposure)` per scene and zero `scene_pose_map` / refs rows. `POST /api/songs/{id}/storyboard/{tier}/analyze-poses`. Mutation: map row or refs job → red |
-| `T2-51` classify cannot write the map | **not built** | — | Intended: `test_t2_51_classify_cannot_write_map.py`. No `scene_pose_map` table. `pose_plan` auto-binds without Accept |
+| `T2-51` classify cannot write the map | **not built** | — | Shared mutation lives in `test_t2_51_classify_cannot_write_map.py` (`T4-23` **built**): classify + gap write zero map rows. Draft keeper→scene map (`status=draft`) is still a later call. `pose_plan` still auto-binds without Accept |
 | `T2-52` Accept-gated pose→scene map | **not built** | — | Intended: `test_t2_52_map_accept.py`. Same shape as T2-15. Generate refs from draft/rejected must fail |
 | `T2-53` location plate per location key | **not built** | — | Intended: `test_t2_53_location_plates.py`. No `location_plates`. `make_anchor.BACKDROP` is a character-sheet clause, not this |
 | `T2-54` ceiling + ticked-lower backfill | **not built** | — | Intended: `test_t2_54_ceiling_backfill.py`. r+pg13 writes both; r-only does not write pg13; g ceiling writes no nude |
