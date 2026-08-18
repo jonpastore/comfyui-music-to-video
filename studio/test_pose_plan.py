@@ -824,6 +824,11 @@ def test_bind_route_json_reports_source():
         assert 'name="sheet_id"' in page
         assert "<select" not in page.split("pose-bind", 1)[-1].split("</form>", 1)[0]
         assert "<textarea" in page and 'name="pose"' in page
+        assert "Image Prompt" in page
+        assert "Video Motion Prompt" in page
+        assert "Negative Prompt" in page
+        assert "Stills and clips share this box" in page
+        assert page.find("video-motion-field") < page.find("clips-head")
         assert 'id="pose-gallery"' in page
         assert 'id="pose-gallery-q"' in page
         assert 'id="pose-gallery-grid"' in page

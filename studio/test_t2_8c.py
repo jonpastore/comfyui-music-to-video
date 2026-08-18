@@ -124,3 +124,17 @@ def test_t2_8c_repeated_tags_stay_distinct():
         s["lyric_sections"] = [t for t in s["lyric_sections"] if t != "Verse"]
     with pytest.raises(ValueError, match="not named"):
         grok.validate(broken, exemplar={}, expect_scenes=2)
+
+
+def test_compose_fills_empty_video_motion_from_motion_and_camera():
+    grok = _grok()
+    raw = [_scene(1)]
+    raw[0]["video_motion_prompt"] = ""
+    raw[0]["motion"] = "walks"
+    raw[0]["camera"] = "wide"
+    sb = grok._compose(
+        {"title": "T", "album": "A", "duration": 10},
+        "r", "g", "note", "[Verse]\na", raw, 1, 5.0)
+    got = sb["scenes"][0]["video_motion_prompt"]
+    assert "walks" in got
+    assert "wide" in got

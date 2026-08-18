@@ -54,39 +54,39 @@
         action="/songs/{{ song.id }}/storyboard/{{ tier }}/scene/{{ r.num }}">
     <div class="field-row">
       {% for f in ("name", "cue", "duration_guidance") %}
-      <label>{{ f.replace("_", " ") }}
+      <label>{{ f.replace("_", " ").title() }}
         <input type="text" name="{{ f }}" value="{{ r.scene[f] or "" }}">
       </label>
       {% endfor %}
     </div>
     <div class="field-row">
-      <label>camera
+      <label>Camera
         <input type="text" name="camera" value="{{ r.scene.camera or "" }}">
       </label>
-      <label>video model
+      <label>Video Model
         <input type="text" name="video_model" value="{{ r.scene.video_model or "" }}"
                placeholder="job default">
       </label>
       <label class="check" title="LTX first, then the decoded s2v lip hop (T2-55). Unchecked is LTX only.">
         <input type="checkbox" name="needs_lip_sync" value="true"
                {% if r.scene.needs_lip_sync %}checked{% endif %}>
-        needs lip sync</label>
-      <label>motion
+        Needs Lip Sync</label>
+      <label>Motion
         <input type="text" name="motion" value="{{ r.scene.motion or "" }}">
       </label>
     </div>
     <div class="field-row">
-      <label>location
+      <label>Location
         <input type="text" name="location" value="{{ r.scene.location or "" }}">
       </label>
-      <label>lighting
+      <label>Lighting
         <input type="text" name="lighting" value="{{ r.scene.lighting or "" }}">
       </label>
     </div>
   </form>
 
   <div class="pose-row">
-    <label class="pose-word-field">pose
+    <label class="pose-word-field">Pose
       <textarea name="pose" form="scene-form-{{ r.num }}" rows="3"
                 title="The scene's pose word. The matcher uses this to suggest a plate.">{{ r.scene.pose or "" }}</textarea>
     </label>
@@ -169,16 +169,14 @@
   </div>
 
   <div class="scene-form stack-form">
-  <label>story
+  <label>Story
     <textarea name="story" form="scene-form-{{ r.num }}" rows="2">{{ r.scene.story or "" }}</textarea>
   </label>
-  <label>image prompt
+  <label>Image Prompt
     <textarea name="image_prompt" form="scene-form-{{ r.num }}" rows="5">{{ r.scene.image_prompt or "" }}</textarea>
   </label>
-  <label>video motion prompt
-    <textarea name="video_motion_prompt" form="scene-form-{{ r.num }}" rows="2">{{ r.scene.video_motion_prompt or "" }}</textarea>
-  </label>
-  <label>negative prompt
+  <label>Negative Prompt
+    <span class="hint">Stills and clips share this box. It is sent as the image negative and the video negative.</span>
     <textarea name="negative_prompt" form="scene-form-{{ r.num }}" rows="2">{{ r.scene.negative_prompt or "" }}</textarea>
   </label>
   <div class="scene-save-row">
@@ -186,7 +184,7 @@
             title="Save scene {{ r.num }} — writes these fields into the storyboard JSON."
             aria-label="Save scene {{ r.num }} — writes these fields into the storyboard JSON.">
       {{ glyph_save() }}
-      <span>Save scene</span>
+      <span>Save Scene</span>
     </button>
     <span class="save-note" aria-live="polite"></span>
   </div>
@@ -306,6 +304,10 @@
     </div>
 
     <div class="media-row clips-row">
+      <label class="video-motion-field">Video Motion Prompt
+        <textarea name="video_motion_prompt" form="scene-form-{{ r.num }}" rows="2"
+                  title="What the clip does over time. Storyboard generate fills this from motion and camera when the model leaves it blank.">{{ r.scene.video_motion_prompt or "" }}</textarea>
+      </label>
       <div class="clips-head">
         <h4>Clips</h4>
         <form method="post" action="/songs/{{ song.id }}/clips" class="clip-bar">
@@ -393,7 +395,8 @@
           <div class="still-thumb">
             <div class="thumb-open clip-fail-well" aria-hidden="true"></div>
           </div>
-          <figcaption>failed · job #{{ j.id }}</figcaption>
+          <figcaption>Render failed · job #{{ j.id }}</figcaption>
+          <p class="clip-fail-note">Not QC. The clip job died before a file landed.</p>
           {% if j.error %}<p class="clip-fail-err" title="{{ j.error }}">{{ j.error }}</p>{% endif %}
         </figure>
         {% endfor %}

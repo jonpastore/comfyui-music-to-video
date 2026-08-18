@@ -1439,6 +1439,8 @@ def gen_clips(slug, tier, storyboard_json, mp3_path, ref_paths, progress=None, l
         args += ["--control-video", control_video]
     if refine:
         args.append("--refine")
+    if only is not None:
+        args += ["--only", ",".join(str(int(i)) for i in sorted({int(x) for x in only}))]
     with tempfile.TemporaryDirectory() as wf_dir:
         _run_script("build_song.py", [*args, "--outdir", wf_dir], progress)
         if prev_clip and only is not None:

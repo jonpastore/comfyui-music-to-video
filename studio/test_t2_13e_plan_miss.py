@@ -111,6 +111,29 @@ def test_t2_13e_main_refuses_before_writing_clip_graphs(tmp_path, monkeypatch):
     assert not list(outdir.glob("clip_*.json"))
 
 
+def test_t2_13e_only_skips_full_track_refuse(tmp_path, monkeypatch):
+    """A scene-scoped --only render must not die on the whole-song miss."""
+    monkeypatch.setattr(build_song, "audio_duration", lambda p: 237.672)
+    sb = {
+        "scenes": [dict(SCENE, scene_number=1, length_seconds=5.0)],
+        "character_reference": "c",
+        "album_world_reference": "w",
+    }
+    storyboard = tmp_path / "sb.json"
+    storyboard.write_text(json.dumps(sb))
+    audio = tmp_path / "song.mp3"
+    audio.write_bytes(b"x")
+    outdir = tmp_path / "out"
+    outdir.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "build_song.py", "--storyboard", str(storyboard),
+        "--audio", str(audio), "--slug", "t213eonly",
+        "--outdir", str(outdir), "--only", "0",
+    ])
+    build_song.main()
+    assert (outdir / "clip_000.json").exists()
+
+
 def test_t2_13e_assemble_comment_does_not_assume_chunk_overrun():
     mixer = _real_module("mixer")
     assert mixer is not None, "real mixer.py failed to import"

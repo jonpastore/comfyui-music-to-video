@@ -742,6 +742,10 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
         # actors). Dicts keep the role they arrived with so a missing or
         # free-text role can fail write/validate instead of being invented.
         s["characters"] = normalize_scene_figures(s.get("characters"))
+        if not (s.get("video_motion_prompt") or "").strip():
+            bits = [b for b in ((s.get("motion") or "").strip(),
+                                (s.get("camera") or "").strip()) if b]
+            s["video_motion_prompt"] = "; ".join(bits) or "holds the asked pose"
         # The guardrail is deliberately NOT written into image_prompt. It is
         # applied by build_refs.workflow()/build_song.workflow() at the point the
         # prompt is built -- the one chokepoint every storyboard reaches, however

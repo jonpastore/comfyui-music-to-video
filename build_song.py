@@ -1274,6 +1274,8 @@ def main():
     ap.add_argument("--control-video", help="s2v only: a driving clip for pose/structure (path)")
     ap.add_argument("--refine", action="store_true",
                     help="T5-A second pass on LTX takes (not the s2v hop)")
+    ap.add_argument("--only", default="",
+                    help="comma-separated clip_idx subset; skips T2-13e full-track refuse")
     ap.add_argument("--outdir", required=True)
     args = ap.parse_args()
 
@@ -1298,7 +1300,15 @@ def main():
         plan_clips.append(entry)
         if rec["model"] != "s2v":
             ltx_plan_clips.append((i, clip_scene, shot_directive(clip_scene, i)))
-    refuse_plan_miss(ltx_plan_clips, dur)
+    only_idxs = None
+    raw_only = (args.only or "").strip()
+    if raw_only:
+        only_idxs = {int(x) for x in raw_only.split(",") if x.strip()}
+        plan_clips = [e for e in plan_clips if e[0] in only_idxs]
+        if not plan_clips:
+            raise ValueError(f"--only {sorted(only_idxs)} matched no planned clip")
+    else:
+        refuse_plan_miss(ltx_plan_clips, dur)
     nclips = len(plan_clips)
     # grok._compose stores the rating as version; T10-18 reads it here so a
     # g/pg13 storyboard depicting a child is not refused at the builder.

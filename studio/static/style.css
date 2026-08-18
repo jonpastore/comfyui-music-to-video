@@ -1610,6 +1610,21 @@ img.lazy-src, video.lazy-src {
   background: var(--panel);
   border: 1px solid var(--danger);
 }
+.video-motion-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0 0 0.65rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.video-motion-field textarea { width: 100%; }
+.clip-fail-note {
+  margin: 0.15rem 0 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+  max-width: 190px;
+}
 .clip-fail-err {
   margin: 0.2rem 0 0;
   font-size: 0.7rem;

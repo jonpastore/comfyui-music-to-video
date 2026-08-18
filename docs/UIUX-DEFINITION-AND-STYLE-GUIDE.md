@@ -572,7 +572,12 @@ opens `#tip-modal` (stays until Close / Esc) — not inline save-note
 text. Opening a scene loads that row's thumbs immediately.
 `GET /api/songs/{id}/pose-plan/{tier}` is the same object
 (`test_pose_plan.py`).
-Scene media is stacked rows: pose word, then plate controls, then
+Scene field labels are Init Cap (Story, Image Prompt, Video Motion
+Prompt, Negative Prompt). Negative Prompt is one box for stills and
+clips — a hint says so. Video Motion Prompt sits above the Clips
+strip, not with the stills. Storyboard generate fills a blank
+`video_motion_prompt` from motion + camera (`test_compose_fills_empty_video_motion_from_motion_and_camera`).
+A failed clip card says **Render failed** and “Not QC”. Scene media is stacked rows: pose word, then plate controls, then
 **reference stills** and **clips** each scroll sideways
 (no wrap). The cue/camera/location line is not repeated above the
 fields. Stills show every candidate, **Use this still** approves one.
