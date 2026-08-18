@@ -348,7 +348,7 @@ character."* — the capability loss stated in full.
 
 ---
 
-## 9. Status against the tree, 2026-08-17
+## 9. Status against the tree, 2026-08-18
 
 #529 library rows. T4-1…T4-20 stay in the 2026-08-15 ledger below.
 

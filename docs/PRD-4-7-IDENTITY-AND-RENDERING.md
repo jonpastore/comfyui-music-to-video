@@ -157,16 +157,18 @@ use-as-ref ticked, `gen_anchor`'s images list is exactly that sheet.
 **NOT MEASURED**. **0 chosen studio anchors** — the factory is still on
 step 1.
 
-**P13 (the loop) is not built.** `T2-50` coverage list **is**
+**P13 (the loop) is partial.** `T2-50` coverage list **is**
 (`test_t2_50_coverage_list.py`). `T4-21`/`T4-22` classification_json
 in sqlite **is** (`test_t4_21_classification_json.py`): album +
-character, versioned, queryable; sidecars seed import only. `T4-24`
-ceiling-tier pose generate **is** (`test_t4_24_ceiling_generate.py`):
-pose-gap holes → studio jobs at the run ceiling; clothed+nude iff
-r/xxx. `T7-21` C1/C2 resolver **is** (`test_t7_21_c1_c2_resolver.py`):
-same-pose encode vs empty 896×1216 + her keepers. Accept-gated
-map, location plates, LTX-first, decoded s2v hop are not: see TRD-2
-`T2-51`…`T2-56` and TRD-5 `T5-11`…`T5-15`.
+character, versioned, queryable; sidecars seed import only. `T4-23`
+gap **is**. `T2-51` classify-cannot-write-map **is** (same test);
+the draft map (`T2-52`) is not. `T4-24` ceiling-tier pose generate
+**is** (`test_t4_24_ceiling_generate.py`): pose-gap holes → studio
+jobs at the run ceiling; clothed+nude iff r/xxx. `T7-21` C1/C2
+resolver **is** (`test_t7_21_c1_c2_resolver.py`): same-pose encode
+vs empty 896×1216 + her keepers. Accept-gated map, location plates,
+LTX-first, decoded s2v hop are not: see TRD-2 `T2-52`…`T2-56` and
+TRD-5 `T5-11`…`T5-15`.
 
 ## 5. Priorities
 

@@ -12,7 +12,9 @@ measurement that cannot fail is not evidence) is **built** as
 exemplar is the T6-A4 stub differential on `/queue`.
 
 **Every "built" and "not built" below was read off the tree at `7de0aea` (refreshed 2026-08-15), then
-reconciled to the TRD-1/2/3 ledgers at `d782d2e` on 2026-08-16.** The 2026-08-13 snapshot was `f9ca597`. TRD-3 §2.1 records what happens otherwise: a "do not rebuild"
+reconciled to the TRD-1/2/3 ledgers at `d782d2e` on 2026-08-16, then
+to the 2026-08-18 ledgers (`T2-51` partial; `T4-21`…`T4-24` / `T7-21`
+built).** The 2026-08-13 snapshot was `f9ca597`. TRD-3 §2.1 records what happens otherwise: a "do not rebuild"
 table that omitted the QC implementation, which is the omission most likely to
 cost a rewrite. Built-state is the TRD ledgers. Where a claim here is a measurement, the command that produced it
 is named.
@@ -791,7 +793,8 @@ Product is `T2-56`: image1 is the accepted keeper for **that** scene,
 plus the location plate when the scene has one. `test_t2_refs_identity.py`
 guards the old lock; `test_t2_56_per_scene_keeper.py` is the #529
 check and is **not built**. `pose_plan` auto-binds image2 without
-Accept (`T2-51`/`T2-52` **not built**).
+Accept (`T2-51` **partial** — classify writes no map;
+`T2-52` Accept-gated draft **not built**).
 
 `T2-30` is **built**. `unanchored_leads(rows)` returns names of figures
 with `role == "lead"` and no chosen anchor. Storyboard HTML banner,

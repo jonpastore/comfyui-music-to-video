@@ -5,10 +5,13 @@ Sequencing and review record: `docs/PLAN-TRD-4-7.md`,
 `docs/reviews/PLAN-TRD-4-7-RECOMMENDATIONS-2026-08-13.md`. Sibling:
 `docs/DDD-1-3-EDITING-AND-QUALITY.md`.
 
-**Rewritten 2026-08-17 for Jarvis #529 (D1–D10).** Built-state is the
-TRD-4/5/7 ledgers. The one-line pipeline (operator photos → one chosen
-front → `gen_refs` image1 for every scene → `ltx25` or `s2v`) is
-retired. Every claim that is a measurement names what it was read from.
+**Rewritten 2026-08-17 for Jarvis #529 (D1–D10).** Reconciled
+2026-08-18: `T2-50`, `T4-21`…`T4-24`, `T7-21` **built**; `T2-51`
+**partial** (classify writes no map; draft/Accept is `T2-52`).
+Built-state is the TRD-4/5/7 ledgers. The one-line pipeline (operator
+photos → one chosen front → `gen_refs` image1 for every scene →
+`ltx25` or `s2v`) is retired. Every claim that is a measurement names
+what it was read from.
 
 ---
 

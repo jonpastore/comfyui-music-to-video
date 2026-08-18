@@ -802,13 +802,13 @@ check is true, and forcing the check true SUBMITS.
 
 ---
 
-## Status against the tree, 2026-08-17
+## Status against the tree, 2026-08-18
 
 #529 QC rows. T3-1…T3-33 stay in the 2026-08-13 ledger below.
 
 | criterion | state | commit | what was measured |
 |---|---|---|---|
-| `T3-34` C1/C2 landing scored like an anchor | **not built** | — | Intended: `test_t3_34_pose_still_qc.py`. Pose-library generate is sidecar `batch_edit`, not the studio loop |
+| `T3-34` C1/C2 landing scored like an anchor | **not built** | — | Intended: `test_t3_34_pose_still_qc.py`. Pose-gap generate is now studio `anchor` jobs (`T4-24` **built**), not sidecar `batch_edit`. Those landings are still not scored like an anchor candidate |
 | `T3-35` settings remedies (latent / denoise / CFG / pose-match / plate-absent / body-colour) | **not built** | — | Intended: `test_t3_35_settings_remedies.py`. Image FLAG/REJECT is still `edit-text` only (`T3-33.a`) |
 | `T3-36` image-latent sheets do not FAIL for inheriting source size | **not built** | — | Intended: `test_t3_36_image_latent_size.py`. `T3-4.1-resolution` compares exact WxH with no image-latent exemption |
 | `T3-37` D7 look (lips + her + blocking) | **not built**; **NOT MEASURED** | — | Intended: `test_t3_37_d7_look.py`. No same-scene GPU pair. Do not rank on warm px |
