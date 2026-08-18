@@ -39,7 +39,7 @@ is not a studio feature.
 | `studio/app.py` | the anchor routes, `ANCHOR_VIEWS` labels, `ANCHOR_RENDER_FLAGS`, `DENOISE_CHOICES`, the preview; song-page `pose_library_by_tier` (chosen sheets, not just identity front); `start_refs` freezes `pose_plan` binds into `pose_bases` |
 | `studio/pose_plan.py` | scene need-text → chosen sheet match; `plan` / `bind_scene` / `freeze_auto_binds` / `album_coverage`; no FastAPI. Not the T2-50 writer |
 | `studio/pose_coverage.py` | T2-50 analyze-for-poses (writes `pose_coverage` only); T4-23 `gap` reads the open song's ceiling board vs `classification.keepers` and emits holes only; T4-24 `generate` delegates to `pose_generate`; no FastAPI; does not import `pose_plan`; analyze/gap never write `scene_pose_map` |
-| `studio/pose_generate.py` | T4-24 ceiling-tier pose generate from gap holes; clothed+nude iff r/xxx; g/pg13 clothed only, no anatomy; enqueues studio `anchor` jobs (`source=pose-gap`); no FastAPI; not `batch_edit` |
+| `studio/pose_generate.py` | T4-24 ceiling-tier pose generate from gap holes; clothed+nude iff r/xxx; g/pg13 clothed only, no anatomy; T7-21 `resolve_c1_c2` (C1 image latent + denoise 1.0 + source pose vs C2 empty 896×1216 + her keepers); denoise labels shared with `app.denoise_choices`; enqueues studio `anchor` jobs (`source=pose-gap`); no FastAPI; not `batch_edit` |
 | `studio/classification.py` | T4-21 / T4-22 album pose library; versioned `classification_json` in sqlite; `library` / `query` / `save` / `import_sidecar` / `keepers` (`usable≠skip`); no FastAPI. Sidecar is import seed only |
 | `studio/prompts.py` | `PROMPT_TYPES` — composer fields plus `view:<key>` generated from `VIEWS` (`T7-13`), plus `backdrop`/`composite`/`pose` |
 | `studio/tiers.py` | `compose_guardrail`, `check_text` (tier-aware: g/pg13 may depict T10-18; r lyrics/narrative mention T10-18a), `screen_work_for_tier` / `screen_escalation` / `check_escalation` (T10-19 entry; T10-20 ignores override kwargs), `check_override`, `check_tier_policy` |
@@ -67,7 +67,8 @@ gap vs this board (`GET /api/songs/{id}/pose-gap`, T4-23 **built**)
         → holes only; no scene_pose_map
         → ceiling-tier generate from holes (`POST /api/songs/{id}/pose-generate`,
            T4-24 **built**: clothed+nude iff r/xxx)
-        → C1 same-pose / C2 new-pose graphs still T7-21 (**not built**)
+        → C1 same-pose / C2 new-pose (`T7-21` **built**,
+           `test_t7_21_c1_c2_resolver.py`)
         │
         ▼
 QC each landing (T3-34); keeper / reject; usable≠skip (T7-23)
@@ -501,7 +502,7 @@ code rather than in documents.
   why the walker exists.
 - **`DENOISE_CHOICES`' labels vs `latent_mode`** — §4, `T7-8`. One resolver, or
   the label and the graph drift the moment either moves. `T7-21` is
-  the same resolver for C1/C2 (**not built**).
+  the same resolver for C1/C2 (**built**, `test_t7_21_c1_c2_resolver.py`).
 - **Clip-hop labels vs the graph** — LTX always; s2v if
   `needs_lip_sync`; T5-A if refine. A control that says "lip-sync"
   must not emit s2v-only (`T5-11`, **not built**).
@@ -517,7 +518,8 @@ code rather than in documents.
   `POST /api/songs/{id}/pose-generate` (`T4-24` **built**,
   `test_t4_24_ceiling_generate.py`). Highest ticked tier this run.
   Clothed+nude iff r/xxx. g/pg13: clothed only, no anatomy. Studio
-  `anchor` jobs, not sidecar `batch_edit`. C1/C2 graphs remain `T7-21`.
+  `anchor` jobs, not sidecar `batch_edit`. C1/C2 graphs are `T7-21`
+  (**built**).
 
 ## 8. How this design is verified
 

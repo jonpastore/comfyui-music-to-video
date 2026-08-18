@@ -193,10 +193,11 @@ map/refs rows. `T4-21`/`T4-22` classification_json in sqlite **built**
 holes only, no `scene_pose_map`. `T4-24` ceiling-tier pose generate
 **built** (`test_t4_24_ceiling_generate.py`): holes → studio jobs at
 the run ceiling; clothed+nude iff r/xxx; g/pg13 clothed only, no
-anatomy. `T2-51` (draft map; classify cannot write it) is **not built**.
+anatomy. `T7-21` C1/C2 resolver **built** (`test_t7_21_c1_c2_resolver.py`).
+`T2-51` (draft map; classify cannot write it) is **not built**.
 **P10–P13 are not built** (the rest of the loop). P12's generate half
-is `T4-24`; board backfill `T2-54` is still not. Anchors-on-model and
-this loop beat the timeline (`§6.0`). Do
+is `T4-24`; C1/C2 graphs are `T7-21`; board backfill `T2-54` is still
+not. Anchors-on-model and this loop beat the timeline (`§6.0`). Do
 not mark them built until the named tests can go red.
 
 ## 6. Sequencing — the part the TRDs do not have

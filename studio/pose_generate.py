@@ -1,16 +1,43 @@
-"""T4-24: ceiling-tier pose generate from pose-gap holes.
+"""T4-24 / T7-21: ceiling-tier pose generate from pose-gap holes.
 
 Library sheets at the highest ticked tier this run. Clothed+nude iff
 that ceiling allows nudity (r, xxx). g/pg13: clothed only, no anatomy.
 Never invent a higher tier than the ceiling. Studio `anchor` jobs, not
 sidecar batch_edit. No FastAPI.
+
+T7-21: one resolver picks C1 (same-pose: image latent, denoise 1.0,
+pose text matches the source) vs C2 (new-pose: empty 896×1216, her
+keepers as image1, asked pose replaces the standing clause). Denoise
+labels come from that same latent so they cannot disagree with the
+graph.
 """
+import classification
 import db
 import jobs
 import make_anchor
 import pose_coverage
 import storyboard_service
 import tiers
+
+C2_SIZE = (896, 1216)
+C1_C2_DENOISE = 1.0
+HER_KINDS = ("operator", "generated")
+PLATE_KINDS = ("plate",)
+DENOISE_VALUES = ("0.35", "0.45", "0.55", "0.65", "0.75", "1.0")
+_POSE_CLAUSE = {
+    "standing": "standing upright, arms relaxed at their sides, feet apart",
+    "kneeling": "kneeling",
+    "all-fours": (
+        "on hands and knees, hips toward the camera, back arched, "
+        "tail lifted aside, head turned to look back, knees apart"
+    ),
+    "cowgirl": "straddling, sitting on top",
+    "supine": "lying on her back, knees bent, legs parted",
+    "seated": "sitting facing the camera",
+    "crouch": "crouching",
+    "bent": "bent over",
+    "spread": "standing with legs apart",
+}
 
 # Coverage cameras → make_anchor VIEWS keys. 3qtr-rear is from-behind.
 _VIEW_TO_SHEET = {
@@ -75,6 +102,144 @@ def coverage_status(tier, sheets, holes):
             pairs.append(key)
     need = {(pose, view, wardrobe) for pose, view in pairs for wardrobe in required}
     return "green" if need <= have else "holes"
+
+
+def denoise_labels(latent, values=None):
+    """[(value, label)] for the latent the sampler will start from.
+
+    Same resolver the anchors form uses (T7-8). Below 1.0 from an empty
+    latent returns leftover noise; below 1.0 from an encoded image is
+    the point of the control.
+    """
+    values = values or DENOISE_VALUES
+    if latent == "image":
+        wording = {
+            "0.35": "0.35 — barely touched; the reference with a new surface",
+            "0.45": "0.45 — light refine, composition and pose held",
+            "0.55": "0.55 — the usable middle: same sheet, re-rendered",
+            "0.65": "0.65 — the spec's default; pose held, detail redrawn",
+            "0.75": "0.75 — heavy; keeps little more than the layout",
+            "1.0": "1.0 — full denoise, which discards the reference entirely",
+        }
+        return tuple((v, wording[v]) for v in values)
+    return tuple(
+        (v, f"{v} — refine-from-image only; from an empty latent this returns noise")
+        if v != "1.0" else
+        (v, "1.0 — full denoise, the only correct value from an empty latent")
+        for v in values
+    )
+
+
+def _canon_pose(text):
+    return (pose_coverage._match(text, pose_coverage._POSE_CANON)
+            or pose_coverage._slug(text))
+
+
+def _canon_view(text):
+    return pose_coverage._match(
+        text, pose_coverage._VIEW_CANON,
+        default=pose_coverage._slug(text) or "front")
+
+
+def pose_clause(pose):
+    """Positive pose wording for apply_pose. Empty stays the view stance."""
+    raw = " ".join((pose or "").split())
+    if not raw:
+        return ""
+    return _POSE_CLAUSE.get(_canon_pose(raw), raw)
+
+
+def is_her_keeper(image):
+    """Identity/generated stills of her. A plate is never image1 (T7-21)."""
+    if not image:
+        return False
+    kind = (image.get("kind") or "").strip().lower()
+    if kind in PLATE_KINDS:
+        return False
+    if kind and kind not in HER_KINDS:
+        return False
+    usable = (image.get("usable") or "").strip().lower()
+    return usable != "skip"
+
+
+def _her_keepers(keepers, album_images=None):
+    her = [im for im in (keepers or []) if is_her_keeper(im) and im.get("path")]
+    if her:
+        return her
+    out = []
+    for path in album_images or []:
+        if path:
+            out.append({
+                "path": path, "kind": "operator", "usable": "identity",
+                "pose": "", "view": "", "wardrobe": "clothed",
+            })
+    return out
+
+
+def _same_pose_source(asked, her):
+    want_pose = _canon_pose(asked.get("pose"))
+    want_view = _canon_view(asked.get("view"))
+    if not want_pose:
+        return None
+    for image in her:
+        if (_canon_pose(image.get("pose")) == want_pose
+                and _canon_view(image.get("view")) == want_view):
+            return image
+    return None
+
+
+def resolve_c1_c2(asked, keepers=None, album_images=None):
+    """C1 same-pose vs C2 new-pose. Latent, denoise labels, and pose text.
+
+    C1: her same pose+view still exists — encode it, denoise 1.0, pose
+    wording matches that source. C2: empty 896×1216, her keepers as
+    image1, asked pose replaces the standing clause. A stranger plate
+    never becomes the encoded latent or image1.
+    """
+    her = _her_keepers(keepers, album_images)
+    source = _same_pose_source(asked, her)
+    if source:
+        latent = "image"
+        kind = "c1"
+        pose_label = "same-pose"
+        pose = pose_clause(source.get("pose") or asked.get("pose"))
+        images = [source["path"]]
+        width = height = None
+        source_path = source["path"]
+    else:
+        latent = "empty"
+        kind = "c2"
+        pose_label = "new-pose"
+        pose = pose_clause(asked.get("pose"))
+        images = [im["path"] for im in her][:3]
+        width, height = C2_SIZE
+        source_path = None
+    labels = denoise_labels(latent)
+    return {
+        "kind": kind,
+        "latent": latent,
+        "denoise": C1_C2_DENOISE,
+        "width": width,
+        "height": height,
+        "pose": pose,
+        "pose_label": pose_label,
+        "images": images,
+        "source_path": source_path,
+        "denoise_label": dict(labels)[str(C1_C2_DENOISE)],
+        "denoise_labels": labels,
+    }
+
+
+def c1_c2_render(resolved):
+    """make_anchor flags for a T7-21 decision. Keys match ANCHOR_RENDER_FLAGS."""
+    render = {
+        "latent": resolved["latent"],
+        "denoise": resolved["denoise"],
+    }
+    if resolved.get("kind") == "c2":
+        render["width"] = resolved.get("width") or C2_SIZE[0]
+        render["height"] = resolved.get("height") or C2_SIZE[1]
+    return render
 
 
 def _album_images(album, character_id=None):
@@ -146,22 +311,27 @@ def generate(song_id, run_tiers, character_id=None, images=None, n=4):
     if images is None:
         images = _album_images(planned["album"], character_id)
     images = list(images or [])
+    keepers = classification.keepers(planned["album"], character_id)["images"]
     n = max(1, min(int(n or 4), 8))
     queued = []
     for sheet in planned["sheets"]:
+        decided = resolve_c1_c2(sheet, keepers, images)
         jid = jobs.enqueue("anchor", {
             "scope_kind": "album",
             "scope_value": planned["album"],
             "tier": sheet["tier"],
             "view": sheet["sheet_view"],
-            "images": images,
+            "images": decided["images"],
             "n": n,
             "character_id": character_id,
             "prompt": "",
-            "pose": sheet["pose"],
+            "pose": decided["pose"],
             "wardrobe": sheet["wardrobe"],
             "anatomy": False,
             "source": "pose-gap",
+            "job_kind": decided["kind"],
+            "pose_label": decided["pose_label"],
+            "render": c1_c2_render(decided),
         }, song_id=planned["song_id"])
         queued.append({
             "id": jid,
@@ -170,6 +340,9 @@ def generate(song_id, run_tiers, character_id=None, images=None, n=4):
             "pose": sheet["pose"],
             "wardrobe": sheet["wardrobe"],
             "anatomy": False,
+            "job_kind": decided["kind"],
+            "pose_label": decided["pose_label"],
+            "latent": decided["latent"],
         })
     planned["jobs"] = queued
     planned["queued"] = len(queued)

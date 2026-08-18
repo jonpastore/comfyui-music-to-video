@@ -163,7 +163,8 @@ in sqlite **is** (`test_t4_21_classification_json.py`): album +
 character, versioned, queryable; sidecars seed import only. `T4-24`
 ceiling-tier pose generate **is** (`test_t4_24_ceiling_generate.py`):
 pose-gap holes → studio jobs at the run ceiling; clothed+nude iff
-r/xxx. Accept-gated
+r/xxx. `T7-21` C1/C2 resolver **is** (`test_t7_21_c1_c2_resolver.py`):
+same-pose encode vs empty 896×1216 + her keepers. Accept-gated
 map, location plates, LTX-first, decoded s2v hop are not: see TRD-2
 `T2-51`…`T2-56` and TRD-5 `T5-11`…`T5-15`.
 
@@ -181,8 +182,9 @@ statement of it:
 3. **Prove identity holds** (P5's `T7-7` + D10 colour). Harness built.
    GPU four-image set **NOT MEASURED**. Body clause still says
    jet-black (`T4-11` **partial**).
-4. **C1/C2 resolver** (`T7-21`) and location plates (`T7-22`) — not
-   built. `T7-8` image-latent is reachable; it is not the loop.
+4. **C1/C2 resolver** (`T7-21` **built**,
+   `test_t7_21_c1_c2_resolver.py`). Location plates (`T7-22`) are not
+   built. `T7-8` image-latent is the form control; the loop uses T7-21.
 5. **`--refine` is honest as a graph** (P7 / `T5-1`). D7 hop
    (`T5-12`) is not built and NOT MEASURED. Variant B does not fit
    (`T5-6`).

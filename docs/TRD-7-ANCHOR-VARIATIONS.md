@@ -303,11 +303,11 @@ That ledger's high built-rate is the **old** one-shot world.
 
 | criterion | state | commit | what was measured |
 |---|---|---|---|
-| `T7-21` C1/C2 resolver (latent + denoise labels + pose-match) | **not built** | — | Intended: `test_t7_21_c1_c2_resolver.py`. `T7-8` image-latent is reachable; it is not wired as C1 vs C2 for the loop |
+| `T7-21` C1/C2 resolver (latent + denoise labels + pose-match) | **built** | `test_t7_21_c1_c2_resolver.py` | `pose_generate.resolve_c1_c2` + pose-gap `generate` job args. C1: image latent, denoise 1.0, pose matches source, label `same-pose`. C2: empty 896×1216, her keepers as image1, asked pose via `apply_pose` (never beside standing). Labels = `denoise_choices(latent)` / the emitted graph. Mutation: C2 encodes a stranger plate → red. Mutation: C1 empty while label says same-pose → red. Mutation: pose sits beside standing → red |
 | `T7-22` location plates ≠ identity lock | **not built** | — | Intended: `test_t2_53_location_plates.py`. No `location_plates` |
 | `T7-23` use-as-ref only keepers `usable≠skip` | **not built** | — | Intended: `test_t7_23_usable_skip.py`. No `usable` field on studio keepers |
-| `T7-24` / `T4-24` ceiling-tier generate | **built** | `test_t4_24_ceiling_generate.py` | Ceiling rule is `T4-24`. C1/C2 graphs stay `T7-21` (**not built**). Generate enqueues studio `anchor` jobs from pose-gap holes; clothed+nude iff r/xxx |
-| `T7-8` `latent_mode="image"` reachable | **partial** | `d3f2f6a` | Graph + labels exist. Not the C1/C2 loop resolver |
+| `T7-24` / `T4-24` ceiling-tier generate | **built** | `test_t4_24_ceiling_generate.py` | Ceiling rule is `T4-24`. C1/C2 graphs are `T7-21` (**built**). Generate enqueues studio `anchor` jobs from pose-gap holes; clothed+nude iff r/xxx |
+| `T7-8` `latent_mode="image"` reachable | **built** | `d3f2f6a` | Graph + labels exist. C1/C2 loop resolver is `T7-21` |
 | `T7-9` no silent composition plate | **built** (character sheet) | `d3f2f6a` | `base=None`. Does not cover location plates (`T7-22`) |
 | `T7-16` pose replaces the standing clause | **built** | `test_pose_replaces_the_view_stance_and_does_not_sit_beside_it` | Keep. C1/C2 must use this, not append |
 

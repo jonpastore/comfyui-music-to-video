@@ -273,7 +273,8 @@ exposure — board needs only; analyze writes this table and nothing else),
 `classification_json` keepers; holes only; no table; no `scene_pose_map`),
 `POST /api/songs/{id}/pose-generate` (`T4-24` **built**: ceiling-tier
 library sheets from those holes; clothed+nude iff r/xxx; g/pg13 clothed
-only, no anatomy; studio `anchor` jobs, not `batch_edit`),
+only, no anatomy; studio `anchor` jobs, not `batch_edit`; C1/C2
+graphs `T7-21` **built**, `test_t7_21_c1_c2_resolver.py`),
 and `classification_json` (`T4-21`/`T4-22`: album, character_id
 NULL=protagonist, versioned document, same fields as
 image-classification.json; sidecars seed import only).

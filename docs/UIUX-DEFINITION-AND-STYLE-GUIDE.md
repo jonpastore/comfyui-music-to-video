@@ -1279,7 +1279,10 @@ board is `GET /api/songs/{id}/pose-gap` (`T4-23` **built**,
 Generate missing poses is `POST /api/songs/{id}/pose-generate`
 (`T4-24` **built**, `test_t4_24_ceiling_generate.py`): highest ticked
 tier; r/xxx queues clothed **and** nude; a g run offers no nude and no
-anatomy. C1 / C2 job type on generate (`T7-21`). QC remedy
+anatomy. C1 / C2 job type on generate (`T7-21` **built**,
+`test_t7_21_c1_c2_resolver.py`): same-pose is image latent + denoise
+1.0; new-pose is empty 896×1216 + her keepers; labels match the graph.
+QC remedy
 line (`T3-35`). Keeper / reject; `usable=skip` never enters a
 slot (`T7-23`). Ceiling + ticked-lower backfill is visible
 (`T2-54`): r+pg13 shows both; a g run offers no nude.

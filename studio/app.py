@@ -3629,21 +3629,13 @@ DENOISE_VALUES = ("0.35", "0.45", "0.55", "0.65", "0.75", "1.0")
 def denoise_choices(latent=DEFAULT_LATENT):
     """[(value, label)], worded for the latent the sampler will actually start
     from. Below 1.0 from an EMPTY latent leaves part of the noise in the output;
-    below 1.0 from an encoded image is the point of the control."""
-    if latent == "image":
-        return tuple(
-            (v, {"0.35": "0.35 — barely touched; the reference with a new surface",
-                 "0.45": "0.45 — light refine, composition and pose held",
-                 "0.55": "0.55 — the usable middle: same sheet, re-rendered",
-                 "0.65": "0.65 — the spec's default; pose held, detail redrawn",
-                 "0.75": "0.75 — heavy; keeps little more than the layout",
-                 "1.0": "1.0 — full denoise, which discards the reference entirely"}[v])
-            for v in DENOISE_VALUES)
-    return tuple(
-        (v, f"{v} — refine-from-image only; from an empty latent this returns noise")
-        if v != "1.0" else
-        (v, "1.0 — full denoise, the only correct value from an empty latent")
-        for v in DENOISE_VALUES)
+    below 1.0 from an encoded image is the point of the control.
+
+    T7-21 C1/C2 uses this same resolver so a same-pose label cannot sit
+    on an empty-latent graph.
+    """
+    import pose_generate
+    return pose_generate.denoise_labels(latent, DENOISE_VALUES)
 
 # How many candidates a CFG sweep renders at each guidance value. Off is the
 # default and everything else is a deliberate multi-sheet job.
