@@ -1,17 +1,14 @@
-"""T2-47: one job, two scenes (s2v + ltx25) emit each model's frames/fps.
+"""T2-47 retargeted: hop 0 is LTX even when a scene is marked s2v.
 
-docs/TRD-2 W2 / T2-47: one storyboard, two scenes, one marked s2v and
-one left ltx25, rendered in a single job — and the two output clips
-carry the models' own frame counts and fps. Asserting the plan holds
-two model names proves the field posts, not that two renderers ran.
+docs/TRD-2 W2 / T2-47 asked for two renderers in one job (s2v + ltx25
+native frames/fps). T5-11 retired s2v-as-first: clip_000 of a marked
+s2v scene is ltx25. Mixed native frames return with the T5-12 hop.
 
 Asserted through build_song.main() — the writer pipeline.gen_clips /
 h_clips shells out to (T6-A10).
 
-Mutation: main() passes args.video_model to every clip → both expects
-match ltx25 and this fails.
-Mutation: write two model names on a plan and skip the graphs → this
-fails (no clip_NNN.expect.json / family nodes).
+Mutation: main() emits WanSoundImageToVideo as hop 0 for video_model=s2v
+→ this fails.
 """
 import json
 import sys
@@ -30,7 +27,7 @@ def _classes(wf):
     return {n.get("class_type") for n in wf.values()}
 
 
-def test_t2_47_one_job_two_scenes_carry_each_models_frames_and_fps(
+def test_t2_47_one_job_s2v_mark_still_emits_ltx_first(
         tmp_path, monkeypatch):
     monkeypatch.setattr(build_song, "audio_duration",
                         lambda p: 2 * build_song.CHUNK)
@@ -55,30 +52,28 @@ def test_t2_47_one_job_two_scenes_carry_each_models_frames_and_fps(
     ])
     build_song.main()
 
-    wan_path = outdir / "clip_000.json"
-    ltx_path = outdir / "clip_001.json"
-    wan_expect_path = outdir / "clip_000.expect.json"
-    ltx_expect_path = outdir / "clip_001.expect.json"
-    assert wan_path.is_file() and ltx_path.is_file()
-    assert wan_expect_path.is_file() and ltx_expect_path.is_file()
+    first_path = outdir / "clip_000.json"
+    second_path = outdir / "clip_001.json"
+    first_expect_path = outdir / "clip_000.expect.json"
+    second_expect_path = outdir / "clip_001.expect.json"
+    assert first_path.is_file() and second_path.is_file()
+    assert first_expect_path.is_file() and second_expect_path.is_file()
 
-    wan_wf = json.loads(wan_path.read_text())
-    ltx_wf = json.loads(ltx_path.read_text())
-    wan_expect = json.loads(wan_expect_path.read_text())
-    ltx_expect = json.loads(ltx_expect_path.read_text())
+    first_wf = json.loads(first_path.read_text())
+    second_wf = json.loads(second_path.read_text())
+    first_expect = json.loads(first_expect_path.read_text())
+    second_expect = json.loads(second_expect_path.read_text())
 
-    wan_classes = _classes(wan_wf)
-    ltx_classes = _classes(ltx_wf)
-    assert "WanSoundImageToVideo" in wan_classes, wan_classes
-    assert "EmptyLTXVLatentVideo" in ltx_classes, ltx_classes
-    assert "WanSoundImageToVideo" not in ltx_classes
-    assert "EmptyLTXVLatentVideo" not in wan_classes
+    first_classes = _classes(first_wf)
+    second_classes = _classes(second_wf)
+    assert "EmptyLTXVLatentVideo" in first_classes, first_classes
+    assert "EmptyLTXVLatentVideo" in second_classes, second_classes
+    assert "WanSoundImageToVideo" not in first_classes
+    assert "WanSoundImageToVideo" not in second_classes
 
-    assert wan_expect == build_song.expect_from_workflow(wan_wf)
-    assert ltx_expect == build_song.expect_from_workflow(ltx_wf)
-    assert wan_expect["frames"] == build_song.LEN
-    assert wan_expect["fps"] == build_song.FPS
-    assert ltx_expect["frames"] == build_song.LTX25_LEN
-    assert ltx_expect["fps"] == round(build_song.LTX25_FPS, 4)
-    assert wan_expect["frames"] != ltx_expect["frames"]
-    assert wan_expect["fps"] != ltx_expect["fps"]
+    assert first_expect == build_song.expect_from_workflow(first_wf)
+    assert second_expect == build_song.expect_from_workflow(second_wf)
+    assert first_expect["frames"] == build_song.LTX25_LEN
+    assert first_expect["fps"] == round(build_song.LTX25_FPS, 4)
+    assert second_expect["frames"] == build_song.LTX25_LEN
+    assert second_expect["fps"] == round(build_song.LTX25_FPS, 4)

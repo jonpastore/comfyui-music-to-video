@@ -382,7 +382,9 @@ also records the legal clip duration for that clip
 is NULL (generated before the column) still reads as `CHUNK`. The renderer
 emits that same legal length (`T2-13a`): latent frames and the audio-trim
 window follow `clip_seconds`, not a hardcoded `LTX25_LEN`/`CHUNK`; a NULL
-`length_seconds` still renders 81 frames of `CHUNK`. A mixed-model job keeps each clip's **native** frames and fps
+`length_seconds` still renders 81 frames of `CHUNK`. Hop 0 is LTX (`T5-11` **built**, `test_t5_11_ltx_always_first.py`):
+`video_model=s2v` does not skip LTX. When the T5-12 hop runs, a
+mixed-model job keeps each clip's **native** frames and fps
 (`T2-47`): s2v is 77@16.0, ltx25 is 81@16.8312; the editor must not
 show one fps as if both renderers produced it. Starting that job is
 refused before enqueue when any named model is unavailable on every
@@ -390,9 +392,9 @@ reachable backend (`T2-45`); a box that could not be asked (`None`)
 is still a candidate, not a refusal. A scene that asked for
 `ref_motion` or `control_video` pins that clip to cerberus
 (`T2-46`); the rest of the song still routes. Per-scene model and
-per-model ceilings compose (`T2-48`): a 30 s scene marked `s2v` splits
-into s2v-sized clips, a 30 s scene on `ltx25` into 15 s ones, and each
-chain tiles that scene. QC compares each clip to that native rate, not the song's output fps (`T2-13f`): using the song rate flags every correct clip of the other model. A single-clip request
+per-model ceilings compose (`T2-48`): hop 0 splits a 30 s scene on
+the LTX ceiling (15 s + 15 s) even when marked `s2v`; s2v hop
+windows are T5-12. Each chain tiles that scene. QC compares each clip to that native rate, not the song's output fps (`T2-13f`): using the song rate flags every correct clip of the other model. A single-clip request
 over the model's ceiling (`T5-9`) is a
 named refusal (measured vs chosen), not a quiet annotation; split is
 `split_to_ceiling` / `clips_for_scene`. A scene over the 15 s render ceiling
@@ -558,7 +560,8 @@ forward from ~0.2s until the frame is not black.
 **Render clip** sits on the Clips heading row with First clip only,
 Auto post (LTX refine on the LTX take, `T5-14`), and Auto QC as one
 nowrap option bar. First clip only is the default. Every scene is
-LTX first (`T5-11`). `needs_lip_sync` beside camera (`T2-55`) marks
+LTX first (`T5-11` **built**, `test_t5_11_ltx_always_first.py`).
+`needs_lip_sync` beside camera (`T2-55`) marks
 the decoded s2v hop; the control says **NOT MEASURED** until a GPU
 pair exists (`T3-37`, UIUX 7a.3). When the hop ran, the LTX
 predecessor and the s2v successor are both listed (`T6-A5`).
@@ -1360,10 +1363,11 @@ uses that scene's accepted keeper as image1 (`T2-56` **built**,
 page display is later.
 A draft or rejected row has no Generate.
 
-**Clips page.** LTX predecessor + s2v successor both listed when
-the hop ran. Refine sibling on the LTX take, not on s2v. The
-lip-sync control is marked NOT MEASURED until `T3-37` has a
-pinned pair.
+**Clips page.** Every scene is LTX first (`T5-11` **built**,
+`test_t5_11_ltx_always_first.py`). LTX predecessor + s2v successor
+both listed when the hop ran. Refine sibling on the LTX take, not
+on s2v. The lip-sync control is marked NOT MEASURED until `T3-37`
+has a pinned pair.
 
 ## 7b. The surfaces TRD 8-10 adds
 

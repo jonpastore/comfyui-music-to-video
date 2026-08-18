@@ -503,8 +503,12 @@ def requested_clip_seconds(scene, video_model="ltx25"):
 
 
 def clips_for_scene(scene, default_model="ltx25", origin=0.0):
-    """Split one scene on its model's ceiling. Clips tile the scene (T2-48 / T2-8b)."""
-    model = scene.get("video_model") or default_model
+    """Split one scene on the LTX ceiling. Hop 0 is ltx25 (T5-11 / T2-8b).
+
+    video_model=s2v and needs_lip_sync do not skip LTX. default_model is
+    kept for callers; hop 0 ignores it. T5-12 hop windows are not this.
+    """
+    model = "ltx25"
     seconds = requested_clip_seconds(scene, model)
     parts = split_to_ceiling(seconds, model)
     fps = LTX_FPS if model in ("ltx", "ltx25") else FPS
@@ -1171,9 +1175,9 @@ def main():
         # one reference per clip (build_refs.py --audio), so consecutive clips in
         # a scene are different compositions rather than the same still
         ref = f"{args.slug}_clip_{i:03d}.png"
-        # T2-42 / T2-47: a scene may name its renderer; absent, the job's
-        # --video-model. One job can therefore emit s2v and ltx25 graphs.
-        model = scene.get("video_model") or args.video_model
+        # T5-11: hop 0 is ltx25. video_model=s2v / needs_lip_sync do not
+        # skip LTX. T5-12 hop is not this emit.
+        model = scene.get("video_model") or "ltx25"
         # T2-46: a scene field is the request. Job-level --ref-motion is
         # the fallback so a whole-song upload still fills s2v clips.
         wf = workflow(i, scene, ref, audio_name, char, world, guard,
@@ -1300,11 +1304,11 @@ def demo():
     assert any(n["class_type"] == "LTXVAddGuide" for n in guided.values())
     gnode = next(n for n in guided.values() if n["class_type"] == "LTXVAddGuide")
     assert gnode["inputs"]["frame_idx"] == 0
-    # T2-48: per-scene model picks the ceiling. Same 30s, two models.
+    # T5-11: hop 0 is ltx25 even when marked s2v. Same 30s, both LTX tiles.
     s2v30 = clips_for_scene({"length_seconds": 30.0, "video_model": "s2v"})
     ltx30 = clips_for_scene({"length_seconds": 30.0, "video_model": "ltx25"})
-    assert len(s2v30) == math.ceil(30.0 / CHUNK) and len(ltx30) == 2
-    assert all(c["duration_s"] <= CHUNK + 1e-9 for c in s2v30)
+    assert len(s2v30) == 2 and len(ltx30) == 2
+    assert all(c["model"] == "ltx25" for c in s2v30)
     assert [round(c["duration_s"], 6) for c in ltx30] == [15.0, 15.0]
 
     # T5-1: --refine on ltx25 adds a second pass. Restoring the early return

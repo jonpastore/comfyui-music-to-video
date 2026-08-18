@@ -254,7 +254,7 @@ this document owns the node. The sentence stays "do not reinvent", not
 
 | criterion | state | commit | what was measured |
 |---|---|---|---|
-| `T5-11` LTX always first | **not built** | — | Intended: `test_t5_11_ltx_always_first.py`. Tree: T2-42/43 still let `video_model=s2v` skip LTX |
+| `T5-11` LTX always first | **built** | `test_t5_11_ltx_always_first.py` | `clips_for_scene` / `main()` hop 0 is `ltx25`. `video_model=s2v` or `needs_lip_sync=true` does not emit `WanSoundImageToVideo` as hop 0. Unmarked = LTX only (no T5-12 hop). Mutation: first hop s2v → red |
 | `T5-12` decoded s2v hop (`control_video` = LTX frames) | **not built**; **NOT MEASURED** | — | Intended: `test_t5_12_d7_hop.py`. No hop graph. No GPU pair (`T3-37`) |
 | `T5-13` `skip_first_frames` matches the LTX slice | **not built** | — | Intended: `test_t5_13_s2v_window.py` |
 | `T5-14` T5-A refine on the LTX take, not on s2v | **partial** | `test_clip_length.py` | `_refine_ltx` attaches A on an LTX graph. No s2v successor exists, so "not on s2v" is untested. Labels must not promise a hop the graph omits |

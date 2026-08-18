@@ -1,18 +1,15 @@
-"""T2-48: per-scene model and per-model ceilings compose.
+"""T2-48: hop 0 splits on the LTX ceiling; tiles still compose.
 
-docs/TRD-2 W2 / T2-48: a 30 s scene marked s2v splits into s2v-sized
-clips, a 30 s scene on ltx25 into 15 s ones, and each tiles its own
-scene exactly (T2-8b).
+docs/TRD-2 W2 / T2-48: a 30 s LTX take splits on the LTX ceiling.
+s2v hop windows (T5-12) are not this slice. T5-11: a scene marked
+s2v still splits on LTX as hop 0, not on CHUNK.
 
-Mutation: clips_for_scene ignores video_model → both scenes take the
-job default ceiling and the s2v arm is 2 x 15 s.
-Mutation: main() still allocates by CHUNK and hands the 30 s scene to
-workflow → honour_ceiling raises, or both families emit the same count.
+Mutation: clips_for_scene treats video_model=s2v as hop 0 → the
+s2v-marked arm is 7 x CHUNK and this fails.
 Mutation: _compose does not stamp clips / validate skips tiling → a
 gapped chain is accepted.
 """
 import json
-import math
 import os
 import sys
 
@@ -44,15 +41,12 @@ def _tiles(clips, seconds):
     assert abs(sum(c["duration_s"] for c in clips) - seconds) < 1e-9
 
 
-def test_t2_48_30s_s2v_splits_on_s2v_size_and_tiles():
+def test_t2_48_30s_s2v_mark_splits_on_ltx_ceiling_as_hop0():
     scene = dict(SCENE, scene_number=1, video_model="s2v", length_seconds=30.0)
     clips = build_song.clips_for_scene(scene)
-    limit = build_song.clip_ceiling("s2v")["seconds"]
-    assert limit == build_song.CHUNK
-    assert len(clips) == math.ceil(30.0 / limit)
-    assert len(clips) != math.ceil(30.0 / 15.0), "s2v must not take the ltx25 ceiling"
-    assert all(c["duration_s"] <= limit + 1e-9 for c in clips)
-    assert all(c["model"] == "s2v" for c in clips)
+    assert [round(c["duration_s"], 6) for c in clips] == [15.0, 15.0]
+    assert all(c["model"] == "ltx25" for c in clips)
+    assert len(clips) != 7, "s2v mark must not take the s2v ceiling as hop 0"
     _tiles(clips, 30.0)
 
 
@@ -64,27 +58,26 @@ def test_t2_48_30s_ltx25_splits_into_15s_and_tiles():
     _tiles(clips, 30.0)
 
 
-def test_t2_48_mixed_scenes_each_use_own_ceiling():
+def test_t2_48_mixed_scenes_hop0_uses_ltx_ceiling():
     scenes = [
         dict(SCENE, scene_number=1, video_model="s2v", length_seconds=30.0),
         dict(SCENE, scene_number=2, video_model="ltx25", length_seconds=30.0),
     ]
     plan = build_song.clips_for_scenes(scenes)
-    s2v = [c for c in plan if c["scene_number"] == 1]
+    marked = [c for c in plan if c["scene_number"] == 1]
     ltx = [c for c in plan if c["scene_number"] == 2]
-    assert len(s2v) == math.ceil(30.0 / build_song.CHUNK)
+    assert len(marked) == 2
     assert len(ltx) == 2
-    assert len(s2v) != len(ltx)
-    assert all(c["model"] == "s2v" for c in s2v)
+    assert all(c["model"] == "ltx25" for c in marked)
     assert all(c["model"] == "ltx25" for c in ltx)
-    _tiles(s2v, 30.0)
-    assert abs(ltx[0]["start_s"] - s2v[-1]["end_s"]) < 1e-6
+    _tiles(marked, 30.0)
+    assert abs(ltx[0]["start_s"] - marked[-1]["end_s"]) < 1e-6
     assert abs(ltx[-1]["end_s"] - 60.0) < 1e-6
     for a, b in zip(ltx, ltx[1:]):
         assert abs(a["end_s"] - b["start_s"]) < 1e-9
 
 
-def test_t2_48_compose_stamps_per_model_tiles():
+def test_t2_48_compose_stamps_ltx_tiles_on_s2v_mark():
     grok = _real_module("grok")
     raw = [
         dict(SCENE, scene_number=1, video_model="s2v", camera="wide"),
@@ -92,13 +85,14 @@ def test_t2_48_compose_stamps_per_model_tiles():
     ]
     song = {"title": "T", "album": "A", "duration": 60.0, "genre": "pop"}
     board = grok._compose(song, "pg13", "", "style", "[Verse]\na", raw, 2, 30.0)
-    s2v = board["scenes"][0]
+    marked = board["scenes"][0]
     ltx = board["scenes"][1]
-    assert s2v["video_model"] == "s2v"
+    assert marked["video_model"] == "s2v"
     assert ltx["video_model"] == "ltx25"
-    assert len(s2v["clips"]) == math.ceil(30.0 / build_song.CHUNK)
+    assert [round(c["duration_s"], 6) for c in marked["clips"]] == [15.0, 15.0]
     assert [round(c["duration_s"], 6) for c in ltx["clips"]] == [15.0, 15.0]
-    _tiles(s2v["clips"], 30.0)
+    assert all(c["model"] == "ltx25" for c in marked["clips"])
+    _tiles(marked["clips"], 30.0)
     _tiles(ltx["clips"], 30.0)
     grok.validate(board, exemplar={}, expect_scenes=2)
 
@@ -118,7 +112,7 @@ def test_t2_48_validate_refuses_untiled_clips():
         grok.validate(board, exemplar={}, expect_scenes=2)
 
 
-def test_t2_48_main_emits_s2v_sized_and_15s_graphs(tmp_path, monkeypatch):
+def test_t2_48_main_emits_ltx_graphs_for_s2v_mark(tmp_path, monkeypatch):
     monkeypatch.setattr(build_song, "audio_duration", lambda p: 60.0)
     sb = {
         "scenes": [
@@ -141,20 +135,13 @@ def test_t2_48_main_emits_s2v_sized_and_15s_graphs(tmp_path, monkeypatch):
     build_song.main()
 
     graphs = sorted(p for p in outdir.glob("clip_*.json") if ".expect." not in p.name)
-    s2v_n = math.ceil(30.0 / build_song.CHUNK)
-    assert len(graphs) == s2v_n + 2
+    assert len(graphs) == 4
 
     def _classes(path):
         wf = json.loads(path.read_text())
         return {n.get("class_type") for n in wf.values()}
 
-    s2v_graphs = graphs[:s2v_n]
-    ltx_graphs = graphs[s2v_n:]
-    for path in s2v_graphs:
-        classes = _classes(path)
-        assert "WanSoundImageToVideo" in classes, path
-        assert "EmptyLTXVLatentVideo" not in classes
-    for path in ltx_graphs:
+    for path in graphs:
         classes = _classes(path)
         assert "EmptyLTXVLatentVideo" in classes, path
         assert "WanSoundImageToVideo" not in classes

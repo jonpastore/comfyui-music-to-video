@@ -509,11 +509,12 @@ order and take the dependencies from here.
    per-model ceilings, which is P0 item 1 again. The renderer half of those
    ceilings is `T5-9`: labeled measured vs chosen, and an over-long single
    clip is refused or split. The planner divisor is unchanged.
-   **`T2-47` built**: one clips job with a scene marked `s2v` and one left
-   `ltx25` writes each model's own frames/fps
-   (`test_t2_47_mixed_model.py`). **`T2-48` built**: a 30 s `s2v` scene
-   splits on the s2v ceiling and a 30 s `ltx25` scene into 15 s clips,
-   each tiling its scene (`test_t2_48_ceilings_compose.py`).
+   **`T2-47` partial**: hop 0 is LTX even when a scene is marked `s2v`
+   (`T5-11` **built**, `test_t5_11_ltx_always_first.py`). Mixed native
+   frames return with the T5-12 hop (`test_t2_47_mixed_model.py`).
+   **`T2-48` partial**: hop 0 splits a 30 s scene on the LTX ceiling
+   even when marked `s2v`; s2v hop windows are T5-12
+   (`test_t2_48_ceilings_compose.py`).
    **`T2-45` built**: a mixed-model song is refused before enqueue when
    any named model is `False` on every reachable backend
    (`test_t2_45_enqueue_unavailable.py`); `None` stays a candidate.

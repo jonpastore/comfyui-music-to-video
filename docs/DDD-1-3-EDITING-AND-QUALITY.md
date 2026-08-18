@@ -40,7 +40,7 @@ is named.
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2 JSON-canonical arc; §3.3 `save_prompt`/`restore_prompt` (`T2-5`); `generate` records an `arc` version (`T2-7`); §4.1 wand (`require_theme`, proposal files, `apply_summaries`) | built (`T2-5`/`T2-7`/`T2-14`/`T2-15`/`T2-16`) |
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning; `restore(vid)` puts previous text back as a new version (`T2-5`); `delete` drops a row and does not renumber survivors (`T2-6`); a version stores the asked `model` and `created` (`T2-7`); `running(vid)` is the row a render RUNS (`T3-20`) | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
-| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow`, `clips_for_scene`, `chain_clip_count`, `LTXVAddGuide` handoff (`T2-10`) | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5; `main()` honours per-scene `video_model` (`T2-47`), per-model ceilings (`T2-48`), and per-scene `ref_motion` / `control_video` (`T2-46`). A scene over the 15 s LTX ceiling is `ceil(scene / ceiling)` clips; successor graph injects N's last frame at index 0 |
+| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow`, `clips_for_scene`, `chain_clip_count`, `LTXVAddGuide` handoff (`T2-10`) | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5; hop 0 is `ltx25` (`T5-11`); `T2-47`/`T2-48` hop-0 s2v-as-first retired (T5-12 hop not built); per-scene `ref_motion` / `control_video` (`T2-46`). A scene over the 15 s LTX ceiling is `ceil(scene / ceiling)` clips; successor graph injects N's last frame at index 0 |
 | `studio/db.py` | 559 | schema | `automation`, `findings` (`artefact_hash`, `remedy_class`), `artefacts`, `sets.mode_audience`, `calibrations` landed; `sets.out_fps` did not, §4 |
 | `studio/vision.py` | 516 | VLM calls, local-first | **not** tier 2, §5.6 |
 | `anchor5/poses/cleanrun/qc-pose-*.json` | — | Operator `T3-33.b` pose-then-anatomy eye gates (not a VLM). Anatomy is not composited on FAIL | process, this slice |
@@ -616,10 +616,11 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    writes no graphs. nclips-only callers are display and skip the gate.
    `assemble_song` keeps `-t audio_dur`; its comment no longer says
    clips are quantised so the video always overruns.
-4. **`T2-47` built.** `main()` takes `scene.video_model` when present, else
-   `--video-model`. One job with a scene marked `s2v` and one left `ltx25`
-   writes WAN 77@16.0 and LTX 81@16.8312 (`test_t2_47_mixed_model.py`).
-   Two names on a plan is not this check. **`T2-45` built.**
+4. **`T2-47` partial.** Hop 0 is LTX even when a scene is marked `s2v`
+   (`T5-11` **built**, `test_t5_11_ltx_always_first.py`). Mixed native
+   frames (WAN 77@16.0 + LTX 81@16.8312) return with the T5-12 hop
+   (`test_t2_47_mixed_model.py`). Two names on a plan is not this
+   check. **`T2-45` built.**
    `start_clips` asks `models.mixed_unavailable` (via `models.where()`)
    before `jobs.enqueue`: a mixed board that names a model `False` on
    every reachable backend is 400 and writes no job; `None` is a
@@ -627,14 +628,13 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    A scene with `ref_motion` / `control_video` writes
    `LoadVideosFromFolder` on that clip only; `_attempt_plan` pins it
    to cerberus and the rest of the song still free-draws
-   (`test_t2_46_driving_pins_cerberus.py`). **`T2-48` built.**
-   `clips_for_scene` / `clips_for_scenes` split a scene on *that scene's*
-   model ceiling: 30 s `s2v` → s2v-sized parts (`CHUNK`), 30 s `ltx25`
-   → 15 s + 15 s, each chain tiles its scene from 0 (`T2-8b`).
-   `grok._compose` stamps `clips` from the planned length;
-   `validate` refuses a gap or overlap. `main()` expands an over-ceiling
-   scene into that chain instead of handing 30 s to `workflow`.
-   Mutation: ignore `video_model` → both scenes take 15 s.
+   (`test_t2_46_driving_pins_cerberus.py`). **`T2-48` partial.**
+   Hop 0 splits on the LTX ceiling: 30 s marked `s2v` or `ltx25` →
+   15 s + 15 s, each chain tiles its scene from 0 (`T2-8b`). s2v hop
+   windows are T5-12. `grok._compose` stamps `clips` from the planned
+   length; `validate` refuses a gap or overlap. `main()` expands an
+   over-ceiling scene into that chain instead of handing 30 s to
+   `workflow`. Mutation: treat `video_model=s2v` as hop 0 → 7 × CHUNK.
    **`T2-11` built.** `clip_chain_plan` sets `depends_on` on same-scene
    successors. `app.enqueue_clips` (called from `start_clips`) enqueues
    one job per chain clip with `jobs.enqueue(..., depends_on=pred)`;

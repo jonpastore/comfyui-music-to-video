@@ -66,12 +66,14 @@ def _write_board(sid, slug, tier, scenes):
 
 
 def test_t2_42_absent_scene_takes_the_job_video_model():
-    """T2-42's render half: unmarked scene uses --video-model, marked keeps its own."""
+    """T5-11: hop 0 is ltx25. The field still posts; it does not skip LTX."""
     unmarked = {"length_seconds": 5.0}
     marked = {"length_seconds": 5.0, "video_model": "s2v"}
+    lip = {"length_seconds": 5.0, "needs_lip_sync": True}
     assert build_song.clips_for_scene(unmarked, default_model="ltx25")[0]["model"] == "ltx25"
-    assert build_song.clips_for_scene(marked, default_model="ltx25")[0]["model"] == "s2v"
-    assert build_song.clips_for_scene(unmarked, default_model="s2v")[0]["model"] == "s2v"
+    assert build_song.clips_for_scene(marked, default_model="ltx25")[0]["model"] == "ltx25"
+    assert build_song.clips_for_scene(unmarked, default_model="s2v")[0]["model"] == "ltx25"
+    assert build_song.clips_for_scene(lip, default_model="s2v")[0]["model"] == "ltx25"
 
 
 def test_t2_42_json_carries_video_model_beside_camera():

@@ -762,8 +762,8 @@ def _compose(song, tier, guardrail, style_note, lyrics, scenes, n_scenes, scene_
         frames = legal_frames(planned, LTX_FPS)
         s["frames"] = frames
         s["length_seconds"] = round(frames / LTX_FPS, 4)
-        # T2-48: stamp the per-model split of the planned scene length so
-        # 30 s s2v is s2v-sized and 30 s ltx25 is 15 s, each tiling the scene.
+        # T5-11 / T2-48: hop 0 splits on the LTX ceiling. s2v hop windows
+        # are T5-12. Each chain tiles the scene.
         s["clips"] = clips_for_scene(dict(s, length_seconds=float(planned)))
         out.append(s)
 

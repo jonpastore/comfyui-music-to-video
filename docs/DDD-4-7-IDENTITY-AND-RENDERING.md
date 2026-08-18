@@ -6,7 +6,7 @@ Sequencing and review record: `docs/PLAN-TRD-4-7.md`,
 `docs/DDD-1-3-EDITING-AND-QUALITY.md`.
 
 **Rewritten 2026-08-17 for Jarvis #529 (D1–D10).** Reconciled
-2026-08-18: `T2-50`, `T4-11` (charcoal-brown compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`), `T4-21`…`T4-24`, `T7-21`…`T7-23` **built**; `T3-35` **built** (`test_t3_35_settings_remedies.py`); `T2-51`
+2026-08-18: `T5-11` **built** (`test_t5_11_ltx_always_first.py`); `T2-50`, `T4-11` (charcoal-brown compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`), `T4-21`…`T4-24`, `T7-21`…`T7-23` **built**; `T3-35` **built** (`test_t3_35_settings_remedies.py`); `T2-51`
 **partial** (classify writes no map; draft/Accept is `T2-52`).
 `T2-56` **built** (`test_t2_56_per_scene_keeper.py`): accepted keeper
 for that scene is image1. `T2-53` / `T7-22` **built**
@@ -514,7 +514,8 @@ code rather than in documents.
   the same resolver for C1/C2 (**built**, `test_t7_21_c1_c2_resolver.py`).
 - **Clip-hop labels vs the graph** — LTX always; s2v if
   `needs_lip_sync`; T5-A if refine. A control that says "lip-sync"
-  must not emit s2v-only (`T5-11`, **not built**).
+  must not emit s2v-only (`T5-11` **built**,
+  `test_t5_11_ltx_always_first.py`). T5-12 hop is not built.
 - **`classification_json` vs `anchor5/*.json`** — the DB document is
   the store (`T4-21` **built**, `test_t4_21_classification_json.py`).
   Sidecars seed `import_sidecar` only (`T4-22` **built**); `library()`
