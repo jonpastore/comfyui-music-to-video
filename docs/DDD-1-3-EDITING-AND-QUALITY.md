@@ -40,7 +40,7 @@ is named.
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2 JSON-canonical arc; §3.3 `save_prompt`/`restore_prompt` (`T2-5`); `generate` records an `arc` version (`T2-7`); §4.1 wand (`require_theme`, proposal files, `apply_summaries`) | built (`T2-5`/`T2-7`/`T2-14`/`T2-15`/`T2-16`) |
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning; `restore(vid)` puts previous text back as a new version (`T2-5`); `delete` drops a row and does not renumber survivors (`T2-6`); a version stores the asked `model` and `created` (`T2-7`); `running(vid)` is the row a render RUNS (`T3-20`) | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
-| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow`, `clips_for_scene`, `chain_clip_count`, `LTXVAddGuide` handoff (`T2-10`) | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5; hop 0 is `ltx25` (`T5-11`); `T2-47` mixed native frames **built** (`test_t2_47_mixed_model.py`: LTX hop0 81@`LTX25_FPS` + s2v hop 77@16.0); `T2-48` ceilings compose **built** (`test_t2_48_ceilings_compose.py`: 30 s `needs_lip_sync` is LTX 15+15 plus per-part s2v windows); T5-12 D7 hop graph **built** (`test_t5_12_d7_hop.py`); T5-13 `skip_first_frames` **built** (`main()` hop emit + `test_t5_13_s2v_window.py`); per-scene `ref_motion` / `control_video` (`T2-46`). A scene over the 15 s LTX ceiling is `ceil(scene / ceiling)` clips; successor graph injects N's last frame at index 0 |
+| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow`, `clips_for_scene`, `chain_clip_count`, `LTXVAddGuide` handoff (`T2-10`) | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5; hop 0 is `ltx25` (`T5-11`); `T2-47` mixed native frames **built** (`test_t2_47_mixed_model.py`: LTX hop0 81@`LTX25_FPS` + s2v hop 77@16.0); `T2-48` ceilings compose **built** (`test_t2_48_ceilings_compose.py`: 30 s `needs_lip_sync` is LTX 15+15 plus per-part s2v windows); T5-12 D7 hop graph **built** (`test_t5_12_d7_hop.py`); T5-13 `skip_first_frames` **built** (`main()` hop emit + `test_t5_13_s2v_window.py`); T5-14 T5-A on LTX take **built** (`test_t5_14_refine_on_ltx_take.py`: hop `refine=False`, `control_video` = refined LTX prefix); per-scene `ref_motion` / `control_video` (`T2-46`). A scene over the 15 s LTX ceiling is `ceil(scene / ceiling)` clips; successor graph injects N's last frame at index 0 |
 | `studio/db.py` | 559 | schema | `automation`, `findings` (`artefact_hash`, `remedy_class`), `artefacts`, `sets.mode_audience`, `calibrations` landed; `sets.out_fps` did not, §4 |
 | `studio/vision.py` | 516 | VLM calls, local-first | **not** tier 2, §5.6 |
 | `anchor5/poses/cleanrun/qc-pose-*.json` | — | Operator `T3-33.b` pose-then-anatomy eye gates (not a VLM). Anatomy is not composited on FAIL | process, this slice |
@@ -310,7 +310,9 @@ Still needed, and no more than this:
     --   s2v hop, LTX refine
 
 One resolver for clip hops: LTX always; s2v if `needs_lip_sync`
-(`T2-55` **built**, `test_t2_55_needs_lip_sync.py`); T5-A if refine.
+(`T2-55` **built**, `test_t2_55_needs_lip_sync.py`); T5-A if refine,
+on the LTX take only (`T5-14` **built**,
+`test_t5_14_refine_on_ltx_take.py`).
 Labels cannot promise a hop the graph omits. Classify never
 writes `scene_pose_map`. A nude map row on g/pg13 is refused.
 

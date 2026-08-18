@@ -577,7 +577,8 @@ bar with Use this still / Fix / Delete; tall prev/next sit beside the
 image; Left/Right arrows step stills in that scene. Clip thumbs walk
 forward from ~0.2s until the frame is not black.
 **Render clip** sits on the Clips heading row with First clip only,
-Auto post (LTX refine on the LTX take, `T5-14`), and Auto QC as one
+Auto post (LTX refine on the LTX take, `T5-14` **built**,
+`test_t5_14_refine_on_ltx_take.py`), and Auto QC as one
 nowrap option bar. First clip only is the default. Every scene is
 LTX first (`T5-11` **built**, `test_t5_11_ltx_always_first.py`).
 `needs_lip_sync` beside camera (`T2-55` **built**,
@@ -1408,7 +1409,10 @@ A draft or rejected row has no Generate.
 marks the hop; hop graph is `T5-12` **built**; `T5-13`
 `skip_first_frames` **built** (`main()` hop emit). LTX predecessor + s2v
 successor both listed when the hop ran. Refine sibling on the LTX take,
-not on s2v. D7 look is NOT MEASURED until `T3-37` has a pinned pair.
+not on s2v (`T5-14` **built**, `test_t5_14_refine_on_ltx_take.py`).
+The song-page refine checkbox and `h_clips` progress name T5-A on the
+LTX take; they do not say unproven-on-s2v or i2v-low refine.
+D7 look is NOT MEASURED until `T3-37` has a pinned pair.
 
 ## 7b. The surfaces TRD 8-10 adds
 

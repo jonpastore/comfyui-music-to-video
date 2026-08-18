@@ -91,12 +91,16 @@ gen_refs: image1 = accepted keeper for THAT scene
         ▼
 LTX 2.5 first (T5-11)
         │
-        ├─ unmarked → LTX only; T5-A refine on the LTX take (T5-14)
+        ├─ unmarked → LTX only; T5-A refine on the LTX take (T5-14 **built**,
+        │  `test_t5_14_refine_on_ltx_take.py`)
         │
         ▼ needs_lip_sync
-decoded s2v hop: control_video = LTX frames, ref_image = scene still
+decoded s2v hop: control_video = LTX frames (the `_refined` prefix when
+`--refine`), ref_image = scene still
 (T5-12 **built**; T5-13 `skip_first_frames` **built**,
-`main()` hop emit + `test_t5_13_s2v_window.py`). D7 look NOT MEASURED (T3-37).
+`main()` hop emit + `test_t5_13_s2v_window.py`; T5-14 **built**:
+T5-A on the LTX take, hop `refine=False`,
+`test_t5_14_refine_on_ltx_take.py`). D7 look NOT MEASURED (T3-37).
         │
         ▼ assemble; song length owns clip count
 ```
@@ -186,13 +190,16 @@ Accept-gated map → gen_refs image1 = that scene's keeper
         │
         ▼ approved scene still + location plate
 LTX 2.5 first; optional decoded s2v hop; T5-A on the LTX take
+(`T5-14` **built**, `test_t5_14_refine_on_ltx_take.py`)
         │
         ▼ assemble; song length owns clip count
 ```
 
 One resolver for C1/C2 (latent + denoise labels + pose hint). One
 resolver for clip hops (LTX always; s2v if `needs_lip_sync`; T5-A if
-refine). Labels cannot promise a hop the graph omits.
+refine, on the LTX take only — `T5-14` **built**,
+`test_t5_14_refine_on_ltx_take.py`). Labels cannot promise a hop the
+graph omits.
 
 Parked off this path: Phr00t AIO, Klein 9B, Pony donor, Krea/Flux
 t2i, O14 training on gamingpc. Flux.1 Kontext and Flux.2 are
@@ -405,8 +412,12 @@ does not replace the picture look.
 
 The silent no-op is gone. `_refine_ltx` attaches variant A on LTX
 (`T5-1`/`T5-3`/`T5-4`, `test_clip_length.py`). `--refine` either adds that
-pass or raises. The GPU pair that proves the pass changes the picture
-(`T5-2`) and the peak-VRAM reading (`T5-5`) are **NOT MEASURED**. Variant
+pass or raises. On `needs_lip_sync`, T5-A stays on the LTX take;
+hop successors force `refine=False` and `control_video` reads the
+`_refined` LTX prefix (`T5-14` **built**,
+`test_t5_14_refine_on_ltx_take.py`). The GPU pair that proves the pass
+changes the picture (`T5-2`) and the peak-VRAM reading (`T5-5`) are
+**NOT MEASURED**. Variant
 B does not fit; that finding is on `CATALOG['ltx25']['notes']` (`T5-6`).
 
 **Do not wire the WAN refiner to LTX.** It re-samples the s2v latent with
@@ -536,7 +547,8 @@ code rather than in documents.
   the same resolver for C1/C2 (**built**, `test_t7_21_c1_c2_resolver.py`).
 - **Clip-hop labels vs the graph** — LTX always; s2v if
   `needs_lip_sync` (`T2-55` **built**, `test_t2_55_needs_lip_sync.py`);
-  T5-A if refine. A control that says "lip-sync"
+  T5-A if refine, on the LTX take only (`T5-14` **built**,
+  `test_t5_14_refine_on_ltx_take.py`). A control that says "lip-sync"
   must not emit s2v-only (`T5-11` **built**,
   `test_t5_11_ltx_always_first.py`). T5-12 hop graph **built**
   (`test_t5_12_d7_hop.py`); look is `T3-37` NOT MEASURED.

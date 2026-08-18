@@ -1696,7 +1696,7 @@ def h_clips(args, progress):
     if video_model == "i2v":
         progress("i2v: prompt-driven only -- this render has no beat sync or mouth movement")
     if args.get("refine"):
-        progress("refiner pass ON: roughly double the render time, and unproven on s2v output")
+        progress("refiner pass ON: T5-A on the LTX take (not the s2v hop); roughly double LTX render time")
     # T2-11: a chain successor is its own job with clip_idx set; only render that
     # clip. A batch job (no clip_idx) still renders the whole song.
     only = None

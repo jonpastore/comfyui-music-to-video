@@ -302,10 +302,10 @@ sidecar (not the studio loop).
 | D5 location plate per location key | **built** `T2-53`/`T7-22` (`test_t2_53_location_plates.py`). Store only; no page display |
 | D6 LTX always first | **built** `T5-11` (`test_t5_11_ltx_always_first.py`); lip fact is `T2-55` **built** |
 | D7 decoded s2v hop (`control_video` = LTX frames) | graph **built** `T5-12`; look **NOT MEASURED** (`T3-37`); no GPU pair |
-| D8 T5-A stays on the LTX take, not on s2v | specified; confirm graph labels |
+| D8 T5-A stays on the LTX take, not on s2v | **built** `T5-14` (`test_t5_14_refine_on_ltx_take.py`). `--refine` + `needs_lip_sync` attaches T5-A only on LTX; hop `refine=False`. Hop `control_video` is the `_refined` LTX prefix |
 | D9 D7 look (lips + her + blocking) | no pinned pair |
 | D10 identity = text + her image1; charcoal-brown | measured on stills; 0 chosen studio anchors |
 | sqlite `classification_json` | **built** `T4-21`/`T4-22` (`test_t4_21_classification_json.py`). Sidecar seeds import only |
-| Docs TRD-2/3/4/5/7 + PRDs + DDDs + UIUX describe this loop | **rewritten 2026-08-17** — T2-50…T2-56, T3-34…T3-37, T4-21…T4-24, T5-11…T5-15, T7-21…T7-23. `T2-50`…`T2-56`, `T3-34`, `T4-21`…`T4-24`, `T5-11`, `T5-12` (graph), `T5-13`, `T5-15` (`test_t5_15_no_latent_handoff.py`), `T7-21`…`T7-23` **built**. Leftover is T5-14 (refine-not-on-s2v still partial), D7 look `T3-37` |
+| Docs TRD-2/3/4/5/7 + PRDs + DDDs + UIUX describe this loop | **rewritten 2026-08-17** — T2-50…T2-56, T3-34…T3-37, T4-21…T4-24, T5-11…T5-15, T7-21…T7-23. `T2-50`…`T2-56`, `T3-34`, `T4-21`…`T4-24`, `T5-11`, `T5-12` (graph), `T5-13`, `T5-14` (`test_t5_14_refine_on_ltx_take.py`), `T5-15` (`test_t5_15_no_latent_handoff.py`), `T7-21`…`T7-23` **built**. Leftover is D7 look `T3-37` |
 
 **Product:** 0 chosen anchors live. Factory is still on step 1.

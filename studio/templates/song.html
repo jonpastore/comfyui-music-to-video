@@ -541,11 +541,11 @@
         <input type="file" name="control_video" accept="video/*">
       </label>
       <label class="check"><input type="checkbox" name="refine" value="true">
-        Refiner pass (i2v low-noise, low denoise)</label>
+        Refiner pass (T5-A on the LTX take)</label>
       <p class="hint">The two clips are <code>WanSoundImageToVideo</code>'s own optional inputs,
         unused until now &mdash; s2v only, i2v has neither. The refiner is
-        <strong>unproven on s2v output</strong> and roughly doubles render time: render three
-        clips with and three without before committing a song to it.</p>
+        LTX variant A on the LTX take, not the WAN i2v-low expert and not a
+        second pass on the s2v hop. It roughly doubles LTX render time.</p>
     </details>
     <button type="submit">Render video</button>
     {% if ref_progress_by_tier %}

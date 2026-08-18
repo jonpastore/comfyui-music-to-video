@@ -1273,7 +1273,7 @@ def main():
     ap.add_argument("--ref-motion", help="s2v only: a motion-style reference clip (path)")
     ap.add_argument("--control-video", help="s2v only: a driving clip for pose/structure (path)")
     ap.add_argument("--refine", action="store_true",
-                    help="add an unproven low-denoise pass with the i2v low-noise expert")
+                    help="T5-A second pass on LTX takes (not the s2v hop)")
     ap.add_argument("--outdir", required=True)
     args = ap.parse_args()
 
@@ -1321,8 +1321,11 @@ def main():
             ref = f"{args.slug}_clip_{head:03d}.png"
             # control_video = LTX SaveVideo path (LoadVideosFromFolder), not
             # LoadVideo / not an LTX latent. Distinct hop SaveVideo below.
+            # T5-14: when --refine, LTX SaveVideo is *_refined; hop reads that.
             ltx_idx = rec["control_clip_idx"]
             control = f"{args.slug}/clip_{ltx_idx:03d}"
+            if args.refine:
+                control += "_refined"
             ref_motion = None
             refine = False
         else:
