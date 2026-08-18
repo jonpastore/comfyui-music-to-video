@@ -460,8 +460,9 @@ def album_coverage(album, tier):
                 g["path"] = item["path"]
                 g["source"] = item["source"]
     needed = sorted(groups.values(),
-                    key=lambda r: (r["character_label"].lower(),
-                                   r["sheet_id"] is not None, r["label"].lower()))
+                    key=lambda r: (r["sheet_id"] is not None,
+                                   r["character_label"].lower(),
+                                   r["label"].lower()))
     for g in needed:
         g["mage"] = "\n\n".join(g.get("mage_parts") or [])
     sheets = []

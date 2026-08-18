@@ -517,6 +517,55 @@ def test_album_coverage_splits_the_same_pose_by_character():
         assert tiger["id"]
 
 
+def test_album_coverage_floats_missing_poses_first():
+    """A filled Lead row must not bury a missing Panther row under All."""
+    with TestClient(appmod.app) as client:
+        album = f"Missing First {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        pl = db.one("SELECT id FROM playlists WHERE name=?", album)["id"]
+        db.run("UPDATE playlists SET style_text=? WHERE id=?",
+               "Meow P — alley nights", pl)
+        client.post(f"/playlists/{pl}/characters",
+                    data={"name": "Panther", "role": "partner"})
+        song = _upload_song(client, "Missing First Song", album=album)
+        dest = os.path.join(db.DATA, "pose-plan")
+        os.makedirs(dest, exist_ok=True)
+        plate = os.path.join(dest, "mf-stand.png")
+        open(plate, "wb").write(_png_bytes())
+        _sheet(album, "xxx", "pose_mf", plate, "standing", nude=False)
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        json.dump({
+            "title": "T", "album": album, "version": "xxx",
+            "character_reference": "Meow P",
+            "scenes": [
+                {"scene_number": 1, "name": "Her", "pose": "standing",
+                 "image_prompt": "stand", "characters": [],
+                 "duration_guidance": "4s"},
+                {"scene_number": 2, "name": "Him", "pose": "kneeling ready crouch",
+                 "image_prompt": "crouch",
+                 "characters": [{"name": "Panther", "role": "lead"}],
+                 "duration_guidance": "4s"},
+            ],
+        }, open(jp, "w"))
+        md = os.path.join(outdir, f"{song['slug']}_xxx.md")
+        open(md, "w").write("# sb\n")
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               song["id"], "xxx", jp, md, 2, time.time())
+        cov = pose_plan.album_coverage(album, "xxx")
+        assert len(cov["needed"]) == 2, [g["label"] for g in cov["needed"]]
+        assert cov["needed"][0]["sheet_id"] is None
+        assert "crouch" in cov["needed"][0]["label"].lower()
+        assert cov["needed"][1]["sheet_id"] is not None
+        page = client.get(f"/anchors?scope_value={album}").text
+        roster = page.split('id="album-pose-roster"', 1)[-1]
+        miss = roster.find("kneeling ready crouch")
+        have = roster.find("standing")
+        assert 0 <= miss < have, (miss, have)
+
+
 def test_bind_route_overrides_auto():
     with TestClient(appmod.app) as client:
         song = _upload_song(client, "Override Pose Song", album="Override Pose Album")

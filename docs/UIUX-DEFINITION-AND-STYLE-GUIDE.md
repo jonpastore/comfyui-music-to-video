@@ -1139,7 +1139,9 @@ there is no sheet), **character · pose**, then songs, then the sheet
 dropdown, then a save icon (no “Keeper” label). A crouch for Meow P
 and a crouch for Tiger are two rows; the dropdown only lists that
 person's sheets. When more than one lead appears, character tabs
-filter the list. The list scrolls (`.pose-roster`
+filter the list. Missing rows sort first so they are
+addressed before filled ones; within that, character then
+pose name. The list scrolls (`.pose-roster`
 `max-height: min(28rem, 50vh)`) so a hundred missing poses do not
 stretch the page. Missing poses do **not** dump as
 `Missing: crouching, …` — the count lives in the summary tag and each
