@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import modal_close, glyph_save %}
+{% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_download, glyph_actors %}
 {% block content %}
 <h1>Anchors</h1>
 <p class="hint">This album&rsquo;s pose library. Songs on the album list the poses
@@ -243,13 +243,44 @@
               aria-label="Save pose classification">{{ glyph_save() }}</button>
     </form>
     <span class="lightbox-spacer"></span>
-    <a class="lightbox-download" download>Download</a>
-    <button type="button" class="thumb-btn-danger lightbox-delete">Delete</button>
+    <button type="button" class="icon-btn lightbox-actors" title="Who is in this sheet"
+            aria-label="Tag actors on this sheet">{{ glyph_actors() }}</button>
+    <a class="icon-btn lightbox-download" download title="Download" aria-label="Download">
+      {{ glyph_download() }}</a>
+    <button type="button" class="icon-btn danger-icon lightbox-delete" title="Delete"
+            aria-label="Delete">{{ glyph_delete() }}</button>
     {{ modal_close() }}
   </div>
   <img alt="anchor candidate, full size">
   <p class="lightbox-help muted">
     &larr; &rarr; between sheets in this row &middot; &uarr; &darr; between rows &middot;
     Del to delete &middot; Esc to close</p>
+</dialog>
+<dialog class="confirm-modal" id="actor-tag">
+  <div class="modal-bar">
+    <strong>Who is in this sheet</strong>
+    <span class="lightbox-spacer"></span>
+    {{ modal_close() }}
+  </div>
+  <form id="actor-tag-form" method="post" class="stack-form">
+    <input type="hidden" name="sheet_id" value="">
+    <div class="check-row">
+      <label class="check">
+        <input type="checkbox" name="actor_name" value="{{ lead_name or 'Lead' }}">
+        {{ lead_name or "Lead" }}
+      </label>
+      {% for c in characters %}
+      <label class="check">
+        <input type="checkbox" name="actor_name" value="{{ c.name }}">
+        {{ c.name }}
+      </label>
+      {% endfor %}
+    </div>
+    <p class="hint">Two or more names puts this plate on the Actors tab.</p>
+    <div class="form-actions">
+      <button type="submit" class="icon-btn" title="Save actors" aria-label="Save actors">
+        {{ glyph_save() }}</button>
+    </div>
+  </form>
 </dialog>
 {% endblock %}

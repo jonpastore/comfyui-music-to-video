@@ -265,6 +265,38 @@ def test_upload_pose_becomes_chosen_sheet(tmp_path):
         assert body["chosen"] is True
 
 
+def test_lightbox_saves_actors_on_an_existing_sheet():
+    with TestClient(appmod.app) as client:
+        album = f"Tag Actors {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        dest = os.path.join(db.DATA, "uploads", "anchors", "album", "x")
+        os.makedirs(dest, exist_ok=True)
+        path = os.path.join(dest, f"tag_{time.time_ns()}.png")
+        open(path, "wb").write(_png_bytes())
+        db.run("""INSERT INTO anchors (scope_kind,scope_value,tier,view,path,chosen,created)
+                  VALUES ('album',?,'xxx','front',?,1,?)""",
+               album, path, time.time())
+        row = db.one("SELECT * FROM anchors WHERE path=?", path)
+        page = client.get("/anchors", params={"scope_value": album}).text
+        assert 'id="actor-tag"' in page
+        assert "lightbox-actors" in page
+        assert 'class="icon-btn lightbox-download"' in page
+        assert "lightbox-delete" in page and "danger-icon" in page
+        js = open(os.path.join(os.path.dirname(appmod.__file__), "static", "app.js")).read()
+        assert '"/" + all.length' in js
+        assert ' + " · CHOSEN"' not in js
+        assert '"option "' not in js
+        r = client.post(f"/anchors/{row['id']}/actors",
+                        data={"actor_name": ["Meow P", "Panther", "Tiger"]},
+                        headers={"Accept": "application/json"})
+        assert r.status_code == 200, r.text
+        assert r.json()["actors"] == ["Meow P", "Panther", "Tiger"]
+        assert r.json()["ensemble"] is True
+        meta = json.loads(db.one("SELECT render_json FROM anchors WHERE id=?",
+                                 row["id"])["render_json"])
+        assert meta["actors"] == ["Meow P", "Panther", "Tiger"]
+
+
 def test_upload_pose_stamps_every_actor():
     with TestClient(appmod.app) as client:
         album = f"Trio Pose {time.time_ns()}"

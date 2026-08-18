@@ -2335,10 +2335,10 @@ function initAnchors() {
     var legend = at.row.closest("fieldset") && at.row.closest("fieldset").querySelector("legend");
     var title = legend || head;
     box.querySelector(".lightbox-title").textContent = title ? title.textContent.trim() : "";
-    box.querySelector(".lightbox-pos").textContent =
-      "option " + (at.idx + 1) + " of " + all.length +
-      (card.classList.contains("picked") ? " · CHOSEN" : "");
+    box.querySelector(".lightbox-pos").textContent = (at.idx + 1) + "/" + all.length;
     fillLightboxPose(card);
+    var actorsBtn = box.querySelector(".lightbox-actors");
+    if (actorsBtn) actorsBtn.hidden = !(card.dataset.anchor);
     var dl = box.querySelector(".lightbox-download");
     dl.href = src;
     // a name the file keeps once it is off the page; the src basename is a
@@ -2388,6 +2388,37 @@ function initAnchors() {
   });
 
   box && box.querySelector(".lightbox-delete").addEventListener("click", removeShown);
+  box && box.querySelector(".lightbox-actors") &&
+    box.querySelector(".lightbox-actors").addEventListener("click", function () {
+      var card = current;
+      var dlg = document.getElementById("actor-tag");
+      var form = document.getElementById("actor-tag-form");
+      if (!card || !card.dataset.anchor || !dlg || !form) return;
+      form.setAttribute("action", "/anchors/" + card.dataset.anchor + "/actors");
+      form.querySelector('[name="sheet_id"]').value = card.dataset.anchor;
+      var have = (card.dataset.actors || "").split("|").filter(Boolean);
+      var want = {};
+      have.forEach(function (n) { want[n.toLowerCase()] = true; });
+      Array.prototype.forEach.call(form.querySelectorAll('[name="actor_name"]'), function (cb) {
+        cb.checked = !!want[(cb.value || "").toLowerCase()];
+      });
+      if (!dlg.open) dlg.showModal();
+    });
+  var actorForm = document.getElementById("actor-tag-form");
+  actorForm && actorForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var form = e.target;
+    var card = current;
+    var dlg = document.getElementById("actor-tag");
+    if (!card || !card.dataset.anchor) return;
+    api(form.action, new FormData(form)).then(function (d) {
+      card.dataset.actors = (d.actors || []).join("|");
+      if (dlg && dlg.open) dlg.close();
+    }).catch(function (err) {
+      if (box) box.querySelector(".lightbox-pos").textContent = "not tagged: " + err.message;
+      if (dlg && dlg.open) dlg.close();
+    });
+  });
 
   function fillLightboxPose(card) {
     var form = box && box.querySelector(".lightbox-pose-form");
@@ -2584,9 +2615,7 @@ function initAnchors() {
         var at = card && where(card);
         if (at) {
           var all = cardsIn(at.row);
-          box.querySelector(".lightbox-pos").textContent =
-            "option " + (at.idx + 1) + " of " + all.length +
-            ((card && card.classList.contains("picked")) || d.chosen ? " · CHOSEN" : "");
+          box.querySelector(".lightbox-pos").textContent = (at.idx + 1) + "/" + all.length;
         }
       }).catch(function (err) {
         box.querySelector(".lightbox-pos").textContent = "not classified: " + err.message;

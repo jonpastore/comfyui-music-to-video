@@ -204,6 +204,7 @@ def view_label(view):
 
 
 templates.env.filters["viewname"] = lambda v: view_label(v)
+templates.env.filters["actorlist"] = lambda row: pose_plan.actor_names(row)
 
 
 def view_base(view):
@@ -6025,6 +6026,36 @@ def set_album_pose_keeper(request: Request, album: str = Form(...),
     if wants_hx(request):
         return _playlist_hx_album(request, album)
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
+
+
+@app.post("/anchors/{id}/actors")
+async def save_anchor_actors(request: Request, id: int):
+    """Stamp who is on this plate. Two or more names make it an Actors sheet."""
+    row = db.one("SELECT * FROM anchors WHERE id=?", id)
+    if not row:
+        raise HTTPException(404, "no such anchor candidate")
+    form = await request.form()
+    names = []
+    seen = set()
+    for raw in form.getlist("actor_name"):
+        n = " ".join(str(raw or "").split())
+        key = n.lower()
+        if not n or key in seen:
+            continue
+        seen.add(key)
+        names.append(n)
+    meta = db.jset(row, "render_json")
+    if names:
+        meta["actors"] = names
+    else:
+        meta.pop("actors", None)
+    db.run("UPDATE anchors SET render_json=? WHERE id=?", json.dumps(meta), id)
+    if wants_json(request):
+        return JSONResponse({"ok": True, "id": id, "actors": names,
+                             "ensemble": pose_plan.is_ensemble(
+                                 db.one("SELECT * FROM anchors WHERE id=?", id),
+                                 row["scope_value"], "")})
+    return _anchor_done(request, row)
 
 
 def tier_tone(tier, album=""):

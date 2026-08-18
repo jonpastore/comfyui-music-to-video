@@ -1206,8 +1206,10 @@ the meta line. Close on `#pose-brief` sits far right
 `/anchors` and on the playlist Anchors fold. The candidate lightbox
 (`#anchor-lightbox`) classifies the open sheet: a select of that
 album’s needed poses (character · pose) plus the save icon posts the
-same keeper route and stays on the picture. Download / Delete / Close
-stay; Close remains far right. Arrows and Delete are ignored while the
+same keeper route and stays on the picture. Position is `N/M`, not
+“option N of M · CHOSEN”. Download / Delete are `icon-btn`s and sit
+with Close on the far right. An actors icon opens `#actor-tag` to
+stamp `render_json.actors` (`POST /anchors/{id}/actors`). Arrows and Delete are ignored while the
 select is focused so classifying does not step or delete the sheet.
 Roster thumbs open `#pose-preview`. Playlist Anchors uses
 character tabs and Clothed/Nude family tabs. On `/anchors` the gallery tabs are **tier → character → clothed/nude**, plus an **Actors** tab for multi-body plates (split roast, cowgirl, or any sheet with two or more stamped actors). Solo all-fours stays on the owner. Generate’s **Also in this sheet** ticks join each extra body’s identity front (cap 3). Upload-pose writes the roster’s actors onto the row. The first character tab is the album lead (not the word

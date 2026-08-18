@@ -2624,7 +2624,7 @@ dialog.lightbox img { max-height: 82vh; }
   height: 1.35rem;
 }
 .lightbox-spacer { flex: 1; }
-.lightbox-pos { font-size: 0.85rem; white-space: nowrap; }
+.lightbox-pos { font-size: 0.85rem; white-space: nowrap; flex: none; }
 .lightbox-pose-form {
   display: inline-flex;
   align-items: center;
@@ -2639,9 +2639,9 @@ dialog.lightbox img { max-height: 82vh; }
   max-width: 18rem;
   flex: 1 1 auto;
 }
-.lightbox-download {
-  padding: 0.25rem 0.7rem; border-radius: 4px; text-decoration: none;
-  border: 1px solid var(--border, #444);
+a.lightbox-download {
+  text-decoration: none;
+  box-sizing: border-box;
 }
 .lightbox-help { font-size: 0.75rem; margin: 0.4rem 0 0; text-align: center; }
 

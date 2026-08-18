@@ -18,7 +18,8 @@
     {% for c in g.candidates %}
     <div class="candidate {% if c.chosen %}picked{% endif %}" data-anchor="{{ c.id }}"
          data-album="{{ g.scope_value }}" data-tier="{{ g.tier }}"
-         data-who="{{ g.character_id or 'lead' }}">
+         data-who="{{ g.character_id or 'lead' }}"
+         data-actors="{{ c | actorlist | join('|') }}">
       <label class="candidate-pick">
         <input type="checkbox" class="pick-anchor" value="{{ c.id }}"
                aria-label="select this candidate">
