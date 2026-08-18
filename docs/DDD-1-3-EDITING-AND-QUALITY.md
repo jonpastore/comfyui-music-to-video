@@ -827,8 +827,9 @@ red (`test_t2_28_html.py`, `test_t2_28_refs_unanchored_leads.py`,
 **refs-identity `T2-56` is built.** `start_refs`/`h_refs` pass
 `accepted_bases` as `anchors` (image1 per scene). They do not also
 stuff those keepers into `pose_bases` (image2). Empty / draft /
-rejected map → 400; no `pose_plan.freeze_auto_binds` fallback
-(`test_t2_52_map_accept.py`, `test_start_refs_freezes_pose_bases`).
+rejected map → 400; `pose_plan.freeze_auto_binds` deleted (no auto-bind
+fallback; `test_freeze_auto_binds_is_gone`, `test_t2_52_map_accept.py`,
+`test_start_refs_freezes_pose_bases`).
 Standing 4748 plate is refused (keep, `test_t2_refs_identity.py`).
 Location plates (`T2-53` **built**, `test_t2_53_location_plates.py`).
 Extra-view slots are later.

@@ -181,8 +181,9 @@ gap **is**; the same page shows ceiling holes and import closes them
 without GPU. `T2-51` draft map (classify cannot write it) **is**
 (`test_t2_51_classify_cannot_write_map.py`). `T2-52` Accept-gated
 map **is** (`test_t2_52_map_accept.py`): Accept/Reject per scene;
-`start_refs` refuses empty map, draft, or rejected (no
-`freeze_auto_binds` fallback). `T4-24` ceiling-tier pose generate
+`start_refs` refuses empty map, draft, or rejected;
+`pose_plan.freeze_auto_binds` is deleted (`test_freeze_auto_binds_is_gone`).
+`T4-24` ceiling-tier pose generate
 **is** (`test_t4_24_ceiling_generate.py`): pose-gap holes → studio
 jobs at the run ceiling; clothed+nude iff r/xxx. `T7-21` C1/C2
 resolver **is** (`test_t7_21_c1_c2_resolver.py`): same-pose encode

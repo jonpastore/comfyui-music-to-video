@@ -299,8 +299,14 @@ def test_build_refs_bases_file_sets_image2(tmp_path):
     assert "9" not in wf2
 
 
+def test_freeze_auto_binds_is_gone():
+    """T2-52: dead auto-bind helper must stay deleted (empty map cannot regain it)."""
+    assert not hasattr(pose_plan, "freeze_auto_binds")
+
+
 def test_start_refs_freezes_pose_bases(monkeypatch):
-    """Empty scene_pose_map refuses refs; freeze_auto_binds is not the path."""
+    """Empty scene_pose_map refuses refs; freeze_auto_binds is gone, not a fallback."""
+    assert not hasattr(pose_plan, "freeze_auto_binds")
     monkeypatch.setattr(appmod.pipeline, "gen_refs",
                         lambda *a, **k: (_ for _ in ()).throw(
                             RuntimeError("gen_refs must not run")))

@@ -773,39 +773,3 @@ def stamp_binds(tier, binds, sheet_id):
             bind_scene(b["song_id"], tier, b["num"], want)
         except (LookupError, ValueError):
             continue
-
-
-def freeze_auto_binds(song, tier):
-    """Stamp auto-matches onto the board so generate/reroll stay stable.
-
-    Returns {scene_number: path} including saved + newly stamped binds.
-    """
-    song = song if hasattr(song, "keys") else storyboard_service.require_song(song)
-    p = plan(song, tier)
-    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?",
-                 song["id"], tier)
-    sb = storyboard_service.load(row, normalized=False)
-    by_num = {s.get("scene_number"): s for s in sb.get("scenes") or []}
-    changed = False
-    for item in p["scenes"]:
-        if item["source"] != "auto" or not item["sheet_id"]:
-            continue
-        scene = by_num.get(item["num"])
-        if scene is None or _scene_sheet_id(scene):
-            continue
-        scene["pose_sheet_id"] = item["sheet_id"]
-        scene["edited"] = time.time()
-        changed = True
-    if changed:
-        try:
-            grok.write_storyboard(sb, os.path.dirname(row["json_path"]),
-                                  song["slug"], tier)
-        except ValueError:
-            # A board that fails write guards still renders; binds live in
-            # the job args for this generate.
-            pass
-    bases = {}
-    for item in p["scenes"]:
-        if item["path"] and os.path.isfile(item["path"]):
-            bases[int(item["num"])] = item["path"]
-    return bases

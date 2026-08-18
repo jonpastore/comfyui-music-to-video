@@ -539,9 +539,10 @@ map / draft / rejected refuse Generate refs. Location plates
 (`T2-53` **built**, `test_t2_53_location_plates.py`). Extra-view
 slots are later.
 The expanded tier's **pose map** is drafted, then Accept per scene
-(`T2-52` **built**, `test_t2_52_map_accept.py`); generate refs from
+(`T2-52` **built**, `test_t2_52_map_accept.py` /
+`test_freeze_auto_binds_is_gone`); generate refs from
 an empty map, draft, or rejected is refused (`POST /songs/{id}/refs`
-400). A coverage meter (`T2-50` **built**, `test_t2_50_coverage_list.py`)
+400; `freeze_auto_binds` is deleted, not a silent fallback). A coverage meter (`T2-50` **built**, `test_t2_50_coverage_list.py`)
 sits above the map and reads `pose_coverage` from
 `POST /api/songs/{id}/storyboard/{tier}/analyze-poses`; holes vs keepers
 are `GET /api/songs/{id}/pose-gap` (`T4-23` **built**). Generate from those
@@ -1443,7 +1444,8 @@ and ticked-lower boards (`T2-54` **built**) exist per ticked tier;
 page listing of every ticked board is those existing per-tier pages.
 
 **Refs page.** Generate from the accepted map only — empty map,
-draft, or rejected is refused (`T2-52`). Each scene uses that scene's
+draft, or rejected is refused (`T2-52`; `pose_plan.freeze_auto_binds`
+deleted, `test_freeze_auto_binds_is_gone`). Each scene uses that scene's
 accepted keeper as image1 (`T2-56` **built**,
 `test_t2_56_per_scene_keeper.py`). Location plate store is `T2-53` **built**;
 page display is later.
