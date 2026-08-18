@@ -595,7 +595,8 @@ row even if the SSE watch was missed. Landed clip tiles reserve a 3:4 well on `.
 video's intrinsic size — a flex `.clip-tile` plus an undecoded
 `<video>` collapsed the well to the caption). The approved still is
 an `<img class="clip-poster">` under the video; click the well or
-the caption opens `#clip-preview`. Clip thumbs seek ~0.5s in so
+the caption opens `#clip-preview`. A trash on the caption deletes
+that landed take (`POST /songs/{id}/clips/{clip_idx}/delete`). Clip thumbs seek ~0.5s in so
 the first-frame black is not the poster.
 Fix (face / inpaint / outpaint) and Delete sit on the still as icon
 buttons with hover titles (check / wrench / trash), not labeled

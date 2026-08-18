@@ -410,6 +410,10 @@
             {% if v.status %}<span class="tag">{{ v.status }}</span>{% endif %}
             {% set qv = v | qctag %}
             {% if qv %}<span class="qc-tag" title="first-frame physical identity vs her photographs. Clothes do not lower identity.">{{ qv }}</span>{% endif %}
+            <button type="button" class="icon-btn danger-icon js-clip-del"
+                    data-clip-idx="{{ v.clip_idx }}"
+                    title="Delete this clip"
+                    aria-label="Delete this clip">{{ glyph_delete() }}</button>
           </figcaption>
         </figure>
         {% endfor %}

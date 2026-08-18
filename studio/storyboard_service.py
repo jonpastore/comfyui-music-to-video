@@ -519,6 +519,25 @@ def _commit_scene(song, row, sb):
                           song["slug"], tier=row["tier"])
 
 
+def delete_clip(song_id, tier, clip_idx):
+    """Remove one landed take. File goes if nothing else points at the path."""
+    song_id = int(song_id)
+    clip_idx = int(clip_idx)
+    row = db.one(
+        "SELECT * FROM clips WHERE song_id=? AND tier=? AND clip_idx=?",
+        song_id, tier, clip_idx)
+    if not row:
+        raise LookupError(f"no clip {clip_idx} at {tier}")
+    path = row["path"]
+    db.run("DELETE FROM clips WHERE id=?", row["id"])
+    if path and os.path.isfile(path):
+        still = db.one("SELECT id FROM clips WHERE path=?", path)
+        render = db.one("SELECT id FROM renders WHERE path=?", path)
+        if still is None and render is None:
+            os.remove(path)
+    return {"ok": True, "deleted": clip_idx, "path": path}
+
+
 def dismiss_clip_job(song_id, tier, num, job_id):
     song, row, sb, scene = _open_scene(song_id, tier, num)
     jid = int(job_id)

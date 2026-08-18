@@ -6979,6 +6979,20 @@ async def save_scene_field_version(request: Request, id: int, tier: str, num: in
         raise HTTPException(400, str(e)) from e
 
 
+@app.post("/songs/{id}/clips/{clip_idx}/delete")
+async def delete_landed_clip(request: Request, id: int, clip_idx: int):
+    """Operator delete of one landed take. Stills stay."""
+    get_song_or_404(id)
+    body = await _api_body(request)
+    tier = str(body.get("tier") or request.query_params.get("tier") or "")
+    try:
+        out = storyboard_service.delete_clip(id, valid_tier_or_400(tier), clip_idx)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    return json_or_redirect(
+        request, out, f"/songs/{id}/storyboard/{tier}")
+
+
 @app.post("/songs/{id}/storyboard/{tier}/scene/{num}/clip-job/{jid}/dismiss")
 def dismiss_scene_clip_job(id: int, tier: str, num: int, jid: int):
     try:

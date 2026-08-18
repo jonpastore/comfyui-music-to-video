@@ -215,6 +215,39 @@ def _predecessor_landed(c, row):
     return pred is not None and pred["status"] == "done"
 
 
+def _predecessor_dead(c, row):
+    """Predecessor failed, cancelled, or is gone — successor will never be ready."""
+    try:
+        args = json.loads(row["args_json"] or "{}")
+    except ValueError:
+        args = {}
+    dep = args.get("_depends_on")
+    if dep is None:
+        return None
+    pred = c.execute("SELECT status FROM jobs WHERE id=?", (dep,)).fetchone()
+    if pred is None:
+        return "predecessor missing"
+    if pred["status"] in ("failed", "cancelled"):
+        return f"predecessor {pred['status']}"
+    return None
+
+
+def _fail_dead_dependents(c):
+    """T6-2 other half: a failed/cancelled pred must not leave QC queued forever."""
+    now = time.time()
+    rows = c.execute("SELECT * FROM jobs WHERE status='queued'").fetchall()
+    for r in rows:
+        reason = _predecessor_dead(c, r)
+        if not reason:
+            continue
+        cur = c.execute(
+            "UPDATE jobs SET status='failed', finished=?, error=? "
+            "WHERE id=? AND status='queued'",
+            (now, reason, r["id"]))
+        if cur.rowcount == 1:
+            _record_transition(r["id"], "failed", now, c=c)
+
+
 def _capability_ready(row):
     """T6-3: match on capability. False is a refusal; None is a candidate.
 
@@ -258,6 +291,7 @@ def _claim():
     c = db.conn()
     try:
         c.execute("BEGIN IMMEDIATE")
+        _fail_dead_dependents(c)
         rows = c.execute(
             "SELECT * FROM jobs WHERE status='queued' ORDER BY id").fetchall()
         row = next((r for r in rows

@@ -2255,6 +2255,21 @@ function fillSceneVerSelect(sel, versions, keep) {
 }
 
 document.addEventListener("click", function (e) {
+  var del = e.target.closest && e.target.closest(".js-clip-del");
+  if (del) {
+    e.preventDefault();
+    e.stopPropagation();
+    var ctx = scenePromptCtx(del);
+    var idx = del.getAttribute("data-clip-idx");
+    if (!ctx || idx == null) return;
+    api("/songs/" + ctx.song + "/clips/" + idx + "/delete", {tier: ctx.tier}).then(function () {
+      var fig = del.closest(".clip-frame");
+      if (fig) fig.remove();
+    }).catch(function (err) {
+      if (ctx.note) say2(ctx.note, err.message, true);
+    });
+    return;
+  }
   var dismiss = e.target.closest && e.target.closest(".js-clip-fail-dismiss");
   if (dismiss) {
     e.preventDefault();
@@ -4026,6 +4041,7 @@ document.addEventListener("click", function (e) {
   document.addEventListener("click", function (e) {
     if (e.target.closest("#clip-preview .media-nav-prev")) { e.preventDefault(); show(idx - 1); return; }
     if (e.target.closest("#clip-preview .media-nav-next")) { e.preventDefault(); show(idx + 1); return; }
+    if (e.target.closest(".js-clip-del") || e.target.closest(".js-clip-fail-dismiss")) return;
     var clip = e.target.closest(".js-clip-preview");
     if (!clip) return;
     if (clip.getAttribute("data-playlist") && !clip.getAttribute("data-video")) {

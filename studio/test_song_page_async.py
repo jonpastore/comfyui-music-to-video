@@ -158,6 +158,18 @@ def test_scenes_lists_every_rendered_clip_on_a_split_scene():
         assert "poster=" in strip
         assert 'class="clip-poster"' in strip
         assert "clip-frame clip-tile js-clip-preview" in strip
+        assert "js-clip-del" in strip
+        gone = client.post(
+            f"/songs/{sid}/clips/0/delete",
+            json={"tier": "xxx"}, headers=J)
+        assert gone.status_code == 200, gone.text
+        assert gone.json()["deleted"] == 0
+        assert not os.path.isfile(os.path.join(db.DATA, "c0.mp4"))
+        assert os.path.isfile(os.path.join(db.DATA, "c1.mp4"))
+        rows2, _ = storyboard_service.scenes(
+            db.one("SELECT * FROM songs WHERE id=?", sid),
+            {"scenes": scenes}, "xxx")
+        assert [v["clip_idx"] for v in rows2[0]["videos"]] == [1]
 
 
 def test_scene_row_reads_clip_jobs_when_chip_is_qc():

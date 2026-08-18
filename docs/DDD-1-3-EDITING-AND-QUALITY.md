@@ -672,7 +672,8 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    chip going QC does not blank the row. A landed take is a
    reserved 3:4 `.still-thumb`, `<img class="clip-poster">` from the
    approved still, `<video src>` with `preload=metadata`, and a play
-   badge. Click the well or the caption opens `#clip-preview`. Not
+   badge. Click the well or the caption opens `#clip-preview`. A
+   trash deletes the take (`storyboard_service.delete_clip`). Not
    `lazy-src` (`test_song_page_async.py`). Reroll note,
    seed range, Fix, and Delete live on the still. `GET /songs/{id}/approve/{tier}`
    303s to the song page. `POST /clips` accepts `scene` + `head_only`.

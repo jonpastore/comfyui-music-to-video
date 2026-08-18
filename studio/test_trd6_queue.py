@@ -81,6 +81,20 @@ def test_t6_2_successor_is_pulled_once_predecessor_has_landed():
         f"(got {pulled['id'] if pulled else None})")
 
 
+def test_t6_2_failed_predecessor_fails_successor():
+    """A failed pred must not leave Auto QC queued forever (job 332)."""
+    _isolate()
+    pred = jobs.enqueue("t6", {"who": "pred"})
+    succ = jobs.enqueue("t6", {"who": "qc"}, depends_on=pred)
+    assert jobs._claim()["id"] == pred
+    db.run("UPDATE jobs SET status='failed', finished=?, error=? WHERE id=?",
+           1.0, "clip plan miss", pred)
+    assert jobs._claim() is None
+    got = jobs.get(succ)
+    assert got["status"] == "failed", got["status"]
+    assert "predecessor failed" in (got["error"] or "")
+
+
 def test_t6_7_land_requires_the_file():
     """A row claiming a landed artefact that is not on disk is refused.
     QC would otherwise measure nothing against it."""
