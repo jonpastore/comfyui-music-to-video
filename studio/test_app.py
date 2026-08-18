@@ -3586,6 +3586,23 @@ def test_sets_by_song_reports_new_style_sets_on_the_library_page():
         assert "Library Set" in page, "the set-editor render is missing from the Library's Sets column"
 
 
+def test_sets_by_song_keeps_one_link_per_set_mix():
+    """Two audio renders of the same set are history, not two memberships."""
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Dup Set Song")
+        client.post("/sets/new", data={"name": "Dup Mix", "mode": "audio"})
+        row = db.one("SELECT * FROM sets WHERE name='Dup Mix'")
+        client.post(f"/sets/{row['id']}/items",
+                    data={"song_id": song["id"], "transition": "cut", "secs": "0"})
+        meta = json.dumps({"set_id": row["id"], "mode": "audio"})
+        db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+               None, "set", "/tmp/dup-old.mp3", meta, time.time())
+        db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+               None, "set", "/tmp/dup-new.mp3", meta, time.time() + 1)
+        labels = [s["label"] for s in appmod.sets_by_song().get(song["id"], [])]
+        assert labels.count("Dup Mix (audio)") == 1, labels
+
+
 def test_set_editor_page_404s_for_an_unknown_id():
     with TestClient(appmod.app) as client:
         assert client.get("/sets/999999").status_code == 404

@@ -1978,6 +1978,7 @@ def sets_by_song():
     pl_names = {p["id"]: p["name"] for p in db.q("SELECT id, name FROM playlists")}
     set_names = {s["id"]: s["name"] for s in db.q("SELECT id, name FROM sets")}
     out = {}
+    seen = set()
     for a in db.q("SELECT * FROM assets WHERE kind='set' ORDER BY id DESC"):
         meta = db.jset(a)
         sid = meta.get("set_id")
@@ -1985,11 +1986,16 @@ def sets_by_song():
             label = set_names.get(sid, "(deleted set)")
             song_ids = set_members.get(sid, [])
             href = f"/sets/{sid}"
+            key = ("set", sid, meta.get("mode") or "", meta.get("tier") or "")
         else:
             pid = meta.get("playlist_id")
             label = pl_names.get(pid, "(deleted playlist)")
             song_ids = pl_members.get(pid, [])
             href = "/sets"
+            key = ("pl", pid, meta.get("mode") or "", meta.get("tier") or "")
+        if key in seen:
+            continue
+        seen.add(key)
         if meta.get("tier"):
             label += f" {meta['tier'].upper()}"
         if meta.get("mode") == "audio":
