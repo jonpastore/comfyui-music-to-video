@@ -265,6 +265,31 @@ def test_upload_pose_becomes_chosen_sheet(tmp_path):
         assert body["chosen"] is True
 
 
+def test_upload_pose_stamps_every_actor():
+    with TestClient(appmod.app) as client:
+        album = f"Trio Pose {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        r = client.post("/anchors/upload-pose",
+                        data={"album": album, "tier": "xxx", "label": "split roast",
+                              "actor_name": ["Meow P", "Panther", "Tiger"]},
+                        files={"image": ("trio.png", _png_bytes(), "image/png")},
+                        follow_redirects=False)
+        assert r.status_code == 303, r.text
+        sheet = db.one("SELECT * FROM anchors WHERE scope_value=? AND chosen=1", album)
+        meta = json.loads(sheet["render_json"])
+        assert meta["actors"] == ["Meow P", "Panther", "Tiger"]
+        nest = appmod.nest_anchor_groups([{
+            "scope_kind": "album", "scope_value": album,
+            "character_id": sheet["character_id"],
+            "character_name": None,
+            "tier": sheet["tier"], "view": sheet["view"],
+            "render_json": sheet["render_json"],
+            "path": sheet["path"],
+        }])
+        names = [c["character_name"] for c in nest[0]["tiers"][0]["characters"]]
+        assert names == ["Actors"]
+
+
 def test_deleting_uploaded_pose_sheet_drops_the_base_image_row():
     """upload-pose writes an assets row and a chosen sheet on the SAME file.
     Deleting the sheet used to unlink the file and leave the upload row, which

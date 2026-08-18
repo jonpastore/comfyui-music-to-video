@@ -106,6 +106,10 @@ Assign / `upload-pose` share the file with the chosen sheet;
 `_drop_anchor` deletes every `anchor_ref` on that path (not only
 borrowed `anchor_id` rows). `anchor_refs` does not list a row whose
 file is gone.
+A sheet with two or more bodies is an ensemble (`pose_plan.is_ensemble`):
+stamped `render_json.actors`, a cowgirl/spit-roast family, or another
+cast name on the pose label. `nest_anchor_groups` puts those on the
+Actors tab. Generate `actor_id` joins each extra identity front.
 `T6-A1`'s JSON loop (`GET/POST /api/anchors`, pick, use-as-ref) still
 holds for generating keepers; it does not write the map.
 

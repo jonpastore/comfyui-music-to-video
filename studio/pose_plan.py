@@ -43,7 +43,8 @@ _FAMILIES = {
     "side": ("on side", "laying on side", "lying on side", "on her side"),
     "portrait": ("portrait", "close portrait", "face close", "afterglow", "cum on face"),
     "oral": ("oral", "blowjob", "mouth on", "in her mouth"),
-    "spit": ("spit-roast", "spit roast", "spitroast", "both ends", "oral in front"),
+    "spit": ("spit-roast", "spit roast", "spitroast", "split roast", "split-roast",
+             "both ends", "oral in front"),
     "bent": ("bent over", "bent at", "bent,"),
     "spread": ("spread", "spreading", "legs apart", "legs parted", "labia"),
     "rear": ("looking back", "look back", "over her shoulder", "over shoulder",
@@ -58,6 +59,11 @@ _MIN_SCORE = 0.34
 _PARTNERED = frozenset({
     "cowgirl", "oral", "spit", "supine", "allfours", "bent", "side",
 })
+
+# Always more than one body, even when the operator never stamped actors.
+# allfours / oral / side can be solo — those only become ensemble when
+# another character's name is on the sheet.
+_ENSEMBLE_FAMILIES = frozenset({"cowgirl", "spit"})
 
 
 def _norm(text):
@@ -209,6 +215,71 @@ def sheet_name(row):
                 return name
         return f"pose {m.group(1)}" + (" nude" if view.endswith("_nude") else "")
     return view.replace("_", " ")
+
+
+def _row_get(row, key, default=None):
+    if row is None:
+        return default
+    if hasattr(row, "keys") and key in row.keys():
+        return row[key]
+    if isinstance(row, dict):
+        return row.get(key, default)
+    return default
+
+
+def actor_names(row, album=""):
+    """Who is on this sheet. Stamped actors first; else names in the pose label."""
+    raw = _row_get(row, "render_json")
+    meta = {}
+    if raw:
+        try:
+            meta = json.loads(raw) if isinstance(raw, str) else dict(raw)
+        except (TypeError, ValueError):
+            meta = {}
+    names = []
+    seen = set()
+    for a in meta.get("actors") or []:
+        if isinstance(a, dict):
+            n = " ".join(str(a.get("name") or "").split())
+        else:
+            n = " ".join(str(a or "").split())
+        key = n.lower()
+        if not n or key in seen:
+            continue
+        seen.add(key)
+        names.append(n)
+    if len(names) >= 2:
+        return names
+    hay = _norm(f"{sheet_name(row)} {_row_get(row, 'view') or ''}")
+    if album and hay:
+        candidates = [lead_name(album)]
+        for c in db.q("SELECT name FROM characters WHERE scope_value=? ORDER BY name",
+                      album):
+            candidates.append(c["name"])
+        for n in candidates:
+            n = " ".join(str(n or "").split())
+            key = n.lower()
+            if not n or key in seen:
+                continue
+            if _norm(n) and _norm(n) in hay:
+                seen.add(key)
+                names.append(n)
+    return names
+
+
+def is_ensemble(row, album="", owner_name=""):
+    """True when this plate is more than one character.
+
+    Split-roast / cowgirl are ensemble even without stamps. A solo all-fours
+    stays on the owner's tab unless another cast name is on the label.
+    """
+    names = actor_names(row, album)
+    if len(names) >= 2:
+        return True
+    if _families(sheet_name(row)) & _ENSEMBLE_FAMILIES:
+        return True
+    owner = (owner_name or "").strip().lower()
+    return any(n.lower() != owner for n in names if n)
 
 
 def is_nude_sheet(row):

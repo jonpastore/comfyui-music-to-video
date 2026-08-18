@@ -42,6 +42,30 @@
         {% endfor %}
       </select>
     </label>
+    {% if characters %}
+    <fieldset class="actor-pick">
+      <legend>Also in this sheet</legend>
+      <div class="check-row">
+        {% if character_id %}
+        <label class="check">
+          <input type="checkbox" name="actor_id" value="lead">
+          {{ lead_name or "Lead" }}
+        </label>
+        {% endif %}
+        {% for c in characters %}
+        {% if c.id != character_id %}
+        <label class="check">
+          <input type="checkbox" name="actor_id" value="{{ c.id }}">
+          {{ c.name }}
+        </label>
+        {% endif %}
+        {% endfor %}
+      </div>
+      <p class="hint">Tick every other body. Their identity front joins hers
+        as a reference (up to {{ max_refs }}). The sheet lands on the
+        <em>Actors</em> tab, not under one character.</p>
+    </fieldset>
+    {% endif %}
     <label>
       <span class="label-text">Candidates per sheet{{ help("n") }}</span>
       <input type="number" name="n" value="{{ last_n }}" min="1" max="8">

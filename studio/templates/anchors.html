@@ -152,7 +152,7 @@
     {% if ns_pl.id %}
     <details class="char-rename">
       <summary>Rename a character</summary>
-      {% for ch in t.characters %}
+      {% for ch in t.characters if not ch.ensemble %}
       <form method="post" class="char-rename-row"
             action="{% if ch.character_id %}/characters/{{ ch.character_id }}/save{% else %}/playlists/{{ ns_pl.id }}/profile{% endif %}">
         <label>{{ 'Album lead' if not ch.character_id else 'Character' }}

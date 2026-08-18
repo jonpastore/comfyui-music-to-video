@@ -1248,6 +1248,16 @@ def h_anchor(args, progress):
     # queued before runs existed. New rows leave it NULL and read the run.
     run_id = args.get("run_id")
     settings = None if run_id else json.dumps(resolved_settings(render))
+    actors = [a for a in (args.get("actors") or []) if a]
+    if actors:
+        meta = {}
+        if settings:
+            try:
+                meta = json.loads(settings)
+            except (TypeError, ValueError):
+                meta = {}
+        meta["actors"] = actors
+        settings = json.dumps(meta)
     now = time.time()
     asked = args.get("prompt") or args.get("pose") or ""
     bases = args.get("images") or []
@@ -3056,8 +3066,10 @@ async def upload_style(id: int, image: UploadFile = File(...), note: str = Form(
 def nest_anchor_groups(group_list):
     """Tier → character → clothed/nude → one row per camera position.
 
-    Flat groups stay available for tests that walk candidates; the page
-    renders this nest so a dozen sheets do not dump as one long column.
+    Multi-body plates (split roast, cowgirl, stamped actors) sit on an
+    Actors tab, not under the lead. Flat groups stay available for tests
+    that walk candidates; the page renders this nest so a dozen sheets
+    do not dump as one long column.
     """
     albums = {}
     for g in group_list:
@@ -3068,8 +3080,14 @@ def nest_anchor_groups(group_list):
         tmap = albums[album]["tier_map"]
         tier = g["tier"] or ""
         tmap.setdefault(tier, {})
-        who = (g["character_id"],
-               g["character_name"] or pose_plan.lead_name(g.get("scope_value")))
+        owner = g["character_name"] or pose_plan.lead_name(g.get("scope_value"))
+        sample = (g.get("candidates") or [g])[0]
+        row = dict(sample) if hasattr(sample, "keys") else (sample or g)
+        row.setdefault("view", g.get("view"))
+        if g.get("ensemble") or pose_plan.is_ensemble(row, album, owner):
+            who = ("__actors__", "Actors")
+        else:
+            who = (g["character_id"], owner)
         tmap[tier].setdefault(who, {"clothed": {}, "nude": {}})
         family = view_family(g["view"])
         pos = view_position_label(g["view"])
@@ -3079,7 +3097,10 @@ def nest_anchor_groups(group_list):
         tiers = []
         for name, chars in sec["tier_map"].items():
             characters = []
-            for (cid, cname), fams in chars.items():
+            ordered = sorted(chars.items(), key=lambda it: (
+                2 if it[0][0] == "__actors__" else (0 if it[0][0] is None else 1),
+                it[0][1] or ""))
+            for (cid, cname), fams in ordered:
                 families = []
                 for fam_key in ("clothed", "nude"):
                     rows = [{"position": pos, "groups": gs}
@@ -3091,7 +3112,9 @@ def nest_anchor_groups(group_list):
                 for fam in families:
                     fam["default"] = fam["key"] == default_key
                 characters.append({
-                    "character_id": cid, "character_name": cname,
+                    "character_id": None if cid == "__actors__" else cid,
+                    "character_name": cname,
+                    "ensemble": cid == "__actors__",
                     "families": families,
                 })
             tiers.append({"name": name, "characters": characters})
@@ -3448,17 +3471,24 @@ async def upload_pose_sheet(request: Request, album: str = Form(...),
         try:
             cov = pose_plan.album_coverage(album, tier)
             group = next((x for x in cov["needed"] if str(x["key"]) == str(key)), None)
-            who = (group or {}).get("characters") or []
+            who = (group or {}).get("actors") or (group or {}).get("characters") or []
             if who:
                 cid = who[0].get("id")
         except (LookupError, OSError, ValueError, json.JSONDecodeError):
             group = None
+    form = await request.form()
+    actor_names = [n for n in form.getlist("actor_name") if str(n).strip()]
+    if not actor_names and group:
+        actor_names = [p.get("name") for p in
+                       ((group.get("actors") or group.get("characters") or []))
+                       if p.get("name")]
     aid = db.run(
         "INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
         None, "anchor_ref", path,
         json.dumps({"scope_kind": "album", "scope_value": album, "role": "pose",
                     "pose_name": name, "pose_tier": tier, "pose_nude": is_nude,
-                    "source": "upload", "character_id": cid}),
+                    "source": "upload", "character_id": cid,
+                    "actors": actor_names}),
         now)
     view = pose_view_key(aid, is_nude)
     db.run("""UPDATE anchors SET chosen=0 WHERE scope_kind='album' AND scope_value=?
@@ -3469,7 +3499,7 @@ async def upload_pose_sheet(request: Request, album: str = Form(...),
                        VALUES ('album',?,?,?,?,1,?,?,?)""",
                     album, tier, view, path, now, cid,
                     json.dumps({"source": "upload", "asset_id": aid, "pose_name": name,
-                                "character_id": cid}))
+                                "character_id": cid, "actors": actor_names}))
     if group:
         try:
             pose_plan.stamp_binds(tier, group.get("binds") or [], new_id)
@@ -4882,6 +4912,56 @@ def _validate_anchor_request(album, tiers_sel, views_sel):
     return album, selected_tiers, selected_views, combos
 
 
+def _form_actors(form, album, character_id):
+    """Primary character plus any extra bodies ticked on the generate form."""
+    names = []
+    extra_ids = []
+    if character_id is not None:
+        char = get_character_or_404(character_id)
+        names.append(char["name"])
+    else:
+        names.append(pose_plan.lead_name(album))
+    seen = {n.lower() for n in names}
+    for raw in form.getlist("actor_id"):
+        if str(raw) == "lead":
+            if character_id is None:
+                continue
+            n = pose_plan.lead_name(album)
+            extra_ids.append(None)
+            if n and n.lower() not in seen:
+                seen.add(n.lower())
+                names.append(n)
+            continue
+        try:
+            cid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if cid == character_id:
+            continue
+        row = db.one("SELECT * FROM characters WHERE id=? AND scope_value=?",
+                     cid, album)
+        if not row:
+            continue
+        extra_ids.append(cid)
+        n = row["name"]
+        if n and n.lower() not in seen:
+            seen.add(n.lower())
+            names.append(n)
+    return names, extra_ids
+
+
+def _actor_identity_paths(album, character_ids, work_tiers):
+    """Chosen identity front for each extra body, first ticked tier that has one."""
+    out = []
+    for cid in character_ids:
+        for t in work_tiers or []:
+            front = chosen_anchor("album", album, t, "front", cid)
+            if front and front["path"] and os.path.isfile(front["path"]):
+                out.append(front["path"])
+                break
+    return out
+
+
 def _collect_anchor_ref_paths(album, character_id, ref_ids, extra_paths=None,
                               work_tiers=None):
     """Resolve selected anchor_ref assets to paths. T10-23: a child-locked
@@ -4936,7 +5016,7 @@ def _collect_anchor_ref_paths(album, character_id, ref_ids, extra_paths=None,
 
 
 def _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
-                         character_id, form, paths):
+                         character_id, form, paths, actors=None):
     """Queue one job per planned sheet. Shared by HTML POST /anchors and /api/anchors."""
     if character_id is not None:
         char = get_character_or_404(character_id)
@@ -5020,7 +5100,8 @@ def _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
         jid = jobs.enqueue("anchor", {"scope_kind": "album", "scope_value": album, "tier": t,
                                        "view": v, "images": this_paths, "n": this_n,
                                        "character_id": character_id, "prompt": text,
-                                       "render": this_render, "run_id": run_id})
+                                       "render": this_render, "run_id": run_id,
+                                       "actors": list(actors or [])})
         queued.append({"id": jid, "tier": t, "view": v, "prompt": text, "cfg": cfg,
                        "run_id": run_id})
     prompts.mark_used(form.getlist("used_version"))
@@ -5189,11 +5270,14 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     if not ref_ids:
         ref_ids = [str(r["id"]) for r in anchor_refs(album, character_id)
                    if r.get("role") == "identity"][:2]
+    actor_names, extra_ids = _form_actors(form, album, character_id)
+    extra.extend(_actor_identity_paths(album, extra_ids, selected_tiers))
     paths = _collect_anchor_ref_paths(album, character_id, ref_ids,
                                       extra_paths=extra,
                                       work_tiers=selected_tiers)
     payload = _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
-                                   character_id, form, paths)
+                                   character_id, form, paths,
+                                   actors=actor_names)
     if wants_json(request):
         return JSONResponse(payload)
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)
@@ -8556,7 +8640,14 @@ def playlist_gallery(p):
     per_character = {}
     lead_n = lead_display_name(prof)
     for a in all_anchors:
-        who = a["character_name"] or lead_n
+        owner = a["character_name"] or lead_n
+        if pose_plan.is_ensemble(a, p["name"], owner):
+            who = "Actors"
+            a["ensemble"] = True
+        else:
+            who = owner
+            a["ensemble"] = False
+        a["gallery_who"] = who
         per_character[who] = per_character.get(who, 0) + 1
     pose_need = []
     for t in VIDEO_MATRIX_TIERS:
@@ -10549,13 +10640,15 @@ async def api_anchors_generate(request: Request):
     character_id = _optional_int(body.get("character_id"))
     form = _JsonForm(body)
     extra = _as_str_list(body.get("paths") or body.get("images") or body.get("path"))
+    actor_names, extra_ids = _form_actors(form, album, character_id)
+    extra.extend(_actor_identity_paths(album, extra_ids, selected_tiers))
     paths = _collect_anchor_ref_paths(
         album, character_id,
         _as_str_list(body.get("ref_id") if "ref_id" in body else body.get("ref_ids")),
         extra_paths=extra, work_tiers=selected_tiers)
     return JSONResponse(_enqueue_anchor_jobs(
         album, selected_tiers, selected_views, combos,
-        body.get("n") or 4, character_id, form, paths))
+        body.get("n") or 4, character_id, form, paths, actors=actor_names))
 
 
 @app.get("/api/anchors/refs")

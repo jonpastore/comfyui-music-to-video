@@ -57,6 +57,9 @@
     <input type="hidden" name="tier" value="{{ tier }}">
     <input type="hidden" name="key" value="{{ g.key }}">
     <input type="hidden" name="label" value="{{ g.label }}">
+    {% for a in g.actors or g.characters or [] %}
+    {% if a.name %}<input type="hidden" name="actor_name" value="{{ a.name }}">{% endif %}
+    {% endfor %}
     <label class="icon-btn">
       <span class="visually-hidden">Upload sheet for {{ g.label }}</span>
       <input type="file" name="image" accept="image/*" required hidden

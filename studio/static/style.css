@@ -272,6 +272,8 @@ details.song-fold[open] > summary { margin-bottom: 0.75rem; }
 a.tier-cell.has { color: var(--accent); border-color: var(--border-strong); }
 .tier-cell.miss { color: var(--muted); }
 #media-player audio { width: 100%; margin-top: 0.6rem; }
+.actor-pick { margin: 0; min-width: 12rem; }
+.actor-pick .check-row { margin: 0.15rem 0 0; }
 .char-rename { margin: 0.45rem 0 0.7rem; }
 .char-rename > summary { cursor: pointer; color: var(--muted); }
 .char-rename-row {

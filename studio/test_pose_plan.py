@@ -106,6 +106,41 @@ def test_scene_actors_solo_named_lead_stays_one():
     assert [p["name"] for p in got] == ["Panther"]
 
 
+def test_ensemble_sheet_is_split_roast_not_solo_all_fours():
+    split = {"view": "pose_1_nude",
+             "render_json": json.dumps({"pose_name": "split roast"})}
+    solo = {"view": "pose_2",
+            "render_json": json.dumps({"pose_name": "all fours, facing forward"})}
+    stamped = {"view": "front",
+               "render_json": json.dumps({"pose_name": "standing",
+                                          "actors": ["Meow P", "Panther"]})}
+    assert pose_plan.is_ensemble(split) is True
+    assert pose_plan.is_ensemble(solo) is False
+    assert pose_plan.is_ensemble(stamped) is True
+
+
+def test_nest_puts_split_roast_on_the_actors_tab():
+    album = f"Actors Tab {time.time_ns()}"
+    nest = __import__("app").nest_anchor_groups([
+        {"scope_kind": "album", "scope_value": album,
+         "character_id": None, "character_name": None,
+         "tier": "xxx", "view": "pose_9_nude",
+         "render_json": json.dumps({"pose_name": "split roast"}),
+         "path": "split.jpg"},
+        {"scope_kind": "album", "scope_value": album,
+         "character_id": None, "character_name": None,
+         "tier": "xxx", "view": "front", "path": "front.jpg"},
+    ])
+    chars = nest[0]["tiers"][0]["characters"]
+    names = [c["character_name"] for c in chars]
+    assert "Actors" in names
+    actors = next(c for c in chars if c["ensemble"])
+    solo = next(c for c in chars if not c["ensemble"])
+    assert actors["character_name"] == "Actors"
+    assert any(r["position"] for fam in actors["families"] for r in fam["rows"])
+    assert solo["families"]
+
+
 def test_set_lead_name_is_what_the_anchors_tab_uses():
     album = f"Lead Name {time.time_ns()}"
     assert pose_plan.lead_name(album) == "Lead"

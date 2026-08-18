@@ -70,11 +70,11 @@
   <div class="anchor-row">
     {% for a in group.anchors %}
     <figure class="anchor-tile {% if a.chosen %}picked{% endif %}"
-            data-character="{{ a.character_name or d.lead_name }}">
+            data-character="{{ a.gallery_who or a.character_name or d.lead_name }}">
       <button type="button" class="js-ref-preview thumb-open anchor-open"
               data-full="{{ media_url(a.path) }}"
               data-opposite="{{ media_url(a.opposite) if a.opposite else '' }}"
-              data-label="{{ a.character_name or d.lead_name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
+              data-label="{{ a.gallery_who or a.character_name or d.lead_name }} · {{ a.tier | tiername }} · {{ a.view | viewname }}"
               title="Open this sheet">
         <img class="lazy-src" data-src="{{ media_url(a.path) }}" loading="lazy" decoding="async"
              alt="{{ a.character_name or d.lead_name }}, {{ a.tier | tiername }}, {{ a.view | viewname }}">
