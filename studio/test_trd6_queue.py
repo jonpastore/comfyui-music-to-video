@@ -95,6 +95,26 @@ def test_t6_2_failed_predecessor_fails_successor():
     assert "predecessor failed" in (got["error"] or "")
 
 
+def test_chip_skips_never_started_cancelled_qc():
+    """Auto QC leftover (job 332) must not be the chip after it is cancelled."""
+    _isolate()
+    pred = jobs.enqueue("t6", {"who": "pred"})
+    succ = jobs.enqueue("t6", {"song_id": 1, "tier": "xxx", "who": "qc"},
+                        depends_on=pred)
+    db.run("UPDATE jobs SET status='failed', finished=?, error=? WHERE id=?",
+           1.0, "clip plan miss", pred)
+    jobs._claim()
+    row = jobs.get(succ)
+    if row["status"] == "queued":
+        jobs.cancel(succ)
+        row = jobs.get(succ)
+    db.run("UPDATE jobs SET started=NULL WHERE id=?", succ)
+    import app as appmod
+    latest = appmod.queue_ctx()["queue_latest"]
+    if latest is not None:
+        assert latest["job"]["id"] != succ, latest
+
+
 def test_t6_7_land_requires_the_file():
     """A row claiming a landed artefact that is not on disk is refused.
     QC would otherwise measure nothing against it."""

@@ -11188,9 +11188,14 @@ def queue_ctx():
     recent = [entry(j) for j in rows if j["status"] not in ("running", "cancelling", "queued")]
     recent.reverse()                       # newest of the finished ones first
     rows_out = active + waiting + recent
+    # Chip headline: in-flight first. A cancelled QC that never started
+    # (Auto QC ticked on a clip that then died) is not "work in flight".
+    chip_recent = [e for e in recent
+                   if e["job"].get("started") or e["job"]["status"] == "done"]
+    chip_rows = active + waiting + chip_recent
     return {"queue_active": active, "queue_waiting": waiting, "queue_recent": recent,
             "queue_rows": rows_out,
-            "queue_latest": rows_out[0] if rows_out else None,
+            "queue_latest": chip_rows[0] if chip_rows else None,
             "queue_n_running": len(active),
             "queue_n_waiting": len(waiting),
             "queue_n_recent": len(recent),
