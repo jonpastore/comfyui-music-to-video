@@ -1,9 +1,12 @@
-"""T2-25: scene-time mismatch is refused before clips enqueue.
+"""T2-25: scene-time mismatch is refused before full-song clips enqueue.
 
-docs/TRD-2 §5.1: a song whose scenes do not sum to its duration is
-flagged before any render is queued. GET /meter already flags (T2-23);
-this is the gate that would have caught the scene_seconds defect on
-the first generation instead of the hundredth.
+docs/TRD-2 §5.1 / T2-13e seam: a song whose scenes do not sum to its
+duration is flagged before any full-song render is queued. GET /meter
+already flags (T2-23); this is the gate that would have caught the
+scene_seconds defect on the first generation instead of the hundredth.
+
+Scene-scoped Render clip (scene= / clip_idx=) matches build_song --only
+and still enqueues on a short board; bare full-song POST stays 400.
 
 Both arms: an in-tolerance board still enqueues; a deliberately short
 board is 400 and writes no clips job.
@@ -12,6 +15,7 @@ Mutation: only flag on GET /meter, enqueue anyway → miss arm fails.
 Mutation: always refuse clips → match arm fails.
 Mutation: refuse with a generic 400 that missing-refs already returns
 → message arm fails.
+Mutation: scene-scoped POST still refuse a short board → seam arm fails.
 """
 import json
 import os
@@ -123,3 +127,50 @@ def test_t2_25_mismatch_refused_before_clips_enqueue():
         assert "scene time" in low or "scene_time" in low, miss.text
         assert "120" in miss.text, miss.text
         assert _n_clips_jobs(sid) == before_miss, miss.text
+
+
+def test_t2_25_scene_scoped_skips_mismatch_refuse():
+    """Short board + scene=/clip_idx= still enqueues; bare full-song 400s.
+
+    T2-13e/T2-25 seam: Render clip matches build_song --only.
+    Mutation: scene-scoped still refuse → this fails.
+    Mutation: bare full-song enqueue → full-song arm fails.
+    """
+    tiers.ensure_builtins()
+    song_length = 120.0
+    scene_seconds = 30.0
+    with TestClient(appmod.app) as client:
+        sid = db.upsert_song(
+            "t225-scene-scoped", title="T2-25 Scene Scoped",
+            album="T225", duration=song_length)
+        song = db.one("SELECT * FROM songs WHERE id=?", sid)
+        short = [_scene(n, "5 sec") for n in (1, 2, 3, 4)]
+        _write_board(sid, song["slug"], "pg13", short, scene_seconds=scene_seconds)
+        _approve_refs(sid, "pg13", short)
+        meter = client.get(f"/api/songs/{sid}/storyboard/pg13/meter")
+        assert meter.status_code == 200, meter.text
+        assert meter.json()["mismatch"] is True, meter.json()
+
+        before = _n_clips_jobs(sid)
+        by_scene = client.post(
+            f"/songs/{sid}/clips",
+            data={"tier": "pg13", "scene": "1"},
+            follow_redirects=False)
+        assert by_scene.status_code == 303, by_scene.text
+        assert _n_clips_jobs(sid) == before + 1, by_scene.text
+
+        before_clip = _n_clips_jobs(sid)
+        by_idx = client.post(
+            f"/songs/{sid}/clips",
+            data={"tier": "pg13", "clip_idx": "0"},
+            follow_redirects=False)
+        assert by_idx.status_code == 303, by_idx.text
+        assert _n_clips_jobs(sid) == before_clip + 1, by_idx.text
+
+        before_full = _n_clips_jobs(sid)
+        full = client.post(f"/songs/{sid}/clips", data={"tier": "pg13"},
+                           follow_redirects=False)
+        assert full.status_code == 400, full.text
+        low = full.text.lower()
+        assert "scene time" in low or "scene_time" in low, full.text
+        assert _n_clips_jobs(sid) == before_full, full.text

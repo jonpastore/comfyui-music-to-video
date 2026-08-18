@@ -285,8 +285,9 @@ HTML `GET /` / `GET /songs` (`#library` `data-song-count`) and
 (`test_t6_a2_html_and_json_report_the_same_library_numbers`); `GET /songs`
 is 200 never 405.
 **`T2-25` built**:
-`POST /songs/{id}/clips` refuses a scene-time miss (400, no job)
-and still queues an in-tolerance board.
+bare `POST /songs/{id}/clips` refuses a scene-time miss (400, no job)
+and still queues an in-tolerance board; scene-scoped Render clip
+(`scene=` / `clip_idx=`) skips that refuse (seam with `T2-13e`).
 
 `finding-row` **built** (`GET /qc`, `_finding_row.html`,
 `test_t3_19_finding_row.py`): measured / expected / unit / editable
@@ -423,9 +424,11 @@ before (`T2-10`). Re-generating a storyboard keeps every approved reference
 The grid lists every **scene** (`T2-13c`); a 20-scene board on a 195 s
 song is 20 tiles, not 41 clip parts.
 A plan whose clip durations miss the track by more than one clip is
-refused before render (`T2-13e`); the storyboard page still allocates
-from `nclips` alone. Assembly still clamps to the track — an overrun
-is a signal, not the expected leftover of 4.8125 s quantisation.
+refused before render (`T2-13e`); scene-scoped `--only` / Render clip
+(`scene=` / `clip_idx=`) skip that full-track refuse. The storyboard
+page still allocates from `nclips` alone. Assembly still clamps to the
+track — an overrun is a signal, not the expected leftover of 4.8125 s
+quantisation.
 The storyboard planner prompt does not tell the model clips are a fixed
 4.8125 s (`T2-14a`). The song-page Direction box is the **brief**, not
 the board; existing G/XXX links open the scenes. Scene count is the
@@ -474,7 +477,9 @@ silently defaulted and not deferred to render.
 The storyboard meter API reports total scene time against song length
 and flags a miss beyond a stated tolerance (`T2-23`); it reports this
 song's `clip_seconds`, not a constant (`T2-24`). A miss is refused
-before clips enqueue (`T2-25`). The live `meter` component is not this.
+before bare full-song clips enqueue (`T2-25`); scene-scoped Render clip
+skips that refuse (seam with `T2-13e`). The live `meter` component is
+not this.
 `GET/POST /api/songs/{id}/storyboard/{tier}` is the generation prompt
 (`T2-17`–`T2-19`) and, when a board file exists, the scenes/anchors/refs
 payload (`T2-26`, `T2-27`). The song page itself (`GET /songs/{id}`) does

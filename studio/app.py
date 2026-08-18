@@ -6684,10 +6684,12 @@ def scene_time_report(scene_time, song_length):
 
 
 def refuse_if_scene_time_mismatch(song, tier):
-    """T2-25: a miss is refused before clips enqueue, not only on GET /meter.
+    """T2-25: a miss is refused before full-song clips enqueue.
 
-    Unreadable boards are skipped so a missing fixture path still hits the
-    existing duration/refs gates rather than a new 500.
+    Scene-scoped Render clip (scene= / clip_idx=) skips this gate the same
+    way build_song --only skips T2-13e. Unreadable boards are skipped so a
+    missing fixture path still hits the existing duration/refs gates rather
+    than a new 500.
     """
     row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?",
                  song["id"], tier)
@@ -8076,7 +8078,9 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
         # it would look like it worked
         raise HTTPException(400, "ref_motion and control_video are s2v inputs -- i2v has "
                                   "neither. Switch to s2v or remove the clips.")
-    refuse_if_scene_time_mismatch(song, tier)
+    # T2-13e/T2-25 seam: scene-scoped Render clip matches build_song --only.
+    if scene_num is None and only_idx is None:
+        refuse_if_scene_time_mismatch(song, tier)
     jids = enqueue_clips(id, tier, video_model, refine=bool(refine),
                   ref_motion=motion_path, control_video=control_path,
                   scenes=(board or {}).get("scenes") or [],

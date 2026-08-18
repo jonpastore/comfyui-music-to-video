@@ -357,8 +357,10 @@ unbuilt work and are not" — the ledger with line counts is DDD §1.
    heads). A 20-scene storyboard on a 195 s song is 20 tiles, not 41
    4.8 s slices. `T2-13e` is **built**: `clip_plan` refuses
    before render when planned clip durations miss the track by more
-   than one clip; assemble still clamps to the track and no longer
-   treats a 4.8125 s overrun as the norm. **refs-length built**:
+   than one clip; `--only` and studio Render clip (`scene=` /
+   `clip_idx=`) skip that full-track refuse (seam with `T2-25`);
+   assemble still clamps to the track and no longer treats a 4.8125 s
+   overrun as the norm. **refs-length built**:
    `clip_plan`'s audio-only default is `n_clips_for(track,
    length_seconds)`, not `ceil(track / CHUNK)`, so `build_refs` /
    `reroll_refs` emit one still per scene (`--heads`), not a CHUNK-era count.
@@ -447,8 +449,10 @@ order and take the dependencies from here.
    `renderable()` and discards it fails that. **`T2-8c` built**: every
    scene names the lyric sections it spans; unnamed or double-named
    fails validate (`test_t2_8c.py`). **`T2-25` built**: a scene-time
-   miss is 400 before clips enqueue; in-tolerance still queues
-   (`test_t2_25_scene_time_enqueue.py`). **`T2-34` built**: the
+   miss is 400 before bare full-song clips enqueue; in-tolerance still
+   queues; scene-scoped `scene=` / `clip_idx=` still enqueues on a short
+   board (`test_t2_25_scene_time_enqueue.py`, seam with `T2-13e`).
+   **`T2-34` built**: the
    clip-pass picker marks a model `where()` says False on every
    reachable backend as unavailable and still offers a confirmed one
    (`test_t2_34_unavailable_shown.py`). **`T2-17` built**:

@@ -374,7 +374,9 @@ clamp, correct the comment.** Under variable lengths the clips should sum to
 approximately the song, so an overrun becomes a signal rather than the norm.
 
 - `T2-13e` A plan whose clip durations miss the track length by more than one
-  clip is refused **before render**, not absorbed by the clamp.
+  clip is refused **before render**, not absorbed by the clamp. Scene-scoped
+  `--only` / studio Render clip (`scene=` / `clip_idx=`) skip that full-track
+  refuse; bare full-song render still refuses (seam with `T2-25`).
 
 **W1-7 Chained clips have a node already.** `LTXVAddGuide`, `LTXVAddGuideMulti`
 and `LTXVAddGuidesFromBatch` are installed on cerberus and inject a guide frame
@@ -590,8 +592,10 @@ cannot hide them (`test_scene_row_reads_clip_jobs_when_chip_is_qc`).
   reports two different clip lengths. A meter hardcoding 4.8125 s passes a
   presence check and fails this one.
 - `T2-25` A song whose scenes do not sum to its duration is flagged **before**
-  any render is queued. This is the check that would have surfaced the
-  `scene_seconds` defect on its first generation instead of on its hundredth.
+  any **full-song** render is queued. Scene-scoped Render clip (`scene=` /
+  `clip_idx=`) skips the refuse the same way `build_song --only` skips
+  `T2-13e`. This is the check that would have surfaced the `scene_seconds`
+  defect on its first generation instead of on its hundredth.
 
 ### 5.2 Anchors and cast
 
@@ -859,7 +863,7 @@ current.
 | **legacy refs remap to scene heads** | **built** | `test_remap_legacy_refs_moves_clip_plan_rows_onto_heads` | `remap_legacy_refs` maps clip_plan-era `(clip_idx, seed)` onto the scene's chain head and stamps `scene_number`. Already-stamped rows stay. Mutation: map by `clip_idx==head` → scene-2 part-1 stills land on scene 4 |
 | **`T2-13d` one output fps per song** | **built** | `test_t2_13d_assembly_fps.py` | mixed 16 + 24 + 16 assembles at 24 on the **file**, not the plan; 16.0 + 16.8312 assembles at 16.8312. Mutation: concat demuxer first-clip-wins → 16.0 and this fails |
 | **`T2-13f` clip QC expectation is native fps** | **built** | `test_t2_13f_native_fps.py` | mixed s2v@16.0 / LTX@16.8312 each pass their own fps check; `clip_qc_expect` ignores the song fps. Mutation: copy song fps onto the clip → the other model flags |
-| **`T2-13e` plan that misses the track by more than one clip is refused before render** | **built** | `test_t2_13e_plan_miss.py` | `clip_plan` with a known track raises when `|sum(clip_seconds) - track|` exceeds one clip; `main()` writes no clip graphs. A miss of exactly one clip, and nclips-only display, still allocate. `--only` (scene-scoped Render clip) skips the full-track refuse (`test_t2_13e_only_skips_full_track_refuse`). `assemble_song` keeps `-t audio_dur` and no longer says clips are quantised so the video always overruns. Mutation: allocate and return → red. Mutation: `--only` still refuse a short board → red |
+| **`T2-13e` plan that misses the track by more than one clip is refused before render** | **built** | `test_t2_13e_plan_miss.py` / `test_t2_25_scene_time_enqueue.py` | `clip_plan` with a known track raises when `|sum(clip_seconds) - track|` exceeds one clip; `main()` writes no clip graphs. A miss of exactly one clip, and nclips-only display, still allocate. `--only` and studio `POST /clips` with `scene=` / `clip_idx=` (Render clip) skip the full-track / scene-time refuse (`test_t2_13e_only_skips_full_track_refuse`, `test_t2_25_scene_scoped_skips_mismatch_refuse`); bare full-song POST still 400s. `assemble_song` keeps `-t audio_dur` and no longer says clips are quantised so the video always overruns. Mutation: allocate and return → red. Mutation: `--only` / scene-scoped still refuse a short board → red |
 | **`T2-14a` no fixed clip quantum in the planner prompt** | **built** | `_user_prompt` | return value has no `CHUNK` formatting, no "Nothing shorter or longer can be produced", no `duration_guidance`-to-multiples instruction. Mutation: restore any one → red. `_system_prompt` no longer names 4.8125 s either |
 | unpinned generate does not pin `n_clips_for` | **built** | `test_unpinned_user_prompt_does_not_ask_for_a_clip_count` | `scene_seconds` empty → no "N clips", no "Generate None". 237.67 s at CHUNK is 50; naming that count is the defect. Mutation: restore `n_clips_for(dur, None)` in TIMING → red |
 | **`T2-14b` clip-length text derived from planning** | **built** | `_user_prompt` | TIMING clip-length line is `clip_seconds(scene_seconds)`, not a new constant. Same song at 15 s and 30 s yields two statements. Mutation: swap 4.8125 for 15.0 and keep the sentence shape → `T2-14a` passes and this fails |
@@ -878,7 +882,7 @@ current.
 | **`T2-24` meter reports this song's `clip_seconds`** | **built** | `api_storyboard_meter` | `GET .../meter` returns `clip_seconds` from `build_song.clip_seconds(scene_seconds)`, not `CHUNK`. Same song at 15 s and 30 s yields two lengths. Mutation: hardcode 4.8125 → both arms equal. Mutation: return raw `scene_seconds` → 15.0 is not the legal 8n+1 length. The live `meter` component and `T2-25` are not this |
 | **`T2-33` picker reads `renderable()`** | **built** | `test_t2_33_picker_renderable.py` | add a catalogue model with a cli and it appears in `GET /songs/{id}` video_model options with no template change; option values match `models.renderable("video").values()`. Mutation: hardcode s2v+i2v+ltx → the probe cli is absent |
 | **`T2-34` unavailable shown as unavailable** | **built** | `available_on_fleet` | clip-pass picker takes `models.available_on_fleet` (a fold of `where()`): False on every reachable backend disables the option; a confirmed model is still offered (`test_t2_34_unavailable_shown.py`). Empty backends are None, not False. Mutation: copy `catalog()['available']` → a model this box does not mark False is offered. Mutation: disable every option → available arm red |
-| **`T2-25` refuse scene-time mismatch before clips enqueue** | **built** | `test_t2_25_scene_time_enqueue.py` | `POST /songs/{id}/clips` 400s and writes no clips job when `scene_time_report` is a miss (20 s of guidance on a 120 s song); in-tolerance still 303s. Mutation: only flag on GET /meter → miss arm red. Mutation: always refuse → match arm red |
+| **`T2-25` refuse scene-time mismatch before clips enqueue** | **built** | `test_t2_25_scene_time_enqueue.py` | Bare `POST /songs/{id}/clips` 400s and writes no clips job when `scene_time_report` is a miss (20 s of guidance on a 120 s song); in-tolerance still 303s. Scene-scoped `scene=` / `clip_idx=` (Render clip) skips the refuse, matching `build_song --only` / T2-13e (`test_t2_25_scene_scoped_skips_mismatch_refuse`). Mutation: only flag on GET /meter → miss arm red. Mutation: always refuse → match arm red. Mutation: scene-scoped still refuse → seam arm red |
 | **`T2-15` proposal is not saved until accepted** | **built** | `test_t2_15_arc_proposal.py` | Previous arc on disk; `POST .../arc/propose` leaves that file byte-identical; `POST .../arc/reject` leaves it byte-identical; `POST .../arc` replaces the premise. Mutation: propose writes → propose arm red. Mutation: reject overwrites or deletes → reject arm red. Mutation: accept does not write → accept arm red |
 | **`T2-27` each scene JSON carries its reference image** | **built** | `_scene_json` | `GET /api/songs/{id}/storyboard/{tier}` `scenes[]` include `refs` next to `image_prompt` / `story` / `video_motion_prompt`: per-clip `idx` / `path` / `url` (latest candidate) plus `candidates[]`. Scene A does not carry scene B's still. Another tier stays out. Mutation: omit `refs` on the scene → red. Mutation: top-level refs only → red. Mutation: copy another scene's still onto this scene → red. `studio/test_t2_27_scene_refs.py` |
 | **`T2-29` every named scene figure carries lead/extra/background** | **built** | `test_t2_29_figure_roles.py` | `_compose` keeps `{name, role}` (does not drop dicts). `write_storyboard` / `validate` refuse a named figure with no role or a free-text role. `GET .../cast` returns `role` on each figure. A bare name is a legacy lead. Mutation: coerce characters to strings → compose arm red. Mutation: dump without the check → writer arm red. Mutation: return names without role → API arm red. `T2-30` (unanchored warning fires only for leads) is not this |

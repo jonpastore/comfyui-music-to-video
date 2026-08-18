@@ -620,6 +620,9 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    `clip_seconds(length_seconds)` (CHUNK when missing) and refuses when
    that total misses the track by more than one clip. `main()` therefore
    writes no graphs. nclips-only callers are display and skip the gate.
+   Scene-scoped `build_song --only` and studio `POST /clips` with
+   `scene=` / `clip_idx=` skip the full-track / scene-time refuse (seam
+   with `T2-25`); bare full-song POST still 400s.
    `assemble_song` keeps `-t audio_dur`; its comment no longer says
    clips are quantised so the video always overruns.
 4. **`T2-47` built.** Hop 0 is LTX even when a scene is marked `s2v`
@@ -675,7 +678,8 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    (reroll / generate from current text). Still check/wrench/trash sit
    on `.still-icons { margin-top: auto }` so wrapping QC text does not
    offset the row.
-   Scene-scoped `build_song --only` skips T2-13e. Scene preview is plate / stills / clips. Reroll plants
+   Scene-scoped `build_song --only` and studio Render clip (`scene=` /
+   `clip_idx=`) skip T2-13e / T2-25. Scene preview is plate / stills / clips. Reroll plants
    `.ref-frame.clip-tile` shimmer cards (same 190px / 3:4 frame as a
    finished still). Render clip plants the same cards in
    `.media-strip.scene-clips` (`paintClipPlaceholders`) and calls
@@ -779,11 +783,15 @@ is not this.
 arms equal. Mutation: return raw `scene_seconds` → 15.0 is not the
 legal 8n+1 length. The live `meter` component is not this.
 
-`T2-25` is **built**. `POST /songs/{id}/clips` calls
+`T2-25` is **built**. Bare `POST /songs/{id}/clips` calls
 `refuse_if_scene_time_mismatch` after the existing duration/refs
 gates: a miss is 400 and writes no clips job; an in-tolerance board
-still enqueues. An unreadable board file is skipped so the older gates
-still fire. Mutation: flag only on GET `/meter` → the miss arm fails.
+still enqueues. Scene-scoped `scene=` / `clip_idx=` (Render clip)
+skips that refuse, matching `build_song --only` / `T2-13e`
+(`test_t2_25_scene_scoped_skips_mismatch_refuse`). An unreadable board
+file is skipped so the older gates still fire. Mutation: flag only on
+GET `/meter` → the miss arm fails. Mutation: scene-scoped still refuse
+→ seam arm fails.
 
 `T2-33` is **built**. `GET /songs/{id}` builds the video-model select
 from `models.renderable("video")` (labels/purpose from `catalog()`).
