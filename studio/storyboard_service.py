@@ -77,9 +77,7 @@ def clip_count(song, scene_seconds=None):
 
 
 def chosen_anchor(scope_kind, scope_value, tier, view="front", character_id=None):
-    return db.one("""SELECT * FROM anchors WHERE scope_kind=? AND scope_value=? AND tier=?
-                      AND view=? AND chosen=1 AND character_id IS ?""",
-                  scope_kind, scope_value, tier, view, character_id)
+    return db.chosen_anchor(scope_kind, scope_value, tier, view, character_id)
 
 
 def album_cast(album):
@@ -96,12 +94,8 @@ def cast_anchors(album, tier):
 
 
 def album_chosen_anchors(album, tier):
-    """Chosen album sheets at this tier: protagonist first, then cast by name."""
-    return db.q("""SELECT a.*, c.name AS character_name
-                   FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
-                   WHERE a.scope_kind='album' AND a.scope_value=? AND a.tier=? AND a.chosen=1
-                   ORDER BY (a.character_id IS NOT NULL), c.name, a.view, a.id""",
-                album or "", tier)
+    """Chosen sheets at this tier: album keepers plus the shared library."""
+    return db.visible_chosen_anchors(album, tier)
 
 
 def anchors_by_character(album, tier):

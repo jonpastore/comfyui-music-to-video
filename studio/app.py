@@ -420,10 +420,10 @@ def album_anchor_tiers(album):
     tier + view group, oldest first) and the path of its opposite view, so the
     viewer can show front and back together without another query.
     """
-    rows = db.q("""SELECT a.*, c.name AS character_name
-                   FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
-                   WHERE a.scope_kind='album' AND a.scope_value=?
-                   ORDER BY a.tier, c.name, a.view, a.created, a.id""", album or "")
+    rows = db.q(f"""SELECT a.*, c.name AS character_name
+                    FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
+                    WHERE {db.visible_anchor_sql('a')}
+                    ORDER BY a.tier, c.name, a.view, a.created, a.id""", album or "")
     # version numbering and opposite-view lookup both key off the same group
     by_group, version = {}, {}
     for r in rows:
@@ -578,12 +578,22 @@ def chosen_pose_count(scope_kind, scope_value, tier, character_id=None):
 
     Named pose sheets (pose_21, pose_60_nude, …) count. Generate refs still
     needs view='front'; this number is what the UI uses to say "library is
-    full, identity front is missing" instead of "no anchor".
+    full, identity front is missing" instead of "no anchor". Shared
+    sheets with the same character name count for every album.
     """
-    row = db.one("""SELECT COUNT(*) AS n FROM anchors
-                    WHERE scope_kind=? AND scope_value=? AND tier=?
-                      AND chosen=1 AND character_id IS ?""",
-                 scope_kind, scope_value, tier, character_id)
+    if character_id is None:
+        row = db.one(f"""SELECT COUNT(*) AS n FROM anchors
+                         WHERE {db.visible_anchor_sql()} AND tier=?
+                           AND chosen=1 AND character_id IS NULL""",
+                     scope_value or "", tier)
+    else:
+        row = db.one(f"""SELECT COUNT(*) AS n FROM anchors a
+                         LEFT JOIN characters c ON c.id = a.character_id
+                         WHERE {db.visible_anchor_sql('a')} AND a.tier=?
+                           AND a.chosen=1
+                           AND (a.character_id=? OR (a.scope_kind='shared'
+                                AND c.name=(SELECT name FROM characters WHERE id=?)))""",
+                     scope_value or "", tier, character_id, character_id)
     return int(row["n"]) if row else 0
 
 
@@ -613,13 +623,11 @@ def chosen_anchor(scope_kind, scope_value, tier, view="front", character_id=None
     NULL test is not optional: without it a supporting character's chosen anchor
     could be returned as the protagonist's and every reference frame for the
     song would render the wrong person.
+
+    A shared keeper (scope_kind='shared') is used when this album has no
+    row of its own. Kitty's standing nude is one file, not one copy per album.
     """
-    # `IS ?` is sqlite's null-safe equality: it matches NULL when the parameter
-    # is None and matches the id otherwise, in one query. (`= ?` never matches
-    # NULL, and IS NOT DISTINCT FROM needs sqlite 3.39 -- cerberus has 3.37.)
-    return db.one("""SELECT * FROM anchors WHERE scope_kind=? AND scope_value=? AND tier=?
-                      AND view=? AND chosen=1 AND character_id IS ?""",
-                  scope_kind, scope_value, tier, view, character_id)
+    return db.chosen_anchor(scope_kind, scope_value, tier, view, character_id)
 
 
 def ref_score_bases(song, tier, fallback=None):
@@ -719,16 +727,13 @@ def cast_anchors(album, tier):
 
 
 def album_chosen_anchors(album, tier):
-    """Chosen album sheets at this tier: protagonist first, then cast by name.
+    """Chosen sheets at this tier: protagonist first, then cast by name.
 
-    Same rows the storyboard page already showed at the top. T2-26 puts them
-    on the JSON so a client that is not that page can show them too.
+    Album-scoped keepers plus the shared library. Same rows the
+    storyboard page already showed at the top. T2-26 puts them on the
+    JSON so a client that is not that page can show them too.
     """
-    return db.q("""SELECT a.*, c.name AS character_name
-                   FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
-                   WHERE a.scope_kind='album' AND a.scope_value=? AND a.tier=? AND a.chosen=1
-                   ORDER BY (a.character_id IS NOT NULL), c.name, a.view, a.id""",
-                album or "", tier)
+    return db.visible_chosen_anchors(album, tier)
 
 
 def anchors_by_character(album, tier):
@@ -2716,10 +2721,10 @@ def song_page(request: Request, id: int):
     anchor_by_tier = {t: chosen_anchor("album", album, t) for t in storyboards}
     pose_count_by_tier = {t: chosen_pose_count("album", album, t) for t in storyboards}
     pose_library_by_tier = {}
-    for a in db.q("""SELECT a.*, c.name AS character_name
-                     FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
-                     WHERE a.scope_kind='album' AND a.scope_value=? AND a.chosen=1
-                     ORDER BY a.tier, c.name, a.view, a.id""", album):
+    for a in db.q(f"""SELECT a.*, c.name AS character_name
+                      FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
+                      WHERE {db.visible_anchor_sql('a')} AND a.chosen=1
+                      ORDER BY a.tier, c.name, a.view, a.id""", album):
         pose_library_by_tier.setdefault(a["tier"], []).append(a)
     ref_progress_by_tier = {}
     for t in storyboards:
@@ -3164,12 +3169,16 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
     if not scope_value and names:
         scope_value = names[0]
     clauses, params = [], []
-    if scope_kind:
-        clauses.append("a.scope_kind=?")
-        params.append(scope_kind)
-    if scope_value:
-        clauses.append("a.scope_value=?")
+    if scope_value and not scope_kind:
+        clauses.append(db.visible_anchor_sql("a"))
         params.append(scope_value)
+    else:
+        if scope_kind:
+            clauses.append("a.scope_kind=?")
+            params.append(scope_kind)
+        if scope_value:
+            clauses.append("a.scope_value=?")
+            params.append(scope_value)
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
     # grouped by CHARACTER as well: two characters' candidates in one grid, with
     # one "chosen" between them, is unreadable and mispicks are invisible
@@ -3179,7 +3188,8 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
                 *params)
     groups = {}
     for r in rows:
-        key = (r["scope_kind"], r["scope_value"], r["character_id"], r["character_name"],
+        shown_scope = scope_value if r["scope_kind"] == db.SHARED_KIND else r["scope_value"]
+        key = (r["scope_kind"], shown_scope, r["character_id"], r["character_name"],
                r["tier"], r["view"])
         groups.setdefault(key, []).append(r)
     group_list = [{"scope_kind": k[0], "scope_value": k[1], "character_id": k[2],
@@ -3297,9 +3307,9 @@ def _ref_assigned_as_sheet(asset_id, album, character_id=None):
     Assigned files live in the candidate grid. Showing them again under
     Base images is the same photograph twice.
     """
-    for row in db.q("""SELECT render_json FROM anchors
-                       WHERE scope_kind='album' AND scope_value=?
-                         AND chosen=1 AND character_id IS ?""",
+    for row in db.q(f"""SELECT render_json FROM anchors
+                        WHERE {db.visible_anchor_sql()}
+                          AND chosen=1 AND character_id IS ?""",
                     album, character_id):
         meta = db.jset(row, "render_json")
         if meta.get("source") == "upload" and meta.get("asset_id") == asset_id:
@@ -3342,13 +3352,19 @@ def update_ref_meta(asset_id, **fields):
 
 
 async def _save_anchor_refs(album, character_id, uploads, actors=None):
-    """Persist uploaded base images and return their asset rows."""
-    dest_dir = os.path.join(db.DATA, "uploads", "anchors", "album", safe_name(album))
+    """Persist uploaded base images and return their asset rows.
+
+    Files live once under uploads/anchors/shared/. The album name stays
+    in meta so the generate form still filters "this album's bases", but
+    assigning the photo as a sheet writes a shared anchors row.
+    """
+    dest_dir = db.shared_anchor_dir()
     stamp = int(time.time() * 1000)
     saved = []
     for i, f in enumerate(uploads):
         path = await save_upload(f, MAX_IMAGE, dest_dir, "image", prefix=f"ref{i}_{stamp}")
-        meta = {"scope_value": album, "character_id": character_id}
+        meta = {"scope_kind": db.SHARED_KIND, "scope_value": album,
+                "character_id": character_id}
         if actors:
             meta["actors"] = list(actors)
         db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
@@ -3495,14 +3511,14 @@ async def assign_anchor_ref_as_sheet(request: Request, asset_id: int):
                 seen.add(n.lower())
                 actor_names.append(n)
     now = time.time()
-    db.run("""UPDATE anchors SET chosen=0 WHERE scope_kind='album' AND scope_value=?
+    db.run("""UPDATE anchors SET chosen=0 WHERE scope_kind=? AND scope_value=?
               AND tier=? AND view=? AND (? IS NULL AND character_id IS NULL
                    OR character_id=?)""",
-           album, tier, view, cid, cid)
+           db.SHARED_KIND, db.SHARED_VALUE, tier, view, cid, cid)
     db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen,
                                     created, character_id, render_json)
-              VALUES ('album',?,?,?,?,1,?,?,?)""",
-           album, tier, view, row["path"], now, cid,
+              VALUES (?,?,?,?,?,1,?,?,?)""",
+           db.SHARED_KIND, db.SHARED_VALUE, tier, view, row["path"], now, cid,
            json.dumps({"source": "upload", "asset_id": asset_id, "pose_name": name,
                        "content_tier": art_tier or tier, "actors": actor_names}))
     update_ref_meta(asset_id, pose_name=name, pose_tier=tier, role="pose",
@@ -3515,8 +3531,14 @@ async def upload_pose_sheet(request: Request, album: str = Form(...),
                             tier: str = Form(...), key: str = Form(""),
                             label: str = Form("uploaded pose"),
                             nude: str = Form(""),
+                            character_id: CharacterId = Form(None),
                             image: UploadFile = File(...)):
-    """A sheet generated elsewhere (Mage, etc.) becomes the keeper for this pose."""
+    """A sheet generated elsewhere (Mage, etc.) becomes the shared keeper.
+
+    One file, one anchors row (scope_kind=shared). Any album can reference
+    it. `album` is still required so the roster/redirect knows where the
+    operator was standing; it is not a copy destination.
+    """
     album = album.strip()
     if not album:
         raise HTTPException(400, "album required")
@@ -3525,18 +3547,22 @@ async def upload_pose_sheet(request: Request, album: str = Form(...),
     is_nude = str(nude).lower() in ("1", "on", "true", "yes") or "nude" in name.lower()
     if is_nude and not tiers.allows_nudity(tier):
         raise HTTPException(400, f"{tier.upper()} does not permit a nude sheet")
-    dest_dir = os.path.join(db.DATA, "uploads", "anchors", "album", safe_name(album))
+    dest_dir = db.shared_anchor_dir()
     path = await save_upload(image, MAX_IMAGE, dest_dir, "image",
                              prefix=f"pose_{int(time.time() * 1000)}")
     now = time.time()
-    cid = None
+    cid = character_id
     group = None
+    if cid is not None:
+        char = get_character_or_404(cid)
+        if char["scope_value"] != album:
+            raise HTTPException(400, f"character {char['name']!r} belongs to {char['scope_value']!r}")
     if key:
         try:
             cov = pose_plan.album_coverage(album, tier)
             group = next((x for x in cov["needed"] if str(x["key"]) == str(key)), None)
             who = (group or {}).get("actors") or (group or {}).get("characters") or []
-            if who:
+            if who and cid is None:
                 cid = who[0].get("id")
         except (LookupError, OSError, ValueError, json.JSONDecodeError):
             group = None
@@ -3549,19 +3575,19 @@ async def upload_pose_sheet(request: Request, album: str = Form(...),
     aid = db.run(
         "INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
         None, "anchor_ref", path,
-        json.dumps({"scope_kind": "album", "scope_value": album, "role": "pose",
+        json.dumps({"scope_kind": db.SHARED_KIND, "scope_value": album, "role": "pose",
                     "pose_name": name, "pose_tier": tier, "pose_nude": is_nude,
                     "source": "upload", "character_id": cid,
                     "actors": actor_names}),
         now)
     view = pose_view_key(aid, is_nude)
-    db.run("""UPDATE anchors SET chosen=0 WHERE scope_kind='album' AND scope_value=?
+    db.run("""UPDATE anchors SET chosen=0 WHERE scope_kind=? AND scope_value=?
               AND tier=? AND view=? AND character_id IS ?""",
-           album, tier, view, cid)
+           db.SHARED_KIND, db.SHARED_VALUE, tier, view, cid)
     new_id = db.run("""INSERT INTO anchors (scope_kind, scope_value, tier, view, path,
                                             chosen, created, character_id, render_json)
-                       VALUES ('album',?,?,?,?,1,?,?,?)""",
-                    album, tier, view, path, now, cid,
+                       VALUES (?,?,?,?,?,1,?,?,?)""",
+                    db.SHARED_KIND, db.SHARED_VALUE, tier, view, path, now, cid,
                     json.dumps({"source": "upload", "asset_id": aid, "pose_name": name,
                                 "character_id": cid, "actors": actor_names}))
     if group:
@@ -4369,7 +4395,7 @@ def _draft_ref_image(album, character_id=None):
     refs = anchor_refs(album, character_id)
     if refs:
         return refs[0]["path"]
-    row = db.one("""SELECT path FROM anchors WHERE scope_kind='album' AND scope_value=?
+    row = db.one(f"""SELECT path FROM anchors WHERE {db.visible_anchor_sql()}
                     AND (? IS NULL OR character_id IS ? OR character_id=?)
                     ORDER BY chosen DESC, (view='front') DESC, id DESC""",
                  album, character_id, character_id, character_id)
@@ -4689,11 +4715,11 @@ def anchor_group(request: Request, scope_value: str, tier: str, view: str,
     those are the controls that make a candidate usable.
     """
     valid_tier_or_400(tier)
-    rows = db.q("""SELECT a.*, c.name AS character_name
-                   FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
-                   WHERE a.scope_kind='album' AND a.scope_value=? AND a.tier=? AND a.view=?
-                     AND a.character_id IS ?
-                   ORDER BY a.id DESC""", scope_value, tier, view, character_id)
+    rows = db.q(f"""SELECT a.*, c.name AS character_name
+                    FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
+                    WHERE {db.visible_anchor_sql('a')} AND a.tier=? AND a.view=?
+                      AND a.character_id IS ?
+                    ORDER BY a.id DESC""", scope_value, tier, view, character_id)
     if not rows:
         return HTMLResponse("")          # nothing yet: the caller leaves the page alone
     g = {"scope_kind": "album", "scope_value": scope_value, "tier": tier, "view": view,
@@ -5221,12 +5247,16 @@ def _refs_payload(album, character_id=None):
 
 def _anchor_groups(scope_kind="", scope_value=""):
     clauses, params = [], []
-    if scope_kind:
-        clauses.append("a.scope_kind=?")
-        params.append(scope_kind)
-    if scope_value:
-        clauses.append("a.scope_value=?")
+    if scope_value and not scope_kind:
+        clauses.append(db.visible_anchor_sql("a"))
         params.append(scope_value)
+    else:
+        if scope_kind:
+            clauses.append("a.scope_kind=?")
+            params.append(scope_kind)
+        if scope_value:
+            clauses.append("a.scope_value=?")
+            params.append(scope_value)
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
     rows = db.q(f"""SELECT a.*, c.name AS character_name
                     FROM anchors a LEFT JOIN characters c ON c.id = a.character_id{where}
@@ -5266,9 +5296,9 @@ def _use_anchor_as_ref(id):
     row = db.one("SELECT * FROM anchors WHERE id=?", id)
     if not row:
         raise HTTPException(404, "no such anchor candidate")
-    if row["scope_kind"] != "album":
+    if row["scope_kind"] not in ("album", db.SHARED_KIND):
         raise HTTPException(400, "only an album's anchors can be used as references")
-    album, cid = row["scope_value"], row["character_id"]
+    album, cid = row["scope_value"] or "", row["character_id"]
     try:
         classification.refuse_skip(album, path=row["path"], character_id=cid)
     except ValueError as e:
@@ -6083,9 +6113,9 @@ def set_album_pose_keeper(request: Request, album: str = Form(...),
     picked = None
     if sid:
         sheet = db.one(
-            """SELECT * FROM anchors WHERE id=? AND scope_kind='album'
-               AND scope_value=? AND tier=?""",
-            sid, album, tier)
+            f"""SELECT * FROM anchors WHERE id=? AND tier=?
+                AND {db.visible_anchor_sql()}""",
+            sid, tier, album)
         if not sheet:
             raise HTTPException(400, "that sheet is not on this album and tier")
         picked = _pick_anchor(sid)
@@ -8554,7 +8584,7 @@ def _describe_image(p):
     cover = p["image_path"] if p["image_path"] and os.path.isfile(p["image_path"]) else None
     if cover:
         return cover
-    anchor = db.one("""SELECT * FROM anchors WHERE scope_kind='album' AND scope_value=?
+    anchor = db.one(f"""SELECT * FROM anchors WHERE {db.visible_anchor_sql()}
                        ORDER BY chosen DESC, (view='front') DESC, id DESC LIMIT 1""",
                     p["name"])
     return anchor["path"] if anchor else None
@@ -8729,8 +8759,8 @@ def playlist_detail(p):
     for r in rows:
         r["arc"] = arc_by_sid.get(r["item"]["song_id"])
     n_sheets = db.one(
-        """SELECT COUNT(*) n FROM anchors
-           WHERE scope_kind='album' AND scope_value=?""", p["name"])["n"]
+        f"""SELECT COUNT(*) n FROM anchors WHERE {db.visible_anchor_sql()}""",
+        p["name"])["n"]
     anchor_tiers, all_anchors, per_character, pose_need = [], [], {}, []
     # the cast, with how many anchors each has -- an unanchored character is the
     # thing worth seeing here, since naming one in a scene achieves nothing
@@ -8740,7 +8770,9 @@ def playlist_detail(p):
         cfields, cward = _character_look(p["name"], c)
         cast.append({"c": c, "anchors": n, "profile_fields": cfields,
                      "wardrobe_tiers": cward, "is_lead": character_is_lead(c)})
-    has_anchor = bool(db.one("""SELECT id FROM anchors WHERE scope_kind='album' AND scope_value=?
+    has_anchor = bool(db.chosen_anchor("album", p["name"], "xxx") or
+                      db.chosen_anchor("album", p["name"], "r") or
+                      db.one(f"""SELECT id FROM anchors WHERE {db.visible_anchor_sql()}
                                  AND chosen=1 AND character_id IS NULL""", p["name"]))
     artwork_default = models.default_for("artwork")
     artwork_models = [{"key": e["key"], "label": e["label"], "available": e["available"],

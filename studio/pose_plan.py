@@ -423,12 +423,23 @@ def _who_label(who):
 
 def library(album, tier, character_id=None):
     """Chosen protagonist sheets at this album+tier, identity front last."""
-    rows = db.q(
-        """SELECT * FROM anchors
-           WHERE scope_kind='album' AND scope_value=? AND tier=?
-             AND chosen=1 AND character_id IS ?
-           ORDER BY id""",
-        album or "", tier, character_id)
+    if character_id is None:
+        rows = db.q(
+            f"""SELECT * FROM anchors
+                WHERE {db.visible_anchor_sql()} AND tier=?
+                  AND chosen=1 AND character_id IS NULL
+                ORDER BY id""",
+            album or "", tier)
+    else:
+        rows = db.q(
+            f"""SELECT a.* FROM anchors a
+                LEFT JOIN characters c ON c.id = a.character_id
+                WHERE {db.visible_anchor_sql('a')} AND a.tier=?
+                  AND a.chosen=1
+                  AND (a.character_id=? OR (a.scope_kind='shared'
+                       AND c.name=(SELECT name FROM characters WHERE id=?)))
+                ORDER BY a.id""",
+            album or "", tier, character_id, character_id)
     return list(rows)
 
 
@@ -500,9 +511,9 @@ def plan(song, tier):
     sb = storyboard_service.load(row, normalized=False)
     people = _album_leads(album)
     sheets = db.q(
-        """SELECT * FROM anchors
-           WHERE scope_kind='album' AND scope_value=? AND tier=? AND chosen=1
-           ORDER BY id""",
+        f"""SELECT * FROM anchors
+            WHERE {db.visible_anchor_sql()} AND tier=? AND chosen=1
+            ORDER BY id""",
         album or "", tier)
     by_id = {s["id"]: s for s in sheets}
     prefer_nude = tiers.allows_nudity(tier)
@@ -599,10 +610,7 @@ def bind_scene(song_id, tier, num, sheet_id):
     want = None
     if sheet_id not in (None, "", 0, "0"):
         want = int(sheet_id)
-        sheet = db.one(
-            """SELECT * FROM anchors WHERE id=? AND scope_kind='album'
-               AND scope_value=? AND tier=? AND chosen=1""",
-            want, song["album"] or "", tier)
+        sheet = db.visible_anchor_by_id(want, song["album"] or "", tier)
         if not sheet:
             raise ValueError(
                 f"anchor {want} is not a chosen sheet for {song['album']!r} {tier}")
@@ -690,10 +698,10 @@ def album_coverage(album, tier):
         g["mage"] = "\n\n".join(g.get("mage_parts") or [])
     sheets = []
     for row in db.q(
-            """SELECT a.*, c.name AS character_name
-               FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
-               WHERE a.scope_kind='album' AND a.scope_value=? AND a.tier=?
-               ORDER BY a.chosen DESC, a.id""",
+            f"""SELECT a.*, c.name AS character_name
+                FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
+                WHERE {db.visible_anchor_sql('a')} AND a.tier=?
+                ORDER BY a.chosen DESC, a.id""",
             album or "", tier):
         sheets.append({
             "id": row["id"], "label": sheet_name(row), "path": row["path"],

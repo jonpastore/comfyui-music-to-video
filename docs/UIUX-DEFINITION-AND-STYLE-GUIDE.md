@@ -346,7 +346,9 @@ was and marked itself UNSURE, which is the right question: there isn't one that
 the word explains. The domain calls them albums everywhere it speaks for itself
 — `arc.py`'s docstring opens *"The album's STORY"* and then says *"an album is a
 playlist, so the arc attaches to the playlist record"*; the arc, the album
-profile, the cast and the anchors are all album-scoped. `playlists` is the
+profile and the cast are album-scoped. Pose uploads live in one shared
+`anchors` table any album can open; generated candidates stay
+album-scoped. `playlists` is the
 table's name and the nav is showing the schema to the operator. The table does
 not have to move for the label to be right.
 

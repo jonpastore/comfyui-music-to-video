@@ -16,14 +16,16 @@ CREATE TABLE IF NOT EXISTS songs (
   slug TEXT UNIQUE NOT NULL, mp3_path TEXT, duration REAL, lyrics TEXT,
   anchor_path TEXT, style_path TEXT, bpm REAL, created REAL);
 
--- Anchor character sheets. Scoped to an ALBUM or PLAYLIST and a TIER, not to a
--- song: every track on Street Cats shares one look, and the clean and explicit
--- cuts differ only in wardrobe. One row per generated candidate; chosen=1 marks
--- the one that reference rendering will use for that scope+tier+view.
+-- Anchor character sheets. One row per candidate. scope_kind is
+-- 'album' | 'playlist' | 'shared'. Shared sheets (Kitty, actors, any
+-- operator model the studio should not copy per album) have
+-- scope_value '' and are visible to every album. Album-scoped rows
+-- still win chosen_anchor when both exist. chosen=1 marks the keeper
+-- for that scope+tier+view+character.
 CREATE TABLE IF NOT EXISTS anchors (
   id INTEGER PRIMARY KEY,
-  scope_kind TEXT NOT NULL,          -- 'album' | 'playlist'
-  scope_value TEXT NOT NULL,         -- album name, or playlist id as text
+  scope_kind TEXT NOT NULL,          -- 'album' | 'playlist' | 'shared'
+  scope_value TEXT NOT NULL,         -- album name, playlist id, or '' if shared
   tier TEXT NOT NULL,
   view TEXT DEFAULT 'front',         -- front | back
   path TEXT NOT NULL,
@@ -833,6 +835,76 @@ def q(sql, *args):
 
 def one(sql, *args):
     return conn().execute(sql, args).fetchone()
+
+
+# Operator models (Kitty, Panther, a pose sheet) live once. Generated
+# album candidates stay album-scoped. Lookups union the two.
+SHARED_KIND = "shared"
+SHARED_VALUE = ""
+
+
+def shared_anchor_dir():
+    dest = os.path.join(DATA, "uploads", "anchors", "shared")
+    os.makedirs(dest, exist_ok=True)
+    return dest
+
+
+def visible_anchor_sql(alias=""):
+    """album-scoped OR shared. Bind the album name once after this fragment.
+
+    Pass alias='a' when the FROM clause is `anchors a`. Default is the
+    bare table so `FROM anchors WHERE …` does not look for a.scope_kind.
+    """
+    col = f"{alias}." if alias else ""
+    return (f"({col}scope_kind='{SHARED_KIND}' OR "
+            f"({col}scope_kind='album' AND {col}scope_value=?))")
+
+
+def chosen_anchor(scope_kind, scope_value, tier, view="front", character_id=None):
+    """Keeper for this scope+tier+view+character. Album row wins; else shared.
+
+    Shared sheets attach to a character id from whatever album created
+    them. A second album finds them by character name so Kitty on
+    Catatonic is the same sheet as Kitty on Street Cats.
+    """
+    if scope_kind == SHARED_KIND:
+        return one("""SELECT * FROM anchors WHERE scope_kind=? AND tier=?
+                      AND view=? AND chosen=1 AND character_id IS ?""",
+                   SHARED_KIND, tier, view, character_id)
+    row = one("""SELECT * FROM anchors WHERE scope_kind=? AND scope_value=? AND tier=?
+                 AND view=? AND chosen=1 AND character_id IS ?""",
+              scope_kind, scope_value, tier, view, character_id)
+    if row:
+        return row
+    if character_id is None:
+        return one("""SELECT * FROM anchors WHERE scope_kind=? AND tier=?
+                      AND view=? AND chosen=1 AND character_id IS NULL""",
+                   SHARED_KIND, tier, view)
+    return one("""SELECT a.* FROM anchors a
+                  JOIN characters c ON c.id = a.character_id
+                  WHERE a.scope_kind=? AND a.tier=? AND a.view=? AND a.chosen=1
+                    AND c.name = (SELECT name FROM characters WHERE id=?)""",
+               SHARED_KIND, tier, view, character_id)
+
+
+def visible_chosen_anchors(album, tier):
+    """Chosen sheets this album can use: its own, plus the shared library."""
+    return q(f"""SELECT a.*, c.name AS character_name
+                 FROM anchors a LEFT JOIN characters c ON c.id = a.character_id
+                 WHERE {visible_anchor_sql('a')} AND a.tier=? AND a.chosen=1
+                 ORDER BY (a.character_id IS NOT NULL), c.name, a.view, a.id""",
+             album or "", tier)
+
+
+def visible_anchor_by_id(sheet_id, album, tier=None):
+    """A keeper this album may bind: its own album row or any shared row."""
+    if tier:
+        return one(f"""SELECT * FROM anchors WHERE id=? AND chosen=1 AND tier=?
+                       AND {visible_anchor_sql()}""",
+                   sheet_id, tier, album or "")
+    return one(f"""SELECT * FROM anchors WHERE id=? AND chosen=1
+                   AND {visible_anchor_sql()}""",
+               sheet_id, album or "")
 
 
 _tx = threading.local()

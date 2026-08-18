@@ -103,10 +103,14 @@ decoded s2v hop: control_video = LTX frames, ref_image = scene still
 A pose plate is not a base image unless the operator put it there.
 Location plates are a different object (`location_plates`), never her
 identity lock (`T7-22`). Named pose uploads stay `T7-20`.
-Assign / `upload-pose` share the file with the chosen sheet;
-`_drop_anchor` deletes every `anchor_ref` on that path (not only
-borrowed `anchor_id` rows). `anchor_refs` does not list a row whose
-file is gone.
+Assign / `upload-pose` share the file with the chosen sheet and
+write `scope_kind='shared'` (`T4-25`). The bytes live under
+`uploads/anchors/shared/`. A second album resolves the same
+`anchors.id`; it does not copy the file. Album-generated candidates
+stay album-scoped. `chosen_anchor` prefers an album row, then a
+shared row with the same character name. `_drop_anchor` deletes
+every `anchor_ref` on that path (not only borrowed `anchor_id`
+rows). `anchor_refs` does not list a row whose file is gone.
 A sheet with two or more bodies is an ensemble (`pose_plan.is_ensemble`):
 stamped `render_json.actors`, a cowgirl/spit-roast family, or another
 cast name on the pose label. `nest_anchor_groups` puts those on the

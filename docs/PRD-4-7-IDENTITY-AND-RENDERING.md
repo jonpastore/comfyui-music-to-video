@@ -80,7 +80,9 @@ What they need from these four, in their own terms:
    three-body plate lives on the Actors tab, not under Meow P; I tick
    who is in the sheet (or All) on generate, on the base card, and on
    Assign as sheet. Intertwined sex uses that multi-body plate as the
-   lock, not three solo fronts."* (`T7-20`)
+   lock, not three solo fronts. Kitty, Panther, and the other models
+   live once: an upload is a shared anchors row any album can
+   reference, not a copy under each album folder."* (`T7-20`, `T4-25`)
 
 ## 3. The product rules
 
