@@ -174,8 +174,10 @@ def test_save_lead_name_from_anchors_stays_on_anchors():
         assert "/anchors" in (r.headers.get("location") or "")
         page = client.get("/anchors", params={"album": album}).text
         assert "Meow P" in page
-        assert 'name="lead_name"' in page
-        assert "Rename a character" in page
+        assert 'id="rename-char"' in page
+        assert "js-rename-char" in page
+        assert 'data-field="lead_name"' in page
+        assert "Rename a character" not in page
 
 
 def test_match_cowgirl_not_standing():

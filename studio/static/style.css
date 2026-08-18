@@ -311,15 +311,7 @@ a.tier-cell.has { color: var(--accent); border-color: var(--border-strong); }
 #media-player audio { width: 100%; margin-top: 0.6rem; }
 .actor-pick { margin: 0; min-width: 12rem; }
 .actor-pick .check-row { margin: 0.15rem 0 0; }
-.char-rename { margin: 0.45rem 0 0.7rem; }
-.char-rename > summary { color: var(--muted); }
-.char-rename-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  align-items: end;
-  margin: 0.4rem 0 0;
-}
+/* .char-rename fold removed — pencil on each tab opens #rename-char. */
 .notice {
   margin: 0.4rem 0 0;
   color: var(--muted);
@@ -920,7 +912,7 @@ button.cover-open:hover { background: none; }
   border-color: var(--accent);
   color: var(--accent);
 }
-.look-tab-wrap {
+.look-tab-wrap, .char-tab-wrap {
   display: inline-flex;
   align-items: center;
   gap: 0.15rem;

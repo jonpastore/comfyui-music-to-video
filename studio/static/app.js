@@ -573,6 +573,26 @@ document.addEventListener("click", function (e) {
     return;
   }
 
+  var rename = e.target.closest(".js-rename-char");
+  if (rename) {
+    e.preventDefault();
+    e.stopPropagation();
+    var dlg = document.getElementById("rename-char");
+    var form = document.getElementById("rename-char-form");
+    if (!dlg || !form) return;
+    form.action = rename.getAttribute("data-action") || "";
+    var field = rename.getAttribute("data-field") || "name";
+    var input = form.querySelector("input[type=text]");
+    if (input) {
+      input.name = field;
+      input.value = rename.getAttribute("data-name") || "";
+      input.maxLength = parseInt(rename.getAttribute("data-max") || "60", 10) || 60;
+    }
+    if (!dlg.open) dlg.showModal();
+    if (input) input.focus();
+    return;
+  }
+
   var gtab = e.target.closest(".gallery-char-tab");
   if (gtab) {
     var groot = gtab.closest(".tier-panel") || document;

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_download, glyph_actors, media_nav_prev, media_nav_next %}
+{% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_download, glyph_actors, glyph_edit, media_nav_prev, media_nav_next %}
 {% block content %}
 <h1>Anchors</h1>
 <p class="hint">This album&rsquo;s pose library. Songs on the album list the poses
@@ -141,30 +141,27 @@
   {% for t in section.tiers %}
   <div class="tier-panel {% if not loop.first %}hidden{% endif %}"
        data-album="{{ section.tab_id }}" data-tier="{{ t.name }}">
-    <div class="cast-tabs" role="tablist" aria-label="Character">
-      {% for ch in t.characters %}
-      <button type="button" class="cast-tab gallery-char-tab {% if loop.first %}active{% endif %}"
-              data-char="{{ loop.index }}">{{ ch.character_name }}</button>
-      {% endfor %}
-    </div>
     {% set ns_pl = namespace(id=none) %}
     {% for pl in playlists if pl.name == section.album %}{% set ns_pl.id = pl.id %}{% endfor %}
-    {% if ns_pl.id %}
-    <details class="char-rename">
-      <summary>Rename a character</summary>
-      {% for ch in t.characters if not ch.ensemble %}
-      <form method="post" class="char-rename-row"
-            action="{% if ch.character_id %}/characters/{{ ch.character_id }}/save{% else %}/playlists/{{ ns_pl.id }}/profile{% endif %}">
-        <label>{{ 'Album lead' if not ch.character_id else 'Character' }}
-          <input type="text" name="{{ 'lead_name' if not ch.character_id else 'name' }}"
-                 value="{{ ch.character_name }}" maxlength="{{ 40 if not ch.character_id else 60 }}"
-                 required>
-        </label>
-        <button type="submit">Save name</button>
-      </form>
+    <div class="cast-tabs" role="tablist" aria-label="Character">
+      {% for ch in t.characters %}
+      <span class="char-tab-wrap">
+        <button type="button" class="cast-tab gallery-char-tab {% if loop.first %}active{% endif %}"
+                data-char="{{ loop.index }}">{{ ch.character_name }}</button>
+        {% if ns_pl.id and not ch.ensemble %}
+        <button type="button" class="icon-btn js-rename-char"
+                title="Rename {{ ch.character_name }}"
+                aria-label="Rename {{ ch.character_name }}"
+                data-action="{% if ch.character_id %}/characters/{{ ch.character_id }}/save{% else %}/playlists/{{ ns_pl.id }}/profile{% endif %}"
+                data-field="{{ 'lead_name' if not ch.character_id else 'name' }}"
+                data-name="{{ ch.character_name }}"
+                data-max="{{ 40 if not ch.character_id else 60 }}">
+          {{ glyph_edit() }}
+        </button>
+        {% endif %}
+      </span>
       {% endfor %}
-    </details>
-    {% endif %}
+    </div>
     {% for ch in t.characters %}
     <div class="gallery-char-panel {% if not loop.first %}hidden{% endif %}"
          data-char="{{ loop.index }}">
@@ -264,6 +261,22 @@
   <p class="lightbox-help muted">
     &larr; &rarr; between sheets in this row &middot; &uarr; &darr; between rows &middot;
     Del to delete &middot; Esc to close</p>
+</dialog>
+<dialog class="confirm-modal" id="rename-char">
+  <div class="modal-bar">
+    <strong>Rename</strong>
+    <span class="lightbox-spacer"></span>
+    {{ modal_close() }}
+  </div>
+  <form id="rename-char-form" method="post" class="stack-form">
+    <label>Name
+      <input type="text" name="name" maxlength="60" required>
+    </label>
+    <div class="form-actions">
+      <button type="submit" class="icon-btn" title="Save name" aria-label="Save name">
+        {{ glyph_save() }}</button>
+    </div>
+  </form>
 </dialog>
 <dialog class="confirm-modal" id="actor-tag">
   <div class="modal-bar">
