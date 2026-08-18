@@ -15,6 +15,7 @@ A new dated helper goes here only after it has a reusable entry point
 |---|---|---|
 | `scripts/deprecate.py` | `python3 scripts/deprecate.py STAMP path [path…]` moves into `deprecated/<stamp>/` and writes `MANIFEST.md`. `--list` shows batches. | Do not write another `deprecate_*_junk.py`. Restore with `mv`; delete only after Jon says so. |
 | `scripts/reddit-egress-proxy.py` | Rate-limited HTTP/HTTPS proxy, Reddit hosts only. `--bind` `--port` `--token-file` `--state-file`. Unit template: `scripts/reddit-egress-proxy.service`. | Do not hit Reddit from a new box without this gate. Token is not in git. Bind a Tailscale IP, not `0.0.0.0`. |
+| `scripts/gen_reddit_catalog.py` | Rebuild the scene-act catalog (`reddit-pose-catalog.json` / `.md`). `--out` defaults to the local `anchor5/` lab. Tables in the script are the source. | Do not scrape Reddit. Do not use catalog stills as image1 or a person-plate in image2. |
 
 `deprecated/` is gitignored (failed hops, stills). The tool is tracked;
 the junk is not.
@@ -33,7 +34,7 @@ list). That batch already moved. Use `deprecate.py`.
 | `run_anat_inpaint.py` | Anatomy inpaint at the measured quality sampler (cfg 2 / 50 / LoRA off). Not the Lightning default. |
 | `fetch_ltx25.sh` / `update_ltx25.sh` | Pull / refresh LTX 2.5 on a fleet box. |
 | `fix_ref.py` | Single-sheet repair graph (used by studio QC). |
-| `anchor5/_gen_reddit_catalog.py` | Rebuild `anchor5/reddit-pose-catalog.json` / `.md` from the generator tables. |
+
 
 ## Do not commit
 
@@ -43,3 +44,4 @@ list). That batch already moved. Use `deprecate.py`.
 | `deprecated/` | Hold-area stills. |
 | `config.json` | Local `batch_edit` job set. Use `config.json.example`. |
 | leftover `_scene_row.html` / `_storyboard_panel.html` | Unfinished storyboard dirt. Not this shelf. |
+| `anchor5/` | Operator photo lab, Reddit samples, pose-hop runbooks. On disk only. |

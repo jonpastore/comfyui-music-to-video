@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """Generate the Meow P scene-act catalog.
 
-Complete porn genre / position / act vocabulary → distinct primitives
-→ families → per-topic definition, skeleton, movement, hold-frame, source.
+    python3 scripts/gen_reddit_catalog.py
+    python3 scripts/gen_reddit_catalog.py --out /path/to/dir
+
+Writes reddit-pose-catalog.json and .md. Default --out is the local
+anchor5/ lab (gitignored). Tables in this file are the source; the
+json/md are generated.
 
 A scene is composed as:
   configuration × pose × contact × act × finish × movement × camera [× overlay]
 """
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
-OUT = Path(__file__).resolve().parent
+REPO = Path(__file__).resolve().parents[1]
+OUT = REPO / "anchor5"
 
 README = [
     "Adult 18+ only. Scene vocabulary for Meow P: poses, acts, configs, finishes, movement.",
@@ -1214,7 +1220,7 @@ def write_md():
         "",
         "`configuration × pose × contact × act × finish × movement × camera [× overlay]`",
         "",
-        f"Example: `mfm` + `doggy` + `anal` + `spit_roast` + `creampie_flow` + `thrust` + `rear`.",
+        "Example: `mfm` + `doggy` + `anal` + `spit_roast` + `creampie_flow` + `thrust` + `rear`.",
         "",
         f"{n} distinct topic ids in {len(FAMILIES)} families. "
         f"{len(ALIASES)} aliases map tube/storyboard names onto those ids.",
@@ -1345,6 +1351,13 @@ def write_md():
 
 
 def main():
+    global OUT
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--out", default=str(REPO / "anchor5"),
+                    help="directory for reddit-pose-catalog.json/.md (default: anchor5/)")
+    args = ap.parse_args()
+    OUT = Path(args.out)
+    OUT.mkdir(parents=True, exist_ok=True)
     jp, doc = write_json()
     mp = write_md()
     n = len(doc["topics"])
@@ -1352,7 +1365,7 @@ def main():
     for t in doc["topics"]:
         by.setdefault(t["family"], 0)
         by[t["family"]] += 1
-    print(f"wrote {mp.name} and {jp.name}")
+    print(f"wrote {mp} and {jp}")
     print(f"topics {n} aliases {len(doc['aliases'])}")
     for k, v in by.items():
         print(f"  {k}: {v}")

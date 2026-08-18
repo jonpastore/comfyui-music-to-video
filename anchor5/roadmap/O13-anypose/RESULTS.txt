@@ -1,4 +1,0 @@
-o13_anypose_00001_.png
-o13_map_00001_.png
-o13_lt_map_00001_.png
-o13_lt_fdau_00001_.png

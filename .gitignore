@@ -37,8 +37,9 @@
 *.webp
 *.webm
 
-# Reddit pose hold-frames (operator samples, not source)
-/anchor5/reddit-samples/
+# Operator photo lab: stills, Reddit samples, pose-hop runbooks, catalogs.
+# Recycleable code from here lives in scripts/ (see docs/SCRIPTS.md).
+/anchor5/
 *.pdf
 *.zip
 
