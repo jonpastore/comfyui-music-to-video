@@ -173,9 +173,10 @@ jobs at the run ceiling; clothed+nude iff r/xxx. `T7-21` C1/C2
 resolver **is** (`test_t7_21_c1_c2_resolver.py`): same-pose encode
 vs empty 896×1216 + her keepers. Location plates (`T2-53`/`T7-22` **built**,
 `test_t2_53_location_plates.py`). `T7-23` use-as-ref / map / image1 only
-from `usable≠skip` **is** (`test_t7_23_usable_skip.py`). LTX-first and
-decoded s2v hop are not: see TRD-2
-`T2-54`…`T2-55` and TRD-5 `T5-11`…`T5-15`. `T2-56` per-scene
+from `usable≠skip` **is** (`test_t7_23_usable_skip.py`). `T2-54` ceiling + ticked-lower board backfill **is**
+(`test_t2_54_ceiling_backfill.py`). LTX-first and
+decoded s2v hop are not: see TRD-2 `T2-55` and TRD-5 `T5-11`…`T5-15`.
+`T2-56` per-scene
 image1 **is** (`test_t2_56_per_scene_keeper.py`).
 
 ## 5. Priorities

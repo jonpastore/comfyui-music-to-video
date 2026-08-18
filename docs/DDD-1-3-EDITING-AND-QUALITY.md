@@ -14,7 +14,7 @@ exemplar is the T6-A4 stub differential on `/queue`.
 **Every "built" and "not built" below was read off the tree at `7de0aea` (refreshed 2026-08-15), then
 reconciled to the TRD-1/2/3 ledgers at `d782d2e` on 2026-08-16, then
 to the 2026-08-18 ledgers (`T2-51` partial; `T4-21`…`T4-24` / `T7-21`
-built).** The 2026-08-13 snapshot was `f9ca597`. TRD-3 §2.1 records what happens otherwise: a "do not rebuild"
+built), then `T2-54` built (`test_t2_54_ceiling_backfill.py`).** The 2026-08-13 snapshot was `f9ca597`. TRD-3 §2.1 records what happens otherwise: a "do not rebuild"
 table that omitted the QC implementation, which is the omission most likely to
 cost a rewrite. Built-state is the TRD ledgers. Where a claim here is a measurement, the command that produced it
 is named.
@@ -30,6 +30,7 @@ is named.
 | `studio/playlist_service.py` | — | TRD-6 T6-A2-playlists: `numbers(playlist_id)` → song_count / total_secs; no FastAPI | **built** (`test_t6_a2_html_and_json_report_the_same_playlist_numbers`) |
 | `studio/library_service.py` | — | TRD-6 T6-A2-library: `numbers()` → song_count for HTML library and `GET /api/songs`; no FastAPI | **built** (`test_t6_a2_html_and_json_report_the_same_library_numbers`) |
 | `studio/nav_service.py` | — | UIUX §8 / TRD-6 T6-A2-nav: `LINKS` / `links()` → topbar `{href,label}` list for `base.html` and `GET /api/nav`; no FastAPI | **built** (`test_uiux_nav_html_and_json_share_one_list`) |
+| `studio/storyboard_backfill.py` | — | T2-54 ceiling + ticked-lower boards from the ceiling board; each ticked tier ≤ ceiling gets that tier's guardrail + wardrobe subset; no FastAPI | **built** (`test_t2_54_ceiling_backfill.py`) |
 | `studio/mixer.py` | 2116 | set duration, `transition_times` (`T3-12` model), both filter graphs, overlap arithmetic, beatmatch, ramps, splice, `spliced_duration` / `SPLICE_DURATION_TOLERANCE` (`T3-10`), song-assembly geometry (`T5-7`) and fps (`T2-13d`), `EXPORT_FORMATS` (`T1-24`), `probe.sample_rate` for **T3-4.3-sr**, `probe["channels"]` (`T3-4.3-ch`) | TRD-1's engine. Built; one measured gap, §5.2. Song assemble honours largest same-aspect size and refuses mixed aspect — it does not letterbox. Mixed clip fps honours the highest and is asserted on the assembled file. Export encode args are a named row of `EXPORT_FORMATS`; `render_set(..., fmt=)` looks the row up and passes it to ffmpeg (`test_t1_24_export_format_row.py`). Probe always exposes sample rate and channel count (0 when no audio) for QC |
 | `studio/effects.py` | 592 | effect validation, `filter_sweep`, `duration_delta`, `loudnorm_filter`, `measure_loudness`, `export_loudness`, `LOUDNORM_I` | built; owns loudness for `T1-25` and the loudness half of §4.3. `T3-9` silence is **not** here |
 | `studio/automation.py` | 457 | TRD-1 §5 in full: lanes, RDP decimation, `MAX_POINTS = 64`, `FILTER_EXPR_MAX_BYTES = 8192` (`T1-10`), `fragment`, `item_audio`, `wants_master_loudnorm` | built |
@@ -91,7 +92,8 @@ intent/rendered division in the template). Stub differential:
 Service modules, same shape:
 
     sets_service.py        TRD-1   sets, items, automation, peaks, preview, render, export
-    storyboard_service.py  TRD-2   arc flows, storyboard generation, scene edit, time meter, casting
+    storyboard_service.py  TRD-2   arc flows, storyboard generation, scene edit, time meter, casting; thin T2-54 `backfill` wrapper
+    storyboard_backfill.py TRD-2   T2-54 ceiling + ticked-lower boards from the ceiling board; no FastAPI
     arc_service.py         TRD-2/6 album arc meter (song_count / act_count / premise)
     playlist_service.py    TRD-6   playlist card numbers (song_count / total_secs)
     #media-player          UIUX    Play column audio/tier cells stay on the
@@ -284,7 +286,11 @@ NULL=protagonist, versioned document, same fields as
 image-classification.json; sidecars seed import only),
 and `scene_pose_map` (`T2-51`/`T2-52` **built**: song, tier,
 scene_number → keeper id/path, status `draft|accepted|rejected`;
-`prev_*` holds the last accepted bind so reject leaves it).
+`prev_*` holds the last accepted bind so reject leaves it),
+and `storyboard_backfill.backfill` (`T2-54` **built**: ceiling board
+→ only ticked tiers ≤ ceiling; each board gets that tier's
+`compose_guardrail` + allowed wardrobe; nude clamps to clothed on
+g/pg13; no new table, no route).
 Switching audience writes only that column. Easy is `mixer.master_engaged`
 reading `mode_audience == "easy"` on the item dict — the same application
 point as a gain curve (`T1-18`, `T1-20c`, `T1-20d`).
@@ -800,6 +806,17 @@ Extra-view slots are later.
 `test_t2_56_per_scene_keeper.py`. `scene_pose_map` is the Accept-gated
 map (`T2-51`/`T2-52` **built**, `test_t2_52_map_accept.py`).
 `start_refs` 400s on draft/rejected.
+
+**`T2-54` is built.** `storyboard_backfill.backfill(song_id, run_tiers)`
+takes the existing ceiling-tier board (highest ticked) and writes only
+ticked tiers at or below that ceiling. Each written board carries
+`tiers.compose_guardrail(tier)` and that tier's wardrobe subset; g/pg13
+clamp nude→clothed and strip `_nude` views. r+pg13 writes both;
+r-only writes no pg13; g writes a clothed g board and no r/xxx.
+`storyboard_service.backfill` is the thin wrapper. No `app.py` / `db.py`
+route this slice. Mutation: r-only writes pg13 → red. Mutation: g
+writes a nude view or r/xxx board → red
+(`test_t2_54_ceiling_backfill.py`).
 
 `T2-30` is **built**. `unanchored_leads(rows)` returns names of figures
 with `role == "lead"` and no chosen anchor. Storyboard HTML banner,

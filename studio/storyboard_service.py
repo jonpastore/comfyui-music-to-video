@@ -668,6 +668,12 @@ def generate_poses(song_id, run_tiers, character_id=None, images=None):
         song_id, run_tiers, character_id=character_id, images=images)
 
 
+def backfill(song_id, run_tiers):
+    """T2-54: ceiling + ticked-lower boards from the ceiling board."""
+    import storyboard_backfill
+    return storyboard_backfill.backfill(song_id, run_tiers)
+
+
 def persist_arc(pl, data, model="", direction=""):
     songs = playlist_tracks(pl["id"])
     titles = {s["id"]: s["title"] for s in songs}

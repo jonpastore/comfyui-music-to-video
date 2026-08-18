@@ -1306,8 +1306,10 @@ anatomy. C1 / C2 job type on generate (`T7-21` **built**,
 1.0; new-pose is empty 896×1216 + her keepers; labels match the graph.
 QC remedy
 line (`T3-35`). Keeper / reject; `usable=skip` never enters a
-slot (`T7-23` **built**, `test_t7_23_usable_skip.py`). Ceiling + ticked-lower backfill is visible
-(`T2-54`): r+pg13 shows both; a g run offers no nude.
+slot (`T7-23` **built**, `test_t7_23_usable_skip.py`). Ceiling + ticked-lower backfill (`T2-54` **built**,
+`test_t2_54_ceiling_backfill.py`): r+pg13 writes both boards; a g run
+writes a clothed g board and no nude. No new route this slice — each
+tier's existing storyboard page is the surface.
 
 **Storyboard page.** Coverage meter (needs vs keepers, no bind)
 reads `pose_coverage` after
@@ -1320,7 +1322,8 @@ reads `pose_coverage` after
 the arc wand. Location plate per unique key (`T2-53` **built**,
 `test_t2_53_location_plates.py`); unset / studio is
 grey-studio and no plate. Page display of the plate is later. `needs_lip_sync` beside camera. Ceiling
-and ticked-lower boards visible.
+and ticked-lower boards (`T2-54` **built**) exist per ticked tier;
+page listing of every ticked board is those existing per-tier pages.
 
 **Refs page.** Generate from the accepted map only. Each scene
 uses that scene's accepted keeper as image1 (`T2-56` **built**,
