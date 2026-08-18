@@ -130,3 +130,46 @@ Paths:
 
 Live sources: `cerberus-ai:/home/jon/ComfyUI/output/anchor_v2/` same basenames.
 
+
+### Plate-20 hops 310–329 (QC.md A by eye)
+
+Jobs from `anchor5/plate20-enqueue.json`. Sheets in
+`anchor5/t7-7-use-as-ref/hops/hopNN_job_view_seed.png`. One variable per
+hop. VLM not used as stamp. Hops **13–16** and **18–20** were
+**cancelled** externally mid-queue (studio left 321+326); no sheets.
+Reddit O09 hops 19–20 never ran — not keepers.
+
+Identity refs: `standing-nude.jpg` (dark brown) + T7-7 **225** (jet).
+Kitty crop unused (those jobs cancelled).
+
+| Hop | Job | Variable | 1 muzzle | 2 arms | 3 skin | 4 camera | 5 tail | Call | Anatomy | Note |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 01 | 310 | plate cowgirl seed5151 | PASS | PASS | FAIL jet | FAIL stand not cowgirl | PASS aside | **pose FAIL: camera, skin** | n/a | her holds; plate pose lost |
+| 02 | 311 | plate all-fours lookback | PASS | PASS | FAIL jet | FAIL side-3qtr not FDAU hips-cam | weak mid-back | **pose FAIL: camera, skin** | pink vulva visible (illegal) | her holds |
+| 03 | 312 | plate rear all-fours | PASS | PASS | soft PASS brown | soft PASS all-fours lookback | **FAIL across cleft** | **pose FAIL: tail** | n/a | best tone of early set; plate partly held |
+| 04 | 313 | plate seated spread | PASS | PASS | FAIL jet | FAIL stand not seated | PASS | **pose FAIL: camera, skin** | n/a | her holds |
+| 05 | 314 | plate wide-stance | PASS | PASS | FAIL jet | FAIL legs together not spread | FAIL across crotch | **pose FAIL: camera, skin, tail** | n/a | her holds |
+| 06 | 315 | plate looking-back (3qtr view) | PASS | PASS | soft PASS brown | FAIL stand 3qtr not look-back | PASS | **pose FAIL: camera** | n/a | tone closer; pose lost |
+| 07 | 316 | identity 225 + cowgirl | PASS | PASS | FAIL jet | FAIL stand not cowgirl | PASS | **pose FAIL: camera, skin** | n/a | 225 lock = jet; plate lost |
+| 08 | 317 | ensemble cowgirl-dp | PASS | PASS | FAIL jet | FAIL solo stand not MMF | PASS | **pose FAIL: camera, skin** | n/a | no second bodies |
+| 09 | 318 | ensemble split-roast | PASS | PASS | FAIL jet | FAIL solo stand not spit | PASS | **pose FAIL: camera, skin** | n/a | no second bodies |
+| 10 | 319 | ensemble reverse-cowgirl | PASS | PASS | FAIL jet | FAIL solo stand not reverse | PASS | **pose FAIL: camera, skin** | n/a | no second bodies |
+| 11 | 320 | MF cowgirl-panther | PASS | PASS | FAIL jet | FAIL solo stand not cowgirl+male | PASS | **pose FAIL: camera, skin** | n/a | no panther |
+| 12 | 321 | MF panther blowjob | PASS | PASS | FAIL jet | FAIL stand/finger not oral | PASS | **pose FAIL: camera, skin** | n/a | no panther |
+| 13 | 322 | Kitty crop control | — | — | — | — | — | **cancelled** | — | no sheet |
+| 14 | 323 | lesbian 225+Kitty | — | — | — | — | — | **cancelled** | — | no sheet |
+| 15 | 324 | lesbian + seated plate | — | — | — | — | — | **cancelled** | — | no sheet |
+| 16 | 325 | FFM 225+Kitty+tiger | — | — | — | — | — | **cancelled** | — | no sheet |
+| 17 | 326 | tone 225+standing image@0.65 | PASS | PASS | **PASS brown** | PASS stand front | PASS aside | **pose PASS** | A6 vulva lighter PASS; A7 anus N/A front; A8/A9 PASS | **holds her + brown tone** — mage.space identity/tone evidence |
+| 18 | 327 | seed+1 cowgirl 5152 | — | — | — | — | — | **cancelled** | — | no sheet |
+| 19 | 328 | O09 lesbian photoreal | — | — | — | — | — | **cancelled** | — | not a keeper anyway |
+| 20 | 329 | O09 mmf photoreal | — | — | — | — | — | **cancelled** | — | not a keeper anyway |
+
+**Read:** Drawn sex plates as `image2` with empty latent did **not** lock
+asked pose on hops 1–12 (standing identity wins). Tone hop **17**
+pose-PASSes and holds her with brown closer to `standing-nude.jpg` —
+that is the mage.space **identity/tone** replacement evidence, not
+graphic-pose replacement. Hop **03** was the only early sheet where the
+plate partly won (all-fours) and tone improved, but tail-across fails A5.
+Do not flip MEASURED. Do not use cancelled/O09 as keepers.
+
