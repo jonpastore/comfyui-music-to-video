@@ -304,7 +304,7 @@ That ledger's high built-rate is the **old** one-shot world.
 | criterion | state | commit | what was measured |
 |---|---|---|---|
 | `T7-21` C1/C2 resolver (latent + denoise labels + pose-match) | **built** | `test_t7_21_c1_c2_resolver.py` | `pose_generate.resolve_c1_c2` + pose-gap `generate` job args. C1: image latent, denoise 1.0, pose matches source, label `same-pose`. C2: empty 896×1216, her keepers as image1, asked pose via `apply_pose` (never beside standing). Labels = `denoise_choices(latent)` / the emitted graph. Mutation: C2 encodes a stranger plate → red. Mutation: C1 empty while label says same-pose → red. Mutation: pose sits beside standing → red |
-| `T7-22` location plates ≠ identity lock | **not built** | — | Intended: `test_t2_53_location_plates.py`. No `location_plates` |
+| `T7-22` location plates ≠ identity lock | **built** | `test_t2_53_location_plates.py` | `location_plates` store (`T2-53`). `build_refs.workflow` / `--anchor` / `--anchors` refuse a stored plate as image1. A plate may still be `base`/image2. Mutation: `--anchor` is a location plate path → red |
 | `T7-23` use-as-ref only keepers `usable≠skip` | **not built** | — | Intended: `test_t7_23_usable_skip.py`. `classification_json` **has** `usable`; `keepers()` / gap already drop `skip` (`T4-21`/`T4-23`). Studio `POST /anchors/{id}/use-as-ref` and refs image1 do not read `usable`. No dedicated test |
 | `T7-24` / `T4-24` ceiling-tier generate | **built** | `test_t4_24_ceiling_generate.py` | Ceiling rule is `T4-24`. C1/C2 graphs are `T7-21` (**built**). Generate enqueues studio `anchor` jobs from pose-gap holes; clothed+nude iff r/xxx |
 | `T7-8` `latent_mode="image"` reachable | **built** | `d3f2f6a` | Graph + labels exist. C1/C2 loop resolver is `T7-21` |

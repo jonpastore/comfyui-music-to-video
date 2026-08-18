@@ -166,7 +166,7 @@ the eight things that must become true; they are not a new contract.
 | P8 | Identity is the text lock plus her photographs as image1. Empty `character_reference` is refused. A stranger plate as image1 is refused. Identity-wrong remedy is edit the text, not swap a stranger plate | `T2-31`, `T2-32`, `T2-56`, `T3-17`, `T3-28`, `T3-35` |
 | P9 | A board produces a coverage list of needed poses; classify does not write the pose→scene map | `T2-50`, `T2-51` **built** |
 | P10 | Scene refs generate only from an accepted map row; one chosen front is not image1 for every scene | `T2-52` **built**; `T2-56` **built** |
-| P11 | One location plate per location key, reused; unset/studio has no plate | `T2-53` |
+| P11 | One location plate per location key, reused; unset/studio has no plate | `T2-53` **built** (`test_t2_53_location_plates.py`) |
 | P12 | Ceiling + ticked-lower backfill: r+pg13 writes both; r-only does not write pg13; g ceiling writes no nude | `T2-54`, `T4-24` |
 | P13 | Every scene is LTX first. Marked lip scenes then the decoded s2v hop. D7 look is NOT MEASURED until a GPU pair | `T2-55`, `T5-11`, `T5-12`, `T3-37` |
 | P8a | An image FLAG/REJECT content finding's remedy is the next prompt rewrite, not "re-render with a different seed". Identity-wrong already said "edit the text"; blank, uniform, transparent, lighting and portrait findings say the same | `T3-28`, `T3-33.a` |
@@ -201,8 +201,8 @@ classify + gap write zero map rows; `POST .../pose-map` drafts
 Accept/Reject per scene; `start_refs` refuses draft/rejected;
 accepted writes a still. **P10 is built** (`T2-56` —
 image1 is that scene's accepted keeper;
-`test_t2_56_per_scene_keeper.py`). Location plates (`T2-53`) and
-extra-view slots are later. **P11–P13 are not built**. P12's generate half is `T4-24`; C1/C2 graphs are
+`test_t2_56_per_scene_keeper.py`). Location plates (`T2-53` **built**,
+`test_t2_53_location_plates.py`). Extra-view slots are later. **P11 is built**. **P12–P13 are not built**. P12's generate half is `T4-24`; C1/C2 graphs are
 `T7-21`; board backfill `T2-54` is still not. Anchors-on-model and
 this loop beat the timeline (`§6.0`). Do not mark a row built until
 the named test can go red.
@@ -472,7 +472,8 @@ order and take the dependencies from here.
    `test_t2_52_map_accept.py`). `start_refs` refuses draft/rejected.
    **`T2-56` built**: accepted keeper for that scene is image1
    (`test_t2_56_per_scene_keeper.py`); keepers are not also stuffed
-   into pose_bases/image2. Location plates stay `T2-53`.
+   into pose_bases/image2. Location plates (`T2-53` **built**,
+   `test_t2_53_location_plates.py`).
    The row's Pinned / Suggested UI can stay as the Accept
    surface. Scene stills and clips sit in a labeled preview table;
    reroll N stills, pick one, then render the first LTX clip before

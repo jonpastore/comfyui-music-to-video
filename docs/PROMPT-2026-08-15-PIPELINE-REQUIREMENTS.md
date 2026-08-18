@@ -298,13 +298,13 @@ sidecar (not the studio loop).
 | D2 ceiling-tier pose generate (clothed+nude iff r/xxx) | **built** `T4-24` (`test_t4_24_ceiling_generate.py`). `POST /api/songs/{id}/pose-generate` / `pose_generate.generate` from pose-gap holes at the run ceiling. Sidecar `batch_edit` is not the path |
 | D3 ticked-lower backfill, never invent a higher tier | not a criterion |
 | D4 draft map + Accept (classify cannot write it) | **built** `T2-51`/`T2-52` (`test_t2_51_classify_cannot_write_map.py`, `test_t2_52_map_accept.py`). `scene_pose_map` status draft\|accepted\|rejected; `start_refs` refuses draft/rejected |
-| D5 location plate per location key | no `location_plates` |
+| D5 location plate per location key | **built** `T2-53`/`T7-22` (`test_t2_53_location_plates.py`). Store only; no page display |
 | D6 LTX always first | lip-sync still means skip-LTX in T2-42/43 |
 | D7 decoded s2v hop (`control_video` = LTX frames) | **NOT MEASURED**; no GPU pair |
 | D8 T5-A stays on the LTX take, not on s2v | specified; confirm graph labels |
 | D9 D7 look (lips + her + blocking) | no pinned pair |
 | D10 identity = text + her image1; charcoal-brown | measured on stills; 0 chosen studio anchors |
 | sqlite `classification_json` | **built** `T4-21`/`T4-22` (`test_t4_21_classification_json.py`). Sidecar seeds import only |
-| Docs TRD-2/3/4/5/7 + PRDs + DDDs + UIUX describe this loop | **rewritten 2026-08-17** — T2-50…T2-56, T3-34…T3-37, T4-21…T4-24, T5-11…T5-15, T7-21…T7-23. `T2-50`, `T2-51`, `T2-52`, `T4-21`/`T4-22`, `T4-23`, `T4-24` **built**. Rest **not built** except where a pre-#529 check already covers a forbid (T5-15 latent, T3-28 no stranger swap). Code leftover is T2-53…T2-56, LTX-first, D7 |
+| Docs TRD-2/3/4/5/7 + PRDs + DDDs + UIUX describe this loop | **rewritten 2026-08-17** — T2-50…T2-56, T3-34…T3-37, T4-21…T4-24, T5-11…T5-15, T7-21…T7-23. `T2-50`, `T2-51`, `T2-52`, `T2-53`, `T2-56`, `T4-21`/`T4-22`, `T4-23`, `T4-24`, `T7-21`, `T7-22` **built**. Rest **not built** except where a pre-#529 check already covers a forbid (T5-15 latent, T3-28 no stranger swap). Code leftover is T2-54…T2-55, LTX-first, D7 |
 
 **Product:** 0 chosen anchors live. Factory is still on step 1.

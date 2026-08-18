@@ -293,8 +293,8 @@ Still needed, and no more than this:
 
     ALTER TABLE sets ADD COLUMN out_fps REAL;                        -- NULL = derive from items
 
-    -- #529 loop (D5, D7). Minimum; do not over-schema.
-    -- location_plates: album or song, location key → asset path
+    -- #529 loop (D7 leftover). Minimum; do not over-schema.
+    -- location_plates (T2-53 **built**): album or song, location key → asset path
     -- scenes.needs_lip_sync (or video_model kept plus this flag)
     -- clips retain predecessor/successor (T6-A5) for LTX take,
     --   s2v hop, LTX refine
@@ -795,7 +795,8 @@ per scene). They do not also stuff those keepers into `pose_bases`
 (image2). Unmapped songs still freeze `chosen_anchor` as image1 for
 every scene and `pose_plan.freeze_auto_binds` as leftover image2.
 Standing 4748 plate is refused (keep, `test_t2_refs_identity.py`).
-Location plates (`T2-53`) and extra-view slots are later.
+Location plates (`T2-53` **built**, `test_t2_53_location_plates.py`).
+Extra-view slots are later.
 `test_t2_56_per_scene_keeper.py`. `scene_pose_map` is the Accept-gated
 map (`T2-51`/`T2-52` **built**, `test_t2_52_map_accept.py`).
 `start_refs` 400s on draft/rejected.

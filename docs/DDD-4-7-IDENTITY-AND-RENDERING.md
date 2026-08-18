@@ -9,7 +9,8 @@ Sequencing and review record: `docs/PLAN-TRD-4-7.md`,
 2026-08-18: `T2-50`, `T4-21`…`T4-24`, `T7-21` **built**; `T2-51`
 **partial** (classify writes no map; draft/Accept is `T2-52`).
 `T2-56` **built** (`test_t2_56_per_scene_keeper.py`): accepted keeper
-for that scene is image1.
+for that scene is image1. `T2-53` / `T7-22` **built**
+(`test_t2_53_location_plates.py`): one plate per location key; never image1.
 Built-state is the TRD-4/5/7 ledgers. The one-line pipeline (operator
 photos → one chosen front → `gen_refs` image1 for every scene →
 `ltx25` or `s2v`) is retired. Every claim that is a measurement names

@@ -721,6 +721,25 @@ CREATE TABLE IF NOT EXISTS scene_pose_map (
 CREATE INDEX IF NOT EXISTS idx_scene_pose_map ON scene_pose_map(song_id, tier);
 """
 
+LOCATION_PLATES_SCHEMA = """
+-- T2-53 / T7-22: one backdrop still per location key. Scope is album or
+-- song. Unset / studio is no row. A character sheet is refused as path.
+-- This path is never build_refs --anchor / image1.
+CREATE TABLE IF NOT EXISTS location_plates (
+  id INTEGER PRIMARY KEY,
+  scope_kind TEXT NOT NULL,
+  scope_value TEXT NOT NULL,
+  location_key TEXT NOT NULL,
+  path TEXT NOT NULL,
+  created REAL NOT NULL,
+  updated REAL NOT NULL,
+  UNIQUE(scope_kind, scope_value, location_key));
+
+CREATE INDEX IF NOT EXISTS idx_location_plates
+  ON location_plates(scope_kind, scope_value);
+CREATE INDEX IF NOT EXISTS idx_location_plates_path ON location_plates(path);
+"""
+
 
 def _nullable_set_item_song_id(c):
     """T1-28: a card is a set_items row with song_id NULL. CREATE TABLE IF
@@ -796,6 +815,7 @@ def conn():
         c.executescript(POSE_COVERAGE_SCHEMA)
         c.executescript(CLASSIFICATION_JSON_SCHEMA)
         c.executescript(SCENE_POSE_MAP_SCHEMA)
+        c.executescript(LOCATION_PLATES_SCHEMA)
         _migrate(c)
         _local.c = c
     return c

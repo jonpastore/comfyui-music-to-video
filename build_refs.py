@@ -218,6 +218,19 @@ def scene_cast(scene, cast):
 MAX_REF_IMAGES = 3
 
 
+def refuse_location_plate_identity(*paths):
+    """T7-22: a location plate is never --anchor / image1."""
+    wanted = [p for p in paths if p]
+    if not wanted:
+        return
+    studio = os.path.join(os.path.dirname(os.path.abspath(__file__)), "studio")
+    if studio not in sys.path:
+        sys.path.insert(0, studio)
+    import location_plates
+    for path in wanted:
+        location_plates.refuse_as_identity(path)
+
+
 def assign_ref_slots(base, extra_refs):
     """[(slot, name, comfy_filename, description)] for the cast members that fit.
 
@@ -277,6 +290,7 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
     this scene needs beyond the protagonist. They become image2/image3 and are
     named in the prompt by slot -- see cast_clause.
     """
+    refuse_location_plate_identity(anchor)
     # shot directive goes FIRST -- framing is ignored when buried mid-prompt
     if shot.startswith(DETAIL_SHOTS):
         pos = shot + " " + tighten_for_detail(scene, world, character)
@@ -419,6 +433,7 @@ def main():
     if args.anchors:
         raw_anchors = json.load(open(args.anchors))
         per_scene_anchor = {int(k): v for k, v in raw_anchors.items() if v}
+    refuse_location_plate_identity(args.anchor, *per_scene_anchor.values())
     per_scene_base = {}
     if args.bases:
         raw_bases = json.load(open(args.bases))

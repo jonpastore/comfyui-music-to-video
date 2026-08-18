@@ -509,8 +509,8 @@ Reference-image generate uses the **accepted keeper for that scene**
 as image1 (`T2-56` **built**, `test_t2_56_per_scene_keeper.py`), not
 one chosen front for every scene, and never a standing plate
 (`test_t2_refs_identity.py` still guards the plate refusal). Unmapped
-songs still use the album front. Location plates (`T2-53`) and
-extra-view slots are later.
+songs still use the album front. Location plates (`T2-53` **built**,
+`test_t2_53_location_plates.py`). Extra-view slots are later.
 The expanded tier's **pose map** is drafted, then Accept per scene
 (`T2-52` **built**, `test_t2_52_map_accept.py`); generate refs from
 draft/rejected is refused (`POST /songs/{id}/refs` 400). A coverage
@@ -519,7 +519,7 @@ the map and reads `pose_coverage` from
 `POST /api/songs/{id}/storyboard/{tier}/analyze-poses`; holes vs keepers
 are `GET /api/songs/{id}/pose-gap` (`T4-23` **built**). Generate from those
 holes is `POST /api/songs/{id}/pose-generate` (`T4-24` **built**). Location plate per unique
-location key (`T2-53`) is a still, not a character sheet. Storyboard
+location key (`T2-53` **built**, `test_t2_53_location_plates.py`) is a still, not a character sheet. Storyboard
 scene rows have a **Pose keeper** select after Accept
 (`POST .../scene/{n}/pose-sheet` is today's auto-bind leftover). The plate thumb is a
 `button.thumb-open` (neutral, not the accent fill). Save actions are labeled floppies (Save JSON, Save lock, Save plate,
@@ -1311,13 +1311,15 @@ reads `pose_coverage` after
 `POST /api/songs/{id}/pose-generate` (`T4-24` **built**). Draft map + Accept per scene (`T2-52` **built**,
 `test_t2_52_map_accept.py`; `POST .../pose-map` + `.../accept` /
 `.../reject`), same shape as
-the arc wand. Location plate per unique key (`T2-53`); unset / studio is
-grey-studio and no plate. `needs_lip_sync` beside camera. Ceiling
+the arc wand. Location plate per unique key (`T2-53` **built**,
+`test_t2_53_location_plates.py`); unset / studio is
+grey-studio and no plate. Page display of the plate is later. `needs_lip_sync` beside camera. Ceiling
 and ticked-lower boards visible.
 
 **Refs page.** Generate from the accepted map only. Each scene
 uses that scene's accepted keeper as image1 (`T2-56` **built**,
-`test_t2_56_per_scene_keeper.py`). Location plate display is `T2-53`.
+`test_t2_56_per_scene_keeper.py`). Location plate store is `T2-53` **built**;
+page display is later.
 A draft or rejected row has no Generate.
 
 **Clips page.** LTX predecessor + s2v successor both listed when
