@@ -6725,6 +6725,17 @@ def api_album_pose_coverage(album: str, tier: str):
         raise HTTPException(400, str(e))
 
 
+@app.get("/api/albums/{album}/sheet-prompt")
+def api_sheet_prompt(album: str, pose: str = "", tier: str = "",
+                     character_id: Optional[int] = None):
+    """Grey-studio pose sheet for Mage. Not the scene still."""
+    t = valid_tier_or_400(tier) if (tier or "").strip() else ""
+    text = pose_plan.sheet_prompt(album, pose, character_id, t)
+    if not text:
+        raise HTTPException(400, "name the pose")
+    return JSONResponse({"prompt": text, "pose": pose, "tier": t})
+
+
 @app.get("/api/albums/{album}/classification/versions")
 def api_classification_versions(album: str, character_id: Optional[int] = None):
     """T4-21: version list for this album+character. Newest first."""

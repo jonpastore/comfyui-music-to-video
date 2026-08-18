@@ -1150,11 +1150,12 @@ stretch the page. Missing poses do **not** dump as
 empty row is the row. Only leads need a plate (T2-30); extras and
 background stay off the roster. An empty scene cast is the album lead. **Generate…** opens a modal with a copyable Mage
 prompt that is a **grey-studio character sheet**, not the
-scene still (`#pose-brief`). Same composer as Generate
-anchors: asked pose + identity/wardrobe/body + mid-grey
-backdrop. Story, camera, partner, location, and lighting
-from the storyboard stay out. Rating and song stay on the
-meta line.
+scene still (`#pose-brief`). Click fetches
+`GET /api/albums/{album}/sheet-prompt` so a stale tab
+cannot paste the old scene still. Same composer as
+Generate anchors: asked pose + identity/wardrobe/body +
+mid-grey backdrop. Story, camera, partner, location, and
+lighting stay out. Rating and song stay on the meta line.
 `POST /anchors/keeper` plus the save icon stamps the assignment — on
 `/anchors` and on the playlist Anchors fold. The candidate lightbox
 (`#anchor-lightbox`) classifies the open sheet: a select of that

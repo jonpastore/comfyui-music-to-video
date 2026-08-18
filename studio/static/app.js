@@ -3397,6 +3397,21 @@ document.addEventListener("click", function (e) {
     }
     if (ta) ta.value = src ? src.value : "";
     dlg.showModal();
+    var album = brief.getAttribute("data-album") || "";
+    var pose = brief.getAttribute("data-label") || "";
+    var tid = brief.getAttribute("data-tier-id") || "";
+    var cid = brief.getAttribute("data-character-id") || "";
+    if (album && pose && typeof api === "function") {
+      var qs = new URLSearchParams();
+      qs.set("pose", pose);
+      if (tid) qs.set("tier", tid);
+      if (cid) qs.set("character_id", cid);
+      api("/api/albums/" + encodeURIComponent(album) + "/sheet-prompt?" + qs)
+        .then(function (d) {
+          if (d && d.prompt && ta && dlg.open) ta.value = d.prompt;
+        })
+        .catch(function () {});
+    }
     return;
   }
   var tip = e.target.closest && e.target.closest(".help-tip");

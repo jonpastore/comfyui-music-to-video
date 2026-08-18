@@ -42,10 +42,12 @@
           data-label="{{ g.label }}"
           data-who="{{ g.character_label or '' }}"
           data-tier="{{ tier | tiername }}"
+          data-tier-id="{{ tier }}"
           data-album="{{ album }}"
+          data-character-id="{{ (g.characters[0].id if g.characters else '') or '' }}"
           data-songs="{% for s in g.songs %}{{ s.title }}{% if not loop.last %}, {% endif %}{% endfor %}"
           data-scenes="{{ g.n_scenes }}"
-          title="Copy a detailed prompt for Mage">Generate…</button>
+          title="Copy a grey-studio character sheet for Mage">Generate…</button>
   <textarea class="pose-brief-text" hidden readonly>{{ pose_mage_prompt(album, tier, g) }}</textarea>
   <form method="post" action="/anchors/upload-pose" enctype="multipart/form-data"
         class="pose-upload" title="Upload a sheet generated elsewhere"

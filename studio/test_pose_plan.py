@@ -367,6 +367,17 @@ def test_mage_brief_on_the_page_is_a_grey_studio_sheet():
         assert "Used in" not in brief
         assert "Rating:" not in brief
         assert "Mage Brief Song" not in brief
+        assert 'data-tier-id="xxx"' in page
+        r = client.get(f"/api/albums/{album}/sheet-prompt",
+                       params={"pose": "all fours then spring", "tier": "xxx"})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert "mid-grey" in body["prompt"].lower()
+        assert "all fours then spring" in body["prompt"].lower()
+        assert "His grip fails" not in body["prompt"]
+        assert "corridor mouth" not in body["prompt"]
+        js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
+        assert "/sheet-prompt" in js
 
 
 def test_roster_tier_query_beats_the_largest_need_count():
