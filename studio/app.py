@@ -6296,19 +6296,36 @@ async def api_start_storyboard(id: int, tier: str, request: Request):
 # reference renderer actually sends; video_motion_prompt is what the clip
 # renderer sends; story is the human line the detail-shot path falls back to
 # (build_refs.tighten_for_detail). video_model is a directorial fact on the
-# scene (T2-42 / T2-43) and sits beside camera. scene_number keys the
-# allocation and is not editable here.
+# scene (T2-42 / T2-43) and sits beside camera. needs_lip_sync (T2-55) is the
+# lip-sync fact beside camera: true → LTX then s2v hop; false/absent → LTX only.
+# scene_number keys the allocation and is not editable here.
 EDITABLE_SCENE_FIELDS = (
     "name", "cue", "duration_guidance", "story",
-    "camera", "video_model", "motion", "lighting", "location", "pose",
+    "camera", "video_model", "needs_lip_sync", "motion", "lighting",
+    "location", "pose",
     "image_prompt", "video_motion_prompt", "negative_prompt",
 )
+BOOL_SCENE_FIELDS = ("needs_lip_sync",)
 BOARD_LOCK_FIELDS = ("character_reference", "album_world_reference")
 SHORT_SCENE_FIELDS = (
     "name", "cue", "duration_guidance", "camera", "video_model",
-    "motion", "lighting", "location", "pose",
+    "needs_lip_sync", "motion", "lighting", "location", "pose",
 )
 MAX_SCENE_FIELD = 4000
+
+
+def _as_scene_bool(raw):
+    """Checkbox / JSON bool for BOOL_SCENE_FIELDS (T2-55)."""
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return False
+    if isinstance(raw, (int, float)):
+        return raw != 0
+    s = str(raw).strip().lower()
+    if s in ("", "0", "false", "no", "off"):
+        return False
+    return s in ("1", "true", "yes", "on")
 
 # Fields re-screened on T10-21 unlock. Lyrics may mention a child at r
 # (T10-18a); for unlock-to-explicit the work must be empty of minor
@@ -6774,6 +6791,13 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
 
     changed = False
     for field in EDITABLE_SCENE_FIELDS:
+        if field in BOOL_SCENE_FIELDS:
+            # Unchecked checkbox is omitted from multipart; treat as false.
+            value = _as_scene_bool(form.get(field)) if field in form else False
+            if bool(scene.get(field)) != value:
+                scene[field] = value
+                changed = True
+            continue
         if field not in form:
             continue
         value = (form.get(field) or "").strip()
@@ -6903,6 +6927,7 @@ def _scene_json(r):
         "story": scene.get("story") or "",
         "camera": scene.get("camera") or "",
         "video_model": scene.get("video_model") or "",
+        "needs_lip_sync": bool(scene.get("needs_lip_sync")),
         "cast": r["cast"],
         "clips": r["clips"],
         "refs": _scene_refs_json(r),
@@ -6935,6 +6960,12 @@ def _apply_scene_fields(song, tier, num, fields):
     changed = False
     for field in EDITABLE_SCENE_FIELDS:
         if field not in fields:
+            continue
+        if field in BOOL_SCENE_FIELDS:
+            value = _as_scene_bool(fields.get(field))
+            if bool(scene.get(field)) != value:
+                scene[field] = value
+                changed = True
             continue
         value = (fields.get(field) or "").strip()
         if len(value) > MAX_SCENE_FIELD:
@@ -6978,6 +7009,7 @@ async def api_storyboard_edit_scene(id: int, tier: str, num: int, request: Reque
         "story": scene.get("story") or "",
         "camera": scene.get("camera") or "",
         "video_model": scene.get("video_model") or "",
+        "needs_lip_sync": bool(scene.get("needs_lip_sync")),
     }
     return JSONResponse(payload)
 

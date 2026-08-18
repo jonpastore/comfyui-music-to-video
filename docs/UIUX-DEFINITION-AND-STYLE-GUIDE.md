@@ -574,7 +574,8 @@ forward from ~0.2s until the frame is not black.
 Auto post (LTX refine on the LTX take, `T5-14`), and Auto QC as one
 nowrap option bar. First clip only is the default. Every scene is
 LTX first (`T5-11` **built**, `test_t5_11_ltx_always_first.py`).
-`needs_lip_sync` beside camera (`T2-55`) marks
+`needs_lip_sync` beside camera (`T2-55` **built**,
+`test_t2_55_needs_lip_sync.py`) marks
 the decoded s2v hop (`T5-12` graph **built**, `test_t5_12_d7_hop.py`);
 the look says **NOT MEASURED** until a GPU pair exists (`T3-37`,
 UIUX 7a.3). When the hop ran, the LTX predecessor and the s2v
@@ -665,7 +666,8 @@ entry with a `cli` appears there with no template change. A model
 not offered; a confirmed model stays selectable (`T2-34`).
 A scene may name its own `video_model` beside `camera` (`T2-42`,
 `T2-43`) as a renderer pin. The lip-sync fact is `needs_lip_sync`
-beside camera, not instead of it (`T2-55`). It does not skip LTX.
+beside camera, not instead of it (`T2-55` **built**,
+`test_t2_55_needs_lip_sync.py`). It does not skip LTX.
 Both are editable on the scene row (`EDITABLE_SCENE_FIELDS`) and
 returned on `GET /api/songs/{id}/storyboard/{tier}`; absent
 `video_model` means the job picker applies; absent `needs_lip_sync`
@@ -1381,7 +1383,7 @@ reads `pose_coverage` after
 `.../reject`), same shape as
 the arc wand. Location plate per unique key (`T2-53` **built**,
 `test_t2_53_location_plates.py`); unset / studio is
-grey-studio and no plate. Page display of the plate is later. `needs_lip_sync` beside camera. Ceiling
+grey-studio and no plate. Page display of the plate is later. `needs_lip_sync` beside camera (`T2-55` **built**, `test_t2_55_needs_lip_sync.py`). Ceiling
 and ticked-lower boards (`T2-54` **built**) exist per ticked tier;
 page listing of every ticked board is those existing per-tier pages.
 
@@ -1392,10 +1394,10 @@ page display is later.
 A draft or rejected row has no Generate.
 
 **Clips page.** Every scene is LTX first (`T5-11` **built**,
-`test_t5_11_ltx_always_first.py`). LTX predecessor + s2v successor
-both listed when the hop ran. Refine sibling on the LTX take, not
-on s2v. The lip-sync control is marked NOT MEASURED until `T3-37`
-has a pinned pair.
+`test_t5_11_ltx_always_first.py`). `needs_lip_sync` (`T2-55` **built**)
+marks the hop; hop graph is `T5-12` **built**. LTX predecessor + s2v
+successor both listed when the hop ran. Refine sibling on the LTX take,
+not on s2v. D7 look is NOT MEASURED until `T3-37` has a pinned pair.
 
 ## 7b. The surfaces TRD 8-10 adds
 

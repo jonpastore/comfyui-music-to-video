@@ -25,12 +25,28 @@ import mixer
 
 SCENE_TIME_TOLERANCE = 0.15
 # video_model is a directorial fact on the scene (T2-42 / T2-43 / T2-44).
+# needs_lip_sync (T2-55) sits beside camera: true → LTX then hop; false → LTX only.
 EDITABLE_SCENE_FIELDS = (
     "name", "cue", "duration_guidance", "story",
-    "camera", "video_model", "motion", "lighting", "location", "pose",
+    "camera", "video_model", "needs_lip_sync", "motion", "lighting",
+    "location", "pose",
     "image_prompt", "video_motion_prompt", "negative_prompt",
 )
+BOOL_SCENE_FIELDS = ("needs_lip_sync",)
 MAX_SCENE_FIELD = 4000
+
+
+def _as_scene_bool(raw):
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return False
+    if isinstance(raw, (int, float)):
+        return raw != 0
+    s = str(raw).strip().lower()
+    if s in ("", "0", "false", "no", "off"):
+        return False
+    return s in ("1", "true", "yes", "on")
 DEFAULT_SCENE_SECONDS = 4.0
 SCENE_SECONDS_MIN = 1.0
 SCENE_SECONDS_MAX = 60.0
@@ -489,6 +505,7 @@ def _scene_json(r):
         "story": scene.get("story") or "",
         "camera": scene.get("camera") or "",
         "video_model": scene.get("video_model") or "",
+        "needs_lip_sync": bool(scene.get("needs_lip_sync")),
         "cast": r["cast"],
         "clips": r["clips"],
         "n_parts": r.get("n_parts", 1),
@@ -581,6 +598,12 @@ def edit_scene(song_id, tier, num, fields):
     changed = False
     for field in EDITABLE_SCENE_FIELDS:
         if field not in fields:
+            continue
+        if field in BOOL_SCENE_FIELDS:
+            value = _as_scene_bool(fields.get(field))
+            if bool(scene.get(field)) != value:
+                scene[field] = value
+                changed = True
             continue
         value = (fields.get(field) or "").strip()
         if len(value) > MAX_SCENE_FIELD:

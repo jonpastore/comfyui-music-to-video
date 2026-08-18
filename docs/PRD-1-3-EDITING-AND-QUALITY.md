@@ -211,7 +211,8 @@ image1 is that scene's accepted keeper;
 `test_t2_56_per_scene_keeper.py`). Location plates (`T2-53` **built**,
 `test_t2_53_location_plates.py`). Extra-view slots are later. **P11 is built**. **P12 is built** (`T2-54` board backfill,
 `test_t2_54_ceiling_backfill.py`; generate half `T4-24`; C1/C2
-`T7-21`). **P13 is not built**. Anchors-on-model and
+`T7-21`). **P13 is partial**: `T5-11` / `T2-55` / `T5-12` graph
+**built**; D7 look `T3-37` NOT MEASURED. Anchors-on-model and
 this loop beat the timeline (`§6.0`). Do not mark a row built until
 the named test can go red.
 

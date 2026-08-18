@@ -67,6 +67,10 @@
         <input type="text" name="video_model" value="{{ r.scene.video_model or "" }}"
                placeholder="job default">
       </label>
+      <label class="check" title="LTX first, then the decoded s2v lip hop (T2-55). Unchecked is LTX only.">
+        <input type="checkbox" name="needs_lip_sync" value="true"
+               {% if r.scene.needs_lip_sync %}checked{% endif %}>
+        needs lip sync</label>
       <label>motion
         <input type="text" name="motion" value="{{ r.scene.motion or "" }}">
       </label>
@@ -312,7 +316,7 @@
                   title="When does S2V happen?"
                   aria-label="When does S2V happen?"
                   data-label="LTX then S2V"
-                  data-help="Render clip always starts LTX from the approved still. WAN S2V is not this button. It is a later hop from an LTX take: set the scene video model to s2v, or run that hop after you have a clip you like. We do not auto-stack S2V on every LTX render.">
+                  data-help="Render clip always starts LTX from the approved still. WAN S2V is the decoded hop after LTX when needs lip sync is ticked on this scene (beside camera). Unchecked scenes stay LTX only. video_model is a renderer pin, not the lip-sync switch.">
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
               <path fill="currentColor" d="M7.3 6.2c0-.8.5-1.3 1.3-1.3s1.3.5 1.3 1.2c0 .6-.3.9-.9 1.3-.5.4-.8.7-.8 1.3h1.3c0-.4.2-.7.7-1.1.7-.5 1.3-1 1.3-2 0-1.3-1-2.2-2.4-2.2-1.5 0-2.6 1-2.6 2.5zm1.1 5.8h1.4V10.7H8.4z"/>

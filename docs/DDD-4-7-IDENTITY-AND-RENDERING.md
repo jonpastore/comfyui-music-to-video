@@ -526,7 +526,8 @@ code rather than in documents.
   the label and the graph drift the moment either moves. `T7-21` is
   the same resolver for C1/C2 (**built**, `test_t7_21_c1_c2_resolver.py`).
 - **Clip-hop labels vs the graph** — LTX always; s2v if
-  `needs_lip_sync`; T5-A if refine. A control that says "lip-sync"
+  `needs_lip_sync` (`T2-55` **built**, `test_t2_55_needs_lip_sync.py`);
+  T5-A if refine. A control that says "lip-sync"
   must not emit s2v-only (`T5-11` **built**,
   `test_t5_11_ltx_always_first.py`). T5-12 hop graph **built**
   (`test_t5_12_d7_hop.py`); look is `T3-37` NOT MEASURED.

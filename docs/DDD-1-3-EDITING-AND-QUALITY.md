@@ -303,14 +303,15 @@ Still needed, and no more than this:
 
     ALTER TABLE sets ADD COLUMN out_fps REAL;                        -- NULL = derive from items
 
-    -- #529 loop (D7 leftover). Minimum; do not over-schema.
+    -- #529 loop leftover. Minimum; do not over-schema.
     -- location_plates (T2-53 **built**): album or song, location key → asset path
-    -- scenes.needs_lip_sync (or video_model kept plus this flag)
+    -- scenes.needs_lip_sync (T2-55 **built**, storyboard JSON bool beside camera)
     -- clips retain predecessor/successor (T6-A5) for LTX take,
     --   s2v hop, LTX refine
 
-One resolver for clip hops: LTX always; s2v if `needs_lip_sync`; T5-A
-if refine. Labels cannot promise a hop the graph omits. Classify never
+One resolver for clip hops: LTX always; s2v if `needs_lip_sync`
+(`T2-55` **built**, `test_t2_55_needs_lip_sync.py`); T5-A if refine.
+Labels cannot promise a hop the graph omits. Classify never
 writes `scene_pose_map`. A nude map row on g/pg13 is refused.
 
 Peaks are **not** a table. They are a binary min/max array written beside the
