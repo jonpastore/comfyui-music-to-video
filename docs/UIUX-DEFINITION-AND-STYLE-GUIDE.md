@@ -1450,9 +1450,13 @@ pose / wardrobe / usable). The document is sqlite
 `GET /api/albums/{album}/classification` (query params view / pose /
 wardrobe / usable) and `POST` to save; `POST .../import` seeds from a
 sidecar path. Live empty auto-seed **built**: `/anchors` calls
-`ensure_sidecar_seed` so Street Cats with an empty live DB imports the
-repo `anchor5/image-classification.json` once; `library()` still never
-reads a file; a random sidecar path alone does not paint
+`ensure_sidecar_seed` so Street Cats with an empty live DB imports
+`_DEFAULT_SIDECAR` once (`~/meowp-studio/anchor5/image-classification.json`
+on the render box); `deploy.sh` ships tracked
+`studio/seed/image-classification.json` there
+(`test_t4_22_deploy_ships_default_sidecar_to_meowp_studio_anchor5`) —
+live seed depends on that ship; `library()` still never reads a file; a
+random sidecar path alone does not paint
 (`test_uiux_classification_chips.py`). Chips UI **built**
 (`test_uiux_classification_chips.py`); the store is the API, not
 `anchor5/image-classification.json`. Coverage vs the open song's

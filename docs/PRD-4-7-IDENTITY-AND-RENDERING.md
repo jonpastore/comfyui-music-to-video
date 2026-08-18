@@ -183,8 +183,10 @@ step 1.
 in sqlite **is** (`test_t4_21_classification_json.py`): album +
 character, versioned, queryable; sidecars seed import only. Live empty
 auto-seed **built** (`ensure_sidecar_seed` from
-`_anchors_classification_ctx`; default repo
-`anchor5/image-classification.json`; `library()` never reads a file).
+`_anchors_classification_ctx`; `_DEFAULT_SIDECAR` =
+`~/meowp-studio/anchor5/image-classification.json` on the render box;
+`deploy.sh` ships tracked `studio/seed/image-classification.json` there
+— live seed depends on that ship; `library()` never reads a file).
 `/anchors` paints keeper chips and import/save seed an empty library
 (`test_uiux_classification_chips.py`). `T4-23`
 gap **is**; the Pose catalog on `/anchors` is album-first then song-to-check, collapsed unless empty or holed, and import closes holes
