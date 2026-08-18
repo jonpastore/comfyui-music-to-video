@@ -654,9 +654,11 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    `clips_for_scene` / `main()` take `--video-model`.
    `EDITABLE_SCENE_FIELDS` includes `video_model`; the scene row
    shows it beside camera (`test_t2_42_scene_video_model.py`).
-   Pose-plate bind is a floppy `.icon-btn` plus a `.save-note`
-   (saved / pinned / error). Status is Pinned / Suggested / Missing
-   sheet / No plate with a help icon, not “saved bind”.
+   Pose is a textarea. Pose-plate bind is a horizontal thumbnail
+   slider (radio `sheet_id`, not a `<select>`), a floppy `.icon-btn`,
+   and a `.save-note` (saved / pinned / error). Status is Pinned /
+   Suggested / Missing sheet / No plate with a help icon, not
+   “saved bind”.
    Scene preview is plate / stills / clips. Reroll note, seed range,
    Fix, and Delete live on the still. `GET /songs/{id}/approve/{tier}`
    303s to the song page. `POST /clips` accepts `scene` + `head_only`.

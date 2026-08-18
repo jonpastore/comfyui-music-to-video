@@ -2023,9 +2023,10 @@ function initSongPage() {
   });
 
   page.addEventListener("change", function (e) {
-    var sel = e.target.closest && e.target.closest(".pose-bind select[name=sheet_id]");
-    if (!sel || !page.contains(sel)) return;
-    sayPending(sel.form && sel.form.querySelector(".save-note"), "not saved yet");
+    var radio = e.target.closest && e.target.closest(".pose-bind input[name=sheet_id]");
+    if (!radio || !page.contains(radio)) return;
+    markPosePick(radio.form, radio.value);
+    sayPending(radio.form && radio.form.querySelector(".save-note"), "not saved yet");
   });
 
 }
@@ -2133,6 +2134,17 @@ function paintStillApprove(fig, approved) {
   }
 }
 
+function markPosePick(form, sheetId) {
+  if (!form) return;
+  var want = String(sheetId == null ? 0 : sheetId);
+  form.querySelectorAll(".pose-pick").forEach(function (lab) {
+    var inp = lab.querySelector("input[name=sheet_id]");
+    var on = inp && inp.value === want;
+    lab.classList.toggle("on", !!on);
+    if (inp) inp.checked = !!on;
+  });
+}
+
 function paintPoseBind(form, d) {
   if (!form || !d) return;
   var src = d.source || "none";
@@ -2149,6 +2161,7 @@ function paintPoseBind(form, d) {
     help.setAttribute("data-label", pair[0]);
     help.setAttribute("data-help", pair[1]);
   }
+  markPosePick(form, d.sheet_id);
   var btn = form.querySelector(".thumb-open");
   var img = btn && btn.querySelector("img");
   if (d.url) {

@@ -86,10 +86,9 @@
   </form>
 
   <div class="pose-row">
-    <label>pose
-      <input type="text" name="pose" form="scene-form-{{ r.num }}"
-             value="{{ r.scene.pose or "" }}"
-             title="The scene's pose word. The matcher uses this to suggest a plate.">
+    <label class="pose-word-field">pose
+      <textarea name="pose" form="scene-form-{{ r.num }}" rows="3"
+                title="The scene's pose word. The matcher uses this to suggest a plate.">{{ r.scene.pose or "" }}</textarea>
     </label>
     {% if pose_plan %}
     {% for s in pose_plan.scenes if s.num == r.num %}
@@ -118,16 +117,30 @@
       {% else %}
       <span class="anchor-thumb pose-thumb-empty" aria-hidden="true"></span>
       {% endif %}
-      <label>Pose plate
-        <select name="sheet_id" title="Pick a pose plate for this scene">
-          <option value="0">{% if s.source == "none" %}no match — identity front only{% else %}clear bind{% endif %}</option>
-          {% for sh in pose_plan.sheets %}
-          <option value="{{ sh.id }}" {% if s.sheet_id == sh.id %}selected{% endif %}>
-            {{ sh.label }}{% if sh.nude %} · nude{% endif %}
-          </option>
-          {% endfor %}
-        </select>
-      </label>
+      <span class="pose-picks-label">Pose plate</span>
+      <div class="pose-picks" role="listbox" aria-label="Pose plate">
+        <label class="pose-pick{% if not s.sheet_id %} on{% endif %}"
+               title="{% if s.source == 'none' %}no match — identity front only{% else %}clear bind{% endif %}">
+          <input type="radio" name="sheet_id" value="0"
+                 {% if not s.sheet_id %}checked{% endif %}>
+          <span class="pose-pick-thumb pose-thumb-empty" aria-hidden="true"></span>
+          <span class="pose-pick-cap">none</span>
+        </label>
+        {% for sh in pose_plan.sheets %}
+        <label class="pose-pick{% if s.sheet_id == sh.id %} on{% endif %}"
+               title="{{ sh.label }}{% if sh.nude %} · nude{% endif %}">
+          <input type="radio" name="sheet_id" value="{{ sh.id }}"
+                 {% if s.sheet_id == sh.id %}checked{% endif %}>
+          {% if sh.path %}
+          <img class="pose-pick-thumb" src="{{ media_url(sh.path) }}?w=360"
+               alt="{{ sh.label }}" loading="lazy" decoding="async">
+          {% else %}
+          <span class="pose-pick-thumb pose-thumb-empty" aria-hidden="true"></span>
+          {% endif %}
+          <span class="pose-pick-cap">{{ sh.label }}{% if sh.nude %} · nude{% endif %}</span>
+        </label>
+        {% endfor %}
+      </div>
       {{ save_icon("Save plate",
          "Save this plate for the scene — Generate refs uses it as the pose (image2).") }}
       <span class="pose-bind-meta">

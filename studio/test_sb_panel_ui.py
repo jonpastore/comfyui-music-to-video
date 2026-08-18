@@ -97,6 +97,7 @@ def test_sb_panel_toolbar_and_closed_json():
         assert 'id="scene-1"' in html
         assert 'name="camera"' in html
         assert 'name="pose"' in html
+        assert "<textarea" in html and 'name="pose"' in html
         assert 'name="image_prompt"' in html
         assert "<details class=\"scene\" id=\"scene-1\" open" not in html
         js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()

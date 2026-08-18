@@ -546,8 +546,11 @@ the map and reads `pose_coverage` from
 are `GET /api/songs/{id}/pose-gap` (`T4-23` **built**). Generate from those
 holes is `POST /api/songs/{id}/pose-generate` (`T4-24` **built**). Location plate per unique
 location key (`T2-53` **built**, `test_t2_53_location_plates.py`) is a still, not a character sheet. Storyboard
-scene rows have a **Pose keeper** select after Accept
-(`POST .../scene/{n}/pose-sheet` is today's auto-bind leftover). The plate thumb is a
+scene rows have a **pose textarea** and a **Pose plate thumbnail
+slider** after Accept
+(`POST .../scene/{n}/pose-sheet` is today's auto-bind leftover). The
+dropdown is gone — plates are picked from a horizontal strip of
+thumbs (`role=listbox`, radio `sheet_id`). The plate thumb is a
 `button.thumb-open` (neutral, not the accent fill). Save actions are labeled floppies (Save JSON, Save lock, Save plate,
 Save scene) so two disks are not the same control. Every icon has
 `title` and `aria-label`. A `.save-note` reports saved / pinned / the

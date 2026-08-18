@@ -818,6 +818,10 @@ def test_bind_route_json_reports_source():
         assert "scene-preview" in page
         assert "Reference stills" in page
         assert "Pose plate" in page
+        assert "pose-picks" in page
+        assert 'name="sheet_id"' in page
+        assert "<select" not in page.split("pose-bind", 1)[-1].split("</form>", 1)[0]
+        assert "<textarea" in page and 'name="pose"' in page
         assert ">Clips<" in page or ">Clips</h4>" in page
         assert "First clip only" in page
         assert "What First clip only means" in page
