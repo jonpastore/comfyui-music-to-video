@@ -114,10 +114,13 @@ write `scope_kind='shared'` (`T4-25`). The bytes live under
 `uploads/anchors/shared/`. A second album resolves the same
 `anchors.id`; it does not copy the file. Historical Street Cats
 Kitty/Panther/Tiger/ensemble operator plates promote the same way
-(`import_shared_poses.py --promote`). Album-generated Meow P
-candidates (`character_id IS NULL`) stay album-scoped.
-`chosen_anchor` prefers an album row, then a shared row with the
-same character name. `_drop_anchor` deletes
+(`import_shared_poses.py --promote`) on SKIP_SUBSTR, SHEETS
+basename, character name Kitty/Panther/Tiger, actors stamp, or
+`shared_pending`. Album-generated Meow P candidates
+(`character_id IS NULL`, empty actors) stay album-scoped.
+`chosen_anchor` and the song-page chosen summary
+(`visible_anchor_sql`) prefer an album row, then a shared row with
+the same character name. `_drop_anchor` deletes
 every `anchor_ref` on that path (not only borrowed `anchor_id`
 rows). `anchor_refs` does not list a row whose file is gone.
 A sheet with two or more bodies is an ensemble (`pose_plan.is_ensemble`):

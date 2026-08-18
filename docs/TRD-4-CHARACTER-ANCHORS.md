@@ -226,20 +226,22 @@ Gap reads the board; it does not bind (`T2-51`).
 - `T4-25` **One anchors table, any album can reference.** Operator
   pose uploads (`/anchors/upload-pose`, Assign as sheet) write
   `scope_kind='shared'`, one file under `uploads/anchors/shared/`.
-  `chosen_anchor` / pose-plan / the album gallery union album-scoped
-  rows with the shared library. A second album does not copy the
-  file or insert a second row. An album-specific chosen sheet still
-  wins over a shared one for the same view. Historical Street Cats
-  Kitty/Panther/Tiger/ensemble operator plates (basename in
-  `SKIP_SUBSTR`, or `render_json.shared_pending`) promote to
+  `chosen_anchor` / pose-plan / the album gallery / the song-page
+  chosen summary (`visible_anchor_sql`) union album-scoped rows with
+  the shared library. A second album does not copy the file or
+  insert a second row. An album-specific chosen sheet still wins
+  over a shared one for the same view. Historical Street Cats
+  Kitty/Panther/Tiger/ensemble operator plates promote to
   `scope_kind='shared'` via `scripts/import_shared_poses.py
-  --promote`; Meow P `character_id IS NULL` candidates stay
-  album-scoped. *Mutation: upload-pose writes `scope_kind='album'`
-  and a second album cannot resolve the sheet → red. Mutation:
-  assigning the same upload copies the bytes into
-  `uploads/anchors/album/<other>/` → red. Mutation: a SKIP_SUBSTR
-  album row stays album-scoped after `--promote` → red.*
-  (`test_shared_anchors.py`)
+  --promote` when any of: basename in `SKIP_SUBSTR`, a `SHEETS`
+  basename, character name Kitty/Panther/Tiger, `render_json.actors`,
+  or `render_json.shared_pending` with character_id/actors. Meow P
+  `character_id IS NULL` with empty actors stays album-scoped.
+  *Mutation: upload-pose writes `scope_kind='album'` and a second
+  album cannot resolve the sheet → red. Mutation: assigning the
+  same upload copies the bytes into `uploads/anchors/album/<other>/`
+  → red. Mutation: a Kitty/SHEETS album row stays album-scoped after
+  `--promote` → red.* (`test_shared_anchors.py`)
 
 Use-as-ref / map / image1 only from keepers with `usable≠skip`
 (`T7-23`). `usable=skip` never enters a slot.
@@ -380,7 +382,7 @@ character."* — the capability loss stated in full.
 | `T4-24` ceiling-tier pose generate (clothed+nude iff r/xxx) | **built** | `test_t4_24_ceiling_generate.py` | `POST /api/songs/{id}/pose-generate` / `pose_generate.generate` plans sheets from pose-gap holes at the highest ticked tier. r/xxx: clothed **and** nude. g/pg13: clothed only, no anatomy job, no nude view. Never invents a higher tier. Studio `anchor` jobs (`source=pose-gap`), not sidecar `batch_edit`. Mutation: g-only emits nude or anatomy → red. Mutation: r emits clothed only and calls coverage green → red |
 | `T4-11` / D10 colour (charcoal-brown, not jet-black) | **built** (compose); render differential **harness only; NOT MEASURED** | `test_trd4_unverified.py`, `test_t4_11_body_colour.py` | Compose: `test_t4_11_fresh_album_compose_is_charcoal_brown` — fresh album through `album_profile` contains charcoal-brown and the nine-part list, not jet-black. Mutation: `DEFAULT_BODY` / `ALBUM_FIELDS["body"]` default says jet-black, defers colour to the face, or omits charcoal-brown → red. Differential harness: `qc.t4_11_*` + `test_t4_11_body_colour.py` — missing/unpinned charcoal-vs-negating pair raises NOT MEASURED; synthetic uniform vs two-tone proves region-luma variance can fail; `T4_11_REAL_PAIR_MEASURED` is False. Do not flip without a pinned GPU pair. |
 | `T4-20` pose QC before anatomy | **process** | 2026-08-16 | `docs/MEASURED-2026-08-16-POSE-ANATOMY.md`. Studio graph unchanged |
-| `T4-25` shared pose library, any album references one row | **built** | `test_shared_anchors.py` | upload-pose / assign write `scope_kind=shared` under `uploads/anchors/shared/`. Two albums resolve the same `anchors.id` and the same path. Album-specific chosen still wins. `--promote` flips historical SKIP_SUBSTR / `shared_pending` album plates to shared; Meow P NULL candidates stay album-scoped (`test_promote_skip_substr_plates_shared_across_albums`). Mutation: per-album copy or album-only lookup → red |
+| `T4-25` shared pose library, any album references one row | **built** | `test_shared_anchors.py` | upload-pose / assign write `scope_kind=shared` under `uploads/anchors/shared/`. Two albums resolve the same `anchors.id` and the same path. Album-specific chosen still wins. Song-page chosen summary uses `visible_anchor_sql` so shared Kitty/actor keepers appear. `--promote` flips SKIP_SUBSTR / SHEETS basename / Kitty|Panther|Tiger character / actors-stamped / `shared_pending` album plates to shared; Meow P NULL+empty actors stay album (`test_promote_skip_substr_plates_shared_across_albums`, `test_promote_kitty_sheets_or_character_without_shared_pending`). Mutation: kitty album row remains album after promote → red |
 
 ---
 

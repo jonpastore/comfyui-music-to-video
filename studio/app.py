@@ -2870,10 +2870,11 @@ def song_page(request: Request, id: int):
     takes = db.list_takes(id)
     audio_original = db.one("SELECT * FROM assets WHERE song_id=? AND kind='audio_original'", id)
     # anchors belong to the song's ALBUM, not the song -- this is a read-only
-    # summary for convenience; management happens on /anchors.
+    # summary for convenience; management happens on /anchors. Shared
+    # Kitty/actor keepers must appear here too (T4-25).
     chosen_anchors = db.q(
-        """SELECT * FROM anchors WHERE scope_kind='album' AND scope_value=? AND chosen=1
-           ORDER BY tier, view""", song["album"] or "")
+        f"""SELECT * FROM anchors WHERE {db.visible_anchor_sql()} AND chosen=1
+            ORDER BY tier, view""", song["album"] or "")
     # a tier is offered for clip generation once every SCENE has an approved
     # still. Chain parts after the first use the previous clip's last frame.
     clips_ready_tiers = []

@@ -349,8 +349,9 @@ the word explains. The domain calls them albums everywhere it speaks for itself
 — `arc.py`'s docstring opens *"The album's STORY"* and then says *"an album is a
 playlist, so the arc attaches to the playlist record"*; the arc, the album
 profile and the cast are album-scoped. Pose uploads and promoted
-Street Cats actor plates live in one shared `anchors` table any
-album can open; Meow P generated candidates stay album-scoped.
+Street Cats Kitty/Panther/Tiger and actors-stamped plates live in
+one shared `anchors` table any album (and the song-page summary)
+can open; Meow P generated candidates stay album-scoped.
 `playlists` is the
 table's name and the nav is showing the schema to the operator. The table does
 not have to move for the label to be right.

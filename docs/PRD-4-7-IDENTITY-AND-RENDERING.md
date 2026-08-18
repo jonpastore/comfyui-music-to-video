@@ -84,8 +84,11 @@ What they need from these four, in their own terms:
    lock, not three solo fronts. Kitty, Panther, and the other models
    live once: an upload is a shared anchors row any album can
    reference, not a copy under each album folder. Historical
-   Street Cats actor plates promote into that shared library;
-   Meow P's album-generated candidates stay on that album."*
+   Street Cats Kitty/Panther/Tiger and actors-stamped plates
+   promote into that shared library (SHEETS basename or character
+   name alone is enough); Meow P's album-generated candidates
+   stay on that album. The song page summary lists those shared
+   keepers with the album's own."*
    (`T7-20`, `T4-25`)
 
 ## 3. The product rules

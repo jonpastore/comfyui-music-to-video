@@ -178,3 +178,74 @@ def test_promote_skip_substr_plates_shared_across_albums():
         assert dst["id"] == actor_id
         assert dst["path"] == src["path"]
         assert appmod.chosen_anchor("album", a2, "xxx", "front") is None
+
+
+def test_promote_kitty_sheets_or_character_without_shared_pending():
+    """SHEETS basename / Kitty character_id (no shared_pending) → shared; Meow P NULL stays."""
+    with TestClient(appmod.app) as client:
+        a1 = _album(client, f"Kitty Promote Src {time.time_ns()}")
+        a2 = _album(client, f"Kitty Promote Dst {time.time_ns()}")
+        kitty = _character(a1, "Kitty", "lead")
+        _character(a2, "Kitty", "lead")
+        dest = os.path.join(db.DATA, "uploads", "anchors", "album", a1)
+        os.makedirs(dest, exist_ok=True)
+        now = time.time()
+        sheet_path = os.path.join(dest, f"kitty-seated-nude_{time.time_ns()}.png")
+        char_path = os.path.join(dest, f"kitty_operator_{time.time_ns()}.png")
+        meow_path = os.path.join(dest, f"meowp_null_{time.time_ns()}.png")
+        actors_path = os.path.join(dest, f"ensemble_upload_{time.time_ns()}.png")
+        for p in (sheet_path, char_path, meow_path, actors_path):
+            open(p, "wb").write(_png_bytes())
+        sheet_view = f"pose_sheet_{time.time_ns()}_nude"
+        char_view = f"pose_char_{time.time_ns()}_nude"
+        actors_view = f"pose_actors_{time.time_ns()}_nude"
+        sheet_id = db.run(
+            """INSERT INTO anchors (scope_kind, scope_value, tier, view, path,
+                                    chosen, created, character_id, render_json)
+               VALUES ('album',?,?,?,?,1,?,?,?)""",
+            a1, "xxx", sheet_view, sheet_path, now, None,
+            json.dumps({"source": "upload", "pose_name": "seated nude"}))
+        char_id = db.run(
+            """INSERT INTO anchors (scope_kind, scope_value, tier, view, path,
+                                    chosen, created, character_id, render_json)
+               VALUES ('album',?,?,?,?,1,?,?,?)""",
+            a1, "xxx", char_view, char_path, now, kitty["id"],
+            json.dumps({"source": "upload", "pose_name": "kitty operator"}))
+        actors_id = db.run(
+            """INSERT INTO anchors (scope_kind, scope_value, tier, view, path,
+                                    chosen, created, character_id, render_json)
+               VALUES ('album',?,?,?,?,1,?,?,?)""",
+            a1, "xxx", actors_view, actors_path, now, None,
+            json.dumps({"source": "upload", "actors": ["Meow P", "Kitty"],
+                        "pose_name": "ensemble"}))
+        meow_id = db.run(
+            """INSERT INTO anchors (scope_kind, scope_value, tier, view, path,
+                                    chosen, created, character_id, render_json)
+               VALUES ('album',?,?,?,?,1,?,?,?)""",
+            a1, "xxx", "front", meow_path, now, None,
+            json.dumps({"source": "generate"}))
+
+        mod = _import_shared_poses()
+        assert mod.promote_pending() == 0
+
+        sheet = db.one("SELECT * FROM anchors WHERE id=?", sheet_id)
+        char = db.one("SELECT * FROM anchors WHERE id=?", char_id)
+        actors = db.one("SELECT * FROM anchors WHERE id=?", actors_id)
+        meow = db.one("SELECT * FROM anchors WHERE id=?", meow_id)
+        assert sheet["scope_kind"] == db.SHARED_KIND, "mutation: kitty SHEETS basename stayed album"
+        assert char["scope_kind"] == db.SHARED_KIND, "mutation: Kitty character_id stayed album"
+        assert actors["scope_kind"] == db.SHARED_KIND
+        assert sheet["scope_value"] == db.SHARED_VALUE
+        assert char["scope_value"] == db.SHARED_VALUE
+        assert meow["scope_kind"] == "album"
+        assert meow["scope_value"] == a1
+
+        dst_kitty = db.one("SELECT * FROM characters WHERE scope_value=? AND name=?",
+                           a2, "Kitty")
+        src = appmod.chosen_anchor("album", a1, "xxx", char_view, kitty["id"])
+        dst = appmod.chosen_anchor("album", a2, "xxx", char_view, dst_kitty["id"])
+        assert src is not None and dst is not None
+        assert src["id"] == char_id
+        assert dst["id"] == char_id
+        assert dst["path"] == src["path"]
+        assert appmod.chosen_anchor("album", a2, "xxx", "front") is None

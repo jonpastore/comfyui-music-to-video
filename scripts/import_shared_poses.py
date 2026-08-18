@@ -99,31 +99,45 @@ def _character_id(name):
     return row["id"] if row else None
 
 
+PROMOTE_CHARACTER_NAMES = frozenset({"Kitty", "Panther", "Tiger"})
+
+
 def _basename_key(path):
     return os.path.basename(path or "").lower().replace(" ", "_")
+
+
+_SHEET_STEMS = tuple(os.path.splitext(_basename_key(fname))[0] for fname, *_ in SHEETS)
 
 
 def _should_promote(row):
     """Album-scoped operator plates → shared. Meow P NULL candidates stay.
 
-    Matches render_json.shared_pending (the first 28 Kitty/actor promotes) or a
-    historical Street Cats basename in SKIP_SUBSTR. Protagonist candidates
-    (character_id IS NULL, no actors stamp, not a SKIP plate) stay album-scoped.
+    Promotes when any of: SKIP_SUBSTR, a SHEETS basename, character name
+    Kitty/Panther/Tiger, render_json.actors, or shared_pending with
+    character_id/actors. Protagonist candidates (character_id IS NULL, no
+    actors stamp, not SKIP/SHEETS) stay album-scoped.
     """
     if (row["scope_kind"] or "") != "album":
         return False
     key = _basename_key(row["path"])
     if any(s in key for s in SKIP_SUBSTR):
         return True
+    if any(stem in key for stem in _SHEET_STEMS):
+        return True
     try:
         meta = json.loads(row["render_json"] or "{}")
     except (TypeError, ValueError):
         meta = {}
-    if not meta.get("shared_pending"):
-        return False
-    if row["character_id"] is None and not (meta.get("actors") or []):
-        return False
-    return True
+    if meta.get("actors"):
+        return True
+    cid = row["character_id"]
+    if cid is not None:
+        ch = db.one("SELECT name FROM characters WHERE id=?", cid)
+        if ch and (ch["name"] or "") in PROMOTE_CHARACTER_NAMES:
+            return True
+    if meta.get("shared_pending") and (cid is not None or meta.get("actors")):
+        return True
+    return False
 
 
 def promote_pending():
