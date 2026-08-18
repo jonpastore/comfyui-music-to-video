@@ -2,7 +2,7 @@
 in db/tiers/jobs/pipeline/grok/lyrics/mixer; this file wires HTTP to them and
 does upload validation + path-traversal-safe media serving.
 """
-import json, math, os, random, re, shutil, sqlite3, tempfile, time
+import hashlib, json, math, os, random, re, shutil, sqlite3, tempfile, time
 from contextlib import asynccontextmanager
 from typing import Annotated, List, Optional
 from urllib.parse import quote
@@ -1958,8 +1958,24 @@ def h_render_set(args, progress):
 
 # ------------------------------------------------------------------ media --
 
+def _media_thumb(real, width):
+    """Grid-sized JPEG so 100+ candidate tiles do not stall the single worker."""
+    from PIL import Image
+    width = max(64, min(int(width), 640))
+    stamp = f"{os.path.getmtime(real):.3f}:{os.path.getsize(real)}:{width}"
+    key = hashlib.sha256(f"{real}:{stamp}".encode()).hexdigest()[:20]
+    dest = os.path.join(db.DATA, "thumbs", str(width), key + ".jpg")
+    if not os.path.isfile(dest):
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with Image.open(real) as im:
+            im = im.convert("RGB")
+            im.thumbnail((width, width * 2), Image.Resampling.BILINEAR)
+            im.save(dest, "JPEG", quality=70, optimize=True)
+    return FileResponse(dest, media_type="image/jpeg")
+
+
 @app.get("/media/{path:path}")
-def media(path: str):
+def media(path: str, w: int = 0):
     if "\x00" in path:
         raise HTTPException(400, "invalid path")
     real = os.path.realpath("/" + path)
@@ -1967,6 +1983,11 @@ def media(path: str):
         raise HTTPException(403, "path not allowed")
     if not os.path.isfile(real):
         raise HTTPException(404)
+    if w:
+        try:
+            return _media_thumb(real, w)
+        except Exception:
+            pass
     return FileResponse(real)
 
 

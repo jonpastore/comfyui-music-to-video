@@ -235,6 +235,21 @@ def test_media_url_does_not_emit_double_slash():
     assert not url.startswith("/media//"), url
 
 
+def test_media_thumb_is_smaller_jpeg():
+    """Grid ?w= must not send the 800 KB Comfy PNG. Mutation: ignore w → red."""
+    from PIL import Image
+    src = os.path.join(db.DATA, "media_thumb_src.png")
+    Image.new("RGB", (896, 1216), (30, 90, 40)).save(src)
+    rel = os.path.realpath(src).lstrip("/")
+    with TestClient(appmod.app) as client:
+        full = client.get("/media/" + rel)
+        thumb = client.get("/media/" + rel, params={"w": 160})
+    assert full.status_code == 200, full.text
+    assert thumb.status_code == 200, thumb.text
+    assert "jpeg" in (thumb.headers.get("content-type") or "")
+    assert len(thumb.content) < len(full.content)
+
+
 def test_oversized_upload_rejected():
     with TestClient(appmod.app) as client:
         big = b"0" * (appmod.MAX_MP3 + 1)

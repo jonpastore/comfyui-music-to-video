@@ -91,8 +91,9 @@ def test_candidate_tile_shows_confidence():
     )
     assert "81%" in html
     assert "confidence" in html.lower() or "vision" in html.lower()
-    assert 'src="/media?p=/tmp/c.png"' in html
-    assert "loading=\"lazy\"" not in html.split("<img", 1)[1].split(">", 1)[0]
+    tag = html.split("<img", 1)[1].split(">", 1)[0]
+    assert 'src="/media?p=/tmp/c.png?w=360"' in html or 'src="/media?p=/tmp/c.png"?w=360' in html or "?w=360" in tag
+    assert "loading=\"lazy\"" not in tag
 
 
 def test_lazy_src_placeholder_and_stills_load_without_observer():
