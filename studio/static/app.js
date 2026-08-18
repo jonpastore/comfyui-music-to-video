@@ -810,6 +810,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initGenreSelects("set-genre2-select", "set-subgenre2-select");
   initLibraryBulk();
   initAnchors();
+  initClassificationLibrary();
   initAnchorBatch();
   initAnchorPrompts();
   initAnchorPaste();
@@ -2415,6 +2416,47 @@ document.addEventListener("submit", function (e) {
 });
 
 restoreRosterTier();
+
+// T4-21 / T4-23: seed classification_json from the anchors page (no GPU).
+function initClassificationLibrary() {
+  var box = document.getElementById("classification-library");
+  if (!box) return;
+  var album = box.getAttribute("data-album") || "";
+  var note = document.getElementById("classification-note");
+  function say(msg) { if (note) note.textContent = msg || ""; }
+
+  var imp = document.getElementById("classification-import");
+  if (imp) {
+    imp.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var pathEl = imp.querySelector('[name="path"]');
+      var path = pathEl ? pathEl.value : "";
+      say("Importing…");
+      api("/api/albums/" + encodeURIComponent(album) + "/classification/import",
+          {path: path})
+        .then(function () { location.reload(); })
+        .catch(function (err) { say(err.message); });
+    });
+  }
+
+  var save = document.getElementById("classification-save");
+  if (save) {
+    save.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var rawEl = save.querySelector('[name="document"]');
+      var raw = rawEl ? rawEl.value : "";
+      var doc;
+      try { doc = JSON.parse(raw); } catch (err) {
+        say("classification_json is not JSON");
+        return;
+      }
+      say("Saving…");
+      api("/api/albums/" + encodeURIComponent(album) + "/classification", doc)
+        .then(function () { location.reload(); })
+        .catch(function (err) { say(err.message); });
+    });
+  }
+}
 
 // ---- Anchors: view full size, multi-select, and nothing reloads the page -----
 function initAnchors() {

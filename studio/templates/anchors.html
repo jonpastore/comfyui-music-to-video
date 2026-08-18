@@ -62,6 +62,80 @@
   </ul>
 </section>
 
+<section class="card" id="classification-library"
+         data-album="{{ class_album or form_album }}">
+  <h2>Classification library</h2>
+  <p class="hint">Keepers from <code>classification_json</code> (usable≠skip).
+    Import a sidecar or save a document to seed an empty library &mdash; no GPU.
+    Ceiling holes are this song versus those keepers.</p>
+  {% if album_songs %}
+  <form method="get" action="/anchors" id="pose-gap-song-form" class="field-row">
+    <input type="hidden" name="scope_value" value="{{ class_album or form_album }}">
+    <label>Open song
+      <select name="song_id" id="pose-gap-song" onchange="this.form.requestSubmit()">
+        {% for s in album_songs %}
+        <option value="{{ s.id }}" {% if s.id == open_song_id %}selected{% endif %}>{{ s.title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% if pose_gap %}
+    <span class="muted" id="pose-gap-meter">{{ pose_gap.tier | tiername }}
+      · {{ pose_gap.n_covered }}/{{ pose_gap.n_needs }} covered{% if pose_gap.n_holes %}
+      · {{ pose_gap.n_holes }} hole{{ "" if pose_gap.n_holes == 1 else "s" }}{% endif %}</span>
+    {% endif %}
+  </form>
+  {% endif %}
+  <div class="class-chips" id="class-keeper-chips">
+    {% for im in class_keepers %}
+    <span class="tag class-chip" data-id="{{ im.id }}" data-view="{{ im.view }}"
+          data-pose="{{ im.pose }}" data-wardrobe="{{ im.wardrobe }}"
+          data-usable="{{ im.usable }}">{{ im.pose }} / {{ im.view }} / {{ im.wardrobe }}
+      <span class="muted">{{ im.usable }}</span></span>
+    {% else %}
+    <p class="empty" id="class-keepers-empty">No keepers in classification_json.
+      Import a sidecar or save a document &mdash; no GPU.</p>
+    {% endfor %}
+  </div>
+  <h3>Ceiling holes</h3>
+  <div class="class-chips" id="pose-gap-holes">
+    {% if pose_gap and pose_gap.holes %}
+    {% for h in pose_gap.holes %}
+    <span class="tag class-chip hole warn-tag"
+          data-pose="{{ h.pose }}" data-view="{{ h.view }}"
+          data-wardrobe="{{ h.wardrobe }}"
+          data-scenes="{{ h.scenes | join(',') }}">{{ h.pose }} / {{ h.view }} / {{ h.wardrobe }}
+      <span class="muted">sc {{ h.scenes | join(', ') }}</span></span>
+    {% endfor %}
+    {% elif pose_gap %}
+    <p class="empty" id="pose-gap-empty">No ceiling holes for this song.</p>
+    {% elif album_songs %}
+    <p class="empty" id="pose-gap-empty">No storyboard on this song, so there is no ceiling board to gap.</p>
+    {% else %}
+    <p class="empty" id="pose-gap-empty">No song on this album to gap against.</p>
+    {% endif %}
+  </div>
+  <p class="hint" id="classification-note"></p>
+  <form id="classification-import" class="stack-form">
+    <label>Sidecar path
+      <input type="text" name="path" id="classification-import-path"
+             placeholder="/path/to/image-classification.json" autocomplete="off">
+    </label>
+    <div class="form-actions">
+      <button type="submit">Import sidecar</button>
+    </div>
+  </form>
+  <form id="classification-save" class="stack-form">
+    <label>classification_json
+      <textarea name="document" id="classification-save-document" rows="6"
+                spellcheck="false" placeholder="{&quot;images&quot;:[]}"></textarea>
+    </label>
+    <div class="form-actions">
+      <button type="submit" class="icon-btn" title="Save classification library"
+              aria-label="Save classification library">{{ glyph_save() }}</button>
+    </div>
+  </form>
+</section>
+
 {% if coverage_by_tier %}
 <section class="card" id="album-pose-roster">
   {% set miss = namespace(n=0) %}

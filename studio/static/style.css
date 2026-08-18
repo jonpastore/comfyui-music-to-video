@@ -1720,6 +1720,8 @@ img.lazy-src, video.lazy-src {
 
 /* ---- cast ---- */
 .cast-chips { margin: 0.3rem 0; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.class-chips { margin: 0.3rem 0; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.class-chip.hole { border-color: var(--danger); color: var(--danger); }
 .cast-offer { margin: 0.4rem 0 0; padding-left: 1.2rem; }
 .cast-offer li { margin: 0.2rem 0; }
 .character-row {

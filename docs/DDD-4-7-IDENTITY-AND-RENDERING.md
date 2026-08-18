@@ -43,7 +43,7 @@ is not a studio feature.
 |---|---|
 | `make_anchor.py` | the view table, the positive constants, `is_nude_view`, `prompt_for`, the call into `workflow()` |
 | `build_refs.py` | the graph: `workflow()`, `sampler_settings`, `assign_ref_slots`, `cast_clause`, `negative_applies` |
-| `studio/app.py` | the anchor routes, `ANCHOR_VIEWS` labels, `ANCHOR_RENDER_FLAGS`, `DENOISE_CHOICES`, the preview; song-page `pose_library_by_tier` (chosen sheets, not just identity front); `start_refs` refuses draft/rejected `scene_pose_map` rows (`T2-52`) and passes accepted keepers as per-scene `anchors` image1 (`T2-56`); `_use_anchor_as_ref` / `_collect_anchor_ref_paths` refuse `usable=skip` (`T7-23`) |
+| `studio/app.py` | the anchor routes, `ANCHOR_VIEWS` labels, `ANCHOR_RENDER_FLAGS`, `DENOISE_CHOICES`, the preview; `/anchors` classification chips + ceiling holes (`_anchors_classification_ctx`, UIUX 7a.7, `test_uiux_classification_chips.py`); song-page `pose_library_by_tier` (chosen sheets, not just identity front); `start_refs` refuses draft/rejected `scene_pose_map` rows (`T2-52`) and passes accepted keepers as per-scene `anchors` image1 (`T2-56`); `_use_anchor_as_ref` / `_collect_anchor_ref_paths` refuse `usable=skip` (`T7-23`) |
 | `studio/pose_plan.py` | leftover unmapped image2 match; `plan` / `bind_scene` / `freeze_auto_binds` / `album_coverage`; `scene_actors` (kneel partnered); leftover pool + coverage keeper list are those actors so a Panther-lead cowgirl / kneeling-look-back / supine scene binds a Meow P / ensemble keeper; `lead_name` / `set_lead_name` (album lead tab, not “protagonist”); no FastAPI. Not the T2-50 writer or the Accept-gated map |
 | `studio/scene_pose_map.py` | T2-51 draft keeper→scene; T2-52 Accept/Reject per scene; `require_accepted` / `accepted_bases`; `_upsert_draft` / `accepted_bases` call `refuse_skip` (`T7-23`); no FastAPI. Classify never writes here |
 | `studio/pose_coverage.py` | T2-50 analyze-for-poses (writes `pose_coverage` only); T4-23 `gap` reads the open song's ceiling board vs `classification.keepers` and emits holes only; T4-24 `generate` delegates to `pose_generate`; no FastAPI; does not import `pose_plan`; analyze/gap never write `scene_pose_map` |
@@ -556,11 +556,14 @@ code rather than in documents.
 - **`classification_json` vs `anchor5/*.json`** — the DB document is
   the store (`T4-21` **built**, `test_t4_21_classification_json.py`).
   Sidecars seed `import_sidecar` only (`T4-22` **built**); `library()`
-  never reads a file.
+  never reads a file. `/anchors` chips + import/save
+  (`test_uiux_classification_chips.py`) seed an empty library without
+  GPU.
 - **Gap vs the open song's ceiling board** — `pose_coverage.gap` /
   `GET /api/songs/{id}/pose-gap` (`T4-23` **built**,
   `test_t2_51_classify_cannot_write_map.py`). Holes only. Classify and
-  gap write no `scene_pose_map` row. Draft map is `T2-51` **built**;
+  gap write no `scene_pose_map` row. `/anchors` paints those holes
+  (`test_uiux_classification_chips.py`). Draft map is `T2-51` **built**;
   Accept is `T2-52` **built** (`test_t2_52_map_accept.py`).
 - **Ceiling-tier pose generate** — `pose_generate.generate` /
   `POST /api/songs/{id}/pose-generate` (`T4-24` **built**,

@@ -3153,9 +3153,43 @@ def nest_anchor_groups(group_list):
     return out
 
 
+def _anchors_classification_ctx(album, song_id=""):
+    """T4-21 / T4-23: keepers and ceiling holes for the open song."""
+    album = (album or "").strip()
+    keepers, songs, gap, open_id = [], [], None, None
+    if album:
+        keepers = classification.keepers(album)["images"]
+        songs = list(db.q(
+            "SELECT id, title FROM songs WHERE album=? ORDER BY id", album))
+        raw = str(song_id or "").strip()
+        wanted = int(raw) if raw.isdigit() else None
+        if wanted and any(s["id"] == wanted for s in songs):
+            open_id = wanted
+        else:
+            for s in songs:
+                if db.one("SELECT 1 AS n FROM storyboards WHERE song_id=? LIMIT 1",
+                          s["id"]):
+                    open_id = s["id"]
+                    break
+            if open_id is None and songs:
+                open_id = songs[0]["id"]
+        if open_id:
+            try:
+                gap = storyboard_service.pose_gap(open_id)
+            except (LookupError, ValueError, RuntimeError):
+                gap = None
+    return {
+        "class_album": album,
+        "class_keepers": keepers,
+        "album_songs": songs,
+        "pose_gap": gap,
+        "open_song_id": open_id,
+    }
+
+
 @app.get("/anchors", response_class=HTMLResponse)
 def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
-                 album: str = "", roster_tier: str = ""):
+                 album: str = "", roster_tier: str = "", song_id: str = ""):
     # One album at a time. The generate form's album select is the same
     # subject as the gallery; swapping the form via htmx left every album's
     # groups on the page. `album` is the select's name so a full-page GET
@@ -3236,7 +3270,8 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
         known_albums=albums, playlists=playlists,
         coverage_by_tier=coverage_by_tier,
         roster_tier=shown_roster,
-        failed_jobs=fresh, active_jobs=active))
+        failed_jobs=fresh, active_jobs=active,
+        **_anchors_classification_ctx(scope_value, song_id)))
 
 
 MAX_ANCHOR_UPLOADS = 24
