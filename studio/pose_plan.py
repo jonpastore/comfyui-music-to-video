@@ -13,8 +13,14 @@ import time
 
 import db
 import grok
+import make_anchor
 import storyboard_service
 import tiers
+
+_LOOK_KEYS = (
+    "identity", "wardrobe", "body", "nude_wardrobe", "anatomy",
+    "backdrop", "composite",
+)
 
 _STOP = {
     "the", "a", "an", "and", "or", "of", "on", "in", "at", "to", "her", "his",
@@ -82,19 +88,41 @@ def need_text(scene):
     return " ".join(b for b in bits if b).strip()
 
 
-def mage_text(scene):
-    """Paste for Mage: pose and picture. No rating, song, or studio meta."""
+def _look_fields(album, character_id=None):
+    """Identity/wardrobe/body for one album person. No FastAPI."""
+    out = {}
+    row = db.one(
+        "SELECT * FROM playlists WHERE name=? AND kind='playlist'", album or "")
+    if row:
+        for key in _LOOK_KEYS:
+            if key in row.keys() and row[key]:
+                out[key] = row[key]
+    if character_id:
+        char = db.one("SELECT * FROM characters WHERE id=?", character_id)
+        if char:
+            for key in _LOOK_KEYS:
+                if key in char.keys() and char[key]:
+                    out[key] = char[key]
+    return out
+
+
+def sheet_prompt(album, pose, character_id=None, tier=""):
+    """Grey-studio character sheet. Pose replaces stance. Not a scene render."""
+    pose = " ".join(str(pose or "").split())
+    if not pose:
+        return ""
+    fields = _look_fields(album, character_id)
+    fields["pose"] = pose
+    slug = re.sub(r"[^a-z0-9]+", "_", pose.lower()).strip("_") or "pose"
+    nude = bool(tier) and tiers.allows_nudity(tier)
+    view = f"pose_{slug}_nude" if nude else f"pose_{slug}"
+    return make_anchor.prompt_for(view, make_anchor.anchor_from(fields), n_refs=1)
+
+
+def mage_text(scene, album="", character_id=None, tier=""):
+    """Paste for Mage: one figure, grey studio, asked pose. Not the scene still."""
     pose = " ".join(str(scene.get("pose") or "").split())
-    story = " ".join(str(scene.get("story") or "").split())
-    prompt = " ".join(str(scene.get("image_prompt") or "").split())
-    parts = []
-    if pose:
-        parts.append(pose)
-    if story and story.lower() != pose.lower():
-        parts.append(story)
-    if prompt:
-        parts.append(prompt)
-    return "\n\n".join(parts)
+    return sheet_prompt(album, pose, character_id, tier)
 
 
 def sheet_name(row):
@@ -331,7 +359,9 @@ def plan(song, tier):
             "name": scene.get("name") or f"scene {num}",
             "pose": (scene.get("pose") or "").strip(),
             "need": need,
-            "mage": mage_text(scene),
+            "mage": mage_text(scene, album=album,
+                              character_id=(who[0].get("id") if who else None),
+                              tier=tier),
             "sheet_id": sheet["id"] if sheet else None,
             "path": sheet["path"] if sheet else None,
             "label": sheet_name(sheet) if sheet else "",

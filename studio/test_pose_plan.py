@@ -27,34 +27,28 @@ def test_pose_plan_imports_nothing_from_fastapi():
     assert "fastapi" not in mods
 
 
-def test_mage_text_is_pose_and_full_picture_without_studio_meta():
+def test_mage_text_is_a_grey_studio_sheet_not_the_scene():
     long_prompt = (
-        "adult anthropomorphic black feline woman guide, sleek black fur, "
-        "yellow-green almond eyes, long wavy black hair pulled over one "
-        "shoulder, full body, empty studio, looking back over her shoulder, "
-        "tail raised aside, corridor mouth behind her, ME-OW-P energy, "
-        "UNIQUE_MAGE_TAIL_TOKEN that only the uncut prompt keeps"
+        "Grip gone: spring past the panther into darker corridor mouth, "
+        "ME-OW-P energy, chase mix red and cold blue, 16:9 cinematic, "
+        "UNIQUE_SCENE_TOKEN wet concrete pipes haze"
     )
-    assert len(long_prompt) > 240
     got = pose_plan.mage_text({
         "pose": "all fours then spring",
         "story": "His grip fails; she drops to all fours then springs past him.",
         "image_prompt": long_prompt,
-        "camera": "rear",
-    })
-    assert "all fours then spring" in got
-    assert "His grip fails" in got
-    assert "UNIQUE_MAGE_TAIL_TOKEN" in got
+        "camera": "follow",
+    }, album="", tier="xxx")
+    assert "all fours then spring" in got.lower()
+    assert "character reference sheet" in got.lower()
+    assert "mid-grey" in got.lower() or "neutral mid-grey" in got.lower()
+    assert "His grip fails" not in got
+    assert "UNIQUE_SCENE_TOKEN" not in got
+    assert "corridor" not in got.lower()
+    assert "16:9" not in got
     assert "Rating" not in got
     assert "Used in" not in got
-    assert "Hard to Handle" not in got
-    assert got.count(long_prompt) == 1
-    # matching still slices; Mage does not
-    need = pose_plan.need_text({
-        "pose": "all fours then spring", "story": "",
-        "image_prompt": long_prompt, "camera": "",
-    })
-    assert "UNIQUE_MAGE_TAIL_TOKEN" not in need
+    assert "stands upright" not in got.lower()
 
 
 def _sheet(album, tier, view, path, pose_name, nude=False):
@@ -327,8 +321,8 @@ def test_album_coverage_rolls_up_songs_and_clear_unsets_keeper():
         assert "Save pose classification" in page
 
 
-def test_mage_brief_on_the_page_is_picture_not_studio_meta():
-    """Generate… copies pose + full image_prompt. Rating and song stay off it."""
+def test_mage_brief_on_the_page_is_a_grey_studio_sheet():
+    """Generate… copies the anchor sheet prompt, not the scene still."""
     with TestClient(appmod.app) as client:
         album = f"Mage Brief {time.time_ns()}"
         client.post("/playlists", data={"name": album})
@@ -336,11 +330,9 @@ def test_mage_brief_on_the_page_is_picture_not_studio_meta():
         outdir = os.path.join(db.DATA, "storyboards", song["slug"])
         os.makedirs(outdir, exist_ok=True)
         prompt = (
-            "adult anthropomorphic black feline woman guide, sleek black fur, "
-            "yellow-green almond eyes, long wavy black hair pulled over one "
-            "shoulder, full body, empty studio, looking back over her shoulder"
+            "corridor mouth, wet concrete, red and cold blue chase lights, "
+            "Partner adult anthropomorphic black panther man empty-handed"
         )
-        assert len(prompt) > 180
         jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
         json.dump({
             "title": "T", "album": album, "version": "xxx",
@@ -348,7 +340,7 @@ def test_mage_brief_on_the_page_is_picture_not_studio_meta():
             "scenes": [{
                 "scene_number": 1, "name": "One",
                 "image_prompt": prompt,
-                "camera": "rear",
+                "camera": "follow",
                 "pose": "all fours then spring",
                 "story": "His grip fails; she drops to all fours then springs.",
                 "duration_guidance": "5s",
@@ -361,13 +353,20 @@ def test_mage_brief_on_the_page_is_picture_not_studio_meta():
                song["id"], "xxx", jp, md, 1, time.time())
         page = client.get(f"/anchors?scope_value={album}").text
         assert "js-pose-brief" in page
-        assert "all fours then spring" in page
-        assert "hair pulled over one shoulder" in page
-        assert "Used in" not in page
-        assert "Rating:" not in page
-        assert "XXX rating" not in page
-        assert "Mage Brief Song" not in page.split("pose-brief-text", 1)[-1][:800]
-        assert "Full body, one figure, empty studio." in page
+        m = re.search(
+            r'<textarea class="pose-brief-text"[^>]*>(.*?)</textarea>',
+            page, re.S)
+        assert m, "missing row has no Mage textarea"
+        brief = m.group(1)
+        assert "all fours then spring" in brief.lower()
+        assert "mid-grey" in brief.lower()
+        assert "character reference sheet" in brief.lower()
+        assert "His grip fails" not in brief
+        assert "corridor mouth" not in brief
+        assert "black panther man" not in brief
+        assert "Used in" not in brief
+        assert "Rating:" not in brief
+        assert "Mage Brief Song" not in brief
 
 
 def test_roster_tier_query_beats_the_largest_need_count():

@@ -62,13 +62,7 @@ hx-post="{{ url }}" hx-target="closest .playlist-body" hx-swap="innerHTML"
 {%- endmacro %}
 
 {% macro pose_mage_prompt(album, tier, g) -%}
-{% if g.mage %}{{ g.mage }}
-{% elif g.needs %}{% for n in g.needs %}{{ n }}{% if not loop.last %}
-
-{% endif %}{% endfor %}
-{% else %}{{ g.label }}{% endif %}
-
-Full body, one figure, empty studio.
+{{ g.mage or g.label }}
 {%- endmacro %}
 
 {% macro save_icon(label, title, extra="") %}
