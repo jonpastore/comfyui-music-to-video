@@ -191,8 +191,8 @@ statement of it:
 2. **Make a view cheap** (P4). `T7-1`/`T7-2`/`T7-3` landed. GPU
    new-view sheets remain NOT MEASURED.
 3. **Prove identity holds** (P5's `T7-7` + D10 colour). Harness built.
-   GPU four-image set **NOT MEASURED**. Body clause still says
-   jet-black (`T4-11` **partial**).
+   GPU four-image set **NOT MEASURED**. Body clause is charcoal-brown
+   (`T4-11` **built**, `test_t4_11_fresh_album_compose_is_charcoal_brown`).
 4. **C1/C2 resolver** (`T7-21` **built**,
    `test_t7_21_c1_c2_resolver.py`). Location plates (`T7-22` **built**,
    `test_t2_53_location_plates.py`). Use-as-ref / map / image1 refuse

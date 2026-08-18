@@ -1,4 +1,4 @@
-"""TRD-4 criteria the 2026-08-13 ledger left unverified: T4-8, T4-9, T4-13, T4-18.
+"""TRD-4 criteria the 2026-08-13 ledger left unverified: T4-8, T4-9, T4-11, T4-13, T4-18.
 
 T4-5/T4-6/T4-7 already live in test_app.py. This file only covers what that
 session marked unverified or partial. Public routes and the real composer —
@@ -117,6 +117,37 @@ def test_t4_9_tier_wording_route_gets_the_same_tier_policy():
         stored = tiers.override_text(album, "g")
         assert stored == PLAIN
         assert tiers.check_tier_policy(stored, "g", "tier wording") == stored
+
+
+def test_t4_11_fresh_album_compose_is_charcoal_brown():
+    """docs/TRD-4 T4-11 / D10. Fresh album compose names charcoal-brown, not jet-black.
+
+    album_profile() fills body from ALBUM_FIELDS; that is what renders. A
+    constant that says charcoal-brown while the album default still defers to
+    face colour (or says jet-black) is the 4032aba defect again. Do not POST
+    a body — the default has to survive compose on its own.
+    """
+    album = "T4-11 Colour Album"
+    with TestClient(appmod.app) as client:
+        r = client.post("/playlists", data={"name": album, "kind": "playlist"})
+        assert r.status_code in (200, 303), r.text[:200]
+    fields = appmod.anchor_profile_fields(album)
+    body = fields.get("body") or ""
+    assert "charcoal-brown" in body, body
+    assert "jet-black" not in body.lower(), body
+    character = make_anchor.prompt_for(
+        "front", make_anchor.anchor_from(fields), n_refs=1)
+    wf = build_refs.workflow(
+        {"image_prompt": character, "negative_prompt": ""},
+        "face.png", None, "empty", 896, 1216, 1, "")
+    composed = wf["11"]["inputs"]["prompt"]
+    assert composed, "workflow produced an empty composed prompt"
+    assert "charcoal-brown" in composed, composed
+    assert "jet-black" not in composed.lower(), composed
+    assert make_anchor.DEFAULT_BODY in composed, (
+        "DEFAULT_BODY did not reach the composed prompt; the album default won")
+    missing = [p for p in BODY_PARTS if p not in composed]
+    assert not missing, f"body part list incomplete, missing {missing}"
 
 
 def _t4_18_xxx_front_nude(album):

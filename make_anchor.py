@@ -63,9 +63,9 @@ COMPOSITE_HEAD = (
 COMPOSITE_STANCE = "standing by herself."
 COMPOSITE = COMPOSITE_HEAD + COMPOSITE_STANCE
 DEFAULT_BODY = (
-    "Her entire body from shoulders to feet carries the same colouring and texture as her "
-    "face, uniform in shade on shoulders, upper arms, forearms, hands, torso, hips, thighs, "
-    "calves and feet, every part the same single tone."
+    "Her entire body from shoulders to feet is covered in the same sleek charcoal-brown "
+    "fur as her face, uniform in shade and texture on shoulders, upper arms, forearms, "
+    "hands, torso, hips, thighs, calves and feet, every part the same single tone."
 )
 # POSITIVE ONLY, and that is the whole point of the rewrite.
 #
@@ -463,8 +463,10 @@ _NEGATION_PATTERNS = (r"\bno\s+\w", r"\bnot\s+\w", r"\bwithout\s+\w",
 # two-tone limbs are exactly what that clause denied, at cfg 4.5 / 28 steps
 # where the negative prompt is live. A reasoned exception losing to an
 # observation is the observation winning. DEFAULT_BODY is a pure positive
-# assertion now, and it NAMES THE PARTS -- "identical head to toe" is a summary
-# a model can satisfy by averaging, and a list is not. docs/TRD-4 T4-10, T4-11.
+# assertion now: charcoal-brown fur, and it NAMES THE PARTS -- "identical head
+# to toe" is a summary a model can satisfy by averaging, and a list is not.
+# Face-colour deferral ("same colouring as her face" with no hue) and jet-black
+# both fail T4-11 / D10. docs/TRD-4 T4-10, T4-11.
 _NEGATION_ALLOWED = ()
 
 

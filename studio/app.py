@@ -8096,9 +8096,9 @@ ALBUM_FIELDS = {
         # album in the database, and what rendered was the exact sentence
         # _NEGATION_ALLOWED was emptied to forbid. Two copies of one fact, and
         # the studio held the one that ships.
-        "Her entire body from shoulders to feet carries the same colouring and texture as her "
-        "face, uniform in shade on shoulders, upper arms, forearms, hands, torso, hips, thighs, "
-        "calves and feet, every part the same single tone.",
+        "Her entire body from shoulders to feet is covered in the same sleek charcoal-brown "
+        "fur as her face, uniform in shade and texture on shoulders, upper arms, forearms, "
+        "hands, torso, hips, thighs, calves and feet, every part the same single tone.",
         "Re-assert colouring PER BODY PART. One mention at the top does not hold below the "
         "waist -- this is the fix for a black-furred character rendering with human-toned "
         "legs, and it has to be positive wording, not a negative."),

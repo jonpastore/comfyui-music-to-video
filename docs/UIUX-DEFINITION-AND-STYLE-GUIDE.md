@@ -1215,7 +1215,9 @@ hint no longer dumps live names.
 `T7-6` JSON shipped. The `T7-7` picture look is still human-judged; the
 compose hook FLAGs a human-body nude wording (including the live-studio
 body clause) so a dirty prompt does not reach the tile as a clean
-candidate. The front / three_quarter ranking harness exists offline; the
+candidate. The album body default names charcoal-brown fur and the
+nine body parts (`T4-11` **built**); it does not say jet-black or defer
+colour to the face. The front / three_quarter ranking harness exists offline; the
 GPU four-image pair is not measured. Photo-conditioned halves (Catatonic
 jobs 244/248; Street Cats jobs 264/268) are on disk from base
 photographs; Catatonic is the collapsed human woman, not her. The

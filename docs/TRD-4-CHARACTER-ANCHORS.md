@@ -110,12 +110,12 @@ exception losing to an observation is the observation winning.
   matching the operator photographs.** Charcoal-brown / espresso — the
   colour of `anchor5/` / the UI pair — not jet-black. "Her entire body
   from shoulders to feet is covered in the same sleek charcoal-brown
-  fur as her face, uniform in shade and texture on shoulders, arms,
-  torso, hips, thighs and calves." The part list is the load-bearing
+  fur as her face, uniform in shade and texture on shoulders, upper
+  arms, forearms, hands, torso, hips, thighs, calves and feet." The
+  part list is the load-bearing
   half: "identical head to toe" is a summary a model can satisfy by
   averaging, and a list is not. A compose that still says jet-black
-  fails this (D10). `T4-22` is the colour half if the parts check is
-  already green.
+  or defers colour to the face fails this (D10).
 - `T4-12` **Reference images are named by slot** — "the character in image 1 is
   the identity reference", "image 2 is the wardrobe reference" — while the
   existing composite instruction that every reference shows *the same single
@@ -157,8 +157,9 @@ in a document is stale the moment the constants move.
     <identity, from the album profile>
     <nude_wardrobe, from the album profile — no wardrobe clause at all>
     Her entire body from shoulders to feet is covered in the same sleek
-    charcoal-brown fur as her face, uniform in shade and texture on shoulders,
-    arms, torso, hips, thighs and calves.
+    charcoal-brown fur as her face, uniform in shade and texture on
+    shoulders, upper arms, forearms, hands, torso, hips, thighs, calves
+    and feet, every part the same single tone.
     <anatomy, from the album profile>
     Even neutral studio lighting.
     <BACKDROP: flat neutral mid-grey, evenly lit, empty, contact shadow>
@@ -357,7 +358,7 @@ character."* — the capability loss stated in full.
 | `T4-21` / `T4-22` `classification_json` in DB | **built** | `test_t4_21_classification_json.py` | sqlite `classification_json` (album + `character_id` NULL=protagonist, versioned). Query by view/pose/wardrobe/usable. Sidecar seeds `import_sidecar` only; `library()` never reads a file. Mutation: sidecar-only store → red |
 | `T4-23` gap reads the board, does not bind | **built** | `test_t2_51_classify_cannot_write_map.py` | `GET /api/songs/{id}/pose-gap` reads the open song's ceiling board vs `classification_json` keepers (`usable≠skip`) and emits holes only. Classify/gap write zero `scene_pose_map` / `pose_coverage` / refs rows. Mutation: gap upserts a map row → red. Mutation: skip keeper or sidecar-only library closes a hole → red |
 | `T4-24` ceiling-tier pose generate (clothed+nude iff r/xxx) | **built** | `test_t4_24_ceiling_generate.py` | `POST /api/songs/{id}/pose-generate` / `pose_generate.generate` plans sheets from pose-gap holes at the highest ticked tier. r/xxx: clothed **and** nude. g/pg13: clothed only, no anatomy job, no nude view. Never invents a higher tier. Studio `anchor` jobs (`source=pose-gap`), not sidecar `batch_edit`. Mutation: g-only emits nude or anatomy → red. Mutation: r emits clothed only and calls coverage green → red |
-| `T4-11` / D10 colour (charcoal-brown, not jet-black) | **partial** | `4032aba` | Parts list **built**. Composed default still says jet-black. D10 colour not asserted |
+| `T4-11` / D10 colour (charcoal-brown, not jet-black) | **built** | `test_trd4_unverified.py` | `test_t4_11_fresh_album_compose_is_charcoal_brown`: fresh album compose through `album_profile` contains charcoal-brown and the nine-part list, not jet-black. Mutation: `DEFAULT_BODY` / `ALBUM_FIELDS["body"]` default says jet-black, defers colour to the face, or omits charcoal-brown → red |
 | `T4-20` pose QC before anatomy | **process** | 2026-08-16 | `docs/MEASURED-2026-08-16-POSE-ANATOMY.md`. Studio graph unchanged |
 
 ---
