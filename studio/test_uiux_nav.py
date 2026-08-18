@@ -7,6 +7,7 @@ HTML <nav> hrefs/labels == JSON links. A distinctive probe monkeypatched into
 nav_service.LINKS appears in both surfaces. Mutation: hardcode the old eight
 links in the template → probe missing → red.
 """
+import os
 import re
 
 from fastapi.testclient import TestClient
@@ -92,3 +93,11 @@ def test_uiux_nav_html_and_json_share_one_list(monkeypatch):
     assert 'class="nav-sub"' in nav_html
     assert 'href="/media?new=song"' in nav_html
     assert 'href="/media?new=image"' in nav_html
+    assert 'aria-haspopup="true"' in nav_html
+    assert 'aria-expanded="false"' in nav_html
+    js = open(
+        os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
+    assert "function initNavDrop" in js
+    assert "initNavDrop()" in js
+    assert "HOLD_MS = 2000" in js
+    assert "OPEN_MS = 300" in js

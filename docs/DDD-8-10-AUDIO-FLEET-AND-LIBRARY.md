@@ -133,7 +133,8 @@ HTML and JSON report the same numbers and `kind:id` keys (`T6-A2`). The bag
 list is T8-16; pick on take rows is T8-2 (form when not picked, tag when
 picked). Use of edits stays on the edit card.
 
-The topbar **Media** item is a submenu (`nav_service` children). `GET /media`
+The topbar **Media** item is a submenu (`nav_service` children; `initNavDrop`
+pins on click and holds 2s after leave). `GET /media`
 is the chooser. New Song is `/media?new=song` (`POST /media/songs` → song
 row + `audio` job with `as_new_song`). New Image is `/media?new=image`
 (`POST /media/images` → `t2i` job on `T2I_WIRED` Qwen; album look

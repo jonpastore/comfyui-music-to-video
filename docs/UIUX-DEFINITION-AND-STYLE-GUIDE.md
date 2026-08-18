@@ -1869,8 +1869,11 @@ A style guide is falsifiable or it is decoration.
   Media is a submenu: New Song (`/media?new=song`, ACE-Step → new library
   row) and New Image (`/media?new=image`, Qwen t2i; parked Flux 2
   listed disabled; Style LoRA + Civitai fetch; Recent images has
-  multi-select + Delete selected). `GET /media` is the chooser, not both
-  forms (`test_media_create.py`). Other
+  multi-select + Delete selected). Click **Media** pins the menu; it
+  stays open 2s after the pointer leaves (WAI-ARIA: dismiss on pick,
+  outside click, or Escape). Hover opens after 300ms (Baymard). No
+  gap between the label and the panel (`test_uiux_nav.py`). `GET /media`
+  is the chooser, not both forms (`test_media_create.py`). Other
   `T6-A2` objects: the queue panel
   (`test_t6_a2_html_and_json_report_the_same_queue_numbers`), the review
   queue (`test_t6_a2_html_and_json_report_the_same_review_queue_numbers`),

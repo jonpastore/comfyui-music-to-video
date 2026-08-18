@@ -802,6 +802,73 @@ function initGenreSelects(genreId, subgenreId) {
   refresh();
 }
 
+function initNavDrop() {
+  var OPEN_MS = 300;
+  var HOLD_MS = 2000;
+  var drops = document.querySelectorAll(".nav-drop");
+  if (!drops.length) return;
+
+  function closeDrop(drop) {
+    drop.classList.remove("open", "pinned");
+    var t = drop.querySelector(":scope > a");
+    if (t) t.setAttribute("aria-expanded", "false");
+  }
+
+  function openDrop(drop, pinned) {
+    drops.forEach(function (other) {
+      if (other !== drop) closeDrop(other);
+    });
+    drop.classList.add("open");
+    if (pinned) drop.classList.add("pinned");
+    var t = drop.querySelector(":scope > a");
+    if (t) t.setAttribute("aria-expanded", "true");
+  }
+
+  drops.forEach(function (drop) {
+    var trigger = drop.querySelector(":scope > a");
+    if (!trigger) return;
+    var openTimer = null;
+    var closeTimer = null;
+    function clearTimers() {
+      clearTimeout(openTimer);
+      clearTimeout(closeTimer);
+    }
+    drop.addEventListener("mouseenter", function () {
+      clearTimers();
+      if (drop.classList.contains("open")) return;
+      openTimer = setTimeout(function () { openDrop(drop, false); }, OPEN_MS);
+    });
+    drop.addEventListener("mouseleave", function () {
+      clearTimers();
+      closeTimer = setTimeout(function () { closeDrop(drop); }, HOLD_MS);
+    });
+    drop.addEventListener("focusin", function () {
+      clearTimers();
+      openDrop(drop, false);
+    });
+    drop.addEventListener("focusout", function (e) {
+      if (drop.contains(e.relatedTarget)) return;
+      clearTimers();
+      closeTimer = setTimeout(function () { closeDrop(drop); }, HOLD_MS);
+    });
+    trigger.addEventListener("click", function (e) {
+      if (drop.classList.contains("open")) return;
+      e.preventDefault();
+      clearTimers();
+      openDrop(drop, true);
+    });
+  });
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest(".nav-drop")) return;
+    drops.forEach(closeDrop);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    drops.forEach(closeDrop);
+  });
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   initGenreSelects("genre-select", "subgenre-select");
   initGenreSelects("genre2-select", "subgenre2-select");
@@ -809,6 +876,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initGenreSelects("bulk-genre2-select", "bulk-subgenre2-select");
   initGenreSelects("set-genre-select", "set-subgenre-select");
   initGenreSelects("set-genre2-select", "set-subgenre2-select");
+  initNavDrop();
   initLibraryBulk();
   initAnchors();
   initClassificationLibrary();

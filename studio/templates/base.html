@@ -20,7 +20,7 @@
       {% for link in nav_links() %}
       {% if link.children %}
       <span class="nav-drop">
-        <a href="{{ link.href }}">{{ link.label }}</a>
+        <a href="{{ link.href }}" aria-haspopup="true" aria-expanded="false">{{ link.label }}</a>
         <span class="nav-sub">
           {% for child in link.children %}
           <a href="{{ child.href }}">{{ child.label }}</a>
