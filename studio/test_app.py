@@ -1583,7 +1583,12 @@ def test_scene_edit_rewrites_the_json_the_renderer_reads_and_marks_frames_stale(
 
         # the pre-existing frame is now stale, and says so
         assert "stale" in r.text
-        assert "stale" in client.get(f"/songs/{sid}/storyboard/r").text
+        page = client.get(f"/songs/{sid}/storyboard/r").text
+        assert "stale" in page
+        assert 'data-label="Stale"' in page
+        assert "before the last Save Scene" in page
+        css = open(os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
+        assert "margin-top: auto" in css.split(".still-icons", 1)[1][:220]
 
 
 def test_scene_edit_is_screened_like_generated_scene_text():

@@ -275,16 +275,32 @@
           <figcaption>
             still{% if c.seed is not none %} · {{ c.seed }}{% endif %}
             {% if c.approved %}<span class="tag done">approved</span>{% endif %}
-            {% if r.refs[0].stale %}<span class="tag warn-tag">stale</span>{% endif %}
+            {% if r.refs[0].stale %}
+            <button type="button" class="tag warn-tag help-tip"
+                    data-label="Stale"
+                    data-help="This still landed before the last Save Scene. Pose, story, or image prompt changed after it was rendered. Reroll or generate new stills from the current scene text. Approving it still uses this old picture as the clip start frame."
+                    title="This still is older than the last Save Scene">stale</button>
+            {% endif %}
             {% if ref_flags and ns.head is not none and ref_flags.get(ns.head) %}
-            <span class="tag warn-tag" title="{{ ref_flags[ns.head].reason }}">{{ ref_flags[ns.head].issue }}</span>
+            <button type="button" class="tag warn-tag help-tip"
+                    data-label="{{ ref_flags[ns.head].issue }}"
+                    data-help="{{ ref_flags[ns.head].reason }} Reroll or pick another still."
+                    title="{{ ref_flags[ns.head].reason }}">{{ ref_flags[ns.head].issue }}</button>
             {% endif %}
             {% set origin = c.origin or "gen" %}
             {% if origin in ("gen", "reroll", "refine", "face", "inpaint", "outpaint") %}
-            <span class="tag">{{ origin }}</span>
+            <button type="button" class="tag help-tip"
+                    data-label="{{ origin }}"
+                    data-help="{% if origin == 'reroll' %}This candidate came from Reroll, not the first generate.{% elif origin == 'refine' %}A refine pass on an existing still.{% elif origin == 'face' %}Face fix on an existing still.{% elif origin == 'inpaint' %}Inpaint on an existing still.{% elif origin == 'outpaint' %}Outpaint on an existing still.{% else %}First generate for this scene.{% endif %}"
+                    title="How this still was made">{{ origin }}</button>
             {% endif %}
             {% set q = c | qctag %}
-            {% if q %}<span class="qc-tag" title="physical identity vs her photographs. Clothes do not lower identity.">{{ q }}</span>{% endif %}
+            {% if q %}
+            <button type="button" class="qc-tag help-tip"
+                    data-label="Still QC"
+                    data-help="{{ q }} Identity is physical likeness to her photographs. Clothes do not lower it. Do not approve a still that is not her — reroll or pick another."
+                    title="physical identity vs her photographs. Clothes do not lower identity.">{{ q }}</button>
+            {% endif %}
           </figcaption>
           {% if ns.head is not none %}
           <div class="still-icons">

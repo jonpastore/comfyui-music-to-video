@@ -631,6 +631,13 @@ table.list th, table.list td {
   margin-right: 0.25rem;
 }
 .tag.done { border-color: var(--accent); color: var(--accent); }
+button.tag,
+button.qc-tag {
+  font: inherit;
+  color: inherit;
+  line-height: inherit;
+  appearance: none;
+}
 
 .empty { color: var(--muted); font-style: italic; }
 .hint { color: var(--muted); font-size: var(--text-sm); }
@@ -1565,11 +1572,22 @@ img.lazy-src, video.lazy-src {
   line-height: 0;
 }
 .still-select input { width: 1rem; height: 1rem; margin: 0; }
+.scene-refs { align-items: stretch; }
+.scene-refs .ref-frame {
+  display: flex;
+  flex-direction: column;
+}
 .still-icons {
   display: flex;
   align-items: center;
   gap: 0.15rem;
-  margin-top: 0.3rem;
+  margin-top: auto;
+  min-height: 2.1rem;
+  padding-top: 0.3rem;
+}
+.ref-frame .tag.help-tip,
+.ref-frame .qc-tag.help-tip {
+  cursor: pointer;
 }
 .still-icons .inline { margin: 0; }
 .icon-btn.danger-icon { color: var(--danger); }

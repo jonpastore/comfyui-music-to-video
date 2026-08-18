@@ -670,6 +670,11 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    lyrics/style/direction/lock and album look boxes remember the last
    selected `prompt_versions` id (`prompt_current`). Video Motion Prompt sits above Clips.
    `_compose` fills a blank `video_motion_prompt` from motion + camera.
+   A still is **stale** when `scene.edited` is after every candidate
+   `created` (`storyboard_service.scenes`). The chip opens `#tip-modal`
+   (reroll / generate from current text). Still check/wrench/trash sit
+   on `.still-icons { margin-top: auto }` so wrapping QC text does not
+   offset the row.
    Scene-scoped `build_song --only` skips T2-13e. Scene preview is plate / stills / clips. Reroll plants
    `.ref-frame.clip-tile` shimmer cards (same 190px / 3:4 frame as a
    finished still). Render clip plants the same cards in

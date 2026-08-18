@@ -603,6 +603,13 @@ an `<img class="clip-poster">` under the video; click the well or
 the caption opens `#clip-preview`. A trash on the caption deletes
 that landed take (`POST /songs/{id}/clips/{clip_idx}/delete`). Clip thumbs seek ~0.5s in so
 the first-frame black is not the poster.
+**stale** on a still means it landed before the last Save Scene
+(pose / story / image prompt changed). The chip is a help tip: click
+it for what to do (reroll or generate from the current text;
+approving still uses the old picture). QC and origin chips open the
+same `#tip-modal`. Check / wrench / trash sit on one row pinned to
+the bottom of every still card so wrapping QC text does not offset
+the buttons.
 Fix (face / inpaint / outpaint) and Delete sit on the still as icon
 buttons with hover titles (check / wrench / trash), not labeled
 primaries. Each still has a top-right select box; **Delete selected**
