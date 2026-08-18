@@ -491,6 +491,17 @@ def split_to_ceiling(seconds, video_model):
     return [part] * n
 
 
+def s2v_window_skips(ltx_seconds):
+    """skip_first_frames per s2v window over one LTX take (T5-13).
+
+    Splits a ≤15s LTX take onto the s2v ceiling (~CHUNK / LEN). Window k
+    skips k*LEN frames at force_rate=FPS so LoadVideosFromFolder reads
+    the matching LTX slice, not always frame 0.
+    """
+    n = len(split_to_ceiling(ltx_seconds, "s2v"))
+    return [k * LEN for k in range(n)]
+
+
 def requested_clip_seconds(scene, video_model="ltx25"):
     """Seconds this scene is asking the renderer for, before the ceiling gate."""
     if scene.get("length_seconds") is not None:
@@ -579,8 +590,9 @@ def clip_chain_plan(scenes, default_model="ltx25"):
             continue
         for ltx in ltx_by_scene.get(sn, []):
             windows = split_to_ceiling(ltx["duration_s"], "s2v")
+            skips = s2v_window_skips(ltx["duration_s"])
             t = float(ltx["start_s"])
-            for part in windows:
+            for k, part in enumerate(windows):
                 hop = {
                     "start_s": t,
                     "end_s": t + part,
@@ -592,6 +604,7 @@ def clip_chain_plan(scenes, default_model="ltx25"):
                     "clip_idx": len(out),
                     "depends_on": ltx["clip_idx"],
                     "control_clip_idx": ltx["clip_idx"],
+                    "skip_first_frames": skips[k],
                 }
                 out.append(hop)
                 t += part
@@ -1019,7 +1032,7 @@ def apply_chain_guide(wf, prev_clip, dest_guide=None):
 
 def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
              video_model="s2v", ref_motion=None, control_video=None, refine=False,
-             guide_image=None, prev_clip=None, tier=None):
+             guide_image=None, prev_clip=None, tier=None, skip_first_frames=0):
     """Same rule as build_refs.workflow: the pinned clause is attached HERE, at
     the point the prompt is built, not read out of the storyboard JSON.
 
@@ -1032,6 +1045,9 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
 
     ref_motion / control_video are s2v's two optional inputs, unused until now:
     a motion-style reference clip, and a driving clip for pose or structure.
+
+    skip_first_frames: T5-13 offset into control_video (LoadVideosFromFolder).
+    Window k of an LTX take uses k*LEN at force_rate=FPS; default 0.
 
     refine=True adds a low-denoise second pass with the i2v low-noise expert.
 
@@ -1119,9 +1135,11 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
                                     ("21", control_video, "control_video")):
             if not path:
                 continue
+            # T5-13: control_video window offset; ref_motion stays at 0.
+            skip = int(skip_first_frames) if key == "control_video" else 0
             wf[node_id] = {"class_type": "LoadVideosFromFolder", "inputs": {
                 "video": path, "force_rate": FPS, "custom_width": W, "custom_height": H,
-                "frame_load_cap": LEN, "skip_first_frames": 0, "select_every_nth": 1,
+                "frame_load_cap": LEN, "skip_first_frames": skip, "select_every_nth": 1,
                 "output_type": "batch", "grid_max_columns": 4, "add_label": False}}
             s2v[key] = [node_id, 0]
         wf["14"] = {"class_type": "WanSoundImageToVideo", "inputs": s2v}

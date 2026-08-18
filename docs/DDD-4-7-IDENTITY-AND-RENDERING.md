@@ -94,7 +94,8 @@ LTX 2.5 first (T5-11)
         │
         ▼ needs_lip_sync
 decoded s2v hop: control_video = LTX frames, ref_image = scene still
-(T5-12, T5-13). D7 look NOT MEASURED (T3-37).
+(T5-12 **built**; T5-13 `skip_first_frames` **built**,
+`test_t5_13_s2v_window.py`). D7 look NOT MEASURED (T3-37).
         │
         ▼ assemble; song length owns clip count
 ```
