@@ -3006,7 +3006,7 @@ function initClassificationLibrary() {
       var raw = rawEl ? rawEl.value : "";
       var doc;
       try { doc = JSON.parse(raw); } catch (err) {
-        say("classification_json is not JSON");
+        say("That is not valid JSON");
         return;
       }
       say("Saving…");

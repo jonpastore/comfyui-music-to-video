@@ -62,29 +62,61 @@
   </ul>
 </section>
 
+{% set class_open = (not class_keepers) or (pose_gap and pose_gap.holes) %}
 <section class="card" id="classification-library"
          data-album="{{ class_album or form_album }}">
-  <h2>Classification library</h2>
-  <p class="hint">Keepers from <code>classification_json</code> (usable≠skip).
-    Import a sidecar or save a document to seed an empty library &mdash; no GPU.
-    Ceiling holes are this song versus those keepers.</p>
-  {% if album_songs %}
+  <details class="disclose" {% if class_open %}open{% endif %}>
+  <summary>
+    <h2>Pose catalog</h2>
+    <span class="muted">{{ class_album or form_album or "no album" }}
+      · {{ class_keepers | length }} tagged
+      {% if pose_gap and pose_gap.n_holes %}
+      · {{ pose_gap.n_holes }} missing on this song{% endif %}</span>
+  </summary>
+  <p class="hint">This is the album&rsquo;s <strong>tagged list of keeper
+    sheets</strong> (standing / kneeling / &hellip;), not a generate button.
+    The storyboard asks for poses; a hole is a pose that song still needs
+    and this list does not have. Fill the list from a JSON file &mdash; no
+    GPU. Generate missing poses is the form below.
+    <button type="button" class="icon-btn help-tip"
+            title="What the pose catalog is for"
+            aria-label="What the pose catalog is for"
+            data-label="Pose catalog"
+            data-help="Album first: the catalog belongs to the album, not a song. Then pick a song to compare that song's storyboard against the catalog. Tagged keepers are sheets we already have (usable, not skip). Holes are poses the board asks for that are not tagged yet. Import or paste JSON to seed the list without rendering. After keepers exist, Generate anchors / the roster below makes the missing sheets. Accept on the storyboard is a later step (who is image1). This box never starts a GPU job.">
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <path fill="currentColor" d="M7.3 6.2c0-.8.5-1.3 1.3-1.3s1.3.5 1.3 1.2c0 .6-.3.9-.9 1.3-.5.4-.8.7-.8 1.3h1.3c0-.4.2-.7.7-1.1.7-.5 1.3-1 1.3-2 0-1.3-1-2.2-2.4-2.2-1.5 0-2.6 1-2.6 2.5zm1.1 5.8h1.4V10.7H8.4z"/>
+      </svg>
+    </button>
+  </p>
   <form method="get" action="/anchors" id="pose-gap-song-form" class="field-row">
-    <input type="hidden" name="scope_value" value="{{ class_album or form_album }}">
-    <label>Open song
+    <label>Album
+      <select id="class-album"
+              onchange="location.href='/anchors?scope_value='+encodeURIComponent(this.value)">
+        {% for a in albums %}
+        <option value="{{ a }}" {% if a == (class_album or form_album) %}selected{% endif %}>{{ a }}</option>
+        {% else %}
+        <option value="">no albums yet &mdash; create one on Playlists</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% if album_songs %}
+    <label>Song to check
       <select name="song_id" id="pose-gap-song" onchange="this.form.requestSubmit()">
         {% for s in album_songs %}
         <option value="{{ s.id }}" {% if s.id == open_song_id %}selected{% endif %}>{{ s.title }}</option>
         {% endfor %}
       </select>
     </label>
+    <input type="hidden" name="scope_value" value="{{ class_album or form_album }}">
+    {% endif %}
     {% if pose_gap %}
     <span class="muted" id="pose-gap-meter">{{ pose_gap.tier | tiername }}
       · {{ pose_gap.n_covered }}/{{ pose_gap.n_needs }} covered{% if pose_gap.n_holes %}
-      · {{ pose_gap.n_holes }} hole{{ "" if pose_gap.n_holes == 1 else "s" }}{% endif %}</span>
+      · {{ pose_gap.n_holes }} missing{% endif %}</span>
     {% endif %}
   </form>
-  {% endif %}
+  <h3>Tagged keepers</h3>
   <div class="class-chips" id="class-keeper-chips">
     {% for im in class_keepers %}
     <span class="tag class-chip" data-id="{{ im.id }}" data-view="{{ im.view }}"
@@ -92,11 +124,12 @@
           data-usable="{{ im.usable }}">{{ im.pose }} / {{ im.view }} / {{ im.wardrobe }}
       <span class="muted">{{ im.usable }}</span></span>
     {% else %}
-    <p class="empty" id="class-keepers-empty">No keepers in classification_json.
-      Import a sidecar or save a document &mdash; no GPU.</p>
+    <p class="empty" id="class-keepers-empty">No tagged keepers on this album yet.
+      Import a JSON file or paste one below &mdash; that labels existing
+      sheets. It does not render anything.</p>
     {% endfor %}
   </div>
-  <h3>Ceiling holes</h3>
+  <h3>Missing on this song</h3>
   <div class="class-chips" id="pose-gap-holes">
     {% if pose_gap and pose_gap.holes %}
     {% for h in pose_gap.holes %}
@@ -109,31 +142,39 @@
     {% elif pose_gap %}
     <p class="empty" id="pose-gap-empty">No ceiling holes for this song.</p>
     {% elif album_songs %}
-    <p class="empty" id="pose-gap-empty">No storyboard on this song, so there is no ceiling board to gap.</p>
+    <p class="empty" id="pose-gap-empty">This song has no storyboard, so there is nothing to compare.</p>
     {% else %}
-    <p class="empty" id="pose-gap-empty">No song on this album to gap against.</p>
+    <p class="empty" id="pose-gap-empty">This album has no songs to check.</p>
     {% endif %}
   </div>
   <p class="hint" id="classification-note"></p>
-  <form id="classification-import" class="stack-form">
-    <label>Sidecar path
-      <input type="text" name="path" id="classification-import-path"
-             placeholder="/path/to/image-classification.json" autocomplete="off">
-    </label>
-    <div class="form-actions">
-      <button type="submit">Import sidecar</button>
-    </div>
-  </form>
-  <form id="classification-save" class="stack-form">
-    <label>classification_json
-      <textarea name="document" id="classification-save-document" rows="6"
-                spellcheck="false" placeholder="{&quot;images&quot;:[]}"></textarea>
-    </label>
-    <div class="form-actions">
-      <button type="submit" class="icon-btn" title="Save classification library"
-              aria-label="Save classification library">{{ glyph_save() }}</button>
-    </div>
-  </form>
+  <details class="disclose" id="classification-seed">
+    <summary>Import or paste the tag list</summary>
+    <p class="hint">A sidecar is a JSON file of labels (pose, view, wardrobe,
+      usable). Street Cats lives in the repo as
+      <code>anchor5/image-classification.json</code>. Saving writes a new
+      version for this album. Neither step uses the GPU.</p>
+    <form id="classification-import" class="stack-form">
+      <label>JSON file on this box
+        <input type="text" name="path" id="classification-import-path"
+               placeholder="/path/to/image-classification.json" autocomplete="off">
+      </label>
+      <div class="form-actions">
+        <button type="submit">Import file</button>
+      </div>
+    </form>
+    <form id="classification-save" class="stack-form">
+      <label>Or paste the JSON
+        <textarea name="document" id="classification-save-document" rows="6"
+                  spellcheck="false" placeholder="{&quot;images&quot;:[]}"></textarea>
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="icon-btn" title="Save pose catalog"
+                aria-label="Save pose catalog">{{ glyph_save() }}</button>
+      </div>
+    </form>
+  </details>
+  </details>
 </section>
 
 {% if coverage_by_tier %}

@@ -179,7 +179,7 @@ auto-seed **built** (`ensure_sidecar_seed` from
 `anchor5/image-classification.json`; `library()` never reads a file).
 `/anchors` paints keeper chips and import/save seed an empty library
 (`test_uiux_classification_chips.py`). `T4-23`
-gap **is**; the same page shows ceiling holes and import closes them
+gap **is**; the Pose catalog on `/anchors` is album-first then song-to-check, collapsed unless empty or holed, and import closes holes
 without GPU. `T2-51` draft map (classify cannot write it) **is**
 (`test_t2_51_classify_cannot_write_map.py`). `T2-52` Accept-gated
 map **is** (`test_t2_52_map_accept.py`): Accept/Reject per scene;

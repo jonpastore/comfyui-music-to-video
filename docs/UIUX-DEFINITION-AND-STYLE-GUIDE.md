@@ -1430,7 +1430,11 @@ says so). Every control the backend cannot honour is marked, never
 inert (7a.3). D7 is unmeasured until the GPU pair exists — say so
 on the control.
 
-**Anchors page.** Library chips from `classification_json` (view /
+**Anchors page.** The **Pose catalog** card (`#classification-library`)
+is a collapsed `<details>` (open when the list is empty or the song
+has holes). Album first, then **Song to check**. It is the tagged
+keeper list, not generate. Help tip explains the order. Import / paste
+JSON lives in a nested fold. Library chips from `classification_json` (view /
 pose / wardrobe / usable). The document is sqlite
 (`T4-21`/`T4-22` **built**, `test_t4_21_classification_json.py`):
 `GET /api/albums/{album}/classification` (query params view / pose /

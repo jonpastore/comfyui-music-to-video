@@ -128,6 +128,11 @@ def test_uiux_anchors_shows_keeper_chips_and_holes():
     assert 'id="classification-import"' in html
     assert 'id="classification-save"' in html
     assert f'value="{sid}"' in html
+    assert "<summary>" in html.split('id="classification-library"', 1)[1]
+    assert "Pose catalog" in html
+    album_at = html.find('id="class-album"')
+    song_at = html.find('id="pose-gap-song"')
+    assert album_at != -1 and song_at != -1 and album_at < song_at
 
 
 def test_uiux_import_seeds_empty_library_and_closes_holes():
@@ -148,7 +153,7 @@ def test_uiux_import_seeds_empty_library_and_closes_holes():
             assert empty.status_code == 200, empty.text
             assert 'id="class-keepers-empty"' in empty.text
             assert 'data-pose="standing"' in empty.text
-            assert "No keepers in classification_json" in empty.text
+            assert "No tagged keepers on this album yet" in empty.text
 
             seeded = client.post(
                 f"/api/albums/{album}/classification/import", json={"path": side})
