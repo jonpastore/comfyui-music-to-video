@@ -82,6 +82,21 @@ def need_text(scene):
     return " ".join(b for b in bits if b).strip()
 
 
+def mage_text(scene):
+    """Paste for Mage: pose and picture. No rating, song, or studio meta."""
+    pose = " ".join(str(scene.get("pose") or "").split())
+    story = " ".join(str(scene.get("story") or "").split())
+    prompt = " ".join(str(scene.get("image_prompt") or "").split())
+    parts = []
+    if pose:
+        parts.append(pose)
+    if story and story.lower() != pose.lower():
+        parts.append(story)
+    if prompt:
+        parts.append(prompt)
+    return "\n\n".join(parts)
+
+
 def sheet_name(row):
     """Operator pose name, then the encoded view label."""
     meta = {}
@@ -316,6 +331,7 @@ def plan(song, tier):
             "name": scene.get("name") or f"scene {num}",
             "pose": (scene.get("pose") or "").strip(),
             "need": need,
+            "mage": mage_text(scene),
             "sheet_id": sheet["id"] if sheet else None,
             "path": sheet["path"] if sheet else None,
             "label": sheet_name(sheet) if sheet else "",
@@ -425,6 +441,7 @@ def album_coverage(album, tier):
                     "songs": [],
                     "binds": [],
                     "needs": [],
+                    "mage_parts": [],
                     "n_scenes": 0,
                 }
                 groups[key] = g
@@ -432,6 +449,9 @@ def album_coverage(album, tier):
             need = (item.get("need") or item.get("pose") or "").strip()
             if need and need not in g["needs"] and len(g["needs"]) < 6:
                 g["needs"].append(need[:800])
+            mage = (item.get("mage") or "").strip()
+            if mage and mage not in g["mage_parts"] and len(g["mage_parts"]) < 4:
+                g["mage_parts"].append(mage)
             g["binds"].append({"song_id": song["id"], "num": item["num"]})
             if not any(s["id"] == song["id"] for s in g["songs"]):
                 g["songs"].append({"id": song["id"], "title": song["title"]})
@@ -442,6 +462,8 @@ def album_coverage(album, tier):
     needed = sorted(groups.values(),
                     key=lambda r: (r["character_label"].lower(),
                                    r["sheet_id"] is not None, r["label"].lower()))
+    for g in needed:
+        g["mage"] = "\n\n".join(g.get("mage_parts") or [])
     sheets = []
     for row in db.q(
             """SELECT a.*, c.name AS character_name

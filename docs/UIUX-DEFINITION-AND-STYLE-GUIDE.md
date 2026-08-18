@@ -1145,7 +1145,10 @@ stretch the page. Missing poses do **not** dump as
 `Missing: crouching, …` — the count lives in the summary tag and each
 empty row is the row. Only leads need a plate (T2-30); extras and
 background stay off the roster. An empty scene cast is the album lead. **Generate…** opens a modal with a copyable Mage
-prompt from the storyboard’s pose/need text (`#pose-brief`).
+prompt that is only the pose and picture (`#pose-brief`).
+Rating, song, and “used in” stay on the meta line — Mage
+does not get them. The picture text is not sliced at 240
+characters.
 `POST /anchors/keeper` plus the save icon stamps the assignment — on
 `/anchors` and on the playlist Anchors fold. The candidate lightbox
 (`#anchor-lightbox`) classifies the open sheet: a select of that

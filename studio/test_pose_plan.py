@@ -27,6 +27,36 @@ def test_pose_plan_imports_nothing_from_fastapi():
     assert "fastapi" not in mods
 
 
+def test_mage_text_is_pose_and_full_picture_without_studio_meta():
+    long_prompt = (
+        "adult anthropomorphic black feline woman guide, sleek black fur, "
+        "yellow-green almond eyes, long wavy black hair pulled over one "
+        "shoulder, full body, empty studio, looking back over her shoulder, "
+        "tail raised aside, corridor mouth behind her, ME-OW-P energy, "
+        "UNIQUE_MAGE_TAIL_TOKEN that only the uncut prompt keeps"
+    )
+    assert len(long_prompt) > 240
+    got = pose_plan.mage_text({
+        "pose": "all fours then spring",
+        "story": "His grip fails; she drops to all fours then springs past him.",
+        "image_prompt": long_prompt,
+        "camera": "rear",
+    })
+    assert "all fours then spring" in got
+    assert "His grip fails" in got
+    assert "UNIQUE_MAGE_TAIL_TOKEN" in got
+    assert "Rating" not in got
+    assert "Used in" not in got
+    assert "Hard to Handle" not in got
+    assert got.count(long_prompt) == 1
+    # matching still slices; Mage does not
+    need = pose_plan.need_text({
+        "pose": "all fours then spring", "story": "",
+        "image_prompt": long_prompt, "camera": "",
+    })
+    assert "UNIQUE_MAGE_TAIL_TOKEN" not in need
+
+
 def _sheet(album, tier, view, path, pose_name, nude=False):
     aid = db.run(
         "INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
@@ -257,6 +287,8 @@ def test_album_coverage_rolls_up_songs_and_clear_unsets_keeper():
         body = cov.json()
         assert body["n_needed"] >= 1
         assert body["n_have"] >= 1
+        assert body["needed"][0].get("mage")
+        assert "Used in" not in (body["needed"][0].get("mage") or "")
         page = client.get(f"/anchors?scope_value={album}").text
         assert "album-pose-roster" in page
         assert "pose-sheet-row" in page
@@ -293,6 +325,49 @@ def test_album_coverage_rolls_up_songs_and_clear_unsets_keeper():
         assert "Classify this pose" in page
         assert 'id="lightbox-pose-key"' in page
         assert "Save pose classification" in page
+
+
+def test_mage_brief_on_the_page_is_picture_not_studio_meta():
+    """Generate… copies pose + full image_prompt. Rating and song stay off it."""
+    with TestClient(appmod.app) as client:
+        album = f"Mage Brief {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        song = _upload_song(client, "Mage Brief Song", album=album)
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        prompt = (
+            "adult anthropomorphic black feline woman guide, sleek black fur, "
+            "yellow-green almond eyes, long wavy black hair pulled over one "
+            "shoulder, full body, empty studio, looking back over her shoulder"
+        )
+        assert len(prompt) > 180
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        json.dump({
+            "title": "T", "album": album, "version": "xxx",
+            "character_reference": "her",
+            "scenes": [{
+                "scene_number": 1, "name": "One",
+                "image_prompt": prompt,
+                "camera": "rear",
+                "pose": "all fours then spring",
+                "story": "His grip fails; she drops to all fours then springs.",
+                "duration_guidance": "5s",
+            }],
+        }, open(jp, "w"))
+        md = os.path.join(outdir, f"{song['slug']}_xxx.md")
+        open(md, "w").write("# sb\n")
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               song["id"], "xxx", jp, md, 1, time.time())
+        page = client.get(f"/anchors?scope_value={album}").text
+        assert "js-pose-brief" in page
+        assert "all fours then spring" in page
+        assert "hair pulled over one shoulder" in page
+        assert "Used in" not in page
+        assert "Rating:" not in page
+        assert "XXX rating" not in page
+        assert "Mage Brief Song" not in page.split("pose-brief-text", 1)[-1][:800]
+        assert "Full body, one figure, empty studio." in page
 
 
 def test_roster_tier_query_beats_the_largest_need_count():

@@ -62,17 +62,13 @@ hx-post="{{ url }}" hx-target="closest .playlist-body" hx-swap="innerHTML"
 {%- endmacro %}
 
 {% macro pose_mage_prompt(album, tier, g) -%}
-Album: {{ album }}
-Rating: {{ tier | tiername }}
-Character: {{ g.character_label or "Lead" }}
-Pose name: {{ g.label }}
+{% if g.mage %}{{ g.mage }}
+{% elif g.needs %}{% for n in g.needs %}{{ n }}{% if not loop.last %}
 
-What the storyboard asked — use this as the pose, not a standing sheet:
-{% for n in g.needs or [] %}{{ n }}
-{% else %}{{ g.label }}
-{% endfor %}
-One figure, full body inside the frame, empty studio, matching the identity photographs of {{ g.character_label or "the album lead" }}. {{ tier | tiername }} rating.
-Used in {{ g.n_scenes }} scene{{ "" if g.n_scenes == 1 else "s" }}{% if g.songs %} on {% for s in g.songs %}{{ s.title }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}.
+{% endif %}{% endfor %}
+{% else %}{{ g.label }}{% endif %}
+
+Full body, one figure, empty studio.
 {%- endmacro %}
 
 {% macro save_icon(label, title, extra="") %}
