@@ -33,7 +33,7 @@ identity lock (`test_t6_a1_anchor_loop_over_json`).
 - **TRD-5 — the graph that turns a request into a clip**, and the refine pass.
   `_refine_ltx` ships variant A (`T5-1`/`T5-3`/`T5-4` built as a graph). The
   GPU pair that proves it helps (`T5-2`) and the peak-VRAM reading (`T5-5`)
-  are **NOT MEASURED**.
+  are **NOT MEASURED**. `T5-5` is not the base 23.4 peak.
 - **TRD-6 — the queue, the lifecycle, and what joins to what.** Ledger is
   **built** (`T6-1`…`T6-A10`). `T6-18` still deletes nothing; GC is
   **deferred** (Status row; §7 **No automatic GC**).
@@ -153,7 +153,7 @@ copies. Do not offer those families as `role=reference` defaults.
 | P7f | A long LTX scene is a chain whose successor graph uses `LTXVAddGuide` so the first frame is the predecessor's last | `T2-10` |
 | P7c | Refine-on vs refine-off is judged on decoded frames (MAD > 0, sharpness up), not graph nodes. Missing measurement fails closed. GPU pair still NOT MEASURED | `T5-2` |
 | P7d | If LTX variant B does not fit, that is a recorded finding on `ltx25` and `--refine` ships A; the upsampler is never dropped silently | `T5-6` |
-| P7e | Peak VRAM of shipped refine variant A is measured on the box, or fail-closed `NOT MEASURED`. Copying the base 23.4/23.9 figure onto `refine_peak` is a quote, not a reading | `T5-5` |
+| P7e | Peak VRAM of shipped refine variant A is measured on the box, or fail-closed `NOT MEASURED`. `T5-5` is not the base 23.4 peak. Copying the base 23.4/23.9 figure onto `refine_peak` is a quote, not a reading; `origin=not_measured` until samples land | `T5-5` |
 | P8 | Work is pulled, not assigned; "ready" is not "queued"; every artefact's state transition is a row with a time. A re-render, refine, repair or anchor re-roll lists both candidates and either is selectable | `T6-1`…`T6-7`, `T6-A5` |
 | P9 | Every artefact can be joined to what was asked of it, by one canonical path | `T6-8`…`T6-13a` |
 | P10 | A killed worker leaves no half-written job; a long render does not hold the write lock | `T6-14`…`T6-16` |

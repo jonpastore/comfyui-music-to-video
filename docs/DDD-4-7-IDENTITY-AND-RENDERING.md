@@ -7,7 +7,9 @@ Sequencing and review record: `docs/PLAN-TRD-4-7.md`,
 
 **Rewritten 2026-08-17 for Jarvis #529 (D1–D10).** Reconciled
 2026-08-18: `T5-11` **built** (`test_t5_11_ltx_always_first.py`); `T5-15`
-**built** (`test_t5_15_no_latent_handoff.py`); `T2-50`, `T4-11` **built** (charcoal-brown compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`; render differential **harness only; NOT MEASURED**, `test_t4_11_body_colour.py`), `T4-21`…`T4-24`, `T7-21`…`T7-23` **built**; `T3-35` **built** (`test_t3_35_settings_remedies.py`); `T2-51`/`T2-52` **built** (classify writes no map; draft+Accept required for `start_refs`; empty/draft/rejected refuse refs; `start_reroll` uses pinned `pose_sheet_id` — empty map + pin enqueues, `test_start_reroll_pinned_plate_skips_empty_map`; no `freeze_auto_binds` / auto-`scene_bases` fallback — `test_pose_plan.py`).
+**built** (`test_t5_15_no_latent_handoff.py`); `T5-5` **harness only; peak NOT
+MEASURED** (`test_t5_5_refine_peak_vram.py` — not the base 23.4 peak;
+`refine_peak` stays `origin=not_measured`); `T2-50`, `T4-11` **built** (charcoal-brown compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`; render differential **harness only; NOT MEASURED**, `test_t4_11_body_colour.py`), `T4-21`…`T4-24`, `T7-21`…`T7-23` **built**; `T3-35` **built** (`test_t3_35_settings_remedies.py`); `T2-51`/`T2-52` **built** (classify writes no map; draft+Accept required for `start_refs`; empty/draft/rejected refuse refs; `start_reroll` uses pinned `pose_sheet_id` — empty map + pin enqueues, `test_start_reroll_pinned_plate_skips_empty_map`; no `freeze_auto_binds` / auto-`scene_bases` fallback — `test_pose_plan.py`).
 `T2-56` **built** (`test_t2_56_per_scene_keeper.py`): accepted keeper
 for that scene is image1. `T2-53` / `T7-22` **built**
 (`test_t2_53_location_plates.py`): one plate per location key; never image1.
@@ -460,19 +462,23 @@ pixels; the siblings are scaled up, not letterboxed. Mixed aspect is a named
 `ValueError`. `_normalize_filter`'s decrease+pad path stays on `render_set`
 (playlist songs of different geometry), not on song assembly.
 
-**The measurement that decides whether B is possible runs first, not last.** The
+**The base peak that decides whether B is possible runs first, not last.** The
 base render already peaks at 23.4 GB of 23.9 on cerberus — 95.8% of the card — at
-832×480. **`T5-5` is that measurement for the shipped variant.**
+832×480. That figure is the **base** render. It is **not** `T5-5`. **`T5-5` is
+the peak VRAM of the shipped refine variant A**, recorded on
+`models.refine_peak` beside the 23.4/23.9 base note; `origin=not_measured` until
+samples land on the box (**harness only; peak NOT MEASURED**,
+`test_t5_5_refine_peak_vram.py`). Copying 23.4 onto `refine_peak` as measured is
+a quote, not a reading. Docs must not claim `T5-5` is the base 23.4 measurement.
 `pipeline.sample_vram` reads `/system_stats` (via `gpu.vram`);
 `peak_from_samples` takes the max `used_gb`; empty samples raise `NOT MEASURED`.
 `t5_5_claim` is fail-closed: `T5_5_MEASURED` with an empty hook is still
-`NOT MEASURED`. `models.refine_peak` sits beside the 23.4/23.9 figure;
-`origin=measured` without `n_samples`/`host`/`date`, or `same_as_base=True`,
-is a quoted number. A's peak has not been read off the box. **`T5-6` recorded
-the finding on the `ltx25` notes: variant B does not fit.** 0.5 GB of headroom
-cannot hold a 4× spatial latent plus the 0.3 GiB upscaler on the same graph.
-`--refine` ships variant A. Silently dropping the upsampler and calling A a
-two-stage is the defect this document is about. A submit records its
+`NOT MEASURED`. `origin=measured` without `n_samples`/`host`/`date`, or
+`same_as_base=True`, is a quoted number. A's peak has not been read off the box.
+**`T5-6` recorded the finding on the `ltx25` notes: variant B does not fit.**
+0.5 GB of headroom cannot hold a 4× spatial latent plus the 0.3 GiB upscaler on
+the same graph. `--refine` ships variant A. Silently dropping the upsampler and
+calling A a two-stage is the defect this document is about. A submit records its
 pre-render reading on `pipeline.LAST_RENDER_VRAM` (T9-15).
 
 **Proof, split after review:** mean absolute pixel difference > 0 is the

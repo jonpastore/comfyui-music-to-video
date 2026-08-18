@@ -6,10 +6,12 @@ Missing samples raise NOT MEASURED.
 
 The 23.4/23.9 figure is the BASE render. Copying it onto refine_peak with
 origin=measured and same_as_base=True is the quote this harness exists to
-catch. Graph-only is T5-1. B-does-not-fit is T5-6.
+catch. Docs must not claim T5-5 is that base measurement. Graph-only is
+T5-1. B-does-not-fit is T5-6.
 """
 import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -26,6 +28,11 @@ import models
 
 pipeline = _real_module("pipeline")
 assert pipeline is not None, "real pipeline.py failed to import"
+
+DDD = Path(ROOT) / "docs" / "DDD-4-7-IDENTITY-AND-RENDERING.md"
+TRD = Path(ROOT) / "docs" / "TRD-5-CLIP-RENDERING-AND-REFINE.md"
+PRD = Path(ROOT) / "docs" / "PRD-4-7-IDENTITY-AND-RENDERING.md"
+UIUX = Path(ROOT) / "docs" / "UIUX-DEFINITION-AND-STYLE-GUIDE.md"
 
 
 def _notes():
@@ -156,6 +163,42 @@ def test_t5_5_notes_sit_beside_23_4_and_do_not_quote_it():
     peak = models.refine_peak("ltx25")
     if peak.get("origin") != "measured":
         assert "not measured" in blob, neighbour
+
+
+def test_t5_5_docs_do_not_claim_base_peak_is_t5_5():
+    """Docs cannot claim T5-5 is the base 23.4 measurement.
+
+    Mutation: restore 'T5-5 is that measurement for the shipped variant' → red.
+    HOLD: do not flip MEASURED; refine_peak stays origin=not_measured.
+    """
+    ddd = DDD.read_text(encoding="utf-8")
+    assert "T5-5 is that measurement" not in ddd, (
+        "DDD must not equate T5-5 with the base 23.4 peak"
+    )
+    section = ddd.split("## 5. Refine on LTX", 1)[1].split("## 6.", 1)[0]
+    assert "23.4" in section and "T5-5" in section, section
+    assert "**not** `T5-5`" in section or "not `T5-5`" in section, section
+    assert "NOT MEASURED" in section, section
+    assert "origin=not_measured" in section, section
+
+    peak = models.refine_peak("ltx25")
+    assert peak.get("origin") == "not_measured", peak
+
+    trd = TRD.read_text(encoding="utf-8")
+    rows = [ln for ln in trd.splitlines() if "`T5-5`" in ln and "NOT MEASURED" in ln]
+    assert rows, "TRD-5 Status must keep T5-5 harness only; peak NOT MEASURED"
+    for row in rows:
+        assert "harness only" in row or "peak NOT MEASURED" in row, row
+        assert "**MEASURED**" not in row.replace("NOT MEASURED", ""), row
+
+    prd = PRD.read_text(encoding="utf-8")
+    assert "T5-5" in prd and "NOT MEASURED" in prd
+    assert "T5-5 is that measurement" not in prd
+
+    uiux = UIUX.read_text(encoding="utf-8")
+    assert "T5-5" in uiux
+    assert "NOT MEASURED" in uiux
+    assert "T5-5 is that measurement" not in uiux
 
 
 def test_t5_5_free_vram_and_sample_vram_exist():

@@ -1165,8 +1165,9 @@ The studio has two live instances of the same defect and both are UI-visible:
   (`T5-1`). Variant B does not fit on cerberus — recorded on the `ltx25`
   notes (`T5-6`); the upsampler is not silently dropped. Peak VRAM of
   shipped A is `T5-5`: `models.refine_peak` sits beside the 23.4/23.9
-  base figure. A quoted copy of 23.4 is not a reading; missing samples
-  raise. The refine peak is **NOT MEASURED**. Whether A changed the
+  base figure with `origin=not_measured`. `T5-5` is not that base peak.
+  A quoted copy of 23.4 is not a reading; missing samples raise. The
+  refine peak is **NOT MEASURED**. Whether A changed the
   picture is `T5-2`: decoded-frame MAD and Laplacian variance, same seed,
   on vs off. A graph growing is not that reading. Missing frames raise;
   a skip is not a reading. The accept path records a named `refine_off`
