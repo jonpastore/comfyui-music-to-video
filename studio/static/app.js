@@ -2479,10 +2479,13 @@ function paintRerollPlaceholders(form, d) {
   clearRerollPlaceholders(d.job_id, strip);
   for (var i = 0; i < n; i++) {
     var fig = document.createElement("figure");
-    fig.className = "ref-frame still-pending";
+    fig.className = "ref-frame clip-tile still-pending";
     fig.setAttribute("data-job-id", String(d.job_id));
     fig.setAttribute("aria-label", "Rendering still");
-    fig.innerHTML = "<div class=\"still-skeleton\"></div><figcaption>rendering…</figcaption>";
+    fig.innerHTML = "<div class=\"still-thumb\">" +
+      "<div class=\"thumb-open still-skeleton\" aria-hidden=\"true\"></div>" +
+      "</div><figcaption>rendering…</figcaption>" +
+      "<div class=\"still-icons\" aria-hidden=\"true\"></div>";
     strip.appendChild(fig);
   }
 }

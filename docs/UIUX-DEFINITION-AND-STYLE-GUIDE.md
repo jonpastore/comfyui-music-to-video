@@ -578,8 +578,9 @@ Scene media is stacked rows: pose word, then plate controls, then
 fields. Stills show every candidate, **Use this still** approves one.
 Reroll is one bar above the stills (What to change, Images to generate,
 Min, Max, Seed stepping). Submitting it plants N shimmer placeholders
-in the stills strip; they swap for the real stills when the job lands
-and clear if it fails or is cancelled. The sticky job chip carries
+in the stills strip — same `.ref-frame.clip-tile` card (190px, 3:4
+frame, caption + icon row) as a finished still. They swap for the
+real stills when the job lands and clear if it fails or is cancelled. The sticky job chip carries
 `data-kind` / `data-clips`; a finished reroll refreshes that scene
 row even if the SSE watch was missed. Clip thumbs seek ~0.5s in so
 the first-frame black is not the poster.

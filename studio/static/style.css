@@ -1579,30 +1579,17 @@ img.lazy-src, video.lazy-src {
 .reroll-bar input[type=number] { width: 5.2rem; }
 .reroll-bar select { min-width: 7.5rem; }
 .reroll-bar button { align-self: flex-end; margin: 0; }
-.still-pending {
-  width: 8.5rem;
-  min-height: 12rem;
-  margin: 0;
-  border: 1px dashed var(--border);
-  border-radius: 4px;
-  background: var(--panel);
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-}
 .still-pending .still-skeleton {
-  flex: 1 1 auto;
-  min-height: 9rem;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  min-height: 0;
+  pointer-events: none;
+  cursor: default;
   background: linear-gradient(90deg, var(--panel) 0%, var(--panel-raised, #2a3140) 50%, var(--panel) 100%);
   background-size: 200% 100%;
   animation: still-shimmer 1.2s linear infinite;
 }
-.still-pending figcaption {
-  padding: 0.3rem 0.4rem;
-  font-size: 0.75rem;
-  color: var(--muted);
-  text-align: center;
-}
+.still-pending .still-icons { min-height: 1.7rem; }
 @keyframes still-shimmer {
   0% { background-position: 100% 0; }
   100% { background-position: -100% 0; }
