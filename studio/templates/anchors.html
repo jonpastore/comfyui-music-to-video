@@ -64,7 +64,9 @@
 
 {% set class_open = (not class_keepers) or (pose_gap and pose_gap.holes) %}
 <section class="card" id="classification-library"
-         data-album="{{ class_album or form_album }}">
+         data-album="{{ class_album or form_album }}"
+         data-song-id="{{ open_song_id or '' }}"
+         data-tier="{{ pose_gap.tier if pose_gap else '' }}">
   <details class="disclose" {% if class_open %}open{% endif %}>
   <summary>
     <h2>Pose catalog</h2>
@@ -125,19 +127,21 @@
       <span class="muted">{{ im.usable }}</span></span>
     {% else %}
     <p class="empty" id="class-keepers-empty">No tagged keepers on this album yet.
-      Import a JSON file or paste one below &mdash; that labels existing
-      sheets. It does not render anything.</p>
+      Use <strong>Tag from these sheets</strong> to mark the gallery below
+      as the catalog. No file path, no GPU.</p>
     {% endfor %}
   </div>
   <h3>Missing on this song</h3>
+  <p class="hint">Click a chip. Pick a sheet from the gallery (clothed or
+    nude) to tag it, or generate the wardrobe you do not have.</p>
   <div class="class-chips" id="pose-gap-holes">
     {% if pose_gap and pose_gap.holes %}
     {% for h in pose_gap.holes %}
-    <span class="tag class-chip hole warn-tag"
-          data-pose="{{ h.pose }}" data-view="{{ h.view }}"
-          data-wardrobe="{{ h.wardrobe }}"
-          data-scenes="{{ h.scenes | join(',') }}">{{ h.pose }} / {{ h.view }} / {{ h.wardrobe }}
-      <span class="muted">sc {{ h.scenes | join(', ') }}</span></span>
+    <button type="button" class="tag class-chip hole warn-tag js-hole-pick"
+            data-pose="{{ h.pose }}" data-view="{{ h.view }}"
+            data-wardrobe="{{ h.wardrobe }}"
+            data-scenes="{{ h.scenes | join(',') }}">{{ h.pose }} · {{ h.view }} · {{ h.wardrobe }}
+      <span class="muted">sc {{ h.scenes | join(', ') }}</span></button>
     {% endfor %}
     {% elif pose_gap %}
     <p class="empty" id="pose-gap-empty">No ceiling holes for this song.</p>
@@ -148,32 +152,28 @@
     {% endif %}
   </div>
   <p class="hint" id="classification-note"></p>
-  <details class="disclose" id="classification-seed">
-    <summary>Import or paste the tag list</summary>
-    <p class="hint">A sidecar is a JSON file of labels (pose, view, wardrobe,
-      usable). Street Cats lives in the repo as
-      <code>anchor5/image-classification.json</code>. Saving writes a new
-      version for this album. Neither step uses the GPU.</p>
-    <form id="classification-import" class="stack-form">
-      <label>JSON file on this box
-        <input type="text" name="path" id="classification-import-path"
-               placeholder="/path/to/image-classification.json" autocomplete="off">
-      </label>
-      <div class="form-actions">
-        <button type="submit">Import file</button>
-      </div>
-    </form>
-    <form id="classification-save" class="stack-form">
-      <label>Or paste the JSON
-        <textarea name="document" id="classification-save-document" rows="6"
-                  spellcheck="false" placeholder="{&quot;images&quot;:[]}"></textarea>
-      </label>
-      <div class="form-actions">
-        <button type="submit" class="icon-btn" title="Save pose catalog"
-                aria-label="Save pose catalog">{{ glyph_save() }}</button>
-      </div>
-    </form>
-  </details>
+  <div class="form-actions">
+    <button type="button" id="classification-from-sheets">Tag from these sheets</button>
+    <span class="muted">Marks chosen gallery sheets as keepers. No file, no GPU.</span>
+  </div>
+  <dialog class="confirm-modal" id="hole-pick" aria-labelledby="hole-pick-title">
+    <div class="modal-bar">
+      <strong id="hole-pick-title">Missing pose</strong>
+      <span class="lightbox-spacer"></span>
+      {{ modal_close() }}
+    </div>
+    <p class="hint" id="hole-pick-meta"></p>
+    <div class="field-row" id="hole-pick-ward">
+      <button type="button" class="toggle" data-ward="clothed">Clothed</button>
+      <button type="button" class="toggle" data-ward="nude">Nude</button>
+    </div>
+    <div class="class-chips hole-pick-grid" id="hole-pick-grid"></div>
+    <p class="empty" id="hole-pick-empty" hidden>No chosen sheets in that wardrobe. Switch to Nude if that is what you have, or generate.</p>
+    <div class="button-row">
+      <button type="button" id="hole-pick-use" disabled>Use selected sheet</button>
+      <button type="button" class="secondary" id="hole-pick-gen">Generate this wardrobe</button>
+    </div>
+  </dialog>
   </details>
 </section>
 

@@ -2981,38 +2981,144 @@ function initClassificationLibrary() {
   var box = document.getElementById("classification-library");
   if (!box) return;
   var album = box.getAttribute("data-album") || "";
+  var songId = box.getAttribute("data-song-id") || "";
+  var tier = box.getAttribute("data-tier") || "";
   var note = document.getElementById("classification-note");
   function say(msg) { if (note) note.textContent = msg || ""; }
 
-  var imp = document.getElementById("classification-import");
-  if (imp) {
-    imp.addEventListener("submit", function (e) {
-      e.preventDefault();
-      var pathEl = imp.querySelector('[name="path"]');
-      var path = pathEl ? pathEl.value : "";
-      say("Importing…");
-      api("/api/albums/" + encodeURIComponent(album) + "/classification/import",
-          {path: path})
+  var fromSheets = document.getElementById("classification-from-sheets");
+  if (fromSheets) {
+    fromSheets.addEventListener("click", function () {
+      say("Tagging chosen sheets…");
+      api("/api/albums/" + encodeURIComponent(album) + "/classification/from-sheets", {})
         .then(function () { location.reload(); })
         .catch(function (err) { say(err.message); });
     });
   }
 
-  var save = document.getElementById("classification-save");
-  if (save) {
-    save.addEventListener("submit", function (e) {
+  var dlg = document.getElementById("hole-pick");
+  var grid = document.getElementById("hole-pick-grid");
+  var empty = document.getElementById("hole-pick-empty");
+  var useBtn = document.getElementById("hole-pick-use");
+  var genBtn = document.getElementById("hole-pick-gen");
+  var hole = null;
+  var ward = "clothed";
+  var picked = null;
+
+  function paintToggles() {
+    box.querySelectorAll("#hole-pick-ward .toggle").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-ward") === ward);
+    });
+  }
+
+  function loadSheets() {
+    if (!grid) return;
+    grid.innerHTML = "";
+    picked = null;
+    if (useBtn) useBtn.disabled = true;
+    api("/api/albums/" + encodeURIComponent(album) + "/sheets?family=" + encodeURIComponent(ward))
+      .then(function (data) {
+        var sheets = (data && data.sheets) || [];
+        if (empty) empty.hidden = sheets.length > 0;
+        sheets.forEach(function (s) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "hole-pick-cell";
+          btn.setAttribute("data-id", String(s.id));
+          btn.setAttribute("data-path", s.path || "");
+          btn.title = (s.pose || s.label || "") + " · " + (s.view || "");
+          var img = document.createElement("img");
+          img.src = (s.url || "") + (s.url && s.url.indexOf("?") >= 0 ? "&" : "?") + "w=360";
+          img.alt = s.label || "";
+          img.decoding = "async";
+          var cap = document.createElement("span");
+          cap.textContent = s.pose || s.label || s.view || "";
+          btn.appendChild(img);
+          btn.appendChild(cap);
+          grid.appendChild(btn);
+        });
+      })
+      .catch(function (err) { say(err.message); });
+  }
+
+  function openHole(btn) {
+    hole = {
+      pose: btn.getAttribute("data-pose") || "",
+      view: btn.getAttribute("data-view") || "front",
+      wardrobe: btn.getAttribute("data-wardrobe") || "clothed",
+      scenes: btn.getAttribute("data-scenes") || "",
+    };
+    ward = hole.wardrobe === "nude" ? "nude" : "clothed";
+    var title = document.getElementById("hole-pick-title");
+    var meta = document.getElementById("hole-pick-meta");
+    if (title) title.textContent = hole.pose + " · " + hole.view;
+    if (meta) {
+      meta.textContent = "Scenes " + (hole.scenes || "?") +
+        ". Pick a sheet in the wardrobe you want, or generate that wardrobe.";
+    }
+    paintToggles();
+    loadSheets();
+    if (dlg && typeof dlg.showModal === "function") dlg.showModal();
+  }
+
+  box.addEventListener("click", function (e) {
+    var chip = e.target.closest && e.target.closest(".js-hole-pick");
+    if (chip) {
       e.preventDefault();
-      var rawEl = save.querySelector('[name="document"]');
-      var raw = rawEl ? rawEl.value : "";
-      var doc;
-      try { doc = JSON.parse(raw); } catch (err) {
-        say("That is not valid JSON");
+      openHole(chip);
+      return;
+    }
+    var tog = e.target.closest && e.target.closest("#hole-pick-ward .toggle");
+    if (tog) {
+      ward = tog.getAttribute("data-ward") || "clothed";
+      paintToggles();
+      loadSheets();
+      return;
+    }
+    var cell = e.target.closest && e.target.closest(".hole-pick-cell");
+    if (cell && grid && grid.contains(cell)) {
+      grid.querySelectorAll(".hole-pick-cell").forEach(function (c) {
+        c.classList.toggle("on", c === cell);
+      });
+      picked = {id: cell.getAttribute("data-id"), path: cell.getAttribute("data-path")};
+      if (useBtn) useBtn.disabled = !picked.path;
+    }
+  });
+
+  if (useBtn) {
+    useBtn.addEventListener("click", function () {
+      if (!hole || !picked || !picked.path) return;
+      say("Tagging sheet…");
+      api("/api/albums/" + encodeURIComponent(album) + "/classification/keeper", {
+        id: "anchor-" + (picked.id || ""),
+        path: picked.path,
+        kind: "operator",
+        view: hole.view,
+        pose: hole.pose,
+        wardrobe: ward,
+        usable: "pose",
+      }).then(function () { location.reload(); })
+        .catch(function (err) { say(err.message); });
+    });
+  }
+
+  if (genBtn) {
+    genBtn.addEventListener("click", function () {
+      if (!hole || !songId) {
+        say("Pick a song to check first.");
         return;
       }
-      say("Saving…");
-      api("/api/albums/" + encodeURIComponent(album) + "/classification", doc)
-        .then(function () { location.reload(); })
-        .catch(function (err) { say(err.message); });
+      say("Queuing " + ward + " generate…");
+      api("/api/songs/" + encodeURIComponent(songId) + "/pose-generate", {
+        tier: tier || "xxx",
+        pose: hole.pose,
+        view: hole.view,
+        wardrobe: ward,
+        n: 4,
+      }).then(function (d) {
+        say("Queued job " + ((d.jobs && d.jobs[0] && d.jobs[0].id) || ""));
+        if (dlg && dlg.open) dlg.close();
+      }).catch(function (err) { say(err.message); });
     });
   }
 }

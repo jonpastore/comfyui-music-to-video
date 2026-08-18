@@ -120,13 +120,13 @@ def test_uiux_anchors_shows_keeper_chips_and_holes():
     assert 'data-usable="pose"' in html
     assert "kneel / front / clothed" in html
     assert 'id="pose-gap-holes"' in html
-    assert 'class="tag class-chip hole warn-tag"' in html
+    assert 'class="tag class-chip hole warn-tag js-hole-pick"' in html
     assert 'data-pose="standing"' in html
-    assert "standing / front / clothed" in html
+    assert "standing · front · clothed" in html
     assert 'data-usable="skip"' not in html
     assert "stand-skip" not in html
-    assert 'id="classification-import"' in html
-    assert 'id="classification-save"' in html
+    assert 'id="classification-from-sheets"' in html
+    assert 'id="hole-pick"' in html
     assert f'value="{sid}"' in html
     assert "<summary>" in html.split('id="classification-library"', 1)[1]
     assert "Pose catalog" in html
@@ -216,7 +216,7 @@ def test_uiux_sidecar_alone_does_not_paint_keepers_or_close_holes():
         assert 'data-id="disk-only"' not in page.text
         assert 'id="class-keepers-empty"' in page.text
         assert 'data-pose="standing"' in page.text
-        assert 'class="tag class-chip hole warn-tag"' in page.text
+        assert "js-hole-pick" in page.text
     finally:
         classification._DEFAULT_SIDECAR = prev
 
@@ -250,12 +250,51 @@ def test_uiux_live_empty_auto_seeds_from_default_sidecar():
 
 
 def test_uiux_js_wires_import_and_save():
-    """The page forms POST to the existing classification APIs."""
+    """The page tags from sheets and opens the hole picker."""
     js = open(_JS).read()
     assert "function initClassificationLibrary" in js
     assert "initClassificationLibrary()" in js
-    assert "/classification/import" in js
-    assert 'api("/api/albums/" + encodeURIComponent(album) + "/classification"' in js
+    assert "/classification/from-sheets" in js
+    assert "/classification/keeper" in js
+    assert "js-hole-pick" in js
+
+
+def test_tag_from_anchors_and_keeper_close_a_hole(tmp_path):
+    stamp = f"tag-sheets-{time.time_ns()}"
+    album, sid, _song = _album_song(stamp, scenes=[_scene(1, "standing", "wide")])
+    path = str(tmp_path / "stand.png")
+    open(path, "wb").write(b"\x89PNG\r\n\x1a\n")
+    db.run("""INSERT INTO anchors (scope_kind,scope_value,tier,view,path,chosen,created,render_json)
+              VALUES ('album',?,'xxx','front',?,1,?,?)""",
+           album, path, time.time(), json.dumps({"pose_name": "standing"}))
+    prev = classification._DEFAULT_SIDECAR
+    classification._DEFAULT_SIDECAR = str(tmp_path / "missing.json")
+    try:
+        with TestClient(appmod.app) as client:
+            tagged = client.post(f"/api/albums/{album}/classification/from-sheets")
+            assert tagged.status_code == 200, tagged.text
+            assert tagged.json()["images"]
+            sheets = client.get(f"/api/albums/{album}/sheets", params={"family": "clothed"})
+            assert sheets.status_code == 200
+            assert sheets.json()["n"] >= 1
+            page = client.get("/anchors", params={"scope_value": album, "song_id": sid})
+        assert page.status_code == 200
+        assert "No ceiling holes for this song." in page.text
+    finally:
+        classification._DEFAULT_SIDECAR = prev
+
+
+def test_add_keeper_tags_one_sheet(tmp_path):
+    stamp = f"one-keep-{time.time_ns()}"
+    album = f"One {stamp}"
+    path = str(tmp_path / "k.png")
+    open(path, "wb").write(b"\x89PNG\r\n\x1a\n")
+    got = classification.add_keeper(album, {
+        "id": "anchor-1", "path": path, "kind": "operator",
+        "view": "front", "pose": "seated", "wardrobe": "nude", "usable": "pose",
+    })
+    assert any(im["pose"] == "seated" and im["wardrobe"] == "nude"
+               for im in got["images"])
 
 
 def test_uiux_stays_off_scene_row_and_storyboard_panel():

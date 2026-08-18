@@ -7543,6 +7543,54 @@ async def api_classification_import(request: Request, album: str,
         _svc_http(e)
 
 
+@app.get("/api/albums/{album}/sheets")
+def api_album_sheets(album: str, family: str = ""):
+    """Chosen sheets for the hole picker. family=clothed|nude filters."""
+    want = (family or "").strip().lower()
+    rows = []
+    for row in db.q(
+            """SELECT * FROM anchors WHERE scope_value=? AND chosen=1
+               ORDER BY id DESC""", album):
+        fam = view_family(row["view"])
+        if want in ("clothed", "nude") and fam != want:
+            continue
+        meta = db.jset(row, "render_json")
+        rows.append({
+            "id": row["id"],
+            "path": row["path"],
+            "url": media_url(row["path"]),
+            "view": row["view"],
+            "family": fam,
+            "pose": (meta.get("pose_name") or row["view"] or "").strip(),
+            "label": view_position_label(row["view"]),
+        })
+    return JSONResponse({"album": album, "family": want or None,
+                         "n": len(rows), "sheets": rows})
+
+
+@app.post("/api/albums/{album}/classification/from-sheets")
+def api_classification_from_sheets(album: str,
+                                   character_id: Optional[int] = None):
+    """Tag chosen gallery sheets as keepers. No sidecar path, no GPU."""
+    try:
+        return JSONResponse(classification.tag_from_anchors(
+            album, character_id=character_id))
+    except (LookupError, ValueError) as e:
+        _svc_http(e)
+
+
+@app.post("/api/albums/{album}/classification/keeper")
+async def api_classification_keeper(request: Request, album: str,
+                                    character_id: Optional[int] = None):
+    """Tag one sheet as covering a hole."""
+    body = await _api_body(request)
+    try:
+        return JSONResponse(classification.add_keeper(
+            album, body, character_id=character_id))
+    except (LookupError, ValueError) as e:
+        _svc_http(e)
+
+
 @app.post("/api/albums/{album}/classification")
 async def api_classification_save(request: Request, album: str,
                                   character_id: Optional[int] = None):
@@ -7596,6 +7644,15 @@ async def api_pose_generate(request: Request, id: int,
     cid = character_id if character_id is not None else _optional_int(
         body.get("character_id"))
     try:
+        pose = (body.get("pose") or "").strip()
+        if pose:
+            import pose_generate
+            return JSONResponse(pose_generate.generate_one(
+                get_song_or_404(id)["id"], pose,
+                body.get("view") or "front",
+                body.get("wardrobe") or "clothed",
+                run_tiers, character_id=cid,
+                n=int(body.get("n") or 4)))
         return JSONResponse(storyboard_service.generate_poses(
             get_song_or_404(id)["id"], run_tiers, character_id=cid))
     except (LookupError, ValueError, RuntimeError) as e:

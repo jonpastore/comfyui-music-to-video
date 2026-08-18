@@ -1920,6 +1920,38 @@ img.lazy-src, video.lazy-src {
 .cast-chips { margin: 0.3rem 0; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
 .class-chips { margin: 0.3rem 0; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
 .class-chip.hole { border-color: var(--danger); color: var(--danger); }
+button.class-chip.hole {
+  font: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.hole-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: 0.5rem;
+  max-height: 22rem;
+  overflow: auto;
+  margin: 0.6rem 0;
+}
+.hole-pick-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  font: inherit;
+  font-size: 0.75rem;
+  text-align: left;
+}
+.hole-pick-cell.on { border-color: var(--accent); color: var(--accent); }
+.hole-pick-cell img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background: var(--panel);
+}
 .cast-offer { margin: 0.4rem 0 0; padding-left: 1.2rem; }
 .cast-offer li { margin: 0.2rem 0; }
 .character-row {

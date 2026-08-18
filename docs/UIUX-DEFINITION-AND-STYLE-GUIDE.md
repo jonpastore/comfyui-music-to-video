@@ -1434,8 +1434,11 @@ on the control.
 **Anchors page.** The **Pose catalog** card (`#classification-library`)
 is a collapsed `<details>` (open when the list is empty or the song
 has holes). Album first, then **Song to check**. It is the tagged
-keeper list, not generate. Help tip explains the order. Import / paste
-JSON lives in a nested fold. Library chips from `classification_json` (view /
+keeper list, not generate. **Tag from these sheets** marks chosen
+gallery keepers (no file path). A missing-pose chip opens `#hole-pick`:
+clothed/nude toggle, pick a sheet to tag, or generate that wardrobe
+(`test_uiux_classification_chips.py`). The sidecar path box is gone.
+Library chips from `classification_json` (view /
 pose / wardrobe / usable). The document is sqlite
 (`T4-21`/`T4-22` **built**, `test_t4_21_classification_json.py`):
 `GET /api/albums/{album}/classification` (query params view / pose /

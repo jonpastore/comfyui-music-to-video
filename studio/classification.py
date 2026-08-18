@@ -210,6 +210,54 @@ def save(album, document, character_id=None):
     return _payload(stored)
 
 
+def add_keeper(album, image, character_id=None):
+    """Append or replace one keeper. New version. No GPU."""
+    parsed = _parse_document({"images": [image]})["images"][0]
+    images = list(library(album, character_id)["images"])
+    images = [
+        im for im in images
+        if im.get("id") != parsed["id"]
+        and not (
+            im.get("pose") == parsed["pose"]
+            and im.get("view") == parsed["view"]
+            and im.get("wardrobe") == parsed["wardrobe"]
+        )
+    ]
+    images.append(parsed)
+    return save(album, {"images": images}, character_id)
+
+
+def tag_from_anchors(album, character_id=None):
+    """Mark this album's chosen sheets as keepers. No sidecar, no GPU."""
+    import make_anchor
+    album = _album(album)
+    rows = db.q(
+        """SELECT * FROM anchors
+           WHERE scope_value=? AND chosen=1 ORDER BY id""",
+        album)
+    images = []
+    for row in rows:
+        path = (row["path"] or "").strip()
+        if not path:
+            continue
+        meta = db.jset(row, "render_json")
+        view = (row["view"] or "front").strip() or "front"
+        wardrobe = "nude" if make_anchor.is_nude_view(view) else "clothed"
+        pose = (meta.get("pose_name") or view).strip() or view
+        images.append({
+            "id": f"anchor-{row['id']}",
+            "path": path,
+            "kind": "operator",
+            "view": view,
+            "pose": pose,
+            "wardrobe": wardrobe,
+            "usable": "pose",
+        })
+    if not images:
+        raise ValueError("this album has no chosen sheets to tag")
+    return save(album, {"images": images}, character_id)
+
+
 def import_sidecar(album, path, character_id=None):
     """Seed a new version from a sidecar file. Not the runtime source."""
     album = _album(album)

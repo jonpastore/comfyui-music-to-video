@@ -347,3 +347,64 @@ def generate(song_id, run_tiers, character_id=None, images=None, n=4):
     planned["jobs"] = queued
     planned["queued"] = len(queued)
     return planned
+
+
+def generate_one(song_id, pose, view, wardrobe, run_tiers, character_id=None,
+                 n=4):
+    """One hole, one wardrobe. Used when the operator picks nude vs clothed."""
+    song = storyboard_service.require_song(song_id)
+    album = (song["album"] or "").strip()
+    if not album:
+        raise ValueError("an album is needed to generate poses")
+    names = _normalize_tiers(run_tiers)
+    ceiling = max(names, key=_tier_rank)
+    wardrobe = "nude" if (wardrobe or "").strip().lower() == "nude" else "clothed"
+    if wardrobe == "nude" and not tiers.allows_nudity(ceiling):
+        raise ValueError(f"{ceiling} cannot generate a nude sheet")
+    pose = (pose or "").strip()
+    view = (view or "").strip() or "front"
+    if not pose:
+        raise ValueError("name the pose to generate")
+    sheet = {
+        "pose": pose,
+        "view": view,
+        "sheet_view": sheet_view(view, wardrobe),
+        "wardrobe": wardrobe,
+        "tier": ceiling,
+        "anatomy": False,
+    }
+    images = _album_images(album, character_id)
+    keepers = classification.keepers(album, character_id)["images"]
+    decided = resolve_c1_c2(sheet, keepers, images)
+    n = max(1, min(int(n or 4), 8))
+    jid = jobs.enqueue("anchor", {
+        "scope_kind": "album",
+        "scope_value": album,
+        "tier": sheet["tier"],
+        "view": sheet["sheet_view"],
+        "images": decided["images"],
+        "n": n,
+        "character_id": character_id,
+        "prompt": decided["pose"],
+        "pose": decided["pose"],
+        "wardrobe": sheet["wardrobe"],
+        "anatomy": False,
+        "source": "pose-gap",
+        "job_kind": decided["kind"],
+        "pose_label": decided["pose_label"],
+        "render": c1_c2_render(decided),
+    }, song_id=song["id"])
+    return {
+        "song_id": song["id"],
+        "album": album,
+        "tier": ceiling,
+        "queued": 1,
+        "jobs": [{
+            "id": jid,
+            "tier": sheet["tier"],
+            "view": sheet["sheet_view"],
+            "pose": sheet["pose"],
+            "wardrobe": sheet["wardrobe"],
+            "job_kind": decided["kind"],
+        }],
+    }
