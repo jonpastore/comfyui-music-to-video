@@ -60,6 +60,10 @@ def test_image_viewers_share_still_stage_chevrons():
     assert "still-stage" in base
     css = open(os.path.join(HERE, "static", "style.css"), encoding="utf-8").read()
     assert ".clip-stage, .still-stage" in css
+    playlists = open(os.path.join(TEMPLATES, "playlists.html"), encoding="utf-8").read()
+    assert "lightbox-pair" in playlists
+    assert "media_nav_prev" in playlists
+    assert "lightbox-pair-pos" in playlists
 
 
 def test_ref_preview_close_is_on_the_bar():

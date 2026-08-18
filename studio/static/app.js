@@ -555,6 +555,35 @@ document.addEventListener("click", function (e) {
 });
 
 // ---- anchor sheets: tabs, filter, viewer, repair --------------------------
+// Playlist pair viewer (#anchor-lightbox without .lightbox-pose-form).
+// Candidate lightbox on /anchors has the pose form and uses initAnchors.
+var pairNav = { items: [], idx: 0 };
+function isPairLightbox(dlg) {
+  return !!(dlg && dlg.id === "anchor-lightbox" && !dlg.querySelector(".lightbox-pose-form"));
+}
+function paintPair(i) {
+  var dlg = document.getElementById("anchor-lightbox");
+  var pair = document.getElementById("lightbox-pair");
+  if (!isPairLightbox(dlg) || !pair || !pairNav.items.length) return;
+  pairNav.idx = (i + pairNav.items.length) % pairNav.items.length;
+  var img = pairNav.items[pairNav.idx];
+  var lab = document.getElementById("lightbox-label");
+  if (lab) lab.textContent = (img.dataset.label || "").replace(/&middot;/g, "·");
+  pair.innerHTML = "";
+  [img.dataset.full, img.dataset.opposite].forEach(function (src) {
+    if (!src) return;
+    var full = document.createElement("img");
+    full.src = src;
+    pair.appendChild(full);
+  });
+  var pos = document.getElementById("lightbox-pair-pos");
+  if (pos) pos.textContent = (pairNav.idx + 1) + "/" + pairNav.items.length;
+  var prev = dlg.querySelector(".media-nav-prev");
+  var next = dlg.querySelector(".media-nav-next");
+  if (prev) prev.disabled = pairNav.items.length < 2;
+  if (next) next.disabled = pairNav.items.length < 2;
+}
+
 document.addEventListener("click", function (e) {
   // tier tabs: the panels are already rendered, so this is a class swap
   var tab = e.target.closest(".tier-tab");
@@ -622,22 +651,26 @@ document.addEventListener("click", function (e) {
     return;
   }
 
+  var pairDlg = document.getElementById("anchor-lightbox");
+  if (isPairLightbox(pairDlg) && pairDlg.open) {
+    if (e.target.closest("#anchor-lightbox .media-nav-prev")) {
+      e.preventDefault(); paintPair(pairNav.idx - 1); return;
+    }
+    if (e.target.closest("#anchor-lightbox .media-nav-next")) {
+      e.preventDefault(); paintPair(pairNav.idx + 1); return;
+    }
+  }
+
   // a sheet opens beside its opposite view -- a character sheet is read as a
   // pair, front checked against back
   var img = e.target.closest(".anchor-open");
-  if (img) {
-    var dlg = document.getElementById("anchor-lightbox");
-    var pair = document.getElementById("lightbox-pair");
-    document.getElementById("lightbox-label").textContent =
-      (img.dataset.label || "").replace(/&middot;/g, "·");
-    pair.innerHTML = "";
-    [img.dataset.full, img.dataset.opposite].forEach(function (src) {
-      if (!src) return;
-      var full = document.createElement("img");
-      full.src = src;
-      pair.appendChild(full);
-    });
-    dlg.showModal();
+  if (img && isPairLightbox(document.getElementById("anchor-lightbox"))) {
+    pairNav.items = Array.prototype.slice.call(
+      document.querySelectorAll(".anchor-open[data-full]"));
+    var at = pairNav.items.indexOf(img);
+    if (at < 0) { pairNav.items = [img]; at = 0; }
+    paintPair(at);
+    document.getElementById("anchor-lightbox").showModal();
     return;
   }
 
@@ -670,6 +703,14 @@ document.addEventListener("click", function (e) {
     }
     fix.showModal();
   }
+});
+
+document.addEventListener("keydown", function (e) {
+  var dlg = document.getElementById("anchor-lightbox");
+  if (!isPairLightbox(dlg) || !dlg.open) return;
+  if (e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (e.key === "ArrowLeft") { e.preventDefault(); paintPair(pairNav.idx - 1); }
+  if (e.key === "ArrowRight") { e.preventDefault(); paintPair(pairNav.idx + 1); }
 });
 
 // show only one character's sheets. They are already on the page, so hiding is

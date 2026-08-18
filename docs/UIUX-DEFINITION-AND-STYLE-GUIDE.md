@@ -1213,7 +1213,8 @@ the meta line. Close on `#pose-brief` sits far right
 `POST /anchors/keeper` plus the save icon stamps the assignment — on
 `/anchors` and on the playlist Anchors fold. Every image/video viewer uses the same stage: `.still-stage` /
 `.clip-stage` plus `media_nav_prev` / `media_nav_next` chevrons
-(arrow keys too). Header actions stay per-dialog. The candidate lightbox
+(arrow keys too), including the playlist front/back pair
+(`#lightbox-pair`). Header actions stay per-dialog. The candidate lightbox
 (`#anchor-lightbox`) classifies the open sheet: a select of that
 album’s needed poses (character · pose) plus the save icon posts the
 same keeper route and stays on the picture. Position is `N/M`, not

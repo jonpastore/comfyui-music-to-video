@@ -15,7 +15,8 @@ code describe one loop from storyboard poses through clips, for every
 defined tier (g, pg13, r, xxx). Product: `comfyui-music-to-video`.
 
 This is a documents change. Do not implement UI or deploy. Isolated
-worktree if you also touch `studio/*.py`. Never deploy mid-render.
+worktree if you also touch `studio/*.py`. Push and deploy are not gated
+on ComfyUI / Swarm jobs (AGENTS.md).
 
 Read first, in this order:
 

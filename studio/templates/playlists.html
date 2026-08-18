@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import modal_close, glyph_edit, glyph_delete %}
+{% from "_macros.html" import modal_close, glyph_edit, glyph_delete, media_nav_prev, media_nav_next %}
 {% block content %}
 <h1>Playlists</h1>
 
@@ -43,10 +43,16 @@
 <dialog class="lightbox" id="anchor-lightbox">
   <div class="modal-bar">
     <strong id="lightbox-label"></strong>
+    <span id="lightbox-pair-pos" class="lightbox-pos muted"></span>
+    <span class="lightbox-spacer"></span>
     {{ modal_close() }}
   </div>
   {# front and back side by side; the CSS stacks them on a narrow screen #}
-  <div class="lightbox-pair" id="lightbox-pair"></div>
+  <div class="still-stage">
+    {{ media_nav_prev("Previous sheet") }}
+    <div class="lightbox-pair" id="lightbox-pair"></div>
+    {{ media_nav_next("Next sheet") }}
+  </div>
 </dialog>
 
 <dialog class="fix-modal" id="anchor-fix">

@@ -6,6 +6,9 @@
 # It gets its OWN venv: ComfyUI's venv is left exactly as it is.
 #
 # usage: ./deploy.sh [--no-restart]
+#
+# ComfyUI / Swarm jobs do not gate this. Restarting meowp-studio does not
+# cancel fleet work. Do not poll /jobs first. AGENTS.md.
 set -euo pipefail
 cd "$(dirname "$0")"
 REPO=".."
