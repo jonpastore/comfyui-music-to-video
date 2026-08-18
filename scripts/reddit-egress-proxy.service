@@ -1,0 +1,22 @@
+# User unit for scripts/reddit-egress-proxy.py
+# Copy to ~/.config/systemd/user/reddit-egress-proxy.service
+#   mkdir -p ~/.config/reddit-egress
+#   umask 077; openssl rand -hex 16 > ~/.config/reddit-egress/token
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now reddit-egress-proxy.service
+# Bind the Tailscale IP of the box that may talk to Reddit, not 0.0.0.0.
+
+[Unit]
+Description=Rate-limited Reddit egress proxy
+After=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+# Edit --bind to this box's Tailscale IP when installing.
+ExecStart=/usr/bin/python3 %h/projects/comfyui/scripts/reddit-egress-proxy.py --bind 127.0.0.1 --port 8118 --token-file %h/.config/reddit-egress/token --state-file %h/.config/reddit-egress/state.json
+Restart=on-failure
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

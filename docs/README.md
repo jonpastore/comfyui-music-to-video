@@ -115,7 +115,13 @@ property of the brief and not of the models: it demands `UNSURE`, accepts
 `NOTHING FOUND`, forbids inventing ids or quotations, and every returned claim is
 checked against the tree before it reaches a document.
 
-## 6. What no document in this set can tell you
+## 6. Operator utilities
+
+`docs/SCRIPTS.md` — recycle shelf for `scripts/`, `batch_edit.py`, and
+the other root helpers that are not the product pipeline. Read it
+before writing another dated one-off.
+
+## 7. What no document in this set can tell you
 
 **Whether the pictures hold.** Most TRD checks are still on strings, graphs
 and schemas. `T4-13` is now **measured** on job 257 (seed 5151 PASSes 8.06;

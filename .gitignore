@@ -58,7 +58,14 @@ __pycache__/
 
 # Agent / session scratch state
 .omc/
+.grok/
 CONTINUATION-*.md
+
+# Failed pose-hop stills and other dated junk. Never product.
+/deprecated/
+
+# Local batch_edit job set (machine paths + one prompt). Template is tracked.
+/config.json
 
 # Session scratch and unreleased track names -- not code
 prompt.txt

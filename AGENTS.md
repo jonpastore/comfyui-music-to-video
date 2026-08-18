@@ -104,6 +104,8 @@ and video modal.
   `HX-Request` and swaps the fragment. No full-page reload for those
   controls. Mandate: `~/.grok/rules/constitution.md` **In-page studio**.
 - Tests: `cd studio && python3 -m pytest -q .`
+- Operator utilities (batch_edit, reddit proxy, deprecate): `docs/SCRIPTS.md`.
+  Do not add another dated one-off under `scripts/`.
 - Lint: Ruff via pre-commit (`ruff-check`). One-time: `pip install pre-commit && pre-commit install`.
 - Push and deploy are not gated on ComfyUI / Swarm jobs. This process
   is not the renderer; a studio restart does not cancel fleet work.

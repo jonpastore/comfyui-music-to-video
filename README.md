@@ -21,7 +21,11 @@ Two layers:
 | `reroll_refs.py` | best-of-N re-roll for specific clips (composition is seed-dominated) |
 | `build_song.py` | one WAN 2.2 S2V workflow per 4.8125 s clip; also holds the shared shot/allocation logic |
 | `make_contact_sheet.py` | labelled contact sheet for approving a batch |
+| `batch_edit.py` | fleet Qwen-Image-Edit job set (`--config config.json.example`) |
 | `profiles/*.json` | per-album template: locations, palettes, camera vocabulary, outfits, guardrails |
+
+Operator recycle shelf (deprecate, Reddit proxy, QC stills, LTX fetch):
+`docs/SCRIPTS.md`.
 
 Storyboards come in four schemas across the project's history; `build_song.normalize()`
 maps them all onto the keys the builders read.
