@@ -126,6 +126,13 @@ a { color: var(--accent); }
 }
 .nav-drop.open .nav-sub { display: flex; }
 .nav-sub a { padding: 0.4rem 0.85rem; white-space: nowrap; }
+.nav-sub .nav-drop { display: block; position: relative; }
+.nav-sub .nav-drop > a { display: block; }
+.nav-sub .nav-drop > .nav-sub {
+  top: 0;
+  left: 100%;
+  margin-left: 0.15rem;
+}
 .media-choice { display: block; text-decoration: none; color: inherit; }
 .media-choice:hover { border-color: var(--accent); }
 

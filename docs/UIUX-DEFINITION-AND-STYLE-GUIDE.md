@@ -1871,7 +1871,9 @@ A style guide is falsifiable or it is decoration.
   listed disabled; Style LoRA + Civitai fetch; Recent images has
   multi-select + Delete selected). Click **Media** pins the menu; it
   stays open 2s after the pointer leaves (WAI-ARIA: dismiss on pick,
-  outside click, or Escape). Hover opens after 300ms (Baymard). No
+  outside click, or Escape). Hover opens after 300ms (Baymard). Arrow
+  Down/Up move in the open menu; Enter activates; Left/Right open and
+  close nested submenus (`initNavDrop`). No
   gap between the label and the panel (`test_uiux_nav.py`). `GET /media`
   is the chooser, not both forms (`test_media_create.py`). Other
   `T6-A2` objects: the queue panel

@@ -101,3 +101,9 @@ def test_uiux_nav_html_and_json_share_one_list(monkeypatch):
     assert "initNavDrop()" in js
     assert "HOLD_MS = 2000" in js
     assert "OPEN_MS = 300" in js
+    assert "ArrowDown" in js
+    assert "ArrowUp" in js
+    assert "ArrowLeft" in js
+    assert "ArrowRight" in js
+    assert 'key === "Enter"' in js
+    assert "subItems" in js

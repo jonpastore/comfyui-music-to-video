@@ -805,28 +805,58 @@ function initGenreSelects(genreId, subgenreId) {
 function initNavDrop() {
   var OPEN_MS = 300;
   var HOLD_MS = 2000;
+  var nav = document.querySelector(".topbar nav");
   var drops = document.querySelectorAll(".nav-drop");
-  if (!drops.length) return;
+  if (!nav || !drops.length) return;
 
+  function triggerOf(drop) {
+    return drop.querySelector(":scope > a");
+  }
+  function subItems(drop) {
+    var sub = drop.querySelector(":scope > .nav-sub");
+    if (!sub) return [];
+    return Array.prototype.slice.call(
+      sub.querySelectorAll(":scope > a, :scope > .nav-drop > a"));
+  }
+  function topTriggers() {
+    return Array.prototype.slice.call(
+      nav.querySelectorAll(":scope > a, :scope > .nav-drop > a"));
+  }
+  function dropOf(el) {
+    return el && el.closest ? el.closest(".nav-drop") : null;
+  }
+  function parentDrop(drop) {
+    var outer = drop.parentElement && drop.parentElement.closest(".nav-drop");
+    return outer || null;
+  }
+  function focusAt(list, i) {
+    if (!list.length) return;
+    var n = ((i % list.length) + list.length) % list.length;
+    list[n].focus();
+  }
   function closeDrop(drop) {
     drop.classList.remove("open", "pinned");
-    var t = drop.querySelector(":scope > a");
+    var t = triggerOf(drop);
     if (t) t.setAttribute("aria-expanded", "false");
+    drop.querySelectorAll(".nav-drop.open").forEach(closeDrop);
   }
-
   function openDrop(drop, pinned) {
+    var outer = parentDrop(drop);
     drops.forEach(function (other) {
-      if (other !== drop) closeDrop(other);
+      if (other === drop || drop.contains(other)) return;
+      if (outer && (other === outer || outer.contains(other))) return;
+      closeDrop(other);
     });
     drop.classList.add("open");
     if (pinned) drop.classList.add("pinned");
-    var t = drop.querySelector(":scope > a");
+    var t = triggerOf(drop);
     if (t) t.setAttribute("aria-expanded", "true");
   }
 
   drops.forEach(function (drop) {
-    var trigger = drop.querySelector(":scope > a");
+    var trigger = triggerOf(drop);
     if (!trigger) return;
+    subItems(drop).forEach(function (a) { a.tabIndex = -1; });
     var openTimer = null;
     var closeTimer = null;
     function clearTimers() {
@@ -863,9 +893,98 @@ function initNavDrop() {
     if (e.target.closest && e.target.closest(".nav-drop")) return;
     drops.forEach(closeDrop);
   });
-  document.addEventListener("keydown", function (e) {
-    if (e.key !== "Escape") return;
-    drops.forEach(closeDrop);
+
+  nav.addEventListener("keydown", function (e) {
+    var key = e.key;
+    if (key === "Esc") key = "Escape";
+    var el = e.target;
+    if (!el || el.tagName !== "A") return;
+    var drop = dropOf(el);
+    var items = drop ? subItems(drop) : [];
+    var tops = topTriggers();
+    var onTrigger = drop && el === triggerOf(drop);
+    var onSub = drop && items.indexOf(el) >= 0;
+    var nested = drop && parentDrop(drop);
+
+    if (key === "Escape") {
+      e.preventDefault();
+      if (drop) {
+        closeDrop(drop);
+        var back = triggerOf(drop);
+        if (back) back.focus();
+      }
+      return;
+    }
+    if (key === "ArrowDown") {
+      if (onTrigger) {
+        e.preventDefault();
+        openDrop(drop, true);
+        focusAt(subItems(drop), 0);
+      } else if (onSub) {
+        e.preventDefault();
+        focusAt(items, items.indexOf(el) + 1);
+      }
+      return;
+    }
+    if (key === "ArrowUp") {
+      if (onTrigger) {
+        e.preventDefault();
+        openDrop(drop, true);
+        var down = subItems(drop);
+        focusAt(down, down.length - 1);
+      } else if (onSub) {
+        e.preventDefault();
+        focusAt(items, items.indexOf(el) - 1);
+      }
+      return;
+    }
+    if (key === "Home" || key === "End") {
+      e.preventDefault();
+      var jump = onSub ? items : tops;
+      focusAt(jump, key === "Home" ? 0 : jump.length - 1);
+      return;
+    }
+    if (key === "ArrowRight") {
+      e.preventDefault();
+      var childDrop = el.parentElement &&
+        el.parentElement.classList.contains("nav-drop") &&
+        !onTrigger ? el.parentElement : null;
+      if (childDrop && subItems(childDrop).length) {
+        openDrop(childDrop, true);
+        focusAt(subItems(childDrop), 0);
+        return;
+      }
+      if (onSub) {
+        var owner = nested ? parentDrop(drop) : drop;
+        closeDrop(owner || drop);
+        focusAt(tops, tops.indexOf(triggerOf(owner || drop)) + 1);
+        return;
+      }
+      focusAt(tops, tops.indexOf(el) + 1);
+      return;
+    }
+    if (key === "ArrowLeft") {
+      e.preventDefault();
+      if (nested) {
+        closeDrop(drop);
+        var parent = triggerOf(nested);
+        if (parent) parent.focus();
+        return;
+      }
+      if (onSub) {
+        closeDrop(drop);
+        focusAt(tops, tops.indexOf(triggerOf(drop)) - 1);
+        return;
+      }
+      focusAt(tops, tops.indexOf(el) - 1);
+      return;
+    }
+    if ((key === "Enter" || key === " ") && onTrigger &&
+        !drop.classList.contains("open")) {
+      e.preventDefault();
+      openDrop(drop, true);
+      focusAt(subItems(drop), 0);
+    }
   });
 }
 
