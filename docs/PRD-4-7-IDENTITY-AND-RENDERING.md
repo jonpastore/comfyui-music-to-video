@@ -165,7 +165,9 @@ copies. Do not offer those families as `role=reference` defaults.
 use-as-ref ticked, `gen_anchor`'s images list is exactly that sheet.
 `gen_refs` passes the accepted keeper for **that** scene as image1
 (`T2-56` **built**, `test_t2_56_per_scene_keeper.py`). Empty map /
-draft / rejected refuse refs and reroll (`T2-52` **built**); no auto-bind
+draft / rejected refuse refs (`T2-52` **built**); scene-row reroll uses a
+pinned `pose_sheet_id` and does not wait on the Accept map (empty map +
+pin enqueues, `test_start_reroll_pinned_plate_skips_empty_map`); no auto-bind
 fallback; `scene_bases` is saved `pose_sheet_id` only; `h_refs`/`h_reroll`
 do not fill plates from `plan()` auto. Location plates (`T2-53` **built**,
 `test_t2_53_location_plates.py`). Extra-view slots are later.
@@ -186,7 +188,9 @@ gap **is**; the Pose catalog on `/anchors` is album-first then song-to-check, co
 without GPU. `T2-51` draft map (classify cannot write it) **is**
 (`test_t2_51_classify_cannot_write_map.py`). `T2-52` Accept-gated
 map **is** (`test_t2_52_map_accept.py`): Accept/Reject per scene;
-`start_refs` and `start_reroll` refuse empty map, draft, or rejected;
+`start_refs` refuses empty map, draft, or rejected; Accept is
+`start_refs` only — `start_reroll` uses a pinned `pose_sheet_id`
+(`test_start_reroll_pinned_plate_skips_empty_map`);
 `pose_plan.freeze_auto_binds` is deleted (`test_freeze_auto_binds_is_gone`);
 `scene_bases` is saved binds only; landers do not auto-fill plates
 (`test_pose_plan.py`).

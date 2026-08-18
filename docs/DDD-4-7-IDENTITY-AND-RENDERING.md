@@ -7,7 +7,7 @@ Sequencing and review record: `docs/PLAN-TRD-4-7.md`,
 
 **Rewritten 2026-08-17 for Jarvis #529 (D1–D10).** Reconciled
 2026-08-18: `T5-11` **built** (`test_t5_11_ltx_always_first.py`); `T5-15`
-**built** (`test_t5_15_no_latent_handoff.py`); `T2-50`, `T4-11` **built** (charcoal-brown compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`; render differential **harness only; NOT MEASURED**, `test_t4_11_body_colour.py`), `T4-21`…`T4-24`, `T7-21`…`T7-23` **built**; `T3-35` **built** (`test_t3_35_settings_remedies.py`); `T2-51`/`T2-52` **built** (classify writes no map; draft+Accept required; empty/draft/rejected refuse refs and reroll; no `freeze_auto_binds` / auto-`scene_bases` fallback — `test_pose_plan.py`).
+**built** (`test_t5_15_no_latent_handoff.py`); `T2-50`, `T4-11` **built** (charcoal-brown compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`; render differential **harness only; NOT MEASURED**, `test_t4_11_body_colour.py`), `T4-21`…`T4-24`, `T7-21`…`T7-23` **built**; `T3-35` **built** (`test_t3_35_settings_remedies.py`); `T2-51`/`T2-52` **built** (classify writes no map; draft+Accept required for `start_refs`; empty/draft/rejected refuse refs; `start_reroll` uses pinned `pose_sheet_id` — empty map + pin enqueues, `test_start_reroll_pinned_plate_skips_empty_map`; no `freeze_auto_binds` / auto-`scene_bases` fallback — `test_pose_plan.py`).
 `T2-56` **built** (`test_t2_56_per_scene_keeper.py`): accepted keeper
 for that scene is image1. `T2-53` / `T7-22` **built**
 (`test_t2_53_location_plates.py`): one plate per location key; never image1.
