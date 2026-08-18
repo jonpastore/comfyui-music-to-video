@@ -172,7 +172,7 @@ fi
 # report the whole app down.
 echo "== smoke test"
 FAIL=0
-for P in / /playlists /tiers /jobs /models /anchors; do
+for P in / /playlists /tiers /jobs /models /anchors /media; do
   CODE=$(ssh $R "curl -s -o /dev/null -w '%{http_code}' -m 15 http://$BIND:8000$P" || echo 000)
   printf "  %-12s %s\n" "$P" "$CODE"
   [ "$CODE" = "200" ] || FAIL=1

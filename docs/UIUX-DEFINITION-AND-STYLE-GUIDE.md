@@ -119,10 +119,10 @@ Ranked by impact.
    is `max-width: 1200px` with 1.5rem padding, so a contact sheet, an anchor
    grid and a set timeline are all poured into a column sized for prose.
 5. **The nav does not match the agreed order and carries an extra item.**
-   `base.html` has *Library, Anchors, Playlists, Sets, Tiers, Models, Jobs,
-   Config*. TRD-2 §7's agreed order is *Library → Playlists → Anchors → Sets →
-   Jobs → Tiers → Config* — make-things first, then machinery — and does not
-   include Models. One of the two is stale and §5.1 says which.
+   `base.html` / `nav_service.LINKS` is *Library, Media, Anchors, Playlists,
+   Sets, Tiers, Models, Jobs, Config*. TRD-2 §7's older agreed order is
+   *Library → Playlists → Anchors → Sets → Jobs → Tiers → Config*. Media is
+   the create surface (New Song / New Image). §5.1 still owns any later rename.
 
 Three breakpoints exist (`860px`, `900px`, `46rem`) in two units, which is not a
 responsive strategy; §5.6.
@@ -1825,8 +1825,10 @@ A style guide is falsifiable or it is decoration.
   `nav_service.LINKS` / `nav_service.links()` drives the topbar (`base.html`
   iterates `nav_links()`) and `GET /api/nav` (`{links: [...]}`); a
   monkeypatched probe entry appears in both HTML `<nav>` and JSON; hardcoding
-  the old eight `<a>` tags in the template drops the probe → red. Today's eight
-  destinations stay in today's order until §5.1 renames/order land. Other
+  the old `<a>` tags in the template drops the probe → red. Today's order is
+  Library, **Media**, Anchors, Playlists, Sets, Tiers, Models, Jobs, Config.
+  Media is New Song (ACE-Step → new library row) and New Image (local t2i,
+  not Mage). Other
   `T6-A2` objects: the queue panel
   (`test_t6_a2_html_and_json_report_the_same_queue_numbers`), the review
   queue (`test_t6_a2_html_and_json_report_the_same_review_queue_numbers`),

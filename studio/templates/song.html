@@ -178,6 +178,34 @@
     {% endif %}
   </div>
 
+  <form id="audio-repair-form" method="post" action="/songs/{{ song.id }}/audio/generate"
+        class="stack-form">
+    <input type="hidden" name="tags" value="{{ song.style_text or 'repair' }}">
+    <details class="disclose">
+      <summary>Replace a span &mdash; cut from the middle</summary>
+      <p class="hint">ffmpeg removes the span, ACE-Step writes a bridge, seams
+        crossfade. The seconds box is ignored; the bridge is the gap plus
+        {{ "%.2f"|format(splice_eaten_secs) }}s eaten by the two crossfades.</p>
+      <div class="row">
+        <label>From <input type="number" name="bridge_start" min="0" step="0.1"
+                           placeholder="seconds"></label>
+        <label>To <input type="number" name="bridge_end" min="0" step="0.1"
+                         placeholder="seconds"></label>
+      </div>
+      <button type="submit" class="secondary">Replace span</button>
+    </details>
+    <details class="disclose">
+      <summary>Re-synthesise from the current audio</summary>
+      <p class="warn">Feeds the whole current track in. It is a new take, not a
+        patch. Denoise must be below 1.0.</p>
+      <div class="row">
+        <label><input type="checkbox" name="from_current" value="1"> Use the current audio as the source</label>
+        <label>Denoise <input type="number" name="denoise" value="0.5" min="0.05" max="0.95" step="0.05"></label>
+      </div>
+      <button type="submit" class="secondary">Re-synthesise</button>
+    </details>
+  </form>
+
   {% if audio_edits %}
   <h3>Edits</h3>
   <table class="list">
@@ -209,59 +237,14 @@
 
 <details class="card song-fold" id="fold-gen-audio">
   <summary>
-    <h2>Generate audio</h2>
+    <h2>Takes</h2>
     <span class="muted">{% if takes %}{{ takes|length }} take{{ "" if takes|length == 1 else "s" }}{% else %}no takes{% endif %}</span>
   </summary>
-  <p class="hint">
-    {% if audio_model %}<code>{{ audio_model.label }}</code> &mdash; {% endif %}
-    writes NEW music from style tags and optional lyrics. It is a generator, not an
-    editor: <strong>it cannot cut a region out of this track.</strong> Re-synthesising
-    from the current audio replaces the whole thing, not a span of it, because no
-    backend publishes a region or mask node. Trimming and fading stay with
-    &ldquo;Edit audio&rdquo; above, which is deterministic ffmpeg and touches nothing else.
-    Takes are kept as candidates; picking one records the pick and does not
-    write over this song&rsquo;s audio.</p>
-  <form id="audio-gen-form" method="post" action="/songs/{{ song.id }}/audio/generate"
-        class="stack-form">
-    <label>Style tags
-      <input type="text" name="tags" maxlength="600" required
-             placeholder="dark synthwave, driving bassline, female vocal, 120 bpm">
-      <span class="muted">Musical style tokens, comma separated. Not a scene description.</span>
-    </label>
-    <label>Lyrics <span class="muted">(optional)</span>
-      {% from "_macros.html" import versioned_prompt %}
-      {{ versioned_prompt("lyrics", 4, audio_lyrics_box if audio_lyrics_box is defined else {"versions": [], "text": "", "current_id": none}, "song:" ~ song.id, "audio_gen_lyrics", "", "[verse]") }}
-    </label>
-    <div class="row">
-      <label>Seconds <input type="number" name="seconds" value="30" min="1" max="240" step="1"></label>
-      <label>Takes <input type="number" name="n" value="1" min="1" max="4" step="1"></label>
-      <label>Seed <input type="text" name="seed" placeholder="blank = random"></label>
-    </div>
-    <details class="disclose">
-      <summary>Replace a span &mdash; cut from the middle</summary>
-      <p class="hint">The one thing that really does cut from the middle: ffmpeg removes
-        the span, ACE-Step writes a bridge to fill it, and the seams are crossfaded so
-        the join does not click. The bridge is generated slightly longer than the gap
-        because {{ "%.2f"|format(splice_eaten_secs) }}s of it is eaten by the two crossfades, so
-        the track comes back the length it went in. The seconds box above is ignored.</p>
-      <div class="row">
-        <label>From <input type="number" name="bridge_start" min="0" step="0.1"
-                           placeholder="seconds"></label>
-        <label>To <input type="number" name="bridge_end" min="0" step="0.1"
-                         placeholder="seconds"></label>
-      </div>
-    </details>
-    <details class="disclose">
-      <summary>Re-synthesise from the current audio</summary>
-      <p class="warn">This does not repair a section. It feeds the whole current track in
-        at the denoise below and returns a whole new one.</p>
-      <div class="row">
-        <label><input type="checkbox" name="from_current" value="1"> Use the current audio as the source</label>
-        <label>Denoise <input type="number" name="denoise" value="1.0" min="0.05" max="1.0" step="0.05"></label>
-      </div>
-    </details>
-    <button type="submit">Generate take</button>
-  </form>
+  <p class="hint">New music is a new song &mdash; use
+    <a href="/media#new-song">Media &rarr; New Song</a>.
+    Replace a span or re-synthesise <em>this</em> track under Edit audio above.
+    Takes already on this song stay here; picking one does not overwrite the
+    uploaded original.</p>
 
   {% if takes %}
   <h3>Takes</h3>

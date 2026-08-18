@@ -133,6 +133,11 @@ HTML and JSON report the same numbers and `kind:id` keys (`T6-A2`). The bag
 list is T8-16; pick on take rows is T8-2 (form when not picked, tag when
 picked). Use of edits stays on the edit card.
 
+The topbar **Media** item (`GET /media`) is a different surface: New Song
+(`POST /media/songs` → song row + `audio` job with `as_new_song`) and New
+Image (`POST /media/images` → `t2i` job; album look retrieved into the
+prompt; lands `assets.kind=t2i`). It does not replace T8-16.
+
 ## 3. TRD-9 — testing what already works
 
 ### 3.1 The seam is already right

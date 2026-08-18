@@ -74,9 +74,10 @@ def test_uiux_nav_html_and_json_share_one_list(monkeypatch):
     assert (_PROBE_HREF, _PROBE_LABEL) in json_pairs, (
         f"probe missing from /api/nav: {json_pairs}")
 
-    # Baseline eight still present and in today's order before the probe.
+    # Baseline destinations stay in today's order before the probe.
     expected_base = [
         ("/", "Library"),
+        ("/media", "Media"),
         ("/anchors", "Anchors"),
         ("/playlists", "Playlists"),
         ("/sets", "Sets"),
@@ -85,5 +86,5 @@ def test_uiux_nav_html_and_json_share_one_list(monkeypatch):
         ("/jobs", "Jobs"),
         ("/config", "Config"),
     ]
-    assert html_pairs[:8] == expected_base, html_pairs[:8]
-    assert html_pairs[8] == (_PROBE_HREF, _PROBE_LABEL)
+    assert html_pairs[:9] == expected_base, html_pairs[:9]
+    assert html_pairs[9] == (_PROBE_HREF, _PROBE_LABEL)

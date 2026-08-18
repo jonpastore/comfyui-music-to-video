@@ -91,7 +91,6 @@ def test_t8_2_use_is_not_the_pick_and_both_takes_stay_listed():
     after the pick. The Use route on an audio_gen asset is not the pick.
     """
     import app as appmod
-    from urllib.parse import quote
 
     from fastapi.testclient import TestClient
 
@@ -136,7 +135,7 @@ def test_t8_2_use_is_not_the_pick_and_both_takes_stay_listed():
 
     for take in rows.values():
         assert os.path.isfile(take["path"])
-        src = "/media/" + quote(os.path.realpath(take["path"]), safe="/")
+        src = appmod.media_url(take["path"])
         assert src in page.text
 
 

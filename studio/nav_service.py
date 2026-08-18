@@ -11,6 +11,7 @@ No FastAPI import — same rule as library_service (T6-A3).
 # template. Labels and hrefs are the operator-facing contract.
 LINKS = [
     {"href": "/", "label": "Library"},
+    {"href": "/media", "label": "Media"},
     {"href": "/anchors", "label": "Anchors"},
     {"href": "/playlists", "label": "Playlists"},
     {"href": "/sets", "label": "Sets"},
@@ -24,7 +25,7 @@ LINKS = [
 def links():
     """Topbar entries for base.html and GET /api/nav.
 
-    Returns a list of {href, label}. Template hardcoding the old eight
+    Returns a list of {href, label}. Template hardcoding the old
     links misses a monkeypatched probe (test_uiux_nav.py).
     """
     return list(LINKS)

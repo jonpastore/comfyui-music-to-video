@@ -1653,6 +1653,52 @@ def h_artwork(args, progress):
     return {"path": shown}
 
 
+@jobs.handler("t2i")
+def h_t2i(args, progress):
+    """Local text-to-image for Media → New Image. Not Mage."""
+    album = (args.get("album") or "").strip()
+    parts = []
+    if album:
+        prof = album_profile(album)
+        parts += [prof.get("identity"), prof.get("wardrobe"), prof.get("body"),
+                  prof.get("style_text"), prof.get("world")]
+    parts.append(args["prompt"])
+    composed = " ".join(x for x in parts if x and str(x).strip())
+    try:
+        tiers.check_text(composed, "image prompt")
+    except ValueError as e:
+        raise RuntimeError(str(e)) from e
+    guard = tiers.compose_guardrail(args.get("tier") or "xxx", album)
+    lora = 1.0 if args.get("lightning") else 0.0
+    paths = pipeline.gen_artwork(
+        safe_name(f"t2i_{int(time.time())}"), composed, progress,
+        anchor_path=args.get("anchor_path"),
+        guard=guard, n=int(args.get("n") or 1),
+        size=int(args.get("width") or 1024),
+        height=int(args.get("height") or args.get("width") or 1024),
+        lora_strength=lora)
+    if not paths:
+        raise RuntimeError("the image render produced no file")
+    now = time.time()
+    dest_dir = os.path.join(db.DATA, "t2i")
+    os.makedirs(dest_dir, exist_ok=True)
+    kept = []
+    for i, src in enumerate(paths):
+        dest = os.path.join(dest_dir, f"t2i_{int(now * 1000)}_{i}.png")
+        shutil.copy2(src, dest)
+        db.run(
+            "INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+            None, "t2i", dest,
+            json.dumps({"album": album, "prompt": args["prompt"], "composed": composed,
+                        "model": args.get("model"), "width": args.get("width"),
+                        "height": args.get("height"),
+                        "lightning": bool(args.get("lightning"))}),
+            now)
+        kept.append(dest)
+    progress(f"{len(kept)} image(s) in {dest_dir}")
+    return {"path": kept[0], "n": len(kept)}
+
+
 @jobs.handler("fix_ref")
 def h_fix_ref(args, progress):
     """Repair one reference frame. The result is another CANDIDATE for that
@@ -1890,6 +1936,16 @@ def h_audio(args, progress):
                 db.assign_take_voice(tid, voice_id, start_secs=0,
                                      end_secs=args["seconds"])
         kept.append(out)
+    # New Song (Media): there is no upload. The first generated take IS the
+    # original. Pick still does not overwrite a song that already has audio
+    # (T8-2). Opt-in via as_new_song so existing-song takes stay candidates.
+    if (sid and args.get("as_new_song") and kept and origin == "generated"
+            and song and not song["mp3_path"]):
+        db.run("UPDATE songs SET mp3_path=?, duration=? WHERE id=?",
+               kept[0], args["seconds"], sid)
+        db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+               sid, "audio_original", kept[0], None, time.time())
+        progress("first take is this song's original")
     progress(f"{len(kept)} take(s) kept in {outdir}")
     return {"path": kept[0], "takes": len(kept)}
 
@@ -2239,6 +2295,136 @@ async def create_song(request: Request, title: str = Form(...), album: str = For
         # redirect off to the song page mid-upload of the next file
         return JSONResponse({"song_id": sid, "title": title.strip() or slug})
     return RedirectResponse(f"/songs/{sid}", status_code=303)
+
+
+@app.get("/media", response_class=HTMLResponse)
+def media_page(request: Request):
+    """Create surface: New Song (ACE-Step) and New Image (local t2i)."""
+    albums = [r["name"] for r in db.q(
+        "SELECT name FROM playlists WHERE kind='playlist' ORDER BY name") if r["name"]]
+    default = models.default_for("t2i") or models.default_for("artwork")
+    t2i_models = []
+    seen = set()
+    live = {}
+    try:
+        live = {e["key"]: e for e in models.catalog()}
+    except Exception:
+        live = {}
+    for key, spec in models.CATALOG.items():
+        if spec.get("role") not in ("t2i", "artwork") or key in seen:
+            continue
+        if key == "z_image_t2i":
+            continue
+        seen.add(key)
+        row = live.get(key) or {}
+        t2i_models.append({
+            "key": key, "label": spec["label"],
+            "available": row.get("available", True),
+            "default": key == default,
+        })
+    recent = db.q(
+        "SELECT * FROM assets WHERE kind='t2i' ORDER BY id DESC LIMIT 24")
+    images = []
+    for row in recent:
+        meta = db.jset(row)
+        images.append({
+            "id": row["id"], "path": row["path"],
+            "label": (meta.get("prompt") or "t2i")[:48],
+        })
+    return templates.TemplateResponse(request, "media.html", {
+        "albums": albums, "t2i_models": t2i_models, "images": images,
+    })
+
+
+@app.post("/media/songs")
+def media_new_song(request: Request, title: str = Form(...), album: str = Form(""),
+                   tags: str = Form(""), lyrics: str = Form(""),
+                   seconds: float = Form(30.0), n: int = Form(1),
+                   seed: str = Form(""), explicit: bool = Form(False)):
+    """Create a song from ACE-Step. First take becomes the original."""
+    tags = " ".join((tags or "").split())
+    if not tags:
+        raise HTTPException(400, "a song needs at least one style tag")
+    if len(tags) > MAX_TAGS:
+        raise HTTPException(400, f"tags is {len(tags)} characters; keep it under {MAX_TAGS}")
+    if len(lyrics or "") > MAX_LYRICS:
+        raise HTTPException(400, f"lyrics is {len(lyrics)} characters; keep it under {MAX_LYRICS}")
+    if not 1.0 <= seconds <= MAX_AUDIO_SECS:
+        raise HTTPException(400, f"seconds must be between 1 and {MAX_AUDIO_SECS:g}")
+    if not 1 <= n <= MAX_AUDIO_TAKES:
+        raise HTTPException(400, f"takes must be between 1 and {MAX_AUDIO_TAKES}")
+    seed_n = None
+    if (seed or "").strip():
+        try:
+            seed_n = int(seed)
+        except ValueError:
+            raise HTTPException(400, "seed must be a whole number, or blank for random") from None
+    slug = unique_slug(title)
+    sid = db.upsert_song(
+        slug, title=title.strip() or slug, album=(album or "").strip(),
+        style_text=tags, explicit=int(explicit))
+    if (lyrics or "").strip():
+        db.store_lyrics(sid, lyrics, source="supplied")
+        try:
+            prompts.touch(f"song:{sid}", "audio_gen_lyrics", lyrics, "saved")
+        except ValueError:
+            pass
+        try:
+            prompts.touch(f"song:{sid}", "song_lyrics", lyrics, "saved")
+        except ValueError:
+            pass
+    args = {"song_id": sid, "tags": tags, "lyrics": lyrics or "",
+            "seconds": float(seconds), "n": int(n), "as_new_song": True}
+    if seed_n is not None:
+        args["seed"] = seed_n
+    jid = jobs.enqueue("audio", args, song_id=sid)
+    return json_or_redirect(
+        request, {"job_id": jid, "kind": "audio", "song_id": sid},
+        f"/songs/{sid}")
+
+
+@app.post("/media/images")
+def media_new_image(request: Request, prompt: str = Form(...), album: str = Form(""),
+                    model: str = Form(""), size: str = Form("896x1216"),
+                    n: int = Form(1), attach_her: str = Form(""),
+                    lightning: str = Form("")):
+    """Queue local t2i. Album look is retrieved into the prompt."""
+    prompt = (prompt or "").strip()
+    if not prompt:
+        raise HTTPException(400, "an image needs a prompt")
+    try:
+        tiers.check_text(prompt, "image prompt")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    n = max(1, min(int(n or 1), 4))
+    width, height = 896, 1216
+    if "x" in (size or ""):
+        try:
+            w_s, h_s = size.lower().split("x", 1)
+            width, height = int(w_s), int(h_s)
+        except ValueError:
+            raise HTTPException(400, "size must look like 896x1216") from None
+    album = (album or "").strip()
+    key = model or models.default_for("t2i") or models.default_for("artwork")
+    spec = models.CATALOG.get(key) or {}
+    if spec.get("role") not in ("t2i", "artwork") or key == "z_image_t2i":
+        raise HTTPException(400, f"'{key}' is not a text-to-image model that can render yet")
+    anchor_path = None
+    if attach_her:
+        if not album:
+            raise HTTPException(400, "pick an album to attach her identity front")
+        front = chosen_anchor("album", album, "xxx") or chosen_anchor("album", album, "r")
+        if not front:
+            raise HTTPException(400, f"no chosen identity front on {album!r}")
+        anchor_path = front["path"]
+    jid = jobs.enqueue("t2i", {
+        "prompt": prompt, "album": album, "model": key,
+        "width": width, "height": height, "n": n,
+        "anchor_path": anchor_path, "lightning": bool(lightning),
+        "tier": "xxx" if album else "r",
+    })
+    return json_or_redirect(
+        request, {"job_id": jid, "kind": "t2i"}, "/media#new-image")
 
 
 @app.post("/songs/analyse-all")

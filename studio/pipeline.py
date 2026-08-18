@@ -1563,7 +1563,7 @@ def fix_ref(slug, tier, clip_idx, mode, image_path, seed, progress=None,
 
 
 def gen_artwork(slug, prompt, progress=None, anchor_path=None, source_path=None,
-                guard="", n=1, size=1024):
+                guard="", n=1, size=1024, height=None, lora_strength=None):
     """Album cover from the album look. Three modes, one workflow:
 
       neither given   text-to-image. Every image input on
@@ -1580,10 +1580,13 @@ def gen_artwork(slug, prompt, progress=None, anchor_path=None, source_path=None,
     """
     prefix = f"artwork_{slug}"
     refs = [p for p in (anchor_path, source_path) if p]
+    h = height if height else size
     args = ["--n", str(n), "--prefix", prefix, "--view", "front",
-            "--width", str(size), "--height", str(size),
+            "--width", str(size), "--height", str(h),
             "--prompt", prompt, "--guardrail", guard,
             "--images", ",".join(install_input(p) for p in refs)]
+    if lora_strength is not None:
+        args += ["--lora-strength", str(lora_strength)]
     with tempfile.TemporaryDirectory() as wf_dir:
         _run_script("make_anchor.py", [*args, "--outdir", wf_dir], progress)
         return _submit_and_collect(wf_dir, prefix, "*.png", progress)

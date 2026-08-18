@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Media · Meow P Studio{% endblock %}
+{% block content %}
+<h1>Media</h1>
+<p class="hint">New music is a new song. New pictures are local text-to-image
+  (Qwen / Z-Image + LoRAs), not Mage. Upload an existing mp3 from the
+  <a href="/">Library</a>. Repair a span of a track you already have on that
+  song&rsquo;s Edit audio fold.</p>
+
+<div class="row-2col">
+<section class="card" id="new-song">
+  <h2>New Song</h2>
+  <p class="hint">ACE-Step writes the track, then this becomes a Library song
+    (first take is the original). Style tags are musical tokens, not a scene.</p>
+  <form method="post" action="/media/songs" class="stack-form">
+    <div class="field-row">
+      <label>Title <input type="text" name="title" required maxlength="200"></label>
+      <label>Album
+        <input type="text" name="album" list="media-albums" autocomplete="off">
+        <datalist id="media-albums">
+          {% for a in albums %}<option value="{{ a }}"></option>{% endfor %}
+        </datalist>
+      </label>
+    </div>
+    <label>Style tags
+      <input type="text" name="tags" maxlength="600" required
+             placeholder="dark synthwave, driving bassline, female vocal, 120 bpm">
+    </label>
+    <label>Lyrics <span class="muted">(optional)</span>
+      <textarea name="lyrics" rows="4" maxlength="10000" placeholder="[verse]"></textarea>
+    </label>
+    <div class="row">
+      <label>Seconds <input type="number" name="seconds" value="30" min="1" max="240" step="1"></label>
+      <label>Takes <input type="number" name="n" value="1" min="1" max="4" step="1"></label>
+      <label>Seed <input type="text" name="seed" placeholder="blank = random"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="explicit" value="true"> Explicit lyrics</label>
+    <button type="submit">Generate song</button>
+  </form>
+</section>
+
+<section class="card" id="new-image">
+  <h2>New Image</h2>
+  <p class="hint">Local text-to-image. Pick an album to pull identity / body /
+    wardrobe / premise into the prompt. Attach her front to condition on the
+    photographs. Lightning LoRA stays off unless you tick it.</p>
+  <form method="post" action="/media/images" class="stack-form">
+    <label>Prompt
+      <textarea name="prompt" rows="5" required
+                placeholder="standing three-quarter, tail aside, grey studio sheet"></textarea>
+    </label>
+    <div class="field-row">
+      <label>Album
+        <input type="text" name="album" list="media-albums" autocomplete="off"
+               placeholder="Street Cats">
+      </label>
+      <label>Model
+        <select name="model">
+          {% for m in t2i_models %}
+          <option value="{{ m.key }}" {% if m.default %}selected{% endif %}
+                  {% if not m.available %}disabled{% endif %}>
+            {{ m.label }}{% if not m.available %} · unavailable{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="field-row">
+      <label>Size
+        <select name="size">
+          <option value="896x1216">896×1216 portrait (sheets)</option>
+          <option value="1024x1024">1024×1024 square (covers)</option>
+          <option value="1216x896">1216×896 landscape</option>
+        </select>
+      </label>
+      <label>Images <input type="number" name="n" value="1" min="1" max="4"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="attach_her" value="1">
+      Attach the album identity front</label>
+    <label class="check"><input type="checkbox" name="lightning" value="1">
+      Lightning LoRA (faster, worse identity)</label>
+    <button type="submit">Generate image</button>
+  </form>
+</section>
+</div>
+
+{% if images %}
+<h2>Recent images</h2>
+<div class="media-strip">
+  {% for im in images %}
+  <figure class="ref-frame clip-tile">
+    <div class="still-thumb">
+      <a href="{{ media_url(im.path) }}" target="_blank" rel="noopener">
+        <img src="{{ media_url(im.path) }}?w=360" alt="" decoding="async">
+      </a>
+    </div>
+    <figcaption>{{ im.label }}</figcaption>
+  </figure>
+  {% endfor %}
+</div>
+<p class="hint">Assign a keeper from <a href="/anchors">Anchors</a>
+  (upload / assign as sheet). This page does not stamp a pose.</p>
+{% endif %}
+{% endblock %}
