@@ -218,14 +218,33 @@ def scene_cast(scene, cast):
 MAX_REF_IMAGES = 3
 
 
+def _studio_on_path():
+    """Directory that contains location_plates.py.
+
+    Repo checkout: <root>/build_refs.py + <root>/studio/location_plates.py.
+    Live deploy:   scripts/build_refs.py + app/location_plates.py.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    parent = os.path.dirname(here)
+    for d in (os.path.join(here, "studio"),
+              os.path.join(parent, "app"),
+              os.path.join(parent, "studio"),
+              here):
+        if os.path.isfile(os.path.join(d, "location_plates.py")):
+            if d not in sys.path:
+                sys.path.insert(0, d)
+            return d
+    return None
+
+
 def refuse_location_plate_identity(*paths):
     """T7-22: a location plate is never --anchor / image1."""
     wanted = [p for p in paths if p]
     if not wanted:
         return
-    studio = os.path.join(os.path.dirname(os.path.abspath(__file__)), "studio")
-    if studio not in sys.path:
-        sys.path.insert(0, studio)
+    if _studio_on_path() is None:
+        raise ModuleNotFoundError(
+            "location_plates.py not next to this script or in ../app")
     import location_plates
     for path in wanted:
         location_plates.refuse_as_identity(path)

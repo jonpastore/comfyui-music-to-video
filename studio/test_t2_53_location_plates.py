@@ -120,6 +120,18 @@ def test_t2_53_refuses_character_sheet_and_anchor_ref_as_plate():
     assert location_plates.get_plate("album", album, "neon alley") == other
 
 
+def test_t7_22_finds_location_plates_from_live_scripts_layout(tmp_path, monkeypatch):
+    """Live deploy: scripts/build_refs.py, app/location_plates.py. Mutation: only
+    look in scripts/studio → red (jobs 290/291)."""
+    scripts = tmp_path / "scripts"
+    app = tmp_path / "app"
+    scripts.mkdir()
+    app.mkdir()
+    (app / "location_plates.py").write_text("x = 1\n")
+    monkeypatch.setattr(build_refs, "__file__", str(scripts / "build_refs.py"))
+    assert build_refs._studio_on_path() == str(app)
+
+
 def test_t7_22_build_refs_refuses_location_plate_as_anchor(tmp_path, monkeypatch):
     """A stored location plate cannot be --anchor or workflow image1."""
     stamp = f"t253-id-{time.time_ns()}"
