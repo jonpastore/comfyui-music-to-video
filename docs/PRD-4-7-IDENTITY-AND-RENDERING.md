@@ -248,7 +248,10 @@ is the keeper; the full-size lightbox classifies the open sheet onto
 that roster. The album lead’s gallery tab is a renameable name
 (default **Lead**), not the word protagonist. **Generate…** lists the actors Mage needs a reference
 image for (the sheet’s person, plus the album lead on a partnered
-stance such as cowgirl) above the grey-studio sheet prompt. Uploading a sheet stays on that roster tier — it does
+stance such as cowgirl, kneeling look-back, or supine) above the grey-studio sheet prompt.
+Unmapped leftover auto-bind and the album-coverage keeper dropdown use
+that same actor pool, so a Panther-lead partnered scene can take a
+Meow P / ensemble keeper without generating a new sheet. Uploading a sheet stays on that roster tier — it does
 not refresh onto G because G has more rows. "Use as reference" is
 not on the tile.
 

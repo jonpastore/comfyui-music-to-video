@@ -1197,8 +1197,9 @@ edit, and delete icons are the shared `glyph_save` / `glyph_edit` /
 `glyph_delete` macros. Transitions edit in the row. Remove confirms. The roster is a one-line grid: thumb (or a dashed `.pose-ph` when
 there is no sheet), **character · pose**, then songs, then the sheet
 dropdown, then a save icon (no “Keeper” label). A crouch for Meow P
-and a crouch for Tiger are two rows; the dropdown only lists that
-person's sheets. When more than one lead appears, character tabs
+and a crouch for Tiger are two rows; the dropdown lists that
+person's sheets, and on a partnered stance (cowgirl, kneeling,
+supine, …) the album lead / ensemble keepers too. When more than one lead appears, character tabs
 filter the list. Missing rows sort first so they are
 addressed before filled ones; within that, character then
 pose name. Keeper select + save sit in a fixed 16rem
@@ -1213,7 +1214,7 @@ prompt that is a **grey-studio character sheet**, not the
 scene still (`#pose-brief`). Above the prompt, **Actors**
 lists every body Mage needs a reference image for: the
 sheet’s person, plus the album lead when the stance is
-partnered (cowgirl, doggy / all fours, oral, missionary /
+partnered (cowgirl, kneeling, doggy / all fours, oral, missionary /
 supine, bent, side, spit-roast). The sheet being generated
 is marked **this sheet**. Click fetches
 `GET /api/albums/{album}/sheet-prompt` so a stale tab

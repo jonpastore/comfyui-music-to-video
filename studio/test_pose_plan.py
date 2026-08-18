@@ -833,3 +833,82 @@ def test_bind_route_json_reports_source():
         assert "lazy-src" in page
         assert "data-src=" in page
         assert "pose-row" in page
+
+
+def test_scene_actors_kneel_includes_album_lead():
+    people = [{"id": None, "name": "Meow P"}, {"id": 2, "name": "Panther"}]
+    scene = {"pose": "kneeling look-back",
+             "characters": [{"name": "Panther", "role": "lead"}]}
+    got = pose_plan.scene_actors(scene, people)
+    assert [p["name"] for p in got] == ["Meow P", "Panther"]
+
+
+def test_panther_lead_partnered_binds_meowp_keepers():
+    """Cowgirl / kneeling look-back / supine on a Panther-only scene
+    still match Meow P keepers. No new GPU sheet."""
+    with TestClient(appmod.app) as client:
+        album = f"Partnered Bind {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        pl = db.one("SELECT id FROM playlists WHERE name=?", album)["id"]
+        db.run("UPDATE playlists SET style_text=? WHERE id=?",
+               "Meow P — alley nights", pl)
+        client.post(f"/playlists/{pl}/characters",
+                    data={"name": "Panther", "role": "partner"})
+        panther = db.one("SELECT * FROM characters WHERE scope_value=? AND name=?",
+                         album, "Panther")
+        song = _upload_song(client, "Partnered Bind Song", album=album)
+        dest = os.path.join(db.DATA, "pose-plan")
+        os.makedirs(dest, exist_ok=True)
+        paths = {}
+        for key in ("cow", "kneel", "supine", "stand"):
+            paths[key] = os.path.join(dest, f"pb-{key}-{time.time_ns()}.png")
+            open(paths[key], "wb").write(_png_bytes())
+        cow = _sheet(album, "xxx", "pose_cow", paths["cow"], "cowgirl nude", nude=True)
+        kneel = _sheet(album, "xxx", "pose_kn", paths["kneel"],
+                       "kneeling looking back nude", nude=True)
+        supine = _sheet(album, "xxx", "pose_su", paths["supine"],
+                        "supine nude", nude=True)
+        stand = _sheet(album, "xxx", "pose_st", paths["stand"], "standing side erect")
+        db.run("UPDATE anchors SET character_id=? WHERE id=?",
+               panther["id"], stand["id"])
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        json.dump({
+            "title": "T", "album": album, "version": "xxx",
+            "character_reference": "Meow P",
+            "scenes": [
+                {"scene_number": 1, "name": "Ride", "pose": "cowgirl",
+                 "image_prompt": "she rides facing camera",
+                 "characters": [{"name": "Panther", "role": "lead"}],
+                 "duration_guidance": "4s"},
+                {"scene_number": 2, "name": "Look", "pose": "kneeling look-back",
+                 "image_prompt": "kneeling look-back over her shoulder",
+                 "characters": [{"name": "Panther", "role": "lead"}],
+                 "duration_guidance": "4s"},
+                {"scene_number": 3, "name": "Floor", "pose": "supine",
+                 "image_prompt": "supine on the wet floor",
+                 "characters": [{"name": "Panther", "role": "lead"}],
+                 "duration_guidance": "4s"},
+            ],
+        }, open(jp, "w"))
+        md = os.path.join(outdir, f"{song['slug']}_xxx.md")
+        open(md, "w").write("# sb\n")
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               song["id"], "xxx", jp, md, 3, time.time())
+        p = pose_plan.plan(song, "xxx")
+        by_pose = {r["pose"]: r for r in p["scenes"]}
+        assert by_pose["cowgirl"]["sheet_id"] == cow["id"], by_pose["cowgirl"]
+        assert by_pose["kneeling look-back"]["sheet_id"] == kneel["id"], (
+            by_pose["kneeling look-back"])
+        assert by_pose["supine"]["sheet_id"] == supine["id"], by_pose["supine"]
+        assert all(r["source"] == "auto" for r in p["scenes"])
+        cov = pose_plan.album_coverage(album, "xxx")
+        assert cov["n_missing"] == 0, [
+            (g["label"], g["character_label"], g["sheet_id"]) for g in cov["needed"]]
+        for g in cov["needed"]:
+            ids = {s["id"] for s in g["sheets"]}
+            assert cow["id"] in ids, (g["label"], ids)
+            assert kneel["id"] in ids, (g["label"], ids)
+            assert supine["id"] in ids, (g["label"], ids)

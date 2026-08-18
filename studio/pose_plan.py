@@ -58,6 +58,7 @@ _MIN_SCORE = 0.34
 # Stance that is not a solo still — Mage needs a ref for each body.
 _PARTNERED = frozenset({
     "cowgirl", "oral", "spit", "supine", "allfours", "bent", "side",
+    "kneel",
 })
 
 # Always more than one body, even when the operator never stamped actors.
@@ -400,6 +401,12 @@ def scene_actors(scene, people, pose=None):
     return [lead0] + list(leads)
 
 
+def _sheet_pool(sheets, people):
+    """Sheets this bind may use. Lead id is None (album protagonist)."""
+    ids = {p.get("id") for p in people}
+    return [s for s in sheets if s["character_id"] in ids]
+
+
 def _append_people(dst, extra):
     seen = {(p.get("id"), (p.get("name") or "").lower()) for p in dst}
     for p in extra or []:
@@ -530,7 +537,7 @@ def plan(song, tier):
         elif saved:
             source = "missing"
         else:
-            pool = [s for s in sheets if s["character_id"] in {p["id"] for p in who}]
+            pool = _sheet_pool(sheets, actors)
             sheet, score = match_sheet(need, pool, prefer_nude=prefer_nude)
             if sheet:
                 source = "auto"
@@ -710,8 +717,7 @@ def album_coverage(album, tier):
             "character_name": row["character_name"] or _album_lead_name(album),
         })
     for g in needed:
-        ids = {p.get("id") for p in g["characters"]}
-        g["sheets"] = [s for s in sheets if s["character_id"] in ids]
+        g["sheets"] = _sheet_pool(sheets, g.get("actors") or g["characters"])
     people_out = []
     for person in people:
         n = sum(1 for g in needed
