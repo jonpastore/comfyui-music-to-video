@@ -667,7 +667,10 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    Scene-scoped `build_song --only` skips T2-13e. Scene preview is plate / stills / clips. Reroll plants
    `.ref-frame.clip-tile` shimmer cards (same 190px / 3:4 frame as a
    finished still). Render clip plants the same cards in
-   `.media-strip.scene-clips` (`paintClipPlaceholders`). The strip is
+   `.media-strip.scene-clips` (`paintClipPlaceholders`). A leftover
+   shimmer is cleared when that clip job is done/failed/cancelled
+   (`sweepPendingClipCards` reads `/jobs/{id}`; the chip kind may be
+   QC). The strip is
    also filled from `jobs` (`clip_pending` / `clip_failed`) so the
    chip going QC does not blank the row. A landed take is a
    reserved 3:4 `.still-thumb`, `<img class="clip-poster">` from the

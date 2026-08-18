@@ -822,6 +822,8 @@ document.addEventListener("DOMContentLoaded", function () {
   initRunHistory();
   initAnchorPlan();
   hydrateLazy(document);
+  sweepPendingClipCards();
+  setInterval(sweepPendingClipCards, 3000);
 });
 
 // Off-screen plates / stills / clips stay as data-src until they approach
@@ -2212,6 +2214,9 @@ document.addEventListener("submit", function (e) {
     var jid = d.job_id || (d.job_ids && d.job_ids[0]);
     if (!jid) return;
     watchJob(jid, "song-status", function (job) {
+      if (job.status === "failed" || job.status === "cancelled") {
+        clearClipPlaceholders(jid);
+      }
       if (job.status === "done" || job.status === "failed" ||
           job.status === "cancelled") refreshSceneRow(form);
     });
@@ -2692,6 +2697,44 @@ function clearClipPlaceholders(jobId, root) {
   });
 }
 
+var _pendingClipAsk = {};
+function sweepPendingClipCards() {
+  var cards = document.querySelectorAll(".clip-pending[data-job-id]");
+  if (!cards.length) return;
+  var seen = {};
+  Array.prototype.forEach.call(cards, function (fig) {
+    var jid = fig.getAttribute("data-job-id");
+    if (!jid || seen[jid]) return;
+    seen[jid] = true;
+    var now = Date.now();
+    if (_pendingClipAsk[jid] && now - _pendingClipAsk[jid] < 2000) return;
+    _pendingClipAsk[jid] = now;
+    var scene = fig.closest(".scene");
+    fetch("/jobs/" + jid, {headers: {Accept: "application/json"}})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (job) {
+        if (!job) return;
+        if (job.status === "failed" || job.status === "cancelled") {
+          clearClipPlaceholders(jid);
+          if (scene) {
+            refreshSceneEl(scene, scene.getAttribute("data-song"),
+                           scene.getAttribute("data-tier"), jid);
+          }
+          return;
+        }
+        if (job.status === "done") {
+          if (scene) {
+            refreshSceneEl(scene, scene.getAttribute("data-song"),
+                           scene.getAttribute("data-tier"), jid);
+          } else {
+            clearClipPlaceholders(jid);
+          }
+        }
+      })
+      .catch(function () {});
+  });
+}
+
 function songIdFromForm(form) {
   var page = document.getElementById("song-page");
   if (page && page.getAttribute("data-song-id")) return page.getAttribute("data-song-id");
@@ -2802,6 +2845,7 @@ function sceneElForSceneNum(tier, sceneNum) {
 }
 
 function applyClipsChip(chip) {
+  sweepPendingClipCards();
   if (!chip || chip.getAttribute("data-kind") !== "clips") return;
   var jid = chip.getAttribute("data-job-id");
   var status = chip.getAttribute("data-status");

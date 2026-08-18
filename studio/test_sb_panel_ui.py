@@ -107,6 +107,8 @@ def test_sb_panel_toolbar_and_closed_json():
         assert "function paintClipPlaceholders" in js
         assert "clip-frame clip-tile clip-pending" in js
         assert "el.closest(\".clip-frame\")" in js
+        assert "function sweepPendingClipCards" in js
+        assert "clearClipPlaceholders(jid)" in js.split("function sweepPendingClipCards", 1)[1]
         css = open(os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
         assert "clip-play" in css
         assert ".clip-frame .still-thumb" in css
