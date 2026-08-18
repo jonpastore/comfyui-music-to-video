@@ -2,10 +2,12 @@
 
 docs/TRD-5 §5a: window k of a ≤15s LTX take skips k*LEN frames at
 force_rate=FPS via LoadVideosFromFolder. Window 2 of a 15s take does
-not start at frame 0. T5-12 hop emit in main() is not this slice.
+not start at frame 0. main() hop emit passes clip_chain_plan's skip
+into workflow().
 
 Mutation: every window loads the LTX file from index 0 → red.
 """
+import json
 import os
 import sys
 
@@ -29,6 +31,27 @@ def _control_loader(wf):
              if n.get("class_type") == "LoadVideosFromFolder"]
     assert len(nodes) == 1, nodes
     return nodes[0]
+
+
+def _emit(tmp_path, monkeypatch, scenes, slug, audio_s):
+    monkeypatch.setattr(build_song, "audio_duration", lambda p: audio_s)
+    sb = {
+        "scenes": scenes,
+        "character_reference": "c",
+        "album_world_reference": "w",
+    }
+    storyboard = tmp_path / "sb.json"
+    storyboard.write_text(json.dumps(sb))
+    audio = tmp_path / "song.mp3"
+    audio.write_bytes(b"x")
+    outdir = tmp_path / "out"
+    monkeypatch.setattr(sys, "argv", [
+        "build_song.py", "--storyboard", str(storyboard),
+        "--audio", str(audio), "--slug", slug, "--outdir", str(outdir),
+        "--video-model", "ltx25",
+    ])
+    build_song.main()
+    return outdir
 
 
 def test_t5_13_helper_window_2_of_15s_does_not_skip_0():
@@ -80,3 +103,19 @@ def test_t5_13_ref_motion_stays_at_skip_0():
              if n.get("class_type") == "LoadVideosFromFolder"}
     assert by_id["20"]["inputs"]["skip_first_frames"] == 0
     assert by_id["21"]["inputs"]["skip_first_frames"] == 2 * build_song.LEN
+
+
+def test_t5_13_main_emit_window_2_of_15s_is_not_skip_0(tmp_path, monkeypatch):
+    scene = dict(SCENE, scene_number=1, length_seconds=15.0, needs_lip_sync=True)
+    hops = [p for p in build_song.clip_chain_plan([scene]) if p["model"] == "s2v"]
+    assert hops[2]["skip_first_frames"] != 0
+    outdir = _emit(tmp_path, monkeypatch, [scene], "t513", audio_s=15.0)
+    skips = []
+    for hop in hops:
+        wf = json.loads((outdir / f"clip_{hop['clip_idx']:03d}.json").read_text())
+        skip = _control_loader(wf)["inputs"]["skip_first_frames"]
+        assert skip == hop["skip_first_frames"], (hop["clip_idx"], skip, hop)
+        skips.append(skip)
+    assert skips[2] != 0, "window 2 of a 15s LTX take must not start at frame 0"
+    assert not all(s == 0 for s in skips), (
+        "main() hop emit must pass skip_first_frames from clip_chain_plan")

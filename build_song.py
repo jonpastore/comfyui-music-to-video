@@ -1255,7 +1255,8 @@ def main():
                       ref_motion=ref_motion,
                       control_video=control,
                       refine=refine,
-                      tier=tier)
+                      tier=tier,
+                      skip_first_frames=rec.get("skip_first_frames", 0))
         # Attach the save to whichever node actually produces the VIDEO, found by
         # class rather than by a per-family id table. That table was
         # `"21" if video_model == "ltx" else "17"`, so ltx25 silently took the
