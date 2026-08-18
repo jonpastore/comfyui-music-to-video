@@ -1211,7 +1211,7 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
 }
 .pose-roster-row {
   display: grid;
-  grid-template-columns: 3rem minmax(7rem, 1fr) auto auto auto;
+  grid-template-columns: 3rem minmax(7rem, 1fr) 16rem auto auto;
   align-items: center;
   gap: 0.45rem 0.7rem;
   padding: 0.45rem 0;
@@ -1248,8 +1248,15 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
   gap: 0.35rem;
   margin: 0;
   grid-column: 3;
+  width: 16rem;
+  min-width: 0;
 }
-.pose-keeper-form select { min-width: 10rem; max-width: 16rem; }
+.pose-keeper-form select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+  width: 100%;
+}
 .pose-roster-row .js-pose-brief { grid-column: 4; }
 .pose-upload { margin: 0; grid-column: 5; }
 .pose-upload .icon-btn { cursor: pointer; }

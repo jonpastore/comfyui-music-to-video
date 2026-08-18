@@ -1143,7 +1143,9 @@ and a crouch for Tiger are two rows; the dropdown only lists that
 person's sheets. When more than one lead appears, character tabs
 filter the list. Missing rows sort first so they are
 addressed before filled ones; within that, character then
-pose name. The list scrolls (`.pose-roster`
+pose name. Keeper select + save sit in a fixed 16rem
+column so a long “in use” label does not shove Save /
+Generate / upload. The list scrolls (`.pose-roster`
 `max-height: min(28rem, 50vh)`) so a hundred missing poses do not
 stretch the page. Missing poses do **not** dump as
 `Missing: crouching, …` — the count lives in the summary tag and each

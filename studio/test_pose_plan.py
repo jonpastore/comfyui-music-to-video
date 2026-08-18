@@ -303,6 +303,8 @@ def test_album_coverage_rolls_up_songs_and_clear_unsets_keeper():
         assert "pose-ph" in page or "pose-roster-open" in page
         css = open(os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
         assert ".pose-roster" in css and "overflow-y: auto" in css
+        assert "grid-template-columns: 3rem minmax(7rem, 1fr) 16rem auto auto" in css
+        assert ".pose-keeper-form {\n  display: inline-flex" in css or "width: 16rem" in css
         assert "Use as this pose" in page
         assert "Use as reference" not in page
         assert "Catatonic" not in page
