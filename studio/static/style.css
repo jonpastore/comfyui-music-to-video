@@ -311,6 +311,22 @@ a.tier-cell.has { color: var(--accent); border-color: var(--border-strong); }
 #media-player audio { width: 100%; margin-top: 0.6rem; }
 .actor-pick { margin: 0; min-width: 12rem; }
 .actor-pick .check-row { margin: 0.15rem 0 0; }
+.anchor-form-top {
+  display: grid;
+  grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.anchor-form-who,
+.anchor-form-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .anchor-form-top { grid-template-columns: 1fr; }
+}
 /* .char-rename fold removed — pencil on each tab opens #rename-char. */
 .notice {
   margin: 0.4rem 0 0;

@@ -18,7 +18,8 @@
      another view" from "the user picked a different character", and carrying a
      prompt across the latter renders one character's wording as another's. #}
   <input type="hidden" name="composed_for" value="{{ form_album }}|{{ character_id or '' }}">
-  <div class="field-row">
+  <div class="anchor-form-top">
+    <div class="anchor-form-who">
     <label>Album
       {# An album IS a playlist -- the same record, matched by the name songs
          already carry. There is no scope to choose, and the free-text box this
@@ -31,6 +32,10 @@
         <option value="">no albums yet &mdash; create one on Playlists</option>
         {% endfor %}
       </select>
+    </label>
+    <label>
+      <span class="label-text">Candidates per sheet{{ help("n") }}</span>
+      <input type="number" name="n" value="{{ last_n }}" min="1" max="8">
     </label>
     <input type="hidden" name="character_id" value="{{ character_id or '' }}">
     <fieldset class="actor-pick">
@@ -60,15 +65,8 @@
         multi-body photograph is the lock for intertwined poses — not
         three solo fronts glued together.</p>
     </fieldset>
-    <label>
-      <span class="label-text">Candidates per sheet{{ help("n") }}</span>
-      <input type="number" name="n" value="{{ last_n }}" min="1" max="8">
-    </label>
-  </div>
-
-  <details class="disclose" data-fold="tiers" open>
-    <summary>Tiers
-      <span class="muted">{% if selected_tiers %}{{ selected_tiers | join(", ") }}{% else %}none ticked{% endif %}</span></summary>
+    </div>
+    <div class="anchor-form-plan">
   <fieldset>
     <legend>Tiers &mdash; one tab, and one set of sheets, per tier</legend>
     <div class="check-row">
@@ -84,11 +82,6 @@
       {% endfor %}
     </div>
   </fieldset>
-  </details>
-
-  <details class="disclose" data-fold="views" open>
-    <summary>Views
-      <span class="muted">{% if sheet_count %}{{ sheet_count }} sheet{{ "" if sheet_count == 1 else "s" }}{% else %}none ticked{% endif %}</span></summary>
   <fieldset class="views-fieldset">
     <legend>Views &mdash; one sheet per ticked cell, per tier</legend>
     <div class="view-toolbar">
@@ -169,7 +162,8 @@
     <p class="hint"><strong>{{ sheet_count }}</strong> sheet{{ "" if sheet_count == 1 else "s" }}
       to render, each with its own candidates.</p>
   </fieldset>
-  </details>
+    </div>
+  </div>
 
   {# ---- base images: kept, not re-uploaded every time ---- #}
   {% if saved_refs %}

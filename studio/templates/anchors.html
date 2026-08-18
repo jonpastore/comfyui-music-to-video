@@ -245,13 +245,15 @@
 </section>
 {% endif %}
 
-<section class="card">
-  <h2>Generate a missing pose</h2>
+<section class="card" id="generate-pose">
+  <details class="disclose" open>
+  <summary><h2>Generate a missing pose</h2></summary>
   <p class="hint">Tick at least one <strong>tier</strong> and one <strong>view</strong>.
     Generate still mints sheets. If no base is ticked, the chosen identity
     front is image1 (empty latent + her). Then <strong>Save</strong> the
     keeper in the dropdown above.</p>
   {% include "_anchor_form.html" %}
+  </details>
 </section>
 
 {% if not gallery %}

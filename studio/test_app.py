@@ -2438,16 +2438,18 @@ def test_anchor_form_folds_and_actions_are_icons():
     with TestClient(appmod.app) as client:
         client.post("/playlists", data={"name": "Fold Album"})
         form = client.get("/anchors/form", params={"album": "Fold Album"}).text
-    for fold in ("tiers", "views", "negative", "render"):
+    for fold in ("negative", "render"):
         assert f'data-fold="{fold}"' in form
+    assert 'data-fold="tiers"' not in form
+    assert 'data-fold="views"' not in form
+    assert "anchor-form-who" in form and "anchor-form-plan" in form
+    assert form.index("anchor-form-who") < form.index("anchor-form-plan")
     assert 'name="actor_id"' in form
     assert "actor-check-all" in form
     assert 'name="character_id"' in form and "<select name=\"character_id\"" not in form
-    # Tiers and Views stay open even with nothing ticked — collapsing them
-    # hid the only controls that fill the missing-pose form.
-    for fold in ("tiers", "views"):
-        m = re.search(rf'<details[^>]*data-fold="{fold}"[^>]*>', form)
-        assert m and "open" in m.group(0), fold
+    page = client.get("/anchors", params={"album": "Fold Album"}).text
+    assert 'id="generate-pose"' in page
+    assert "<summary>" in page.split('id="generate-pose"', 1)[1][:500]
     css = open(os.path.join(os.path.dirname(appmod.__file__), "static", "style.css")).read()
     assert "text-transform: capitalize" in css
     assert 'class="icon-btn"' in form
