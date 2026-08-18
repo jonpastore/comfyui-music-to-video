@@ -819,9 +819,17 @@ def test_bind_route_json_reports_source():
         assert "Reference stills" in page
         assert "Pose plate" in page
         assert "pose-picks" in page
+        assert "pose-under" in page
         assert 'name="sheet_id"' in page
         assert "<select" not in page.split("pose-bind", 1)[-1].split("</form>", 1)[0]
         assert "<textarea" in page and 'name="pose"' in page
+        assert 'id="pose-gallery"' in page
+        assert 'id="pose-gallery-q"' in page
+        assert 'id="pose-gallery-grid"' in page
+        assert "Set as pose" in page
+        assert "js-pose-open" in page
+        bind = page.split("pose-bind", 1)[-1].split("</form>", 1)[0]
+        assert "js-ref-preview" not in bind
         assert ">Clips<" in page or ">Clips</h4>" in page
         assert "First clip only" in page
         assert "What First clip only means" in page
@@ -832,7 +840,10 @@ def test_bind_route_json_reports_source():
         assert ">Reroll<" in page
         assert "What to change" in page
         assert 'class="reroll-form reroll-bar"' in page
-        assert "js-ref-preview thumb-open" in page
+        assert "js-pose-open thumb-open" in page
+        scene_row = open(os.path.join(os.path.dirname(__file__),
+                                      "templates", "_scene_row.html")).read()
+        assert "js-ref-preview thumb-open" in scene_row
         assert 'name="seed_min"' in page
         assert "lazy-src" in page
         assert "data-src=" in page

@@ -549,20 +549,25 @@ location key (`T2-53` **built**, `test_t2_53_location_plates.py`) is a still, no
 scene rows have a **pose textarea** and a **Pose plate thumbnail
 slider** after Accept
 (`POST .../scene/{n}/pose-sheet` is today's auto-bind leftover). The
-dropdown is gone — plates are picked from a horizontal strip of
-thumbs (`role=listbox`, radio `sheet_id`). The plate thumb is a
-`button.thumb-open` (neutral, not the accent fill). Save actions are labeled floppies (Save JSON, Save lock, Save plate,
+dropdown is gone. Layout is a column: the pose textarea, then
+`.pose-under` (current plate thumb + Save plate + Pinned/Suggested),
+then a taller horizontal `.pose-picks` strip. A strip thumb opens
+`#pose-gallery` (`js-pose-open`, same `.lightbox` / `.still-stage`
+chrome as `#ref-preview` — not that dialog). The bar has Search
+(`#pose-gallery-q`), Gallery (`#pose-gallery-grid`, a filterable
+grid of every plate), and **Set as pose** (`#pose-gallery-use`)
+which writes hidden `sheet_id` and posts the bind. `none` clears
+the bind without opening the viewer. Save actions are labeled floppies (Save JSON, Save lock, Save plate,
 Save scene) so two disks are not the same control. Every icon has
 `title` and `aria-label`. A `.save-note` reports saved / pinned / the
 error and does not fade on failure. Bind status is **Pinned** (operator chose), **Suggested**
 (matcher), **Missing sheet**, or **No plate**, with a help icon that
 opens `#tip-modal` (stays until Close / Esc) — not inline save-note
-text. Pose word, plate thumb (fixed 4.5×6rem, not a collapsed lazy
-frame), picker, Save plate and status sit on one row. Opening a scene
-loads that row's thumbs immediately. `GET /api/songs/{id}/pose-plan/{tier}` is the same object
+text. Opening a scene loads that row's thumbs immediately.
+`GET /api/songs/{id}/pose-plan/{tier}` is the same object
 (`test_pose_plan.py`).
-Scene media is stacked rows: pose word + plate controls on one
-nowrap row; **reference stills** and **clips** each scroll sideways
+Scene media is stacked rows: pose word, then plate controls, then
+**reference stills** and **clips** each scroll sideways
 (no wrap). The cue/camera/location line is not repeated above the
 fields. Stills show every candidate, **Use this still** approves one.
 Reroll is one bar above the stills (What to change, Images to generate,

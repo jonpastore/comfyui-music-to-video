@@ -2180,6 +2180,156 @@ function paintPoseBind(form, d) {
   }
 }
 
+(function () {
+  var dlg = document.getElementById("pose-gallery");
+  if (!dlg) return;
+  var img = document.getElementById("pose-gallery-img");
+  var q = document.getElementById("pose-gallery-q");
+  var gridBtn = document.getElementById("pose-gallery-grid");
+  var thumbs = document.getElementById("pose-gallery-thumbs");
+  var useBtn = document.getElementById("pose-gallery-use");
+  var form = null;
+  var items = [];
+  var shown = [];
+  var idx = 0;
+
+  function current() { return shown[idx] || null; }
+
+  function hay(el) {
+    return ((el.getAttribute("data-label") || "") + " " +
+            (el.getAttribute("title") || "")).toLowerCase();
+  }
+
+  function filtered() {
+    var needle = ((q && q.value) || "").trim().toLowerCase();
+    if (!needle) return items.slice();
+    return items.filter(function (el) { return hay(el).indexOf(needle) >= 0; });
+  }
+
+  function setGallery(on) {
+    if (thumbs) thumbs.hidden = !on;
+    dlg.classList.toggle("gallery-on", !!on);
+    if (gridBtn) gridBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+
+  function paintGrid() {
+    if (!thumbs) return;
+    thumbs.innerHTML = "";
+    shown.forEach(function (el, i) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "pose-pick" + (i === idx ? " on" : "");
+      b.setAttribute("data-i", String(i));
+      var src = el.getAttribute("data-thumb") || el.getAttribute("data-full") || "";
+      if (src) {
+        var im = document.createElement("img");
+        im.className = "pose-pick-thumb";
+        im.src = src;
+        im.alt = el.getAttribute("data-label") || "";
+        b.appendChild(im);
+      } else {
+        var empty = document.createElement("span");
+        empty.className = "pose-pick-thumb pose-thumb-empty";
+        b.appendChild(empty);
+      }
+      var cap = document.createElement("span");
+      cap.className = "pose-pick-cap";
+      cap.textContent = el.getAttribute("data-label") || "";
+      b.appendChild(cap);
+      thumbs.appendChild(b);
+    });
+  }
+
+  function show(i) {
+    shown = filtered();
+    if (!shown.length) {
+      if (img) img.removeAttribute("src");
+      var emptyLab = document.getElementById("pose-gallery-label");
+      if (emptyLab) emptyLab.textContent = "No plates match";
+      var emptyPos = document.getElementById("pose-gallery-pos");
+      if (emptyPos) emptyPos.textContent = "0 / 0";
+      paintGrid();
+      return;
+    }
+    idx = ((i % shown.length) + shown.length) % shown.length;
+    var el = shown[idx];
+    if (img) img.src = el.getAttribute("data-full") || "";
+    var lab = document.getElementById("pose-gallery-label");
+    if (lab) lab.textContent = el.getAttribute("data-label") || "Pose plate";
+    var pos = document.getElementById("pose-gallery-pos");
+    if (pos) pos.textContent = (idx + 1) + " / " + shown.length;
+    paintGrid();
+  }
+
+  function openFrom(el) {
+    form = el.closest(".pose-bind");
+    var strip = form && form.querySelector(".pose-picks");
+    items = strip ? Array.prototype.slice.call(strip.querySelectorAll(".js-pose-open[data-full]")) : [];
+    if (!items.length && el.getAttribute("data-full")) items = [el];
+    if (q) q.value = "";
+    var at = items.indexOf(el);
+    if (at < 0) {
+      items.forEach(function (it, i) {
+        if (it.getAttribute("data-sheet-id") === el.getAttribute("data-sheet-id")) at = i;
+      });
+    }
+    setGallery(false);
+    show(at < 0 ? 0 : at);
+    if (typeof dlg.showModal === "function") dlg.showModal();
+    if (q) q.focus();
+  }
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest("#pose-gallery .media-nav-prev")) {
+      e.preventDefault();
+      show(idx - 1);
+      return;
+    }
+    if (e.target.closest("#pose-gallery .media-nav-next")) {
+      e.preventDefault();
+      show(idx + 1);
+      return;
+    }
+    var cell = e.target.closest("#pose-gallery-thumbs .pose-pick");
+    if (cell) {
+      e.preventDefault();
+      show(parseInt(cell.getAttribute("data-i"), 10) || 0);
+      return;
+    }
+    var btn = e.target.closest(".js-pose-open");
+    if (btn && btn.getAttribute("data-full")) {
+      e.preventDefault();
+      openFrom(btn);
+    }
+  });
+
+  if (q) q.addEventListener("input", function () { show(idx); });
+
+  if (gridBtn) gridBtn.addEventListener("click", function () {
+    setGallery(thumbs && thumbs.hidden);
+    show(idx);
+  });
+
+  if (useBtn) useBtn.addEventListener("click", function () {
+    var el = current();
+    if (!form || !el) return;
+    var sid = el.getAttribute("data-sheet-id") || "0";
+    markPosePick(form, sid);
+    sayPending(form.querySelector(".save-note"), "not saved yet");
+    if (typeof form.requestSubmit === "function") form.requestSubmit();
+    else form.submit();
+    dlg.close();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (!dlg.open) return;
+    var t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
+    if (e.key === "ArrowLeft") { e.preventDefault(); show(idx - 1); }
+    if (e.key === "ArrowRight") { e.preventDefault(); show(idx + 1); }
+  });
+})();
+
 function paintSbVersions(form, versions, selected) {
   var panel = form && form.closest(".sb-panel");
   if (!panel) return;

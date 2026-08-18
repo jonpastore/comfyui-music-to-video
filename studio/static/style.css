@@ -1291,14 +1291,13 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
 }
 .pose-row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 0.55rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
   margin: 0.5rem 0 0.75rem;
 }
 .pose-row > .pose-word-field {
-  flex: 1 1 14rem;
-  min-width: 12rem;
+  width: 100%;
 }
 .pose-word-field textarea {
   width: 100%;
@@ -1307,34 +1306,44 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
 }
 .pose-bind {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+}
+.pose-under {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.45rem;
-  margin: 0;
-  flex: 1 1 28rem;
-  min-width: 0;
 }
-.pose-bind button,
-.pose-bind .icon-btn { align-self: center; }
+.pose-bind .pose-under .icon-btn { align-self: center; }
 .pose-picks-label {
-  flex: 0 0 100%;
   font-size: var(--text-sm);
   color: var(--muted);
 }
 .pose-picks {
   display: flex;
   flex-wrap: nowrap;
-  gap: 0.35rem;
+  gap: 0.45rem;
   overflow-x: auto;
-  flex: 1 1 16rem;
-  min-width: 0;
-  padding: 0.15rem 0 0.35rem;
+  width: 100%;
+  min-height: 9.5rem;
+  padding: 0.2rem 0 0.4rem;
 }
 .pose-pick {
-  flex: 0 0 3.6rem;
-  width: 3.6rem;
+  flex: 0 0 5.6rem;
+  width: 5.6rem;
   cursor: pointer;
   margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
@@ -1346,12 +1355,54 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
 }
 .pose-pick-thumb {
   display: block;
-  width: 3.6rem;
-  height: 4.8rem;
+  width: 5.6rem;
+  height: 7.6rem;
   object-fit: cover;
   border-radius: 4px;
   border: 2px solid var(--border);
   background: var(--panel);
+}
+#pose-gallery .lightbox-bar { flex-wrap: wrap; }
+.pose-gallery-search {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: var(--text-sm);
+  flex: 1 1 12rem;
+  min-width: 10rem;
+}
+.pose-gallery-search input {
+  flex: 1 1 auto;
+  min-width: 8rem;
+  width: auto;
+}
+.pose-gallery-thumbs[hidden] { display: none; }
+#pose-gallery.gallery-on {
+  background: var(--panel);
+  width: min(96vw, 64rem);
+  max-width: 96vw;
+  max-height: 96vh;
+  padding: 0.4rem 0.6rem 0.7rem;
+  border-radius: 8px;
+  overflow: hidden;
+}
+#pose-gallery.gallery-on .still-stage { display: none; }
+#pose-gallery.gallery-on .pose-gallery-thumbs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.5rem;
+  max-height: 78vh;
+  overflow-y: auto;
+  margin-top: 0.5rem;
+}
+#pose-gallery.gallery-on .pose-gallery-thumbs .pose-pick {
+  flex: none;
+  width: auto;
+}
+#pose-gallery.gallery-on .pose-gallery-thumbs .pose-pick-thumb {
+  width: 100%;
+  height: 8.4rem;
 }
 .pose-pick.on .pose-pick-thumb,
 .pose-pick:has(:checked) .pose-pick-thumb {
@@ -1367,8 +1418,8 @@ table.list th.num, table.list td.num { text-align: right; font-variant-numeric: 
   -webkit-box-orient: vertical;
 }
 .pose-bind .save-note { flex: 1 0 100%; min-height: 0; }
-.pose-bind > .thumb-open,
-.pose-bind .pose-thumb-empty {
+.pose-under .thumb-open,
+.pose-under > .pose-thumb-empty {
   flex: 0 0 4.5rem;
   width: 4.5rem;
   height: 6rem;

@@ -90,6 +90,28 @@
       {{ media_nav_next("Next still") }}
     </div>
   </dialog>
+  <dialog class="lightbox" id="pose-gallery">
+    <div class="lightbox-bar">
+      <strong id="pose-gallery-label">Pose plate</strong>
+      <label class="pose-gallery-search">Search
+        <input type="search" id="pose-gallery-q" placeholder="name or view"
+               autocomplete="off" aria-label="Search pose plates">
+      </label>
+      <button type="button" class="secondary" id="pose-gallery-grid"
+              aria-pressed="false" title="Show every plate as a grid">Gallery</button>
+      <span id="pose-gallery-pos" class="lightbox-pos muted"></span>
+      <button type="button" id="pose-gallery-use"
+              title="Set this sheet as the scene pose plate">Set as pose</button>
+      <span class="lightbox-spacer"></span>
+      {{ modal_close() }}
+    </div>
+    <div class="still-stage" id="pose-gallery-stage">
+      {{ media_nav_prev("Previous plate") }}
+      <img id="pose-gallery-img" alt="pose plate">
+      {{ media_nav_next("Next plate") }}
+    </div>
+    <div class="pose-gallery-thumbs" id="pose-gallery-thumbs" hidden></div>
+  </dialog>
   <dialog class="video-modal" id="clip-preview">
     <div class="modal-bar">
       <strong id="clip-preview-label">Clip</strong>

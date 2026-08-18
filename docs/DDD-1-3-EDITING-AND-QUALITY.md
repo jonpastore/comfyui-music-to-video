@@ -820,7 +820,10 @@ Location plates (`T2-53` **built**, `test_t2_53_location_plates.py`).
 Extra-view slots are later.
 `test_t2_56_per_scene_keeper.py`. `scene_pose_map` is the Accept-gated
 map (`T2-51`/`T2-52` **built**, `test_t2_52_map_accept.py`).
-`start_refs` 400s on draft/rejected.
+`start_refs` 400s on draft/rejected. The leftover bind on the scene
+row is a pose textarea, then current thumb + Save plate, then a
+taller `pose-picks` strip. `#pose-gallery` (search, Gallery grid,
+Set as pose) posts `.../scene/{n}/pose-sheet`. Not a `<select>`.
 
 **`T2-54` is built.** `storyboard_backfill.backfill(song_id, run_tiers)`
 takes the existing ceiling-tier board (highest ticked) and writes only

@@ -76,7 +76,7 @@ not for a tenant.
 The work is albums of music videos. The factory loop is: ceiling-tier
 storyboard → coverage list of needed poses → classified library →
 Accept-gated pose→scene map → per-scene refs (that keeper + location
-plate, picked from a thumbnail slider on the scene row) → LTX 2.5 first → optional decoded s2v hop on lip scenes →
+plate, picked from a thumbnail slider on the scene row — click opens a lightbox with search, a gallery grid, and Set as pose) → LTX 2.5 first → optional decoded s2v hop on lip scenes →
 assemble. Identity — one character, recognisably the same across an
 album — is the text lock plus her photographs as image1. A stranger
 plate as image1 is how this project has most often lost her.
