@@ -665,6 +665,25 @@ CREATE TABLE IF NOT EXISTS advice_proposals (
   accepted_at REAL);
 """
 
+POSE_COVERAGE_SCHEMA = """
+-- T2-50: analyze-for-poses writes one row per scene. A coverage list, not
+-- a bind. Classify and generate-refs do not write here. scene_pose_map is
+-- a later table (T2-51) and is not created by analyze.
+CREATE TABLE IF NOT EXISTS pose_coverage (
+  id INTEGER PRIMARY KEY,
+  song_id INTEGER NOT NULL,
+  tier TEXT NOT NULL,
+  scene_number INTEGER NOT NULL,
+  pose TEXT NOT NULL,
+  view TEXT NOT NULL,
+  wardrobe TEXT NOT NULL,
+  exposure TEXT NOT NULL,
+  created REAL NOT NULL,
+  UNIQUE(song_id, tier, scene_number));
+
+CREATE INDEX IF NOT EXISTS idx_pose_coverage ON pose_coverage(song_id, tier);
+"""
+
 
 def _nullable_set_item_song_id(c):
     """T1-28: a card is a set_items row with song_id NULL. CREATE TABLE IF
@@ -737,6 +756,7 @@ def conn():
         c.executescript(CALIBRATIONS_SCHEMA)
         c.executescript(ADVICE_PROPOSALS_SCHEMA)
         c.executescript(LINEAGE_SCHEMA)
+        c.executescript(POSE_COVERAGE_SCHEMA)
         _migrate(c)
         _local.c = c
     return c

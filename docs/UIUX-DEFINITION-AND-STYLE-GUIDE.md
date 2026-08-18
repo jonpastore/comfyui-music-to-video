@@ -511,7 +511,9 @@ standing plate (`test_t2_refs_identity.py` still guards the plate
 refusal). The tree still pins the album front — that is the leftover.
 The expanded tier's **pose map** is drafted, then Accept per scene
 (`T2-52`); generate refs from draft/rejected is refused. A coverage
-meter (`T2-50`) sits above the map. Location plate per unique
+meter (`T2-50` **built**, `test_t2_50_coverage_list.py`) sits above
+the map and reads `pose_coverage` from
+`POST /api/songs/{id}/storyboard/{tier}/analyze-poses`. Location plate per unique
 location key (`T2-53`) is a still, not a character sheet. Storyboard
 scene rows have a **Pose keeper** select after Accept
 (`POST .../scene/{n}/pose-sheet` is today's auto-bind leftover). The plate thumb is a
@@ -1255,9 +1257,11 @@ line (`T3-35`). Keeper / reject; `usable=skip` never enters a
 slot (`T7-23`). Ceiling + ticked-lower backfill is visible
 (`T2-54`): r+pg13 shows both; a g run offers no nude.
 
-**Storyboard page.** Coverage meter (needs vs keepers, no bind).
-Draft map + Accept per scene (`T2-52`), same shape as the arc
-wand. Location plate per unique key (`T2-53`); unset / studio is
+**Storyboard page.** Coverage meter (needs vs keepers, no bind)
+reads `pose_coverage` after
+`POST /api/songs/{id}/storyboard/{tier}/analyze-poses` (`T2-50`
+**built**). Draft map + Accept per scene (`T2-52`), same shape as
+the arc wand. Location plate per unique key (`T2-53`); unset / studio is
 grey-studio and no plate. `needs_lip_sync` beside camera. Ceiling
 and ticked-lower boards visible.
 

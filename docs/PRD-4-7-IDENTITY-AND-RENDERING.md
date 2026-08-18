@@ -157,9 +157,10 @@ use-as-ref ticked, `gen_anchor`'s images list is exactly that sheet.
 **NOT MEASURED**. **0 chosen studio anchors** — the factory is still on
 step 1.
 
-**P13 (the loop) is not built.** Coverage list, Accept-gated map,
-location plates, LTX-first, decoded s2v hop: see TRD-2 `T2-50`…`T2-56`
-and TRD-5 `T5-11`…`T5-15`.
+**P13 (the loop) is not built.** `T2-50` coverage list **is**
+(`test_t2_50_coverage_list.py`). Accept-gated map, location plates,
+LTX-first, decoded s2v hop are not: see TRD-2 `T2-51`…`T2-56` and
+TRD-5 `T5-11`…`T5-15`.
 
 ## 5. Priorities
 

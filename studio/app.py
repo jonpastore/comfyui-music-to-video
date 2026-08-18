@@ -6708,6 +6708,26 @@ def api_album_pose_coverage(album: str, tier: str):
         raise HTTPException(400, str(e))
 
 
+@app.post("/api/songs/{id}/storyboard/{tier}/analyze-poses")
+def api_analyze_poses(id: int, tier: str):
+    """T2-50: write coverage from the board. Does not bind or enqueue refs."""
+    try:
+        return JSONResponse(storyboard_service.analyze_poses(
+            get_song_or_404(id)["id"], valid_tier_or_400(tier)))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
+
+
+@app.get("/api/songs/{id}/storyboard/{tier}/pose-coverage")
+def api_song_pose_coverage(id: int, tier: str):
+    """T2-50: stored (pose, view, wardrobe, exposure) per scene."""
+    try:
+        return JSONResponse(storyboard_service.pose_coverage_list(
+            get_song_or_404(id)["id"], valid_tier_or_400(tier)))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
+
+
 @app.get("/api/songs/{id}/pose-plan/{tier}")
 def api_pose_plan(id: int, tier: str):
     """Scenes this song needs vs chosen pose sheets. Does not write."""

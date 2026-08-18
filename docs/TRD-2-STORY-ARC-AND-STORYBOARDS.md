@@ -800,7 +800,7 @@ current.
 
 | criterion | state | commit | what was measured |
 |---|---|---|---|
-| `T2-50` coverage list from the board (no bind) | **not built** | — | Intended: `test_t2_50_coverage_list.py`. Analyze writes `(pose, view, wardrobe, exposure)` per scene and zero `scene_pose_map` / refs rows. Tree: not a first-class studio output |
+| `T2-50` coverage list from the board (no bind) | **built** | `test_t2_50_coverage_list.py` | Analyze writes `(pose, view, wardrobe, exposure)` per scene and zero `scene_pose_map` / refs rows. `POST /api/songs/{id}/storyboard/{tier}/analyze-poses`. Mutation: map row or refs job → red |
 | `T2-51` classify cannot write the map | **not built** | — | Intended: `test_t2_51_classify_cannot_write_map.py`. No `scene_pose_map` table. `pose_plan` auto-binds without Accept |
 | `T2-52` Accept-gated pose→scene map | **not built** | — | Intended: `test_t2_52_map_accept.py`. Same shape as T2-15. Generate refs from draft/rejected must fail |
 | `T2-53` location plate per location key | **not built** | — | Intended: `test_t2_53_location_plates.py`. No `location_plates`. `make_anchor.BACKDROP` is a character-sheet clause, not this |

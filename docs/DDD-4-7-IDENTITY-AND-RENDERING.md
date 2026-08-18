@@ -37,7 +37,8 @@ is not a studio feature.
 | `make_anchor.py` | the view table, the positive constants, `is_nude_view`, `prompt_for`, the call into `workflow()` |
 | `build_refs.py` | the graph: `workflow()`, `sampler_settings`, `assign_ref_slots`, `cast_clause`, `negative_applies` |
 | `studio/app.py` | the anchor routes, `ANCHOR_VIEWS` labels, `ANCHOR_RENDER_FLAGS`, `DENOISE_CHOICES`, the preview; song-page `pose_library_by_tier` (chosen sheets, not just identity front); `start_refs` freezes `pose_plan` binds into `pose_bases` |
-| `studio/pose_plan.py` | scene need-text → chosen sheet match; `plan` / `bind_scene` / `freeze_auto_binds` / `album_coverage`; no FastAPI |
+| `studio/pose_plan.py` | scene need-text → chosen sheet match; `plan` / `bind_scene` / `freeze_auto_binds` / `album_coverage`; no FastAPI. Not the T2-50 writer |
+| `studio/pose_coverage.py` | T2-50 analyze-for-poses; writes `pose_coverage` only; no FastAPI; does not import `pose_plan` |
 | `studio/prompts.py` | `PROMPT_TYPES` — composer fields plus `view:<key>` generated from `VIEWS` (`T7-13`), plus `backdrop`/`composite`/`pose` |
 | `studio/tiers.py` | `compose_guardrail`, `check_text` (tier-aware: g/pg13 may depict T10-18; r lyrics/narrative mention T10-18a), `screen_work_for_tier` / `screen_escalation` / `check_escalation` (T10-19 entry; T10-20 ignores override kwargs), `check_override`, `check_tier_policy` |
 | `build_song.py` | TRD-5's territory: `workflow()`, the LTX branches, `clip_plan`, `expect_from_workflow` |

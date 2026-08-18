@@ -643,6 +643,18 @@ def load_arc(pid):
         return None
 
 
+def analyze_poses(song_id, tier):
+    """T2-50: write (pose, view, wardrobe, exposure) per scene. No bind."""
+    import pose_coverage
+    return pose_coverage.analyze(song_id, tier)
+
+
+def pose_coverage_list(song_id, tier):
+    """Stored T2-50 coverage for this song+tier. Empty before analyze."""
+    import pose_coverage
+    return pose_coverage.listed(song_id, tier)
+
+
 def persist_arc(pl, data, model="", direction=""):
     songs = playlist_tracks(pl["id"])
     titles = {s["id"]: s["title"] for s in songs}
