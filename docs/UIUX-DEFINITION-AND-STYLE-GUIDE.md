@@ -613,7 +613,10 @@ the first-frame black is not the poster.
 (pose / story / image prompt changed). The chip is a help tip: click
 it for what to do (reroll or generate from the current text;
 approving still uses the old picture). QC and origin chips open the
-same `#tip-modal`. Check / wrench / trash sit on one row pinned to
+same `#tip-modal` (Close on the right via `.lightbox-spacer`, same as
+`#pose-brief`). Still QC is compact accent text (`button.qc-tag`:
+transparent, no primary fill, wraps on its own caption row) — not a
+filled blue well. Check / wrench / trash sit on one row pinned to
 the bottom of every still card so wrapping QC text does not offset
 the buttons.
 Fix (face / inpaint / outpaint) and Delete sit on the still as icon
@@ -646,7 +649,9 @@ the look says **harness only; NOT MEASURED** until a GPU pair exists
 LTX predecessor and the s2v successor are both listed (`T6-A5`).
 There is no separate Approve refs page.
 Stills and clips show `.qc-tag`: confidence, identity, and the
-assessment sentence. Wardrobe may change; physical identity must not.
+assessment sentence as small accent text (a still's chip is a help-tip
+button that must not inherit the solid-accent primary). Wardrobe may
+change; physical identity must not.
 Scene plates use a real `src`. Stills use `data-src` + `.lazy-src`
 and load as soon as the row is in the page. Landed clip tiles reserve a 3:4 `.still-thumb` and put the approved
 still in `<img class="clip-poster">` under `<video src>` /
@@ -663,7 +668,8 @@ keys step clips. Render clip calls `refreshQueue()` so the idle chip
 re-arms.
 **Modals:** every `<dialog>` dismisses with `modal_close()` — ghost X,
 `.modal-close`, never an accent circle and never a mix of Close / ×
-(`test_modal_close_is_one_icon`). Confirm actions stay Cancel / Delete.
+(`test_modal_close_is_one_icon`). `#tip-modal` Close sits on the
+right (`.lightbox-spacer`). Confirm actions stay Cancel / Delete.
 **Clips & render:** assembled outputs are `.render-card` tiles — video
 thumbnail (`preload=metadata`), preview `<dialog class="video-modal">`,
 Confirm clean, and Delete (`POST /songs/{id}/renders/{id}/delete` removes

@@ -631,12 +631,34 @@ table.list th, table.list td {
   margin-right: 0.25rem;
 }
 .tag.done { border-color: var(--accent); color: var(--accent); }
-button.tag,
-button.qc-tag {
+button.tag {
   font: inherit;
   color: inherit;
   line-height: inherit;
   appearance: none;
+}
+/* Still QC is a sentence, not a primary. Bare <button> is the solid-accent
+   block; without this reset the chip is an unreadably blue well. */
+button.qc-tag {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: left;
+  white-space: normal;
+  appearance: none;
+  align-self: auto;
+}
+button.qc-tag:hover:not(:disabled),
+button.qc-tag:active:not(:disabled) {
+  background: transparent;
+  color: var(--accent);
+  text-decoration: underline;
 }
 
 .empty { color: var(--muted); font-style: italic; }
@@ -1887,6 +1909,10 @@ img.lazy-src, video.lazy-src {
   gap: 0.35rem;
   align-items: center;
   margin-top: 0.25rem;
+}
+.ref-frame figcaption .qc-tag {
+  flex: 1 1 100%;
+  min-width: 0;
 }
 .tag.warn-tag { border-color: var(--danger); color: var(--danger); }
 

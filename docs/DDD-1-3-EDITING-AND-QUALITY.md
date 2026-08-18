@@ -675,9 +675,12 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    `_compose` fills a blank `video_motion_prompt` from motion + camera.
    A still is **stale** when `scene.edited` is after every candidate
    `created` (`storyboard_service.scenes`). The chip opens `#tip-modal`
-   (reroll / generate from current text). Still check/wrench/trash sit
-   on `.still-icons { margin-top: auto }` so wrapping QC text does not
-   offset the row.
+   (reroll / generate from current text). `#tip-modal` Close sits after
+   `.lightbox-spacer` (right of the title). Still QC is `button.qc-tag`
+   with a transparent fill so the sentence stays readable accent text,
+   not a primary well (`test_qc_tag_button_is_not_a_primary`). Still
+   check/wrench/trash sit on `.still-icons { margin-top: auto }` so
+   wrapping QC text does not offset the row.
    Scene-scoped `build_song --only` and studio Render clip (`scene=` /
    `clip_idx=`) skip T2-13e / T2-25. Scene preview is plate / stills / clips. Reroll plants
    `.ref-frame.clip-tile` shimmer cards (same 190px / 3:4 frame as a

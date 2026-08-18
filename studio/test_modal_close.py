@@ -39,6 +39,25 @@ def test_base_lightboxes_use_modal_close():
     assert "lightbox-close" not in src
 
 
+def test_tip_modal_close_is_on_the_right():
+    src = open(os.path.join(TEMPLATES, "base.html"), encoding="utf-8").read()
+    bar = src.split('id="tip-modal"', 1)[1].split("</dialog>", 1)[0]
+    assert "lightbox-spacer" in bar
+    assert bar.index("lightbox-spacer") < bar.index("modal_close")
+
+
+def test_qc_tag_button_is_not_a_primary():
+    css = open(os.path.join(HERE, "static", "style.css"), encoding="utf-8").read()
+    block = re.search(r"button\.qc-tag\s*\{[^}]+\}", css)
+    assert block, "button.qc-tag rule missing"
+    assert "transparent" in block.group(0)
+    assert "padding: 0" in block.group(0)
+    hover = re.search(
+        r"button\.qc-tag:hover:not\(:disabled\)[^\{]*\{[^}]+\}", css)
+    assert hover, "button.qc-tag hover reset missing"
+    assert "transparent" in hover.group(0)
+
+
 def test_clip_preview_has_nav_and_repair_actions():
     src = open(os.path.join(TEMPLATES, "base.html"), encoding="utf-8").read()
     assert "media_nav_prev" in src and "media_nav_next" in src
