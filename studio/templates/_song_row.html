@@ -2,7 +2,7 @@
 {# One Library row. Its own partial so an async upload can ask the server for the
    row it just created (GET /songs/{id}/row) instead of the page rebuilding this
    markup in JavaScript -- two copies of a row is how the two stop matching. #}
-<tr class="album-song hidden" data-song="{{ e.song.id }}"
+<tr class="album-song" data-song="{{ e.song.id }}"
     data-album="{{ e.song.album or '' }}"
     data-genre="{{ e.song.genre or '' }}"
     data-subgenre="{{ e.song.subgenre or '' }}"

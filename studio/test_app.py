@@ -80,13 +80,19 @@ def test_library_groups_by_album_and_collapses_upload():
         tag = page.split('id="fold-upload"', 1)[1][:80]
         assert "open" not in tag
         assert 'class="album-group-head"' in page
+        assert 'class="library-album' in page
         assert "Grouped Alb" in page
         assert 'list="album-names"' in page
         assert 'value="Grouped Alb"' in page
         assert "library-scroll" in page
         assert "album-song" in page
         assert "js-album-genre-set" in page
+        assert 'id="library-albums"' in page
+        body = page.split('id="library-albums"', 1)[1]
+        assert "<thead>" in body
+        assert body.find("<thead>") > body.find("album-group-head")
         js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
+        assert "library-album.open" in js
         assert "/albums/genres" in js
         assert "refineGenres" in js
 

@@ -112,21 +112,7 @@
   <p class="hint" id="bulk-count" hidden></p>
   <p class="hint" id="bulk-note"></p>
 </section>
-<div class="table-scroll library-scroll">
-<table class="list" data-song-count="{{ song_count }}">
-  <thead><tr>
-    <th class="pick"><input type="checkbox" id="pick-all" title="Select all shown"></th>
-    <th>Title</th>
-    <th>Genre</th>
-    <th class="num">Length</th>
-    <th class="num">BPM</th>
-    <th>Key</th>
-    <th class="num">Energy</th>
-    <th>Video</th>
-    <th>Sets</th>
-    <th></th>
-  </tr></thead>
-  <tbody>
+<div id="library-albums" class="library-albums">
   {% for album in ns.albums %}
     {% set gns = namespace(rows=[], last=none) %}
     {% for e in songs if (e.song.album or "") == album %}
@@ -135,13 +121,16 @@
     {% endfor %}
     {% if gns.rows %}
     {% set ag = (album_genres or {}).get(album) %}
-    <tr class="album-group-head" data-album="{{ album }}"
-        data-genre="{{ (ag.genre if ag else gns.last.song.genre) or '' }}"
-        data-subgenre="{{ (ag.subgenre if ag else gns.last.song.subgenre) or '' }}"
-        data-genre2="{{ (ag.genre2 if ag else gns.last.song.genre2) or '' }}"
-        data-subgenre2="{{ (ag.subgenre2 if ag else gns.last.song.subgenre2) or '' }}">
-      <td colspan="10">
-        <button type="button" class="album-fold" aria-expanded="false"
+    {% set open = loop.first %}
+    <section class="library-album{% if open %} open{% endif %}"
+             data-album="{{ album }}"
+             data-genre="{{ (ag.genre if ag else gns.last.song.genre) or '' }}"
+             data-subgenre="{{ (ag.subgenre if ag else gns.last.song.subgenre) or '' }}"
+             data-genre2="{{ (ag.genre2 if ag else gns.last.song.genre2) or '' }}"
+             data-subgenre2="{{ (ag.subgenre2 if ag else gns.last.song.subgenre2) or '' }}">
+      <div class="album-group-head">
+        <button type="button" class="album-fold"
+                aria-expanded="{{ 'true' if open else 'false' }}"
                 title="Show songs in {{ album or 'No album' }}">
           {{ album or "No album" }}
           <span class="muted">({{ gns.rows | length }})</span>
@@ -153,15 +142,20 @@
           {{ glyph_edit() }}
         </button>
         {% endif %}
-      </td>
-    </tr>
-    {% for e in gns.rows %}
-      {% include "_song_row.html" %}
-    {% endfor %}
+      </div>
+      <div class="library-album-body library-scroll table-scroll"{% if not open %} hidden{% endif %}>
+        <table class="list">
+          {% include "_library_thead.html" %}
+          <tbody>
+            {% for e in gns.rows %}
+              {% include "_song_row.html" %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
     {% endif %}
   {% endfor %}
-  </tbody>
-</table>
 </div>
 
 {% endif %}

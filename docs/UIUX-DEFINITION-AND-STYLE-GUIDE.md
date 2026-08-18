@@ -715,14 +715,17 @@ fibonacci. A candidate has Approve, Fix, Delete. Thumbs open
 secondary from the **first song on that album** (oldest `created`).
 The album-row pencil writes playlist genre defaults and copies them
 to every song on that album. Analyse-all also asks for per-song genre
-refinements (style_text / title / lyrics) and saves them. The table groups by album,
-collapsed; expand a group to see songs. Added date sits under the
+refinements (style_text / title / lyrics) and saves them. The table groups by album
+as an accordion (`#library-albums`): one section open, the others
+collapsed. Column headers (Title / Genre / Length / …) live **inside**
+the open section, not above the album list. The open section fills
+leftover viewport height and scrolls (`.library-album-body.library-scroll`);
+opening another album closes this one. The first album starts open.
+Added date sits under the
 title. Genre is chips (primary + secondary), not the word **Set** —
 the pencil opens `#genre-set`. That modal is a 2×2 field grid (selects
 `min-width: 0` so a long subgenre does not shove the next box). Sparkle
-/ Save / help sit in the modal bar as `icon-btn`s, same as album look.
-`.library-scroll` fills leftover
-viewport height and scrolls. Upload accepts popular audio (mp3 / wav / flac / ogg / m4a / …),
+/ Save / help sit in the modal bar as `icon-btn`s, same as album look. Upload accepts popular audio (mp3 / wav / flac / ogg / m4a / …),
 not mp3-only. The bulk genre bar (`#bulk-genre`) is hidden until at least
 one row is ticked; `#bulk-count` sits **below** the controls and reads
 `N songs selected` (or `would_change` after a preview POST). Per-row **Set** opens a

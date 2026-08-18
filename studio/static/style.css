@@ -199,23 +199,47 @@ body:has(#library) main {
   flex-direction: column;
   min-height: 0;
 }
-#library .library-scroll {
+.library-albums {
   flex: 1 1 auto;
-  max-height: none;
-  min-height: 10rem;
-  overflow: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
-tr.album-group-head td {
+.library-album {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.library-album.open {
+  flex: 1 1 auto;
+  min-height: 12rem;
+  display: flex;
+  flex-direction: column;
+}
+.album-group-head {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  background: var(--panel);
+  padding: 0.45rem 0.75rem;
   font-weight: 600;
-  position: sticky;
-  top: 2.1rem;
-  z-index: 2;
+  background: var(--panel);
+}
+.library-album.open .album-group-head {
   border-bottom: 1px solid var(--border-strong);
 }
+.library-album-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  max-height: none;
+  margin-bottom: 0;
+  border: 0;
+  border-radius: 0;
+}
+.library-album-body[hidden] { display: none; }
 button.album-fold {
   background: none;
   border: 0;

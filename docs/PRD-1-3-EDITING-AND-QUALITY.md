@@ -38,7 +38,9 @@ rating videos stay on the card in `#media-player`), and the library list
 (`test_t6_a2_html_and_json_report_the_same_library_numbers`,
 `T6-A2-library` — same `library_service.numbers()` for song_count on
 HTML `GET /` / `GET /songs` and JSON `GET /api/songs`; `GET /songs` is
-200 never 405; the list groups by album and the upload fold is
+200 never 405; the list groups by album as an accordion — column
+headers sit inside the open section, which fills leftover height and
+scrolls; the upload fold is
 collapsed when songs exist), and the topbar nav
 (`test_uiux_nav.py` / `test_uiux_nav_html_and_json_share_one_list`,
 `T6-A2-nav` — same `nav_service.links()` for HTML `base.html` `<nav>`

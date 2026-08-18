@@ -140,7 +140,7 @@ def test_t10_4_toggle_all_is_the_shown_set():
     with TestClient(appmod.app) as client:
         page = client.get("/")
         assert page.status_code == 200, page.text
-        assert 'id="pick-all"' in page.text
+        assert 'class="pick-all"' in page.text
         assert "shown" in page.text.lower()
         r = client.post("/songs/genres", json={"song_ids": shown, **AFTER})
     assert r.status_code == 200, r.text

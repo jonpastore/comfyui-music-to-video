@@ -164,7 +164,10 @@ is a label. Library HTML `GET /` / `GET /songs` (`#library` `data-song-count`)
 and JSON `GET /api/songs` share `library_service.numbers()`
 (`test_t6_a2_html_and_json_report_the_same_library_numbers`, `T6-A2-library`:
 song_count is service-owned so a template `len` recompute fails the stub
-arm; `GET /songs` is 200 never 405). Topbar HTML (`base.html` iterates
+arm; `GET /songs` is 200 never 405). The list is `#library-albums`
+accordion sections: thead inside the open album, that body scrolls,
+opening one closes the others (`test_library_groups_by_album_and_collapses_upload`).
+Topbar HTML (`base.html` iterates
 `nav_links()`) and JSON `GET /api/nav` share `nav_service.links()`
 (`test_uiux_nav_html_and_json_share_one_list`, `T6-A2-nav`: probe
 monkeypatched into `LINKS` appears in both; hardcoding the old eight

@@ -3588,12 +3588,12 @@ function api(url, body, method) {
 function initLibraryBulk() {
   var bar = document.getElementById("bulk-genre");
   if (!bar) return;
-  var all = document.getElementById("pick-all");
+  var all = document.querySelector(".pick-all");
   var count = document.getElementById("bulk-count");
   var note = document.getElementById("bulk-note");
   var val = function (id) { var e = document.getElementById(id); return e ? e.value : ""; };
 
-  // rows currently SHOWN. Sorting reorders and a filter could hide; either way
+  // rows currently SHOWN. An accordion hides the other albums; either way
   // "select all" must never reach a row the user cannot see.
   function shown() {
     return Array.prototype.filter.call(
@@ -3607,9 +3607,11 @@ function initLibraryBulk() {
   function refresh() {
     var n = picked().length;
     var vis = shown();
-    all.checked = vis.length > 0 && n === vis.length;
-    all.indeterminate = n > 0 && n < vis.length;
-    all.title = "Select all " + vis.length + " shown";
+    document.querySelectorAll(".pick-all").forEach(function (box) {
+      box.checked = vis.length > 0 && n === vis.length;
+      box.indeterminate = n > 0 && n < vis.length;
+      box.title = "Select all " + vis.length + " shown";
+    });
     if (!n) {
       bar.hidden = true;
       if (count) { count.hidden = true; count.textContent = ""; }
@@ -3632,8 +3634,15 @@ function initLibraryBulk() {
   }
   function ids() { return picked().map(function (r) { return Number(r.dataset.song); }); }
 
-  all.addEventListener("change", function () {
+  if (all) all.addEventListener("change", function () {
     shown().forEach(function (r) { r.querySelector(".pick-song").checked = all.checked; });
+    refresh();
+  });
+  document.addEventListener("change", function (e) {
+    if (!e.target.classList || !e.target.classList.contains("pick-all")) return;
+    if (e.target === all) return;
+    var on = e.target.checked;
+    shown().forEach(function (r) { r.querySelector(".pick-song").checked = on; });
     refresh();
   });
   document.addEventListener("change", function (e) {
@@ -3658,8 +3667,15 @@ function initLibraryBulk() {
     });
   }
 
+  function albumSection(album) {
+    var root = document.getElementById("library-albums");
+    if (!root) return null;
+    return root.querySelector(
+      '.library-album[data-album="' + String(album || "").replace(/"/g, '\\"') + '"]');
+  }
+
   function fillUploadGenres(album) {
-    var head = document.querySelector('tr.album-group-head[data-album="' + album + '"]');
+    var head = albumSection(album);
     if (!head) return;
     setSel("genre-select", head.getAttribute("data-genre"));
     setSel("subgenre-select", head.getAttribute("data-subgenre"));
@@ -3679,55 +3695,65 @@ function initLibraryBulk() {
 
   function setGroupOpen(head, open) {
     if (!head) return;
+    if (open) {
+      document.querySelectorAll(".library-album.open").forEach(function (sec) {
+        if (sec !== head) setGroupOpen(sec, false);
+      });
+    }
+    head.classList.toggle("open", !!open);
     var btn = head.querySelector(".album-fold");
     if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
-    var row = head.nextElementSibling;
-    while (row && !row.classList.contains("album-group-head")) {
-      row.classList.toggle("hidden", !open);
-      row = row.nextElementSibling;
-    }
+    var body = head.querySelector(".library-album-body");
+    if (body) body.hidden = !open;
+    if (typeof refresh === "function") refresh();
   }
 
   document.addEventListener("click", function (e) {
     var fold = e.target.closest && e.target.closest("button.album-fold");
     if (!fold) return;
-    var head = fold.closest("tr.album-group-head");
+    var head = fold.closest(".library-album");
     var open = fold.getAttribute("aria-expanded") !== "true";
     setGroupOpen(head, open);
   });
 
-  function ensureAlbumGroup(body, album, genres) {
-    var sel = 'tr.album-group-head[data-album="' + album.replace(/"/g, '\\"') + '"]';
-    var head = body.querySelector(sel);
+  function ensureAlbumGroup(root, album, genres) {
+    var head = albumSection(album);
     if (head) return head;
-    var tr = document.createElement("tr");
-    tr.className = "album-group-head";
-    tr.setAttribute("data-album", album);
-    tr.setAttribute("data-genre", (genres && genres.genre) || "");
-    tr.setAttribute("data-subgenre", (genres && genres.subgenre) || "");
-    tr.setAttribute("data-genre2", (genres && genres.genre2) || "");
-    tr.setAttribute("data-subgenre2", (genres && genres.subgenre2) || "");
-    tr.innerHTML = '<td colspan="10"><button type="button" class="album-fold" aria-expanded="true">'
-      + (album || "No album") + ' <span class="muted">(1)</span></button></td>';
-    body.insertBefore(tr, body.firstChild);
+    var listRoot = root || document.getElementById("library-albums");
+    if (!listRoot) return null;
+    var sec = document.createElement("section");
+    sec.className = "library-album";
+    sec.setAttribute("data-album", album);
+    sec.setAttribute("data-genre", (genres && genres.genre) || "");
+    sec.setAttribute("data-subgenre", (genres && genres.subgenre) || "");
+    sec.setAttribute("data-genre2", (genres && genres.genre2) || "");
+    sec.setAttribute("data-subgenre2", (genres && genres.subgenre2) || "");
+    sec.innerHTML =
+      '<div class="album-group-head">' +
+        '<button type="button" class="album-fold" aria-expanded="false">' +
+          (album || "No album") + ' <span class="muted">(0)</span></button>' +
+      '</div>' +
+      '<div class="library-album-body library-scroll table-scroll" hidden>' +
+        '<table class="list"><thead><tr>' +
+          '<th class="pick"><input type="checkbox" class="pick-all" title="Select all shown"></th>' +
+          '<th>Title</th><th>Genre</th><th class="num">Length</th>' +
+          '<th class="num">BPM</th><th>Key</th><th class="num">Energy</th>' +
+          '<th>Video</th><th>Sets</th><th></th>' +
+        '</tr></thead><tbody></tbody></table></div>';
+    listRoot.insertBefore(sec, listRoot.firstChild);
     var list = document.getElementById("album-names");
     if (list && album) {
       var opt = document.createElement("option");
       opt.value = album;
       list.appendChild(opt);
     }
-    return tr;
+    return sec;
   }
 
   function recountGroup(head) {
     if (!head) return;
-    var n = 0;
-    var row = head.nextElementSibling;
-    while (row && !row.classList.contains("album-group-head")) {
-      if (row.getAttribute("data-song")) n += 1;
-      row = row.nextElementSibling;
-    }
-    var muted = head.querySelector(".muted");
+    var n = head.querySelectorAll("tr[data-song]").length;
+    var muted = head.querySelector(".album-fold .muted");
     if (muted) muted.textContent = "(" + n + ")";
     if (!n) head.remove();
   }
@@ -3748,7 +3774,7 @@ function initLibraryBulk() {
   document.addEventListener("click", function (e) {
     var albumBtn = e.target.closest && e.target.closest(".js-album-genre-set");
     if (albumBtn && genreDlg) {
-      var head = albumBtn.closest("tr.album-group-head");
+      var head = albumBtn.closest(".library-album");
       if (!head) return;
       genreAlbum = head.getAttribute("data-album") || "";
       genreSong = null;
@@ -3816,8 +3842,7 @@ function initLibraryBulk() {
         genre2: val("set-genre2-select"),
         subgenre2: val("set-subgenre2-select")
       }).then(function (d) {
-        var head = document.querySelector(
-          'tr.album-group-head[data-album="' + genreAlbum.replace(/"/g, '\\"') + '"]');
+        var head = albumSection(genreAlbum);
         if (head && d.defaults) {
           head.setAttribute("data-genre", d.defaults.genre || "");
           head.setAttribute("data-subgenre", d.defaults.subgenre || "");
@@ -3861,11 +3886,11 @@ function initLibraryBulk() {
         // here -- so it can never drift from what the table renders
         return fetch("/songs/" + d.song_id + "/row").then(function (r) { return r.text(); })
           .then(function (html) {
-            var body = document.querySelector("#library table.list tbody");
+            var listRoot = document.getElementById("library-albums");
             var wrap = document.createElement("tbody");
             wrap.innerHTML = html.trim();
             var row = wrap.querySelector("tr[data-song]");
-            if (body && row) {
+            if (listRoot && row) {
               var album = row.getAttribute("data-album") || "";
               var genres = {
                 genre: row.getAttribute("data-genre") || "",
@@ -3873,11 +3898,14 @@ function initLibraryBulk() {
                 genre2: row.getAttribute("data-genre2") || "",
                 subgenre2: row.getAttribute("data-subgenre2") || ""
               };
-              var head = ensureAlbumGroup(body, album, genres);
-              row.classList.remove("hidden");
-              head.after(row);
-              setGroupOpen(head, true);
-              recountGroup(head);
+              var head = ensureAlbumGroup(listRoot, album, genres);
+              var body = head && head.querySelector("tbody");
+              if (body) {
+                row.classList.remove("hidden");
+                body.insertBefore(row, body.firstChild);
+                setGroupOpen(head, true);
+                recountGroup(head);
+              }
             }
             upload.reset();
             refresh();
@@ -3902,10 +3930,7 @@ function initLibraryBulk() {
     busy(true, "deleting…");
     api(form.action, new FormData(form))
       .then(function () {
-        var head = row.previousElementSibling;
-        while (head && !head.classList.contains("album-group-head")) {
-          head = head.previousElementSibling;
-        }
+        var head = row.closest(".library-album");
         row.remove();
         recountGroup(head);
         refresh();
