@@ -558,8 +558,11 @@ field (`#pose-gallery-q`, icon on the right; focus swaps that icon
 for a clear ×), Gallery (`#pose-gallery-grid`; typing a query opens
 the matching grid), and a save icon on the far right
 (`#pose-gallery-use`). Clicking a grid cell or the save icon writes
-hidden `sheet_id` and posts the bind immediately. `none` clears
-the bind without opening the viewer. Broken plate files show an empty
+hidden `sheet_id` and `fetch`es the bind (`applyPose` / `api()`);
+the current thumb and Pinned label paint from the JSON. No form
+submit, no 303, no reload. `none` clears
+the bind without opening the viewer. The current plate uses a real
+`src`, not `lazy-src`. Broken plate files show an empty
 tile, not the pose name as alt text. Save actions are labeled floppies (Save JSON, Save lock, Save plate,
 Save scene) so two disks are not the same control. Every icon has
 `title` and `aria-label`. A `.save-note` reports saved / pinned / the

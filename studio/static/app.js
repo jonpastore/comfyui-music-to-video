@@ -2155,9 +2155,27 @@ function markPosePick(form, sheetId) {
 function applyPose(form, sheetId) {
   if (!form) return;
   markPosePick(form, sheetId);
-  if (typeof form.requestSubmit === "function") form.requestSubmit();
-  else form.submit();
+  var dest = form.getAttribute("action");
+  if (!dest) return;
+  var note = form.querySelector(".save-note");
+  if (note) say2(note, "saving…");
+  return api(dest, new FormData(form)).then(function (d) {
+    paintPoseBind(form, d);
+    if (note) say2(note, d.source === "saved" ? "pinned" : (d.sheet_id ? "saved" : "cleared"));
+    return d;
+  }).catch(function (err) {
+    if (note) say2(note, err.message, true);
+    throw err;
+  });
 }
+
+document.addEventListener("submit", function (e) {
+  var form = e.target && e.target.closest && e.target.closest("form.pose-bind");
+  if (!form) return;
+  e.preventDefault();
+  var hid = form.querySelector('input[name=sheet_id]');
+  applyPose(form, hid ? hid.value : "0");
+}, true);
 
 document.addEventListener("error", function (e) {
   var img = e.target;
@@ -2189,6 +2207,8 @@ function paintPoseBind(form, d) {
   var under = form.querySelector(".pose-under");
   var btn = under && under.querySelector(".thumb-open");
   var empty = under && under.querySelector(":scope > .pose-thumb-empty");
+  var pick = form.querySelector(".pose-pick.on");
+  var pickThumb = pick && (pick.getAttribute("data-thumb") || pick.getAttribute("data-full"));
   if (d.url && under) {
     if (!btn) {
       btn = document.createElement("button");
@@ -2209,7 +2229,9 @@ function paintPoseBind(form, d) {
       img.alt = "";
       btn.appendChild(img);
     }
-    img.src = d.url;
+    img.src = (pickThumb || d.url);
+    img.removeAttribute("data-src");
+    img.classList.remove("lazy-src");
   } else if (btn) {
     var span = document.createElement("span");
     span.className = "anchor-thumb pose-thumb-empty";

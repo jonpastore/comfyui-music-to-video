@@ -101,9 +101,11 @@ and video modal.
   changing. Functions: ~80 lines or cyclomatic ~12 before you split.
   Exempt only generated/vendor/one-unit APIs. Global rule:
   `~/.grok/rules/constitution.md`.
-- **In-page (htmx):** every playlist and song button/icon posts with
-  `HX-Request` and swaps the fragment. No full-page reload for those
-  controls. Mandate: `~/.grok/rules/constitution.md` **In-page studio**.
+- **In-page, no refresh:** never native-submit a form or
+  `location.reload` to run an action. Fetch or htmx, then paint from
+  the JSON/fragment. Pose bind, save plate, gallery select, and every
+  other control stay on the open page. Mandate:
+  `~/.grok/rules/constitution.md` **In-page studio**.
 - Tests: `cd studio && python3 -m pytest -q .`
 - Operator utilities (batch_edit, reddit proxy, deprecate, catalog): `docs/SCRIPTS.md`.
   Do not add another dated one-off under `scripts/`. `anchor5/` is a local lab, not git.

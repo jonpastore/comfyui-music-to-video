@@ -7310,7 +7310,7 @@ def bind_scene_pose_sheet(request: Request, id: int, tier: str, num: int,
         "url": media_url(path) if path else None,
         "label": row.get("label") or "",
         "pose": row.get("pose") or "",
-    }, f"/songs/{id}#scene-{num}")
+    }, f"/songs/{id}/storyboard/{tier}#scene-{num}")
 
 
 @app.post("/songs/{id}/refs")

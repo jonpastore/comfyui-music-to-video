@@ -823,7 +823,8 @@ map (`T2-51`/`T2-52` **built**, `test_t2_52_map_accept.py`).
 `start_refs` 400s on draft/rejected. The leftover bind on the scene
 row is a pose textarea, then current thumb + Save plate, then a
 taller `pose-picks` strip. `#pose-gallery` (search, Gallery grid,
-save icon) posts `.../scene/{n}/pose-sheet` on select. Not a `<select>`.
+save icon) `fetch`es `.../scene/{n}/pose-sheet` on select and paints
+the current thumb from the JSON. Not a `<select>`, not a full-page submit.
 
 **`T2-54` is built.** `storyboard_backfill.backfill(song_id, run_tiers)`
 takes the existing ceiling-tier board (highest ticked) and writes only

@@ -759,6 +759,7 @@ def test_bind_route_overrides_auto():
             f"/songs/{song['id']}/storyboard/r/scene/1/pose-sheet",
             data={"sheet_id": str(s2["id"])}, follow_redirects=False)
         assert r.status_code == 303, r.text
+        assert f"/songs/{song['id']}/storyboard/r" in (r.headers.get("location") or "")
         sb = json.load(open(jp))
         assert sb["scenes"][0]["pose_sheet_id"] == s2["id"]
         p = pose_plan.plan(song, "r")
@@ -833,6 +834,14 @@ def test_bind_route_json_reports_source():
         assert 'type="hidden" name="sheet_id"' in page.split("pose-bind", 1)[-1].split("</form>", 1)[0]
         bind = page.split("pose-bind", 1)[-1].split("</form>", 1)[0]
         assert "js-ref-preview" not in bind
+        under = page.split("pose-under", 1)[-1].split("pose-picks", 1)[0]
+        assert "lazy-src" not in under
+        assert "?w=360" in under
+        js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
+        apply = js.split("function applyPose", 1)[1].split("document.addEventListener", 1)[0]
+        assert "api(" in apply
+        assert "requestSubmit" not in apply
+        assert ".submit(" not in apply
         assert ">Clips<" in page or ">Clips</h4>" in page
         assert "First clip only" in page
         assert "What First clip only means" in page
@@ -847,9 +856,9 @@ def test_bind_route_json_reports_source():
         scene_row = open(os.path.join(os.path.dirname(__file__),
                                       "templates", "_scene_row.html")).read()
         assert "js-ref-preview thumb-open" in scene_row
+        assert "lazy-src" in scene_row
         assert 'name="seed_min"' in page
-        assert "lazy-src" in page
-        assert "data-src=" in page
+        assert "data-src=" in scene_row
         assert "pose-row" in page
 
 
