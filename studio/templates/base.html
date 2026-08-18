@@ -53,13 +53,18 @@
       {{ modal_close() }}
     </div>
     <p class="hint" id="pose-brief-meta"></p>
+    <div id="pose-brief-actors" class="pose-brief-actors" hidden>
+      <p class="pose-brief-actors-head">Actors — attach a Mage reference for each</p>
+      <ul id="pose-brief-actors-list"></ul>
+    </div>
     <label>Character sheet for Mage
       <textarea id="pose-brief-text" rows="12" readonly></textarea>
     </label>
     <div class="button-row">
       <button type="button" id="pose-brief-copy">Copy prompt</button>
     </div>
-    <p class="hint">Grey studio, one figure, asked pose. Not the scene still.
+    <p class="hint">Grey studio sheet for the selected person. Attach every
+      listed actor as a Mage reference. Not the scene still.
       Or upload a sheet and assign it from the pose row.</p>
   </dialog>
   <dialog class="lightbox" id="ref-preview">

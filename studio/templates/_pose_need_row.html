@@ -41,6 +41,7 @@
   <button type="button" class="secondary js-pose-brief"
           data-label="{{ g.label }}"
           data-who="{{ g.character_label or '' }}"
+          data-actors="{{ g.actor_label or g.character_label or '' }}"
           data-tier="{{ tier | tiername }}"
           data-tier-id="{{ tier }}"
           data-album="{{ album }}"

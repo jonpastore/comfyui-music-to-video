@@ -54,6 +54,11 @@ _FAMILIES = {
 # Auto-bind only when the best sheet beats this. Token-only ties stay unbound.
 _MIN_SCORE = 0.34
 
+# Stance that is not a solo still — Mage needs a ref for each body.
+_PARTNERED = frozenset({
+    "cowgirl", "oral", "spit", "supine", "allfours", "bent", "side",
+})
+
 
 def _norm(text):
     return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
@@ -284,6 +289,31 @@ def scene_leads(scene, people):
     return found or list(people[:1])
 
 
+def scene_actors(scene, people, pose=None):
+    """Named bodies Mage needs refs for. Partnered stance adds the album lead."""
+    leads = scene_leads(scene, people)
+    pose = pose if pose is not None else (scene or {}).get("pose") or ""
+    if not people:
+        return leads
+    partnered = bool(_families(pose) & _PARTNERED)
+    if not partnered:
+        return leads
+    lead0 = people[0]
+    if any(p.get("id") == lead0.get("id") for p in leads):
+        return leads
+    return [lead0] + list(leads)
+
+
+def _append_people(dst, extra):
+    seen = {(p.get("id"), (p.get("name") or "").lower()) for p in dst}
+    for p in extra or []:
+        key = (p.get("id"), (p.get("name") or "").lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        dst.append(p)
+
+
 def _who_key(who):
     parts = []
     for p in who or []:
@@ -385,6 +415,7 @@ def plan(song, tier):
         num = scene.get("scene_number")
         need = need_text(scene)
         who = scene_leads(scene, people)
+        actors = scene_actors(scene, people, scene.get("pose") or "")
         saved = _scene_sheet_id(scene)
         sheet, score, source = None, 0.0, "none"
         if saved and saved in by_id:
@@ -407,8 +438,12 @@ def plan(song, tier):
             "source": source if source != "none" else "unbound",
             "characters": who,
             "character_label": _who_label(who),
+            "actors": list(actors),
+            "actor_label": _who_label(actors),
         })
         groups[key]["scenes"].append(num)
+        _append_people(groups[key]["actors"], actors)
+        groups[key]["actor_label"] = _who_label(groups[key]["actors"])
         rows_out.append({
             "num": num,
             "name": scene.get("name") or f"scene {num}",
@@ -424,6 +459,8 @@ def plan(song, tier):
             "source": source,
             "characters": who,
             "character_label": _who_label(who),
+            "actors": actors,
+            "actor_label": _who_label(actors),
         })
     bound = sum(1 for r in rows_out if r["sheet_id"])
     return {
@@ -523,6 +560,9 @@ def album_coverage(album, tier):
                     "source": item.get("source") or "unbound",
                     "characters": who,
                     "character_label": item.get("character_label") or _who_label(who),
+                    "actors": list(item.get("actors") or who),
+                    "actor_label": item.get("actor_label") or _who_label(
+                        item.get("actors") or who),
                     "songs": [],
                     "binds": [],
                     "needs": [],
@@ -530,6 +570,8 @@ def album_coverage(album, tier):
                     "n_scenes": 0,
                 }
                 groups[key] = g
+            _append_people(g["actors"], item.get("actors") or who)
+            g["actor_label"] = _who_label(g["actors"])
             g["n_scenes"] += 1
             need = (item.get("need") or item.get("pose") or "").strip()
             if need and need not in g["needs"] and len(g["needs"]) < 6:

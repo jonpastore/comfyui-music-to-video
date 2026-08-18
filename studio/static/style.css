@@ -1975,6 +1975,9 @@ label.icon-btn {
 }
 .confirm-modal ul { margin: 0.3rem 0 0.8rem; padding-left: 1.2rem; }
 .confirm-modal li { margin-bottom: 0.2rem; }
+.pose-brief-actors { margin: 0.55rem 0 0.75rem; }
+.pose-brief-actors-head { margin: 0; font-weight: 600; }
+#pose-brief-actors-list { margin: 0.25rem 0 0; }
 .danger-row { margin-top: 1.5rem; }
 
 .lightbox { max-width: 96vw; }

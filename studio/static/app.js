@@ -3395,6 +3395,26 @@ document.addEventListener("click", function (e) {
       if (brief.getAttribute("data-songs")) bits.push(brief.getAttribute("data-songs"));
       meta.textContent = bits.join(" · ");
     }
+    var actorsEl = document.getElementById("pose-brief-actors");
+    var actorsList = document.getElementById("pose-brief-actors-list");
+    if (actorsEl && actorsList) {
+      var raw = brief.getAttribute("data-actors") || brief.getAttribute("data-who") || "";
+      var names = raw.split(" · ").map(function (s) { return s.trim(); }).filter(Boolean);
+      var who = brief.getAttribute("data-who") || "";
+      actorsList.textContent = "";
+      names.forEach(function (name) {
+        var li = document.createElement("li");
+        li.textContent = name;
+        if (who && name === who) {
+          var mark = document.createElement("span");
+          mark.className = "muted";
+          mark.textContent = " — this sheet";
+          li.appendChild(mark);
+        }
+        actorsList.appendChild(li);
+      });
+      actorsEl.hidden = !names.length;
+    }
     if (ta) ta.value = src ? src.value : "";
     dlg.showModal();
     var album = brief.getAttribute("data-album") || "";

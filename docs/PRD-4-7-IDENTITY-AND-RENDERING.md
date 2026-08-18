@@ -221,7 +221,9 @@ operator override on the scene row) and uses that sheet as image2.
 Identity front stays image1. The anchors page shows the album pose
 roster (have/missing across every song board) and **Use as this pose**
 is the keeper; the full-size lightbox classifies the open sheet onto
-that roster. Uploading a sheet stays on that roster tier — it does
+that roster. **Generate…** lists the actors Mage needs a reference
+image for (the sheet’s person, plus the album lead on a partnered
+stance such as cowgirl) above the grey-studio sheet prompt. Uploading a sheet stays on that roster tier — it does
 not refresh onto G because G has more rows. "Use as reference" is
 not on the tile.
 

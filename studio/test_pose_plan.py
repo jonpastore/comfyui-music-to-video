@@ -90,6 +90,22 @@ def test_match_prefers_all_fours_over_standing():
     assert score >= pose_plan._MIN_SCORE
 
 
+def test_scene_actors_cowgirl_includes_album_lead():
+    people = [{"id": None, "name": "Meow P"}, {"id": 2, "name": "Panther"}]
+    scene = {"pose": "cowgirl then roll-off",
+             "characters": [{"name": "Panther", "role": "lead"}]}
+    got = pose_plan.scene_actors(scene, people)
+    assert [p["name"] for p in got] == ["Meow P", "Panther"]
+
+
+def test_scene_actors_solo_named_lead_stays_one():
+    people = [{"id": None, "name": "Meow P"}, {"id": 2, "name": "Panther"}]
+    scene = {"pose": "standing",
+             "characters": [{"name": "Panther", "role": "lead"}]}
+    got = pose_plan.scene_actors(scene, people)
+    assert [p["name"] for p in got] == ["Panther"]
+
+
 def test_match_cowgirl_not_standing():
     standing = {"id": 1, "view": "pose_1", "render_json": json.dumps({"pose_name": "standing"}),
                 "path": "s.jpg"}
@@ -387,9 +403,13 @@ def test_mage_brief_on_the_page_is_a_grey_studio_sheet():
         assert "corridor mouth" not in body["prompt"]
         js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
         assert "/sheet-prompt" in js
+        assert "pose-brief-actors" in js
+        assert "this sheet" in js
         base = open(os.path.join(os.path.dirname(__file__), "templates", "base.html")).read()
         bar = base.split('id="pose-brief"', 1)[1].split("</dialog>", 1)[0]
         assert bar.index("lightbox-spacer") < bar.index("modal_close")
+        assert 'id="pose-brief-actors"' in bar
+        assert "Actors — attach a Mage reference" in bar
         css = open(os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
         assert ".confirm-modal > .modal-bar" in css
         assert "display: flex" in css.split(".confirm-modal > .modal-bar", 1)[1][:120]
@@ -540,6 +560,46 @@ def test_album_coverage_splits_the_same_pose_by_character():
         assert "Tiger" in page
         assert "pose-who-tab" in page
         assert tiger["id"]
+
+
+def test_cowgirl_coverage_lists_both_actors_for_mage():
+    """Partnered stance names the album lead even when the scene only lists him."""
+    with TestClient(appmod.app) as client:
+        album = f"Cowgirl Actors {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        pl = db.one("SELECT id FROM playlists WHERE name=?", album)["id"]
+        db.run("UPDATE playlists SET style_text=? WHERE id=?",
+               "Meow P — alley nights", pl)
+        client.post(f"/playlists/{pl}/characters",
+                    data={"name": "Panther", "role": "partner"})
+        song = _upload_song(client, "Cowgirl Actors Song", album=album)
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        json.dump({
+            "title": "T", "album": album, "version": "xxx",
+            "character_reference": "Meow P",
+            "scenes": [{
+                "scene_number": 1, "name": "Ride",
+                "pose": "cowgirl then roll-off",
+                "image_prompt": "she rolls astride the panther",
+                "characters": [{"name": "Panther", "role": "lead"}],
+                "duration_guidance": "4s",
+            }],
+        }, open(jp, "w"))
+        open(os.path.join(outdir, f"{song['slug']}_xxx.md"), "w").write("# sb\n")
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               song["id"], "xxx", jp,
+               os.path.join(outdir, f"{song['slug']}_xxx.md"), 1, time.time())
+        cov = pose_plan.album_coverage(album, "xxx")
+        assert len(cov["needed"]) == 1, [g["label"] for g in cov["needed"]]
+        g = cov["needed"][0]
+        names = [p["name"] for p in g["actors"]]
+        assert names == ["Meow P", "Panther"], names
+        assert g["actor_label"] == "Meow P · Panther"
+        page = client.get(f"/anchors?scope_value={album}").text
+        assert 'data-actors="Meow P · Panther"' in page
 
 
 def test_album_coverage_floats_missing_poses_first():
