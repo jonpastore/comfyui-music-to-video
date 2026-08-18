@@ -895,6 +895,92 @@ def ltx_workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
     return wf
 
 
+_LTX_LATENT_CLASSES = frozenset({
+    "EmptyLTXVLatentVideo",
+    "LTXVImgToVideo",
+    "LTXVImgToVideoInplace",
+    "LTXVConcatAVLatent",
+    "LTXVSeparateAVLatent",
+    "LTXVAddGuide",
+    "LTXVLatentUpsampler",
+})
+_LTX_LATENT_KEYS = frozenset({
+    "latent_image", "samples", "latent", "av_latent", "video_latent",
+    "audio_latent",
+})
+_LTX_NOT_LATENT_OUT = frozenset({
+    "VAEDecode", "VAEDecodeTiled", "CreateVideo", "SaveVideo",
+})
+
+
+def _ltx_latent_ids(wf):
+    """Node ids that carry an LTX VAE latent (seed classes + latent walk)."""
+    ids = {k for k, n in wf.items()
+           if (n.get("class_type") or "") in _LTX_LATENT_CLASSES}
+    changed = True
+    while changed:
+        changed = False
+        for k, n in wf.items():
+            if k in ids or (n.get("class_type") or "") in _LTX_NOT_LATENT_OUT:
+                continue
+            for key, val in (n.get("inputs") or {}).items():
+                if key not in _LTX_LATENT_KEYS:
+                    continue
+                if isinstance(val, list) and len(val) == 2 and val[0] in ids:
+                    ids.add(k)
+                    changed = True
+                    break
+    return ids
+
+
+def _wan_node_ids(wf):
+    """WAN UNET loaders (wan22_i2v_low / wan*) and nodes that consume them."""
+    ids = set()
+    for k, n in wf.items():
+        ct = n.get("class_type") or ""
+        name = str((n.get("inputs") or {}).get("unet_name") or "").lower()
+        if ct == "UNETLoader" and "wan" in name:
+            ids.add(k)
+        elif ct.startswith("Wan"):
+            ids.add(k)
+    changed = True
+    while changed:
+        changed = False
+        for k, n in wf.items():
+            if k in ids:
+                continue
+            model = (n.get("inputs") or {}).get("model")
+            if isinstance(model, list) and len(model) == 2 and model[0] in ids:
+                ids.add(k)
+                changed = True
+    return ids
+
+
+def refuse_ltx_latent_into_wan(wf):
+    """T5-15: a graph that wires an LTX VAE latent into a WAN node is refused.
+
+    LTX VAE latents include node 21/22 samples and LTXVSeparateAVLatent.
+    WAN nodes are wan22_i2v_low / wan UNET loaders and the samplers they drive.
+    """
+    if not wf:
+        return wf
+    ltx = _ltx_latent_ids(wf)
+    wan = _wan_node_ids(wf)
+    for nid in wan:
+        node = wf[nid]
+        for key, val in (node.get("inputs") or {}).items():
+            if not (isinstance(val, list) and len(val) == 2):
+                continue
+            src = val[0]
+            if src not in ltx:
+                continue
+            src_cls = (wf.get(src) or {}).get("class_type") or src
+            raise ValueError(
+                f"T5-15: refuse LTX VAE latent ({src_cls} node {src}) "
+                f"into WAN node {nid} ({node.get('class_type')} {key})")
+    return wf
+
+
 def _refine_ltx(wf, i):
     """Variant A: same-resolution second pass on the sampled VIDEO latent.
 
@@ -939,7 +1025,7 @@ def _refine_ltx(wf, i):
     for n in wf.values():
         if n["class_type"] == "CreateVideo" and n["inputs"].get("images") == [decode_id, 0]:
             n["inputs"]["images"] = ["33", 0]
-    return wf
+    return refuse_ltx_latent_into_wan(wf)
 
 
 def attach_ltxv_guide(wf, image, frame_idx=0, strength=1.0):
@@ -1080,7 +1166,7 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
             # Variant A, same-resolution re-denoise. Do NOT hand the LTX latent
             # to the WAN refiner -- they do not share a VAE.
             wf = _refine_ltx(wf, i)
-        return wf
+        return refuse_ltx_latent_into_wan(wf)
 
     wf = {
         "4":  {"class_type": "CLIPLoader", "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan", "device": "default"}},
@@ -1171,7 +1257,7 @@ def workflow(i, scene, ref_image, audio_file, char_lock, world_lock, guard,
     # silent: the master mp3 is laid over the assembled timeline once, so
     # per-clip audio cannot drift.
     wf["17"] = {"class_type": "CreateVideo", "inputs": {"images": [decode_id, 0], "fps": FPS}}
-    return wf
+    return refuse_ltx_latent_into_wan(wf)
 
 
 def main():

@@ -6,7 +6,8 @@ Sequencing and review record: `docs/PLAN-TRD-4-7.md`,
 `docs/DDD-1-3-EDITING-AND-QUALITY.md`.
 
 **Rewritten 2026-08-17 for Jarvis #529 (D1–D10).** Reconciled
-2026-08-18: `T5-11` **built** (`test_t5_11_ltx_always_first.py`); `T2-50`, `T4-11` (charcoal-brown compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`), `T4-21`…`T4-24`, `T7-21`…`T7-23` **built**; `T3-35` **built** (`test_t3_35_settings_remedies.py`); `T2-51`
+2026-08-18: `T5-11` **built** (`test_t5_11_ltx_always_first.py`); `T5-15`
+**built** (`test_t5_15_no_latent_handoff.py`); `T2-50`, `T4-11` (charcoal-brown compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`), `T4-21`…`T4-24`, `T7-21`…`T7-23` **built**; `T3-35` **built** (`test_t3_35_settings_remedies.py`); `T2-51`
 **partial** (classify writes no map; draft/Accept is `T2-52`).
 `T2-56` **built** (`test_t2_56_per_scene_keeper.py`): accepted keeper
 for that scene is image1. `T2-53` / `T7-22` **built**
@@ -50,7 +51,7 @@ is not a studio feature.
 | `studio/classification.py` | T4-21 / T4-22 album pose library; versioned `classification_json` in sqlite; `library` / `query` / `save` / `import_sidecar` / `keepers` (`usable≠skip`); `refuse_skip` (`T7-23` **built**, `test_t7_23_usable_skip.py`) blocks use-as-ref / map / image1; no FastAPI. Sidecar is import seed only |
 | `studio/prompts.py` | `PROMPT_TYPES` — composer fields plus `view:<key>` generated from `VIEWS` (`T7-13`), plus `backdrop`/`composite`/`pose` |
 | `studio/tiers.py` | `compose_guardrail`, `check_text` (tier-aware: g/pg13 may depict T10-18; r lyrics/narrative mention T10-18a), `screen_work_for_tier` / `screen_escalation` / `check_escalation` (T10-19 entry; T10-20 ignores override kwargs), `check_override`, `check_tier_policy` |
-| `build_song.py` | TRD-5's territory: `workflow()`, the LTX branches, `clip_plan`, `expect_from_workflow` |
+| `build_song.py` | TRD-5's territory: `workflow()`, the LTX branches, `clip_plan`, `expect_from_workflow`, `refuse_ltx_latent_into_wan` (`T5-15` **built**, `test_t5_15_no_latent_handoff.py`) |
 | `studio/jobs.py`, `pipeline.py`, `db.py` | TRD-6's territory. `qc_service.listed` / `select` / `record_pair` own T6-A5: predecessor and successor both listed and selectable. `h_render_set`, `refine_generated_still`, `h_repair` and `h_anchor` call `record_pair`. |
 | `studio/vision.py` | `score_candidate(path, bases, prompt)` — advisory identity+prompt match; a failure stores the xAI/local error and the backend that actually failed (not `available()`'s hope); `h_anchor` and `h_fix_anchor` write `anchors.qc_json`; `h_refs` / `h_reroll` / `h_fix_ref` write `refs.qc_json` with bases from `ref_score_bases` (chosen anchor, not job plate / broken source — `test_h_refs_scores_vs_chosen_anchor`); `h_artwork` writes `assets.qc_json` on the generate and on a refine sibling; `persist_still_qc` writes `artefacts.qc_json` on an `h_repair` dest still and a standalone refine dest; `qc_tag` shows the named failure, never "vision unknown" (`T3-31`, `T4-19`) |
 
@@ -410,7 +411,10 @@ B does not fit; that finding is on `CATALOG['ltx25']['notes']` (`T5-6`).
 
 **Do not wire the WAN refiner to LTX.** It re-samples the s2v latent with
 `wan22_i2v_low` and that is valid *only* because s2v and i2v-low share
-`wan_2.1_vae`. LTX has its own video VAE.
+`wan_2.1_vae`. LTX has its own video VAE. `T5-15` is **built**:
+`refuse_ltx_latent_into_wan(wf)` raises when an LTX VAE latent (node
+21/22 / `LTXVSeparateAVLatent`) is wired into a WAN node. `workflow()`
+and `_refine_ltx` call it (`test_t5_15_no_latent_handoff.py`).
 
 Variant **A** (Jon's decision, 2026-08-13): a same-resolution second pass,
 inserted **before `VAEDecode` (node 23)**:

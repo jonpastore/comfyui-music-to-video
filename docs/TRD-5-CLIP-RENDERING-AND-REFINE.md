@@ -248,7 +248,7 @@ this document owns the node. The sentence stays "do not reinvent", not
 
 ---
 
-## Status against the tree, 2026-08-17
+## Status against the tree, 2026-08-18
 
 #529 clip-graph rows. T5-1…T5-10 stay in the 2026-08-13 ledger below.
 
@@ -258,7 +258,7 @@ this document owns the node. The sentence stays "do not reinvent", not
 | `T5-12` decoded s2v hop (`control_video` = LTX frames) | **built** (graph); look **NOT MEASURED** (`T3-37`) | `test_t5_12_d7_hop.py` | `needs_lip_sync` → LTX then s2v windows (`depends_on` = LTX pred). `main()` emits `WanSoundImageToVideo` + `LoadVideosFromFolder` on the LTX SaveVideo prefix; `ref_image` = scene still; hop SaveVideo prefix ≠ LTX. Unmarked = LTX only. Mutation: `LoadVideo` / latent control → red. Mutation: hop overwrites LTX prefix → red. GPU pair look is `T3-37` |
 | `T5-13` `skip_first_frames` matches the LTX slice | **built** | `test_t5_13_s2v_window.py` | `s2v_window_skips` / hop `skip_first_frames` = k*LEN at force_rate=FPS. `workflow(..., skip_first_frames=)` wires `LoadVideosFromFolder` on control_video. `main()` hop emit passes `clip_chain_plan` skip into `workflow()`. Window 2 of a 15s LTX take ≠ 0 on emitted `LoadVideosFromFolder`. Mutation: every window skip 0 → red |
 | `T5-14` T5-A refine on the LTX take, not on s2v | **partial** | `test_clip_length.py` | `_refine_ltx` attaches A on an LTX graph. No s2v successor exists, so "not on s2v" is untested. Labels must not promise a hop the graph omits |
-| `T5-15` no LTX latent into WAN | **built** (forbid) | `test_clip_length.py` | Early-return LTX path never reaches the WAN refine block. Keep: do not wire them. Intended positive: a graph that tries the handoff is refused (`test_t5_15_no_latent_handoff.py` **not built**) |
+| `T5-15` no LTX latent into WAN | **built** | `test_t5_15_no_latent_handoff.py` | `build_song.refuse_ltx_latent_into_wan(wf)` raises when an LTX VAE latent (node 21/22 samples / `LTXVSeparateAVLatent`) is wired into a WAN node (`wan22_i2v_low` / wan UNET). Called from `workflow()` and `_refine_ltx`. A good LTX or WAN graph is accepted. Mutation: accept the handoff → red |
 | `T5-1`/`T5-3`/`T5-4` refine on LTX | **built** (graph) | `test_clip_length.py` | `_refine_ltx` attaches a second pass; silent no-op is gone |
 | `T5-2` output MAD + sharpness | **built** (decoded pair); GPU pair **NOT MEASURED** | `test_t5_2_refine_mad.py` | Same as 2026-08-13 row |
 

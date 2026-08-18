@@ -187,7 +187,8 @@ from `usable≠skip` **is** (`test_t7_23_usable_skip.py`). `T2-54` ceiling + tic
 (`test_t2_54_ceiling_backfill.py`). LTX-first (`T5-11` **built**,
 `test_t5_11_ltx_always_first.py`). `needs_lip_sync` field (`T2-55`
 **built**, `test_t2_55_needs_lip_sync.py`); D7 hop graph (`T5-12`
-**built**, `test_t5_12_d7_hop.py`). D7 look is `T3-37` NOT MEASURED.
+**built**, `test_t5_12_d7_hop.py`). No LTX latent into WAN (`T5-15`
+**built**, `test_t5_15_no_latent_handoff.py`). D7 look is `T3-37` NOT MEASURED.
 `T2-56` per-scene
 image1 **is** (`test_t2_56_per_scene_keeper.py`).
 
@@ -212,7 +213,8 @@ statement of it:
    `T7-8` image-latent is the form control; the loop uses T7-21.
 5. **`--refine` is honest as a graph** (P7 / `T5-1`). D7 hop graph
    (`T5-12`) is **built** (`test_t5_12_d7_hop.py`); look is
-   NOT MEASURED (`T3-37`). Variant B does not fit (`T5-6`).
+   NOT MEASURED (`T3-37`). No LTX latent into WAN (`T5-15` **built**,
+   `test_t5_15_no_latent_handoff.py`). Variant B does not fit (`T5-6`).
 6. **The queue is built in full** (P8–P10). Ledger: `T6-1`…`T6-A10`.
    `T6-18` still deletes nothing.
 

@@ -1099,7 +1099,10 @@ The studio has two live instances of the same defect and both are UI-visible:
   (`T5_2_REAL_CLIP_MEASURED` stays False until `source=gpu` lands a Comfy
   pair). `T3-26` is the labelled-set half: a refine that does not raise
   the tier-2 score is reported as not helping; missing scores raise, they
-  do not inherit `opportunistic`.
+  do not inherit `opportunistic`. `T5-15` **built**: a clip graph that
+  wires an LTX VAE latent into `wan22_i2v_low` / a wan UNET is refused
+  (`refuse_ltx_latent_into_wan`, `test_t5_15_no_latent_handoff.py`).
+  The operator never sees a silent LTX→WAN latent handoff.
 - **Five of six `DENOISE_CHOICES`** *were* labelled *"on an anchor this returns
   noise"*, correctly, because `latent_mode` was pinned to `"empty"`. **`T7-8`
   shipped 2026-08-13 (`d3f2f6a`) and unpinned it** — corrected after review
