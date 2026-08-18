@@ -138,7 +138,7 @@ copies. Do not offer those families as `role=reference` defaults.
 |---|---|---|
 | P1 | A sheet cannot be produced from a silent default — no tier, view, or wardrobe falls back to something nobody chose | `T4-1`…`T4-4` |
 | P2 | Text that a tier forbids cannot be saved under it, and text it permits can | `T4-5`…`T4-9` |
-| P3 | The composed positive prompt contains no negation, names the body parts, names the reference slots, and never says "bare skin" on a furred character | `T4-10`…`T4-14`, `T4-18` |
+| P3 | The composed positive prompt contains no negation, names the body parts, names the reference slots, and never says "bare skin" on a furred character | `T4-10`…`T4-14`, `T4-18`. `T4-11` **built** (compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`); render differential NOT MEASURED |
 | P3a | Lighting lock is channel balance on the rendered sheet (olive/magenta FLAG, grey PASS), not the `BACKDROP` string. Job 257 `front_nude` seed 5151 PASSes 8.06; sibling seed 5288 still FLAGs 14.76 | `T4-13` |
 | P4 | A new view is one table entry, and is tier-gated by what it *is* rather than by a list somebody remembered to update | `T7-1`/`T7-2`/`T7-3` built (`make_anchor.VIEWS` + `is_nude_view` + form/compose via `test_t7_3_new_views.py`). GPU new-view sheets NOT MEASURED |
 | P5 | An approved sheet can be the identity lock for the next sheet — the lever that keeps clips on-model, applied to anchors | `T7-6`/`T7-8` built. `T7-7` harness only; GPU pair **NOT MEASURED** |
@@ -207,7 +207,8 @@ statement of it:
    new-view sheets remain NOT MEASURED.
 3. **Prove identity holds** (P5's `T7-7` + D10 colour). Harness built.
    GPU four-image set **NOT MEASURED**. Body clause is charcoal-brown
-   (`T4-11` **built**, `test_t4_11_fresh_album_compose_is_charcoal_brown`).
+   (`T4-11` **built** (compose), `test_t4_11_fresh_album_compose_is_charcoal_brown`;
+   render differential **NOT MEASURED`).
 4. **C1/C2 resolver** (`T7-21` **built**,
    `test_t7_21_c1_c2_resolver.py`). Location plates (`T7-22` **built**,
    `test_t2_53_location_plates.py`). Use-as-ref / map / image1 refuse
@@ -274,7 +275,7 @@ coordinator (TRD-6 §7).
    criteria can all go green by never building them. That warning is spent:
    the ledger marks them **built** with tests that can go red. The remaining
    one-sided risk is `T6-18` (GC deferred) and the GPU **NOT MEASURED** rows
-   in TRD-5/TRD-7.
+   in TRD-4 (`T4-11` colour), TRD-5, and TRD-7.
 3. **Prompt surface area grows faster than the checks on it.** Four new types ×
    ten views is a lot of composed text, and every combination is a chance at
    §3.3's contradiction. `T7-4` is the check that keeps it honest: two views of

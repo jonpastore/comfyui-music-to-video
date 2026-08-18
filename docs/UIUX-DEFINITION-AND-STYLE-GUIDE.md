@@ -9,9 +9,9 @@ Companion documents: `docs/PRD-1-3-EDITING-AND-QUALITY.md`,
 **Every number below was counted from the tree at `f9ca597`, then the built
 claims were reconciled to the TRDs.** Timeline peaks (`data-peaks`) and
 on-demand loudness are **built** (`test_t1_peaks_meter.py`). `T7-16` pose
-type is **built**. GPU new-view / portrait / T7-7 / T5-2 sheets stay
-**NOT MEASURED**. The commands are named so a claim can be re-run rather than
-believed.
+type is **built**. GPU new-view / portrait / T7-7 / T5-2 sheets and the
+`T4-11` colour render differential stay **NOT MEASURED**. The commands
+are named so a claim can be re-run rather than believed.
 
 ---
 
@@ -1280,7 +1280,8 @@ hint no longer dumps live names.
 compose hook FLAGs a human-body nude wording (including the live-studio
 body clause) so a dirty prompt does not reach the tile as a clean
 candidate. The album body default names charcoal-brown fur and the
-nine body parts (`T4-11` **built**); it does not say jet-black or defer
+nine body parts (`T4-11` **built** (compose); render differential
+**NOT MEASURED**); it does not say jet-black or defer
 colour to the face. The front / three_quarter ranking harness exists offline; the
 GPU four-image pair is not measured. Photo-conditioned halves (Catatonic
 jobs 244/248; Street Cats jobs 264/268) are on disk from base
