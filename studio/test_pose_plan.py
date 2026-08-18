@@ -258,6 +258,10 @@ def test_album_coverage_rolls_up_songs_and_clear_unsets_keeper():
         assert body["n_have"] >= 1
         page = client.get(f"/anchors?scope_value={album}").text
         assert "album-pose-roster" in page
+        assert "pose-sheet-row" in page
+        css = open(os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
+        assert ".pose-sheet-row" in css
+        assert "flex-flow: row nowrap" in css
         assert "pose-keeper-form" in page
         assert "pose-roster-open" in page
         assert "Save this assignment" in page

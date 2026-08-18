@@ -165,9 +165,11 @@
       {% endif %}
       {% for row in fam.rows %}
       <h3 class="anchor-row-head">{{ row.position }}</h3>
+      <div class="pose-sheet-row">
       {% for g in row.groups %}
       {% include "_anchor_group.html" %}
       {% endfor %}
+      </div>
       {% endfor %}
     </div>
     {% endfor %}

@@ -2063,6 +2063,33 @@ label.icon-btn {
 }
 .gallery-section > h2 { margin-bottom: 0.4rem; }
 .anchor-group { margin: 0 0 1rem; }
+.pose-sheet-row {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: flex-start;
+  gap: 0.75rem;
+  overflow-x: auto;
+  width: 100%;
+  padding-bottom: 0.25rem;
+}
+.pose-sheet-row > .anchor-group {
+  flex: 0 0 auto;
+  margin: 0;
+  min-width: 0;
+}
+.anchor-group .candidate-grid {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: max-content;
+  max-width: none;
+  margin-top: 0.4rem;
+}
+.anchor-group .candidate {
+  flex: 0 0 12rem;
+  width: 12rem;
+}
 .hidden { display: none !important; }
 .anchor-row-head {
   margin: 1rem 0 0.4rem;
