@@ -2084,10 +2084,21 @@ def _library_ctx():
     in_sets = sets_by_song()
     entries = [song_entry(s, in_sets) for s in songs]
     nums = library_service.numbers()
+    album_genres = {}
+    for p in db.q(
+            "SELECT name, genre, subgenre, genre2, subgenre2 FROM playlists "
+            "WHERE kind='playlist'"):
+        if not (p["genre"] or p["genre2"]):
+            continue
+        album_genres[p["name"]] = {
+            "genre": p["genre"] or "", "subgenre": p["subgenre"] or "",
+            "genre2": p["genre2"] or "", "subgenre2": p["subgenre2"] or "",
+        }
     return {
         "songs": entries,
         "genre_data": GENRE_DATA,
         "song_count": nums["song_count"],
+        "album_genres": album_genres,
     }
 
 
@@ -2152,6 +2163,14 @@ async def create_song(request: Request, title: str = Form(...), album: str = For
                        explicit: bool = Form(False), mp3: UploadFile = File(...)):
     genre, subgenre = valid_genre_or_400(genre, subgenre, "genre")
     genre2, subgenre2 = valid_genre_or_400(genre2, subgenre2, "genre2")
+    album = album.strip()
+    if album and not genre:
+        pl = db.one(
+            "SELECT genre, subgenre, genre2, subgenre2 FROM playlists "
+            "WHERE name=? AND kind='playlist'", album)
+        if pl and (pl["genre"] or pl["genre2"]):
+            genre, subgenre = pl["genre"] or "", pl["subgenre"] or ""
+            genre2, subgenre2 = pl["genre2"] or "", pl["subgenre2"] or ""
     slug = unique_slug(title)
     dest = await save_upload(mp3, MAX_MP3, upload_dir(slug), "mp3")
     duration = None
@@ -2184,7 +2203,8 @@ def analyse_all_songs(request: Request):
                                                            song_id=r["id"])}
               for r in rows]
     if wants_json(request):
-        return JSONResponse({"queued": queued})
+        genre_ids = [r["id"] for r in db.q("SELECT id FROM songs")]
+        return JSONResponse({"queued": queued, "genre_ids": genre_ids})
     return RedirectResponse("/", status_code=303)
 
 
@@ -2385,6 +2405,51 @@ async def bulk_set_genres(request: Request):
     # the STORED values, so the page paints what was saved rather than what was
     # typed -- otherwise a value dropped by validation stays visible and looks fine
     return JSONResponse({"updated": updated, "changed": len(updated)})
+
+
+@app.post("/albums/genres")
+async def set_album_genres(request: Request):
+    """Save album default genres and copy them onto every song on that album."""
+    body = await request.json()
+    album = (body.get("album") or "").strip()
+    if not album:
+        raise HTTPException(400, "name the album")
+    fields = {
+        "genre": "", "subgenre": "", "genre2": "", "subgenre2": "",
+    }
+    fields.update(_bulk_genre_fields(body))
+    pl = db.one("SELECT id FROM playlists WHERE name=? AND kind='playlist'", album)
+    if pl:
+        db.run(
+            "UPDATE playlists SET genre=?, subgenre=?, genre2=?, subgenre2=? WHERE id=?",
+            fields.get("genre") or "", fields.get("subgenre") or "",
+            fields.get("genre2") or "", fields.get("subgenre2") or "", pl["id"])
+    ids = [r["id"] for r in db.q("SELECT id FROM songs WHERE album=?", album)]
+    changing = _bulk_genre_changing(ids, fields) if ids else []
+    if changing:
+        sets = ", ".join(f"{k}=?" for k in fields)
+        c = db.conn()
+        c.execute("BEGIN")
+        try:
+            for sid in changing:
+                c.execute(f"UPDATE songs SET {sets} WHERE id=?", (*fields.values(), sid))
+            c.commit()
+        except Exception:
+            c.rollback()
+            raise
+    updated = []
+    for sid in ids:
+        row = db.one("SELECT id, genre, subgenre, genre2, subgenre2 FROM songs WHERE id=?", sid)
+        if row:
+            updated.append({
+                "song_id": row["id"], "genre": row["genre"] or "",
+                "subgenre": row["subgenre"] or "", "genre2": row["genre2"] or "",
+                "subgenre2": row["subgenre2"] or "",
+            })
+    return JSONResponse({
+        "album": album, "updated": updated, "changed": len(changing),
+        "defaults": fields,
+    })
 
 
 @app.get("/api/songs/{id}/peaks")

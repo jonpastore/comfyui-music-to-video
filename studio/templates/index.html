@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import modal_close, glyph_save, glyph_delete %}
+{% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_edit %}
 {% block content %}
 <h1>Library</h1>
 
@@ -134,17 +134,25 @@
       {% set gns.last = e %}
     {% endfor %}
     {% if gns.rows %}
+    {% set ag = (album_genres or {}).get(album) %}
     <tr class="album-group-head" data-album="{{ album }}"
-        data-genre="{{ gns.last.song.genre or '' }}"
-        data-subgenre="{{ gns.last.song.subgenre or '' }}"
-        data-genre2="{{ gns.last.song.genre2 or '' }}"
-        data-subgenre2="{{ gns.last.song.subgenre2 or '' }}">
+        data-genre="{{ (ag.genre if ag else gns.last.song.genre) or '' }}"
+        data-subgenre="{{ (ag.subgenre if ag else gns.last.song.subgenre) or '' }}"
+        data-genre2="{{ (ag.genre2 if ag else gns.last.song.genre2) or '' }}"
+        data-subgenre2="{{ (ag.subgenre2 if ag else gns.last.song.subgenre2) or '' }}">
       <td colspan="10">
         <button type="button" class="album-fold" aria-expanded="false"
                 title="Show songs in {{ album or 'No album' }}">
           {{ album or "No album" }}
           <span class="muted">({{ gns.rows | length }})</span>
         </button>
+        {% if album %}
+        <button type="button" class="icon-btn js-album-genre-set"
+                title="Set album genre defaults and copy to every song"
+                aria-label="Set genre for {{ album }}">
+          {{ glyph_edit() }}
+        </button>
+        {% endif %}
       </td>
     </tr>
     {% for e in gns.rows %}

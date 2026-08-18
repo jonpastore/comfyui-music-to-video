@@ -443,6 +443,12 @@ MIGRATIONS = [
     # chain-head rows only, and never 7000–16999 clip_plan-era seeds.
     "ALTER TABLE refs ADD COLUMN scene_number INTEGER",
     "ALTER TABLE playlists ADD COLUMN released REAL",
+    # Library album defaults. First song can seed these; the album pencil
+    # writes them and copies onto every song with that album name.
+    "ALTER TABLE playlists ADD COLUMN genre TEXT",
+    "ALTER TABLE playlists ADD COLUMN subgenre TEXT",
+    "ALTER TABLE playlists ADD COLUMN genre2 TEXT",
+    "ALTER TABLE playlists ADD COLUMN subgenre2 TEXT",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and

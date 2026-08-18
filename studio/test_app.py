@@ -76,6 +76,36 @@ def test_library_groups_by_album_and_collapses_upload():
         assert 'value="Grouped Alb"' in page
         assert "library-scroll" in page
         assert "album-song" in page
+        assert "js-album-genre-set" in page
+        js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
+        assert "/albums/genres" in js
+        assert "refineGenres" in js
+
+
+def test_album_genre_defaults_copy_to_every_song():
+    with TestClient(appmod.app) as client:
+        album = f"Album Genre {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        a = _upload_song(client, "AG One", album=album)
+        b = _upload_song(client, "AG Two", album=album)
+        r = client.post("/albums/genres", json={
+            "album": album, "genre": "Electronic", "subgenre": "Deep House",
+            "genre2": "", "subgenre2": "",
+        })
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["changed"] == 2
+        assert body["defaults"]["genre"] == "Electronic"
+        for sid in (a["id"], b["id"]):
+            row = db.one("SELECT genre, subgenre FROM songs WHERE id=?", sid)
+            assert row["genre"] == "Electronic"
+            assert row["subgenre"] == "Deep House"
+        pl = db.one("SELECT genre, subgenre FROM playlists WHERE name=?", album)
+        assert pl["genre"] == "Electronic"
+        c = _upload_song(client, "AG Three", album=album)
+        got = db.one("SELECT genre, subgenre FROM songs WHERE id=?", c["id"])
+        assert got["genre"] == "Electronic"
+        assert got["subgenre"] == "Deep House"
 
 
 def test_empty_state_pages_200():

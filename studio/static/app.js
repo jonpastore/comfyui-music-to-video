@@ -2824,11 +2824,29 @@ function initLibraryBulk() {
     el.value = value || "";
     el.dispatchEvent(new Event("change"));
   }
+  var genreAlbum = null;
   document.addEventListener("click", function (e) {
+    var albumBtn = e.target.closest && e.target.closest(".js-album-genre-set");
+    if (albumBtn && genreDlg) {
+      var head = albumBtn.closest("tr.album-group-head");
+      if (!head) return;
+      genreAlbum = head.getAttribute("data-album") || "";
+      genreSong = null;
+      var title = document.getElementById("genre-set-title");
+      if (title) title.textContent = "Set album genre — " + genreAlbum;
+      setSel("set-genre-select", head.getAttribute("data-genre"));
+      setSel("set-subgenre-select", head.getAttribute("data-subgenre"));
+      setSel("set-genre2-select", head.getAttribute("data-genre2"));
+      setSel("set-subgenre2-select", head.getAttribute("data-subgenre2"));
+      genreNote("Saves as the album default and copies to every song on " + genreAlbum + ".");
+      if (typeof genreDlg.showModal === "function") genreDlg.showModal();
+      return;
+    }
     var btn = e.target.closest && e.target.closest(".js-genre-set");
     if (!btn || !genreDlg) return;
     var row = btn.closest("tr[data-song]");
     if (!row) return;
+    genreAlbum = null;
     genreSong = row.getAttribute("data-song");
     var title = document.getElementById("genre-set-title");
     var name = row.querySelector("a");
@@ -2859,8 +2877,40 @@ function initLibraryBulk() {
       })
       .catch(function (err) { genreNote(err.message); });
   });
+  function stampGenre(row, u) {
+    if (!row || !u) return;
+    paintGenre(row, u);
+    row.setAttribute("data-genre", u.genre || "");
+    row.setAttribute("data-subgenre", u.subgenre || "");
+    row.setAttribute("data-genre2", u.genre2 || "");
+    row.setAttribute("data-subgenre2", u.subgenre2 || "");
+  }
   var keep = document.getElementById("genre-set-save");
   if (keep) keep.addEventListener("click", function () {
+    if (genreAlbum) {
+      genreNote("saving album defaults…");
+      post("/albums/genres", {
+        album: genreAlbum,
+        genre: val("set-genre-select"),
+        subgenre: val("set-subgenre-select"),
+        genre2: val("set-genre2-select"),
+        subgenre2: val("set-subgenre2-select")
+      }).then(function (d) {
+        var head = document.querySelector(
+          'tr.album-group-head[data-album="' + genreAlbum.replace(/"/g, '\\"') + '"]');
+        if (head && d.defaults) {
+          head.setAttribute("data-genre", d.defaults.genre || "");
+          head.setAttribute("data-subgenre", d.defaults.subgenre || "");
+          head.setAttribute("data-genre2", d.defaults.genre2 || "");
+          head.setAttribute("data-subgenre2", d.defaults.subgenre2 || "");
+        }
+        (d.updated || []).forEach(function (u) {
+          stampGenre(document.querySelector('tr[data-song="' + u.song_id + '"]'), u);
+        });
+        if (genreDlg && typeof genreDlg.close === "function") genreDlg.close();
+      }).catch(function (err) { genreNote(err.message); });
+      return;
+    }
     if (!genreSong) return;
     genreNote("saving…");
     post("/songs/genres", {song_ids: [Number(genreSong)],
@@ -2869,15 +2919,8 @@ function initLibraryBulk() {
                             genre2: val("set-genre2-select"),
                             subgenre2: val("set-subgenre2-select")})
       .then(function (d) {
-        var u = (d.updated || [])[0];
-        var row = document.querySelector('tr[data-song="' + genreSong + '"]');
-        if (row && u) {
-          paintGenre(row, u);
-          row.setAttribute("data-genre", u.genre || "");
-          row.setAttribute("data-subgenre", u.subgenre || "");
-          row.setAttribute("data-genre2", u.genre2 || "");
-          row.setAttribute("data-subgenre2", u.subgenre2 || "");
-        }
+        stampGenre(document.querySelector('tr[data-song="' + genreSong + '"]'),
+                   (d.updated || [])[0]);
         if (genreDlg && typeof genreDlg.close === "function") genreDlg.close();
       })
       .catch(function (err) { genreNote(err.message); });
@@ -2995,14 +3038,52 @@ function initLibraryBulk() {
   });
 
   // Analyse-all, without the reload. One poll for the batch; see /songs/analysis.
+  function refineGenres(ids, done) {
+    if (!ids || !ids.length) return done("");
+    post("/songs/genres/suggest", {song_ids: ids})
+      .then(function (d) {
+        var sug = d.suggestions || [];
+        var writes = sug.map(function (s) {
+          return post("/songs/genres", {
+            song_ids: [s.song_id],
+            genre: s.genre, subgenre: s.subgenre,
+            genre2: s.genre2, subgenre2: s.subgenre2
+          }).then(function (w) {
+            stampGenre(document.querySelector('tr[data-song="' + s.song_id + '"]'),
+                       (w.updated || [])[0] || s);
+          });
+        });
+        return Promise.all(writes).then(function () {
+          var msg = sug.length + " genre" + (sug.length === 1 ? "" : "s") + " refined";
+          if (d.dropped && d.dropped.length) msg += ", " + d.dropped.length + " skipped";
+          done(msg);
+        });
+      })
+      .catch(function (err) { done("genre refine failed: " + err.message); });
+  }
+
   var form = document.getElementById("analyse-all");
   if (form) form.addEventListener("submit", function (e) {
     e.preventDefault();
     busy(true, "queueing…");
     api("/songs/analyse-all", {})
       .then(function (d) {
-        var want = d.queued.map(function (q) { return q.song_id; });
-        if (!want.length) return busy(false, "Nothing to analyse — every song already has a bpm.");
+        var want = (d.queued || []).map(function (q) { return q.song_id; });
+        var genreIds = d.genre_ids || Array.prototype.map.call(
+          document.querySelectorAll("tr[data-song]"),
+          function (r) { return Number(r.getAttribute("data-song")); });
+        var gmsg = "";
+        var bpmDone = !want.length;
+        function finish() {
+          if (!bpmDone) return;
+          var bits = [];
+          if (want.length) bits.push("Analysed " + want.length + ".");
+          else bits.push("Nothing to analyse — every song already has a bpm.");
+          if (gmsg) bits.push(gmsg);
+          busy(false, bits.join(" "));
+        }
+        refineGenres(genreIds, function (msg) { gmsg = msg; finish(); });
+        if (!want.length) return;
         var left = want.slice();
         var tick = setInterval(function () {
           api("/songs/analysis?ids=" + left.join(","))
@@ -3018,11 +3099,18 @@ function initLibraryBulk() {
                 }
                 left = left.filter(function (i) { return i !== s.song_id; });
               });
-              // one worker, one GPU -- say where we are rather than spin silently
               busy(true, (want.length - left.length) + " of " + want.length + " analysed…");
-              if (!left.length) { clearInterval(tick); busy(false, "Analysed " + want.length + "."); }
+              if (!left.length) {
+                clearInterval(tick);
+                bpmDone = true;
+                finish();
+              }
             })
-            .catch(function () { clearInterval(tick); busy(false, "Stopped watching; reload to see results."); });
+            .catch(function () {
+              clearInterval(tick);
+              bpmDone = true;
+              busy(false, "Stopped watching; reload to see results.");
+            });
         }, 3000);
       })
       .catch(function (err) { busy(false, "Could not queue: " + err.message); });

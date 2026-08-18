@@ -157,6 +157,9 @@ body:has(#library) main {
   overflow: auto;
 }
 tr.album-group-head td {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   background: var(--panel);
   font-weight: 600;
   position: sticky;

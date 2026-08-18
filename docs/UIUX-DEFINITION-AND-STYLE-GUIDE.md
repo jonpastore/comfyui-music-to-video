@@ -603,7 +603,9 @@ fibonacci. A candidate has Approve, Fix, Delete. Thumbs open
 (open only when the library is empty). Album is a text field with
 `datalist` of existing album names; picking one fills genre / sub /
 secondary from the **first song on that album** (oldest `created`).
-There is no playlist-level genre column yet. The table groups by album,
+The album-row pencil writes playlist genre defaults and copies them
+to every song on that album. Analyse-all also asks for per-song genre
+refinements (style_text / title / lyrics) and saves them. The table groups by album,
 collapsed; expand a group to see songs. Added date sits under the
 title. Genre is chips (primary + secondary), not the word **Set** —
 the pencil opens `#genre-set`. That modal is a 2×2 field grid (selects
