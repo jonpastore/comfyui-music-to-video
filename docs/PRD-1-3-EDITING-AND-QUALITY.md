@@ -360,7 +360,11 @@ unbuilt work and are not" — the ledger with line counts is DDD §1.
    than one clip; `--only` and studio Render clip (`scene=` /
    `clip_idx=`) skip that full-track refuse (seam with `T2-25`);
    assemble still clamps to the track and no longer treats a 4.8125 s
-   overrun as the norm. **refs-length built**:
+   overrun as the norm. Coverage meter hint on a mismatch tells the
+   operator to regenerate or edit `duration_guidance` to fill the
+   track, or use scene-scoped Render clip — not "Pacing matches the
+   track" and not stretch/compress (`test_t2_13e_meter_copy.py`).
+   **refs-length built**:
    `clip_plan`'s audio-only default is `n_clips_for(track,
    length_seconds)`, not `ceil(track / CHUNK)`, so `build_refs` /
    `reroll_refs` emit one still per scene (`--heads`), not a CHUNK-era count.
@@ -452,6 +456,10 @@ order and take the dependencies from here.
    miss is 400 before bare full-song clips enqueue; in-tolerance still
    queues; scene-scoped `scene=` / `clip_idx=` still enqueues on a short
    board (`test_t2_25_scene_time_enqueue.py`, seam with `T2-13e`).
+   **`T2-13e` meter honesty built**: 77s board / 237s track HTML does
+   not say "Pacing matches the track" or "stretched or compressed";
+   hint names fill-the-track regenerate/`duration_guidance` edit or
+   scene-scoped Render clip (`test_t2_13e_meter_copy.py`).
    **`T2-34` built**: the
    clip-pass picker marks a model `where()` says False on every
    reachable backend as unavailable and still offers a confirmed one

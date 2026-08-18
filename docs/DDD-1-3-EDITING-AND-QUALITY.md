@@ -624,7 +624,13 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    `scene=` / `clip_idx=` skip the full-track / scene-time refuse (seam
    with `T2-25`); bare full-song POST still 400s.
    `assemble_song` keeps `-t audio_dur`; its comment no longer says
-   clips are quantised so the video always overruns.
+   clips are quantised so the video always overruns. **Meter honesty:**
+   `storyboard.html` Coverage hint on mismatch says regenerate or edit
+   `duration_guidance` to fill the track, or scene-scoped Render clip;
+   bare full-song refuses. `coverage.ok` (intent≈rendered) must not
+   read as "Pacing matches the track", and the off path must not claim
+   stretch/compress when full-song refuses
+   (`test_t2_13e_meter_copy.py`, 77s/237s fixture).
 4. **`T2-47` built.** Hop 0 is LTX even when a scene is marked `s2v`
    (`T5-11` **built**, `test_t5_11_ltx_always_first.py`). One
    `build_song.main()` job with `needs_lip_sync` writes LTX hop0
@@ -794,7 +800,10 @@ skips that refuse, matching `build_song --only` / `T2-13e`
 (`test_t2_25_scene_scoped_skips_mismatch_refuse`). An unreadable board
 file is skipped so the older gates still fire. Mutation: flag only on
 GET `/meter` → the miss arm fails. Mutation: scene-scoped still refuse
-→ seam arm fails.
+→ seam arm fails. Live `storyboard.html` Coverage hint on that miss
+matches the refuse: fill the track via regenerate/`duration_guidance`,
+or scene-scoped Render clip — not pacing-matches / stretch copy
+(`test_t2_13e_meter_copy.py`).
 
 `T2-33` is **built**. `GET /songs/{id}` builds the video-model select
 from `models.renderable("video")` (labels/purpose from `catalog()`).

@@ -289,6 +289,12 @@ is 200 never 405.
 bare `POST /songs/{id}/clips` refuses a scene-time miss (400, no job)
 and still queues an in-tolerance board; scene-scoped Render clip
 (`scene=` / `clip_idx=`) skips that refuse (seam with `T2-13e`).
+**`T2-13e` meter honesty built**: on a mismatch (77s board / 237s track)
+`storyboard.html` Coverage hint says regenerate or edit
+`duration_guidance` to fill the track, or scene-scoped Render clip;
+bare full-song refuses. It does not say "Pacing matches the track"
+(`coverage.ok` is intent≈rendered only) or claim scenes are
+stretched/compressed (`test_t2_13e_meter_copy.py`).
 
 `finding-row` **built** (`GET /qc`, `_finding_row.html`,
 `test_t3_19_finding_row.py`): measured / expected / unit / editable
@@ -481,8 +487,12 @@ The storyboard meter API reports total scene time against song length
 and flags a miss beyond a stated tolerance (`T2-23`); it reports this
 song's `clip_seconds`, not a constant (`T2-24`). A miss is refused
 before bare full-song clips enqueue (`T2-25`); scene-scoped Render clip
-skips that refuse (seam with `T2-13e`). The live `meter` component is
-not this.
+skips that refuse (seam with `T2-13e`). The live Coverage meter hint on
+`storyboard.html` is honest about a miss: regenerate / edit
+`duration_guidance` to fill the track, or scene-scoped Render clip;
+bare full-song refuses — not "Pacing matches the track" and not
+stretch/compress (`T2-13e` meter honesty, `test_t2_13e_meter_copy.py`).
+The API meter numbers alone are not this.
 `GET/POST /api/songs/{id}/storyboard/{tier}` is the generation prompt
 (`T2-17`–`T2-19`) and, when a board file exists, the scenes/anchors/refs
 payload (`T2-26`, `T2-27`). The song page itself (`GET /songs/{id}`) does
