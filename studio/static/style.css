@@ -1961,6 +1961,11 @@ label.icon-btn {
 .help-modal { max-width: 34rem; }
 .help-modal::backdrop, .confirm-modal::backdrop,
 .lightbox::backdrop, .fix-modal::backdrop { background: rgba(0, 0, 0, 0.7); }
+.confirm-modal > .modal-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 .confirm-modal ul { margin: 0.3rem 0 0.8rem; padding-left: 1.2rem; }
 .confirm-modal li { margin-bottom: 0.2rem; }
 .danger-row { margin-top: 1.5rem; }

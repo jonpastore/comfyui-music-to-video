@@ -385,6 +385,12 @@ def test_mage_brief_on_the_page_is_a_grey_studio_sheet():
         assert "corridor mouth" not in body["prompt"]
         js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
         assert "/sheet-prompt" in js
+        base = open(os.path.join(os.path.dirname(__file__), "templates", "base.html")).read()
+        bar = base.split('id="pose-brief"', 1)[1].split("</dialog>", 1)[0]
+        assert bar.index("lightbox-spacer") < bar.index("modal_close")
+        css = open(os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
+        assert ".confirm-modal > .modal-bar" in css
+        assert "display: flex" in css.split(".confirm-modal > .modal-bar", 1)[1][:120]
 
 
 def test_roster_tier_query_beats_the_largest_need_count():

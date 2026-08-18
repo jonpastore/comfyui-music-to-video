@@ -1158,7 +1158,8 @@ stance (all fours → hands and knees, not standing) then
 identity/wardrobe/body + mid-grey. The modal title is the
 slot; the box is the body. Story, camera, partner,
 location, and lighting stay out. Rating and song stay on
-the meta line.
+the meta line. Close on `#pose-brief` sits far right
+(`.confirm-modal > .modal-bar` is flex + `.lightbox-spacer`).
 `POST /anchors/keeper` plus the save icon stamps the assignment — on
 `/anchors` and on the playlist Anchors fold. The candidate lightbox
 (`#anchor-lightbox`) classifies the open sheet: a select of that
