@@ -822,7 +822,6 @@ def _stamp(paths, backend, host, via, progress=None):
     write that fails says so once and the artefact still comes back.
     """
     import jobs
-    now = time.time()
     for p in paths:
         try:
             # T6-7: landed requires the file. T6-8: one canonical spelling.
@@ -1243,7 +1242,7 @@ def _clip_records(paths, seed_re=r"clip_(\d+)"):
 
 
 def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
-             limit=None, guard="", body="", cast=None, bases=None):
+             limit=None, guard="", body="", cast=None, bases=None, anchors=None):
     """limit=N renders only the first N clips.
 
     A full song is 40-80 references at ~15 s each, so committing to the whole
@@ -1255,7 +1254,11 @@ def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
     dir here -- build_refs.py names images, it does not move them.
 
     bases: {scene_number: local pose-sheet path}. Staged as --bases so each
-    clip's image2 is that scene's plate; image1 stays the identity anchor.
+    clip's image2 is that scene's plate; image1 stays the identity lock.
+
+    anchors: {scene_number: local keeper path}. Staged as --anchors so each
+    clip's image1 is that scene's accepted keeper (T2-56). Scenes not listed
+    keep --anchor (the album front).
     """
     bs = _slug_tier(slug, tier)
     args = ["--storyboard", storyboard_json, "--slug", bs,
@@ -1264,6 +1267,7 @@ def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
     with tempfile.TemporaryDirectory() as wf_dir:
         cast_path = None
         bases_path = None
+        anchors_path = None
         if cast:
             staged = {name: {"image": install_input(c["path"]), "desc": c.get("desc", "")}
                       for name, c in cast.items() if c.get("path")}
@@ -1284,6 +1288,15 @@ def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
             args += ["--bases", bases_path]
             if progress:
                 progress(f"pose plates staged for {len(staged_bases)} scene(s)")
+        if anchors:
+            staged_anchors = {str(n): install_input(p)
+                              for n, p in anchors.items() if p}
+            fd, anchors_path = tempfile.mkstemp(suffix=".json", prefix="anchors_")
+            with os.fdopen(fd, "w") as f:
+                json.dump(staged_anchors, f)
+            args += ["--anchors", anchors_path]
+            if progress:
+                progress(f"per-scene keepers staged for {len(staged_anchors)} scene(s)")
         try:
             _run_script("build_refs.py", [*args, "--outdir", wf_dir], progress)
         finally:
@@ -1291,6 +1304,8 @@ def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
                 os.remove(cast_path)
             if bases_path:
                 os.remove(bases_path)
+            if anchors_path:
+                os.remove(anchors_path)
         if limit:
             keep = _workflow_jsons(wf_dir)[:int(limit)]
             keep_idx = set()

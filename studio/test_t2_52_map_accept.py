@@ -129,7 +129,7 @@ def test_t2_52_accept_persists_reject_restores_refs_refuse_draft(monkeypatch, tm
     still_out = str(tmp_path / "ref_out.png")
 
     def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None,
-                  guard="", body="", cast=None, bases=None):
+                  guard="", body="", cast=None, bases=None, anchors=None):
         open(still_out, "wb").write(b"\x89PNG\r\n\x1a\n")
         return [{"clip_idx": 0, "path": still_out, "seed": 7000}]
 
@@ -175,7 +175,8 @@ def test_t2_52_accept_persists_reject_restores_refs_refuse_draft(monkeypatch, tm
         jobs = _refs_jobs(sid)
         assert len(jobs) == 1, jobs
         args = json.loads(jobs[0]["args_json"])
-        assert keeper_a in (args.get("pose_bases") or {}).values(), args
+        assert keeper_a in (args.get("anchors") or {}).values(), args
+        assert keeper_a not in (args.get("pose_bases") or {}).values(), args
 
         appmod.h_refs(args, lambda m: None)
         assert _refs_n(sid) == 1

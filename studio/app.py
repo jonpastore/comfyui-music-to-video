@@ -1475,13 +1475,18 @@ def h_refs(args, progress):
             for c, a in cast_anchors(album, tier)}
     if cast:
         progress(f"cast for this tier: {', '.join(sorted(cast))}")
-    pose_bases = args.get("pose_bases") or pose_plan.scene_bases(song, tier)
+    pose_bases = (args["pose_bases"] if "pose_bases" in args
+                  else pose_plan.scene_bases(song, tier))
     if pose_bases:
         progress(f"pose plates: {len(pose_bases)} scene(s)")
+    scene_anchors = args.get("anchors") or None
+    if scene_anchors:
+        progress(f"per-scene keepers: {len(scene_anchors)} scene(s)")
+    extra = {"anchors": scene_anchors} if scene_anchors else {}
     results = pipeline.gen_refs(song["slug"], tier, sb["json_path"], anchor_name,
                                  song["mp3_path"], progress, limit=args.get("limit"),
                                  guard=tiers.compose_guardrail(tier, album), body=body,
-                                 cast=cast, bases=pose_bases)
+                                 cast=cast, bases=pose_bases, **extra)
     now = time.time()
     bases = ref_score_bases(song, tier, args.get("anchor_path"))
     landed = list(results)
@@ -6958,12 +6963,17 @@ def start_refs(request: Request, id: int, tier: List[str] = Form([]),
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         if scene_pose_map.has_rows(id, t):
-            pose_bases = scene_pose_map.accepted_bases(song, t)
+            scene_anchors = scene_pose_map.accepted_bases(song, t)
+            pose_bases = {}
         else:
+            scene_anchors = {}
             pose_bases = pose_plan.freeze_auto_binds(song, t)
-        jid = jobs.enqueue("refs", {"song_id": id, "tier": t, "limit": limit or None,
-                               "anchor_path": anchors[t]["path"],
-                               "pose_bases": pose_bases}, song_id=id)
+        job = {"song_id": id, "tier": t, "limit": limit or None,
+               "anchor_path": anchors[t]["path"],
+               "pose_bases": pose_bases}
+        if scene_anchors:
+            job["anchors"] = scene_anchors
+        jid = jobs.enqueue("refs", job, song_id=id)
         jids.append(jid)
     return json_or_redirect(
         request,

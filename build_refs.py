@@ -18,7 +18,7 @@ import argparse, json, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import guardrail  # noqa: E402  (applied here, NOT stored in the storyboard)
-from build_song import (allocate, audio_duration, shot_directive, sname,
+from build_song import (audio_duration, shot_directive, sname,
                         normalize, clip_plan, clip_chain_plan, clip_seconds,
                         legal_frames, LTX_FPS)  # noqa: E402  (shared allocation)
 
@@ -390,6 +390,8 @@ def main():
     ap.add_argument("--storyboard", required=True)
     ap.add_argument("--slug", required=True)
     ap.add_argument("--anchor", required=True, help="identity reference, as named in ComfyUI/input")
+    ap.add_argument("--anchors", help="json {scene_number: comfy_filename} per-scene identity; "
+                                      "wins over --anchor for that scene")
     ap.add_argument("--base", help="optional 16:9 composition base, as named in ComfyUI/input")
     ap.add_argument("--bases", help="json {scene_number: comfy_filename} pose plates; "
                                     "wins over --base for that scene")
@@ -413,6 +415,10 @@ def main():
     args = ap.parse_args()
 
     cast = json.load(open(args.cast)) if args.cast else {}
+    per_scene_anchor = {}
+    if args.anchors:
+        raw_anchors = json.load(open(args.anchors))
+        per_scene_anchor = {int(k): v for k, v in raw_anchors.items() if v}
     per_scene_base = {}
     if args.bases:
         raw_bases = json.load(open(args.bases))
@@ -448,8 +454,10 @@ def main():
             # (song, tier, clip_idx, seed) rows from the old 4.8s allocator
             # (those used 7000+ci on clip_idx 0..n).
             seed = (17000 + ci) if args.heads else (7000 + ci)
-            plate = per_scene_base.get(int(scene.get("scene_number") or 0), args.base)
-            wf = workflow(scene, args.anchor, plate, args.latent,
+            sn = int(scene.get("scene_number") or 0)
+            identity = per_scene_anchor.get(sn, args.anchor)
+            plate = per_scene_base.get(sn, args.base)
+            wf = workflow(scene, identity, plate, args.latent,
                           args.width, args.height, seed,
                           shot, args.guardrail, world, character, args.body,
                           extra_refs=scene_cast(scene, cast), tier=tier)
@@ -475,8 +483,9 @@ def main():
         num = scene["scene_number"]
         if want and num not in want:
             continue
+        identity = per_scene_anchor.get(int(num), args.anchor)
         plate = per_scene_base.get(int(num), args.base)
-        wf = workflow(scene, args.anchor, plate, args.latent,
+        wf = workflow(scene, identity, plate, args.latent,
                       args.width, args.height, 7000 + num,
                       shot_directive(scene, num), args.guardrail, world, character,
                       args.body, extra_refs=scene_cast(scene, cast), tier=tier)

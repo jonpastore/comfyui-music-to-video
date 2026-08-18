@@ -151,8 +151,11 @@ copies. Do not offer those families as `role=reference` defaults.
 
 **P5's path is built; the picture look is not.** `T7-6` shipped: with
 use-as-ref ticked, `gen_anchor`'s images list is exactly that sheet.
-`gen_refs` still passes **one** chosen front as image1 for every scene
-(old world). Product is `T2-56`: the accepted keeper for that scene.
+`gen_refs` passes the accepted keeper for **that** scene as image1
+when the map has accepted rows (`T2-56` **built**,
+`test_t2_56_per_scene_keeper.py`). One chosen front for every scene
+is the unmapped leftover. Location plates (`T2-53`) and extra-view
+slots are later.
 `T7-7` has the offline ranking harness. The GPU four-image set is still
 **NOT MEASURED**. **0 chosen studio anchors** — the factory is still on
 step 1.
@@ -168,9 +171,9 @@ map **is** (`test_t2_52_map_accept.py`): Accept/Reject per scene;
 **is** (`test_t4_24_ceiling_generate.py`): pose-gap holes → studio
 jobs at the run ceiling; clothed+nude iff r/xxx. `T7-21` C1/C2
 resolver **is** (`test_t7_21_c1_c2_resolver.py`): same-pose encode
-vs empty 896×1216 + her keepers. Location plates, per-scene image1,
-LTX-first, decoded s2v hop are not: see TRD-2 `T2-53`…`T2-56` and
-TRD-5 `T5-11`…`T5-15`.
+vs empty 896×1216 + her keepers. Location plates, LTX-first, decoded s2v hop are not: see TRD-2
+`T2-53`…`T2-55` and TRD-5 `T5-11`…`T5-15`. `T2-56` per-scene
+image1 **is** (`test_t2_56_per_scene_keeper.py`).
 
 ## 5. Priorities
 

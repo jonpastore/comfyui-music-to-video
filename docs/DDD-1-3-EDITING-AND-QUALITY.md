@@ -787,16 +787,16 @@ button → HTML arm red. Mutation: enqueue without the check → post arm
 red (`test_t2_28_html.py`, `test_t2_28_refs_unanchored_leads.py`,
 `test_identity_front_blocker_names_pose_library_when_front_is_missing`).
 
-**refs-identity is partial — old one-sheet world.** `start_refs`
-resolves `chosen_anchor` (the album front) and freezes that path as
-image1 for **every** scene. Standing 4748 plate is refused (keep).
-Product is `T2-56`: image1 is the accepted keeper for **that** scene,
-plus the location plate when the scene has one. `test_t2_refs_identity.py`
-guards the old lock; `test_t2_56_per_scene_keeper.py` is the #529
-check and is **not built**. `scene_pose_map` is the Accept-gated
+**refs-identity `T2-56` is built.** When `scene_pose_map` has accepted
+rows, `start_refs`/`h_refs` pass `accepted_bases` as `anchors` (image1
+per scene). They do not also stuff those keepers into `pose_bases`
+(image2). Unmapped songs still freeze `chosen_anchor` as image1 for
+every scene and `pose_plan.freeze_auto_binds` as leftover image2.
+Standing 4748 plate is refused (keep, `test_t2_refs_identity.py`).
+Location plates (`T2-53`) and extra-view slots are later.
+`test_t2_56_per_scene_keeper.py`. `scene_pose_map` is the Accept-gated
 map (`T2-51`/`T2-52` **built**, `test_t2_52_map_accept.py`).
-`start_refs` 400s on draft/rejected. Unmapped songs still
-`pose_plan.freeze_auto_binds` (leftover until `T2-56`).
+`start_refs` 400s on draft/rejected.
 
 `T2-30` is **built**. `unanchored_leads(rows)` returns names of figures
 with `role == "lead"` and no chosen anchor. Storyboard HTML banner,

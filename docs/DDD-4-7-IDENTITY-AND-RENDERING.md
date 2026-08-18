@@ -8,6 +8,8 @@ Sequencing and review record: `docs/PLAN-TRD-4-7.md`,
 **Rewritten 2026-08-17 for Jarvis #529 (D1–D10).** Reconciled
 2026-08-18: `T2-50`, `T4-21`…`T4-24`, `T7-21` **built**; `T2-51`
 **partial** (classify writes no map; draft/Accept is `T2-52`).
+`T2-56` **built** (`test_t2_56_per_scene_keeper.py`): accepted keeper
+for that scene is image1.
 Built-state is the TRD-4/5/7 ledgers. The one-line pipeline (operator
 photos → one chosen front → `gen_refs` image1 for every scene →
 `ltx25` or `s2v`) is retired. Every claim that is a measurement names
@@ -39,7 +41,7 @@ is not a studio feature.
 |---|---|
 | `make_anchor.py` | the view table, the positive constants, `is_nude_view`, `prompt_for`, the call into `workflow()` |
 | `build_refs.py` | the graph: `workflow()`, `sampler_settings`, `assign_ref_slots`, `cast_clause`, `negative_applies` |
-| `studio/app.py` | the anchor routes, `ANCHOR_VIEWS` labels, `ANCHOR_RENDER_FLAGS`, `DENOISE_CHOICES`, the preview; song-page `pose_library_by_tier` (chosen sheets, not just identity front); `start_refs` refuses draft/rejected `scene_pose_map` rows and uses accepted bases (`T2-52`) |
+| `studio/app.py` | the anchor routes, `ANCHOR_VIEWS` labels, `ANCHOR_RENDER_FLAGS`, `DENOISE_CHOICES`, the preview; song-page `pose_library_by_tier` (chosen sheets, not just identity front); `start_refs` refuses draft/rejected `scene_pose_map` rows (`T2-52`) and passes accepted keepers as per-scene `anchors` image1 (`T2-56`) |
 | `studio/pose_plan.py` | leftover unmapped image2 match; `plan` / `bind_scene` / `freeze_auto_binds` / `album_coverage`; no FastAPI. Not the T2-50 writer or the Accept-gated map |
 | `studio/scene_pose_map.py` | T2-51 draft keeper→scene; T2-52 Accept/Reject per scene; `require_accepted` / `accepted_bases`; no FastAPI. Classify never writes here |
 | `studio/pose_coverage.py` | T2-50 analyze-for-poses (writes `pose_coverage` only); T4-23 `gap` reads the open song's ceiling board vs `classification.keepers` and emits holes only; T4-24 `generate` delegates to `pose_generate`; no FastAPI; does not import `pose_plan`; analyze/gap never write `scene_pose_map` |

@@ -506,9 +506,11 @@ used as Generate refs image1*), not dumped as 40 figures. The XXX
 gallery family tab defaults to **Nude** when that family has rows.
 `POST /songs/{id}/refs` refuses the same reason before enqueue.
 Reference-image generate uses the **accepted keeper for that scene**
-as image1 (`T2-56`), not one chosen front for every scene, and never a
-standing plate (`test_t2_refs_identity.py` still guards the plate
-refusal). The tree still pins the album front — that is the leftover.
+as image1 (`T2-56` **built**, `test_t2_56_per_scene_keeper.py`), not
+one chosen front for every scene, and never a standing plate
+(`test_t2_refs_identity.py` still guards the plate refusal). Unmapped
+songs still use the album front. Location plates (`T2-53`) and
+extra-view slots are later.
 The expanded tier's **pose map** is drafted, then Accept per scene
 (`T2-52` **built**, `test_t2_52_map_accept.py`); generate refs from
 draft/rejected is refused (`POST /songs/{id}/refs` 400). A coverage
@@ -1153,7 +1155,12 @@ stretch the page. Missing poses do **not** dump as
 empty row is the row. Only leads need a plate (T2-30); extras and
 background stay off the roster. An empty scene cast is the album lead. **Generate…** opens a modal with a copyable Mage
 prompt that is a **grey-studio character sheet**, not the
-scene still (`#pose-brief`). Click fetches
+scene still (`#pose-brief`). Above the prompt, **Actors**
+lists every body Mage needs a reference image for: the
+sheet’s person, plus the album lead when the stance is
+partnered (cowgirl, doggy / all fours, oral, missionary /
+supine, bent, side, spit-roast). The sheet being generated
+is marked **this sheet**. Click fetches
 `GET /api/albums/{album}/sheet-prompt` so a stale tab
 cannot paste the old scene still. Same composer as
 Generate anchors: the pose *name* is expanded to a still
@@ -1304,7 +1311,8 @@ grey-studio and no plate. `needs_lip_sync` beside camera. Ceiling
 and ticked-lower boards visible.
 
 **Refs page.** Generate from the accepted map only. Each scene
-shows which keeper and which location plate it used (`T2-56`).
+uses that scene's accepted keeper as image1 (`T2-56` **built**,
+`test_t2_56_per_scene_keeper.py`). Location plate display is `T2-53`.
 A draft or rejected row has no Generate.
 
 **Clips page.** LTX predecessor + s2v successor both listed when
