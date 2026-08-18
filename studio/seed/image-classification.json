@@ -1,0 +1,432 @@
+{
+  "_readme": [
+    "Classification ONLY. Do not map storyboards here.",
+    "Order: (1) classify these stills (2) read the storyboard for poses it needs",
+    "(3) generate missing poses (4) add those stills back into this file",
+    "(5) only then refine anatomy on poses that actually expose it.",
+    "Query: filter images[] by view, pose, wardrobe, usable.",
+    "usable=skip never enters a slot. Body: dark charcoal-brown, not jet black."
+  ],
+  "body": "dark charcoal-brown skin matching her face, shoulders and midriff in these photographs, warm undertone, not jet black, not pink, not tan",
+  "process": [
+    "classify",
+    "diff storyboard poses against this file",
+    "generate missing poses",
+    "reclassify",
+    "anatomy pass on exposing poses"
+  ],
+  "images": [
+    {
+      "id": "tense",
+      "path": "tense.jpg",
+      "kind": "operator",
+      "view": "front",
+      "pose": "crouch",
+      "wardrobe": "clothed",
+      "usable": "identity",
+      "notes": "wide stance, legs apart \u2014 only operator front that can show a vulva without a pose change"
+    },
+    {
+      "id": "standing",
+      "path": "standing.jpg",
+      "kind": "operator",
+      "view": "front",
+      "pose": "stand",
+      "wardrobe": "clothed",
+      "usable": "identity"
+    },
+    {
+      "id": "standing-3qtr",
+      "path": "standing-3qtr.jpg",
+      "kind": "operator",
+      "view": "3qtr",
+      "pose": "stand",
+      "wardrobe": "clothed",
+      "usable": "identity"
+    },
+    {
+      "id": "looking-back",
+      "path": "looking-back.jpg",
+      "kind": "operator",
+      "view": "3qtr-rear",
+      "pose": "stand",
+      "wardrobe": "clothed",
+      "usable": "identity",
+      "notes": "looks over shoulder \u2014 encode for presenting / look-back beats"
+    },
+    {
+      "id": "looking-back-v2",
+      "path": "looking-back-v2.jpg",
+      "kind": "operator",
+      "view": "3qtr-rear",
+      "pose": "stand",
+      "wardrobe": "clothed",
+      "usable": "identity"
+    },
+    {
+      "id": "back",
+      "path": "back_s864145572_00001_.png",
+      "kind": "generated",
+      "view": "back",
+      "pose": "stand",
+      "wardrobe": "clothed",
+      "usable": "identity"
+    },
+    {
+      "id": "side-profile",
+      "path": "side profile.jpg",
+      "kind": "operator",
+      "view": "side",
+      "pose": "stand",
+      "wardrobe": "clothed",
+      "usable": "identity"
+    },
+    {
+      "id": "portrait",
+      "path": "portrait.jpg",
+      "kind": "operator",
+      "view": "portrait",
+      "pose": "stand",
+      "wardrobe": "clothed",
+      "usable": "identity",
+      "notes": "face lock only \u2014 never encode as a full-body pose"
+    },
+    {
+      "id": "kneeling",
+      "path": "kneeling.jpg",
+      "kind": "operator",
+      "view": "front",
+      "pose": "kneel",
+      "wardrobe": "clothed",
+      "usable": "identity",
+      "notes": "hands on the floor \u2014 closest operator still to all-fours"
+    },
+    {
+      "id": "cleaning-kneeling",
+      "path": "cleaning-kneeling.jpg",
+      "kind": "operator",
+      "view": "front",
+      "pose": "kneel",
+      "wardrobe": "clothed",
+      "usable": "identity",
+      "notes": "upright on knees, licking finger \u2014 oral / face beats"
+    },
+    {
+      "id": "seated",
+      "path": "seated.jpg",
+      "kind": "operator",
+      "view": "front",
+      "pose": "sit",
+      "wardrobe": "clothed",
+      "usable": "identity"
+    },
+    {
+      "id": "cleaning-seated",
+      "path": "cleaning-seated.jpg",
+      "kind": "operator",
+      "view": "front",
+      "pose": "sit",
+      "wardrobe": "clothed",
+      "usable": "identity"
+    },
+    {
+      "id": "laying-side",
+      "path": "laying-side.jpg",
+      "kind": "operator",
+      "view": "side",
+      "pose": "recumbent",
+      "wardrobe": "clothed",
+      "usable": "identity"
+    },
+    {
+      "id": "playing",
+      "path": "playing.jpg",
+      "kind": "operator",
+      "view": "front",
+      "pose": "supine",
+      "wardrobe": "clothed",
+      "usable": "identity",
+      "notes": "ON HER BACK looking up \u2014 encode for scene 12 (ask legs parted only)"
+    },
+    {
+      "id": "lookback-kneel-749",
+      "path": "looking-back_s843167749_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "clothed",
+      "usable": "identity",
+      "notes": "already kneeling looking back \u2014 better all-fours start than standing looking-back.jpg"
+    },
+    {
+      "id": "lookback-nude-023",
+      "path": "nude-qc/looking-back_s843168023_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "stand",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "notes": "best same-pose nude keep. Prefer this over clothed looking-back as image1 on nude jobs."
+    },
+    {
+      "id": "front-nude-886",
+      "path": "nude-qc/tense_s843167886_00001_.png",
+      "kind": "generated",
+      "view": "front",
+      "pose": "crouch",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "notes": "nude, legs apart, jewelry, crotch still smooth. Best front encode until anatomy inpaint works."
+    },
+    {
+      "id": "lookback-886-twotail",
+      "path": "nude-qc/looking-back_s843167886_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "stand",
+      "wardrobe": "partial",
+      "usable": "skip",
+      "notes": "two tails"
+    },
+    {
+      "id": "charcoal-plate",
+      "path": "plates/meowp_charcoal_poseplate.png",
+      "kind": "plate",
+      "view": "back",
+      "pose": "kneel-present",
+      "wardrobe": "nude",
+      "usable": "skip",
+      "notes": "stranger. Wins identity if used as image2."
+    },
+    {
+      "id": "peach-plate",
+      "path": "plates/meowp_pose_plate.png",
+      "kind": "plate",
+      "view": "front",
+      "pose": "supine",
+      "wardrobe": "nude",
+      "usable": "skip",
+      "notes": "tabby stranger, peach anatomy"
+    },
+    {
+      "id": "a4-749-stand",
+      "path": "poses/on_all_fours_nude_s843167749_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "stand",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "seed": 843167749,
+      "notes": "asked on_all_fours empty+her standing nudes; got standing look-back nude. White disc under feet. Not the all-fours gap."
+    },
+    {
+      "id": "a4-886-stand",
+      "path": "poses/on_all_fours_nude_s843167886_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "stand",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "seed": 843167886,
+      "notes": "asked on_all_fours; walking/standing look-back. Tail down. Identity holds."
+    },
+    {
+      "id": "a4-023-stand",
+      "path": "poses/on_all_fours_nude_s843168023_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "stand",
+      "wardrobe": "nude",
+      "usable": "skip",
+      "seed": 843168023,
+      "notes": "asked on_all_fours; standing look-back. Two-tone feet (brown vs body)."
+    },
+    {
+      "id": "a4-160-stand",
+      "path": "poses/on_all_fours_nude_s843168160_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "stand",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "seed": 843168160,
+      "notes": "cleanest of the four standing look-back nudes. Asked all-fours, still standing. Tail covers crotch."
+    },
+    {
+      "id": "a4k-749-ghost",
+      "path": "poses/allfours-kneel/on_all_fours_nude_s843167749_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "crouch",
+      "wardrobe": "nude",
+      "usable": "skip",
+      "seed": 843167749,
+      "notes": "empty+kneeling.jpg. Crouch/straddle look-back but ghost second body and extra arms. Identity weaker."
+    },
+    {
+      "id": "a4k-886-squat",
+      "path": "poses/allfours-kneel/on_all_fours_nude_s843167886_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "squat",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "seed": 843167886,
+      "notes": "Best of kneeling-ref batch. Nude squat look-back, jewelry, her. Not hands-and-knees. Crotch not exposed (sitting on heels). Feet a bit light."
+    },
+    {
+      "id": "a4k-023-kneel-clothed",
+      "path": "poses/allfours-kneel/on_all_fours_nude_s843168023_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "partial",
+      "usable": "pose",
+      "seed": 843168023,
+      "notes": "Kneeling look-back 3qtr, harness on. Closest clothed kneel-present. C1 undress candidate for kneel-present-nude. Not all-fours."
+    },
+    {
+      "id": "f2-749-kneel-hand",
+      "path": "poses/flux2-a4/allfours_s843167749_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "pose",
+      "seed": 843167749,
+      "notes": "Flux.2 Dev. Hands on floor, look back, nude, her. Closest to all-fours so far. Hips not to camera; crotch not exposed."
+    },
+    {
+      "id": "f2-886-kneel-hand",
+      "path": "poses/flux2-a4/allfours_s843167886_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "pose",
+      "seed": 843167886,
+      "notes": "Flux.2. One hand on floor, side-on crawl/kneel, nude, her."
+    },
+    {
+      "id": "f2-023-kneel-hand",
+      "path": "poses/flux2-a4/allfours_s843168023_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "pose",
+      "seed": 843168023,
+      "notes": "Flux.2. Both hands toward floor, tail up, look back. Best crawl of the four. Eyes lime. Not hips-to-camera expose."
+    },
+    {
+      "id": "f2-160-twotail",
+      "path": "poses/flux2-a4/allfours_s843168160_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "skip",
+      "seed": 843168160,
+      "notes": "Flux.2. Hands on floor but two tails."
+    },
+    {
+      "id": "kx-749-kneel-nude",
+      "path": "poses/kontext-a4/allfours_s843167749_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "seed": 843167749,
+      "notes": "Kontext Dev. Asked all-fours; got nude kneel look-back. She is her, jewelry on, no clothes. Not hands-and-knees."
+    },
+    {
+      "id": "kx-886-kneel-nude",
+      "path": "poses/kontext-a4/allfours_s843167886_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "seed": 843167886,
+      "notes": "Kontext. Best nude kneel look-back of the four. Fills kneel-present-nude. Not all-fours."
+    },
+    {
+      "id": "kx-023-kneel-nude",
+      "path": "poses/kontext-a4/allfours_s843168023_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "seed": 843168023,
+      "notes": "Kontext. Nude kneel look-back, her. Tail down. Not all-fours."
+    },
+    {
+      "id": "kx-160-kneel-nude",
+      "path": "poses/kontext-a4/allfours_s843168160_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "nude",
+      "usable": "identity",
+      "seed": 843168160,
+      "notes": "Kontext. Nude kneel, more 3qtr back. Not all-fours."
+    },
+    {
+      "id": "c1-749-kneel-harness",
+      "path": "poses/c1-kneel023/three_quarter_nude_s843167749_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "partial",
+      "usable": "pose",
+      "seed": 843167749,
+      "notes": "C1 image-latent denoise 1.0 on a4k-023. Pose held. Harness stayed. Not a nude keeper."
+    },
+    {
+      "id": "c1-886-kneel-humanface",
+      "path": "poses/c1-kneel023/three_quarter_nude_s843167886_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "partial",
+      "usable": "skip",
+      "seed": 843167886,
+      "notes": "C1. Pose held, harness stayed, face more human than her."
+    },
+    {
+      "id": "c1-023-kneel-harness",
+      "path": "poses/c1-kneel023/three_quarter_nude_s843168023_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "partial",
+      "usable": "pose",
+      "seed": 843168023,
+      "notes": "C1. Cleanest of the four kneel look-backs. Harness still on."
+    },
+    {
+      "id": "c1-160-kneel-float",
+      "path": "poses/c1-kneel023/three_quarter_nude_s843168160_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "kneel",
+      "wardrobe": "partial",
+      "usable": "skip",
+      "seed": 843168160,
+      "notes": "C1. Floating, no floor, harness on."
+    },
+    {
+      "id": "a4k-160-stand-clothed",
+      "path": "poses/allfours-kneel/on_all_fours_nude_s843168160_00001_.png",
+      "kind": "generated",
+      "view": "3qtr-rear",
+      "pose": "stand",
+      "wardrobe": "clothed",
+      "usable": "skip",
+      "seed": 843168160,
+      "notes": "Standing look-back, full harness and heels. Asked all-fours nude. Do not use as a pose lock."
+    }
+  ]
+}

@@ -37,6 +37,18 @@ rsync -a "$REPO"/build_refs.py "$REPO"/build_song.py "$REPO"/build_storyboard.py
          "$R:$DEST/scripts/"
 rsync -a "$REPO"/profiles/ "$R:$DEST/scripts/profiles/" 2>/dev/null || true
 
+# Default classification sidecar for ensure_sidecar_seed (_DEFAULT_SIDECAR).
+# Live app resolves ../anchor5/image-classification.json from meowp-studio/app,
+# so this must land at ~/meowp-studio/anchor5/. Tracked source is app/seed/
+# (anchor5/ stays a local lab and is gitignored).
+SIDECAR_SRC=seed/image-classification.json
+if [ -f "$SIDECAR_SRC" ]; then
+  ssh $R "mkdir -p $DEST/anchor5"
+  rsync -a "$SIDECAR_SRC" "$R:$DEST/anchor5/image-classification.json"
+else
+  echo "  ERROR: $SIDECAR_SRC missing; live empty /anchors cannot seed classification."; exit 1
+fi
+
 # The few-shot storyboard exemplar grok.py teaches from. Without it grok falls
 # back to a bland inline placeholder and storyboard quality quietly drops, so
 # ship it and fail loudly if it is missing rather than degrading in silence.

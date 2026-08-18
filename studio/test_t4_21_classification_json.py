@@ -229,6 +229,29 @@ def test_t4_22_ensure_sidecar_seed_default_path_when_path_none():
     assert classification.library(album)["version_number"] == 1
 
 
+def test_t4_22_default_sidecar_path_is_anchor5_under_parent():
+    """Live: meowp-studio/app → meowp-studio/anchor5/image-classification.json."""
+    side = classification._DEFAULT_SIDECAR
+    assert side.endswith(os.path.join("anchor5", "image-classification.json")), side
+    studio_dir = os.path.dirname(os.path.abspath(classification.__file__))
+    expected = os.path.join(
+        os.path.dirname(studio_dir), "anchor5", "image-classification.json")
+    assert os.path.abspath(side) == os.path.abspath(expected)
+
+
+def test_t4_22_deploy_ships_default_sidecar_to_meowp_studio_anchor5():
+    """Live seed needs the file at ~/meowp-studio/anchor5/; deploy must ship it."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    seed = os.path.join(here, "seed", "image-classification.json")
+    assert os.path.isfile(seed), seed
+    raw = json.load(open(seed))
+    assert isinstance(raw.get("images"), list) and raw["images"], seed
+    deploy = open(os.path.join(here, "deploy.sh")).read()
+    assert "seed/image-classification.json" in deploy
+    assert "$DEST/anchor5/image-classification.json" in deploy
+    assert "mkdir -p $DEST/anchor5" in deploy
+
+
 def test_t4_21_api_roundtrip():
     album = f"T421-api-{time.time_ns()}"
     document = {"images": [
