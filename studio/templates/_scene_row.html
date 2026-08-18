@@ -386,9 +386,12 @@
                     data-scene="{{ r.num }}"
                     data-clip-idx="{{ v.clip_idx }}"
                     data-motion="{{ r.scene.video_motion_prompt or '' }}"
-                    title="Open clip {{ loop.index }}"
+                    title="Play clip {{ loop.index }}"
                     {% if approved %}data-still="{{ media_url(approved[-1].path) }}"{% endif %}>
-              <video class="lazy-src" data-src="{{ media_url(v.path) }}" preload="none" muted playsinline></video>
+              <video src="{{ media_url(v.path) }}"
+                     {% if approved %}poster="{{ media_url(approved[-1].path) }}"{% endif %}
+                     preload="metadata" muted playsinline></video>
+              <span class="clip-play" aria-hidden="true">play</span>
             </button>
           </div>
           <figcaption>

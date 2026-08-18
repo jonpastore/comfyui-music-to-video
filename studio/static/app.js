@@ -865,6 +865,17 @@ function hydrateLazy(root, eager) {
     else stills.push(el);
   });
   Array.prototype.forEach.call(stills, load);
+  // Clip tiles sit in overflow-x strips / closed <details>. IntersectionObserver
+  // misses them the same way pose thumbs did — the well stays empty. One or two
+  // 4.8s takes per open scene; load them now.
+  var clipVids = [];
+  var restVids = [];
+  Array.prototype.forEach.call(videos, function (el) {
+    if (el.closest(".clip-frame")) clipVids.push(el);
+    else restVids.push(el);
+  });
+  Array.prototype.forEach.call(clipVids, load);
+  videos = restVids;
   if (!videos.length) return;
   if (eager || !("IntersectionObserver" in window)) {
     Array.prototype.forEach.call(videos, load);
@@ -942,7 +953,7 @@ document.body.addEventListener("htmx:afterSwap", function (e) {
 });
 document.addEventListener("toggle", function (e) {
   if (e.target && e.target.tagName === "DETAILS" && e.target.open) {
-    hydrateLazy(e.target);
+    hydrateLazy(e.target, true);
   }
 }, true);
 

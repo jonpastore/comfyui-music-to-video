@@ -866,6 +866,11 @@ def test_bind_route_json_reports_source():
         assert 'name="seed_min"' in page
         assert "data-src=" in scene_row
         assert "pose-row" in page
+        clip_block = scene_row.split("scene-clips", 1)[-1]
+        assert 'class="clip-play"' in clip_block
+        assert 'preload="metadata"' in clip_block
+        assert 'src="{{ media_url(v.path) }}"' in clip_block
+        assert "video class=\"lazy-src\"" not in clip_block
 
 
 def test_scene_actors_kneel_includes_album_lead():

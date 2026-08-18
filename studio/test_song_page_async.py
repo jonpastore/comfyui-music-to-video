@@ -143,6 +143,19 @@ def test_scenes_lists_every_rendered_clip_on_a_split_scene():
             song, {"scenes": scenes}, "xxx")
         assert n >= 2, n
         assert [v["clip_idx"] for v in rows[0]["videos"]] == [0, 1]
+        still = os.path.join(db.DATA, "still0.png")
+        open(still, "wb").write(b"\x89PNG\r\n\x1a\n")
+        db.run("""INSERT INTO refs (song_id,tier,clip_idx,path,seed,approved,created,scene_number)
+                  VALUES (?,?,?,?,?,?,?,?)""",
+               sid, "xxx", 0, still, 42, 1, 1.0, 1)
+        page = client.get(f"/songs/{sid}/storyboard/xxx").text
+        strip = page.split('class="media-strip scene-clips"', 1)[-1]
+        assert 'class="clip-play"' in strip
+        assert 'preload="metadata"' in strip
+        assert "video class=\"lazy-src\"" not in strip
+        assert "data-src=" not in strip.split("</div>", 1)[0]
+        assert 'src="' in strip
+        assert "poster=" in strip
 
 
 def test_scene_row_reads_clip_jobs_when_chip_is_qc():

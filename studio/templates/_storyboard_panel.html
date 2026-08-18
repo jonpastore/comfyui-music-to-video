@@ -154,8 +154,10 @@
                 data-video="{{ media_url(v.path) }}"
                 data-label="{{ tier | tiername }} clip {{ v.clip_idx }}"
                 data-tier="{{ tier }}"
-                data-clip-idx="{{ v.clip_idx }}">
-          <video class="lazy-src" data-src="{{ media_url(v.path) }}" preload="none" muted playsinline></video>
+                data-clip-idx="{{ v.clip_idx }}"
+                title="Play clip {{ v.clip_idx }}">
+          <video src="{{ media_url(v.path) }}" preload="metadata" muted playsinline></video>
+          <span class="clip-play" aria-hidden="true">play</span>
         </button>
         <figcaption>#{{ v.clip_idx }}</figcaption>
       </figure>

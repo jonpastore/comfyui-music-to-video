@@ -589,7 +589,9 @@ in the stills strip — same `.ref-frame.clip-tile` card (190px, 3:4
 frame, caption + icon row) as a finished still. They swap for the
 real stills when the job lands and clear if it fails or is cancelled. The sticky job chip carries
 `data-kind` / `data-clips`; a finished reroll refreshes that scene
-row even if the SSE watch was missed. Clip thumbs seek ~0.5s in so
+row even if the SSE watch was missed. Landed clip tiles set a real `src` and `preload=metadata` (plus
+`poster` from the approved still when one exists) so the well is not
+empty; a **play** badge opens `#clip-preview`. Clip thumbs seek ~0.5s in so
 the first-frame black is not the poster.
 Fix (face / inpaint / outpaint) and Delete sit on the still as icon
 buttons with hover titles (check / wrench / trash), not labeled
@@ -619,9 +621,10 @@ successor are both listed (`T6-A5`).
 There is no separate Approve refs page.
 Stills and clips show `.qc-tag`: confidence, identity, and the
 assessment sentence. Wardrobe may change; physical identity must not.
-Scene plates, stills and clip thumbs use `data-src` + `.lazy-src`;
-the file is requested when the thumb approaches the viewport. Clip
-thumbs are `preload=none`. The all-clips strip starts closed.
+Scene plates use a real `src`. Stills use `data-src` + `.lazy-src`
+and load as soon as the row is in the page. Landed clip tiles set
+`src` + `preload=metadata` (and `poster` from the approved still);
+they do not wait on IntersectionObserver. The all-clips strip starts closed.
 `#clip-preview` has prev/next, Close on the right, and repair actions:
 re-render this clip (optional refine), edit the motion prompt, or open
 the approved still. Arrow keys step clips.

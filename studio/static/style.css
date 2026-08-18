@@ -442,6 +442,7 @@ button.thumb-open:active:not(:disabled) {
   padding-bottom: 0.35rem;
 }
 .clip-frame { margin: 0; width: 190px; }
+.clip-frame .thumb-open { position: relative; display: block; width: 100%; }
 .clip-frame video {
   width: 100%;
   aspect-ratio: 3 / 4;
@@ -450,6 +451,19 @@ button.thumb-open:active:not(:disabled) {
   border-radius: 4px;
   background: var(--letterbox);
   display: block;
+  pointer-events: none;
+}
+.clip-play {
+  position: absolute;
+  right: 0.4rem;
+  bottom: 0.4rem;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  pointer-events: none;
+  line-height: 1.2;
 }
 .clip-frame figcaption {
   font-size: 0.8rem;
@@ -1980,6 +1994,7 @@ button.toggle.off { color: var(--muted); }
   display: block;
 }
 /* data-src only, no src yet — same 3/4 tile, not an empty card. */
+video.lazy-src:not([src]),
 img.lazy-src:not([src]) {
   display: block;
   min-height: 6rem;
