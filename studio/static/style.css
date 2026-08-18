@@ -1794,6 +1794,23 @@ button.toggle.off { color: var(--muted); }
   background: var(--panel);
   display: block;
 }
+/* data-src only, no src yet — same 3/4 tile, not an empty card. */
+img.lazy-src:not([src]) {
+  display: block;
+  min-height: 6rem;
+  background: var(--panel);
+  background-image: linear-gradient(
+    90deg,
+    var(--panel) 0%,
+    var(--border) 45%,
+    var(--panel) 100%
+  );
+  background-size: 200% 100%;
+  animation: lazy-ph 1.1s linear infinite;
+}
+@keyframes lazy-ph {
+  to { background-position: -200% 0; }
+}
 button.icon-btn,
 a.icon-btn {
   display: inline-flex;

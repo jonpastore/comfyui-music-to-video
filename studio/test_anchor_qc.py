@@ -1,5 +1,6 @@
 """T3-31 / T4-19: vision scores each candidate against bases + prompt."""
 import json
+import os
 
 import db
 import app as appmod
@@ -83,13 +84,28 @@ def test_candidate_tile_shows_confidence():
            "tier": "xxx", "view": "back_nude", "unpicked": 0,
            "candidates": [{
                "id": 1, "path": "/tmp/c.png", "chosen": 0, "run_id": None,
-               "render_json": None,
+               "view": "back_nude", "render_json": None,
                "qc_json": json.dumps({"confidence": 81, "notes": "her"}),
            }]},
         media_url=lambda p: "/media?p=" + p,
     )
     assert "81%" in html
     assert "confidence" in html.lower() or "vision" in html.lower()
+    assert 'src="/media?p=/tmp/c.png"' in html
+    assert 'data-src="/media?p=/tmp/c.png"' in html
+
+
+def test_lazy_src_placeholder_and_stills_load_without_observer():
+    """Candidate thumbs must paint without IntersectionObserver.
+
+    Mutation: drop src= or the img.lazy-src:not([src]) rule → grey empty card.
+    """
+    here = os.path.dirname(appmod.__file__)
+    css = open(os.path.join(here, "static", "style.css")).read()
+    js = open(os.path.join(here, "static", "app.js")).read()
+    assert "img.lazy-src:not([src])" in css
+    assert "lazy-ph" in css
+    assert "Stills thumbs must not wait" in js or "must not wait for IntersectionObserver" in js
 
 
 def test_qc_tag_does_not_hide_xai_or_local_failure_as_unknown():
@@ -155,7 +171,7 @@ def test_candidate_tile_shows_named_vision_failure():
            "tier": "xxx", "view": "back_nude", "unpicked": 0,
            "candidates": [{
                "id": 2, "path": "/tmp/c.png", "chosen": 0, "run_id": None,
-               "render_json": None,
+               "view": "back_nude", "render_json": None,
                "qc_json": json.dumps({
                    "confidence": None,
                    "error": "xAI chat request failed (400): Incorrect API key",

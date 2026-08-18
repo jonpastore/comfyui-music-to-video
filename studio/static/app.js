@@ -853,8 +853,19 @@ function hydrateLazy(root, eager) {
       el.addEventListener("loadeddata", function () { seekNonBlackFrame(el); }, {once: true});
     }
   }
+  // Still thumbs must not wait for IntersectionObserver. After an htmx swap
+  // (upload, pick, delete) a missed observe leaves the 3/4 grey tile forever.
+  // Videos stay deferred — a panel of clips still must not all preload.
+  var stills = [];
+  var videos = [];
+  Array.prototype.forEach.call(nodes, function (el) {
+    if (el.tagName === "VIDEO") videos.push(el);
+    else stills.push(el);
+  });
+  Array.prototype.forEach.call(stills, load);
+  if (!videos.length) return;
   if (eager || !("IntersectionObserver" in window)) {
-    Array.prototype.forEach.call(nodes, load);
+    Array.prototype.forEach.call(videos, load);
     return;
   }
   if (!window._lazyMediaObs) {
@@ -866,7 +877,7 @@ function hydrateLazy(root, eager) {
       });
     }, {rootMargin: "240px 0px", threshold: 0.01});
   }
-  Array.prototype.forEach.call(nodes, function (el) {
+  Array.prototype.forEach.call(videos, function (el) {
     window._lazyMediaObs.observe(el);
   });
 }
