@@ -265,6 +265,35 @@ def test_upload_pose_becomes_chosen_sheet(tmp_path):
         assert body["chosen"] is True
 
 
+def test_assign_as_sheet_stamps_actors_from_the_card():
+    with TestClient(appmod.app) as client:
+        album = f"Assign Actors {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        dest = os.path.join(db.DATA, "uploads", "anchors", "album", "x")
+        os.makedirs(dest, exist_ok=True)
+        path = os.path.join(dest, f"trio_{time.time_ns()}.png")
+        open(path, "wb").write(_png_bytes())
+        db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+               None, "anchor_ref", path,
+               json.dumps({"scope_value": album, "character_id": None,
+                           "pose_name": "split roast", "pose_tier": "xxx",
+                           "role": "pose", "actors": ["Meow P", "Panther"]}),
+               time.time())
+        row = db.one("SELECT * FROM assets WHERE path=?", path)
+        r = client.post(f"/anchors/refs/{row['id']}/assign",
+                        data={"album": album, "pose_name": "split roast",
+                              "pose_tier": "xxx"},
+                        follow_redirects=False)
+        assert r.status_code == 303, r.text
+        sheet = db.one("SELECT * FROM anchors WHERE scope_value=? AND chosen=1", album)
+        assert json.loads(sheet["render_json"])["actors"] == ["Meow P", "Panther"]
+        meta = client.post(f"/anchors/refs/{row['id']}/meta",
+                           data={"pose_name": "split roast", "pose_tier": "xxx",
+                                 "role": "pose",
+                                 "actor_name": ["Meow P", "Panther", "Tiger"]})
+        assert meta.json()["actors"] == ["Meow P", "Panther", "Tiger"]
+
+
 def test_lightbox_saves_actors_on_an_existing_sheet():
     with TestClient(appmod.app) as client:
         album = f"Tag Actors {time.time_ns()}"

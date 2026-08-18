@@ -2404,6 +2404,9 @@ def test_anchor_form_folds_and_actions_are_icons():
         form = client.get("/anchors/form", params={"album": "Fold Album"}).text
     for fold in ("tiers", "views", "negative", "render"):
         assert f'data-fold="{fold}"' in form
+    assert 'name="actor_id"' in form
+    assert "actor-check-all" in form
+    assert 'name="character_id"' in form and "<select name=\"character_id\"" not in form
     # Tiers and Views stay open even with nothing ticked — collapsing them
     # hid the only controls that fill the missing-pose form.
     for fold in ("tiers", "views"):

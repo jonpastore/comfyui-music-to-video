@@ -1212,7 +1212,7 @@ with Close on the far right. An actors icon opens `#actor-tag` to
 stamp `render_json.actors` (`POST /anchors/{id}/actors`). Arrows and Delete are ignored while the
 select is focused so classifying does not step or delete the sheet.
 Roster thumbs open `#pose-preview`. Playlist Anchors uses
-character tabs and Clothed/Nude family tabs. On `/anchors` the gallery tabs are **tier → character → clothed/nude**, plus an **Actors** tab for multi-body plates (split roast, cowgirl, or any sheet with two or more stamped actors). Solo all-fours stays on the owner. Generate’s **Also in this sheet** ticks join each extra body’s identity front (cap 3). Upload-pose writes the roster’s actors onto the row. The first character tab is the album lead (not the word
+character tabs and Clothed/Nude family tabs. On `/anchors` the gallery tabs are **tier → character → clothed/nude**, plus an **Actors** tab for multi-body plates (split roast, cowgirl, or any sheet with two or more stamped actors). Solo all-fours stays on the owner. Generate uses **Actors** checkboxes (Lead + cast + **All**), not a character dropdown. A base-image card has the same ticks; Assign as sheet writes them onto the keeper. **All** is every `actor_id`. The gallery **Actors** tab is the unfiltered list of plates with more than one actor. A multi-body photograph is the lock for intertwined sex, not three solo fronts. Upload-pose writes the roster’s actors onto the row. The first character tab is the album lead (not the word
 protagonist). **Rename a character** under the tabs (and
 **Name** on Playlists → Album look) writes that name;
 Panther/Tiger have a Name box on their look bar. Generate’s

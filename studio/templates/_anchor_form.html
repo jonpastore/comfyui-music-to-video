@@ -32,40 +32,34 @@
         {% endfor %}
       </select>
     </label>
-    <label>Character
-      <select name="character_id" hx-get="/anchors/form" hx-target="#anchor-form"
-              hx-swap="outerHTML" hx-trigger="change" hx-include="#anchor-form">
-        <option value="">{{ lead_name or "Lead" }} (the album look)</option>
-        {% for c in characters %}
-        <option value="{{ c.id }}" {% if character_id == c.id %}selected{% endif %}>
-          {{ c.name }}{% if c.role %} &mdash; {{ c.role }}{% endif %}</option>
-        {% endfor %}
-      </select>
-    </label>
-    {% if characters %}
+    <input type="hidden" name="character_id" value="{{ character_id or '' }}">
     <fieldset class="actor-pick">
-      <legend>Also in this sheet</legend>
+      <legend>Actors</legend>
       <div class="check-row">
-        {% if character_id %}
         <label class="check">
-          <input type="checkbox" name="actor_id" value="lead">
+          <input type="checkbox" class="actor-check-all" name="actor_all" value="1"
+                 {% if characters and selected_actor_ids | length >= (characters | length) + 1 %}checked{% endif %}
+                 aria-label="all actors">
+          All
+        </label>
+        <label class="check">
+          <input type="checkbox" name="actor_id" value="lead"
+                 {% if "lead" in selected_actor_ids %}checked{% endif %}>
           {{ lead_name or "Lead" }}
         </label>
-        {% endif %}
         {% for c in characters %}
-        {% if c.id != character_id %}
         <label class="check">
-          <input type="checkbox" name="actor_id" value="{{ c.id }}">
+          <input type="checkbox" name="actor_id" value="{{ c.id }}"
+                 {% if c.id | string in selected_actor_ids %}checked{% endif %}>
           {{ c.name }}
         </label>
-        {% endif %}
         {% endfor %}
       </div>
-      <p class="hint">Tick every other body. Their identity front joins hers
-        as a reference (up to {{ max_refs }}). The sheet lands on the
-        <em>Actors</em> tab, not under one character.</p>
+      <p class="hint">Tick every body on this sheet. <em>All</em> is every
+        lead and cast member. Two or more land on the Actors tab. A
+        multi-body photograph is the lock for intertwined poses — not
+        three solo fronts glued together.</p>
     </fieldset>
-    {% endif %}
     <label>
       <span class="label-text">Candidates per sheet{{ help("n") }}</span>
       <input type="number" name="n" value="{{ last_n }}" min="1" max="8">
@@ -232,6 +226,27 @@
                  aria-label="generate this named pose">
           Generate this pose
         </label>
+        <fieldset class="actor-pick">
+          <legend>Actors</legend>
+          <div class="check-row">
+            <label class="check">
+              <input type="checkbox" name="actor_name" value="{{ lead_name or 'Lead' }}"
+                     {% if (lead_name or 'Lead') in r.actors %}checked{% endif %}
+                     hx-post="/anchors/refs/{{ r.id }}/meta" hx-trigger="change"
+                     hx-include="closest .ref-thumb" hx-swap="none">
+              {{ lead_name or "Lead" }}
+            </label>
+            {% for c in characters %}
+            <label class="check">
+              <input type="checkbox" name="actor_name" value="{{ c.name }}"
+                     {% if c.name in r.actors %}checked{% endif %}
+                     hx-post="/anchors/refs/{{ r.id }}/meta" hx-trigger="change"
+                     hx-include="closest .ref-thumb" hx-swap="none">
+              {{ c.name }}
+            </label>
+            {% endfor %}
+          </div>
+        </fieldset>
         <div class="candidate-actions">
           <button type="submit" formnovalidate
                   formaction="/anchors/refs/{{ r.id }}/assign"

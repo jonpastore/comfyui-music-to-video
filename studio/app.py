@@ -3242,7 +3242,7 @@ def anchor_refs(album, character_id=None):
         meta = db.jset(a)
         if meta.get("scope_value") != album:
             continue
-        if (meta.get("character_id") or None) != (character_id or None):
+        if not _ref_visible_for_character(meta, album, character_id):
             continue
         # Assign / upload-pose share this file with the chosen sheet.
         # Dropping the sheet used to delete the bytes and leave the row,
@@ -3254,6 +3254,18 @@ def anchor_refs(album, character_id=None):
             continue
         out.append(ref_fields(a))
     return out
+
+
+def _ref_visible_for_character(meta, album, character_id):
+    """Solo photos stay on their owner. A multi-body base is visible to
+    every named actor (and on the lead form)."""
+    names = [n for n in (meta.get("actors") or []) if n]
+    if len(names) >= 2:
+        if character_id is None:
+            return True
+        row = db.one("SELECT name FROM characters WHERE id=?", character_id)
+        return bool(row and row["name"] in names)
+    return (meta.get("character_id") or None) == (character_id or None)
 
 
 def _ref_assigned_as_sheet(asset_id, album, character_id=None):
@@ -3280,6 +3292,7 @@ def ref_fields(row):
     d["pose_tier"] = (meta.get("pose_tier") or "").strip()
     d["role"] = (meta.get("role") or "identity").strip() or "identity"
     d["pose_nude"] = bool(meta.get("pose_nude"))
+    d["actors"] = [n for n in (meta.get("actors") or []) if n]
     return d
 
 
@@ -3305,16 +3318,19 @@ def update_ref_meta(asset_id, **fields):
     return db.one("SELECT * FROM assets WHERE id=?", asset_id)
 
 
-async def _save_anchor_refs(album, character_id, uploads):
+async def _save_anchor_refs(album, character_id, uploads, actors=None):
     """Persist uploaded base images and return their asset rows."""
     dest_dir = os.path.join(db.DATA, "uploads", "anchors", "album", safe_name(album))
     stamp = int(time.time() * 1000)
     saved = []
     for i, f in enumerate(uploads):
         path = await save_upload(f, MAX_IMAGE, dest_dir, "image", prefix=f"ref{i}_{stamp}")
+        meta = {"scope_value": album, "character_id": character_id}
+        if actors:
+            meta["actors"] = list(actors)
         db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
                None, "anchor_ref", path,
-               json.dumps({"scope_value": album, "character_id": character_id}), time.time())
+               json.dumps(meta), time.time())
         saved.append(db.one("SELECT * FROM assets WHERE path=? AND kind='anchor_ref'", path))
     return saved
 
@@ -3336,7 +3352,9 @@ def _anchor_ctx_from_form(form, album, character_id):
     return anchor_form_ctx(album, tiers_sel, views_sel, character_id, typed,
                             negative=form.get("negative") or "",
                             latent=form.get("latent"),
-                            pose=form.get("pose") or "")
+                            pose=form.get("pose") or "",
+                            selected_actor_ids=_selected_actor_ids(
+                                form, album, character_id))
 
 
 @app.post("/anchors/refs")
@@ -3356,11 +3374,13 @@ async def add_anchor_refs(request: Request, album: str = Form(...),
         raise HTTPException(400, "choose at least one image to save")
     if len(uploads) > MAX_ANCHOR_UPLOADS:
         raise HTTPException(400, f"that is {len(uploads)} images; {MAX_ANCHOR_UPLOADS} at a time")
+    form = await request.form()
     if character_id is not None:
         char = get_character_or_404(character_id)
         if char["scope_value"] != album:
             raise HTTPException(400, f"character {char['name']!r} belongs to {char['scope_value']!r}")
-    await _save_anchor_refs(album, character_id, uploads)
+    actor_names, _extra = _form_actors(form, album, character_id)
+    await _save_anchor_refs(album, character_id, uploads, actors=actor_names)
     # htmx swaps the form back in with the new thumbnails; a plain browser still
     # gets the redirect, so this works with JavaScript off exactly as before
     if request.headers.get("HX-Request"):
@@ -3390,10 +3410,21 @@ async def save_anchor_ref_meta(request: Request, asset_id: int):
     nude = str(form.get("pose_nude") or "") in ("1", "on", "true", "yes")
     if name and role == "identity":
         role = "pose"
+    actors = []
+    seen = set()
+    for raw in form.getlist("actor_name"):
+        n = " ".join(str(raw or "").split())
+        key = n.lower()
+        if not n or key in seen:
+            continue
+        seen.add(key)
+        actors.append(n)
     update_ref_meta(asset_id, pose_name=name, pose_tier=tier or None,
-                    role=role, pose_nude=nude)
+                    role=role, pose_nude=nude,
+                    actors=actors or None)
     return JSONResponse({"ok": True, "id": asset_id, "pose_name": name,
-                         "pose_tier": tier, "role": role, "pose_nude": nude})
+                         "pose_tier": tier, "role": role, "pose_nude": nude,
+                         "actors": actors})
 
 
 @app.post("/anchors/refs/{asset_id}/assign")
@@ -3432,6 +3463,14 @@ async def assign_anchor_ref_as_sheet(request: Request, asset_id: int):
         raise HTTPException(400, f"{tier.upper()} does not permit a nude sheet")
     view = pose_view_key(asset_id, nude)
     cid = db.jset(row).get("character_id")
+    actor_names = list(fields.get("actors") or [])
+    if not actor_names:
+        seen = set()
+        for raw in form.getlist("actor_name"):
+            n = " ".join(str(raw or "").split())
+            if n and n.lower() not in seen:
+                seen.add(n.lower())
+                actor_names.append(n)
     now = time.time()
     db.run("""UPDATE anchors SET chosen=0 WHERE scope_kind='album' AND scope_value=?
               AND tier=? AND view=? AND (? IS NULL AND character_id IS NULL
@@ -3442,8 +3481,9 @@ async def assign_anchor_ref_as_sheet(request: Request, asset_id: int):
               VALUES ('album',?,?,?,?,1,?,?,?)""",
            album, tier, view, row["path"], now, cid,
            json.dumps({"source": "upload", "asset_id": asset_id, "pose_name": name,
-                       "content_tier": art_tier or tier}))
-    update_ref_meta(asset_id, pose_name=name, pose_tier=tier, role="pose", pose_nude=nude)
+                       "content_tier": art_tier or tier, "actors": actor_names}))
+    update_ref_meta(asset_id, pose_name=name, pose_tier=tier, role="pose",
+                    pose_nude=nude, actors=actor_names or None)
     return await _anchor_form_or_redirect(request, album)
 
 
@@ -4913,41 +4953,48 @@ def _validate_anchor_request(album, tiers_sel, views_sel):
     return album, selected_tiers, selected_views, combos
 
 
+def _selected_actor_ids(src, album, character_id):
+    """actor_id ticks, or All, or the current character as a default."""
+    getlist = getattr(src, "getlist", None)
+    raw = [str(v) for v in (getlist("actor_id") if getlist else []) if v]
+    all_on = str((src.get("actor_all") if hasattr(src, "get") else "") or "") in (
+        "1", "on", "true", "yes")
+    if all_on:
+        return ["lead"] + [str(c["id"]) for c in album_cast(album)]
+    if raw:
+        return raw
+    return ["lead"] if character_id is None else [str(character_id)]
+
+
 def _form_actors(form, album, character_id):
-    """Primary character plus any extra bodies ticked on the generate form."""
-    names = []
-    extra_ids = []
-    if character_id is not None:
-        char = get_character_or_404(character_id)
-        names.append(char["name"])
-    else:
-        names.append(pose_plan.lead_name(album))
-    seen = {n.lower() for n in names}
-    for raw in form.getlist("actor_id"):
+    """Every body ticked on the generate form (All = every lead + cast)."""
+    names, extra_ids, seen = [], [], set()
+    for raw in _selected_actor_ids(form, album, character_id):
         if str(raw) == "lead":
-            if character_id is None:
-                continue
             n = pose_plan.lead_name(album)
-            extra_ids.append(None)
             if n and n.lower() not in seen:
                 seen.add(n.lower())
                 names.append(n)
+            if character_id is not None:
+                extra_ids.append(None)
             continue
         try:
             cid = int(raw)
         except (TypeError, ValueError):
             continue
-        if cid == character_id:
-            continue
         row = db.one("SELECT * FROM characters WHERE id=? AND scope_value=?",
                      cid, album)
         if not row:
             continue
-        extra_ids.append(cid)
         n = row["name"]
         if n and n.lower() not in seen:
             seen.add(n.lower())
             names.append(n)
+        if cid != character_id:
+            extra_ids.append(cid)
+    if not names:
+        names.append(pose_plan.lead_name(album) if character_id is None
+                     else get_character_or_404(character_id)["name"])
     return names, extra_ids
 
 
@@ -5266,12 +5313,13 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     if len(uploads) > MAX_ANCHOR_UPLOADS:
         raise HTTPException(400, f"that is {len(uploads)} reference images; {MAX_ANCHOR_UPLOADS} "
                                   f"is the most this form accepts")
-    extra = [a["path"] for a in await _save_anchor_refs(album, character_id, uploads)]
+    actor_names, extra_ids = _form_actors(form, album, character_id)
+    extra = [a["path"] for a in await _save_anchor_refs(
+        album, character_id, uploads, actors=actor_names)]
     ref_ids = form.getlist("ref_id")
     if not ref_ids:
         ref_ids = [str(r["id"]) for r in anchor_refs(album, character_id)
                    if r.get("role") == "identity"][:2]
-    actor_names, extra_ids = _form_actors(form, album, character_id)
     extra.extend(_actor_identity_paths(album, extra_ids, selected_tiers))
     paths = _collect_anchor_ref_paths(album, character_id, ref_ids,
                                       extra_paths=extra,
@@ -5595,7 +5643,8 @@ def anchor_plan(selected_tiers, selected_views):
 
 
 def anchor_form_ctx(album="", selected_tiers=(), selected_views=(), character_id=None,
-                    typed_prompts=None, negative=None, tones=None, latent=None, pose=None):
+                    typed_prompts=None, negative=None, tones=None, latent=None, pose=None,
+                    selected_actor_ids=None):
     """The generate form for one album, across any number of tiers and views.
 
     Every view is offered against every tier; see anchor_plan() for what gets
@@ -5721,6 +5770,8 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=(), character_id
         "characters": (album_cast(album) if album
                        else db.q("SELECT * FROM characters ORDER BY scope_value, name")),
         "lead_name": pose_plan.lead_name(album) if album else "Lead",
+        "selected_actor_ids": selected_actor_ids or (
+            ["lead"] if character_id is None else [str(character_id)]),
         "pose": pose or "",
     }
 
@@ -5772,7 +5823,9 @@ def anchor_form(request: Request, album: str = "", tier: List[str] = Query([]),
     return templates.TemplateResponse(request, "_anchor_form.html",
                                        anchor_form_ctx(album, tier, view,
                                                        character_id, typed_prompts, negative, tones,
-                                                       latent=qp.get("latent"), pose=pose))
+                                                       latent=qp.get("latent"), pose=pose,
+                                                       selected_actor_ids=_selected_actor_ids(
+                                                           qp, album, character_id)))
 
 
 def _drop_anchor(row):

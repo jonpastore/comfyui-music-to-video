@@ -78,7 +78,9 @@ What they need from these four, in their own terms:
    data. If I upload a sheet to the wrong tier and delete it, the
    empty card goes with the file — the row is not left behind. A
    three-body plate lives on the Actors tab, not under Meow P; I tick
-   who else is in the sheet when I generate or upload."* (`T7-20`)
+   who is in the sheet (or All) on generate, on the base card, and on
+   Assign as sheet. Intertwined sex uses that multi-body plate as the
+   lock, not three solo fronts."* (`T7-20`)
 
 ## 3. The product rules
 

@@ -753,6 +753,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initAnchorPrompts();
   initAnchorPaste();
   initViewCheckAll();
+  initActorPick();
   initJobForms();       // every page, not just the ones with an anchor grid
   initSongPage();       // song page forms: fetch, no full-page submit
   initRunHistory();
@@ -968,6 +969,53 @@ function initViewCheckAll() {
       swap: "outerHTML",
       values: vals
     });
+  });
+}
+
+function initActorPick() {
+  function syncPrimary(form) {
+    var hid = form.querySelector('input[type="hidden"][name="character_id"]');
+    if (!hid) return;
+    var lead = form.querySelector('[name="actor_id"][value="lead"]');
+    var extra = [];
+    form.querySelectorAll('[name="actor_id"]:checked').forEach(function (cb) {
+      if (cb.value !== "lead") extra.push(cb.value);
+    });
+    hid.value = ((!lead || !lead.checked) && extra.length === 1) ? extra[0] : "";
+  }
+  function swap(form) {
+    if (typeof htmx === "undefined") return;
+    var vals = {};
+    new FormData(form).forEach(function (v, k) {
+      if (vals[k] === undefined) vals[k] = v;
+      else if (Array.isArray(vals[k])) vals[k].push(v);
+      else vals[k] = [vals[k], v];
+    });
+    htmx.ajax("GET", "/anchors/form", {
+      target: "#anchor-form",
+      swap: "outerHTML",
+      values: vals
+    });
+  }
+  document.addEventListener("change", function (e) {
+    var form = document.getElementById("anchor-form");
+    if (!form || !e.target.closest || !e.target.closest("#anchor-form")) return;
+    if (e.target.classList && e.target.classList.contains("actor-check-all")) {
+      var on = e.target.checked;
+      form.querySelectorAll('[name="actor_id"]').forEach(function (cb) { cb.checked = on; });
+      syncPrimary(form);
+      swap(form);
+      return;
+    }
+    if (e.target.name === "actor_id") {
+      var all = form.querySelector(".actor-check-all");
+      var boxes = form.querySelectorAll('[name="actor_id"]');
+      var n = 0;
+      boxes.forEach(function (cb) { if (cb.checked) n++; });
+      if (all) all.checked = boxes.length > 0 && n === boxes.length;
+      syncPrimary(form);
+      swap(form);
+    }
   });
 }
 

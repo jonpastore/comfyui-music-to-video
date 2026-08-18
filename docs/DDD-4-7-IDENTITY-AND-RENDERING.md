@@ -109,7 +109,10 @@ file is gone.
 A sheet with two or more bodies is an ensemble (`pose_plan.is_ensemble`):
 stamped `render_json.actors`, a cowgirl/spit-roast family, or another
 cast name on the pose label. `nest_anchor_groups` puts those on the
-Actors tab. Generate `actor_id` joins each extra identity front.
+Actors tab. Generate `actor_id` / `actor_all` is the full cast tick list (not a
+dropdown plus extras). Base `anchor_ref.meta.actors` uses the same
+names; Assign as sheet copies them onto `render_json.actors`.
+A multi-body plate *is* the ensemble reference.
 `POST /anchors/{id}/actors` retags an existing sheet from the lightbox.
 `T6-A1`'s JSON loop (`GET/POST /api/anchors`, pick, use-as-ref) still
 holds for generating keepers; it does not write the map.
