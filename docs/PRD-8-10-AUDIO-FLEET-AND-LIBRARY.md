@@ -109,8 +109,9 @@ still not shipped (`T8-12`, provisional by absence).
    `reason`. **`T8-2` Media-card pick is built** — unpicked takes on that
    bag show `POST /songs/{id}/takes/{id}/pick`; picked takes show a tag
    (`studio/test_t8_2_media_card_pick.py`). Use stays on the edit card.
-   Topbar **Media** (`/media`) is New Song (ACE-Step creates a library row;
-   first take is the original) and New Image (local t2i). Generate-from-tags
+   Topbar **Media** is a submenu: New Song (`/media?new=song`, ACE-Step
+   creates a library row; first take is the original) and New Image
+   (`/media?new=image`, local t2i). `/media` is the chooser. Generate-from-tags
    is not on the song page; span replace / re-synth stay on Edit audio.
 3. **TRD-10's bulk edit.** `T10-3`…`T10-7` are built: blank leaves alone, toggle-all is the shown set, invalid refuses the batch, one transaction, pre-write count equals rows changed.
 3a. **TRD-10's lyrics provenance.** `T10-8` is built: a transcription stores

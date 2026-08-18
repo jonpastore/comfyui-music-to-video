@@ -11,19 +11,34 @@ from test_app import _upload_song
 
 def test_media_page_and_nav():
     with TestClient(appmod.app) as client:
-        page = client.get("/media")
-        assert page.status_code == 200, page.text
-        assert "New Song" in page.text
-        assert "New Image" in page.text
-        assert 'action="/media/songs"' in page.text
-        assert 'action="/media/images"' in page.text
+        hub = client.get("/media")
+        assert hub.status_code == 200, hub.text
+        assert 'href="/media?new=song"' in hub.text
+        assert 'href="/media?new=image"' in hub.text
+        assert 'action="/media/songs"' not in hub.text
+        assert 'action="/media/images"' not in hub.text
+        song = client.get("/media", params={"new": "song"})
+        assert song.status_code == 200, song.text
+        assert 'action="/media/songs"' in song.text
+        assert 'action="/media/images"' not in song.text
+        image = client.get("/media", params={"new": "image"})
+        assert image.status_code == 200, image.text
+        assert 'action="/media/images"' in image.text
+        assert 'action="/media/songs"' not in image.text
         home = client.get("/")
         assert 'href="/media"' in home.text
         assert ">Media<" in home.text
+        assert 'href="/media?new=song"' in home.text
+        assert 'href="/media?new=image"' in home.text
         nav = client.get("/api/nav")
         assert nav.status_code == 200
-        hrefs = [x["href"] for x in nav.json()["links"]]
+        links = nav.json()["links"]
+        hrefs = [x["href"] for x in links]
         assert hrefs[:2] == ["/", "/media"]
+        media = next(x for x in links if x["href"] == "/media")
+        kids = [(c["href"], c["label"]) for c in media["children"]]
+        assert kids == [("/media?new=song", "New Song"),
+                        ("/media?new=image", "New Image")]
 
 
 def test_new_song_enqueues_as_new_song(monkeypatch):
@@ -106,7 +121,7 @@ def test_song_page_points_at_media_not_generate_take():
         page = client.get(f"/songs/{song['id']}")
     assert page.status_code == 200
     assert "Generate take" not in page.text
-    assert "/media#new-song" in page.text
+    assert "/media?new=song" in page.text
     assert "Replace a span" in page.text
 
 
@@ -151,7 +166,7 @@ def test_recent_images_select_and_delete(tmp_path):
         "INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
         None, "t2i", str(drop), json.dumps({"prompt": "drop me"}), 2)
     with TestClient(appmod.app) as client:
-        page = client.get("/media")
+        page = client.get("/media", params={"new": "image"})
         assert page.status_code == 200
         assert 'id="recent-images"' in page.text
         assert 'class="js-t2i-select"' in page.text

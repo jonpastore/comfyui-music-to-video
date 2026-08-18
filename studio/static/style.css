@@ -105,9 +105,28 @@ a { color: var(--accent); }
 }
 
 .topbar .brand { font-weight: 700; text-decoration: none; color: var(--text); flex: none; }
-.topbar nav { display: flex; gap: 1.1rem; flex-wrap: wrap; }
+.topbar nav { display: flex; gap: 1.1rem; flex-wrap: wrap; align-items: center; }
 .topbar nav a { text-decoration: none; color: var(--muted); }
 .topbar nav a:hover { color: var(--text); }
+.nav-drop { position: relative; }
+.nav-sub {
+  display: none;
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  min-width: 10rem;
+  padding: 0.3rem 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 50;
+}
+.nav-drop:hover .nav-sub,
+.nav-drop:focus-within .nav-sub { display: flex; flex-direction: column; }
+.nav-sub a { padding: 0.4rem 0.85rem; white-space: nowrap; }
+.media-choice { display: block; text-decoration: none; color: inherit; }
+.media-choice:hover { border-color: var(--accent); }
 
 .job-chip {
   margin-left: auto;

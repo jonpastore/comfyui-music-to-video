@@ -11,6 +11,8 @@ keepers as image1, asked pose replaces the standing clause). Denoise
 labels come from that same latent so they cannot disagree with the
 graph.
 """
+import os
+
 import classification
 import db
 import jobs
@@ -160,6 +162,55 @@ def is_her_keeper(image):
         return False
     usable = (image.get("usable") or "").strip().lower()
     return usable != "skip"
+
+
+def _image_roots():
+    """Dirs that hold operator plates when classification only stored a name."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(here)
+    data = getattr(db, "DATA", "") or ""
+    return [p for p in (
+        os.path.join(root, "scripts", "anchor5"),
+        os.path.join(root, "anchor5"),
+        os.path.join(here, "seed"),
+        data,
+        os.path.join(data, "uploads") if data else "",
+        os.path.join(data, "uploads", "anchors") if data else "",
+    ) if p]
+
+
+def resolve_image_path(path):
+    """Absolute file, or a sidecar basename found under the known plate dirs.
+
+    Live Street Cats keepers are `tense.jpg` from the import sidecar. The
+    bytes live in meowp-studio/scripts/anchor5/. A missing name is None,
+    never the bare filename that FileNotFoundError'd job 343.
+    """
+    path = (path or "").strip()
+    if not path:
+        return None
+    if os.path.isfile(path):
+        return path
+    name = os.path.basename(path)
+    if not name or name in (".", ".."):
+        return None
+    for root in _image_roots():
+        cand = os.path.join(root, name)
+        if os.path.isfile(cand):
+            return cand
+    return None
+
+
+def existing_images(paths):
+    """Keep only paths that resolve to a real file, in order, no dupes."""
+    out, seen = [], set()
+    for path in paths or []:
+        real = resolve_image_path(path)
+        if not real or real in seen:
+            continue
+        seen.add(real)
+        out.append(real)
+    return out
 
 
 def _her_keepers(keepers, album_images=None):
@@ -316,12 +367,13 @@ def generate(song_id, run_tiers, character_id=None, images=None, n=4):
     queued = []
     for sheet in planned["sheets"]:
         decided = resolve_c1_c2(sheet, keepers, images)
+        refs = existing_images(decided["images"]) or existing_images(images)[:3]
         jid = jobs.enqueue("anchor", {
             "scope_kind": "album",
             "scope_value": planned["album"],
             "tier": sheet["tier"],
             "view": sheet["sheet_view"],
-            "images": decided["images"],
+            "images": refs,
             "n": n,
             "character_id": character_id,
             "prompt": decided["pose"],
@@ -376,13 +428,14 @@ def generate_one(song_id, pose, view, wardrobe, run_tiers, character_id=None,
     images = _album_images(album, character_id)
     keepers = classification.keepers(album, character_id)["images"]
     decided = resolve_c1_c2(sheet, keepers, images)
+    refs = existing_images(decided["images"]) or existing_images(images)[:3]
     n = max(1, min(int(n or 4), 8))
     jid = jobs.enqueue("anchor", {
         "scope_kind": "album",
         "scope_value": album,
         "tier": sheet["tier"],
         "view": sheet["sheet_view"],
-        "images": decided["images"],
+        "images": refs,
         "n": n,
         "character_id": character_id,
         "prompt": decided["pose"],

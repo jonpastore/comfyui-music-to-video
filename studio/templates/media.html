@@ -1,13 +1,33 @@
 {% extends "base.html" %}
-{% block title %}Media · Meow P Studio{% endblock %}
+{% block title %}{% if pane == "song" %}New Song{% elif pane == "image" %}New Image{% else %}Media{% endif %} · Meow P Studio{% endblock %}
 {% block content %}
-<h1>Media</h1>
+<h1>{% if pane == "song" %}New Song{% elif pane == "image" %}New Image{% else %}Media{% endif %}</h1>
+{% if pane %}
+<p class="hint"><a href="/media">Media</a>
+  · {% if pane == "song" %}ACE-Step writes a new library song
+    (first take is the original).{% else %}Local text-to-image
+    (Qwen / Z-Image + LoRAs), not Mage.{% endif %}</p>
+{% else %}
 <p class="hint">New music is a new song. New pictures are local text-to-image
   (Qwen / Z-Image + LoRAs), not Mage. Upload an existing mp3 from the
   <a href="/">Library</a>. Repair a span of a track you already have on that
   song&rsquo;s Edit audio fold.</p>
-
 <div class="row-2col">
+  <a class="card media-choice" href="/media?new=song" id="new-song">
+    <h2>New Song</h2>
+    <p class="hint">ACE-Step writes the track, then this becomes a Library song
+      (first take is the original). Style tags are musical tokens, not a scene.</p>
+  </a>
+  <a class="card media-choice" href="/media?new=image" id="new-image">
+    <h2>New Image</h2>
+    <p class="hint">Local text-to-image. Pick an album to pull identity / body /
+      wardrobe / premise into the prompt. Attach her front to condition on the
+      photographs.</p>
+  </a>
+</div>
+{% endif %}
+
+{% if pane == "song" %}
 <section class="card" id="new-song">
   <h2>New Song</h2>
   <p class="hint">ACE-Step writes the track, then this becomes a Library song
@@ -38,7 +58,9 @@
     <button type="submit">Generate song</button>
   </form>
 </section>
+{% endif %}
 
+{% if pane == "image" %}
 <section class="card" id="new-image">
   <h2>New Image</h2>
   <p class="hint">Local text-to-image. Pick an album to pull identity / body /
@@ -53,6 +75,9 @@
       <label>Album
         <input type="text" name="album" list="media-albums" autocomplete="off"
                placeholder="Street Cats">
+        <datalist id="media-albums">
+          {% for a in albums %}<option value="{{ a }}"></option>{% endfor %}
+        </datalist>
       </label>
       <label>Model
         <select name="model">
@@ -82,7 +107,6 @@
     <button type="submit">Generate image</button>
   </form>
 </section>
-</div>
 
 {% if images %}
 <section id="recent-images" class="t2i-row">
@@ -111,5 +135,6 @@
   <p class="hint">Assign a keeper from <a href="/anchors">Anchors</a>
     (upload / assign as sheet). This page does not stamp a pose.</p>
 </section>
+{% endif %}
 {% endif %}
 {% endblock %}

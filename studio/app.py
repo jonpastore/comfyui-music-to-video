@@ -1240,7 +1240,14 @@ def h_anchor(args, progress):
     # would replace the composed sheet. Pose is already on the profile.
     render_prompt = (
         "" if args.get("source") == "pose-gap" else args.get("prompt", ""))
-    paths = pipeline.gen_anchor(args["images"], view, args.get("n", 4), progress,
+    import pose_generate
+    images = pose_generate.existing_images(args.get("images") or [])
+    if not images:
+        images = pose_generate.existing_images(
+            pose_generate._album_images(album, cid))[:3]
+        if images:
+            progress("identity files were missing; using album photographs")
+    paths = pipeline.gen_anchor(images, view, args.get("n", 4), progress,
                                  profile=anchor_profile,
                                  # this ALBUM's wording for the tier if it has its
                                  # own, else the tier's -- the same call the form
@@ -1269,7 +1276,7 @@ def h_anchor(args, progress):
         settings = json.dumps(meta)
     now = time.time()
     asked = args.get("prompt") or args.get("pose") or ""
-    bases = args.get("images") or []
+    bases = images
     prev = db.q("""SELECT path FROM anchors WHERE scope_kind=? AND scope_value=?
                    AND tier=? AND view=? AND character_id IS ?
                    ORDER BY chosen DESC, id DESC""",
@@ -2299,8 +2306,8 @@ async def create_song(request: Request, title: str = Form(...), album: str = For
 
 
 @app.get("/media", response_class=HTMLResponse)
-def media_page(request: Request):
-    """Create surface: New Song (ACE-Step) and New Image (local t2i)."""
+def media_page(request: Request, new: str = ""):
+    """Create surface: New Song (ACE-Step) or New Image (local t2i)."""
     albums = [r["name"] for r in db.q(
         "SELECT name FROM playlists WHERE kind='playlist' ORDER BY name") if r["name"]]
     default = models.default_for("t2i") or models.default_for("artwork")
@@ -2332,8 +2339,12 @@ def media_page(request: Request):
             "id": row["id"], "path": row["path"],
             "label": (meta.get("prompt") or "t2i")[:48],
         })
+    pane = (new or "").strip().lower()
+    if pane not in ("song", "image"):
+        pane = ""
     return templates.TemplateResponse(request, "media.html", {
         "albums": albums, "t2i_models": t2i_models, "images": images,
+        "pane": pane,
     })
 
 
@@ -2425,7 +2436,7 @@ def media_new_image(request: Request, prompt: str = Form(...), album: str = Form
         "tier": "xxx" if album else "r",
     })
     return json_or_redirect(
-        request, {"job_id": jid, "kind": "t2i"}, "/media#new-image")
+        request, {"job_id": jid, "kind": "t2i"}, "/media?new=image")
 
 
 @app.post("/media/images/delete")
@@ -2458,7 +2469,7 @@ async def media_delete_images(request: Request):
         gone.append(aid)
     if not gone:
         raise HTTPException(400, "no selected images to delete")
-    return json_or_redirect(request, {"deleted": gone}, "/media#recent-images")
+    return json_or_redirect(request, {"deleted": gone}, "/media?new=image")
 
 
 @app.post("/songs/analyse-all")

@@ -316,3 +316,63 @@ def test_t4_24_api_enqueues_at_the_run_ceiling():
         assert refused.status_code == 400, refused.text
         assert "tier" in refused.json()["detail"].lower()
     assert _map_rows(sid) == []
+
+
+def test_existing_images_resolves_sidecar_basename(tmp_path, monkeypatch):
+    dest = tmp_path / "tense.jpg"
+    dest.write_bytes(b"\x89PNG\r\n\x1a\n")
+    monkeypatch.setattr(pose_generate, "_image_roots", lambda: [str(tmp_path)])
+    assert pose_generate.resolve_image_path("tense.jpg") == str(dest)
+    assert pose_generate.resolve_image_path("gone.jpg") is None
+    assert pose_generate.existing_images(["tense.jpg", "gone.jpg"]) == [str(dest)]
+
+
+def test_t4_24_generate_does_not_enqueue_missing_sidecar_names(
+        tmp_path, monkeypatch):
+    dest = tmp_path / "standing.jpg"
+    dest.write_bytes(b"\x89PNG\r\n\x1a\n")
+    monkeypatch.setattr(pose_generate, "_image_roots", lambda: [str(tmp_path)])
+    tiers.ensure_builtins()
+    stamp = f"t424-path-{time.time_ns()}"
+    album = f"T424P {stamp}"
+    song = _song(stamp, album, duration=8.0)
+    sid = song["id"]
+    _write_board(sid, song["slug"], "xxx", [
+        _scene(1, "kneeling", "wide"),
+    ], album)
+    classification.save(album, {"images": [
+        _image("tense", path="tense.jpg", pose="standing", usable="identity"),
+        _image("stand", path="standing.jpg", pose="standing", usable="identity"),
+    ]})
+    got = pose_generate.generate(sid, ["xxx"])
+    assert got["queued"] >= 1, got
+    for _row, args in _job_args(sid):
+        assert "tense.jpg" not in args["images"], args
+        assert all(os.path.isfile(p) for p in args["images"]), args
+        assert str(dest) in args["images"], args
+
+
+def test_h_anchor_rewrites_missing_sidecar_names(tmp_path, monkeypatch):
+    dest = tmp_path / "tense.jpg"
+    dest.write_bytes(b"\x89PNG\r\n\x1a\n")
+    monkeypatch.setattr(pose_generate, "_image_roots", lambda: [str(tmp_path)])
+    seen = {}
+
+    def fake_gen(images, *a, **k):
+        seen["images"] = list(images)
+        return []
+
+    monkeypatch.setattr(appmod.pipeline, "gen_anchor", fake_gen)
+    monkeypatch.setattr(appmod, "score_generated_still",
+                        lambda *a, **k: None)
+    monkeypatch.setattr(appmod, "refine_generated_still",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            RuntimeError("no refine")))
+    appmod.h_anchor({
+        "scope_kind": "album", "scope_value": "Street Cats",
+        "tier": "xxx", "view": "profile_nude",
+        "images": ["tense.jpg", "standing.jpg"],
+        "n": 1, "source": "pose-gap", "pose": "unspecified",
+        "render": {"latent": "empty", "denoise": 1.0},
+    }, lambda m: None)
+    assert seen["images"] == [str(dest)], seen

@@ -252,8 +252,10 @@ def test_t7_21_graph_matches_c1_and_c2_labels(tmp_path):
     _assert_label_matches_graph(c2)
 
 
-def test_t7_21_pose_gap_generate_wires_c1_and_c2():
+def test_t7_21_pose_gap_generate_wires_c1_and_c2(tmp_path):
     """Generate from holes uses the resolver, not a single empty-latent path."""
+    her = str(tmp_path / "her-stand.jpg")
+    open(her, "wb").write(b"\x89PNG\r\n\x1a\n")
     tiers.ensure_builtins()
     stamp = f"t721-{time.time_ns()}"
     album = f"T721 {stamp}"
@@ -264,7 +266,7 @@ def test_t7_21_pose_gap_generate_wires_c1_and_c2():
         _scene(2, "kneeling", "medium"),
     ], album)
     classification.save(album, {"images": [
-        _image("her-stand", path="her-stand.jpg", pose="standing",
+        _image("her-stand", path=her, pose="standing",
                view="front", wardrobe="clothed"),
         _image("stranger", path="stranger-plate.jpg", kind="plate",
                pose="kneeling", view="back", usable="pose"),
@@ -282,7 +284,7 @@ def test_t7_21_pose_gap_generate_wires_c1_and_c2():
             assert args["pose_label"] == "same-pose", args
             assert render.get("latent") == "image", args
             assert float(render.get("denoise")) == 1.0, args
-            assert args["images"] == ["her-stand.jpg"], args
+            assert args["images"] == [her], args
             assert "standing" in args["pose"], args
         elif args.get("job_kind") == "c2":
             assert args["pose_label"] == "new-pose", args
@@ -290,7 +292,7 @@ def test_t7_21_pose_gap_generate_wires_c1_and_c2():
             assert float(render.get("denoise")) == 1.0, args
             assert render.get("width") == 896, args
             assert render.get("height") == 1216, args
-            assert args["images"] == ["her-stand.jpg"], args
+            assert args["images"] == [her], args
             assert "stranger-plate.jpg" not in args["images"], args
             assert "kneeling" in args["pose"], args
         else:

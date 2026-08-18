@@ -18,7 +18,18 @@
     <a class="brand" href="/">Meow P Studio</a>
     <nav>
       {% for link in nav_links() %}
+      {% if link.children %}
+      <span class="nav-drop">
+        <a href="{{ link.href }}">{{ link.label }}</a>
+        <span class="nav-sub">
+          {% for child in link.children %}
+          <a href="{{ child.href }}">{{ child.label }}</a>
+          {% endfor %}
+        </span>
+      </span>
+      {% else %}
       <a href="{{ link.href }}">{{ link.label }}</a>
+      {% endif %}
       {% endfor %}
     </nav>
     <button type="button" id="job-chip" class="job-chip" data-open-jobs

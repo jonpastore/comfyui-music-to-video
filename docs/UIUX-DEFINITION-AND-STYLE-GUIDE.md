@@ -122,7 +122,8 @@ Ranked by impact.
    `base.html` / `nav_service.LINKS` is *Library, Media, Anchors, Playlists,
    Sets, Tiers, Models, Jobs, Config*. TRD-2 §7's older agreed order is
    *Library → Playlists → Anchors → Sets → Jobs → Tiers → Config*. Media is
-   the create surface (New Song / New Image). §5.1 still owns any later rename.
+   the create surface: a topbar submenu (New Song / New Image), each its
+   own pane. §5.1 still owns any later rename.
 
 Three breakpoints exist (`860px`, `900px`, `46rem`) in two units, which is not a
 responsive strategy; §5.6.
@@ -1860,9 +1861,10 @@ A style guide is falsifiable or it is decoration.
   monkeypatched probe entry appears in both HTML `<nav>` and JSON; hardcoding
   the old `<a>` tags in the template drops the probe → red. Today's order is
   Library, **Media**, Anchors, Playlists, Sets, Tiers, Models, Jobs, Config.
-  Media is New Song (ACE-Step → new library row) and New Image (local t2i;
-  Recent images has multi-select + Delete selected, `test_media_create.py`).
-  not Mage). Other
+  Media is a submenu: New Song (`/media?new=song`, ACE-Step → new library
+  row) and New Image (`/media?new=image`, local t2i; Recent images has
+  multi-select + Delete selected). `GET /media` is the chooser, not both
+  forms (`test_media_create.py`). Other
   `T6-A2` objects: the queue panel
   (`test_t6_a2_html_and_json_report_the_same_queue_numbers`), the review
   queue (`test_t6_a2_html_and_json_report_the_same_review_queue_numbers`),

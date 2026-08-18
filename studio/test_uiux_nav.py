@@ -26,12 +26,13 @@ def _nav_block(html):
 
 
 def _nav_anchors(nav_html):
-    """Ordered (href, label) pairs from <a> tags inside <nav>."""
+    """Ordered top-level (href, label) pairs. Submenu links sit in .nav-sub."""
+    stripped = re.sub(r'<span class="nav-sub">.*?</span>', "", nav_html, flags=re.S)
     return [
         (m.group(1), m.group(2).strip())
         for m in re.finditer(
             r'<a\b[^>]*\bhref="([^"]*)"[^>]*>(.*?)</a>',
-            nav_html, re.S | re.I)
+            stripped, re.S | re.I)
     ]
 
 
@@ -88,3 +89,6 @@ def test_uiux_nav_html_and_json_share_one_list(monkeypatch):
     ]
     assert html_pairs[:9] == expected_base, html_pairs[:9]
     assert html_pairs[9] == (_PROBE_HREF, _PROBE_LABEL)
+    assert 'class="nav-sub"' in nav_html
+    assert 'href="/media?new=song"' in nav_html
+    assert 'href="/media?new=image"' in nav_html

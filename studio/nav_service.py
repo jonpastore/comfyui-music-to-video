@@ -11,7 +11,10 @@ No FastAPI import — same rule as library_service (T6-A3).
 # template. Labels and hrefs are the operator-facing contract.
 LINKS = [
     {"href": "/", "label": "Library"},
-    {"href": "/media", "label": "Media"},
+    {"href": "/media", "label": "Media", "children": [
+        {"href": "/media?new=song", "label": "New Song"},
+        {"href": "/media?new=image", "label": "New Image"},
+    ]},
     {"href": "/anchors", "label": "Anchors"},
     {"href": "/playlists", "label": "Playlists"},
     {"href": "/sets", "label": "Sets"},
