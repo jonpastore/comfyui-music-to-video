@@ -139,27 +139,32 @@ def test_uiux_import_seeds_empty_library_and_closes_holes():
         _image("sidecar-stand", pose="stand", view="front", wardrobe="clothed",
                usable="pose"),
     ]}, open(side, "w"))
+    # Hold default auto-seed so this case exercises explicit import only.
+    prev = classification._DEFAULT_SIDECAR
+    classification._DEFAULT_SIDECAR = os.path.join(db.DATA, f"{stamp}-missing.json")
+    try:
+        with TestClient(appmod.app) as client:
+            empty = client.get("/anchors", params={"scope_value": album, "song_id": sid})
+            assert empty.status_code == 200, empty.text
+            assert 'id="class-keepers-empty"' in empty.text
+            assert 'data-pose="standing"' in empty.text
+            assert "No keepers in classification_json" in empty.text
 
-    with TestClient(appmod.app) as client:
-        empty = client.get("/anchors", params={"scope_value": album, "song_id": sid})
-        assert empty.status_code == 200, empty.text
-        assert 'id="class-keepers-empty"' in empty.text
-        assert 'data-pose="standing"' in empty.text
-        assert "No keepers in classification_json" in empty.text
+            seeded = client.post(
+                f"/api/albums/{album}/classification/import", json={"path": side})
+            assert seeded.status_code == 200, seeded.text
+            assert [im["id"] for im in seeded.json()["images"]] == ["sidecar-stand"]
 
-        seeded = client.post(
-            f"/api/albums/{album}/classification/import", json={"path": side})
-        assert seeded.status_code == 200, seeded.text
-        assert [im["id"] for im in seeded.json()["images"]] == ["sidecar-stand"]
-
-        filled = client.get("/anchors", params={"scope_value": album, "song_id": sid})
-    assert filled.status_code == 200, filled.text
-    html = filled.text
-    assert 'data-id="sidecar-stand"' in html
-    assert "stand / front / clothed" in html
-    assert 'id="pose-gap-empty"' in html
-    assert "No ceiling holes for this song." in html
-    assert 'class="tag class-chip hole warn-tag"' not in html
+            filled = client.get("/anchors", params={"scope_value": album, "song_id": sid})
+        assert filled.status_code == 200, filled.text
+        html = filled.text
+        assert 'data-id="sidecar-stand"' in html
+        assert "stand / front / clothed" in html
+        assert 'id="pose-gap-empty"' in html
+        assert "No ceiling holes for this song." in html
+        assert 'class="tag class-chip hole warn-tag"' not in html
+    finally:
+        classification._DEFAULT_SIDECAR = prev
 
 
 def test_uiux_save_seeds_empty_library():
@@ -170,21 +175,26 @@ def test_uiux_save_seeds_empty_library():
         _image("saved-kneel", pose="kneel", view="front", wardrobe="clothed",
                usable="identity"),
     ]}
-    with TestClient(appmod.app) as client:
-        empty = client.get("/anchors", params={"scope_value": album, "song_id": sid})
-        assert 'id="class-keepers-empty"' in empty.text
-        posted = client.post(
-            f"/api/albums/{album}/classification", json=document)
-        assert posted.status_code == 200, posted.text
-        page = client.get("/anchors", params={"scope_value": album, "song_id": sid})
-    assert page.status_code == 200, page.text
-    assert 'data-id="saved-kneel"' in page.text
-    assert 'data-usable="identity"' in page.text
-    assert "No ceiling holes for this song." in page.text
+    prev = classification._DEFAULT_SIDECAR
+    classification._DEFAULT_SIDECAR = os.path.join(db.DATA, f"{stamp}-missing.json")
+    try:
+        with TestClient(appmod.app) as client:
+            empty = client.get("/anchors", params={"scope_value": album, "song_id": sid})
+            assert 'id="class-keepers-empty"' in empty.text
+            posted = client.post(
+                f"/api/albums/{album}/classification", json=document)
+            assert posted.status_code == 200, posted.text
+            page = client.get("/anchors", params={"scope_value": album, "song_id": sid})
+        assert page.status_code == 200, page.text
+        assert 'data-id="saved-kneel"' in page.text
+        assert 'data-usable="identity"' in page.text
+        assert "No ceiling holes for this song." in page.text
+    finally:
+        classification._DEFAULT_SIDECAR = prev
 
 
 def test_uiux_sidecar_alone_does_not_paint_keepers_or_close_holes():
-    """A matching sidecar on disk is not the library until import."""
+    """A random sidecar on disk is not the library; only default auto-seed / import."""
     stamp = f"uiux-side-{time.time_ns()}"
     album, sid, _song = _album_song(stamp, scenes=[_scene(1, "standing", "wide")])
     side = os.path.join(db.DATA, f"{stamp}-only.json")
@@ -192,13 +202,46 @@ def test_uiux_sidecar_alone_does_not_paint_keepers_or_close_holes():
         _image("disk-only", pose="stand", view="front", wardrobe="clothed",
                usable="pose"),
     ]}, open(side, "w"))
-    with TestClient(appmod.app) as client:
-        page = client.get("/anchors", params={"scope_value": album, "song_id": sid})
-    assert page.status_code == 200, page.text
-    assert 'data-id="disk-only"' not in page.text
-    assert 'id="class-keepers-empty"' in page.text
-    assert 'data-pose="standing"' in page.text
-    assert 'class="tag class-chip hole warn-tag"' in page.text
+    prev = classification._DEFAULT_SIDECAR
+    classification._DEFAULT_SIDECAR = os.path.join(db.DATA, f"{stamp}-missing.json")
+    try:
+        with TestClient(appmod.app) as client:
+            page = client.get("/anchors", params={"scope_value": album, "song_id": sid})
+        assert page.status_code == 200, page.text
+        assert 'data-id="disk-only"' not in page.text
+        assert 'id="class-keepers-empty"' in page.text
+        assert 'data-pose="standing"' in page.text
+        assert 'class="tag class-chip hole warn-tag"' in page.text
+    finally:
+        classification._DEFAULT_SIDECAR = prev
+
+
+def test_uiux_live_empty_auto_seeds_from_default_sidecar():
+    """Empty DB + default sidecar present → /anchors seeds one version (no GPU)."""
+    stamp = f"uiux-autoseed-{time.time_ns()}"
+    album, sid, _song = _album_song(stamp, scenes=[_scene(1, "standing", "wide")])
+    side = os.path.join(db.DATA, f"{stamp}-default.json")
+    json.dump({"images": [
+        _image("auto-stand", pose="stand", view="front", wardrobe="clothed",
+               usable="pose"),
+    ]}, open(side, "w"))
+    prev = classification._DEFAULT_SIDECAR
+    classification._DEFAULT_SIDECAR = side
+    try:
+        assert classification.library(album)["images"] == []
+        with TestClient(appmod.app) as client:
+            page = client.get("/anchors", params={"scope_value": album, "song_id": sid})
+            again = client.get("/anchors", params={"scope_value": album, "song_id": sid})
+        assert page.status_code == 200, page.text
+        assert 'data-id="auto-stand"' in page.text
+        assert "stand / front / clothed" in page.text
+        assert 'id="pose-gap-empty"' in page.text
+        assert again.status_code == 200, again.text
+        assert 'data-id="auto-stand"' in again.text
+        vers = classification.versions(album)
+        assert [v["version_number"] for v in vers] == [1]
+    finally:
+        classification._DEFAULT_SIDECAR = prev
 
 
 def test_uiux_js_wires_import_and_save():

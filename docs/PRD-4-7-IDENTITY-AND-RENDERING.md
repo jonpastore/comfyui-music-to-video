@@ -171,8 +171,11 @@ step 1.
 **P13 (the loop) is partial.** `T2-50` coverage list **is**
 (`test_t2_50_coverage_list.py`). `T4-21`/`T4-22` classification_json
 in sqlite **is** (`test_t4_21_classification_json.py`): album +
-character, versioned, queryable; sidecars seed import only. `/anchors`
-paints keeper chips and import/save seed an empty library
+character, versioned, queryable; sidecars seed import only. Live empty
+auto-seed **built** (`ensure_sidecar_seed` from
+`_anchors_classification_ctx`; default repo
+`anchor5/image-classification.json`; `library()` never reads a file).
+`/anchors` paints keeper chips and import/save seed an empty library
 (`test_uiux_classification_chips.py`). `T4-23`
 gap **is**; the same page shows ceiling holes and import closes them
 without GPU. `T2-51` draft map (classify cannot write it) **is**

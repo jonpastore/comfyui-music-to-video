@@ -16,6 +16,12 @@ REQUIRED_IMAGE_FIELDS = ("id", "path", "kind", "view", "pose", "wardrobe",
                          "usable")
 QUERY_FIELDS = ("view", "pose", "wardrobe", "usable")
 
+# Repo-root sidecar used only by ensure_sidecar_seed / import_sidecar.
+# library() never reads this path.
+_DEFAULT_SIDECAR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "anchor5", "image-classification.json")
+
 
 def _character_id(character_id):
     return int(character_id) if character_id else None
@@ -217,3 +223,20 @@ def import_sidecar(album, path, character_id=None):
     except json.JSONDecodeError as e:
         raise ValueError(f"sidecar is not JSON: {e}") from e
     return save(album, raw, character_id)
+
+
+def ensure_sidecar_seed(album, path=None):
+    """If library images are empty and a sidecar exists, import once.
+
+    Default path is repo `anchor5/image-classification.json`. Does not teach
+    `library()` to read a file — seeding goes through `import_sidecar`.
+    """
+    album = _album(album)
+    lib = library(album)
+    if lib["images"]:
+        return lib
+    side = _DEFAULT_SIDECAR if path is None else path
+    side = (side or "").strip()
+    if not side or not os.path.isfile(side):
+        return lib
+    return import_sidecar(album, side)

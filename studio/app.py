@@ -3158,6 +3158,9 @@ def _anchors_classification_ctx(album, song_id=""):
     album = (album or "").strip()
     keepers, songs, gap, open_id = [], [], None, None
     if album:
+        # Empty live DB: seed once from repo sidecar (T4-21/T4-22). library()
+        # still never reads a file — ensure_sidecar_seed calls import_sidecar.
+        classification.ensure_sidecar_seed(album)
         keepers = classification.keepers(album)["images"]
         songs = list(db.q(
             "SELECT id, title FROM songs WHERE album=? ORDER BY id", album))

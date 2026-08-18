@@ -47,7 +47,7 @@ is not a studio feature.
 | `studio/scene_pose_map.py` | T2-51 draft keeper→scene; T2-52 Accept/Reject per scene; `require_accepted` (empty map refused) / `accepted_bases`; `_upsert_draft` / `accepted_bases` call `refuse_skip` (`T7-23`); no FastAPI. Classify never writes here |
 | `studio/pose_coverage.py` | T2-50 analyze-for-poses (writes `pose_coverage` only); T4-23 `gap` reads the open song's ceiling board vs `classification.keepers` and emits holes only; T4-24 `generate` delegates to `pose_generate`; no FastAPI; does not import `pose_plan`; analyze/gap never write `scene_pose_map` |
 | `studio/pose_generate.py` | T4-24 ceiling-tier pose generate from gap holes; clothed+nude iff r/xxx; g/pg13 clothed only, no anatomy; T7-21 `resolve_c1_c2` (C1 image latent + denoise 1.0 + source pose vs C2 empty 896×1216 + her keepers); denoise labels shared with `app.denoise_choices`; enqueues studio `anchor` jobs (`source=pose-gap`) with the decided pose clause as `prompt` (T3-34); no FastAPI; not `batch_edit` |
-| `studio/classification.py` | T4-21 / T4-22 album pose library; versioned `classification_json` in sqlite; `library` / `query` / `save` / `import_sidecar` / `keepers` (`usable≠skip`); `refuse_skip` (`T7-23` **built**, `test_t7_23_usable_skip.py`) blocks use-as-ref / map / image1; no FastAPI. Sidecar is import seed only |
+| `studio/classification.py` | T4-21 / T4-22 album pose library; versioned `classification_json` in sqlite; `library` / `query` / `save` / `import_sidecar` / `ensure_sidecar_seed` (live empty → import once from default repo sidecar; `library()` never reads a file) / `keepers` (`usable≠skip`); `refuse_skip` (`T7-23` **built**, `test_t7_23_usable_skip.py`) blocks use-as-ref / map / image1; no FastAPI. Sidecar is import seed only |
 | `studio/prompts.py` | `PROMPT_TYPES` — composer fields plus `view:<key>` generated from `VIEWS` (`T7-13`), plus `backdrop`/`composite`/`pose` |
 | `studio/tiers.py` | `compose_guardrail`, `check_text` (tier-aware: g/pg13 may depict T10-18; r lyrics/narrative mention T10-18a), `screen_work_for_tier` / `screen_escalation` / `check_escalation` (T10-19 entry; T10-20 ignores override kwargs), `check_override`, `check_tier_policy` |
 | `build_song.py` | TRD-5's territory: `workflow()`, the LTX branches, `clip_plan`, `expect_from_workflow`, `refuse_ltx_latent_into_wan` (`T5-15` **built**, `test_t5_15_no_latent_handoff.py`) |
@@ -555,7 +555,11 @@ code rather than in documents.
 - **`classification_json` vs `anchor5/*.json`** — the DB document is
   the store (`T4-21` **built**, `test_t4_21_classification_json.py`).
   Sidecars seed `import_sidecar` only (`T4-22` **built**); `library()`
-  never reads a file. `/anchors` chips + import/save
+  never reads a file. Live empty auto-seed **built**:
+  `ensure_sidecar_seed` (wired from `_anchors_classification_ctx`)
+  imports the default repo sidecar once when images are empty; missing
+  stays empty; second call adds no version; a random sidecar path alone
+  does not paint. `/anchors` chips + import/save
   (`test_uiux_classification_chips.py`) seed an empty library without
   GPU.
 - **Gap vs the open song's ceiling board** — `pose_coverage.gap` /

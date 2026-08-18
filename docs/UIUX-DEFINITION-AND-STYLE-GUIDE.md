@@ -1398,9 +1398,14 @@ pose / wardrobe / usable). The document is sqlite
 (`T4-21`/`T4-22` **built**, `test_t4_21_classification_json.py`):
 `GET /api/albums/{album}/classification` (query params view / pose /
 wardrobe / usable) and `POST` to save; `POST .../import` seeds from a
-sidecar path. Chips UI **built** (`test_uiux_classification_chips.py`);
-the store is the API, not `anchor5/image-classification.json`. Coverage
-vs the open song's ceiling board is `GET /api/songs/{id}/pose-gap`
+sidecar path. Live empty auto-seed **built**: `/anchors` calls
+`ensure_sidecar_seed` so Street Cats with an empty live DB imports the
+repo `anchor5/image-classification.json` once; `library()` still never
+reads a file; a random sidecar path alone does not paint
+(`test_uiux_classification_chips.py`). Chips UI **built**
+(`test_uiux_classification_chips.py`); the store is the API, not
+`anchor5/image-classification.json`. Coverage vs the open song's
+ceiling board is `GET /api/songs/{id}/pose-gap`
 (`T4-23` **built**, `test_t2_51_classify_cannot_write_map.py`): holes
 only, keepers from `classification_json` with `usable≠skip`; hole chips
 **built** on `/anchors` (`test_uiux_classification_chips.py`). Import /

@@ -179,8 +179,54 @@ def test_t4_22_db_document_wins_over_sidecar():
 def test_t4_22_only_import_sidecar_reads_a_file():
     assert _opens_in("import_sidecar") == ["import_sidecar"]
     for name in ("library", "query", "save", "latest", "versions", "keepers",
-                 "refuse_skip"):
+                 "refuse_skip", "ensure_sidecar_seed"):
         assert _opens_in(name) == [], f"{name} opens a file"
+    assert _opens_in("library") == []
+
+
+def test_t4_22_ensure_sidecar_seed_empty_missing_stays_empty():
+    album = f"T422-miss {time.time_ns()}"
+    missing = os.path.join(tempfile.mkdtemp(prefix="t422miss_"), "gone.json")
+    out = classification.ensure_sidecar_seed(album, path=missing)
+    assert out["images"] == []
+    assert out["version_number"] is None
+    n = db.one(
+        "SELECT COUNT(*) AS n FROM classification_json WHERE album=?",
+        album)["n"]
+    assert n == 0
+
+
+def test_t4_22_ensure_sidecar_seed_empty_sidecar_seeds_once():
+    album = f"T422-seed {time.time_ns()}"
+    tmp = tempfile.mkdtemp(prefix="t422seed_")
+    side = os.path.join(tmp, "image-classification.json")
+    json.dump({"images": [_image("seeded-once", view="front")]}, open(side, "w"))
+
+    first = classification.ensure_sidecar_seed(album, path=side)
+    assert [im["id"] for im in first["images"]] == ["seeded-once"]
+    assert first["version_number"] == 1
+
+    json.dump({"images": [_image("should-not-land", view="back")]}, open(side, "w"))
+    second = classification.ensure_sidecar_seed(album, path=side)
+    assert [im["id"] for im in second["images"]] == ["seeded-once"]
+    assert second["version_number"] == 1
+    nums = [r["version_number"] for r in classification.versions(album)]
+    assert nums == [1]
+
+
+def test_t4_22_ensure_sidecar_seed_default_path_when_path_none():
+    album = f"T422-def {time.time_ns()}"
+    tmp = tempfile.mkdtemp(prefix="t422def_")
+    side = os.path.join(tmp, "image-classification.json")
+    json.dump({"images": [_image("from-default", view="side")]}, open(side, "w"))
+    prev = classification._DEFAULT_SIDECAR
+    try:
+        classification._DEFAULT_SIDECAR = side
+        out = classification.ensure_sidecar_seed(album)
+    finally:
+        classification._DEFAULT_SIDECAR = prev
+    assert [im["id"] for im in out["images"]] == ["from-default"]
+    assert classification.library(album)["version_number"] == 1
 
 
 def test_t4_21_api_roundtrip():

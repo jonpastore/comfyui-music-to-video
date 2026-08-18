@@ -209,7 +209,10 @@ Gap reads the board; it does not bind (`T2-51`).
 - `T4-22` **Sidecar files are not the store.** Reading
   `anchor5/image-classification.json` as the album library fails this
   once a DB document exists. Sidecars may seed an import; they are not
-  the runtime source. (`test_t4_21_classification_json.py`)
+  the runtime source. Live empty DB on `/anchors` may call
+  `ensure_sidecar_seed` → `import_sidecar` once (default repo sidecar);
+  `library()` still never opens a file.
+  (`test_t4_21_classification_json.py`)
 - `T4-23` **Gap reads the open song's ceiling board and writes
   coverage holes only.** It does not write `scene_pose_map`. *Mutation:
   gap upserts a map row → red.* (`test_t2_51_classify_cannot_write_map.py`)
@@ -366,7 +369,7 @@ character."* — the capability loss stated in full.
 
 | criterion | state | commit | evidence |
 |---|---|---|---|
-| `T4-21` / `T4-22` `classification_json` in DB | **built** | `test_t4_21_classification_json.py`, `test_uiux_classification_chips.py` | sqlite `classification_json` (album + `character_id` NULL=protagonist, versioned). Query by view/pose/wardrobe/usable. Sidecar seeds `import_sidecar` only; `library()` never reads a file. `/anchors` paints keeper chips and import/save seeds an empty library (no GPU). Mutation: sidecar-only store → red. Mutation: omit chips / skip painted as keeper → red |
+| `T4-21` / `T4-22` `classification_json` in DB | **built** | `test_t4_21_classification_json.py`, `test_uiux_classification_chips.py` | sqlite `classification_json` (album + `character_id` NULL=protagonist, versioned). Query by view/pose/wardrobe/usable. Sidecar seeds `import_sidecar` only; `library()` never reads a file. Live empty auto-seed **built**: `ensure_sidecar_seed` from `_anchors_classification_ctx` imports repo `anchor5/image-classification.json` once when images are empty (Street Cats `/anchors`); missing sidecar stays empty; second call adds no version; a random sidecar path alone still does not paint. `/anchors` paints keeper chips and import/save seed an empty library (no GPU). Mutation: sidecar-only store → red. Mutation: omit chips / skip painted as keeper → red |
 | `T4-23` gap reads the board, does not bind | **built** | `test_t2_51_classify_cannot_write_map.py`, `test_uiux_classification_chips.py` | `GET /api/songs/{id}/pose-gap` reads the open song's ceiling board vs `classification_json` keepers (`usable≠skip`) and emits holes only. Classify/gap write zero `scene_pose_map` / `pose_coverage` / refs rows. `/anchors` shows those holes; import closes them without GPU. Mutation: gap upserts a map row → red. Mutation: skip keeper or sidecar-only library closes a hole → red |
 | `T4-24` ceiling-tier pose generate (clothed+nude iff r/xxx) | **built** | `test_t4_24_ceiling_generate.py` | `POST /api/songs/{id}/pose-generate` / `pose_generate.generate` plans sheets from pose-gap holes at the highest ticked tier. r/xxx: clothed **and** nude. g/pg13: clothed only, no anatomy job, no nude view. Never invents a higher tier. Studio `anchor` jobs (`source=pose-gap`), not sidecar `batch_edit`. Mutation: g-only emits nude or anatomy → red. Mutation: r emits clothed only and calls coverage green → red |
 | `T4-11` / D10 colour (charcoal-brown, not jet-black) | **built** (compose); render differential **NOT MEASURED** | `test_trd4_unverified.py` | `test_t4_11_fresh_album_compose_is_charcoal_brown`: fresh album compose through `album_profile` contains charcoal-brown and the nine-part list, not jet-black. Mutation: `DEFAULT_BODY` / `ALBUM_FIELDS["body"]` default says jet-black, defers colour to the face, or omits charcoal-brown → red. No GPU pair measuring patchy/two-tone fur decrease against the old negating wording. |
