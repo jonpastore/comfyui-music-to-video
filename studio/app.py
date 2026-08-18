@@ -1684,7 +1684,9 @@ def h_t2i(args, progress):
         guard=guard, n=int(args.get("n") or 1),
         size=int(args.get("width") or 1024),
         height=int(args.get("height") or args.get("width") or 1024),
-        lora_strength=lora)
+        lora_strength=lora,
+        style_lora=args.get("style_lora") or "",
+        style_lora_strength=args.get("style_lora_strength") or 1.0)
     if not paths:
         raise RuntimeError("the image render produced no file")
     now = time.time()
@@ -1700,7 +1702,8 @@ def h_t2i(args, progress):
             json.dumps({"album": album, "prompt": args["prompt"], "composed": composed,
                         "model": args.get("model"), "width": args.get("width"),
                         "height": args.get("height"),
-                        "lightning": bool(args.get("lightning"))}),
+                        "lightning": bool(args.get("lightning")),
+                        "style_lora": args.get("style_lora") or ""}),
             now)
         kept.append(dest)
     progress(f"{len(kept)} image(s) in {dest_dir}")
@@ -2321,15 +2324,17 @@ def media_page(request: Request, new: str = ""):
     for key, spec in models.CATALOG.items():
         if spec.get("role") not in ("t2i", "artwork") or key in seen:
             continue
-        if key == "z_image_t2i":
-            continue
         seen.add(key)
         row = live.get(key) or {}
+        wired = key in models.T2I_WIRED
+        on_box = bool(row.get("available", True))
         t2i_models.append({
             "key": key, "label": spec["label"],
-            "available": row.get("available", True),
-            "default": key == default,
+            "available": on_box,
+            "runnable": wired and on_box,
+            "default": key == default and wired,
         })
+    loras = civitai.list_installed()
     recent = db.q(
         "SELECT * FROM assets WHERE kind='t2i' ORDER BY id DESC LIMIT 24")
     images = []
@@ -2344,7 +2349,8 @@ def media_page(request: Request, new: str = ""):
         pane = ""
     return templates.TemplateResponse(request, "media.html", {
         "albums": albums, "t2i_models": t2i_models, "images": images,
-        "pane": pane,
+        "pane": pane, "loras": loras,
+        "civitai_set": bool(creds.get("civitai")),
     })
 
 
@@ -2399,7 +2405,8 @@ def media_new_song(request: Request, title: str = Form(...), album: str = Form("
 def media_new_image(request: Request, prompt: str = Form(...), album: str = Form(""),
                     model: str = Form(""), size: str = Form("896x1216"),
                     n: int = Form(1), attach_her: str = Form(""),
-                    lightning: str = Form("")):
+                    lightning: str = Form(""), style_lora: str = Form(""),
+                    style_lora_strength: float = Form(1.0)):
     """Queue local t2i. Album look is retrieved into the prompt."""
     prompt = (prompt or "").strip()
     if not prompt:
@@ -2419,8 +2426,16 @@ def media_new_image(request: Request, prompt: str = Form(...), album: str = Form
     album = (album or "").strip()
     key = model or models.default_for("t2i") or models.default_for("artwork")
     spec = models.CATALOG.get(key) or {}
-    if spec.get("role") not in ("t2i", "artwork") or key == "z_image_t2i":
-        raise HTTPException(400, f"'{key}' is not a text-to-image model that can render yet")
+    if spec.get("role") not in ("t2i", "artwork") or key not in models.T2I_WIRED:
+        raise HTTPException(
+            400,
+            f"'{key}' is on the box but has no studio t2i graph yet — "
+            "use Qwen-Image-Edit 2511")
+    style_lora = " ".join((style_lora or "").replace("\\", "/").split())
+    if style_lora.startswith("/") or ".." in style_lora.split("/"):
+        raise HTTPException(400, "style LoRA must be a filename under models/loras")
+    if style_lora and style_lora not in set(civitai.list_installed()):
+        raise HTTPException(400, f"LoRA {style_lora!r} is not installed — fetch it below")
     anchor_path = None
     if attach_her:
         if not album:
@@ -2429,10 +2444,16 @@ def media_new_image(request: Request, prompt: str = Form(...), album: str = Form
         if not front:
             raise HTTPException(400, f"no chosen identity front on {album!r}")
         anchor_path = front["path"]
+    try:
+        strength = float(style_lora_strength)
+    except (TypeError, ValueError):
+        strength = 1.0
+    strength = max(0.0, min(strength, 1.5))
     jid = jobs.enqueue("t2i", {
         "prompt": prompt, "album": album, "model": key,
         "width": width, "height": height, "n": n,
         "anchor_path": anchor_path, "lightning": bool(lightning),
+        "style_lora": style_lora, "style_lora_strength": strength,
         "tier": "xxx" if album else "r",
     })
     return json_or_redirect(

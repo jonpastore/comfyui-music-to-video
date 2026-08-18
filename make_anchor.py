@@ -590,6 +590,11 @@ def main():
     ap.add_argument("--lora-strength", dest="lora_strength", type=float, default=None,
                     help="Lightning LoRA weight. Above 0 with cfg > 1 is mush; the modes "
                          "set it for you.")
+    ap.add_argument("--style-lora", dest="style_lora", default="",
+                    help="Optional extra LoRA filename under models/loras. Absent keeps "
+                         "the shipped graph byte-identical.")
+    ap.add_argument("--style-lora-strength", dest="style_lora_strength",
+                    type=float, default=1.0)
     ap.add_argument("--latent", choices=("empty", "image"), default="empty",
                     help="empty = generate from noise at --width x --height, the character "
                          "sheet case. image = VAEEncode the FIRST reference and denoise from "
@@ -665,7 +670,9 @@ def main():
                       # says all the references show one. docs/TRD-7 T7-10.
                       extra_refs=[(None, img, "")
                                   for img in images[1:]],
-                      settings=settings, ref_method=args.ref_method)
+                      settings=settings, ref_method=args.ref_method,
+                      style_lora=args.style_lora,
+                      style_lora_strength=args.style_lora_strength)
         wf["18"] = {"class_type": "SaveImage", "inputs": {
             "images": ["17", 0],
             "filename_prefix": f"{args.prefix}/{args.view}_s{seed}"}}

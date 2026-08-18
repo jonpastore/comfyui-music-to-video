@@ -63,9 +63,11 @@
 {% if pane == "image" %}
 <section class="card" id="new-image">
   <h2>New Image</h2>
-  <p class="hint">Local text-to-image. Pick an album to pull identity / body /
-    wardrobe / premise into the prompt. Attach her front to condition on the
-    photographs. Lightning LoRA stays off unless you tick it.</p>
+  <p class="hint">This form runs the studio graph: <strong>Qwen-Image-Edit
+    2511</strong>. Flux 2 Dev is on the box (33&nbsp;GiB) but has no studio
+    graph yet — it is listed disabled. Krea is not installed. Identity
+    sheets stay Qwen; a Flux / Krea / Pony file is not a second Meow P.
+    Fetch a LoRA from Civitai below, then pick it here.</p>
   <form method="post" action="/media/images" class="stack-form">
     <label>Prompt
       <textarea name="prompt" rows="5" required
@@ -83,8 +85,9 @@
         <select name="model">
           {% for m in t2i_models %}
           <option value="{{ m.key }}" {% if m.default %}selected{% endif %}
-                  {% if not m.available %}disabled{% endif %}>
-            {{ m.label }}{% if not m.available %} · unavailable{% endif %}
+                  {% if not m.runnable %}disabled{% endif %}>
+            {{ m.label }}{% if not m.available %} · missing
+            {% elif not m.runnable %} · no studio graph{% endif %}
           </option>
           {% endfor %}
         </select>
@@ -100,12 +103,43 @@
       </label>
       <label>Images <input type="number" name="n" value="1" min="1" max="4"></label>
     </div>
+    <div class="field-row">
+      <label>Style LoRA
+        <select name="style_lora">
+          <option value="">none</option>
+          {% for l in loras %}
+          <option value="{{ l }}">{{ l }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>LoRA strength
+        <input type="number" name="style_lora_strength" value="1.0"
+               min="0" max="1.5" step="0.05"></label>
+    </div>
     <label class="check"><input type="checkbox" name="attach_her" value="1">
       Attach the album identity front</label>
     <label class="check"><input type="checkbox" name="lightning" value="1">
       Lightning LoRA (faster, worse identity)</label>
     <button type="submit">Generate image</button>
   </form>
+</section>
+
+<section class="card" id="civitai-loras">
+  <h2>Fetch a LoRA from Civitai</h2>
+  <p class="hint">Search the public catalog and download into
+    <code>~/ComfyUI/models/loras</code> on cerberus. Then pick it in Style
+    LoRA above (refresh this page after the job lands).
+    {% if not civitai_set %}<strong>No API key</strong> — store one on
+    <a href="/config">Config</a> first.{% endif %}</p>
+  <form class="field-row" hx-get="/models/civitai" hx-target="#civitai-out"
+        hx-swap="innerHTML">
+    <label>Search
+      <input type="search" name="q" placeholder="qwen 2511 pose, fur, nsfw"></label>
+    <label>Base model
+      <input type="text" name="base" placeholder="Qwen"></label>
+    <button type="submit" {% if not civitai_set %}disabled{% endif %}>Search</button>
+  </form>
+  <div id="civitai-out"></div>
 </section>
 
 {% if images %}

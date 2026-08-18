@@ -1403,10 +1403,12 @@ resort (roadmap O14 on gamingpc), not a control on this page.
 
 Still identity is Qwen-Image-Edit 2511. Clips are `ltx25` / `wan22_s2v`.
 A Pony, Krea, or Flux file on the box does not appear as a second
-“who is she” choice. If a parked family is ever listed, it is tagged
-**donor** or **wrong sampler** and disabled for `reference`. When-to-use
-copy lives in DDD-4-7 §1a; the picker does not explain every Civitai
-card.
+“who is she” choice. New Image lists parked t2i weights that are on
+disk (`flux2_t2i`) as **disabled · no studio graph**; Krea is not
+installed. Runnable keys are `models.T2I_WIRED` (`qwen_t2i`,
+`qwen_artwork`). Style LoRA is a second `LoraLoader` only when named
+(default graph stays byte-identical). Civitai search/download on that
+pane reuses `/models/civitai`. When-to-use copy lives in DDD-4-7 §1a.
 
 ### 7a.6a Candidate tiles carry a vision confidence
 
@@ -1865,7 +1867,8 @@ A style guide is falsifiable or it is decoration.
   the old `<a>` tags in the template drops the probe → red. Today's order is
   Library, **Media**, Anchors, Playlists, Sets, Tiers, Models, Jobs, Config.
   Media is a submenu: New Song (`/media?new=song`, ACE-Step → new library
-  row) and New Image (`/media?new=image`, local t2i; Recent images has
+  row) and New Image (`/media?new=image`, Qwen t2i; parked Flux 2
+  listed disabled; Style LoRA + Civitai fetch; Recent images has
   multi-select + Delete selected). `GET /media` is the chooser, not both
   forms (`test_media_create.py`). Other
   `T6-A2` objects: the queue panel

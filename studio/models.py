@@ -69,6 +69,10 @@ ROLES = {
 # storyboard and vision are resolved by their own modules at call time.
 RENDERED_ROLES = ("reference", "video", "refine", "artwork", "audio")
 
+# New Image can actually enqueue these. Everything else in role=t2i/artwork
+# is listed so the picker can say "on disk, no graph" instead of hiding it.
+T2I_WIRED = frozenset({"qwen_t2i", "qwen_artwork"})
+
 # loader class -> the input whose enum lists installed files
 LOADER_FIELD = {
     "UNETLoader": "unet_name",
@@ -586,6 +590,26 @@ CATALOG = {
             "or wait until artwork accepts cli=zimage.",
         ],
         "companions": {"ae.safetensors": "VAELoader"},
+    },
+    "flux2_t2i": {
+        "role": "t2i",
+        "proven": "opportunistic",
+        "weights_gib": 33.02,
+        "label": "Flux 2 Dev fp8 (on disk · no studio graph)",
+        "file": "flux2_dev_fp8mixed.safetensors",
+        "loader": "UNETLoader",
+        "purpose": (
+            "The Flux 2 Dev weights are on cerberus. There is no studio t2i "
+            "graph for them yet — New Image cannot run this file."),
+        "when": "Later, once a measured Flux 2 empty-latent graph exists.",
+        "not_for": (
+            "Identity sheets or 'who is she'. Pose/identity stay Qwen-Image-Edit "
+            "2511. A Krea / Pony / Flux file is not a second Meow P."),
+        "notes": [
+            "File is diffusion_models/flux2_dev_fp8mixed.safetensors (33 GiB).",
+            "No Krea checkpoint is installed. Do not list a model we cannot load.",
+        ],
+        "companions": {},
     },
     "qwen_artwork": {
         "role": "artwork",

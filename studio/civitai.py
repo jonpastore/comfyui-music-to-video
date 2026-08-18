@@ -64,6 +64,27 @@ def lora_dir():
     return os.path.join(root, "loras")
 
 
+def list_installed(skip_video=True, skip_lightning=True):
+    """LoRA filenames on this box, relative to lora_dir()."""
+    root = lora_dir()
+    out = []
+    if not os.path.isdir(root):
+        return out
+    for dirpath, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for name in files:
+            if not name.endswith(".safetensors"):
+                continue
+            low = name.lower()
+            if skip_lightning and "lightning" in low:
+                continue
+            if skip_video and ("ltx" in low or low.startswith("wan") or "wan2" in low):
+                continue
+            rel = os.path.relpath(os.path.join(dirpath, name), root)
+            out.append(rel.replace(os.sep, "/"))
+    return sorted(out)
+
+
 def download(version_id, dest_dir=None):
     """Write one model version into dest_dir. Returns the local path."""
     token = creds.get("civitai")

@@ -297,7 +297,8 @@ def cast_clause(slots):
 
 def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
              guard="", world="", character="", body="", extra_refs=(),
-             settings=None, ref_method=None, tier=None):
+             settings=None, ref_method=None, tier=None,
+             style_lora="", style_lora_strength=1.0):
     """guard: tier wording. The pinned clause is appended regardless, HERE --
     this is the chokepoint every storyboard reaches on its way to the image
     model, whoever generated it. Storing the clause in the storyboard JSON only
@@ -363,6 +364,18 @@ def workflow(scene, anchor, base, latent_mode, w, h, seed, shot="",
             "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors", "type": "qwen_image", "device": "default"}},
         "6": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_vae.safetensors"}},
     }
+    style = " ".join((style_lora or "").replace("\\", "/").split())
+    if style and ".." not in style.split("/") and not style.startswith("/"):
+        try:
+            strength = float(style_lora_strength)
+        except (TypeError, ValueError):
+            strength = 1.0
+        wf["2b"] = {"class_type": "LoraLoaderModelOnly", "inputs": {
+            "model": ["2", 0],
+            "lora_name": style,
+            "strength_model": max(0.0, min(strength, 1.5)),
+        }}
+        wf["3"]["inputs"]["model"] = ["2b", 0]
     if anchor:
         wf["7"] = {"class_type": "LoadImage", "inputs": {"image": anchor}}
         wf["8"] = {"class_type": "FluxKontextImageScale", "inputs": {"image": ["7", 0]}}

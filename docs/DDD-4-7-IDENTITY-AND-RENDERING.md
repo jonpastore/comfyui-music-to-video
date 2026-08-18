@@ -236,7 +236,9 @@ Rules for that change:
 - Phr00t Rapid-AIO, if catalogued, is its own `family` and its own
   sampler notes. It is not an alias of `qwen_image_edit_2511`.
 - No `role=reference` entry for Pony, Krea, or Flux until the
-  product is a different identity lock.
+  product is a different identity lock. New Image may list
+  `flux2_t2i` disabled; `models.T2I_WIRED` is only `qwen_t2i` /
+  `qwen_artwork`. A style LoRA is a second loader only when named.
 
 Companion write-up: `docs/ROADMAP-2026-08-16-POSE-ANATOMY.md`
 §Civitai and §Why Pony / Flux / Krea. Operator runbook (one folder
