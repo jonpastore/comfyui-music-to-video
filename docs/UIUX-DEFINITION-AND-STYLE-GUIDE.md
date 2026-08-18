@@ -597,7 +597,8 @@ A failed clip card says **Render failed** and “Not QC”. Scene media is stack
 (no wrap). The cue/camera/location line is not repeated above the
 fields. Stills show every candidate, **Use this still** approves one.
 Reroll is one bar above the stills (What to change, Images to generate,
-Min, Max, Seed stepping). Submitting it plants N shimmer placeholders
+Min, Max, Seed stepping). It uses the pinned pose plate on this scene
+as image2 — not a pose-map Accept. Submitting it plants N shimmer placeholders
 in the stills strip — same `.ref-frame.clip-tile` card (190px, 3:4
 frame, caption + icon row) as a finished still. They swap for the
 real stills when the job lands and clear if it fails or is cancelled. The sticky job chip carries
@@ -1478,11 +1479,14 @@ grey-studio and no plate. Page display of the plate is later. `needs_lip_sync` b
 and ticked-lower boards (`T2-54` **built**) exist per ticked tier;
 page listing of every ticked board is those existing per-tier pages.
 
-**Refs page.** Generate and reroll from the accepted map only — empty map,
+**Refs page.** Generate refs from the accepted map only — empty map,
 draft, or rejected is refused (`T2-52`; `pose_plan.freeze_auto_binds`
 deleted; `scene_bases` is saved binds only; landers do not auto-fill
-plates — `test_freeze_auto_binds_is_gone`, `test_pose_plan.py`). Each scene uses that scene's
-accepted keeper as image1 (`T2-56` **built**,
+unpinned plates — `test_freeze_auto_binds_is_gone`, `test_pose_plan.py`).
+Scene-row **Reroll** uses the pinned pose plate on that scene (Pinned
+under the pose strip). It does not ask for draft+Accept. No pin →
+"pin a pose plate on scene N first". Each scene's Generate refs uses
+that scene's accepted keeper as image1 (`T2-56` **built**,
 `test_t2_56_per_scene_keeper.py`). Location plate store is `T2-53` **built**;
 page display is later.
 A draft or rejected row has no Generate.

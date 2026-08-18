@@ -856,11 +856,15 @@ red (`test_t2_28_html.py`, `test_t2_28_refs_unanchored_leads.py`,
 **refs-identity `T2-56` is built.** `start_refs`/`h_refs` pass
 `accepted_bases` as `anchors` (image1 per scene). They do not also
 stuff those keepers into `pose_bases` (image2). Empty / draft /
-rejected map → 400 on refs **and** reroll; `pose_plan.freeze_auto_binds`
-deleted; `scene_bases` is saved `pose_sheet_id` only; `h_refs`/`h_reroll`
-take job `pose_bases` or `{}` (no auto fallback;
+rejected map → 400 on **refs** (`start_refs`). Scene-row **Reroll**
+needs a pinned plate on that scene (`scene_bases`) and enqueues those
+paths as `pose_bases`; empty map + pin is allowed. No pin → 400
+"pin a pose plate". `pose_plan.freeze_auto_binds` deleted; `scene_bases`
+is saved `pose_sheet_id` only; `h_refs`/`h_reroll` take job
+`pose_bases` or `{}` (no auto fallback;
 `test_freeze_auto_binds_is_gone`, `test_t2_52_map_accept.py`,
-`test_start_refs_freezes_pose_bases`, `test_pose_plan.py`).
+`test_start_refs_freezes_pose_bases`,
+`test_start_reroll_pinned_plate_skips_empty_map`).
 Standing 4748 plate is refused (keep, `test_t2_refs_identity.py`).
 Location plates (`T2-53` **built**, `test_t2_53_location_plates.py`).
 Extra-view slots are later.

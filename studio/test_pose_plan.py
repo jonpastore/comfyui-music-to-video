@@ -399,38 +399,48 @@ def test_h_reroll_empty_pose_bases_stays_empty(monkeypatch):
         assert seen["bases"] == {}
 
 
-def test_start_reroll_accept_gates_like_refs(monkeypatch):
-    """start_reroll refuses empty map and does not enqueue auto plates."""
+def _reroll_board(song, plate=None):
+    dest = os.path.join(db.DATA, "pose-plan")
+    os.makedirs(dest, exist_ok=True)
+    front = os.path.join(dest, f"gate-front-{song['id']}.png")
+    open(front, "wb").write(_png_bytes())
+    db.run("""INSERT INTO anchors (scope_kind,scope_value,tier,view,path,chosen,created)
+              VALUES ('album',?,'xxx','front',?,1,?)""",
+           song["album"], front, time.time())
+    sheet = None
+    if plate:
+        open(plate, "wb").write(_png_bytes())
+        sheet = _sheet(song["album"], "xxx", "pose_rr_gate", plate, "standing",
+                       nude=True)
+    outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+    os.makedirs(outdir, exist_ok=True)
+    jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+    json.dump({
+        "title": "T", "album": song["album"], "version": "xxx",
+        "character_reference": "her",
+        "scenes": [{
+            "scene_number": 1, "name": "One", "image_prompt": "alley",
+            "camera": "medium", "pose": "standing",
+            "duration_guidance": "5s", "characters": [],
+        }],
+    }, open(jp, "w"))
+    open(os.path.join(outdir, f"{song['slug']}_xxx.md"), "w").write("# sb\n")
+    db.run("""INSERT INTO storyboards
+              (song_id,tier,json_path,md_path,scene_count,created,scene_seconds)
+              VALUES (?,?,?,?,?,?,?)""",
+           song["id"], "xxx", jp, os.path.join(outdir, f"{song['slug']}_xxx.md"),
+           1, time.time(), 5.0)
+    return sheet
+
+
+def test_start_reroll_refuses_unpinned_scene(monkeypatch):
+    """Empty map + no pin: 400, no job. Does not enqueue an auto plate."""
     monkeypatch.setattr(appmod.pipeline, "reroll",
                         lambda *a, **k: (_ for _ in ()).throw(
                             RuntimeError("reroll must not run")))
     with TestClient(appmod.app) as client:
         song = _upload_song(client, "Reroll Gate Song", album="Reroll Gate Album")
-        dest = os.path.join(db.DATA, "pose-plan")
-        os.makedirs(dest, exist_ok=True)
-        front = os.path.join(dest, "gate-front.png")
-        open(front, "wb").write(_png_bytes())
-        db.run("""INSERT INTO anchors (scope_kind,scope_value,tier,view,path,chosen,created)
-                  VALUES ('album',?,'xxx','front',?,1,?)""",
-               song["album"], front, time.time())
-        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
-        os.makedirs(outdir, exist_ok=True)
-        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
-        json.dump({
-            "title": "T", "album": song["album"], "version": "xxx",
-            "character_reference": "her",
-            "scenes": [{
-                "scene_number": 1, "name": "One", "image_prompt": "alley",
-                "camera": "medium", "pose": "standing",
-                "duration_guidance": "5s", "characters": [],
-            }],
-        }, open(jp, "w"))
-        open(os.path.join(outdir, f"{song['slug']}_xxx.md"), "w").write("# sb\n")
-        db.run("""INSERT INTO storyboards
-                  (song_id,tier,json_path,md_path,scene_count,created,scene_seconds)
-                  VALUES (?,?,?,?,?,?,?)""",
-               song["id"], "xxx", jp, os.path.join(outdir, f"{song['slug']}_xxx.md"),
-               1, time.time(), 5.0)
+        _reroll_board(song)
         before = list(db.q(
             "SELECT * FROM jobs WHERE song_id=? AND kind='reroll'", song["id"]))
         r = client.post(
@@ -438,10 +448,39 @@ def test_start_reroll_accept_gates_like_refs(monkeypatch):
             data={"tier": "xxx", "clip_idx": "0"},
             follow_redirects=False)
         assert r.status_code == 400, r.text
-        assert "pose map" in r.text.lower() or "Accept" in r.text
+        assert "pin a pose plate" in r.text.lower()
+        assert "auto match" in r.text.lower()
         assert list(db.q(
             "SELECT * FROM jobs WHERE song_id=? AND kind='reroll'",
             song["id"])) == before
+
+
+def test_start_reroll_pinned_plate_skips_empty_map(monkeypatch):
+    """A saved pin is enough to reroll that scene. Accept map is start_refs."""
+    monkeypatch.setattr(appmod.pipeline, "reroll",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            RuntimeError("reroll must not run")))
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Reroll Pin Song", album="Reroll Pin Album")
+        dest = os.path.join(db.DATA, "pose-plan")
+        os.makedirs(dest, exist_ok=True)
+        plate = os.path.join(dest, f"pin-plate-{song['id']}.png")
+        sheet = _reroll_board(song, plate=plate)
+        pose_plan.bind_scene(song["id"], "xxx", 1, sheet["id"])
+        assert pose_plan.scene_bases(song, "xxx") == {1: plate}
+        before = list(db.q(
+            "SELECT * FROM jobs WHERE song_id=? AND kind='reroll'", song["id"]))
+        r = client.post(
+            f"/songs/{song['id']}/reroll",
+            data={"tier": "xxx", "clip_idx": "0", "n": "4"},
+            follow_redirects=False)
+        assert r.status_code in (200, 303), r.text
+        rows = list(db.q(
+            "SELECT * FROM jobs WHERE song_id=? AND kind='reroll'", song["id"]))
+        assert len(rows) == len(before) + 1
+        args = json.loads(rows[-1]["args_json"])
+        bases = args.get("pose_bases") or {}
+        assert str(bases.get("1") or bases.get(1) or "") == plate
 
 
 def test_start_refs_freezes_pose_bases(monkeypatch):

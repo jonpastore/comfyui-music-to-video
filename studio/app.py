@@ -7839,13 +7839,31 @@ def start_reroll(request: Request, id: int, tier: str = Form(...), clip_idx: Lis
         reroll_refs.seed_plan(n, seed_min, seed_max, step)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    # T2-52: same Accept gate as start_refs. No auto plan() plates.
-    try:
-        scene_pose_map.require_accepted(id, tier)
-    except ValueError as e:
-        raise HTTPException(400, str(e)) from e
+    # Scene-row Reroll uses the pinned plate (saved pose_sheet_id) as image2.
+    # Auto plan() plates stay out — scene_bases is saved-only. Draft+Accept
+    # is the start_refs / image1 gate, not this button. Live boards never
+    # had a map row and the storyboard page has no Accept control.
+    saved = pose_plan.scene_bases(song, tier)
+    pose_bases = {}
+    missing = []
+    for i in idxs:
+        sn = _clip_scene_number(song, tier, i)
+        if sn is None:
+            continue
+        path = saved.get(int(sn))
+        if path:
+            pose_bases[int(sn)] = path
+        else:
+            missing.append(str(sn))
+    if missing:
+        raise HTTPException(
+            400,
+            "pin a pose plate on scene " + ", ".join(missing)
+            + " first — Reroll uses that plate, not an auto match")
+    if not pose_bases:
+        raise HTTPException(400, "no valid scene stills given")
     jid = jobs.enqueue("reroll", {"song_id": id, "tier": tier, "clip_indices": idxs, "note": note,
-                             "pose_bases": {},
+                             "pose_bases": pose_bases,
                              "n": n, "seed_min": int(seed_min), "seed_max": int(seed_max),
                              "step": step},
                  song_id=id)
