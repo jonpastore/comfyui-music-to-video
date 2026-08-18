@@ -189,7 +189,9 @@ above it."* Principle 2 is this component. Every control that spends GPU time
 gets one (§5.5). Base photographs use the same candidate card (contain, not
 cover; no render-tag). Each card names the pose, picks a tier, and either
 generates a sheet or assigns the upload as the chosen sheet (`T7-20`). An
-assigned upload leaves Base images and lives only in the candidate grid. The
+assigned upload leaves Base images and lives only in the candidate grid.
+Deleting that sheet removes the source card too (same file) — a missing
+file is not a leftover empty card. The
 corner tick is identity lock only; *Generate this pose* is a second tick.
 
 **The timeline is the set editor, not a missing DAW.** `.timeline` / `.tl-block`
@@ -1224,7 +1226,9 @@ nested discloses with the same caret. A missing pose can take an uploaded third-
 (`POST /anchors/upload-pose`). That post stays on the roster
 tier you were in (JSON in-page; a no-JS redirect keeps
 `roster_tier=`). It does not dump you back on G because G
-has more rows. Gallery tiles use icon
+has more rows. Deleting that keeper also drops the
+`anchor_ref` it created — the file is the sheet, not a
+second photograph that should linger under Base images. Gallery tiles use icon
 actions (filled check = keeper, outline =
 pick, clear, delete) with `title` help. The Fix dialog has a help icon
 per action; Close sits on the far right; submit enqueues a new candidate

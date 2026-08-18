@@ -102,6 +102,10 @@ decoded s2v hop: control_video = LTX frames, ref_image = scene still
 A pose plate is not a base image unless the operator put it there.
 Location plates are a different object (`location_plates`), never her
 identity lock (`T7-22`). Named pose uploads stay `T7-20`.
+Assign / `upload-pose` share the file with the chosen sheet;
+`_drop_anchor` deletes every `anchor_ref` on that path (not only
+borrowed `anchor_id` rows). `anchor_refs` does not list a row whose
+file is gone.
 `T6-A1`'s JSON loop (`GET/POST /api/anchors`, pick, use-as-ref) still
 holds for generating keepers; it does not write the map.
 
@@ -332,7 +336,8 @@ photos vs a stranger plate.
 
 `T7-6` shipped (`d315c6f`): "use as reference" on an anchor tile, the row points
 at the sheet's own file with no copy, deleting the ref keeps the file, deleting
-the anchor cascades to its borrowed refs. That is the same mechanism `gen_refs`
+the anchor cascades to every `anchor_ref` on that path (borrowed *and* the
+upload-pose / assign source row). That is the same mechanism `gen_refs`
 uses for clips — `pipeline.install_input` on the chosen anchor's path — which is
 why clips stay on-model.
 

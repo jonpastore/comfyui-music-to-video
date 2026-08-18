@@ -265,6 +265,57 @@ def test_upload_pose_becomes_chosen_sheet(tmp_path):
         assert body["chosen"] is True
 
 
+def test_deleting_uploaded_pose_sheet_drops_the_base_image_row():
+    """upload-pose writes an assets row and a chosen sheet on the SAME file.
+    Deleting the sheet used to unlink the file and leave the upload row, which
+    then reappeared under Base images as an empty card (Street Cats asset 141)."""
+    with TestClient(appmod.app) as client:
+        album = f"Ghost Pose {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        r = client.post("/anchors/upload-pose",
+                        data={"album": album, "tier": "g", "label": "crouching"},
+                        files={"image": ("crouch.png", _png_bytes(), "image/png")},
+                        follow_redirects=False)
+        assert r.status_code == 303, r.text
+        sheet = db.one("SELECT * FROM anchors WHERE scope_value=? AND chosen=1", album)
+        assert sheet is not None
+        asset_id = json.loads(sheet["render_json"])["asset_id"]
+        path = sheet["path"]
+        assert os.path.isfile(path)
+        assert db.one("SELECT id FROM assets WHERE id=?", asset_id) is not None
+        assert appmod.anchor_refs(album) == [], "assigned upload must stay out of Base images"
+
+        gone = client.post(f"/anchors/{sheet['id']}/delete",
+                           headers={"Accept": "application/json"})
+        assert gone.status_code == 200, gone.text
+        assert gone.json().get("deleted") == [sheet["id"]]
+        assert db.one("SELECT id FROM anchors WHERE id=?", sheet["id"]) is None
+        assert db.one("SELECT id FROM assets WHERE id=?", asset_id) is None, (
+            "the upload row was left behind after the sheet (and file) went")
+        assert not os.path.isfile(path)
+        assert appmod.anchor_refs(album) == []
+
+
+def test_anchor_refs_drops_a_row_whose_file_is_already_gone():
+    """Heal leftovers from before the cascade: a row with no file is not a card."""
+    with TestClient(appmod.app) as client:
+        album = f"Missing File {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        dest = os.path.join(db.DATA, "uploads", "anchors", "album", "x")
+        os.makedirs(dest, exist_ok=True)
+        path = os.path.join(dest, f"gone_{time.time_ns()}.png")
+        open(path, "wb").write(_png_bytes())
+        db.run("INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+               None, "anchor_ref", path,
+               json.dumps({"scope_value": album, "character_id": None,
+                           "pose_name": "crouching", "pose_tier": "g",
+                           "role": "pose"}), time.time())
+        row = db.one("SELECT * FROM assets WHERE path=?", path)
+        os.remove(path)
+        assert appmod.anchor_refs(album) == []
+        assert db.one("SELECT id FROM assets WHERE id=?", row["id"]) is None
+
+
 def test_storyboard_strip_uses_pose_name_not_view_key():
     with TestClient(appmod.app) as client:
         song = _upload_song(client, "Strip Label Song", album="Strip Label Album")

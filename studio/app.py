@@ -3220,6 +3220,12 @@ def anchor_refs(album, character_id=None):
             continue
         if (meta.get("character_id") or None) != (character_id or None):
             continue
+        # Assign / upload-pose share this file with the chosen sheet.
+        # Dropping the sheet used to delete the bytes and leave the row,
+        # which then reappeared here as an empty card (Street Cats #141).
+        if not a["path"] or not os.path.isfile(a["path"]):
+            db.run("DELETE FROM assets WHERE id=?", a["id"])
+            continue
         if _ref_assigned_as_sheet(a["id"], album, character_id):
             continue
         out.append(ref_fields(a))
@@ -5697,14 +5703,13 @@ def _drop_anchor(row):
             os.remove(row["path"])
         except OSError:
             pass
-    # Borrowed references point at THIS file (use_anchor_as_ref) and the file is
-    # going. Left behind, the gallery would offer a thumbnail with no image and
-    # a ticked reference would queue a render that fails at load -- the failure
-    # arriving one GPU minute after the cause, which is the shape of it that
-    # costs the most to diagnose.
+    # Every base-image row pointing at this file goes with it. Borrowed
+    # refs (use_as_ref, meta.anchor_id) used to be the only ones dropped;
+    # upload-pose / Assign as sheet write an upload row on the SAME path
+    # without that key. Leaving it resurrects an empty Base images card
+    # the moment this sheet is no longer chosen.
     for a in db.q("SELECT * FROM assets WHERE kind='anchor_ref' AND path=?", row["path"]):
-        if db.jset(a).get("anchor_id"):
-            db.run("DELETE FROM assets WHERE id=?", a["id"])
+        db.run("DELETE FROM assets WHERE id=?", a["id"])
     db.run("DELETE FROM anchors WHERE id=?", row["id"])
 
 

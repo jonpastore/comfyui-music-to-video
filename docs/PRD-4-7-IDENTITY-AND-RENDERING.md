@@ -75,7 +75,8 @@ What they need from these four, in their own terms:
 7. *"I have sixteen clothed pose photographs. I name each one, assign a
    tier or generate a tier version, and the identity pair stays the
    identity pair. Base cards look like candidate cards without render
-   data."* (`T7-20`)
+   data. If I upload a sheet to the wrong tier and delete it, the
+   empty card goes with the file — the row is not left behind."* (`T7-20`)
 
 ## 3. The product rules
 
