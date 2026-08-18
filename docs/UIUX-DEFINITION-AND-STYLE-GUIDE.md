@@ -367,7 +367,9 @@ Six steps, geometric-ish, replacing fourteen ad-hoc values.
     --text-xl:   1.375rem   /* page h2 */
     --text-2xl:  1.75rem    /* page h1 */
 
-Line height: 1.5 body, 1.25 headings. One family (the existing system-ui stack)
+Line height: 1.5 body, 1.25 headings. Headings (`h1`–`h4`) and every
+`details > summary` are initcap (`text-transform: capitalize`) in
+`style.css` so a template cannot ship a one-off case. One family (the existing system-ui stack)
 plus `ui-monospace` for one job only — **numbers that are compared down a
 column**: durations, frame counts, measured-vs-expected in a finding, file sizes.
 Tabular figures there (`font-variant-numeric: tabular-nums`), because a column of
@@ -1217,9 +1219,16 @@ character select labels the empty option with the same lead
 name.
 Delete selected applies to one pose group only; an emptied row is
 removed. The generate form’s tiers / views / prompts / negative /
-render blocks are collapsible (`details.disclose[data-fold]`); ticking a
+render blocks are collapsible (`details.disclose[data-fold]`).
+Tiers and Views start **open** even when none are ticked —
+those are the controls that fill the form. Ticking a
 tier or view must not collapse an open fold (`window._afOpen` restores
-them after the `#anchor-form` outerHTML swap). Upload / Save prompt /
+them after the `#anchor-form` outerHTML swap).
+Every `<details>` and the library album-group button share
+one caret (`details > summary::before` / `button.album-fold::before`);
+there is no per-fold unicode arrow. Page and section headings
+(`h1`–`h4` and each `summary`) are initcap via
+`text-transform: capitalize` in `style.css`, not per-template. Upload / Save prompt /
 Save negative / Delete version are `icon-btn` + `glyph_*`. Render’s
 everyday knobs stay visible; size / latent / sweep and sampler sit in
 nested discloses with the same caret. A missing pose can take an uploaded third-party sheet

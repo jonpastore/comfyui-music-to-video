@@ -138,14 +138,6 @@ body:has(#library) main {
   width: 100%;
   padding-bottom: 0.75rem;
 }
-#fold-upload > summary {
-  cursor: pointer;
-  list-style: none;
-}
-#fold-upload > summary::-webkit-details-marker { display: none; }
-#fold-upload > summary::before { content: "▸ "; }
-#fold-upload[open] > summary::before { content: "▾ "; }
-#fold-upload > summary h2 { display: inline; }
 #library {
   flex: 1;
   display: flex;
@@ -177,9 +169,10 @@ button.album-fold {
   font-weight: 600;
   padding: 0.15rem 0;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
 }
-button.album-fold[aria-expanded="true"]::before { content: "▾ "; }
-button.album-fold[aria-expanded="false"]::before { content: "▸ "; }
 .song-added { margin-top: 0.15rem; font-size: 0.8rem; }
 .cell-genre .genre-text { display: inline-flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
 
@@ -187,7 +180,7 @@ button.album-fold[aria-expanded="false"]::before { content: "▸ "; }
    level took the browser's default size -- h1 at ~30px on a dense internal
    tool, by accident rather than by choice. The values below are close to what
    was already rendering for h3/h4 and tighter at the top. */
-h1, h2, h3, h4 { font-weight: 600; line-height: 1.25; }
+h1, h2, h3, h4 { font-weight: 600; line-height: 1.25; text-transform: capitalize; }
 h1 { font-size: 1.6rem; font-weight: 700; }
 h2 { font-size: 1.35rem; }
 h3 { font-size: 1.15rem; }
@@ -201,71 +194,23 @@ h4 { font-size: 1rem; }
   margin-bottom: 1.25rem;
 }
 
-/* Song page (and any long work page): one card, collapsed to a status line. */
-details.song-fold > summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.55rem 0.85rem;
-  cursor: pointer;
-  list-style: none;
-}
-details.song-fold > summary h2 { margin: 0; }
-details.song-fold > summary .muted { font-weight: 400; }
-details.song-fold[open] > summary { margin-bottom: 0.75rem; }
-
-/* One caret for every disclosure we own. */
-details.song-fold > summary,
-details.tier-board > summary,
-details.scene > summary,
-details.sb-scenes > summary,
-details.sb-all-clips > summary,
-details.sb-raw-json > summary,
-details.sb-lock-fields > summary,
-details.shot-detail > summary,
-details.pose-plan > summary,
-details.disclose > summary {
+/* One caret for every disclosure. Class lists of song-fold / disclose /
+   scene / … were a second stylesheet of the same triangle; #fold-upload
+   and .album-fold then grew their own unicode arrows. New folds inherit this. */
+details > summary {
   list-style: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0.45rem;
   flex-wrap: wrap;
+  text-transform: capitalize;
 }
-details.disclose > summary > h2 {
-  margin: 0;
-  flex: 0 1 auto;
-}
-details.song-fold > summary::-webkit-details-marker,
-details.tier-board > summary::-webkit-details-marker,
-details.scene > summary::-webkit-details-marker,
-details.sb-scenes > summary::-webkit-details-marker,
-details.sb-all-clips > summary::-webkit-details-marker,
-details.sb-raw-json > summary::-webkit-details-marker,
-details.sb-lock-fields > summary::-webkit-details-marker,
-details.shot-detail > summary::-webkit-details-marker,
-details.pose-plan > summary::-webkit-details-marker,
-details.disclose > summary::-webkit-details-marker { display: none; }
-details.song-fold > summary::marker,
-details.tier-board > summary::marker,
-details.scene > summary::marker,
-details.sb-scenes > summary::marker,
-details.sb-all-clips > summary::marker,
-details.sb-raw-json > summary::marker,
-details.sb-lock-fields > summary::marker,
-details.shot-detail > summary::marker,
-details.pose-plan > summary::marker,
-details.disclose > summary::marker { content: none; }
-details.song-fold > summary::before,
-details.tier-board > summary::before,
-details.scene > summary::before,
-details.sb-scenes > summary::before,
-details.sb-all-clips > summary::before,
-details.sb-raw-json > summary::before,
-details.sb-lock-fields > summary::before,
-details.shot-detail > summary::before,
-details.pose-plan > summary::before,
-details.disclose > summary::before {
+details > summary::-webkit-details-marker { display: none; }
+details > summary::marker { content: none; }
+details > summary h2 { margin: 0; flex: 0 1 auto; }
+details > summary::before,
+button.album-fold::before {
   content: "";
   width: 0.42rem;
   height: 0.42rem;
@@ -273,20 +218,21 @@ details.disclose > summary::before {
   border-bottom: 1.7px solid var(--muted);
   transform: rotate(-45deg);
   flex: none;
+  display: inline-block;
   transition: transform .12s ease;
 }
-details.song-fold[open] > summary::before,
-details.tier-board[open] > summary::before,
-details.scene[open] > summary::before,
-details.sb-scenes[open] > summary::before,
-details.sb-all-clips[open] > summary::before,
-details.sb-raw-json[open] > summary::before,
-details.sb-lock-fields[open] > summary::before,
-details.shot-detail[open] > summary::before,
-details.pose-plan[open] > summary::before,
-details.disclose[open] > summary::before {
+details[open] > summary::before,
+button.album-fold[aria-expanded="true"]::before {
   transform: rotate(45deg);
 }
+
+/* Song page (and any long work page): one card, collapsed to a status line. */
+details.song-fold > summary {
+  align-items: baseline;
+  gap: 0.55rem 0.85rem;
+}
+details.song-fold > summary .muted { font-weight: 400; }
+details.song-fold[open] > summary { margin-bottom: 0.75rem; }
 .look-tabs, .cast-tabs, .cast-subtabs {
   display: flex;
   flex-wrap: wrap;
@@ -2580,8 +2526,7 @@ tr.suggested td.cell-genre {
 
 /* Failed-job list: collapsed by default. A dozen failures is a wall of text
    above the form you came to the page to use. */
-.failed-jobs > summary { cursor: pointer; user-select: none; }
-.failed-jobs > summary::marker { color: var(--muted); }
+.failed-jobs > summary { user-select: none; }
 
 /* Anchors: select candidates, and see one full size.
    The checkbox sits ON the thumbnail rather than beside it -- a grid of images
@@ -2825,10 +2770,8 @@ tr.job-cancelled { opacity: 0.55; }
 @media (prefers-reduced-motion: reduce) {
   .status-running::before { animation: none; }
   .flash-ok { animation: none; }
-  details.song-fold > summary::before,
-  details.tier-board > summary::before,
-  details.scene > summary::before,
-  details.disclose > summary::before { transition: none; }
+  details > summary::before,
+  button.album-fold::before { transition: none; }
 }
 
 /* A link that reads as a primary button. sets.html had <a><button></a> --

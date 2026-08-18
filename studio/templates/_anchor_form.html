@@ -48,7 +48,7 @@
     </label>
   </div>
 
-  <details class="disclose" data-fold="tiers" {% if selected_tiers %}open{% endif %}>
+  <details class="disclose" data-fold="tiers" open>
     <summary>Tiers
       <span class="muted">{% if selected_tiers %}{{ selected_tiers | join(", ") }}{% else %}none ticked{% endif %}</span></summary>
   <fieldset>
@@ -68,7 +68,7 @@
   </fieldset>
   </details>
 
-  <details class="disclose" data-fold="views" {% if selected_views %}open{% endif %}>
+  <details class="disclose" data-fold="views" open>
     <summary>Views
       <span class="muted">{% if sheet_count %}{{ sheet_count }} sheet{{ "" if sheet_count == 1 else "s" }}{% else %}none ticked{% endif %}</span></summary>
   <fieldset class="views-fieldset">

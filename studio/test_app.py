@@ -69,8 +69,10 @@ def test_library_groups_by_album_and_collapses_upload():
         page = client.get("/").text
         assert 'id="fold-upload"' in page
         css = open(os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
-        assert '#fold-upload > summary::before' in css
-        assert '#fold-upload[open] > summary::before' in css
+        assert 'details > summary::before' in css
+        assert 'details[open] > summary::before' in css
+        assert 'button.album-fold::before' in css
+        assert "content: \"▸" not in css and "content: \"▾" not in css
         tag = page.split('id="fold-upload"', 1)[1][:80]
         assert "open" not in tag
         assert 'class="album-group-head"' in page
@@ -2402,6 +2404,13 @@ def test_anchor_form_folds_and_actions_are_icons():
         form = client.get("/anchors/form", params={"album": "Fold Album"}).text
     for fold in ("tiers", "views", "negative", "render"):
         assert f'data-fold="{fold}"' in form
+    # Tiers and Views stay open even with nothing ticked — collapsing them
+    # hid the only controls that fill the missing-pose form.
+    for fold in ("tiers", "views"):
+        m = re.search(rf'<details[^>]*data-fold="{fold}"[^>]*>', form)
+        assert m and "open" in m.group(0), fold
+    css = open(os.path.join(os.path.dirname(appmod.__file__), "static", "style.css")).read()
+    assert "text-transform: capitalize" in css
     assert 'class="icon-btn"' in form
     assert ">Upload<" not in form
     assert "Save negative" not in form
