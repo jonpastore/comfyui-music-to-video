@@ -147,6 +147,24 @@
               data-char="{{ loop.index }}">{{ ch.character_name }}</button>
       {% endfor %}
     </div>
+    {% set ns_pl = namespace(id=none) %}
+    {% for pl in playlists if pl.name == section.album %}{% set ns_pl.id = pl.id %}{% endfor %}
+    {% if ns_pl.id %}
+    <details class="char-rename">
+      <summary>Rename a character</summary>
+      {% for ch in t.characters %}
+      <form method="post" class="char-rename-row"
+            action="{% if ch.character_id %}/characters/{{ ch.character_id }}/save{% else %}/playlists/{{ ns_pl.id }}/profile{% endif %}">
+        <label>{{ 'Album lead' if not ch.character_id else 'Character' }}
+          <input type="text" name="{{ 'lead_name' if not ch.character_id else 'name' }}"
+                 value="{{ ch.character_name }}" maxlength="{{ 40 if not ch.character_id else 60 }}"
+                 required>
+        </label>
+        <button type="submit">Save name</button>
+      </form>
+      {% endfor %}
+    </details>
+    {% endif %}
     {% for ch in t.characters %}
     <div class="gallery-char-panel {% if not loop.first %}hidden{% endif %}"
          data-char="{{ loop.index }}">

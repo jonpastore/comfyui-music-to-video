@@ -222,18 +222,43 @@ def is_identity_front(row):
     return str(row["view"] or "") == "front"
 
 
-def _album_lead_name(album):
-    """Tab label for the protagonist. Same split as app.lead_display_name."""
-    row = db.one(
+def _lead_name_key(album):
+    return f"lead_name:{album or ''}"
+
+
+def lead_name(album):
+    """Operator name for the album lead. Not the word protagonist."""
+    row = db.one("SELECT value FROM settings WHERE key=?", _lead_name_key(album))
+    if row:
+        name = " ".join(str(row["value"] or "").split())
+        if name:
+            return name[:40]
+    prow = db.one(
         "SELECT style_text FROM playlists WHERE name=? AND kind='playlist'",
         album or "")
-    st = " ".join(str((row["style_text"] if row else "") or "").split())
+    st = " ".join(str((prow["style_text"] if prow else "") or "").split())
     for sep in (" — ", " – ", " - ", ":"):
         if sep in st:
             name = st.split(sep, 1)[0].strip()
             if name and len(name) <= 40:
                 return name
     return "Lead"
+
+
+def set_lead_name(album, name):
+    """Remember the album lead's tab name. Empty clears to the fallback."""
+    name = " ".join(str(name or "").split())[:40]
+    key = _lead_name_key(album)
+    if not name:
+        db.run("DELETE FROM settings WHERE key=?", key)
+        return ""
+    db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", key, name)
+    return name
+
+
+def _album_lead_name(album):
+    """Tab label for the album lead. Same as app.lead_display_name."""
+    return lead_name(album)
 
 
 def _album_leads(album):

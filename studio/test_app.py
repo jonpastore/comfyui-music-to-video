@@ -7008,12 +7008,12 @@ def test_anchors_page_applies_the_scope_it_is_given():
         # no query: the form's first album, not every album at once.
         # Other albums still appear in the <select>; the GALLERY must not.
         landing = client.get("/anchors").text
-        assert "Scoped Album A" in landing and "protagonist" in landing
+        assert "Scoped Album A" in landing and "Lead" in landing
         assert "Scoped Album B ·" not in landing.replace("&middot;", "·")
         assert landing.count("gallery-section") == 1
 
         only_b = client.get("/anchors", params={"album": "Scoped Album B"}).text
-        assert "Scoped Album B" in only_b and "protagonist" in only_b
+        assert "Scoped Album B" in only_b and "Lead" in only_b
         assert only_b.count("gallery-section") == 1
         assert "Scoped Album A ·" not in only_b.replace("&middot;", "·")
 

@@ -1184,6 +1184,12 @@ stay; Close remains far right. Arrows and Delete are ignored while the
 select is focused so classifying does not step or delete the sheet.
 Roster thumbs open `#pose-preview`. Playlist Anchors uses
 character tabs and Clothed/Nude family tabs. On `/anchors` the gallery tabs are **tier → character → clothed/nude**.
+The first character tab is the album lead (not the word
+protagonist). **Rename a character** under the tabs (and
+**Name** on Playlists → Album look) writes that name;
+Panther/Tiger have a Name box on their look bar. Generate’s
+character select labels the empty option with the same lead
+name.
 Delete selected applies to one pose group only; an emptied row is
 removed. The generate form’s tiers / views / prompts / negative /
 render blocks are collapsible (`details.disclose[data-fold]`); ticking a

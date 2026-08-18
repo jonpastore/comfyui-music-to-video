@@ -35,7 +35,7 @@
     <label>Character
       <select name="character_id" hx-get="/anchors/form" hx-target="#anchor-form"
               hx-swap="outerHTML" hx-trigger="change" hx-include="#anchor-form">
-        <option value="">protagonist (the album look)</option>
+        <option value="">{{ lead_name or "Lead" }} (the album look)</option>
         {% for c in characters %}
         <option value="{{ c.id }}" {% if character_id == c.id %}selected{% endif %}>
           {{ c.name }}{% if c.role %} &mdash; {{ c.role }}{% endif %}</option>

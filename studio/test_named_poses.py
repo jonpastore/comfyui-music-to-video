@@ -234,7 +234,7 @@ def test_xxx_gallery_defaults_to_nude_family():
         assert xxx_default == ["nude"]
         assert r_default == ["clothed"]
         assert "characters" in by_tier["xxx"]
-        assert by_tier["xxx"]["characters"][0]["character_name"] == "protagonist"
+        assert by_tier["xxx"]["characters"][0]["character_name"] == "Lead"
 
 
 def test_upload_pose_becomes_chosen_sheet(tmp_path):

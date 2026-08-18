@@ -8,6 +8,13 @@
       action="{% if character %}/characters/{{ character.id }}/save{% else %}/playlists/{{ playlist.id }}/profile{% endif %}"
       class="stack-form"
       {% if character %}{{ playlist_hx("/characters/" ~ character.id ~ "/save") }}{% else %}{{ playlist_hx("/playlists/" ~ playlist.id ~ "/profile") }}{% endif %}>
+  {% if not character %}
+  <label class="inline-label">Name
+    <input type="text" name="lead_name" value="{{ lead_name or 'Lead' }}"
+           maxlength="40" required placeholder="Meow P"
+           title="Album lead’s name on Anchors and the pose roster">
+  </label>
+  {% endif %}
   <div class="look-tabs" role="tablist">
     {% for key, label, keys in tabs if key != "world" %}
     <span class="look-tab-wrap">

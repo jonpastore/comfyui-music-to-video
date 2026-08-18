@@ -204,7 +204,7 @@
     <div class="cast-panel" data-cast="lead">
       {% with playlist = d.playlist, profile_fields = d.profile_fields, look_tabs = d.look_tabs,
               look_tab_help = d.look_tab_help, wardrobe_tiers = d.wardrobe_tiers,
-              character = none %}
+              character = none, lead_name = d.lead_name %}
         {% include "_album_look_form.html" %}
       {% endwith %}
     </div>
@@ -219,6 +219,11 @@
         </label>
         <input type="hidden" name="figure_role_present" value="1"
                form="album-look-{{ d.playlist.id }}-c{{ m.c.id }}">
+        <label class="inline-label">Name
+          <input type="text" name="name" form="album-look-{{ d.playlist.id }}-c{{ m.c.id }}"
+                 value="{{ m.c.name }}" maxlength="60" required
+                 title="This character’s name on Anchors and the pose roster">
+        </label>
         <label class="inline-label">Story role
           <input type="text" name="role" form="album-look-{{ d.playlist.id }}-c{{ m.c.id }}"
                  value="{{ m.c.role or '' }}" placeholder="partner, antagonist">

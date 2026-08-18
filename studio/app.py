@@ -2993,7 +2993,8 @@ def nest_anchor_groups(group_list):
         tmap = albums[album]["tier_map"]
         tier = g["tier"] or ""
         tmap.setdefault(tier, {})
-        who = (g["character_id"], g["character_name"] or "protagonist")
+        who = (g["character_id"],
+               g["character_name"] or pose_plan.lead_name(g.get("scope_value")))
         tmap[tier].setdefault(who, {"clothed": {}, "nude": {}})
         family = view_family(g["view"])
         pos = view_position_label(g["view"])
@@ -5197,6 +5198,22 @@ async def add_character(id: int, request: Request):
 async def save_character(cid: int, request: Request):
     char = get_character_or_404(cid)
     form = await request.form()
+    if "name" in form:
+        new_name = " ".join((form.get("name") or "").split())
+        if not new_name:
+            raise HTTPException(400, "a character needs a name")
+        if len(new_name) > 60:
+            raise HTTPException(400, "character name is too long (max 60)")
+        try:
+            tiers.check_text(new_name, "character name")
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        if new_name != char["name"]:
+            try:
+                db.run("UPDATE characters SET name=? WHERE id=?", new_name, cid)
+            except sqlite3.IntegrityError:
+                raise HTTPException(
+                    400, f"'{char['scope_value']}' already has a character called {new_name!r}")
     if "figure_role_present" in form:
         fig = "lead" if (form.get("figure_role") or "") == "lead" else "extra"
         db.run("UPDATE characters SET figure_role=? WHERE id=?", fig, cid)
@@ -5214,6 +5231,10 @@ async def save_character(cid: int, request: Request):
         db.run(f"UPDATE characters SET {field}=? WHERE id=?", value, cid)
         if field != "role":
             _save_look_version(char["scope_value"], field, value, character_id=cid)
+    p = db.one("SELECT * FROM playlists WHERE name=? AND kind='playlist'",
+               char["scope_value"])
+    if p:
+        return _after_name_save(request, p)
     return _playlist_hx_album(request, char["scope_value"])
 
 
@@ -5524,6 +5545,7 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=(), character_id
         "character_id": character_id,
         "characters": (album_cast(album) if album
                        else db.q("SELECT * FROM characters ORDER BY scope_value, name")),
+        "lead_name": pose_plan.lead_name(album) if album else "Lead",
         "pose": pose or "",
     }
 
@@ -8019,13 +8041,18 @@ def _song_arc_beat(song):
 
 def lead_display_name(prof):
     """Tab label for the album lead. Not the word protagonist."""
-    st = " ".join(str((prof or {}).get("style_text") or "").split())
-    for sep in (" — ", " – ", " - ", ":"):
-        if sep in st:
-            name = st.split(sep, 1)[0].strip()
-            if name and len(name) <= 40:
-                return name
-    return "Lead"
+    album = ""
+    if isinstance(prof, str):
+        album = prof
+    elif isinstance(prof, dict):
+        album = prof.get("name") or ""
+        row = prof.get("_row")
+        if not album and row is not None:
+            try:
+                album = row["name"] or ""
+            except (TypeError, KeyError):
+                album = ""
+    return pose_plan.lead_name(album)
 
 
 ALBUM_FIELDS = {
@@ -8424,7 +8451,7 @@ def playlist_detail(p):
             "partial_tiers": sorted(t for t in tiers_with_video if t not in ready),
             "video_matrix": VIDEO_MATRIX_TIERS,
             "transitions": list(mixer.TRANSITIONS),
-            "lead_name": lead_display_name(prof),
+            "lead_name": pose_plan.lead_name(p["name"]),
             "pose_need": pose_need,
             "released": p["released"] if "released" in p.keys() else None,
             "album_date": album_date_iso(p)}
@@ -8523,6 +8550,15 @@ def _playlist_hx_album(request, album, *, gone=False):
             return JSONResponse({"ok": True, "gone": gone})
         return RedirectResponse("/playlists", status_code=303)
     return _playlist_hx(request, pid, gone=gone)
+
+
+def _after_name_save(request, playlist):
+    """Stay on /anchors when the name was saved from the gallery."""
+    ref = request.headers.get("referer") or ""
+    if "/anchors" in ref:
+        return RedirectResponse(
+            f"/anchors?album={quote(playlist['name'])}", status_code=303)
+    return _playlist_hx(request, playlist["id"])
 
 
 def cover_slot_html(p):
@@ -8706,7 +8742,17 @@ async def save_album_profile(id: int, request: Request):
         db.run(f"UPDATE playlists SET {key}=? WHERE id=?",
                None if not value or value == default else value, id)
         _save_look_version(p["name"], key, value)
-    return _playlist_hx(request, id)
+    if "lead_name" in form:
+        raw = " ".join((form.get("lead_name") or "").split())
+        if len(raw) > 40:
+            raise HTTPException(400, "lead name is too long (max 40)")
+        try:
+            if raw:
+                tiers.check_text(raw, "lead name")
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        pose_plan.set_lead_name(p["name"], raw)
+    return _after_name_save(request, p)
 
 
 @app.post("/playlists/{id}/describe", response_class=HTMLResponse)

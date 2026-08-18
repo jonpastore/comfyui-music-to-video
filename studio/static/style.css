@@ -269,6 +269,15 @@ details.disclose[open] > summary::before {
 a.tier-cell.has { color: var(--accent); border-color: var(--border-strong); }
 .tier-cell.miss { color: var(--muted); }
 #media-player audio { width: 100%; margin-top: 0.6rem; }
+.char-rename { margin: 0.45rem 0 0.7rem; }
+.char-rename > summary { cursor: pointer; color: var(--muted); }
+.char-rename-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: end;
+  margin: 0.4rem 0 0;
+}
 .notice {
   margin: 0.4rem 0 0;
   color: var(--muted);

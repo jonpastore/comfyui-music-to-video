@@ -106,6 +106,43 @@ def test_scene_actors_solo_named_lead_stays_one():
     assert [p["name"] for p in got] == ["Panther"]
 
 
+def test_set_lead_name_is_what_the_anchors_tab_uses():
+    album = f"Lead Name {time.time_ns()}"
+    assert pose_plan.lead_name(album) == "Lead"
+    pose_plan.set_lead_name(album, "Meow P")
+    assert pose_plan.lead_name(album) == "Meow P"
+    nest = __import__("app").nest_anchor_groups([{
+        "scope_kind": "album", "scope_value": album,
+        "character_id": None, "character_name": None,
+        "tier": "xxx", "view": "front", "path": "x.jpg",
+    }])
+    assert nest[0]["tiers"][0]["characters"][0]["character_name"] == "Meow P"
+
+
+def test_save_lead_name_from_anchors_stays_on_anchors():
+    with TestClient(appmod.app) as client:
+        album = f"Rename Lead {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        pl = db.one("SELECT id FROM playlists WHERE name=?", album)["id"]
+        dest = os.path.join(db.DATA, "pose-plan")
+        os.makedirs(dest, exist_ok=True)
+        plate = os.path.join(dest, "rn-front.png")
+        open(plate, "wb").write(_png_bytes())
+        db.run("""INSERT INTO anchors (scope_kind,scope_value,tier,view,path,chosen,created)
+                  VALUES ('album',?, 'xxx','front',?,1,?)""",
+               album, plate, time.time())
+        r = client.post(f"/playlists/{pl}/profile",
+                        data={"lead_name": "Meow P"},
+                        headers={"Referer": f"http://test/anchors?album={album}"},
+                        follow_redirects=False)
+        assert r.status_code == 303, r.text
+        assert "/anchors" in (r.headers.get("location") or "")
+        page = client.get("/anchors", params={"album": album}).text
+        assert "Meow P" in page
+        assert 'name="lead_name"' in page
+        assert "Rename a character" in page
+
+
 def test_match_cowgirl_not_standing():
     standing = {"id": 1, "view": "pose_1", "render_json": json.dumps({"pose_name": "standing"}),
                 "path": "s.jpg"}
