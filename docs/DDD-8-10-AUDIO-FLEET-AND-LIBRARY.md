@@ -393,6 +393,10 @@ re-screens every `(field, text)` pair at the destination tier and raises
 storyboards, cast and album profile. Call sites: `storyboard_service.enqueue`
 (higher / non-locked tier), `tiers.set_allow_nudity` when enabling, and
 `app._enqueue_anchor_jobs` when a nude view or non-locked tier is in the plan.
+Scene `image_prompt` must stay adult-only at the destination: a baked PINNED
+enumeration ("No minors, no children…") is a T10-19 self-trip at `xxx`.
+Street Cats Rear Entrance uses the checked-in `rear_entrance_explicit.json`
+adult wording; live pg13/r boards no longer carry that clause.
 
 `guardrail.check_escalation(fields, dest_tier, **overrides)` is the same
 re-screen with override kwargs accepted and discarded (`T10-20`: `confirm`,

@@ -27,9 +27,10 @@ drawn plates + the T7-7 identity lock hold pose and species. If they do,
 mage is only needed for plates we do not have yet (lesbian two-body, new
 cameras).
 
-Street Cats `POST /api/anchors` at xxx is still blocked by T10-19 on Rear
-Entrance scene 1 age-lock wording. Iterations enqueue on **Catatonic**
-with the same identity files.
+Street Cats `POST /api/anchors` at xxx is unblocked. Rear Entrance scene 1
+no longer carries baked age-lock wording; adult-only text matches checked-in
+`Street Cats/Rear Entrance/rear_entrance_explicit.json`. Iterations can
+enqueue on Street Cats. Catatonic still holds the same identity files.
 
 ## QC of the T7-7 four
 

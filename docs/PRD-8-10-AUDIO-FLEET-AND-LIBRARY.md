@@ -136,7 +136,10 @@ still not shipped (`T8-12`, provisional by absence).
    renders (`studio/test_t10_18b_xxx_no_minor.py`). `T10-18c` is built.
    **`T10-19` is built** — escalation re-screens the whole work at the
    destination tier and names the blocking reference
-   (`studio/test_t10_19_escalation_rescreen.py`). `T10-19a` is built: at `r`
+   (`studio/test_t10_19_escalation_rescreen.py`). Street Cats xxx anchors
+   are not blocked by Rear Entrance scene 1; checked-in
+   `rear_entrance_explicit.json` scene 1 screens clean at `xxx`
+   (`studio/test_t10_19_street_cats_explicit.py`). `T10-19a` is built: at `r`
    the allowance is the named list `R_ALLOWANCE_FIELDS` (`lyrics`,
    `narrative`) at the prompt boundary. `T10-20` is built: no override
    channel reaches the escalation re-screen. **`T10-21` is built** — clearing

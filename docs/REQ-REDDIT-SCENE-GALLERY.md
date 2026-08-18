@@ -44,9 +44,10 @@ Example: `mfm` + `doggy` + `anal` + `spit_roast` + `creampie_flow` + `thrust` + 
 7. **Kitty** (Street Cats id=3, cover crop figure 5) is the second
    female lead for `lesbian` / `ffm` / `fff`. Do not mint those
    without her identity sheet passing QC.md A (pale/white, not Meow P).
-8. **Street Cats xxx generate** is still blocked by T10-19 on Rear
-   Entrance scene 1 age-lock wording. Workarounds enqueue on Catatonic
-   with the same identity files until that screen is fixed.
+8. **Street Cats xxx generate** is unblocked. Rear Entrance scene 1 uses
+   adult-only wording from `rear_entrance_explicit.json` (no baked PINNED
+   age-lock). Enqueue on Street Cats; Catatonic still holds the same
+   identity files.
 9. **QC.md A** (pose then anatomy) before any donor/O10. Skin must
    match `standing-nude.jpg` / `looking-back.jpg` brown, not jet UI
    pair. Extra limbs = fail.

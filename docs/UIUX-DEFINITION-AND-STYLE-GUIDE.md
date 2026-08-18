@@ -1646,7 +1646,9 @@ screen leaking back.
 nudity, or adding a nude view re-screens everything already stored and
 refuses with the **field name and the term** — e.g. `escalation to 'xxx'
 blocked by scene 1 image_prompt: … child`. A clean work escalates with no
-extra dialog. There is no confirm-to-override control.
+extra dialog. There is no confirm-to-override control. Street Cats xxx
+anchor generate is not blocked by Rear Entrance scene 1; that field is
+adult-only (`rear_entrance_explicit.json`).
 
 `T10-20` is built on the escalation re-screen: there is no confirm
 dialog, no force flag, and no tier-override / profile / wording control
