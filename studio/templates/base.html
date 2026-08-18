@@ -67,6 +67,16 @@
       listed actor as a Mage reference. Not the scene still.
       Or upload a sheet and assign it from the pose row.</p>
   </dialog>
+  <dialog class="video-modal" id="media-player">
+    <div class="modal-bar">
+      <strong id="media-player-label">Play</strong>
+      <span class="lightbox-spacer"></span>
+      <a id="media-player-download" download>Download</a>
+      {{ modal_close() }}
+    </div>
+    <video id="media-player-video" controls preload="metadata" hidden></video>
+    <audio id="media-player-audio" controls preload="metadata" hidden></audio>
+  </dialog>
   <dialog class="lightbox" id="ref-preview">
     <div class="lightbox-bar">
       <strong id="ref-preview-label"></strong>

@@ -40,8 +40,9 @@
   <td class="play-matrix" data-k="{{ e.videos | length }}">
     {% for t in e.video_matrix %}
       {% if e.video_by_tier.get(t) %}
-      <a class="tier-cell has" href="{{ media_url(e.video_by_tier[t].path) }}"
-         title="{{ t | tiername }} video">{{ t | tiername }}</a>
+      <a class="tier-cell has js-media-play" href="{{ media_url(e.video_by_tier[t].path) }}"
+         data-kind="video" data-label="{{ e.song.title }} · {{ t | tiername }}"
+         title="Play {{ t | tiername }} video here">{{ t | tiername }}</a>
       {% else %}
       <span class="tier-cell miss" title="No {{ t | tiername }} video">{{ t | tiername }}</span>
       {% endif %}

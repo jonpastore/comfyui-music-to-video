@@ -26,11 +26,14 @@
         </td>
         <td class="num">{{ r.item.duration | hms }}</td>
         <td class="play-matrix">
-          {% if r.item.mp3_path %}<a href="{{ media_url(r.item.mp3_path) }}" title="Audio">audio</a>{% endif %}
+          {% if r.item.mp3_path %}<a class="js-media-play" href="{{ media_url(r.item.mp3_path) }}"
+             data-kind="audio" data-label="{{ r.item.song_title }} · audio"
+             title="Play audio here">audio</a>{% endif %}
           {% for t in d.video_matrix %}
             {% if r.video_by_tier.get(t) %}
-            <a class="tier-cell has" href="{{ media_url(r.video_by_tier[t]) }}"
-               title="{{ t | tiername }} video">{{ t | tiername }}</a>
+            <a class="tier-cell has js-media-play" href="{{ media_url(r.video_by_tier[t]) }}"
+               data-kind="video" data-label="{{ r.item.song_title }} · {{ t | tiername }}"
+               title="Play {{ t | tiername }} video here">{{ t | tiername }}</a>
             {% else %}
             <span class="tier-cell miss" title="No {{ t | tiername }} video">{{ t | tiername }}</span>
             {% endif %}

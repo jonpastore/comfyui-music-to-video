@@ -1088,9 +1088,13 @@ def test_library_routes_answer_json_and_still_redirect_a_form_post():
         assert 'class="pick-song"' in row.text and "cell-genre" in row.text
         assert "js-genre-set" in row.text
         assert "tier-cell" in row.text
+        assert "js-media-play" in row.text or "tier-cell miss" in row.text
         assert "danger-icon" in row.text
 
         page = client.get("/").text
+        assert 'id="media-player"' in page
+        assert "js-media-play" in open(
+            os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
         assert 'accept="audio/*' in page or ".wav" in page
         assert 'id="genre-set"' in page
         wav = client.post("/songs", data={"title": "Wav Upload"}, headers=J,

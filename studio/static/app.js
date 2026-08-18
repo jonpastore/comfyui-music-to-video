@@ -2998,10 +2998,55 @@ document.body.addEventListener("htmx:afterSwap", function () {
   window.addEventListener("pageshow", function () { overlay.hidden = true; });
   document.querySelectorAll("dialog.video-modal").forEach(function (d) {
     d.addEventListener("close", function () {
-      d.querySelectorAll("video").forEach(function (v) { v.pause(); });
+      d.querySelectorAll("video, audio").forEach(function (v) {
+        v.pause();
+        v.removeAttribute("src");
+        if (typeof v.load === "function") v.load();
+      });
     });
   });
 })();
+
+document.addEventListener("click", function (e) {
+  var play = e.target.closest("a.js-media-play");
+  if (!play) return;
+  var dlg = document.getElementById("media-player");
+  if (!dlg || typeof dlg.showModal !== "function") return;
+  e.preventDefault();
+  var src = play.getAttribute("href") || "";
+  var kind = play.getAttribute("data-kind") || "video";
+  var lab = document.getElementById("media-player-label");
+  if (lab) lab.textContent = play.getAttribute("data-label") || play.textContent.trim() || "Play";
+  var dl = document.getElementById("media-player-download");
+  if (dl) dl.setAttribute("href", src);
+  var vid = document.getElementById("media-player-video");
+  var aud = document.getElementById("media-player-audio");
+  function mute(el) {
+    if (!el) return;
+    el.pause();
+    el.removeAttribute("src");
+    if (typeof el.load === "function") el.load();
+    el.hidden = true;
+  }
+  if (kind === "audio") {
+    mute(vid);
+    if (aud) {
+      aud.hidden = false;
+      aud.src = src;
+      var p = aud.play();
+      if (p && typeof p.catch === "function") p.catch(function () {});
+    }
+  } else {
+    mute(aud);
+    if (vid) {
+      vid.hidden = false;
+      vid.src = src;
+      var q = vid.play();
+      if (q && typeof q.catch === "function") q.catch(function () {});
+    }
+  }
+  dlg.showModal();
+});
 
 document.addEventListener("click", function (e) {
   var btn = e.target.closest(".pose-roster-open");

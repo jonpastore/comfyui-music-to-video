@@ -33,7 +33,8 @@ same `arc_service.payload()` for song_count / act_count / premise /
 has_proposal), and playlist cards
 (`test_t6_a2_html_and_json_report_the_same_playlist_numbers`,
 `T6-A2-playlists` — same `playlist_service.numbers()` for song_count /
-total_secs; `arc` still only when defined, T2-37), and the library list
+total_secs; `arc` still only when defined, T2-37; Play column audio /
+rating videos stay on the card in `#media-player`), and the library list
 (`test_t6_a2_html_and_json_report_the_same_library_numbers`,
 `T6-A2-library` — same `library_service.numbers()` for song_count on
 HTML `GET /` / `GET /songs` and JSON `GET /api/songs`; `GET /songs` is

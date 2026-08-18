@@ -1137,7 +1137,12 @@ lead front if there is no cover). The World tab's first box is **Album
 premise** (what the record is about), not a product slogan. Each save
 writes a `prompts` version that can be loaded back. The cover thumb expands the card when it is closed and opens a
 lightbox (pencil = replace, trash = delete) when it is open. Album
-date is the pencil on the card header next to the title. The Play column is G / PG-13 / R / XXX. Save,
+date is the pencil on the card header next to the title. The Play column is
+**audio** plus G / PG-13 / R / XXX. A ready cell opens `#media-player` on
+this page (`js-media-play`); it does not navigate to the file. Audio uses
+the `<audio>` element, a rating with a video uses `<video>`. Download and
+Close stay in the bar; Close stops playback. Missing ratings stay inert
+chips. The same modal plays library-row videos. Save,
 edit, and delete icons are the shared `glyph_save` / `glyph_edit` /
 `glyph_delete` macros. Transitions edit in the row. Remove confirms. The roster is a one-line grid: thumb (or a dashed `.pose-ph` when
 there is no sheet), **character · pose**, then songs, then the sheet

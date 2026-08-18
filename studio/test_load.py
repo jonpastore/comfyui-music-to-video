@@ -476,6 +476,8 @@ def test_playlist_card_summary_and_drag_order(client):
     assert "character-row" not in card
     assert "trans-edit" in card
     assert "tier-cell" in card
+    assert "js-media-play" in card
+    assert 'data-kind="audio"' in card
     assert ("Add this song to the playlist" in card) or (
         "already on this playlist" in card)
     if "Add this song to the playlist" in card:

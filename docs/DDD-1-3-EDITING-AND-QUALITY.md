@@ -94,6 +94,8 @@ Service modules, same shape:
     storyboard_service.py  TRD-2   arc flows, storyboard generation, scene edit, time meter, casting
     arc_service.py         TRD-2/6 album arc meter (song_count / act_count / premise)
     playlist_service.py    TRD-6   playlist card numbers (song_count / total_secs)
+    #media-player          UIUX    Play column audio/tier cells stay on the
+                                   playlist (`js-media-play`); no FastAPI
     cleanup_service.py     TRD-6   T6-19 operator-confirmed clip cleanup
                                    (song page card interpolates plan_clip_cleanup)
     media_service.py       TRD-8   song media bag (takes / edits / original / renders)

@@ -268,6 +268,7 @@ details.disclose[open] > summary::before {
 }
 a.tier-cell.has { color: var(--accent); border-color: var(--border-strong); }
 .tier-cell.miss { color: var(--muted); }
+#media-player audio { width: 100%; margin-top: 0.6rem; }
 .notice {
   margin: 0.4rem 0 0;
   color: var(--muted);
