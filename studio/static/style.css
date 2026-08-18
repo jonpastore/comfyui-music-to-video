@@ -2553,6 +2553,19 @@ table.list th.pick, table.list td.pick { width: 1.5rem; text-align: center; }
 .bulk-bar.busy { opacity: 0.6; pointer-events: none; }
 .cell-genre { white-space: nowrap; }
 .cell-genre .js-genre-set { margin-left: 0.35rem; font-size: 0.75rem; }
+#genre-set { width: min(40rem, 94vw); max-width: min(40rem, 94vw); }
+#genre-set .genre-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem 1rem;
+  margin: 0.75rem 0 0.5rem;
+}
+#genre-set .genre-fields label { min-width: 0; }
+#genre-set .genre-fields select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
 /* A suggested genre is NOT a saved one, and must not look like it until Save. */
 tr.suggested td.cell-genre {
   color: var(--accent, #8ab4f8);

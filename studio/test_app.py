@@ -1115,6 +1115,10 @@ def test_library_routes_answer_json_and_still_redirect_a_form_post():
             os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
         assert 'accept="audio/*' in page or ".wav" in page
         assert 'id="genre-set"' in page
+        assert 'class="genre-fields"' in page
+        assert 'id="genre-set-suggest"' in page
+        assert 'id="genre-set-save"' in page
+        assert "Ask AI</button>" not in page
         assert 'id="fold-upload"' in page
         assert 'id="upload-album"' in page
         assert 'list="album-names"' in page
