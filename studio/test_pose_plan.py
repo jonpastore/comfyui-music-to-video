@@ -39,7 +39,10 @@ def test_mage_text_is_a_grey_studio_sheet_not_the_scene():
         "image_prompt": long_prompt,
         "camera": "follow",
     }, album="", tier="xxx")
-    assert "all fours then spring" in got.lower()
+    assert got.lower().startswith("all fours then spring")
+    assert "hands and knees" in got.lower()
+    assert "not standing" in got.lower()
+    assert "spring" in got.lower()
     assert "character reference sheet" in got.lower()
     assert "mid-grey" in got.lower() or "neutral mid-grey" in got.lower()
     assert "His grip fails" not in got
@@ -49,6 +52,8 @@ def test_mage_text_is_a_grey_studio_sheet_not_the_scene():
     assert "Rating" not in got
     assert "Used in" not in got
     assert "stands upright" not in got.lower()
+    stand = pose_plan.stance_clause("standing front")
+    assert "not standing" not in stand.lower()
 
 
 def _sheet(album, tier, view, path, pose_name, nude=False):
@@ -359,6 +364,8 @@ def test_mage_brief_on_the_page_is_a_grey_studio_sheet():
         assert m, "missing row has no Mage textarea"
         brief = m.group(1)
         assert "all fours then spring" in brief.lower()
+        assert "hands and knees" in brief.lower()
+        assert "not standing" in brief.lower()
         assert "mid-grey" in brief.lower()
         assert "character reference sheet" in brief.lower()
         assert "His grip fails" not in brief

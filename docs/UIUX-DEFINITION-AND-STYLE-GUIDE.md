@@ -1153,9 +1153,12 @@ prompt that is a **grey-studio character sheet**, not the
 scene still (`#pose-brief`). Click fetches
 `GET /api/albums/{album}/sheet-prompt` so a stale tab
 cannot paste the old scene still. Same composer as
-Generate anchors: asked pose + identity/wardrobe/body +
-mid-grey backdrop. Story, camera, partner, location, and
-lighting stay out. Rating and song stay on the meta line.
+Generate anchors: the pose *name* is expanded to a still
+stance (all fours → hands and knees, not standing) then
+identity/wardrobe/body + mid-grey. The modal title is the
+slot; the box is the body. Story, camera, partner,
+location, and lighting stay out. Rating and song stay on
+the meta line.
 `POST /anchors/keeper` plus the save icon stamps the assignment — on
 `/anchors` and on the playlist Anchors fold. The candidate lightbox
 (`#anchor-lightbox`) classifies the open sheet: a select of that

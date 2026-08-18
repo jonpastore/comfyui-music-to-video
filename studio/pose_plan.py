@@ -88,6 +88,46 @@ def need_text(scene):
     return " ".join(b for b in bits if b).strip()
 
 
+# Still-frame body for a pose *name*. "all fours then spring" is a slot
+# label; without this, Mage paints a standing character sheet.
+_STANCE = {
+    "allfours": "on hands and knees, back arched or level, tail aside",
+    "crouch": "crouching low, weight forward",
+    "cowgirl": "straddling, seated on top facing forward",
+    "kneel": "kneeling",
+    "seated": "sitting",
+    "supine": "lying on the back",
+    "side": "lying on one side",
+    "bent": "bent over at the hips",
+    "spread": "legs apart so the pose reads",
+    "oral": "this figure only, mouth-forward",
+    "rear": "looking back over the shoulder",
+}
+
+
+def stance_clause(pose):
+    """Body still for this pose name. Not the scene story."""
+    pose = " ".join(str(pose or "").split())
+    if not pose:
+        return ""
+    fams = _families(pose)
+    hints = [_STANCE[k] for k in (
+        "allfours", "crouch", "cowgirl", "kneel", "seated", "supine",
+        "side", "bent", "spread", "oral", "rear",
+    ) if k in fams]
+    low = pose.lower()
+    if "spring" in low:
+        hints.append("coiled to spring forward")
+    standing_only = fams <= {"stand"} or fams <= {"stand", "rear"}
+    if hints and not standing_only:
+        return f"{pose}: {'; '.join(hints)}; not standing upright"
+    if hints:
+        return f"{pose}: {'; '.join(hints)}"
+    if "stand" not in fams:
+        return f"{pose}, full-body still of that pose, not a standing idle"
+    return pose
+
+
 def _look_fields(album, character_id=None):
     """Identity/wardrobe/body for one album person. No FastAPI."""
     out = {}
@@ -107,16 +147,31 @@ def _look_fields(album, character_id=None):
 
 
 def sheet_prompt(album, pose, character_id=None, tier=""):
-    """Grey-studio character sheet. Pose replaces stance. Not a scene render."""
+    """Grey-studio character sheet. Stance first. Not a scene render."""
     pose = " ".join(str(pose or "").split())
     if not pose:
         return ""
+    stance = stance_clause(pose)
     fields = _look_fields(album, character_id)
-    fields["pose"] = pose
+    fields["pose"] = stance
     slug = re.sub(r"[^a-z0-9]+", "_", pose.lower()).strip("_") or "pose"
     nude = bool(tier) and tiers.allows_nudity(tier)
     view = f"pose_{slug}_nude" if nude else f"pose_{slug}"
-    return make_anchor.prompt_for(view, make_anchor.anchor_from(fields), n_refs=1)
+    a = make_anchor.anchor_from(fields)
+    wardrobe = a.get("nude_wardrobe") if nude else a["wardrobe"]
+    parts = [
+        stance + ".",
+        ("Nude " if nude else "") +
+        "character reference sheet of a single adult character, "
+        "one figure, full body, head to toe inside the frame.",
+        wardrobe,
+        a["body"],
+        a["identity"],
+    ]
+    if nude and a.get("anatomy"):
+        parts.insert(4, a["anatomy"])
+    parts.append(make_anchor.backdrop_for(view, a.get("backdrop")))
+    return " ".join(p.strip() for p in parts if p and str(p).strip())
 
 
 def mage_text(scene, album="", character_id=None, tier=""):
