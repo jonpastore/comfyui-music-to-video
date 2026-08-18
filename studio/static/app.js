@@ -3047,14 +3047,18 @@ function initClassificationLibrary() {
       view: btn.getAttribute("data-view") || "front",
       wardrobe: btn.getAttribute("data-wardrobe") || "clothed",
       scenes: btn.getAttribute("data-scenes") || "",
+      tier: btn.getAttribute("data-tier") || tier,
     };
     ward = hole.wardrobe === "nude" ? "nude" : "clothed";
+    if (hole.tier) tier = hole.tier;
     var title = document.getElementById("hole-pick-title");
     var meta = document.getElementById("hole-pick-meta");
-    if (title) title.textContent = hole.pose + " · " + hole.view;
+    var poseLab = hole.pose === "unspecified" ? "no pose named" : hole.pose;
+    if (title) title.textContent = (tier || "sheet") + " · " + poseLab + " · " + hole.view;
     if (meta) {
-      meta.textContent = "Scenes " + (hole.scenes || "?") +
-        ". Pick a sheet in the wardrobe you want, or generate that wardrobe.";
+      meta.textContent = "Generate or tag a " + (tier || "") + " " + ward +
+        " sheet. Scenes " + (hole.scenes || "?") +
+        ". Switch Nude if that is what you have, then Generate clothed.";
     }
     paintToggles();
     loadSheets();

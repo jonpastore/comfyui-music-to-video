@@ -75,16 +75,15 @@
       {% if pose_gap and pose_gap.n_holes %}
       · {{ pose_gap.n_holes }} missing on this song{% endif %}</span>
   </summary>
-  <p class="hint">This is the album&rsquo;s <strong>tagged list of keeper
-    sheets</strong> (standing / kneeling / &hellip;), not a generate button.
-    The storyboard asks for poses; a hole is a pose that song still needs
-    and this list does not have. Fill the list from a JSON file &mdash; no
-    GPU. Generate missing poses is the form below.
+  <p class="hint">These chips are the sheets this song still needs at the
+    <strong>selected tier</strong>. XXX means generate or tag an XXX sheet.
+    Switch to R to see that board. Click a chip to pick an existing
+    sheet or generate that wardrobe.
     <button type="button" class="icon-btn help-tip"
             title="What the pose catalog is for"
             aria-label="What the pose catalog is for"
             data-label="Pose catalog"
-            data-help="Album first: the catalog belongs to the album, not a song. Then pick a song to compare that song's storyboard against the catalog. Tagged keepers are sheets we already have (usable, not skip). Holes are poses the board asks for that are not tagged yet. Import or paste JSON to seed the list without rendering. After keepers exist, Generate anchors / the roster below makes the missing sheets. Accept on the storyboard is a later step (who is image1). This box never starts a GPU job.">
+            data-help="The catalog is album-wide tagged keepers. Pick Album, then Song, then Tier (R or XXX). Missing chips are what that song's board at that tier still needs. unspecified means the scene never named a pose — open the chip and pick one. Tag from these sheets marks the gallery you already have. Click a chip: clothed/nude toggle, use a sheet, or generate that wardrobe at the selected tier.">
       <svg viewBox="0 0 16 16" aria-hidden="true">
         <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
         <path fill="currentColor" d="M7.3 6.2c0-.8.5-1.3 1.3-1.3s1.3.5 1.3 1.2c0 .6-.3.9-.9 1.3-.5.4-.8.7-.8 1.3h1.3c0-.4.2-.7.7-1.1.7-.5 1.3-1 1.3-2 0-1.3-1-2.2-2.4-2.2-1.5 0-2.6 1-2.6 2.5zm1.1 5.8h1.4V10.7H8.4z"/>
@@ -111,9 +110,18 @@
       </select>
     </label>
     <input type="hidden" name="scope_value" value="{{ class_album or form_album }}">
+    {% if song_tiers %}
+    <label>Tier
+      <select name="gap_tier" id="pose-gap-tier" onchange="this.form.requestSubmit()">
+        {% for t in song_tiers %}
+        <option value="{{ t }}" {% if pose_gap and t == pose_gap.tier %}selected{% endif %}>{{ t | tiername }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endif %}
     {% endif %}
     {% if pose_gap %}
-    <span class="muted" id="pose-gap-meter">{{ pose_gap.tier | tiername }}
+    <span class="muted" id="pose-gap-meter">generate at {{ pose_gap.tier | tiername }}
       · {{ pose_gap.n_covered }}/{{ pose_gap.n_needs }} covered{% if pose_gap.n_holes %}
       · {{ pose_gap.n_holes }} missing{% endif %}</span>
     {% endif %}
@@ -131,17 +139,22 @@
       as the catalog. No file path, no GPU.</p>
     {% endfor %}
   </div>
-  <h3>Missing on this song</h3>
-  <p class="hint">Click a chip. Pick a sheet from the gallery (clothed or
-    nude) to tag it, or generate the wardrobe you do not have.</p>
+  <h3>Missing on this song
+    {% if pose_gap %}<span class="muted">· generate {{ pose_gap.tier | tiername }}</span>{% endif %}</h3>
+  <p class="hint">Each chip is one sheet to make or tag at the selected
+    tier. <em>no pose named</em> means the scene text never said standing /
+    kneeling / &hellip; — open it and pick. Nude vs clothed is in the
+    picker.</p>
   <div class="class-chips" id="pose-gap-holes">
     {% if pose_gap and pose_gap.holes %}
     {% for h in pose_gap.holes %}
+    {% set pose_lab = "no pose named" if h.pose == "unspecified" else h.pose %}
     <button type="button" class="tag class-chip hole warn-tag js-hole-pick"
             data-pose="{{ h.pose }}" data-view="{{ h.view }}"
             data-wardrobe="{{ h.wardrobe }}"
-            data-scenes="{{ h.scenes | join(',') }}">{{ h.pose }} · {{ h.view }} · {{ h.wardrobe }}
-      <span class="muted">sc {{ h.scenes | join(', ') }}</span></button>
+            data-tier="{{ pose_gap.tier }}"
+            data-scenes="{{ h.scenes | join(',') }}">{{ pose_gap.tier | tiername }} · {{ h.wardrobe }} · {{ pose_lab }} · {{ h.view }}
+      <span class="muted">scenes {{ h.scenes | join(', ') }}</span></button>
     {% endfor %}
     {% elif pose_gap %}
     <p class="empty" id="pose-gap-empty">No ceiling holes for this song.</p>

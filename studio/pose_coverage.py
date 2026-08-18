@@ -252,17 +252,21 @@ def _need_key(item):
     return (item["pose"], item["view"], item["wardrobe"])
 
 
-def gap(song_id, character_id=None):
-    """T4-23: ceiling-board needs vs classification keepers. Holes only.
+def gap(song_id, character_id=None, tier=None):
+    """T4-23: board needs vs classification keepers. Holes only.
 
-    Reads the open song's highest storyboard. Does not write pose_coverage,
-    refs, jobs, or scene_pose_map. usable=skip never covers a need.
+    Default board is the song's ceiling (highest tier). A named tier
+    gaps that board instead. Does not write pose_coverage, refs, jobs,
+    or scene_pose_map. usable=skip never covers a need.
     """
     song = storyboard_service.require_song(song_id)
     album = (song["album"] or "").strip()
     if not album:
         raise ValueError("an album is needed to compare coverage")
-    tier = ceiling_tier(song["id"])
+    if tier:
+        storyboard_service.require_tier(tier)
+    else:
+        tier = ceiling_tier(song["id"])
     needs = _needs_from_board(song["id"], tier)
     covered = {_keeper_key(im) for im in
                classification.keepers(album, character_id)["images"]}

@@ -914,10 +914,13 @@ def pose_coverage_list(song_id, tier):
     return pose_coverage.listed(song_id, tier)
 
 
-def pose_gap(song_id, character_id=None):
-    """T4-23: ceiling-board needs vs classification keepers. Holes only."""
+def pose_gap(song_id, character_id=None, tier=None):
+    """T4-23: board needs vs classification keepers. Holes only.
+
+    tier=None is the ceiling board. A named tier gaps that board.
+    """
     import pose_coverage
-    return pose_coverage.gap(song_id, character_id=character_id)
+    return pose_coverage.gap(song_id, character_id=character_id, tier=tier)
 
 
 def generate_poses(song_id, run_tiers, character_id=None, images=None):

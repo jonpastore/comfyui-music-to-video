@@ -1435,7 +1435,9 @@ on the control.
 
 **Anchors page.** The **Pose catalog** card (`#classification-library`)
 is a collapsed `<details>` (open when the list is empty or the song
-has holes). Album first, then **Song to check**. It is the tagged
+has holes). Album first, then **Song to check**, then **Tier** (R / XXX).
+Missing chips say `{tier} · {wardrobe} · {pose} · {view}` so you know
+what to generate. It is the tagged
 keeper list, not generate. **Tag from these sheets** marks chosen
 gallery keepers (no file path). A missing-pose chip opens `#hole-pick`:
 clothed/nude toggle, pick a sheet to tag, or generate that wardrobe

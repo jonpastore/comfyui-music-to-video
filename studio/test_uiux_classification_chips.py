@@ -122,7 +122,8 @@ def test_uiux_anchors_shows_keeper_chips_and_holes():
     assert 'id="pose-gap-holes"' in html
     assert 'class="tag class-chip hole warn-tag js-hole-pick"' in html
     assert 'data-pose="standing"' in html
-    assert "standing · front · clothed" in html
+    assert "XXX · clothed · standing · front" in html
+    assert 'id="pose-gap-tier"' in html
     assert 'data-usable="skip"' not in html
     assert "stand-skip" not in html
     assert 'id="classification-from-sheets"' in html
@@ -133,6 +134,24 @@ def test_uiux_anchors_shows_keeper_chips_and_holes():
     album_at = html.find('id="class-album"')
     song_at = html.find('id="pose-gap-song"')
     assert album_at != -1 and song_at != -1 and album_at < song_at
+    assert album_at < html.find('id="pose-gap-tier"')
+
+
+def test_gap_tier_select_reads_that_board():
+    stamp = f"uiux-tier-{time.time_ns()}"
+    album, sid, song = _album_song(stamp, scenes=[_scene(1, "standing", "wide")])
+    _write_board(sid, song["slug"], "r", [_scene(1, "kneeling", "medium")], album)
+    prev = classification._DEFAULT_SIDECAR
+    classification._DEFAULT_SIDECAR = os.path.join(db.DATA, f"{stamp}-missing.json")
+    try:
+        with TestClient(appmod.app) as client:
+            xxx = client.get("/anchors", params={"scope_value": album, "song_id": sid})
+            r = client.get("/anchors", params={
+                "scope_value": album, "song_id": sid, "gap_tier": "r"})
+        assert "XXX · clothed · standing · front" in xxx.text
+        assert "R · clothed · kneeling · front" in r.text
+    finally:
+        classification._DEFAULT_SIDECAR = prev
 
 
 def test_uiux_import_seeds_empty_library_and_closes_holes():

@@ -3429,10 +3429,10 @@ def nest_anchor_groups(group_list):
     return out
 
 
-def _anchors_classification_ctx(album, song_id=""):
-    """T4-21 / T4-23: keepers and ceiling holes for the open song."""
+def _anchors_classification_ctx(album, song_id="", gap_tier=""):
+    """T4-21 / T4-23: keepers and holes for the open song + selected tier."""
     album = (album or "").strip()
-    keepers, songs, gap, open_id = [], [], None, None
+    keepers, songs, gap, open_id, song_tiers = [], [], None, None, []
     if album:
         # Empty live DB: seed once from repo sidecar (T4-21/T4-22). library()
         # still never reads a file — ensure_sidecar_seed calls import_sidecar.
@@ -3453,8 +3453,14 @@ def _anchors_classification_ctx(album, song_id=""):
             if open_id is None and songs:
                 open_id = songs[0]["id"]
         if open_id:
+            song_tiers = [r["tier"] for r in db.q(
+                "SELECT DISTINCT tier FROM storyboards WHERE song_id=? ORDER BY tier",
+                open_id)]
+            want = (gap_tier or "").strip()
+            if want not in song_tiers:
+                want = None
             try:
-                gap = storyboard_service.pose_gap(open_id)
+                gap = storyboard_service.pose_gap(open_id, tier=want)
             except (LookupError, ValueError, RuntimeError):
                 gap = None
     return {
@@ -3463,12 +3469,14 @@ def _anchors_classification_ctx(album, song_id=""):
         "album_songs": songs,
         "pose_gap": gap,
         "open_song_id": open_id,
+        "song_tiers": song_tiers,
     }
 
 
 @app.get("/anchors", response_class=HTMLResponse)
 def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
-                 album: str = "", roster_tier: str = "", song_id: str = ""):
+                 album: str = "", roster_tier: str = "", song_id: str = "",
+                 gap_tier: str = ""):
     # One album at a time. The generate form's album select is the same
     # subject as the gallery; swapping the form via htmx left every album's
     # groups on the page. `album` is the select's name so a full-page GET
@@ -3550,7 +3558,7 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
         coverage_by_tier=coverage_by_tier,
         roster_tier=shown_roster,
         failed_jobs=fresh, active_jobs=active,
-        **_anchors_classification_ctx(scope_value, song_id)))
+        **_anchors_classification_ctx(scope_value, song_id, gap_tier)))
 
 
 MAX_ANCHOR_UPLOADS = 24
