@@ -26,10 +26,9 @@
       </label>
       {# click to see it full size: a character sheet is judged on the face and
          the hands, and neither is legible in a grid thumbnail #}
-      <img class="thumb lazy-src" src="{{ media_url(c.path) }}"
-           data-src="{{ media_url(c.path) }}" alt="" loading="lazy"
-           data-full="{{ media_url(c.path) }}" tabindex="0" role="button" decoding="async"
-           title="Open full size">
+      <img class="thumb" src="{{ media_url(c.path) }}"
+           alt="" data-full="{{ media_url(c.path) }}" tabindex="0" role="button"
+           decoding="async" title="Open full size">
       {# What this one was rendered AT. A CFG sweep puts every guidance value in
          this same grid -- same tier, same view -- so without the settings on
          the thumbnail "6.0 haloes" is a claim about an image nobody can pick

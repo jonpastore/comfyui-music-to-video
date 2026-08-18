@@ -516,7 +516,9 @@ def safe_name(name):
 def media_url(path):
     if not path:
         return None
-    return "/media/" + quote(os.path.realpath(path), safe="/")
+    # realpath is /abs/path. A leading slash here becomes /media//abs… and
+    # Chrome treats the empty segment badly next to loading=lazy + overflow-x.
+    return "/media/" + quote(os.path.realpath(path).lstrip("/"), safe="/")
 
 
 def scene_seconds_for(song_id, tier):

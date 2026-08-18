@@ -228,6 +228,13 @@ def test_media_traversal_blocked():
         assert "root:" not in r.text
 
 
+def test_media_url_does_not_emit_double_slash():
+    """ /media//abs/path breaks Chrome lazy-load in overflow-x rows. """
+    url = appmod.media_url("/tmp/c.png")
+    assert url.startswith("/media/")
+    assert not url.startswith("/media//"), url
+
+
 def test_oversized_upload_rejected():
     with TestClient(appmod.app) as client:
         big = b"0" * (appmod.MAX_MP3 + 1)
