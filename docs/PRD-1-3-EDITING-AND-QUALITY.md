@@ -517,9 +517,11 @@ order and take the dependencies from here.
    `.expect.json` 81@`LTX25_FPS` and s2v hop `.expect.json` 77@16.0;
    they differ (`test_t2_47_mixed_model.py`). Two names on a plan is
    not this check.
-   **`T2-48` partial**: hop 0 splits a 30 s scene on the LTX ceiling
-   even when marked `s2v`; s2v hop windows are T5-12
-   (`test_t5_12_d7_hop.py` **built**; `test_t2_48_ceilings_compose.py`).
+   **`T2-48` built**: hop 0 splits a 30 s scene on the LTX ceiling
+   even when marked `s2v`; a 30 s `needs_lip_sync` scene is LTX 15+15
+   plus per-part s2v windows (`clip_chain_plan` / `split_to_ceiling(s2v)`;
+   `test_t2_48_ceilings_compose.py`). T5-12 hop graph **built**
+   (`test_t5_12_d7_hop.py`).
    **`T2-45` built**: a mixed-model song is refused before enqueue when
    any named model is `False` on every reachable backend
    (`test_t2_45_enqueue_unavailable.py`); `None` stays a candidate.

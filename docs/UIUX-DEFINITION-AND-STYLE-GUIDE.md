@@ -410,9 +410,10 @@ reachable backend (`T2-45`); a box that could not be asked (`None`)
 is still a candidate, not a refusal. A scene that asked for
 `ref_motion` or `control_video` pins that clip to cerberus
 (`T2-46`); the rest of the song still routes. Per-scene model and
-per-model ceilings compose (`T2-48`): hop 0 splits a 30 s scene on
-the LTX ceiling (15 s + 15 s) even when marked `s2v`; s2v hop
-windows are T5-12. Each chain tiles that scene. QC compares each clip to that native rate, not the song's output fps (`T2-13f`): using the song rate flags every correct clip of the other model. A single-clip request
+per-model ceilings compose (`T2-48` **built**): hop 0 splits a 30 s scene on
+the LTX ceiling (15 s + 15 s) even when marked `s2v`; a 30 s
+`needs_lip_sync` scene is LTX 15+15 plus per-part s2v windows
+(`clip_chain_plan` / `split_to_ceiling(s2v)`). Each chain tiles that scene. QC compares each clip to that native rate, not the song's output fps (`T2-13f`): using the song rate flags every correct clip of the other model. A single-clip request
 over the model's ceiling (`T5-9`) is a
 named refusal (measured vs chosen), not a quiet annotation; split is
 `split_to_ceiling` / `clips_for_scene`. A scene over the 15 s render ceiling

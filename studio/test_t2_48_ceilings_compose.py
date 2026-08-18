@@ -1,13 +1,15 @@
 """T2-48: hop 0 splits on the LTX ceiling; tiles still compose.
 
 docs/TRD-2 W2 / T2-48: a 30 s LTX take splits on the LTX ceiling.
-s2v hop windows (T5-12) are not this slice. T5-11: a scene marked
-s2v still splits on LTX as hop 0, not on CHUNK.
+A 30 s needs_lip_sync scene is those LTX parts plus per-part s2v
+windows (clip_chain_plan / split_to_ceiling(s2v)). T5-11: a scene
+marked s2v still splits on LTX as hop 0, not on CHUNK.
 
 Mutation: clips_for_scene treats video_model=s2v as hop 0 → the
 s2v-marked arm is 7 x CHUNK and this fails.
 Mutation: _compose does not stamp clips / validate skips tiling → a
 gapped chain is accepted.
+Mutation: 30 s needs_lip_sync omits per-part s2v windows → red.
 """
 import json
 import os
@@ -32,12 +34,12 @@ SCENE = {
 }
 
 
-def _tiles(clips, seconds):
+def _tiles(clips, seconds, origin=0.0):
     assert clips, "no clips to tile"
-    assert abs(clips[0]["start_s"] - 0.0) < 1e-9
+    assert abs(clips[0]["start_s"] - origin) < 1e-9
     for a, b in zip(clips, clips[1:]):
         assert abs(a["end_s"] - b["start_s"]) < 1e-9, (a, b)
-    assert abs(clips[-1]["end_s"] - seconds) < 1e-6
+    assert abs(clips[-1]["end_s"] - (origin + seconds)) < 1e-6
     assert abs(sum(c["duration_s"] for c in clips) - seconds) < 1e-9
 
 
@@ -56,6 +58,24 @@ def test_t2_48_30s_ltx25_splits_into_15s_and_tiles():
     assert [round(c["duration_s"], 6) for c in clips] == [15.0, 15.0]
     assert all(c["model"] == "ltx25" for c in clips)
     _tiles(clips, 30.0)
+
+
+def test_t2_48_30s_needs_lip_sync_ltx_then_s2v_windows_per_part():
+    scene = dict(SCENE, scene_number=1, needs_lip_sync=True, length_seconds=30.0)
+    plan = build_song.clip_chain_plan([scene])
+    ltx = [p for p in plan if p["model"] == "ltx25"]
+    hops = [p for p in plan if p["model"] == "s2v"]
+    assert [round(c["duration_s"], 6) for c in ltx] == [15.0, 15.0]
+    assert all(c["model"] == "ltx25" for c in ltx)
+    _tiles(ltx, 30.0)
+    assert hops, "needs_lip_sync must append s2v hop windows"
+    for part in ltx:
+        part_hops = [h for h in hops if h["control_clip_idx"] == part["clip_idx"]]
+        want = build_song.split_to_ceiling(part["duration_s"], "s2v")
+        assert [round(h["duration_s"], 6) for h in part_hops] == [
+            round(w, 6) for w in want
+        ]
+        _tiles(part_hops, part["duration_s"], origin=part["start_s"])
 
 
 def test_t2_48_mixed_scenes_hop0_uses_ltx_ceiling():
