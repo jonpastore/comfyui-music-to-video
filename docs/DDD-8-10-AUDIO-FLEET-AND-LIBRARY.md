@@ -136,7 +136,8 @@ picked). Use of edits stays on the edit card.
 The topbar **Media** item (`GET /media`) is a different surface: New Song
 (`POST /media/songs` → song row + `audio` job with `as_new_song`) and New
 Image (`POST /media/images` → `t2i` job; album look retrieved into the
-prompt; lands `assets.kind=t2i`). It does not replace T8-16.
+prompt; lands `assets.kind=t2i`). Recent images multi-select delete is
+`POST /media/images/delete`. It does not replace T8-16.
 
 ## 3. TRD-9 — testing what already works
 

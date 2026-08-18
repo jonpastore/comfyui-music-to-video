@@ -1837,7 +1837,8 @@ A style guide is falsifiable or it is decoration.
   monkeypatched probe entry appears in both HTML `<nav>` and JSON; hardcoding
   the old `<a>` tags in the template drops the probe → red. Today's order is
   Library, **Media**, Anchors, Playlists, Sets, Tiers, Models, Jobs, Config.
-  Media is New Song (ACE-Step → new library row) and New Image (local t2i,
+  Media is New Song (ACE-Step → new library row) and New Image (local t2i;
+  Recent images has multi-select + Delete selected, `test_media_create.py`).
   not Mage). Other
   `T6-A2` objects: the queue panel
   (`test_t6_a2_html_and_json_report_the_same_queue_numbers`), the review

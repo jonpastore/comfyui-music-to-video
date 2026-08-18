@@ -85,20 +85,31 @@
 </div>
 
 {% if images %}
-<h2>Recent images</h2>
-<div class="media-strip">
-  {% for im in images %}
-  <figure class="ref-frame clip-tile">
-    <div class="still-thumb">
-      <a href="{{ media_url(im.path) }}" target="_blank" rel="noopener">
-        <img src="{{ media_url(im.path) }}?w=360" alt="" decoding="async">
-      </a>
-    </div>
-    <figcaption>{{ im.label }}</figcaption>
-  </figure>
-  {% endfor %}
-</div>
-<p class="hint">Assign a keeper from <a href="/anchors">Anchors</a>
-  (upload / assign as sheet). This page does not stamp a pose.</p>
+<section id="recent-images" class="t2i-row">
+  <div class="stills-head">
+    <h2>Recent images</h2>
+    <button type="button" class="danger btn-sm js-t2i-delete" hidden
+            title="Delete every image with a tick">Delete selected</button>
+    <span class="save-note" aria-live="polite"></span>
+  </div>
+  <div class="media-strip">
+    {% for im in images %}
+    <figure class="ref-frame clip-tile" data-t2i-id="{{ im.id }}">
+      <div class="still-thumb">
+        <a href="{{ media_url(im.path) }}" target="_blank" rel="noopener">
+          <img src="{{ media_url(im.path) }}?w=360" alt="" decoding="async">
+        </a>
+        <label class="still-select" title="Select this image">
+          <input type="checkbox" class="js-t2i-select" value="{{ im.id }}"
+                 aria-label="Select {{ im.label }}">
+        </label>
+      </div>
+      <figcaption>{{ im.label }}</figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+  <p class="hint">Assign a keeper from <a href="/anchors">Anchors</a>
+    (upload / assign as sheet). This page does not stamp a pose.</p>
+</section>
 {% endif %}
 {% endblock %}

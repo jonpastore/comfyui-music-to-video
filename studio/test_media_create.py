@@ -135,3 +135,32 @@ def test_new_image_refuses_empty_prompt():
         r = client.post("/media/images", data={"prompt": "  "},
                         follow_redirects=False)
         assert r.status_code == 400
+
+
+def test_recent_images_select_and_delete(tmp_path):
+    dest = tmp_path / "t2i"
+    dest.mkdir()
+    keep = dest / "keep.png"
+    drop = dest / "drop.png"
+    keep.write_bytes(b"\x89PNG\r\n\x1a\n")
+    drop.write_bytes(b"\x89PNG\r\n\x1a\n")
+    kid = db.run(
+        "INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+        None, "t2i", str(keep), json.dumps({"prompt": "keep me"}), 1)
+    did = db.run(
+        "INSERT INTO assets (song_id, kind, path, meta_json, created) VALUES (?,?,?,?,?)",
+        None, "t2i", str(drop), json.dumps({"prompt": "drop me"}), 2)
+    with TestClient(appmod.app) as client:
+        page = client.get("/media")
+        assert page.status_code == 200
+        assert 'id="recent-images"' in page.text
+        assert 'class="js-t2i-select"' in page.text
+        assert 'class="danger btn-sm js-t2i-delete"' in page.text
+        assert f'value="{did}"' in page.text
+        gone = client.post("/media/images/delete", json={"ids": [did]},
+                           headers={"Accept": "application/json"})
+        assert gone.status_code == 200, gone.text
+        assert gone.json()["deleted"] == [did]
+    assert db.one("SELECT id FROM assets WHERE id=?", did) is None
+    assert db.one("SELECT id FROM assets WHERE id=?", kid) is not None
+    assert keep.is_file()

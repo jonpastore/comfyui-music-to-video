@@ -4474,6 +4474,48 @@ document.addEventListener("click", function (e) {
   });
 })();
 
+function syncT2iDelete(row) {
+  if (!row) return;
+  var n = row.querySelectorAll(".js-t2i-select:checked").length;
+  var btn = row.querySelector(".js-t2i-delete");
+  if (!btn) return;
+  btn.hidden = n === 0;
+  btn.textContent = n ? ("Delete selected (" + n + ")") : "Delete selected";
+}
+
+document.addEventListener("change", function (e) {
+  var box = e.target.closest && e.target.closest(".js-t2i-select");
+  if (!box) return;
+  syncT2iDelete(box.closest(".t2i-row"));
+});
+
+document.addEventListener("click", function (e) {
+  var btn = e.target.closest && e.target.closest(".js-t2i-delete");
+  if (!btn) return;
+  var row = btn.closest(".t2i-row");
+  if (!row) return;
+  var picked = Array.prototype.slice.call(row.querySelectorAll(".js-t2i-select:checked"));
+  if (!picked.length) return;
+  var ids = picked.map(function (el) { return parseInt(el.value, 10); }).filter(Boolean);
+  if (!ids.length) return;
+  btn.disabled = true;
+  var note = row.querySelector(".save-note");
+  api("/media/images/delete", {ids: ids}).then(function () {
+    picked.forEach(function (el) {
+      var fig = el.closest(".ref-frame");
+      if (fig) fig.remove();
+    });
+    btn.disabled = false;
+    syncT2iDelete(row);
+    if (!row.querySelector(".js-t2i-select") && note) {
+      note.textContent = "deleted";
+    }
+  }).catch(function (err) {
+    btn.disabled = false;
+    if (note) note.textContent = err.message;
+  });
+});
+
 function syncStillsDelete(row) {
   if (!row) return;
   var n = row.querySelectorAll(".js-still-select:checked").length;

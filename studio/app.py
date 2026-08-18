@@ -2427,6 +2427,39 @@ def media_new_image(request: Request, prompt: str = Form(...), album: str = Form
         request, {"job_id": jid, "kind": "t2i"}, "/media#new-image")
 
 
+@app.post("/media/images/delete")
+async def media_delete_images(request: Request):
+    """Remove selected t2i assets and their files."""
+    ids = []
+    if wants_json(request):
+        body = await _api_body(request)
+        raw = body.get("ids") if isinstance(body, dict) else None
+        if isinstance(raw, list):
+            ids = raw
+    if not ids:
+        form = await request.form()
+        ids = list(form.getlist("id"))
+    gone = []
+    for raw in ids:
+        try:
+            aid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        row = db.one("SELECT * FROM assets WHERE id=? AND kind='t2i'", aid)
+        if not row:
+            continue
+        if _within_data(row["path"]) and os.path.isfile(row["path"]):
+            try:
+                os.remove(row["path"])
+            except OSError:
+                pass
+        db.run("DELETE FROM assets WHERE id=?", aid)
+        gone.append(aid)
+    if not gone:
+        raise HTTPException(400, "no selected images to delete")
+    return json_or_redirect(request, {"deleted": gone}, "/media#recent-images")
+
+
 @app.post("/songs/analyse-all")
 def analyse_all_songs(request: Request):
     """Runnable on demand for the songs that predate analyse.py -- everything
