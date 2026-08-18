@@ -266,6 +266,20 @@ T4_13_REAL_SHEET_SHA256 = (
     "ac56dc7206b5701bb6dfdf084815376e806085c3899ada2ff66e93a67a238f1b")
 T4_13_REAL_SHEET_MEASURED = True
 
+# docs/TRD-4 T4-11: body-colour render differential. Charcoal positive
+# wording vs previous negating wording. Patchy/two-tone region variance
+# must decrease. None is NOT MEASURED. skip is not a reading.
+# T4_11_REAL_PAIR_MEASURED stays False until a GPU charcoal-vs-negating
+# pair is pinned; flipping it with an empty hook or unpinned bytes is
+# the lie. Do not flip MEASURED or render a pair in this harness.
+T4_11_REAL_PAIR = None
+T4_11_REAL_PAIR_SHA256 = None
+T4_11_REAL_PAIR_MEASURED = False
+T4_11_REAL_PAIR_SEED = None
+BODY_COLOUR_DIFFERENTIAL = "body_colour_differential"
+BODY_COLOUR_METRIC = "region_luma_variance_v1"
+T4_11_REGION_BLOCK = 8
+
 # docs/TRD-7 T7-7: identity held across views. The ranking is
 # identity(front, three_quarter) from an anchor vs the same pair from
 # raw photographs. No threshold. None is NOT MEASURED. skip is not a
@@ -350,6 +364,7 @@ CHECK_REMEDY_CLASS = {
     REFINE_DIFFERENTIAL: REMEDY_NONE,
     D7_LOOK: REMEDY_NONE,
     D7_HOP_OMIT: REMEDY_RERENDER,
+    BODY_COLOUR_DIFFERENTIAL: REMEDY_NONE,
 }
 
 # T3-33.a: image content FLAG/REJECT is a prompt rewrite. Structural
@@ -1282,6 +1297,183 @@ def t4_13_claim():
     if not expect or digest != expect:
         raise ValueError("T4-13 real sheet channel balance is NOT MEASURED")
     return check_channel_balance(path)
+
+
+# --------------------------------------------------------- T4-11 colour --
+
+def _t4_11_as_rgb(image, slot):
+    """RGB float64 array from a path or ndarray. Missing raises NOT MEASURED."""
+    import numpy as np
+    from PIL import Image
+    if image is None:
+        raise ValueError("T4-11 body-colour differential is NOT MEASURED")
+    if isinstance(image, (str, bytes, os.PathLike)):
+        if not image or not os.path.isfile(image):
+            raise ValueError("T4-11 body-colour differential is NOT MEASURED")
+        try:
+            with Image.open(image) as im:
+                arr = np.asarray(im.convert("RGB"), dtype="float64")
+        except Exception as e:
+            raise ValueError(
+                "T4-11 body-colour differential is NOT MEASURED") from e
+    else:
+        arr = np.asarray(image, dtype="float64")
+    if arr.size == 0:
+        raise ValueError("T4-11 body-colour differential is NOT MEASURED")
+    if arr.ndim == 2:
+        arr = np.stack([arr, arr, arr], axis=-1)
+    elif arr.ndim == 3 and arr.shape[-1] >= 3:
+        arr = arr[..., :3]
+    else:
+        raise ValueError(
+            f"T4-11: unsupported {slot} image shape {getattr(arr, 'shape', None)}")
+    return arr
+
+
+def body_colour_region_variance(image, block=None):
+    """Std of block-mean luma. Two-tone / patchy fur scores higher than uniform.
+
+    Missing or empty RAISE, never 0.0 as a free pass. docs/TRD-4 T4-11.
+    """
+    import numpy as np
+    block = int(block or T4_11_REGION_BLOCK)
+    if block < 1:
+        raise ValueError("T4-11: block size must be >= 1")
+    arr = _t4_11_as_rgb(image, "sheet")
+    luma = arr.mean(axis=-1)
+    h, w = luma.shape
+    if h < block or w < block:
+        raise ValueError("T4-11: sheet too small for region variance")
+    means = []
+    for y in range(0, h - block + 1, block):
+        for x in range(0, w - block + 1, block):
+            means.append(float(luma[y:y + block, x:x + block].mean()))
+    if len(means) < 2:
+        raise ValueError("T4-11: fewer than two regions is not a measurement")
+    return float(np.std(np.asarray(means, dtype="float64")))
+
+
+def t4_11_real_pair():
+    """Hook the renderer populates. None until a charcoal/negating GPU pair lands."""
+    return T4_11_REAL_PAIR
+
+
+def t4_11_pair_sha256(charcoal, negating):
+    """Two hex digests. Missing files raise NOT MEASURED."""
+    import hashlib
+
+    def _digest(path, slot):
+        if not path or not os.path.isfile(path):
+            raise ValueError("T4-11 body-colour differential is NOT MEASURED")
+        h = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    return (_digest(charcoal, "charcoal"), _digest(negating, "negating"))
+
+
+def record_t4_11_real_pair(charcoal, negating, seed=None, sha256=None):
+    """Renderer calls this with the charcoal / negating pair. Does not flip MEASURED."""
+    global T4_11_REAL_PAIR, T4_11_REAL_PAIR_SEED, T4_11_REAL_PAIR_SHA256
+    T4_11_REAL_PAIR = (charcoal, negating)
+    T4_11_REAL_PAIR_SEED = seed
+    if sha256 is not None:
+        T4_11_REAL_PAIR_SHA256 = sha256
+    elif (isinstance(charcoal, (str, bytes, os.PathLike))
+          and isinstance(negating, (str, bytes, os.PathLike))
+          and os.path.isfile(charcoal) and os.path.isfile(negating)):
+        T4_11_REAL_PAIR_SHA256 = t4_11_pair_sha256(charcoal, negating)
+    else:
+        T4_11_REAL_PAIR_SHA256 = None
+
+
+def t4_11_body_colour_differential(charcoal, negating):
+    """Charcoal positive vs negating wording. Missing pair raises NOT MEASURED.
+
+    Patchiness is region-luma variance. decreased is True when the charcoal
+    sheet is less two-tone/patchy than the negating sheet. A synthetic
+    uniform-vs-two-tone pair proves the metric can fail (identical → not
+    decreased). Eye judgment on a GPU pair is the real claim; this is not that.
+    """
+    c = body_colour_region_variance(charcoal)
+    n = body_colour_region_variance(negating)
+    return {
+        "metric": BODY_COLOUR_METRIC,
+        "variance_charcoal": c,
+        "variance_negating": n,
+        "decreased": c < n,
+        "threshold": None,
+    }
+
+
+def t4_11_claim():
+    """The real-pair gate. MEASURED with an empty hook is still NOT MEASURED."""
+    if not T4_11_REAL_PAIR_MEASURED:
+        raise ValueError("T4-11 body-colour differential is NOT MEASURED")
+    pair = t4_11_real_pair()
+    if pair is None:
+        raise ValueError("T4-11 body-colour differential is NOT MEASURED")
+    charcoal, negating = pair
+    if (isinstance(charcoal, (str, bytes, os.PathLike))
+            and isinstance(negating, (str, bytes, os.PathLike))):
+        expect = T4_11_REAL_PAIR_SHA256
+        if not expect or t4_11_pair_sha256(charcoal, negating) != expect:
+            raise ValueError("T4-11 body-colour differential is NOT MEASURED")
+    out = t4_11_body_colour_differential(charcoal, negating)
+    out["seed"] = T4_11_REAL_PAIR_SEED
+    return out
+
+
+def accept_t4_11_gpu_pair(charcoal, negating, seed=None, source=None):
+    """Record a charcoal-positive / negating-wording pair.
+
+    source='gpu' is the renderer path: populate the hook and flip
+    T4_11_REAL_PAIR_MEASURED. Synthetic / PNG harness must pass
+    source='harness' (or omit it) so the GPU flag stays False. Missing
+    images raise NOT MEASURED.
+    """
+    global T4_11_REAL_PAIR_MEASURED
+    d = t4_11_body_colour_differential(charcoal, negating)
+    record_t4_11_real_pair(charcoal, negating, seed=seed)
+    d["seed"] = seed
+    d["source"] = source or "harness"
+    if source == "gpu":
+        if t4_11_real_pair() is None:
+            raise ValueError("T4-11 body-colour differential is NOT MEASURED")
+        T4_11_REAL_PAIR_MEASURED = True
+    return d
+
+
+def t4_11_finding(report, path=None):
+    """Body-colour finding. Not-decreased is FLAG, not a free pass."""
+    if not report or report.get("variance_charcoal") is None:
+        raise ValueError("T4-11 body-colour differential is NOT MEASURED")
+    if report.get("variance_negating") is None:
+        raise ValueError("T4-11 body-colour differential is NOT MEASURED")
+    path = path or "t4_11_pair"
+    c = float(report["variance_charcoal"])
+    n = float(report["variance_negating"])
+    decreased = bool(report.get("decreased", c < n))
+    measured = {
+        "variance_charcoal": c,
+        "variance_negating": n,
+        "decreased": decreased,
+        "metric": report.get("metric") or BODY_COLOUR_METRIC,
+        "seed": report.get("seed"),
+    }
+    if decreased:
+        detail = (f"charcoal region variance {c:.4f} < negating {n:.4f}: "
+                  "patchy/two-tone fur decreased")
+        verdict = PASS
+    else:
+        detail = (f"charcoal region variance {c:.4f} >= negating {n:.4f}: "
+                  "patchy/two-tone fur did not decrease")
+        verdict = FLAG
+    return finding(
+        path, "image", BODY_COLOUR_DIFFERENTIAL, verdict, detail,
+        measured, {"decreased": True}, BODY_COLOUR_METRIC)
 
 
 # ------------------------------------------------------------------ video --

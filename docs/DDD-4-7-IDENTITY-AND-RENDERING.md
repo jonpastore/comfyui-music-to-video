@@ -7,7 +7,7 @@ Sequencing and review record: `docs/PLAN-TRD-4-7.md`,
 
 **Rewritten 2026-08-17 for Jarvis #529 (D1–D10).** Reconciled
 2026-08-18: `T5-11` **built** (`test_t5_11_ltx_always_first.py`); `T5-15`
-**built** (`test_t5_15_no_latent_handoff.py`); `T2-50`, `T4-11` **built** (charcoal-brown compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`; render differential **NOT MEASURED**), `T4-21`…`T4-24`, `T7-21`…`T7-23` **built**; `T3-35` **built** (`test_t3_35_settings_remedies.py`); `T2-51`/`T2-52` **built** (classify writes no map; draft+Accept required; empty/draft/rejected refuse refs and reroll; no `freeze_auto_binds` / auto-`scene_bases` fallback — `test_pose_plan.py`).
+**built** (`test_t5_15_no_latent_handoff.py`); `T2-50`, `T4-11` **built** (charcoal-brown compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`; render differential **harness only; NOT MEASURED**, `test_t4_11_body_colour.py`), `T4-21`…`T4-24`, `T7-21`…`T7-23` **built**; `T3-35` **built** (`test_t3_35_settings_remedies.py`); `T2-51`/`T2-52` **built** (classify writes no map; draft+Accept required; empty/draft/rejected refuse refs and reroll; no `freeze_auto_binds` / auto-`scene_bases` fallback — `test_pose_plan.py`).
 `T2-56` **built** (`test_t2_56_per_scene_keeper.py`): accepted keeper
 for that scene is image1. `T2-53` / `T7-22` **built**
 (`test_t2_53_location_plates.py`): one plate per location key; never image1.
@@ -543,7 +543,9 @@ code rather than in documents.
   same string as their `make_anchor` constants (`T4-11` / TRD-4 §9.1). A
   truthy album default still beats the constant at compose time — that is
   why the walker exists. Compose is **built**; the patchy/two-tone fur
-  render differential is **NOT MEASURED** (peer to `T5-2` / `T7-3`).
+  render differential is **harness only; NOT MEASURED**
+  (`qc.t4_11_*`, `test_t4_11_body_colour.py`; `T4_11_REAL_PAIR_MEASURED`
+  False — peer to `T5-2` / `T3-37` / `T7-7`).
 - **`DENOISE_CHOICES`' labels vs `latent_mode`** — §4, `T7-8`. One resolver, or
   the label and the graph drift the moment either moves. `T7-21` is
   the same resolver for C1/C2 (**built**, `test_t7_21_c1_c2_resolver.py`).

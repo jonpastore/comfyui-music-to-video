@@ -139,7 +139,7 @@ copies. Do not offer those families as `role=reference` defaults.
 |---|---|---|
 | P1 | A sheet cannot be produced from a silent default — no tier, view, or wardrobe falls back to something nobody chose | `T4-1`…`T4-4` |
 | P2 | Text that a tier forbids cannot be saved under it, and text it permits can | `T4-5`…`T4-9` |
-| P3 | The composed positive prompt contains no negation, names the body parts, names the reference slots, and never says "bare skin" on a furred character | `T4-10`…`T4-14`, `T4-18`. `T4-11` **built** (compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`); render differential NOT MEASURED |
+| P3 | The composed positive prompt contains no negation, names the body parts, names the reference slots, and never says "bare skin" on a furred character | `T4-10`…`T4-14`, `T4-18`. `T4-11` **built** (compose, `test_t4_11_fresh_album_compose_is_charcoal_brown`); render differential **harness only; NOT MEASURED** (`test_t4_11_body_colour.py`, `T4_11_REAL_PAIR_MEASURED` False) |
 | P3a | Lighting lock is channel balance on the rendered sheet (olive/magenta FLAG, grey PASS), not the `BACKDROP` string. Job 257 `front_nude` seed 5151 PASSes 8.06; sibling seed 5288 still FLAGs 14.76 | `T4-13` |
 | P4 | A new view is one table entry, and is tier-gated by what it *is* rather than by a list somebody remembered to update | `T7-1`/`T7-2`/`T7-3` built (`make_anchor.VIEWS` + `is_nude_view` + form/compose via `test_t7_3_new_views.py`). GPU new-view sheets NOT MEASURED |
 | P5 | An approved sheet can be the identity lock for the next sheet — the lever that keeps clips on-model, applied to anchors | `T7-6`/`T7-8` built. `T7-7` harness only; GPU pair **NOT MEASURED** |
@@ -220,7 +220,7 @@ statement of it:
 3. **Prove identity holds** (P5's `T7-7` + D10 colour). Harness built.
    GPU four-image set **NOT MEASURED**. Body clause is charcoal-brown
    (`T4-11` **built** (compose), `test_t4_11_fresh_album_compose_is_charcoal_brown`;
-   render differential **NOT MEASURED`).
+   render differential **harness only; NOT MEASURED**, `test_t4_11_body_colour.py`).
 4. **C1/C2 resolver** (`T7-21` **built**,
    `test_t7_21_c1_c2_resolver.py`). Location plates (`T7-22` **built**,
    `test_t2_53_location_plates.py`). Use-as-ref / map / image1 refuse

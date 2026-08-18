@@ -372,7 +372,7 @@ character."* — the capability loss stated in full.
 | `T4-21` / `T4-22` `classification_json` in DB | **built** | `test_t4_21_classification_json.py`, `test_uiux_classification_chips.py` | sqlite `classification_json` (album + `character_id` NULL=protagonist, versioned). Query by view/pose/wardrobe/usable. Sidecar seeds `import_sidecar` only; `library()` never reads a file. Live empty auto-seed **built**: `ensure_sidecar_seed` from `_anchors_classification_ctx` imports repo `anchor5/image-classification.json` once when images are empty (Street Cats `/anchors`); missing sidecar stays empty; second call adds no version; a random sidecar path alone still does not paint. `/anchors` paints keeper chips and import/save seed an empty library (no GPU). Mutation: sidecar-only store → red. Mutation: omit chips / skip painted as keeper → red |
 | `T4-23` gap reads the board, does not bind | **built** | `test_t2_51_classify_cannot_write_map.py`, `test_uiux_classification_chips.py` | `GET /api/songs/{id}/pose-gap` reads the open song's ceiling board vs `classification_json` keepers (`usable≠skip`) and emits holes only. Classify/gap write zero `scene_pose_map` / `pose_coverage` / refs rows. `/anchors` shows those holes; import closes them without GPU. Mutation: gap upserts a map row → red. Mutation: skip keeper or sidecar-only library closes a hole → red |
 | `T4-24` ceiling-tier pose generate (clothed+nude iff r/xxx) | **built** | `test_t4_24_ceiling_generate.py` | `POST /api/songs/{id}/pose-generate` / `pose_generate.generate` plans sheets from pose-gap holes at the highest ticked tier. r/xxx: clothed **and** nude. g/pg13: clothed only, no anatomy job, no nude view. Never invents a higher tier. Studio `anchor` jobs (`source=pose-gap`), not sidecar `batch_edit`. Mutation: g-only emits nude or anatomy → red. Mutation: r emits clothed only and calls coverage green → red |
-| `T4-11` / D10 colour (charcoal-brown, not jet-black) | **built** (compose); render differential **NOT MEASURED** | `test_trd4_unverified.py` | `test_t4_11_fresh_album_compose_is_charcoal_brown`: fresh album compose through `album_profile` contains charcoal-brown and the nine-part list, not jet-black. Mutation: `DEFAULT_BODY` / `ALBUM_FIELDS["body"]` default says jet-black, defers colour to the face, or omits charcoal-brown → red. No GPU pair measuring patchy/two-tone fur decrease against the old negating wording. |
+| `T4-11` / D10 colour (charcoal-brown, not jet-black) | **built** (compose); render differential **harness only; NOT MEASURED** | `test_trd4_unverified.py`, `test_t4_11_body_colour.py` | Compose: `test_t4_11_fresh_album_compose_is_charcoal_brown` — fresh album through `album_profile` contains charcoal-brown and the nine-part list, not jet-black. Mutation: `DEFAULT_BODY` / `ALBUM_FIELDS["body"]` default says jet-black, defers colour to the face, or omits charcoal-brown → red. Differential harness: `qc.t4_11_*` + `test_t4_11_body_colour.py` — missing/unpinned charcoal-vs-negating pair raises NOT MEASURED; synthetic uniform vs two-tone proves region-luma variance can fail; `T4_11_REAL_PAIR_MEASURED` is False. Do not flip without a pinned GPU pair. |
 | `T4-20` pose QC before anatomy | **process** | 2026-08-16 | `docs/MEASURED-2026-08-16-POSE-ANATOMY.md`. Studio graph unchanged |
 | `T4-25` shared pose library, any album references one row | **built** | `test_shared_anchors.py` | upload-pose / assign write `scope_kind=shared` under `uploads/anchors/shared/`. Two albums resolve the same `anchors.id` and the same path. Album-specific chosen still wins. Mutation: per-album copy or album-only lookup → red |
 
@@ -429,8 +429,11 @@ SAME STRING as their `make_anchor` constants. Two copies that each pass the same
 screen still drift into two different sheets.
 
 Compose is **built**. The one-sided half — a render differential that patchy
-or two-tone fur measurably decreases — is **NOT MEASURED**. No GPU pair is
-pinned. Peer to `T5-2` / `T7-3`.
+or two-tone fur measurably decreases — is **harness only; NOT MEASURED**.
+`qc.t4_11_*` / `test_t4_11_body_colour.py` fail closed on a missing pair;
+synthetic two-tone vs uniform proves the metric can fail.
+`T4_11_REAL_PAIR_MEASURED` stays False until a charcoal-vs-negating GPU
+pair is pinned. Peer to `T5-2` / `T3-37` / `T7-7`.
 
 ### 9.2 `T4-12` and `T7-9` disagreed about image 2, and this document moved
 
