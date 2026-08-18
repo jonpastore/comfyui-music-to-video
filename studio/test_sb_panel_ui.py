@@ -63,10 +63,12 @@ def test_sb_panel_toolbar_and_closed_json():
         html = page.text
         assert 'class="sb-toolbar"' in html
         assert "Snapshot" in html
-        assert 'aria-label="Version"' in html or "Restore" not in html
+        assert "Name this version" in html
+        assert "Delete version" in html
+        assert "data-created=" in html or "No snapshots yet" in html
         assert 'form="sb-gen-xxx" class="secondary"' in html or \
                'class="secondary"\n              title="Rewrites every scene' in html
-        assert "rewrites every scene from the stored direction" in html.lower()
+        assert "rebuilds every scene from the stored direction" in html.lower()
         assert 'class="sb-raw-json"' in html
         assert "<details class=\"sb-raw-json\" open" not in html
         assert 'name="board_json"' in html
@@ -79,15 +81,30 @@ def test_sb_panel_toolbar_and_closed_json():
         assert "Save JSON" in html
         assert "Save lock" in html
         assert "Save JSON: writes the raw board file" in html
+        assert "version it the same way album prompts" in html
+        assert "Board toolbar" in html
+        assert "What these numbers mean" in html
+        assert "Extras and background may be named" not in html
+        assert "wide low-ceiling" not in html or 'name="location"' in html
+        assert "<p class=\"meta\">" not in html
         for tag in re.findall(r'<(?:button|a)\b[^>]*icon-btn[^>]*>', html):
             assert "title=" in tag, tag
         assert html.count('class="scene"') == 2
+        assert "scene-list-head" in html
+        assert ">Time<" in html
+        assert ">Pose<" in html
         assert "Save plate" in html or "Save scene" in html
         assert 'id="scene-1"' in html
         assert 'name="camera"' in html
         assert 'name="pose"' in html
         assert 'name="image_prompt"' in html
         assert "<details class=\"scene\" id=\"scene-1\" open" not in html
+        js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
+        assert "applyRerollChip" in js
+        assert "refreshSceneEl" in js
+        assert "if (!el || !jobId) return" not in js
+        assert "seekNonBlackFrame" in js
+        assert "js-stills-delete" in js
 
 
 def test_sb_panel_scene_fields_write_the_stored_json():

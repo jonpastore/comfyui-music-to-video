@@ -98,7 +98,6 @@ def test_song_page_folds_and_storyboard_are_buttons():
         assert "Edit XXX scenes" not in page
         assert "approve grid" not in page.lower()
         assert 'class="tier-board"' in page
-        assert "tier-toggle" in page
         assert "expand or collapse" in page.lower()
         # pose plan for a tier lives inside that tier's expand body
         assert "tier-ref-body" in page
@@ -109,7 +108,7 @@ def test_song_page_folds_and_storyboard_are_buttons():
         assert "Generate" in panel.text
         assert "Scenes and timing" in panel.text
         assert "asked" in panel.text
-        assert "on the timeline" in panel.text
+        assert "timeline" in panel.text
         assert "song 3:13" not in panel.text or "asked" in panel.text
         assert 'id="ref-preview"' in client.get("/").text
 
@@ -179,6 +178,80 @@ def test_storyboard_save_and_restore_roundtrip():
                            data={"n": "1"}, headers=J)
         assert rest.status_code == 200, rest.text
         assert _json.load(open(jp))["scenes"][0]["name"] == "One"
+        assert rest.json()["versions"]
+        gone = client.post(f"/songs/{sid}/storyboard/r/versions/delete",
+                           data={"n": "1"}, headers=J)
+        assert gone.status_code == 200, gone.text
+        assert gone.json()["deleted"] == 1
+        assert gone.json()["versions"] == []
+        assert client.post(f"/songs/{sid}/storyboard/r/versions/delete",
+                           data={"n": "1"}, headers=J).status_code == 404
+        one = client.get(f"/songs/{sid}/storyboard/r/scene/1")
+        assert one.status_code == 200, one.text
+        assert 'id="scene-1"' in one.text
+        assert 'open' in one.text
+
+
+def test_reroll_stills_show_on_the_scene_row():
+    """A finished reroll used to sit in refs while the open scene kept the
+    first gen still. The scene fragment must list every candidate."""
+    import json as _json
+    import time
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Reroll Visible Song")
+        sid = song["id"]
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_r.json")
+        _json.dump({
+            "title": "T", "character_reference": "her, adult feline woman",
+            "scenes": [{"scene_number": 1, "name": "One",
+                        "image_prompt": "alley", "story": "walk",
+                        "duration_guidance": "5s"}],
+        }, open(jp, "w"))
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               sid, "r", jp, jp.replace(".json", ".md"), 1, 0)
+        dest = os.path.join(db.DATA, "refs")
+        os.makedirs(dest, exist_ok=True)
+        now = time.time()
+        for seed, origin in ((17000, "gen"), (8000, "reroll"), (9500, "reroll")):
+            path = os.path.join(dest, f"r{seed}.png")
+            open(path, "wb").write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16)
+            db.run("""INSERT INTO refs (song_id,tier,clip_idx,path,seed,approved,
+                                        created,origin,scene_number)
+                      VALUES (?,?,?,?,?,0,?,?,?)""",
+                   sid, "r", 0, path, seed, now, origin, 1)
+        html = client.get(f"/songs/{sid}/storyboard/r/scene/1").text
+        assert "still · 17000" in html
+        assert "still · 8000" in html
+        assert "still · 9500" in html
+        assert ">reroll<" in html
+        assert "js-still-select" in html
+        assert "js-stills-delete" in html
+        assert "Use this still as the scene reference" in html
+        assert "Delete this still" in html
+        assert "Fix face, inpaint, or outpaint this still" in html
+        assert "btn-sm js-approve" not in html
+
+
+def test_job_json_reports_reroll_clips():
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Job Json Song")
+        jid = jobs.enqueue("reroll", {"song_id": song["id"], "tier": "xxx",
+                                      "clip_indices": [0], "n": 4},
+                           song_id=song["id"])
+        r = client.get(f"/jobs/{jid}", headers=J)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["id"] == jid
+        assert body["kind"] == "reroll"
+        assert body["clip_indices"] == [0]
+        assert body["n"] == 4
+        chip = client.get("/queue?chip=1").text
+        assert f'data-job-id="{jid}"' in chip
+        assert 'data-kind="reroll"' in chip
+        assert 'data-clips="0"' in chip
 
 
 def test_song_page_storyboard_form_is_dual_path():

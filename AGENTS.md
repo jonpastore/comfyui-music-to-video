@@ -4,7 +4,8 @@ Music-video factory: mp3 → lyrics → storyboard → anchors → per-clip refs
 clips → assemble. FastAPI studio + sqlite. Renders on the SwarmUI / ComfyUI
 fleet (cerberus 5090, gamingpc 5090, peaches 2080 Ti, ethan 5080).
 
-Read `SESSIONS.md` and the newest `CONTINUATION-*.md` before relitigating.
+Read local `SESSIONS.md` (gitignored lock table) and the newest
+`CONTINUATION-*.md` before relitigating.
 Specs: `docs/TRD-*`, `docs/PRD-*`, `docs/DDD-*`, `docs/UIUX*`.
 
 When work shows the product or the code has drifted from a written

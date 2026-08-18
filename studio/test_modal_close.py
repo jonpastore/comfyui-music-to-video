@@ -2,8 +2,6 @@
 import os
 import re
 
-import app as appmod
-
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES = os.path.join(HERE, "templates")
 
@@ -16,7 +14,9 @@ def test_modal_close_macro_is_the_icon():
     assert "macro modal_close" in src
     assert 'class="modal-close"' in src
     assert "aria-label=\"Close\"" in src
-    assert "<svg" in src
+    assert 'viewBox="0 0 24 24"' in src
+    assert "glyph_edit" in src
+    assert "glyph_delete" in src
 
 
 def test_no_dialog_uses_the_word_close():
@@ -32,7 +32,10 @@ def test_no_dialog_uses_the_word_close():
 
 def test_base_lightboxes_use_modal_close():
     src = open(os.path.join(TEMPLATES, "base.html"), encoding="utf-8").read()
-    assert src.count("modal_close()") == 3
+    assert src.count("modal_close()") >= 6
+    assert 'id="tip-modal"' in src
+    assert 'id="pose-brief"' in src
+    assert 'id="media-player"' in src
     assert "lightbox-close" not in src
 
 
@@ -44,6 +47,12 @@ def test_clip_preview_has_nav_and_repair_actions():
     assert 'id="clip-edit-motion"' in src
     assert 'id="clip-open-still"' in src
     assert "lightbox-spacer" in src
+
+
+def test_ref_preview_close_is_on_the_bar():
+    src = open(os.path.join(TEMPLATES, "base.html"), encoding="utf-8").read()
+    bar = src.split('id="ref-preview"', 1)[1].split("</dialog>", 1)[0]
+    assert "modal_close" in bar
 
 
 def test_css_modal_close_is_not_a_circle():

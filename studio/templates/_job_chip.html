@@ -3,6 +3,15 @@
         {% if queue_latest %}job-chip-{{ queue_latest.job.status }}{% else %}job-chip-idle{% endif %}"
         title="Open the job queue" aria-label="Open the job queue"
         data-open-jobs aria-haspopup="dialog" aria-controls="jobs-modal"
+        {% if queue_latest %}
+        data-job-id="{{ queue_latest.job.id }}"
+        data-kind="{{ queue_latest.job.kind }}"
+        data-status="{{ queue_latest.job.status }}"
+        data-song-id="{{ queue_latest.song_id or '' }}"
+        data-tier="{{ queue_latest.tier or '' }}"
+        data-clips="{{ queue_latest.clip_indices | join(',') }}"
+        data-n="{{ queue_latest.n or 0 }}"
+        {% endif %}
         {% if queue_refresh_secs %}hx-get="/queue?chip=1"
         hx-trigger="every {{ queue_refresh_secs }}s" hx-swap="outerHTML"{% endif %}>
   {% if queue_latest %}

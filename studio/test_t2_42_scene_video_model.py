@@ -11,7 +11,6 @@ Mutation: show it anywhere except beside camera → HTML arm red.
 """
 import json
 import os
-import re
 import time
 
 from fastapi.testclient import TestClient
@@ -143,15 +142,13 @@ def test_t2_42_scene_row_shows_video_model_beside_camera():
         end = page.text.find('id="scene-2"')
         assert start != -1, page.text
         html = page.text[start:end if end != -1 else None]
-        meta = re.search(r'<p class="meta">(.*?)</p>', html, re.S)
-        assert meta, html
-        line = re.sub(r"\s+", " ", meta.group(1))
-        assert "camera:" in line.lower()
-        assert "s2v" in line
-        cam_at = line.lower().index("camera:")
-        model_at = line.lower().index("s2v")
-        assert cam_at < model_at, line
+        assert 'name="camera"' in html, html
         assert 'name="video_model"' in html, html
+        cam_at = html.index('name="camera"')
+        model_at = html.index('name="video_model"')
+        assert cam_at < model_at, html[cam_at:model_at + 40]
+        assert 'value="wide establishing"' in html
+        assert 'value="s2v"' in html
         saved = client.post(
             f"/songs/{sid}/storyboard/pg13/scene/2",
             data={"video_model": "i2v"})

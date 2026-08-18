@@ -43,5 +43,5 @@ list). That batch already moved. Use `deprecate.py`.
 | `.grok/` | Session / workflow scratch. Named workflows live in `~/.grok/workflows/`. |
 | `deprecated/` | Hold-area stills. |
 | `config.json` | Local `batch_edit` job set. Use `config.json.example`. |
-| leftover `_scene_row.html` / `_storyboard_panel.html` | Unfinished storyboard dirt. Not this shelf. |
+| `SESSIONS.md` | Local lock table. Not product state. |
 | `anchor5/` | Operator photo lab, Reddit samples, pose-hop runbooks. On disk only. |

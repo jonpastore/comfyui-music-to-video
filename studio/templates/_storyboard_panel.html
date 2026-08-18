@@ -9,29 +9,53 @@
     <div class="sb-toolbar">
       {{ save_icon("Save JSON",
          "Save JSON: writes the raw board file. Scene fields have their own Save scene.") }}
+      <label class="sb-ver-name">Name this version
+        <input type="text" name="label" form="sb-snap-{{ tier }}" maxlength="80"
+               placeholder="e.g. pre-autopilot"
+               title="Name for Snapshot. Same idea as saved prompts.">
+      </label>
       <button type="submit" form="sb-snap-{{ tier }}" class="secondary"
-              title="Snapshot: keep a named copy of this board before you generate or edit">
+              title="Snapshot: copy the live board to a named version. Does not change scenes.">
         Snapshot</button>
-      {% if versions %}
-      <select name="n" form="sb-restore-{{ tier }}" class="sb-ver"
-              aria-label="Version" title="Pick a saved snapshot to restore">
-        {% for v in versions %}
-        <option value="{{ v.n }}">{{ v.label }}</option>
-        {% endfor %}
-      </select>
-      <button type="submit" form="sb-restore-{{ tier }}" class="secondary"
+      <label class="sb-ver-pick">Version
+        <select name="n" form="sb-restore-{{ tier }}" class="sb-ver"
+                aria-label="Version" title="Pick a saved snapshot to restore or delete">
+          {% if versions %}
+          {% for v in versions %}
+          <option value="{{ v.n }}" data-label="{{ v.label }}"
+                  data-created="{{ v.created | isotime }}">{{ v.label }}</option>
+          {% endfor %}
+          {% else %}
+          <option value="">No snapshots yet</option>
+          {% endif %}
+        </select>
+      </label>
+      <button type="submit" form="sb-restore-{{ tier }}" class="secondary sb-ver-restore"
+              {% if not versions %}disabled{% endif %}
               title="Restore: replace the live board with the selected snapshot">
         Restore</button>
-      {% endif %}
+      <button type="submit" form="sb-del-{{ tier }}" class="danger btn-sm sb-ver-del"
+              {% if not versions %}disabled{% endif %}
+              title="Delete the selected snapshot. The live board is unchanged.">
+        Delete version</button>
       <button type="submit" form="sb-gen-{{ tier }}" class="secondary"
               title="Generate: rewrite every scene from the stored direction and overwrite this board">
         Generate</button>
+      <button type="button" class="icon-btn help-tip"
+              title="What these buttons do"
+              aria-label="What these buttons do"
+              data-label="Board toolbar"
+              data-help="Save JSON writes the raw file (paste/power-edit). Snapshot copies the live board to a named version, like saved prompts. Restore puts a snapshot back. Delete version removes that snapshot; the live board stays. Generate rebuilds every scene from the stored direction and overwrites this board — snapshot first if you may want the current one.">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <path fill="currentColor" d="M7.3 6.2c0-.8.5-1.3 1.3-1.3s1.3.5 1.3 1.2c0 .6-.3.9-.9 1.3-.5.4-.8.7-.8 1.3h1.3c0-.4.2-.7.7-1.1.7-.5 1.3-1 1.3-2 0-1.3-1-2.2-2.4-2.2-1.5 0-2.6 1-2.6 2.5zm1.1 5.8h1.4V10.7H8.4z"/>
+        </svg>
+      </button>
       <span class="save-note" aria-live="polite"></span>
     </div>
-    <p class="hint">Generate rewrites every scene from the stored direction
-      and overwrites this board. Snapshot keeps a named copy first.</p>
     <details class="sb-raw-json">
       <summary>Raw board JSON</summary>
+      <p class="hint">Live file. Snapshot / Restore above version it the same way album prompts are versioned.</p>
       <label>Paste or edit the stored file
         <textarea name="board_json" class="sb-json" rows="8"
                   spellcheck="false">{{ board_json }}</textarea>
@@ -44,10 +68,13 @@
   </form>
   <form id="sb-snap-{{ tier }}" method="post"
         action="/songs/{{ song.id }}/storyboard/{{ tier }}/versions">
-    <input type="hidden" name="label" value="">
   </form>
   <form id="sb-restore-{{ tier }}" method="post"
         action="/songs/{{ song.id }}/storyboard/{{ tier }}/versions/restore">
+  </form>
+  <form id="sb-del-{{ tier }}" method="post"
+        action="/songs/{{ song.id }}/storyboard/{{ tier }}/versions/delete">
+    <input type="hidden" name="n" value="">
   </form>
 
   <form method="post" action="/songs/{{ song.id }}/storyboard/{{ tier }}/lock"
@@ -81,38 +108,40 @@
   </form>
   {% endif %}
 
-  {% if album_leads %}
-  <p class="hint">Album leads:
+  <p class="sb-status">
+    {% if album_leads %}
+    <span class="muted">Album leads</span>
     {% for c in album_leads %}
     <span class="tag {% if not c.has_front and c.used %}warn-tag{% endif %}">
       {{ c.name }}{% if not c.used %} &middot; not named{% elif not c.has_front %} &middot; no front{% endif %}
     </span>
     {% endfor %}
-    Extras and background may be named on a scene without a pose or anchor.
-  </p>
-  {% endif %}
-
-  <section class="sb-meter" id="storyboard-meter-{{ tier }}"
-           data-scene-time="{{ scene_time }}"
-           data-song-length="{{ song_length }}"
-           data-clip-seconds="{{ clip_seconds }}"
-           data-scene-count="{{ scene_count }}"
-           data-nclips="{{ nclips }}"
-           data-mismatch="{{ 'true' if mismatch else 'false' }}"
-           data-fill-pct="{{ coverage.fill_pct }}">
-    <p class="meta">{{ scene_count }} scenes ·
-      asked {{ coverage.intent | hms }} ·
-      on the timeline {{ coverage.rendered | hms }} ·
-      song {{ song_length | hms }}
+    {% endif %}
+    <span class="meta" id="storyboard-meter-{{ tier }}"
+          data-scene-time="{{ scene_time }}"
+          data-song-length="{{ song_length }}"
+          data-clip-seconds="{{ clip_seconds }}"
+          data-scene-count="{{ scene_count }}"
+          data-nclips="{{ nclips }}"
+          data-mismatch="{{ 'true' if mismatch else 'false' }}"
+          data-fill-pct="{{ coverage.fill_pct }}">
+      {{ scene_count }} scenes · asked {{ coverage.intent | hms }} ·
+      timeline {{ coverage.rendered | hms }} · song {{ song_length | hms }}
       {% if mismatch %}
       · <span class="warn">asked {{ scene_time | hms }} ≠ song {{ song_length | hms }}</span>
       {% endif %}
-    </p>
-    <p class="hint">Asked is the sum of each scene's duration_guidance.
-      The timeline is how those scenes are scaled onto the mp3
-      ({{ song_length | hms }}). A 4s pin on a 3:10 track is why 50 scenes
-      ask for more time than the song.</p>
-  </section>
+    </span>
+    <button type="button" class="icon-btn help-tip"
+            title="What these numbers mean"
+            aria-label="What these numbers mean"
+            data-label="Coverage"
+            data-help="Asked is the sum of each scene's duration_guidance. Timeline is how those scenes are scaled onto the mp3. A 4s pin on a 3:10 track is why a board can ask for more time than the song. Album leads need identity fronts and pose plates; extras and background may be named without either.">
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <path fill="currentColor" d="M7.3 6.2c0-.8.5-1.3 1.3-1.3s1.3.5 1.3 1.2c0 .6-.3.9-.9 1.3-.5.4-.8.7-.8 1.3h1.3c0-.4.2-.7.7-1.1.7-.5 1.3-1 1.3-2 0-1.3-1-2.2-2.4-2.2-1.5 0-2.6 1-2.6 2.5zm1.1 5.8h1.4V10.7H8.4z"/>
+      </svg>
+    </button>
+  </p>
 
   {% if all_videos %}
   <details class="sb-all-clips">
@@ -154,7 +183,13 @@
   </div>
 
   <details class="sb-scenes" open>
-    <summary>Scenes and timing</summary>
+    <summary title="Expand or collapse the scene list">Scenes and timing</summary>
+    <div class="scene-list-head">
+      <span aria-hidden="true"></span>
+      <span>Scene</span>
+      <span class="scene-col-time">Time</span>
+      <span>Pose</span>
+    </div>
     {% for r in scene_rows %}
       {% include "_scene_row.html" %}
     {% else %}
