@@ -141,6 +141,26 @@ def test_nest_puts_split_roast_on_the_actors_tab():
     assert solo["families"]
 
 
+def test_gallery_tabs_include_cast_with_no_sheets():
+    """R with only the lead still lists Tiger / Panther / Kitty."""
+    album = f"Cast Tabs {time.time_ns()}"
+    pose_plan.set_lead_name(album, "Meow P")
+    db.run("INSERT INTO characters (scope_value, name, created) VALUES (?,?,?)",
+           album, "Tiger", time.time())
+    db.run("INSERT INTO characters (scope_value, name, created) VALUES (?,?,?)",
+           album, "Panther", time.time())
+    db.run("INSERT INTO characters (scope_value, name, created) VALUES (?,?,?)",
+           album, "Kitty", time.time())
+    nest = appmod.nest_anchor_groups([{
+        "scope_kind": "album", "scope_value": album,
+        "character_id": None, "character_name": None,
+        "tier": "r", "view": "front", "path": "front.jpg",
+    }])
+    names = [c["character_name"] for c in nest[0]["tiers"][0]["characters"]]
+    assert names == ["Meow P", "Kitty", "Panther", "Tiger"]
+    assert not any(c["ensemble"] for c in nest[0]["tiers"][0]["characters"])
+
+
 def test_set_lead_name_is_what_the_anchors_tab_uses():
     album = f"Lead Name {time.time_ns()}"
     assert pose_plan.lead_name(album) == "Lead"

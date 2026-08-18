@@ -3298,6 +3298,41 @@ async def upload_style(id: int, image: UploadFile = File(...), note: str = Form(
     return RedirectResponse(f"/songs/{id}", status_code=303)
 
 
+def _empty_gallery_families(tier):
+    default_key = "nude" if tier == "xxx" else "clothed"
+    return [
+        {"key": "clothed", "rows": [], "default": default_key == "clothed"},
+        {"key": "nude", "rows": [], "default": default_key == "nude"},
+    ]
+
+
+def _pad_gallery_cast(album, tier, characters):
+    """Lead + every album character gets a tab, even with no sheets this tier.
+
+    nest_anchor_groups only saw people who already had a row. Tiger/Panther
+    then vanished on R. Actors stays last and only if a multi-body plate exists.
+    """
+    lead = pose_plan.lead_name(album) or "Lead"
+    cast = list(db.q(
+        "SELECT id, name FROM characters WHERE scope_value=? ORDER BY name",
+        album or ""))
+    have = {c["character_id"]: c for c in characters if not c.get("ensemble")}
+    actors = [c for c in characters if c.get("ensemble")]
+    padded = []
+    for cid, name in [(None, lead)] + [(r["id"], r["name"]) for r in cast]:
+        existing = have.get(cid)
+        if existing:
+            padded.append(existing)
+        else:
+            padded.append({
+                "character_id": cid,
+                "character_name": name,
+                "ensemble": False,
+                "families": _empty_gallery_families(tier),
+            })
+    return padded + actors
+
+
 def nest_anchor_groups(group_list):
     """Tier → character → clothed/nude → one row per camera position.
 
@@ -3352,6 +3387,7 @@ def nest_anchor_groups(group_list):
                     "ensemble": cid == "__actors__",
                     "families": families,
                 })
+            characters = _pad_gallery_cast(album, name, characters)
             tiers.append({"name": name, "characters": characters})
         out.append({"scope_kind": sec["scope_kind"], "album": sec["album"],
                     "tab_id": f"anchor-gallery-{len(out)}",

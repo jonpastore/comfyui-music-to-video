@@ -350,7 +350,9 @@ def test_upload_pose_stamps_every_actor():
             "path": sheet["path"],
         }])
         names = [c["character_name"] for c in nest[0]["tiers"][0]["characters"]]
-        assert names == ["Actors"]
+        assert names[0] == "Lead"
+        assert names[-1] == "Actors"
+        assert names.count("Actors") == 1
 
 
 def test_deleting_uploaded_pose_sheet_drops_the_base_image_row():
