@@ -659,10 +659,12 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    and a `.save-note` (saved / pinned / error). Status is Pinned /
    Suggested / Missing sheet / No plate with a help icon, not
    “saved bind”.
-   Scene field labels are Init Cap. Video Motion Prompt sits above
-   Clips. Negative Prompt is shared stills+clips. `_compose` fills a
-   blank `video_motion_prompt` from motion + camera. Scene-scoped
-   `build_song --only` skips T2-13e. Scene preview is plate / stills / clips. Reroll plants
+   Scene field labels are Init Cap. Hint text is the textarea
+   placeholder. Story / Image / Negative / Video Motion have Suggest
+   and `field_versions`. Failed clip cards dismiss via
+   `dismissed_clip_jobs`. Video Motion Prompt sits above Clips.
+   `_compose` fills a blank `video_motion_prompt` from motion + camera.
+   Scene-scoped `build_song --only` skips T2-13e. Scene preview is plate / stills / clips. Reroll plants
    `.ref-frame.clip-tile` shimmer cards (same 190px / 3:4 frame as a
    finished still). Render clip plants the same cards in
    `.media-strip.scene-clips` (`paintClipPlaceholders`). The strip is

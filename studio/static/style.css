@@ -1610,15 +1610,36 @@ img.lazy-src, video.lazy-src {
   background: var(--panel);
   border: 1px solid var(--danger);
 }
-.video-motion-field {
+.prompt-field {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   margin: 0 0 0.65rem;
+}
+.prompt-field-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
   font-size: 0.85rem;
   color: var(--muted);
 }
-.video-motion-field textarea { width: 100%; }
+.prompt-field-head .js-scene-ver { min-width: 8rem; height: 2.1rem; }
+.prompt-field textarea { width: 100%; }
+.prompt-field textarea::placeholder,
+.scene-form textarea::placeholder {
+  color: var(--muted);
+  font-style: italic;
+  opacity: 0.85;
+}
+.clips-row > .prompt-field { margin-bottom: 0.65rem; }
+.clip-failed .still-thumb { position: relative; }
+.clip-failed .js-clip-fail-dismiss {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  z-index: 2;
+}
 .clip-fail-note {
   margin: 0.15rem 0 0;
   font-size: 0.7rem;

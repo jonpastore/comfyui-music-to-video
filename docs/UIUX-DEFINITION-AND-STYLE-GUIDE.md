@@ -573,9 +573,11 @@ text. Opening a scene loads that row's thumbs immediately.
 `GET /api/songs/{id}/pose-plan/{tier}` is the same object
 (`test_pose_plan.py`).
 Scene field labels are Init Cap (Story, Image Prompt, Video Motion
-Prompt, Negative Prompt). Negative Prompt is one box for stills and
-clips — a hint says so. Video Motion Prompt sits above the Clips
-strip, not with the stills. Storyboard generate fills a blank
+Prompt, Negative Prompt). Hint copy lives in the textarea
+`placeholder` (italic muted), not a line above the box. Each of those
+four fields has Suggest (drafts from the rest of the scene) and a
+version select + floppy. Video Motion Prompt sits above the Clips
+strip, not with the stills. A failed clip card has a trash to dismiss it. Storyboard generate fills a blank
 `video_motion_prompt` from motion + camera (`test_compose_fills_empty_video_motion_from_motion_and_camera`).
 A failed clip card says **Render failed** and “Not QC”. Scene media is stacked rows: pose word, then plate controls, then
 **reference stills** and **clips** each scroll sideways

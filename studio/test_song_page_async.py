@@ -162,7 +162,8 @@ def test_scene_row_reads_clip_jobs_when_chip_is_qc():
         outdir = os.path.join(db.DATA, "storyboards", song["slug"])
         os.makedirs(outdir, exist_ok=True)
         jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
-        _json.dump({"title": "T", "scenes": scenes}, open(jp, "w"))
+        _json.dump({"title": "T", "character_reference": "her", "scenes": scenes},
+                   open(jp, "w"))
         db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
                   VALUES (?,?,?,?,?,?)""", sid, "xxx", jp, jp + ".md", 1, 0)
         db.run("""INSERT INTO jobs (kind, args_json, song_id, status, error, created)
@@ -185,6 +186,48 @@ def test_scene_row_reads_clip_jobs_when_chip_is_qc():
         assert "clip-failed" in page
         assert "job #" in page
         assert "No clips yet." not in page.split("scene-clips", 1)[-1].split("</div>", 1)[0]
+        assert "js-clip-fail-dismiss" in page
+        storyboard_service.dismiss_clip_job(sid, "xxx", 1, rows[0]["clip_failed"][0]["id"])
+        rows2, _ = storyboard_service.scenes(song, _json.load(open(jp)), "xxx")
+        assert rows2[0]["clip_failed"] == []
+
+
+def test_scene_prompt_placeholder_and_version_and_draft():
+    import json as _json
+    import storyboard_service
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Prompt Tools Song")
+        sid = song["id"]
+        scenes = [{
+            "scene_number": 1, "name": "One", "story": "she waits",
+            "camera": "wide", "motion": "walks", "lighting": "neon",
+            "location": "alley", "pose": "standing",
+            "image_prompt": "alley still", "video_motion_prompt": "",
+            "negative_prompt": "",
+        }]
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        _json.dump({"title": "T", "character_reference": "her", "scenes": scenes},
+                   open(jp, "w"))
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""", sid, "xxx", jp, jp + ".md", 1, 0)
+        page = client.get(f"/songs/{sid}/storyboard/xxx").text
+        assert 'placeholder="What happens in this shot' in page
+        assert "Stills and clips share this box" in page
+        assert "js-scene-draft" in page
+        assert "js-scene-ver" in page
+        assert '<span class="hint">Stills and clips' not in page
+        saved = client.post(
+            f"/songs/{sid}/storyboard/xxx/scene/1/field-version",
+            json={"field": "story", "text": "she waits in steam", "label": "steam"},
+            headers={"Accept": "application/json"})
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["n"] == 1
+        import vision
+        vision.ask_text = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("offline"))
+        drafted = storyboard_service.draft_scene_field(sid, "xxx", 1, "video_motion_prompt")
+        assert "walks" in drafted["text"]
 
 
 def test_storyboard_save_and_restore_roundtrip():

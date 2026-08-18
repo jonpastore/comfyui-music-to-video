@@ -4,7 +4,38 @@
    a full page reload on a 49-scene storyboard loses your scroll position and
    every other box you were part-way through. #}
 {% from "_macros.html" import save_icon, glyph_save, glyph_delete %}
-<details class="scene" id="scene-{{ r.num }}" {% if scene_open %}open{% endif %}>
+{% set _ph = {
+  "story": "What happens in this shot — action, not camera gear.",
+  "image_prompt": "The still: who, pose, place, light. Self-contained; the image model sees only this.",
+  "negative_prompt": "Stills and clips share this box. Sent as the image negative and the video negative.",
+  "video_motion_prompt": "What the clip does over time: body motion, camera move, lips.",
+} %}
+{% macro prompt_box(r, field, label, rows) %}
+{% set vers = ((r.scene.field_versions or {}).get(field)) or [] %}
+<label class="prompt-field" data-field="{{ field }}">
+  <span class="prompt-field-head">
+    {{ label }}
+    <select class="js-scene-ver" data-field="{{ field }}"
+            aria-label="{{ label }} versions">
+      <option value="">current</option>
+      {% for v in vers %}
+      <option value="{{ v.n }}">{{ v.label or ("v" ~ v.n) }}</option>
+      {% endfor %}
+    </select>
+    <button type="button" class="icon-btn js-scene-ver-save" data-field="{{ field }}"
+            title="Save this {{ label }} as a version"
+            aria-label="Save this {{ label }} as a version">{{ glyph_save() }}</button>
+    <button type="button" class="secondary btn-sm js-scene-draft" data-field="{{ field }}"
+            title="Suggest {{ label }} from the rest of this scene">Suggest</button>
+  </span>
+  <script type="application/json" class="js-scene-ver-json">{{ vers | tojson }}</script>
+  <textarea name="{{ field }}" form="scene-form-{{ r.num }}" rows="{{ rows }}"
+            placeholder="{{ _ph[field] }}">{{ r.scene[field] or "" }}</textarea>
+</label>
+{% endmacro %}
+<details class="scene" id="scene-{{ r.num }}"
+          data-song="{{ song.id }}" data-tier="{{ tier }}" data-num="{{ r.num }}"
+          {% if scene_open %}open{% endif %}>
   <summary class="scene-head" title="Expand or collapse this scene">
     <h3>{{ r.num }}. {{ r.name }}</h3>
     <span class="timing num">
@@ -169,16 +200,9 @@
   </div>
 
   <div class="scene-form stack-form">
-  <label>Story
-    <textarea name="story" form="scene-form-{{ r.num }}" rows="2">{{ r.scene.story or "" }}</textarea>
-  </label>
-  <label>Image Prompt
-    <textarea name="image_prompt" form="scene-form-{{ r.num }}" rows="5">{{ r.scene.image_prompt or "" }}</textarea>
-  </label>
-  <label>Negative Prompt
-    <span class="hint">Stills and clips share this box. It is sent as the image negative and the video negative.</span>
-    <textarea name="negative_prompt" form="scene-form-{{ r.num }}" rows="2">{{ r.scene.negative_prompt or "" }}</textarea>
-  </label>
+  {{ prompt_box(r, "story", "Story", 2) }}
+  {{ prompt_box(r, "image_prompt", "Image Prompt", 5) }}
+  {{ prompt_box(r, "negative_prompt", "Negative Prompt", 2) }}
   <div class="scene-save-row">
     <button type="submit" form="scene-form-{{ r.num }}" class="icon-btn labeled"
             title="Save scene {{ r.num }} — writes these fields into the storyboard JSON."
@@ -304,10 +328,7 @@
     </div>
 
     <div class="media-row clips-row">
-      <label class="video-motion-field">Video Motion Prompt
-        <textarea name="video_motion_prompt" form="scene-form-{{ r.num }}" rows="2"
-                  title="What the clip does over time. Storyboard generate fills this from motion and camera when the model leaves it blank.">{{ r.scene.video_motion_prompt or "" }}</textarea>
-      </label>
+      {{ prompt_box(r, "video_motion_prompt", "Video Motion Prompt", 2) }}
       <div class="clips-head">
         <h4>Clips</h4>
         <form method="post" action="/songs/{{ song.id }}/clips" class="clip-bar">
@@ -394,6 +415,10 @@
         <figure class="clip-frame clip-tile clip-failed" data-job-id="{{ j.id }}">
           <div class="still-thumb">
             <div class="thumb-open clip-fail-well" aria-hidden="true"></div>
+            <button type="button" class="icon-btn danger-icon js-clip-fail-dismiss"
+                    data-job-id="{{ j.id }}"
+                    title="Remove this failed card"
+                    aria-label="Remove this failed card">{{ glyph_delete() }}</button>
           </div>
           <figcaption>Render failed · job #{{ j.id }}</figcaption>
           <p class="clip-fail-note">Not QC. The clip job died before a file landed.</p>

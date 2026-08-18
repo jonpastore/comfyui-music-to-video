@@ -404,7 +404,9 @@ def scenes(song, sb, tier, anchored=(), scene_seconds=None):
             })
         videos = [videos_of[rec["clip_idx"]] for rec in recs
                   if rec["clip_idx"] in videos_of]
-        pending, failed = _clip_job_cards(song["id"], tier, num, recs, videos)
+        pending, failed = _clip_job_cards(
+            song["id"], tier, num, recs, videos,
+            dismissed=scene.get("dismissed_clip_jobs"))
         rows.append({
             "scene": scene, "num": num, "name": build_song.sname(scene),
             "clips": [head] if head is not None else [],
@@ -428,12 +430,13 @@ def _job_err_line(err):
     return lines[-1] if lines else ""
 
 
-def _clip_job_cards(song_id, tier, scene_num, recs, videos):
+def _clip_job_cards(song_id, tier, scene_num, recs, videos, dismissed=None):
     """Queued/running/failed clip jobs for this scene. Jobs table is the state.
 
     The sticky chip is the latest job of any kind, so a QC row hides a clip
     render. The scene strip reads jobs itself.
     """
+    skip = {int(x) for x in (dismissed or []) if str(x).lstrip("-").isdigit()}
     idxs = {int(r["clip_idx"]) for r in recs}
     have = {int(v["clip_idx"]) for v in videos}
     pending, failed = [], []
@@ -465,6 +468,8 @@ def _clip_job_cards(song_id, tier, scene_num, recs, videos):
                 continue
         except (TypeError, ValueError):
             continue
+        if int(j["id"]) in skip:
+            continue
         key = int(ci) if ci is not None else "scene"
         if key in seen:
             continue
@@ -482,6 +487,123 @@ def _clip_job_cards(song_id, tier, scene_num, recs, videos):
         else:
             pending.append(card)
     return pending, failed
+
+
+PROMPT_FIELDS = (
+    "story", "image_prompt", "negative_prompt", "video_motion_prompt")
+PROMPT_HINTS = {
+    "story": "What happens in this shot — action, not camera gear.",
+    "image_prompt": "The still: who, pose, place, light. Self-contained; the image model sees only this.",
+    "negative_prompt": "Stills and clips share this box. Sent as the image negative and the video negative.",
+    "video_motion_prompt": "What the clip does over time: body motion, camera move, lips.",
+}
+
+
+def _open_scene(song_id, tier, num):
+    song = require_song(song_id)
+    require_tier(tier)
+    row = db.one("SELECT * FROM storyboards WHERE song_id=? AND tier=?",
+                 song["id"], tier)
+    if not row:
+        raise LookupError("no storyboard for this tier yet")
+    sb = load(row, normalized=False)
+    scene = next((s for s in sb.get("scenes") or []
+                  if s.get("scene_number") == num), None)
+    if scene is None:
+        raise LookupError(f"no scene {num} in this storyboard")
+    return song, row, sb, scene
+
+
+def _commit_scene(song, row, sb):
+    grok.write_storyboard(sb, os.path.dirname(row["json_path"]),
+                          song["slug"], tier=row["tier"])
+
+
+def dismiss_clip_job(song_id, tier, num, job_id):
+    song, row, sb, scene = _open_scene(song_id, tier, num)
+    jid = int(job_id)
+    ids = [int(x) for x in (scene.get("dismissed_clip_jobs") or [])
+           if str(x).lstrip("-").isdigit()]
+    if jid not in ids:
+        ids.append(jid)
+        scene["dismissed_clip_jobs"] = ids
+        scene["edited"] = time.time()
+        _commit_scene(song, row, sb)
+    return {"ok": True, "dismissed": jid}
+
+
+def save_field_version(song_id, tier, num, field, text, label=""):
+    if field not in PROMPT_FIELDS:
+        raise ValueError(f"unknown prompt field {field!r}")
+    song, row, sb, scene = _open_scene(song_id, tier, num)
+    text = (text or "").strip()
+    if not text:
+        raise ValueError("nothing to version")
+    if len(text) > MAX_SCENE_FIELD:
+        raise ValueError(f"{field} is {len(text)} characters; keep it under {MAX_SCENE_FIELD}")
+    tiers.check_text(text, f"scene {num} {field}", tier=tier)
+    bag = dict(scene.get("field_versions") or {})
+    vers = list(bag.get(field) or [])
+    n = (max((int(v.get("n") or 0) for v in vers), default=0) + 1)
+    vers.append({
+        "n": n,
+        "label": (label or "").strip() or f"v{n}",
+        "text": text,
+        "created": time.time(),
+    })
+    bag[field] = vers[-12:]
+    scene["field_versions"] = bag
+    scene["edited"] = time.time()
+    _commit_scene(song, row, sb)
+    return {"ok": True, "field": field, "versions": bag[field], "n": n}
+
+
+def _draft_fallback(scene, field):
+    if field == "video_motion_prompt":
+        bits = [str(scene.get("motion") or "").strip(),
+                str(scene.get("camera") or "").strip()]
+        return "; ".join(b for b in bits if b) or "holds the asked pose"
+    if field == "story":
+        return (scene.get("story") or scene.get("name") or "").strip()
+    if field == "negative_prompt":
+        return "blurry, watermark, extra limbs, child, teen, underage"
+    if field == "image_prompt":
+        parts = [scene.get("story"), scene.get("pose"),
+                 scene.get("location"), scene.get("lighting")]
+        return ". ".join(str(p).strip() for p in parts if p and str(p).strip())
+    return ""
+
+
+def draft_scene_field(song_id, tier, num, field):
+    if field not in PROMPT_FIELDS:
+        raise ValueError(f"unknown prompt field {field!r}")
+    song, _row, _sb, scene = _open_scene(song_id, tier, num)
+    ctx = {k: scene.get(k) for k in (
+        "name", "story", "pose", "camera", "motion", "lighting", "location",
+        "image_prompt", "video_motion_prompt", "negative_prompt",
+        "characters", "duration_guidance")}
+    ctx["song"] = song["title"]
+    ctx["album"] = song["album"]
+    ctx["tier"] = tier
+    text = ""
+    try:
+        import vision
+        raw, _model = vision.ask_text(
+            "Return JSON {\"text\": \"...\"} only. Adult music-video scene. "
+            "Write the requested field. Use the other fields as context. "
+            "Do not invent a different character.",
+            json.dumps({"field": field, "hint": PROMPT_HINTS[field],
+                        "scene": ctx}, ensure_ascii=False))
+        data = json.loads(raw) if raw else {}
+        text = str((data or {}).get("text") or "").strip()
+    except (RuntimeError, ValueError, TypeError, json.JSONDecodeError):
+        text = _draft_fallback(scene, field)
+    if not text:
+        raise ValueError("draft came back empty")
+    if len(text) > MAX_SCENE_FIELD:
+        text = text[:MAX_SCENE_FIELD]
+    tiers.check_text(text, f"scene {num} {field}", tier=tier)
+    return {"ok": True, "field": field, "text": text}
 
 
 def scene_time_report(scene_time, song_length):

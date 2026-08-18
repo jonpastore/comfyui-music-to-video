@@ -2209,6 +2209,105 @@ document.addEventListener("submit", function (e) {
   }).then(function () { if (btn) btn.disabled = false; });
 }, true);
 
+function scenePromptCtx(el) {
+  var scene = el && el.closest && el.closest(".scene");
+  if (!scene) return null;
+  return {
+    scene: scene,
+    song: scene.getAttribute("data-song"),
+    tier: scene.getAttribute("data-tier"),
+    num: scene.getAttribute("data-num"),
+    note: scene.querySelector(".scene-save-row .save-note")
+  };
+}
+
+function sceneFieldUrl(ctx, tail) {
+  return "/songs/" + ctx.song + "/storyboard/" + encodeURIComponent(ctx.tier) +
+    "/scene/" + ctx.num + "/" + tail;
+}
+
+function fillSceneVerSelect(sel, versions, keep) {
+  if (!sel) return;
+  var want = keep != null ? String(keep) : sel.value;
+  sel.innerHTML = "";
+  var cur = document.createElement("option");
+  cur.value = "";
+  cur.textContent = "current";
+  sel.appendChild(cur);
+  (versions || []).forEach(function (v) {
+    var opt = document.createElement("option");
+    opt.value = v.n;
+    opt.textContent = v.label || ("v" + v.n);
+    sel.appendChild(opt);
+  });
+  if (want) sel.value = want;
+}
+
+document.addEventListener("click", function (e) {
+  var dismiss = e.target.closest && e.target.closest(".js-clip-fail-dismiss");
+  if (dismiss) {
+    e.preventDefault();
+    var ctx = scenePromptCtx(dismiss);
+    var jid = dismiss.getAttribute("data-job-id");
+    if (!ctx || !jid) return;
+    api(sceneFieldUrl(ctx, "clip-job/" + jid + "/dismiss"), {}).then(function () {
+      var fig = dismiss.closest(".clip-failed");
+      if (fig) fig.remove();
+    }).catch(function (err) {
+      if (ctx.note) say2(ctx.note, err.message, true);
+    });
+    return;
+  }
+  var draft = e.target.closest && e.target.closest(".js-scene-draft");
+  if (draft) {
+    e.preventDefault();
+    var ctx = scenePromptCtx(draft);
+    var field = draft.getAttribute("data-field");
+    if (!ctx || !field) return;
+    draft.disabled = true;
+    if (ctx.note) say2(ctx.note, "suggesting…");
+    api(sceneFieldUrl(ctx, "draft"), {field: field}).then(function (d) {
+      var ta = ctx.scene.querySelector('textarea[name="' + field + '"]');
+      if (ta && d.text) ta.value = d.text;
+      if (ctx.note) say2(ctx.note, "suggested — save the scene to keep it");
+    }).catch(function (err) {
+      if (ctx.note) say2(ctx.note, err.message, true);
+    }).then(function () { draft.disabled = false; });
+    return;
+  }
+  var saveV = e.target.closest && e.target.closest(".js-scene-ver-save");
+  if (saveV) {
+    e.preventDefault();
+    var ctx = scenePromptCtx(saveV);
+    var field = saveV.getAttribute("data-field");
+    var box = saveV.closest(".prompt-field");
+    var ta = box && box.querySelector("textarea");
+    if (!ctx || !field || !ta) return;
+    api(sceneFieldUrl(ctx, "field-version"), {field: field, text: ta.value}).then(function (d) {
+      var sel = box.querySelector(".js-scene-ver");
+      var hold = box.querySelector(".js-scene-ver-json");
+      if (hold) hold.textContent = JSON.stringify(d.versions || []);
+      fillSceneVerSelect(sel, d.versions, d.n);
+      if (ctx.note) say2(ctx.note, "version saved");
+    }).catch(function (err) {
+      if (ctx.note) say2(ctx.note, err.message, true);
+    });
+  }
+});
+
+document.addEventListener("change", function (e) {
+  var sel = e.target.closest && e.target.closest(".js-scene-ver");
+  if (!sel) return;
+  var box = sel.closest(".prompt-field");
+  var hold = box && box.querySelector(".js-scene-ver-json");
+  var ta = box && box.querySelector("textarea");
+  if (!hold || !ta || !sel.value) return;
+  var vers = [];
+  try { vers = JSON.parse(hold.textContent || "[]"); } catch (err) { return; }
+  var hit = vers.filter(function (v) { return String(v.n) === String(sel.value); })[0];
+  if (hit && hit.text != null) ta.value = hit.text;
+});
+
 document.addEventListener("error", function (e) {
   var img = e.target;
   if (!img || img.tagName !== "IMG") return;

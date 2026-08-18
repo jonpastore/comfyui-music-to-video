@@ -6949,6 +6949,43 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
         "ref_flags": latest_flags(song["id"], tier)})
 
 
+@app.post("/songs/{id}/storyboard/{tier}/scene/{num}/draft")
+async def draft_scene_prompt(request: Request, id: int, tier: str, num: int):
+    body = await _api_body(request)
+    field = str(body.get("field") or "").strip()
+    try:
+        return JSONResponse(storyboard_service.draft_scene_field(id, tier, num, field))
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.post("/songs/{id}/storyboard/{tier}/scene/{num}/field-version")
+async def save_scene_field_version(request: Request, id: int, tier: str, num: int):
+    body = await _api_body(request)
+    try:
+        return JSONResponse(storyboard_service.save_field_version(
+            id, tier, num,
+            str(body.get("field") or "").strip(),
+            str(body.get("text") or ""),
+            str(body.get("label") or "")))
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.post("/songs/{id}/storyboard/{tier}/scene/{num}/clip-job/{jid}/dismiss")
+def dismiss_scene_clip_job(id: int, tier: str, num: int, jid: int):
+    try:
+        return JSONResponse(storyboard_service.dismiss_clip_job(id, tier, num, jid))
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @app.get("/songs/{id}/storyboard/{tier}/scene/{num}", response_class=HTMLResponse)
 def storyboard_scene_row(request: Request, id: int, tier: str, num: int):
     """One open scene row — swap after a reroll so placeholders become stills."""
