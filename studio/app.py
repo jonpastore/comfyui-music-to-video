@@ -204,7 +204,8 @@ def view_label(view):
 
 
 templates.env.filters["viewname"] = lambda v: view_label(v)
-templates.env.filters["actorlist"] = lambda row: pose_plan.actor_names(row)
+templates.env.filters["actorlist"] = (
+    lambda row, album="": pose_plan.actor_names(row, album))
 
 
 def view_base(view):
@@ -7593,18 +7594,23 @@ def api_album_sheets(album: str, family: str = ""):
     for row in db.q(
             """SELECT * FROM anchors WHERE scope_value=? AND chosen=1
                ORDER BY id DESC""", album):
+        path = row["path"] or ""
+        if not path or not os.path.isfile(path):
+            continue
         fam = view_family(row["view"])
         if want in ("clothed", "nude") and fam != want:
             continue
         meta = db.jset(row, "render_json")
+        actors = pose_plan.actor_names(row, album)
         rows.append({
             "id": row["id"],
-            "path": row["path"],
-            "url": media_url(row["path"]),
+            "path": path,
+            "url": media_url(path),
             "view": row["view"],
             "family": fam,
             "pose": (meta.get("pose_name") or row["view"] or "").strip(),
             "label": view_position_label(row["view"]),
+            "actors": actors,
         })
     return JSONResponse({"album": album, "family": want or None,
                          "n": len(rows), "sheets": rows})

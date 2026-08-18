@@ -2839,6 +2839,11 @@ tr.suggested td.cell-genre {
 .candidate-pick { position: absolute; top: 0.4rem; left: 0.4rem; z-index: 1; }
 .candidate-pick input { width: 1.1rem; height: 1.1rem; cursor: pointer; }
 .candidate-grid img.thumb { cursor: zoom-in; }
+.actor-names {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text);
+}
 .candidate-bar {
   display: flex; align-items: center; gap: 0.75rem;
   margin: 0.25rem 0 0.5rem; flex-wrap: wrap;

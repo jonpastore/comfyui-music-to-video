@@ -289,6 +289,9 @@ def test_assign_as_sheet_stamps_actors_from_the_card():
         assert r.status_code == 303, r.text
         sheet = db.one("SELECT * FROM anchors WHERE chosen=1 ORDER BY id DESC")
         assert json.loads(sheet["render_json"])["actors"] == ["Meow P", "Panther"]
+        page = client.get("/anchors", params={"scope_value": album}).text
+        assert "Meow P · Panther" in page
+        assert "actor-names" in page
         meta = client.post(f"/anchors/refs/{row['id']}/meta",
                            data={"pose_name": "split roast", "pose_tier": "xxx",
                                  "role": "pose",

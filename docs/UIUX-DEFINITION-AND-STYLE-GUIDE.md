@@ -1352,8 +1352,9 @@ tier you were in (JSON in-page; a no-JS redirect keeps
 `roster_tier=`). It does not dump you back on G because G
 has more rows. Deleting that keeper also drops the
 `anchor_ref` it created — the file is the sheet, not a
-second photograph that should linger under Base images. Gallery tiles use icon
-actions (filled check = keeper, outline =
+second photograph that should linger under Base images. Gallery tiles name who is on the sheet (`actorlist(album)` —
+stamped actors, else names in the pose label; `Meow P · Panther`).
+Tiles use icon actions (filled check = keeper, outline =
 pick, clear, delete) with `title` help. The Fix dialog has a help icon
 per action; Close sits on the far right; submit enqueues a new candidate
 (no Save). Clear unsets `chosen`
@@ -1452,7 +1453,11 @@ Missing chips say `{tier} · {wardrobe} · {pose} · {view}` so you know
 what to generate. It is the tagged
 keeper list, not generate. **Tag from these sheets** marks chosen
 gallery keepers (no file path). A missing-pose chip opens `#hole-pick`:
-clothed/nude toggle, pick a sheet to tag, or generate that wardrobe
+clothed/nude toggle, pick a sheet to tag, or **Generate anchors** —
+that fills `#anchor-form` (tier, mapped view, first identity `ref_id`
+if none) and `requestSubmit`s it. `GET /api/albums/{album}/sheets`
+skips chosen rows whose file is gone (empty pose_14 tiles) and
+returns `actors` for the caption
 (`test_uiux_classification_chips.py`). The sidecar path box is gone.
 Library chips from `classification_json` (view /
 pose / wardrobe / usable). The document is sqlite

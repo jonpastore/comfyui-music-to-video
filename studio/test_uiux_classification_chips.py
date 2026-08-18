@@ -268,6 +268,26 @@ def test_uiux_live_empty_auto_seeds_from_default_sidecar():
         classification._DEFAULT_SIDECAR = prev
 
 
+def test_sheets_api_skips_missing_files_and_names_actors(tmp_path):
+    album = f"Sheets {time.time_ns()}"
+    good = str(tmp_path / "ok.png")
+    open(good, "wb").write(b"\x89PNG\r\n\x1a\n")
+    db.run("""INSERT INTO anchors (scope_kind,scope_value,tier,view,path,chosen,created,render_json)
+              VALUES ('album',?,'xxx','front',?,1,?,?)""",
+           album, good, time.time(),
+           json.dumps({"pose_name": "cowgirl", "actors": ["Meow P", "Panther"]}))
+    db.run("""INSERT INTO anchors (scope_kind,scope_value,tier,view,path,chosen,created)
+              VALUES ('album',?,'xxx','pose_14','/no/such/pose14.png',1,?)""",
+           album, time.time())
+    with TestClient(appmod.app) as client:
+        r = client.get(f"/api/albums/{album}/sheets")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["n"] == 1
+    assert body["sheets"][0]["actors"] == ["Meow P", "Panther"]
+    assert "pose_14" not in str(body)
+
+
 def test_uiux_js_wires_import_and_save():
     """The page tags from sheets and opens the hole picker."""
     js = open(_JS).read()
@@ -276,6 +296,8 @@ def test_uiux_js_wires_import_and_save():
     assert "/classification/from-sheets" in js
     assert "/classification/keeper" in js
     assert "js-hole-pick" in js
+    assert "Generate anchors" in open(_ANCHORS).read()
+    assert "requestSubmit" in js
 
 
 def test_tag_from_anchors_and_keeper_close_a_hole(tmp_path):

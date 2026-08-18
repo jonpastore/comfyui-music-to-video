@@ -19,7 +19,7 @@
     <div class="candidate {% if c.chosen %}picked{% endif %}" data-anchor="{{ c.id }}"
          data-album="{{ g.scope_value }}" data-tier="{{ g.tier }}"
          data-who="{{ g.character_id or 'lead' }}"
-         data-actors="{{ c | actorlist | join('|') }}">
+         data-actors="{{ c | actorlist(g.scope_value) | join('|') }}">
       <label class="candidate-pick">
         <input type="checkbox" class="pick-anchor" value="{{ c.id }}"
                aria-label="select this candidate">
@@ -29,6 +29,10 @@
       <img class="thumb" src="{{ media_url(c.path) }}?w=360"
            alt="" data-full="{{ media_url(c.path) }}" tabindex="0" role="button"
            decoding="async" title="Open full size">
+      {% set actors = c | actorlist(g.scope_value) %}
+      {% if actors %}
+      <p class="actor-names">{{ actors | join(" · ") }}</p>
+      {% endif %}
       {# What this one was rendered AT. A CFG sweep puts every guidance value in
          this same grid -- same tier, same view -- so without the settings on
          the thumbnail "6.0 haloes" is a claim about an image nobody can pick

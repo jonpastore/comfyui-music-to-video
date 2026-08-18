@@ -188,9 +188,11 @@ auto-seed **built** (`ensure_sidecar_seed` from
 `deploy.sh` ships tracked `studio/seed/image-classification.json` there
 — live seed depends on that ship; `library()` never reads a file).
 `/anchors` paints keeper chips and import/save seed an empty library
-(`test_uiux_classification_chips.py`). `T4-23`
+(`test_uiux_classification_chips.py`). Hole-pick **Generate anchors**
+fills `#anchor-form` and submits; `GET /api/albums/{album}/sheets`
+skips missing files and returns `actors`. `T4-23`
 gap **is**; the Pose catalog on `/anchors` is album-first then song-to-check, collapsed unless empty or holed, and import closes holes
-without GPU. `T2-51` draft map (classify cannot write it) **is**
+without GPU. Gallery tiles name who is on the sheet (`actorlist(album)`). `T2-51` draft map (classify cannot write it) **is**
 (`test_t2_51_classify_cannot_write_map.py`). `T2-52` Accept-gated
 map **is** (`test_t2_52_map_accept.py`): Accept/Reject per scene;
 `start_refs` refuses empty map, draft, or rejected; Accept is

@@ -3032,7 +3032,8 @@ function initClassificationLibrary() {
           img.alt = s.label || "";
           img.decoding = "async";
           var cap = document.createElement("span");
-          cap.textContent = s.pose || s.label || s.view || "";
+          var who = (s.actors && s.actors.length) ? s.actors.join(" · ") : "";
+          cap.textContent = (s.pose || s.label || s.view || "") + (who ? " · " + who : "");
           btn.appendChild(img);
           btn.appendChild(cap);
           grid.appendChild(btn);
@@ -3106,23 +3107,61 @@ function initClassificationLibrary() {
     });
   }
 
+  function sheetViewKey(view, wardrobe) {
+    var map = {
+      front: "front", back: "back", side: "profile",
+      "3qtr": "three_quarter", "3qtr-rear": "back",
+      profile: "profile", three_quarter: "three_quarter"
+    };
+    var base = map[view] || view || "front";
+    if (wardrobe === "nude") {
+      return /nude/.test(base) ? base : base + "_nude";
+    }
+    return String(base).replace(/_nude$/, "");
+  }
+
   if (genBtn) {
     genBtn.addEventListener("click", function () {
-      if (!hole || !songId) {
-        say("Pick a song to check first.");
+      if (!hole) return;
+      var form = document.getElementById("anchor-form");
+      var meta = document.getElementById("hole-pick-meta");
+      if (!form) {
+        if (meta) meta.textContent = "Generate form is not on this page.";
         return;
       }
-      say("Queuing " + ward + " generate…");
-      api("/api/songs/" + encodeURIComponent(songId) + "/pose-generate", {
-        tier: tier || "xxx",
-        pose: hole.pose,
-        view: hole.view,
-        wardrobe: ward,
-        n: 4,
-      }).then(function (d) {
-        say("Queued job " + ((d.jobs && d.jobs[0] && d.jobs[0].id) || ""));
-        if (dlg && dlg.open) dlg.close();
-      }).catch(function (err) { say(err.message); });
+      var wantTier = hole.tier || tier || "xxx";
+      var wantView = sheetViewKey(hole.view, ward);
+      var tierBox = form.querySelector('input[name="tier"][value="' + wantTier + '"]');
+      var viewBox = form.querySelector('input[name="view"][value="' + wantView + '"]');
+      if (!tierBox || !viewBox) {
+        if (meta) {
+          meta.textContent = "No " + wantTier + " / " + wantView +
+            " on the generate form. Tick that cell by hand.";
+        }
+        return;
+      }
+      form.querySelectorAll('input[name="tier"]').forEach(function (el) {
+        el.removeAttribute("hx-trigger");
+        el.checked = el === tierBox;
+      });
+      form.querySelectorAll('input[name="view"]').forEach(function (el) {
+        el.removeAttribute("hx-trigger");
+        el.checked = el === viewBox;
+      });
+      if (!form.querySelector('input[name="ref_id"]:checked')) {
+        var firstRef = form.querySelector('input[name="ref_id"]');
+        if (firstRef) firstRef.checked = true;
+      }
+      var sec = document.getElementById("generate-pose");
+      var fold = sec && sec.querySelector("details");
+      if (fold) fold.open = true;
+      if (dlg && dlg.open) dlg.close();
+      form.scrollIntoView({behavior: "smooth", block: "start"});
+      if (typeof form.requestSubmit === "function") {
+        form.requestSubmit(document.getElementById("anchor-generate"));
+      } else {
+        form.submit();
+      }
     });
   }
 }
