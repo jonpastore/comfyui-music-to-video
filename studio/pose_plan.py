@@ -594,9 +594,11 @@ def plan(song, tier):
 
 
 def scene_bases(song, tier):
-    """{scene_number: local path} for bound scenes with a readable file."""
+    """{scene_number: path} for saved pose_sheet_id binds only (not plan auto)."""
     out = {}
     for row in plan(song, tier)["scenes"]:
+        if row["source"] != "saved":
+            continue
         if row["path"] and os.path.isfile(row["path"]):
             out[int(row["num"])] = row["path"]
     return out

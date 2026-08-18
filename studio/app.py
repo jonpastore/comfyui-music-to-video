@@ -1497,8 +1497,8 @@ def h_refs(args, progress):
             for c, a in cast_anchors(album, tier)}
     if cast:
         progress(f"cast for this tier: {', '.join(sorted(cast))}")
-    pose_bases = (args["pose_bases"] if "pose_bases" in args
-                  else pose_plan.scene_bases(song, tier))
+    # Job args own plates. Do not fall back to plan() auto scene_bases.
+    pose_bases = args.get("pose_bases") or {}
     if pose_bases:
         progress(f"pose plates: {len(pose_bases)} scene(s)")
     scene_anchors = args.get("anchors") or None
@@ -1550,7 +1550,8 @@ def h_reroll(args, progress):
     cast = {c["name"]: {"path": a["path"],
                         "desc": " ".join(p for p in (c["identity"], c["wardrobe"], c["body"]) if p)}
             for c, a in cast_anchors(album, tier)}
-    pose_bases = args.get("pose_bases") or pose_plan.scene_bases(song, tier)
+    # Job args own plates. Do not fall back to plan() auto scene_bases.
+    pose_bases = args.get("pose_bases") or {}
     results = pipeline.reroll(song["slug"], tier, sb["json_path"], anchor_name,
                                song["mp3_path"], args["clip_indices"], progress,
                                guard=tiers.compose_guardrail(tier, album),
@@ -7746,8 +7747,13 @@ def start_reroll(request: Request, id: int, tier: str = Form(...), clip_idx: Lis
         reroll_refs.seed_plan(n, seed_min, seed_max, step)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    # T2-52: same Accept gate as start_refs. No auto plan() plates.
+    try:
+        scene_pose_map.require_accepted(id, tier)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
     jid = jobs.enqueue("reroll", {"song_id": id, "tier": tier, "clip_indices": idxs, "note": note,
-                             "pose_bases": pose_plan.scene_bases(song, tier),
+                             "pose_bases": {},
                              "n": n, "seed_min": int(seed_min), "seed_max": int(seed_max),
                              "step": step},
                  song_id=id)

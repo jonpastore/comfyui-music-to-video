@@ -304,6 +304,146 @@ def test_freeze_auto_binds_is_gone():
     assert not hasattr(pose_plan, "freeze_auto_binds")
 
 
+def test_scene_bases_unbound_matching_sheet_is_empty():
+    """plan() may auto-match; scene_bases only returns saved pose_sheet_id binds.
+
+    Mutation: restore auto→render (include source=auto in scene_bases) → red.
+    """
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Bases Unbound Song", album="Bases Unbound Album")
+        dest = os.path.join(db.DATA, "pose-plan")
+        os.makedirs(dest, exist_ok=True)
+        stand = os.path.join(dest, "bases-stand.png")
+        fours = os.path.join(dest, "bases-fours.png")
+        open(stand, "wb").write(_png_bytes())
+        open(fours, "wb").write(_png_bytes())
+        _sheet(song["album"], "xxx", "front", stand, "standing")
+        a_fours = _sheet(song["album"], "xxx", "pose_bases_u", fours,
+                         "all fours look back", nude=True)
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        json.dump({
+            "title": "T", "album": song["album"], "version": "xxx",
+            "scenes": [{
+                "scene_number": 1, "name": "Doggy",
+                "image_prompt": "On hands and knees, looking back",
+                "camera": "three-quarter rear",
+                "pose": "on all fours, looking back, tail up",
+                "duration_guidance": "5s",
+            }],
+        }, open(jp, "w"))
+        open(os.path.join(outdir, f"{song['slug']}_xxx.md"), "w").write("# sb\n")
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               song["id"], "xxx", jp, os.path.join(outdir, f"{song['slug']}_xxx.md"),
+               1, time.time())
+        p = pose_plan.plan(song, "xxx")
+        assert p["scenes"][0]["sheet_id"] == a_fours["id"]
+        assert p["scenes"][0]["source"] == "auto"
+        assert pose_plan.scene_bases(song, "xxx") == {}
+        pose_plan.bind_scene(song["id"], "xxx", 1, a_fours["id"])
+        bases = pose_plan.scene_bases(song, "xxx")
+        assert bases == {1: fours}
+        for row in pose_plan.plan(song, "xxx")["scenes"]:
+            if row["source"] == "auto":
+                assert int(row["num"]) not in pose_plan.scene_bases(song, "xxx")
+
+
+def test_h_reroll_empty_pose_bases_stays_empty(monkeypatch):
+    """Empty pose_bases on reroll must not fall back to auto scene_bases."""
+    seen = {}
+
+    def fake_reroll(*a, **k):
+        seen["bases"] = k.get("bases")
+        return []
+
+    monkeypatch.setattr(appmod.pipeline, "reroll", fake_reroll)
+    monkeypatch.setattr(appmod.pipeline, "install_input",
+                        lambda p, name=None: os.path.basename(p))
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Reroll Empty Bases", album="Reroll Empty Album")
+        dest = os.path.join(db.DATA, "pose-plan")
+        os.makedirs(dest, exist_ok=True)
+        front = os.path.join(dest, "reroll-front.png")
+        plate = os.path.join(dest, "reroll-plate.png")
+        open(front, "wb").write(_png_bytes())
+        open(plate, "wb").write(_png_bytes())
+        db.run("""INSERT INTO anchors (scope_kind,scope_value,tier,view,path,chosen,created)
+                  VALUES ('album',?,'xxx','front',?,1,?)""",
+               song["album"], front, time.time())
+        _sheet(song["album"], "xxx", "pose_rr", plate, "all fours", nude=True)
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        json.dump({
+            "title": "T", "album": song["album"], "version": "xxx",
+            "scenes": [{
+                "scene_number": 1, "name": "One",
+                "image_prompt": "on all fours looking back",
+                "camera": "rear", "pose": "on all fours, looking back",
+                "duration_guidance": "5s",
+            }],
+        }, open(jp, "w"))
+        open(os.path.join(outdir, f"{song['slug']}_xxx.md"), "w").write("# sb\n")
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               song["id"], "xxx", jp, os.path.join(outdir, f"{song['slug']}_xxx.md"),
+               1, time.time())
+        assert pose_plan.plan(song, "xxx")["scenes"][0]["source"] == "auto"
+        appmod.h_reroll({
+            "song_id": song["id"], "tier": "xxx", "clip_indices": [0],
+            "pose_bases": {}, "refine": False,
+        }, lambda m: None)
+        assert "bases" in seen
+        assert seen["bases"] == {}
+
+
+def test_start_reroll_accept_gates_like_refs(monkeypatch):
+    """start_reroll refuses empty map and does not enqueue auto plates."""
+    monkeypatch.setattr(appmod.pipeline, "reroll",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            RuntimeError("reroll must not run")))
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Reroll Gate Song", album="Reroll Gate Album")
+        dest = os.path.join(db.DATA, "pose-plan")
+        os.makedirs(dest, exist_ok=True)
+        front = os.path.join(dest, "gate-front.png")
+        open(front, "wb").write(_png_bytes())
+        db.run("""INSERT INTO anchors (scope_kind,scope_value,tier,view,path,chosen,created)
+                  VALUES ('album',?,'xxx','front',?,1,?)""",
+               song["album"], front, time.time())
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        json.dump({
+            "title": "T", "album": song["album"], "version": "xxx",
+            "character_reference": "her",
+            "scenes": [{
+                "scene_number": 1, "name": "One", "image_prompt": "alley",
+                "camera": "medium", "pose": "standing",
+                "duration_guidance": "5s", "characters": [],
+            }],
+        }, open(jp, "w"))
+        open(os.path.join(outdir, f"{song['slug']}_xxx.md"), "w").write("# sb\n")
+        db.run("""INSERT INTO storyboards
+                  (song_id,tier,json_path,md_path,scene_count,created,scene_seconds)
+                  VALUES (?,?,?,?,?,?,?)""",
+               song["id"], "xxx", jp, os.path.join(outdir, f"{song['slug']}_xxx.md"),
+               1, time.time(), 5.0)
+        before = list(db.q(
+            "SELECT * FROM jobs WHERE song_id=? AND kind='reroll'", song["id"]))
+        r = client.post(
+            f"/songs/{song['id']}/reroll",
+            data={"tier": "xxx", "clip_idx": "0"},
+            follow_redirects=False)
+        assert r.status_code == 400, r.text
+        assert "pose map" in r.text.lower() or "Accept" in r.text
+        assert list(db.q(
+            "SELECT * FROM jobs WHERE song_id=? AND kind='reroll'",
+            song["id"])) == before
+
+
 def test_start_refs_freezes_pose_bases(monkeypatch):
     """Empty scene_pose_map refuses refs; freeze_auto_binds is gone, not a fallback."""
     assert not hasattr(pose_plan, "freeze_auto_binds")

@@ -162,8 +162,9 @@ copies. Do not offer those families as `role=reference` defaults.
 use-as-ref ticked, `gen_anchor`'s images list is exactly that sheet.
 `gen_refs` passes the accepted keeper for **that** scene as image1
 (`T2-56` **built**, `test_t2_56_per_scene_keeper.py`). Empty map /
-draft / rejected refuse refs (`T2-52` **built**); no auto-bind
-fallback. Location plates (`T2-53` **built**,
+draft / rejected refuse refs and reroll (`T2-52` **built**); no auto-bind
+fallback; `scene_bases` is saved `pose_sheet_id` only; `h_refs`/`h_reroll`
+do not fill plates from `plan()` auto. Location plates (`T2-53` **built**,
 `test_t2_53_location_plates.py`). Extra-view slots are later.
 `T7-7` has the offline ranking harness. The GPU four-image set is still
 **NOT MEASURED**. **0 chosen studio anchors** — the factory is still on
@@ -182,8 +183,10 @@ gap **is**; the same page shows ceiling holes and import closes them
 without GPU. `T2-51` draft map (classify cannot write it) **is**
 (`test_t2_51_classify_cannot_write_map.py`). `T2-52` Accept-gated
 map **is** (`test_t2_52_map_accept.py`): Accept/Reject per scene;
-`start_refs` refuses empty map, draft, or rejected;
-`pose_plan.freeze_auto_binds` is deleted (`test_freeze_auto_binds_is_gone`).
+`start_refs` and `start_reroll` refuse empty map, draft, or rejected;
+`pose_plan.freeze_auto_binds` is deleted (`test_freeze_auto_binds_is_gone`);
+`scene_bases` is saved binds only; landers do not auto-fill plates
+(`test_pose_plan.py`).
 `T4-24` ceiling-tier pose generate
 **is** (`test_t4_24_ceiling_generate.py`): pose-gap holes → studio
 jobs at the run ceiling; clothed+nude iff r/xxx. `T7-21` C1/C2

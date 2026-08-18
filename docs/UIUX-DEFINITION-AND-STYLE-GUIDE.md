@@ -1447,9 +1447,10 @@ grey-studio and no plate. Page display of the plate is later. `needs_lip_sync` b
 and ticked-lower boards (`T2-54` **built**) exist per ticked tier;
 page listing of every ticked board is those existing per-tier pages.
 
-**Refs page.** Generate from the accepted map only — empty map,
+**Refs page.** Generate and reroll from the accepted map only — empty map,
 draft, or rejected is refused (`T2-52`; `pose_plan.freeze_auto_binds`
-deleted, `test_freeze_auto_binds_is_gone`). Each scene uses that scene's
+deleted; `scene_bases` is saved binds only; landers do not auto-fill
+plates — `test_freeze_auto_binds_is_gone`, `test_pose_plan.py`). Each scene uses that scene's
 accepted keeper as image1 (`T2-56` **built**,
 `test_t2_56_per_scene_keeper.py`). Location plate store is `T2-53` **built**;
 page display is later.
