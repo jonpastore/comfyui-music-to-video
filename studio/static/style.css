@@ -2583,6 +2583,20 @@ dialog.lightbox img { max-height: 82vh; }
 }
 .lightbox-spacer { flex: 1; }
 .lightbox-pos { font-size: 0.85rem; white-space: nowrap; }
+.lightbox-pose-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 11rem;
+  max-width: 22rem;
+  flex: 1 1 12rem;
+}
+.lightbox-pose-form[hidden] { display: none; }
+.lightbox-pose-form select {
+  min-width: 9rem;
+  max-width: 18rem;
+  flex: 1 1 auto;
+}
 .lightbox-download {
   padding: 0.25rem 0.7rem; border-radius: 4px; text-decoration: none;
   border: 1px solid var(--border, #444);

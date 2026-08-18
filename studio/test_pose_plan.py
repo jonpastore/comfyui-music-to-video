@@ -288,6 +288,63 @@ def test_album_coverage_rolls_up_songs_and_clear_unsets_keeper():
         assert sb["scenes"][0].get("pose_sheet_id") == a["id"]
         assert cov2["needed"][0]["character_label"]
         assert "pose-who" in page
+        assert "lightbox-pose-form" in page
+        assert "Classify this pose" in page
+        assert 'id="lightbox-pose-key"' in page
+        assert "Save pose classification" in page
+
+
+def test_lightbox_classify_posts_keeper_json_and_stamps_pose_name():
+    """Full-size sheet: pick which album pose it is. JSON, no reload."""
+    with TestClient(appmod.app) as client:
+        album = f"Classify Lightbox {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        song = _upload_song(client, "Classify Lightbox Song", album=album)
+        dest = os.path.join(db.DATA, "pose-plan")
+        os.makedirs(dest, exist_ok=True)
+        plate = os.path.join(dest, "lb-tense.png")
+        open(plate, "wb").write(_png_bytes())
+        sheet = _sheet(album, "xxx", "pose_lb", plate, "tense", nude=True)
+        db.run("UPDATE anchors SET chosen=0 WHERE id=?", sheet["id"])
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        json.dump({
+            "title": "T", "album": album, "version": "xxx",
+            "character_reference": "her",
+            "scenes": [{
+                "scene_number": 1, "name": "One", "image_prompt": "doorway",
+                "camera": "rear", "pose": "on all fours, looking back",
+                "duration_guidance": "5s",
+            }],
+        }, open(jp, "w"))
+        md = os.path.join(outdir, f"{song['slug']}_xxx.md")
+        open(md, "w").write("# sb\n")
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               song["id"], "xxx", jp, md, 1, time.time())
+        page = client.get(f"/anchors?scope_value={album}").text
+        assert "lightbox-pose-form" in page
+        assert "on all fours" in page
+        cov = pose_plan.album_coverage(album, "xxx")
+        key = cov["needed"][0]["key"]
+        r = client.post("/anchors/keeper", data={
+            "album": album, "tier": "xxx", "key": key,
+            "sheet_id": str(sheet["id"]),
+        }, headers={"Accept": "application/json"})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["ok"] is True
+        assert body["sheet_id"] == sheet["id"]
+        assert body["chosen"] is True
+        assert body["key"] == key
+        assert "all fours" in (body.get("label") or "").lower()
+        row = db.one("SELECT chosen, render_json FROM anchors WHERE id=?", sheet["id"])
+        assert row["chosen"] == 1
+        assert json.loads(row["render_json"])["pose_name"]
+        assert "all fours" in json.loads(row["render_json"])["pose_name"].lower()
+        sb = json.load(open(jp))
+        assert sb["scenes"][0].get("pose_sheet_id") == sheet["id"]
 
 
 def test_album_coverage_splits_the_same_pose_by_character():

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import modal_close %}
+{% from "_macros.html" import modal_close, glyph_save %}
 {% block content %}
 <h1>Anchors</h1>
 <p class="hint">This album&rsquo;s pose library. Songs on the album list the poses
@@ -198,6 +198,30 @@
        ever available by closing the modal and counting. #}
     <strong class="lightbox-title"></strong>
     <span class="lightbox-pos muted"></span>
+    <form method="post" action="/anchors/keeper" class="lightbox-pose-form" hidden>
+      <input type="hidden" name="album" value="">
+      <input type="hidden" name="tier" value="">
+      <input type="hidden" name="sheet_id" value="">
+      <label class="visually-hidden" for="lightbox-pose-key">Classify this pose</label>
+      <select name="key" id="lightbox-pose-key" aria-label="Classify this pose">
+        <option value="">Which pose is this?</option>
+        {% if coverage_by_tier %}
+        {% for t, cov in coverage_by_tier.items() %}
+        <optgroup label="{{ t | tiername }}" data-tier="{{ t }}">
+          {% for g in cov.needed %}
+          <option value="{{ g.key }}" data-tier="{{ t }}" data-who="{{ g.who }}"
+                  data-sheet="{{ g.sheet_id or 0 }}" data-album="{{ cov.album }}"
+                  data-label="{{ g.label }}">
+            {{ g.character_label }} · {{ g.label }}
+          </option>
+          {% endfor %}
+        </optgroup>
+        {% endfor %}
+        {% endif %}
+      </select>
+      <button type="submit" class="icon-btn" title="Save pose classification"
+              aria-label="Save pose classification">{{ glyph_save() }}</button>
+    </form>
     <span class="lightbox-spacer"></span>
     <a class="lightbox-download" download>Download</a>
     <button type="button" class="thumb-btn-danger lightbox-delete">Delete</button>

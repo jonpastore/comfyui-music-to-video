@@ -205,7 +205,8 @@ storyboard scene to a chosen pose sheet (auto-match on `pose` / story,
 operator override on the scene row) and uses that sheet as image2.
 Identity front stays image1. The anchors page shows the album pose
 roster (have/missing across every song board) and **Use as this pose**
-is the keeper; "Use as reference" is not on the tile.
+is the keeper; the full-size lightbox classifies the open sheet onto
+that roster. "Use as reference" is not on the tile.
 
 **Not building**, cited not restated: no IP-Adapter / InstantID / ReActor
 (TRD-4 §7, TRD-7 §5 — a multi-image edit model conditions natively); no second

@@ -112,7 +112,9 @@ unwired.
   still insert the row's `path` as an `anchor_ref` with no copy —
   `pipeline.install_input` at generate time. The gallery tile no longer
   shows that button: **Use as this pose** is `chosen=1` (the keeper for
-  that pose + tier). Growing the library from an approved sheet is a
+  that pose + tier). The full-size lightbox classifies the open sheet
+  against the album pose roster (`POST /anchors/keeper`, same as the
+  roster save). Growing the library from an approved sheet is a
   generate-form action, not a second button on every tile.
 - `T7-7` With an anchor as image1, a variation sheet **keeps the identity across
   views**, measured rather than asserted: render `front` and `three_quarter` from

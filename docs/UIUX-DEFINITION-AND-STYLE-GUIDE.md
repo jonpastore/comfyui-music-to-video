@@ -1145,7 +1145,13 @@ empty row is the row. Only leads need a plate (T2-30); extras and
 background stay off the roster. An empty scene cast is the album lead. **Generate…** opens a modal with a copyable Mage
 prompt from the storyboard’s pose/need text (`#pose-brief`).
 `POST /anchors/keeper` plus the save icon stamps the assignment — on
-`/anchors` and on the playlist Anchors fold. Roster thumbs open `#pose-preview`. Playlist Anchors uses
+`/anchors` and on the playlist Anchors fold. The candidate lightbox
+(`#anchor-lightbox`) classifies the open sheet: a select of that
+album’s needed poses (character · pose) plus the save icon posts the
+same keeper route and stays on the picture. Download / Delete / Close
+stay; Close remains far right. Arrows and Delete are ignored while the
+select is focused so classifying does not step or delete the sheet.
+Roster thumbs open `#pose-preview`. Playlist Anchors uses
 character tabs and Clothed/Nude family tabs. On `/anchors` the gallery tabs are **tier → character → clothed/nude**.
 Delete selected applies to one pose group only; an emptied row is
 removed. The generate form’s tiers / views / prompts / negative /

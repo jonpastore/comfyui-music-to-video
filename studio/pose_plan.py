@@ -482,6 +482,29 @@ def album_coverage(album, tier):
     }
 
 
+def stamp_sheet_pose_name(sheet_id, name):
+    """Write the operator pose name onto the sheet. The view key stays."""
+    if not sheet_id:
+        return
+    name = " ".join(str(name or "").split())[:80]
+    if not name:
+        return
+    row = db.one("SELECT render_json FROM anchors WHERE id=?", int(sheet_id))
+    if not row:
+        return
+    try:
+        meta = json.loads(row["render_json"] or "{}")
+    except ValueError:
+        meta = {}
+    if not isinstance(meta, dict):
+        meta = {}
+    if meta.get("pose_name") == name:
+        return
+    meta["pose_name"] = name
+    db.run("UPDATE anchors SET render_json=? WHERE id=?",
+           json.dumps(meta), int(sheet_id))
+
+
 def stamp_binds(tier, binds, sheet_id):
     """Write pose_sheet_id onto these scenes. Does not recompute coverage."""
     want = None if sheet_id in (None, "", 0, "0") else int(sheet_id)

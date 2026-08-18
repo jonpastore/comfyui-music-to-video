@@ -5793,6 +5793,7 @@ def set_album_pose_keeper(request: Request, album: str = Form(...),
     group = next((g for g in cov["needed"] if g["key"] == key), None)
     if group is None:
         raise HTTPException(404, "no such pose on this album")
+    picked = None
     if sid:
         sheet = db.one(
             """SELECT * FROM anchors WHERE id=? AND scope_kind='album'
@@ -5800,10 +5801,17 @@ def set_album_pose_keeper(request: Request, album: str = Form(...),
             sid, album, tier)
         if not sheet:
             raise HTTPException(400, "that sheet is not on this album and tier")
-        _pick_anchor(sid)
+        picked = _pick_anchor(sid)
+        pose_plan.stamp_sheet_pose_name(sid, group.get("label"))
     elif group.get("sheet_id"):
         db.run("UPDATE anchors SET chosen=0 WHERE id=?", group["sheet_id"])
     pose_plan.stamp_binds(tier, group.get("binds"), sid)
+    if wants_json(request):
+        out = {"ok": True, "sheet_id": sid, "key": key,
+               "label": group.get("label") or "", "chosen": bool(sid)}
+        if picked:
+            out["group"] = picked.get("group")
+        return JSONResponse(out)
     if wants_hx(request):
         return _playlist_hx_album(request, album)
     return RedirectResponse(f"/anchors?scope_value={quote(album)}", status_code=303)

@@ -2257,6 +2257,7 @@ function initAnchors() {
     box.querySelector(".lightbox-pos").textContent =
       "option " + (at.idx + 1) + " of " + all.length +
       (card.classList.contains("picked") ? " · CHOSEN" : "");
+    fillLightboxPose(card);
     var dl = box.querySelector(".lightbox-download");
     dl.href = src;
     // a name the file keeps once it is off the page; the src basename is a
@@ -2295,6 +2296,8 @@ function initAnchors() {
       e.preventDefault(); show(thumb.closest(ITEM_SEL)); return;
     }
     if (!box || !box.open || !current) return;
+    // arrows / Delete belong to the pose select while it is focused
+    if (e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
     if (e.key === "ArrowRight") { e.preventDefault(); step(0, 1); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); step(0, -1); }
     else if (e.key === "ArrowDown") { e.preventDefault(); step(1, 0); }
@@ -2304,6 +2307,41 @@ function initAnchors() {
   });
 
   box && box.querySelector(".lightbox-delete").addEventListener("click", removeShown);
+
+  function fillLightboxPose(card) {
+    var form = box && box.querySelector(".lightbox-pose-form");
+    if (!form) return;
+    var isSheet = card.classList.contains("candidate") && card.dataset.anchor;
+    var sel = form.querySelector("select");
+    var hasPoses = sel && sel.querySelector("option[data-tier]");
+    form.hidden = !isSheet || !hasPoses;
+    if (form.hidden || !sel) return;
+    var album = card.dataset.album || "";
+    var tier = card.dataset.tier || "";
+    var who = card.dataset.who || "";
+    form.querySelector('[name="album"]').value = album;
+    form.querySelector('[name="tier"]').value = tier;
+    form.querySelector('[name="sheet_id"]').value = card.dataset.anchor;
+    var sheetId = String(card.dataset.anchor || "");
+    var title = (box.querySelector(".lightbox-title").textContent || "").trim().toLowerCase();
+    var match = "";
+    Array.prototype.forEach.call(sel.options, function (o) {
+      if (!o.value) return;
+      var hide = (tier && o.getAttribute("data-tier") !== tier)
+        || (who && o.getAttribute("data-who") && o.getAttribute("data-who") !== who);
+      o.hidden = hide;
+      if (hide) return;
+      if (o.getAttribute("data-sheet") === sheetId) match = o.value;
+    });
+    if (!match && title) {
+      Array.prototype.forEach.call(sel.options, function (o) {
+        if (match || o.hidden || !o.value) return;
+        var label = (o.getAttribute("data-label") || o.textContent || "").toLowerCase();
+        if (label.indexOf(title) !== -1 || title.indexOf(label) !== -1) match = o.value;
+      });
+    }
+    sel.value = match;
+  }
 
   function removeShown() {
     if (!current) return;
@@ -2431,6 +2469,49 @@ function initAnchors() {
     if (e.defaultPrevented) return;          // a confirm() handler already said no
     var sec, form;
 
+    if ((form = e.target.closest(".lightbox-pose-form"))) {
+      e.preventDefault();
+      var key = form.querySelector('[name="key"]').value;
+      if (!key) {
+        box.querySelector(".lightbox-pos").textContent = "pick a pose first";
+        return;
+      }
+      var btn = form.querySelector("button[type=submit]");
+      if (btn) btn.disabled = true;
+      api(form.action, new FormData(form)).then(function (d) {
+        var card = current;
+        if (card && d.group) {
+          var sec = sectionOf(card);
+          d.group.forEach(function (p) {
+            var c = sec && sec.querySelector('.candidate[data-anchor="' + p.id + '"]');
+            if (c) c.classList.toggle("picked", p.chosen);
+          });
+        }
+        var want = d.key || key;
+        var opt = null;
+        Array.prototype.forEach.call(form.querySelectorAll("option"), function (o) {
+          if (o.value === want) opt = o;
+        });
+        if (opt) {
+          opt.setAttribute("data-sheet", String(d.sheet_id || (card && card.dataset.anchor) || ""));
+          if (d.label) opt.setAttribute("data-label", d.label);
+        }
+        if (d.label && box.querySelector(".lightbox-title")) {
+          box.querySelector(".lightbox-title").textContent = d.label;
+        }
+        if (card) fillLightboxPose(card);
+        var at = card && where(card);
+        if (at) {
+          var all = cardsIn(at.row);
+          box.querySelector(".lightbox-pos").textContent =
+            "option " + (at.idx + 1) + " of " + all.length +
+            ((card && card.classList.contains("picked")) || d.chosen ? " · CHOSEN" : "");
+        }
+      }).catch(function (err) {
+        box.querySelector(".lightbox-pos").textContent = "not classified: " + err.message;
+      }).then(function () { if (btn) btn.disabled = false; });
+      return;
+    }
     if ((form = e.target.closest(".pick-anchor-form"))) {
       e.preventDefault();
       sec = sectionOf(form);
