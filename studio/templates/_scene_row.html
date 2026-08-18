@@ -344,7 +344,6 @@
           <span class="save-note" aria-live="polite"></span>
         </form>
       </div>
-      {% if r.videos %}
       {% set stills = (r.refs[0].candidates if r.refs else []) %}
       {% set approved = (stills | selectattr('approved') | list) %}
       <div class="media-strip scene-clips">
@@ -355,18 +354,20 @@
                 title="Play every part of this scene in order">Play scene</button>
         {% endif %}
         {% for v in r.videos %}
-        <figure class="clip-frame">
-          <button type="button" class="js-clip-preview thumb-open"
-                  data-video="{{ media_url(v.path) }}"
-                  data-label="scene {{ r.num }} clip {{ loop.index }}{% if r.videos|length > 1 %} / {{ r.videos|length }}{% endif %}"
-                  data-tier="{{ tier }}"
-                  data-scene="{{ r.num }}"
-                  data-clip-idx="{{ v.clip_idx }}"
-                  data-motion="{{ r.scene.video_motion_prompt or '' }}"
-                  title="Open clip {{ loop.index }}"
-                  {% if approved %}data-still="{{ media_url(approved[-1].path) }}"{% endif %}>
-            <video class="lazy-src" data-src="{{ media_url(v.path) }}" preload="none" muted playsinline></video>
-          </button>
+        <figure class="clip-frame clip-tile">
+          <div class="still-thumb">
+            <button type="button" class="js-clip-preview thumb-open"
+                    data-video="{{ media_url(v.path) }}"
+                    data-label="scene {{ r.num }} clip {{ loop.index }}{% if r.videos|length > 1 %} / {{ r.videos|length }}{% endif %}"
+                    data-tier="{{ tier }}"
+                    data-scene="{{ r.num }}"
+                    data-clip-idx="{{ v.clip_idx }}"
+                    data-motion="{{ r.scene.video_motion_prompt or '' }}"
+                    title="Open clip {{ loop.index }}"
+                    {% if approved %}data-still="{{ media_url(approved[-1].path) }}"{% endif %}>
+              <video class="lazy-src" data-src="{{ media_url(v.path) }}" preload="none" muted playsinline></video>
+            </button>
+          </div>
           <figcaption>
             clip {{ loop.index }}{% if r.videos|length > 1 %} / {{ r.videos|length }}{% endif %}
             · {{ "%.1f"|format(r.length / (r.videos|length or 1)) }}s
@@ -375,11 +376,10 @@
             {% if qv %}<span class="qc-tag" title="first-frame physical identity vs her photographs. Clothes do not lower identity.">{{ qv }}</span>{% endif %}
           </figcaption>
         </figure>
+        {% else %}
+        <p class="empty">No clips yet.</p>
         {% endfor %}
       </div>
-      {% else %}
-      <p class="empty">No clips yet.</p>
-      {% endif %}
     </div>
   </section>
 </details>

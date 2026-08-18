@@ -7947,8 +7947,10 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
         request,
         {"job_id": jids[0] if jids else None, "job_ids": jids,
          "kind": "clips", "tier": tier, "scene": scene_num,
-         "head_only": bool(head_only)},
-        f"/songs/{id}")
+         "head_only": bool(head_only),
+         "n": len(jids) or 1},
+        (f"/songs/{id}/storyboard/{tier}#scene-{scene_num}"
+         if scene_num is not None else f"/songs/{id}"))
 
 
 def enqueue_clips(song_id, tier, video_model, refine=False, ref_motion=None,
@@ -7979,6 +7981,9 @@ def enqueue_clips(song_id, tier, video_model, refine=False, ref_motion=None,
             raise HTTPException(400, f"no clips for scene {scene_number}")
         if head_only:
             plan = [plan[0]]
+    base["n"] = max(1, len(plan)) if plan else 1
+    if scene_number is not None:
+        base["scene_number"] = int(scene_number)
     if (clip_idx is None and scene_number is None
             and not any(p.get("depends_on") is not None for p in plan)):
         return [jobs.enqueue("clips", base, song_id=song_id)]
@@ -11123,6 +11128,7 @@ def queue_ctx():
                 "tier": args.get("tier") or "",
                 "clip_indices": [int(c) for c in clips if str(c).lstrip("-").isdigit()],
                 "n": args.get("n") or 0,
+                "scene": args.get("scene_number") or args.get("scene"),
                 "song_id": j["song_id"] or args.get("song_id")}
 
     rows = [dict(r) for r in db.q(

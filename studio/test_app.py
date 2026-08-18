@@ -2217,6 +2217,7 @@ def test_clips_one_scene_head_only_does_not_need_every_scene(patch_stub):
         assert body["kind"] == "clips"
         assert body["head_only"] is True
         assert body["scene"] == 1
+        assert body["n"] == 1
         wait_job(body["job_id"])
         assert seen and seen[-1] == [0], seen
         r2 = client.post(

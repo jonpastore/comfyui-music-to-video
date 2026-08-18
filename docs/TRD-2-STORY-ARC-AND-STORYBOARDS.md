@@ -572,8 +572,9 @@ rows are the same HTML routes `initSongPage` posts as JSON.
 `GET /songs/{id}/storyboard/{tier}` stays as the T6-A2 HTML surface
 (same `storyboard_service.payload()` numbers).
 `GET /songs/{id}/storyboard/{tier}/scene/{num}` returns one open scene
-row so a finished reroll can replace its placeholders (same
-`.ref-frame.clip-tile` card size as a finished still).
+row so a finished reroll or Render clip can replace its
+placeholders (same `.ref-frame.clip-tile` / `.clip-frame.clip-tile`
+card size as a finished still).
 
 ### 5.1 The time meter
 

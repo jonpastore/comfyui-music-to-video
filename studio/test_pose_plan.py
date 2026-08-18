@@ -847,6 +847,7 @@ def test_bind_route_json_reports_source():
         assert "What First clip only means" in page
         assert 'class="clip-bar"' in page
         assert 'class="clips-head"' in page
+        assert "media-strip scene-clips" in page
         assert "When does S2V happen?" in page
         assert "WAN S2V is a later hop" not in page or "data-help=" in page
         assert ">Reroll<" in page

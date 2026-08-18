@@ -747,6 +747,7 @@ function formatLocalTimes(root) {
 document.addEventListener("DOMContentLoaded", function () {
   formatLocalTimes(document);
   applyRerollChip(document.getElementById("job-chip"));
+  applyClipsChip(document.getElementById("job-chip"));
 });
 
 // ---- keyboard review ------------------------------------------------------
@@ -937,6 +938,7 @@ document.body.addEventListener("htmx:afterSwap", function (e) {
   var chip = (target && target.id === "job-chip") ? target
     : document.getElementById("job-chip");
   applyRerollChip(chip);
+  applyClipsChip(chip);
 });
 document.addEventListener("toggle", function (e) {
   if (e.target && e.target.tagName === "DETAILS" && e.target.open) {
@@ -1930,15 +1932,20 @@ function initSongPage() {
     if (form && form.classList.contains("reroll-bar")) {
       paintRerollPlaceholders(form, d);
     }
+    if (form && form.classList.contains("clip-bar")) {
+      paintClipPlaceholders(form, d);
+    }
     watchJob(jid, "song-status", function (job) {
       refreshQueue();
       if (job.status === "done") {
-        if (form && form.classList.contains("reroll-bar")) refreshSceneRow(form);
+        if (form && (form.classList.contains("reroll-bar") ||
+                     form.classList.contains("clip-bar"))) refreshSceneRow(form);
         else refreshSong();
         return;
       }
       if (job.status === "failed" || job.status === "cancelled") {
         clearRerollPlaceholders(jid);
+        clearClipPlaceholders(jid);
       }
     });
   }
@@ -2175,6 +2182,32 @@ document.addEventListener("submit", function (e) {
   e.preventDefault();
   var hid = form.querySelector('input[name=sheet_id]');
   applyPose(form, hid ? hid.value : "0");
+}, true);
+
+document.addEventListener("submit", function (e) {
+  var form = e.target && e.target.closest && e.target.closest("form.clip-bar");
+  if (!form) return;
+  e.preventDefault();
+  var dest = form.getAttribute("action");
+  if (!dest) return;
+  var note = form.querySelector(".save-note");
+  if (note) say2(note, "saving…");
+  var btn = form.querySelector('button[type=submit], button:not([type])');
+  if (btn) btn.disabled = true;
+  api(dest, new FormData(form)).then(function (d) {
+    if (note) say2(note, d.job_id ? ("queued #" + d.job_id) : "queued");
+    paintClipPlaceholders(form, d);
+    var jid = d.job_id || (d.job_ids && d.job_ids[0]);
+    if (!jid) return;
+    watchJob(jid, "song-status", function (job) {
+      if (job.status === "done") refreshSceneRow(form);
+      else if (job.status === "failed" || job.status === "cancelled") {
+        clearClipPlaceholders(jid);
+      }
+    });
+  }).catch(function (err) {
+    if (note) say2(note, err.message, true);
+  }).then(function () { if (btn) btn.disabled = false; });
 }, true);
 
 document.addEventListener("error", function (e) {
@@ -2498,13 +2531,62 @@ function clearRerollPlaceholders(jobId, root) {
   });
 }
 
+function paintClipPlaceholders(form, d) {
+  var row = form && form.closest(".clips-row");
+  if (!row) return;
+  var n = Math.max(1, parseInt(d.n, 10) || (d.job_ids && d.job_ids.length) || 1);
+  var strip = row.querySelector(".scene-clips");
+  if (!strip) {
+    strip = document.createElement("div");
+    strip.className = "media-strip scene-clips";
+    var empty = row.querySelector("p.empty");
+    if (empty) empty.replaceWith(strip);
+    else row.appendChild(strip);
+  }
+  var emptyP = strip.querySelector("p.empty");
+  if (emptyP) emptyP.remove();
+  var jid = d.job_id || (d.job_ids && d.job_ids[0]);
+  if (jid) form.dataset.clipJob = String(jid);
+  clearClipPlaceholders(jid, strip);
+  for (var i = 0; i < n; i++) {
+    var fig = document.createElement("figure");
+    fig.className = "clip-frame clip-tile clip-pending";
+    if (jid) fig.setAttribute("data-job-id", String(jid));
+    fig.setAttribute("aria-label", "Rendering clip");
+    fig.innerHTML = "<div class=\"still-thumb\">" +
+      "<div class=\"thumb-open still-skeleton\" aria-hidden=\"true\"></div>" +
+      "</div><figcaption>rendering…</figcaption>";
+    strip.appendChild(fig);
+  }
+}
+
+function clearClipPlaceholders(jobId, root) {
+  var scope = root || document;
+  if (!jobId) return;
+  scope.querySelectorAll('.clip-pending[data-job-id="' + jobId + '"]').forEach(function (el) {
+    el.remove();
+  });
+}
+
+function songIdFromForm(form) {
+  var page = document.getElementById("song-page");
+  if (page && page.getAttribute("data-song-id")) return page.getAttribute("data-song-id");
+  var action = (form && form.getAttribute("action")) || "";
+  var m = action.match(/\/songs\/(\d+)\//);
+  return m ? m[1] : "";
+}
+
+function sceneTier(form) {
+  var panel = form && form.closest(".sb-panel");
+  if (panel && panel.getAttribute("data-tier")) return panel.getAttribute("data-tier");
+  var inp = form && form.querySelector("[name=tier]");
+  return inp ? inp.value : "";
+}
+
 function refreshSceneRow(form) {
   var scene = form && form.closest(".scene");
-  var panel = form && form.closest(".sb-panel");
-  var page = document.getElementById("song-page");
-  refreshSceneEl(scene, page && page.getAttribute("data-song-id"),
-                 panel && panel.getAttribute("data-tier"),
-                 form && form.dataset.rerollJob);
+  refreshSceneEl(scene, songIdFromForm(form), sceneTier(form),
+                 form && (form.dataset.rerollJob || form.dataset.clipJob));
 }
 
 function sceneElForClip(tier, clipIdx) {
@@ -2533,7 +2615,10 @@ function refreshSceneEl(scene, songId, tier, jobId) {
     formatLocalTimes(next);
     hydrateLazy(next, true);
   }).catch(function () {
-    if (jobId) clearRerollPlaceholders(jobId);
+    if (jobId) {
+      clearRerollPlaceholders(jobId);
+      clearClipPlaceholders(jobId);
+    }
   });
 }
 
@@ -2575,6 +2660,52 @@ function applyRerollChip(chip) {
     refreshSceneEl(scene, songId || chipSong, tier, jid);
   });
   if (any) _appliedReroll[key] = true;
+}
+
+function sceneElForSceneNum(tier, sceneNum) {
+  if (sceneNum == null || sceneNum === "") return null;
+  var inputs = document.querySelectorAll(".clip-bar input[name=scene]");
+  for (var i = 0; i < inputs.length; i++) {
+    if (String(inputs[i].value) !== String(sceneNum)) continue;
+    var form = inputs[i].closest(".clip-bar");
+    if (tier) {
+      var t = form && form.querySelector("[name=tier]");
+      if (t && t.value && t.value !== tier) continue;
+    }
+    return inputs[i].closest(".scene");
+  }
+  return null;
+}
+
+function applyClipsChip(chip) {
+  if (!chip || chip.getAttribute("data-kind") !== "clips") return;
+  var jid = chip.getAttribute("data-job-id");
+  var status = chip.getAttribute("data-status");
+  if (!jid || !status) return;
+  var key = "clips:" + jid + ":" + status;
+  if (_appliedReroll[key]) return;
+  var page = document.getElementById("song-page");
+  var songId = (page && page.getAttribute("data-song-id")) || chip.getAttribute("data-song-id");
+  var chipSong = chip.getAttribute("data-song-id");
+  if (songId && chipSong && String(songId) !== String(chipSong)) return;
+  var tier = chip.getAttribute("data-tier");
+  var scene = sceneElForSceneNum(tier, chip.getAttribute("data-scene"));
+  var form = scene && scene.querySelector(".clip-bar");
+  var n = parseInt(chip.getAttribute("data-n"), 10) || 1;
+  if (status === "queued" || status === "running") {
+    if (form) paintClipPlaceholders(form, {job_id: jid, n: n});
+    return;
+  }
+  if (status === "failed" || status === "cancelled") {
+    _appliedReroll[key] = true;
+    clearClipPlaceholders(jid);
+    return;
+  }
+  if (status !== "done") return;
+  if (scene) {
+    refreshSceneEl(scene, songId || chipSong, tier, jid);
+    _appliedReroll[key] = true;
+  }
 }
 
 // Coverage roster tab. Reload used to pick the tier with the most rows (G

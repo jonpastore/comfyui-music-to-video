@@ -435,19 +435,31 @@ button.thumb-open:active:not(:disabled) {
 }
 .scene-clips {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  flex-wrap: nowrap;
+  gap: 0.6rem;
+  overflow-x: auto;
   margin-top: 0.6rem;
+  padding-bottom: 0.35rem;
 }
-.clip-frame { margin: 0; }
+.clip-frame { margin: 0; width: 190px; }
 .clip-frame video {
-  width: 10rem;
-  height: 6rem;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  height: auto;
   object-fit: cover;
   border-radius: 4px;
   background: var(--letterbox);
+  display: block;
 }
-.clip-frame figcaption { font-size: 0.8rem; color: var(--muted); }
+.clip-frame figcaption {
+  font-size: 0.8rem;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
 
 .tier-ref {
   border: 1px solid var(--border);
@@ -1579,7 +1591,8 @@ img.lazy-src, video.lazy-src {
 .reroll-bar input[type=number] { width: 5.2rem; }
 .reroll-bar select { min-width: 7.5rem; }
 .reroll-bar button { align-self: flex-end; margin: 0; }
-.still-pending .still-skeleton {
+.still-pending .still-skeleton,
+.clip-pending .still-skeleton {
   width: 100%;
   aspect-ratio: 3 / 4;
   min-height: 0;

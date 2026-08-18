@@ -104,6 +104,8 @@ def test_sb_panel_toolbar_and_closed_json():
         assert "applyRerollChip" in js
         assert "ref-frame clip-tile still-pending" in js
         assert "still-skeleton" in js.split("paintRerollPlaceholders", 1)[1]
+        assert "function paintClipPlaceholders" in js
+        assert "clip-frame clip-tile clip-pending" in js
         css = open(os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
         assert "aspect-ratio: 3 / 4" in css.split(".still-pending .still-skeleton", 1)[1][:280]
         assert "refreshSceneEl" in js
