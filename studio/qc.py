@@ -10,6 +10,7 @@ T3-33.a: every image FLAG/REJECT content finding's remedy is the next prompt
 rewrite, not "re-render with a different seed". T3-35: pose/identity FAIL
 names a settings class (latent / denoise / CFG / pose-match / plate-absent /
 body-colour) when expect diagnoses one; blank/uniform/alpha stay edit-text.
+T3-36: image-latent sheets inherit source WxH — not a resolution REJECT.
 
 ffprobe, ffmpeg's own analysis filters, PIL and numpy. No model, no opinion.
 
@@ -1770,11 +1771,21 @@ def check_image(path, expect):
                         remedy="re-render")]
 
     # T3-4.1-resolution: exact WxH vs the request. unit px (T3-4).
+    # T3-36: latent=image inherits source WxH — that is not a REJECT.
+    # Empty or absent latent still exact-matches.
     if expect.get("width") and expect.get("height"):
         want = (int(expect["width"]), int(expect["height"]))
+        inherit = str(expect.get("latent") or "").strip().lower() == "image"
+        match = got == want
+        if inherit:
+            verdict = PASS
+            detail = (f"{got[0]}x{got[1]} inherits source size "
+                      f"(latent=image; request was {want[0]}x{want[1]})")
+        else:
+            verdict = PASS if match else REJECT
+            detail = f"{got[0]}x{got[1]} against {want[0]}x{want[1]} requested"
         out.append(finding(path, "image", "resolution",
-                           PASS if got == want else REJECT,
-                           f"{got[0]}x{got[1]} against {want[0]}x{want[1]} requested",
+                           verdict, detail,
                            f"{got[0]}x{got[1]}", f"{want[0]}x{want[1]}", "px",
                            remedy="re-render pinned to a box that honours it"))
 

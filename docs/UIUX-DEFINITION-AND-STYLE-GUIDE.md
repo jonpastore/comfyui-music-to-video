@@ -836,7 +836,9 @@ image size floor). `T3-4.1-resolution`:
 a still at the wrong width×height REJECTs `resolution` with
 measured/expected WxH, unit `px` (not blank), and a re-render-pinned
 remedy — not a silent pass when the request was 320×240 and the box
-quietly wrote 160×120. `T3-4.1-alpha`: a
+quietly wrote 160×120. `T3-36`: an image-latent sheet that inherits
+source WxH PASSes `resolution` (1024×1024 vs 896×1216 is not REJECT);
+empty/absent latent still exact-match REJECTs. `T3-4.1-alpha`: a
 fully transparent sheet REJECTs `alpha` with max alpha 0 and an
 edit-the-text remedy (`T3-33.a`) — not a silent pass on an invisible RGBA still,
 and not a different-seed offer. `T3-4.1-not_uniform`:
@@ -1325,7 +1327,9 @@ anatomy. C1 / C2 job type on generate (`T7-21` **built**,
 `test_t7_21_c1_c2_resolver.py`): same-pose is image latent + denoise
 1.0; new-pose is empty 896×1216 + her keepers; labels match the graph.
 Those landings are scored like an anchor (`T3-34` **built**,
-`test_t3_34_pose_still_qc.py`). Pose/identity FAIL names a
+`test_t3_34_pose_still_qc.py`). Image-latent sheets that inherit
+source WxH do not `resolution` REJECT (`T3-36` **built**,
+`test_t3_36_image_latent_size.py`). Pose/identity FAIL names a
 settings remedy (`T3-35` **built**, `test_t3_35_settings_remedies.py`):
 latent / denoise / CFG / pose-match / plate-absent / body-colour;
 blank/uniform/alpha stay edit-text (`T3-33.a`). Keeper / reject; `usable=skip` never enters a

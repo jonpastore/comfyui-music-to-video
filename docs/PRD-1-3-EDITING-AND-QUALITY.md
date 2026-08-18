@@ -200,6 +200,8 @@ the run ceiling; clothed+nude iff r/xxx; g/pg13 clothed only, no
 anatomy. `T7-21` C1/C2 resolver **built** (`test_t7_21_c1_c2_resolver.py`).
 `T3-34` **built** (`test_t3_34_pose_still_qc.py`): those C1/C2
 `source=pose-gap` landings call `score_candidate` and store `qc_json`.
+`T3-36` **built** (`test_t3_36_image_latent_size.py`): image-latent
+sheets that inherit source WxH do not `resolution` REJECT.
 `T2-51` **built** (`test_t2_51_classify_cannot_write_map.py`):
 classify + gap write zero map rows; `POST .../pose-map` drafts
 `status=draft`. `T2-52` **built** (`test_t2_52_map_accept.py`):
@@ -261,6 +263,10 @@ opens reject, no image size floor (`test_t3_4_1_opens.py`);
 image `resolution` via PIL size when `expect.width`+`height` are set:
 matching WxH PASSes, downscaled REJECTs with unit `px` (not `None`),
 no expect emits nothing, `test_t3_4_1_resolution.py`;
+**`T3-36` built** — `check_image` `resolution` PASSes inherited
+source WxH when `expect.latent==image` (1024×1024 vs 896×1216 is not
+REJECT); empty/absent latent still exact-match REJECTs
+(`test_t3_36_image_latent_size.py`);
 **`T3-4.1-alpha` built** — image
 `alpha` / `measure_alpha`: fully transparent RGBA REJECTs, RGB and
 opaque/partial alpha PASS, unit `levels`, `test_t3_4_1_alpha.py`;

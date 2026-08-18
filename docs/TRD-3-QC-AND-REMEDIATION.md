@@ -229,7 +229,8 @@ alpha not fully transparent.
   `px`, remedy class `re-render-pinned`. Without a request the check emits
   nothing (as requested only). Catches a box that quietly downscaled a still
   (`test_t3_4_1_resolution.py`). T3-4 names the unit; `unit=None` is not
-  recorded.
+  recorded. Image-latent sheets that inherit source WxH are `T3-36`,
+  not this exact-match REJECT.
 - `T3-4.1-alpha` **Alpha not fully transparent** — `qc.measure_alpha` /
   `check_image` `alpha`: max alpha over the sheet (0–255). Fully
   transparent (max 0) REJECTs; any non-zero opacity PASSes. RGB without
@@ -811,7 +812,7 @@ check is true, and forcing the check true SUBMITS.
 |---|---|---|---|
 | `T3-34` C1/C2 landing scored like an anchor | **built** | `test_t3_34_pose_still_qc.py` | Pose-gap `anchor` jobs (`source=pose-gap`) enqueue the decided pose clause as `prompt` (not empty). C1 and C2 `h_anchor` landings call `score_candidate` and store `qc_json` (`confidence` / `identity` / `prompt`). Mutation: skip `score_candidate` on C2 → red. Mutation: empty enqueue prompt → red |
 | `T3-35` settings remedies (latent / denoise / CFG / pose-match / plate-absent / body-colour) | **built** | `test_t3_35_settings_remedies.py` | `qc.resolve_settings_remedy` + `check_identity_wrong` finding `remedy_class`. C1 empty latent → `latent`. C2 pose mismatch → `pose-match`. Stranger/missing-her image1 → `plate-absent` (never swap-stranger). Jet-black vs charcoal → `body-colour`. Mutation: plate-as-image1 FAIL still only `edit-text` → red. T3-33.a blank/uniform/alpha stay `edit-text` |
-| `T3-36` image-latent sheets do not FAIL for inheriting source size | **not built** | — | Intended: `test_t3_36_image_latent_size.py`. `T3-4.1-resolution` compares exact WxH with no image-latent exemption |
+| `T3-36` image-latent sheets do not FAIL for inheriting source size | **built** | this slice | `check_image` `resolution`: `expect.latent==image` PASSes inherited source WxH (1024×1024 vs 896×1216). Empty/absent latent still exact-match REJECTs. Mutation: drop the exemption → latent=image REJECT → red (`test_t3_36_image_latent_size.py`) |
 | `T3-37` D7 look (lips + her + blocking) | **not built**; **NOT MEASURED** | — | Intended: `test_t3_37_d7_look.py`. No same-scene GPU pair. Do not rank on warm px |
 | `T3-33.b` pose QC before anatomy | **process** | `T4-20` | Eye gates in `anchor5/poses/cleanrun/qc-pose-*.json`. Not a VLM. Studio graph unchanged |
 | `T3-28` identity-wrong never swaps a stranger plate | **built** (keep) | `test_t3_28_identity_wrong_remedy.py` | Remedy is edit the text, not swap a stranger plate. D10 adds: her photos as image1 are required; a missing-her finding is `plate-absent` (`T3-35`), not a swap |
