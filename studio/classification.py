@@ -118,13 +118,50 @@ def library(album, character_id=None):
     }
 
 
+def _is_skip(image):
+    return (image.get("usable") or "").strip().lower() == "skip"
+
+
+def _paths_match(stored, given):
+    stored = str(stored or "").strip()
+    given = str(given or "").strip()
+    if not stored or not given:
+        return False
+    if stored == given:
+        return True
+    return os.path.abspath(stored) == os.path.abspath(given)
+
+
+def _classified_image(album, path=None, image_id=None, character_id=None):
+    """Latest classification row matching path or id, or None."""
+    if not (album or "").strip():
+        return None
+    want_id = str(image_id or "").strip()
+    want_path = str(path or "").strip()
+    if not want_id and not want_path:
+        return None
+    for im in library(album, character_id)["images"]:
+        if want_id and str(im.get("id") or "").strip() == want_id:
+            return im
+        if want_path and _paths_match(im.get("path"), want_path):
+            return im
+    return None
+
+
+def refuse_skip(album, path=None, image_id=None, character_id=None):
+    """T7-23: usable=skip never enters use-as-ref / map / image1."""
+    image = _classified_image(album, path=path, image_id=image_id,
+                              character_id=character_id)
+    if image is not None and _is_skip(image):
+        slot = (image.get("id") or image.get("path") or "image").strip()
+        raise ValueError(
+            f"usable=skip cannot enter use-as-ref / map / image1 ({slot})")
+
+
 def keepers(album, character_id=None):
     """Library images that may cover a board need. usable=skip never covers."""
     lib = library(album, character_id)
-    lib["images"] = [
-        im for im in lib["images"]
-        if (im.get("usable") or "").strip().lower() != "skip"
-    ]
+    lib["images"] = [im for im in lib["images"] if not _is_skip(im)]
     return lib
 
 

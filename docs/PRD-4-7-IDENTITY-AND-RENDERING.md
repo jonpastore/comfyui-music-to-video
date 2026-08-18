@@ -172,7 +172,9 @@ map **is** (`test_t2_52_map_accept.py`): Accept/Reject per scene;
 jobs at the run ceiling; clothed+nude iff r/xxx. `T7-21` C1/C2
 resolver **is** (`test_t7_21_c1_c2_resolver.py`): same-pose encode
 vs empty 896×1216 + her keepers. Location plates (`T2-53`/`T7-22` **built**,
-`test_t2_53_location_plates.py`). LTX-first and decoded s2v hop are not: see TRD-2
+`test_t2_53_location_plates.py`). `T7-23` use-as-ref / map / image1 only
+from `usable≠skip` **is** (`test_t7_23_usable_skip.py`). LTX-first and
+decoded s2v hop are not: see TRD-2
 `T2-54`…`T2-55` and TRD-5 `T5-11`…`T5-15`. `T2-56` per-scene
 image1 **is** (`test_t2_56_per_scene_keeper.py`).
 
@@ -192,7 +194,9 @@ statement of it:
    jet-black (`T4-11` **partial**).
 4. **C1/C2 resolver** (`T7-21` **built**,
    `test_t7_21_c1_c2_resolver.py`). Location plates (`T7-22` **built**,
-   `test_t2_53_location_plates.py`). `T7-8` image-latent is the form control; the loop uses T7-21.
+   `test_t2_53_location_plates.py`). Use-as-ref / map / image1 refuse
+   `usable=skip` (`T7-23` **built**, `test_t7_23_usable_skip.py`).
+   `T7-8` image-latent is the form control; the loop uses T7-21.
 5. **`--refine` is honest as a graph** (P7 / `T5-1`). D7 hop
    (`T5-12`) is not built and NOT MEASURED. Variant B does not fit
    (`T5-6`).

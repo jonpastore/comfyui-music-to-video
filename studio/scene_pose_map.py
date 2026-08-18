@@ -122,19 +122,27 @@ def accepted_bases(song, tier):
     """{scene_number: path} for accepted rows with a readable file."""
     song = song if hasattr(song, "keys") else storyboard_service.require_song(song)
     storyboard_service.require_tier(tier)
+    album = (song["album"] or "").strip()
     out = {}
     for row in _rows(song["id"], tier):
         if row["status"] != "accepted":
             continue
         path = row["path"] or ""
+        classification.refuse_skip(album, path=path, image_id=row["keeper_id"])
         if path and os.path.isfile(path):
             out[int(row["scene_number"])] = path
     return out
 
 
-def _upsert_draft(song_id, tier, num, keeper, now):
+def _upsert_draft(song_id, tier, num, keeper, now, album=None,
+                  character_id=None):
     kid = str(keeper.get("id") or "").strip()
     path = str(keeper.get("path") or "").strip()
+    if not album:
+        song = db.one("SELECT album FROM songs WHERE id=?", song_id)
+        album = ((song["album"] if song else "") or "").strip()
+    classification.refuse_skip(album, path=path, image_id=kid,
+                               character_id=character_id)
     if _is_nude(keeper) and not tiers.allows_nudity(tier):
         raise ValueError(f"a nude map row is refused on {tier}")
     existing = _row(song_id, tier, num)
@@ -188,7 +196,8 @@ def draft(song_id, tier, character_id=None):
         keeper = _best_keeper(need, images, tier)
         if not keeper:
             continue
-        _upsert_draft(song["id"], tier, need["scene_number"], keeper, now)
+        _upsert_draft(song["id"], tier, need["scene_number"], keeper, now,
+                      album=album, character_id=character_id)
     return listed(song["id"], tier)
 
 

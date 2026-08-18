@@ -1306,7 +1306,7 @@ anatomy. C1 / C2 job type on generate (`T7-21` **built**,
 1.0; new-pose is empty 896×1216 + her keepers; labels match the graph.
 QC remedy
 line (`T3-35`). Keeper / reject; `usable=skip` never enters a
-slot (`T7-23`). Ceiling + ticked-lower backfill is visible
+slot (`T7-23` **built**, `test_t7_23_usable_skip.py`). Ceiling + ticked-lower backfill is visible
 (`T2-54`): r+pg13 shows both; a g run offers no nude.
 
 **Storyboard page.** Coverage meter (needs vs keepers, no bind)

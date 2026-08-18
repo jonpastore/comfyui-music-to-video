@@ -178,7 +178,8 @@ def test_t4_22_db_document_wins_over_sidecar():
 
 def test_t4_22_only_import_sidecar_reads_a_file():
     assert _opens_in("import_sidecar") == ["import_sidecar"]
-    for name in ("library", "query", "save", "latest", "versions", "keepers"):
+    for name in ("library", "query", "save", "latest", "versions", "keepers",
+                 "refuse_skip"):
         assert _opens_in(name) == [], f"{name} opens a file"
 
 

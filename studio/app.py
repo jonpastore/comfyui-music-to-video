@@ -4843,6 +4843,11 @@ def _collect_anchor_ref_paths(album, character_id, ref_ids, extra_paths=None,
                 break
     if not picked:
         raise HTTPException(400, "pick at least one saved reference image, or upload one")
+    for p in picked:
+        try:
+            classification.refuse_skip(album, path=p, character_id=character_id)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
     if len(picked) > pipeline.MAX_ANCHOR_REFS:
         raise HTTPException(400, f"{len(picked)} reference images selected; the model conditions "
                                   f"on {pipeline.MAX_ANCHOR_REFS}. Untick some.")
@@ -5031,6 +5036,10 @@ def _use_anchor_as_ref(id):
     if row["scope_kind"] != "album":
         raise HTTPException(400, "only an album's anchors can be used as references")
     album, cid = row["scope_value"], row["character_id"]
+    try:
+        classification.refuse_skip(album, path=row["path"], character_id=cid)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
     existing = db.one("""SELECT * FROM assets WHERE kind='anchor_ref' AND path=?
                          ORDER BY id DESC""", row["path"])
     # T10-23: content_tier travels with the file. A sheet rendered under g/pg13
@@ -6985,7 +6994,10 @@ def start_refs(request: Request, id: int, tier: List[str] = Form([]),
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         if scene_pose_map.has_rows(id, t):
-            scene_anchors = scene_pose_map.accepted_bases(song, t)
+            try:
+                scene_anchors = scene_pose_map.accepted_bases(song, t)
+            except ValueError as e:
+                raise HTTPException(400, str(e)) from e
             pose_bases = {}
         else:
             scene_anchors = {}
