@@ -284,7 +284,10 @@ only, no anatomy; studio `anchor` jobs, not `batch_edit`; C1/C2
 graphs `T7-21` **built**, `test_t7_21_c1_c2_resolver.py`; landings
 scored `T3-34` **built**, `test_t3_34_pose_still_qc.py`; settings
 remedies `T3-35` **built**, `test_t3_35_settings_remedies.py`;
-image-latent size `T3-36` **built**, `test_t3_36_image_latent_size.py`),
+image-latent size `T3-36` **built**, `test_t3_36_image_latent_size.py`;
+D7 look `T3-37` **harness only; NOT MEASURED**
+(`qc.t3_37_*` + `test_t3_37_d7_look.py`; no GPU pair;
+warm-px / silent hop omit refused)),
 and `classification_json` (`T4-21`/`T4-22`: album, character_id
 NULL=protagonist, versioned document, same fields as
 image-classification.json; sidecars seed import only),
@@ -1014,6 +1017,7 @@ documents, not a preference.
     T3-4.1-alpha image alpha not fully transparent (built; measure_alpha)
     T3-4.1-resolution image resolution as requested (built; PIL unit px)
     T3-36 image-latent inherits source WxH PASS (built; empty/absent still exact-match)
+    T3-37 D7 look LTX vs hop (harness only; NOT MEASURED; warm_px refused)
     T3-4.2-black_frames partial black FLAG while mean PASSes (built)
     T3-4.2-size_floor clip under MIN_VIDEO_BYTES REJECT (built)
     T3-4.2-opens unreadable / no-video-stream REJECT (built)

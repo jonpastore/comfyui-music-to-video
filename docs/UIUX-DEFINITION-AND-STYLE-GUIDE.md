@@ -399,8 +399,8 @@ window follow `clip_seconds`, not a hardcoded `LTX25_LEN`/`CHUNK`; a NULL
 `length_seconds` still renders 81 frames of `CHUNK`. Hop 0 is LTX (`T5-11` **built**, `test_t5_11_ltx_always_first.py`):
 `video_model=s2v` does not skip LTX. The T5-12 hop graph is **built**
 (`test_t5_12_d7_hop.py`); `T5-13` `skip_first_frames` per s2v window
-is **built** (`main()` hop emit + `test_t5_13_s2v_window.py`); look is NOT MEASURED
-(`T3-37`). When that
+is **built** (`main()` hop emit + `test_t5_13_s2v_window.py`); look is
+**harness only; NOT MEASURED** (`T3-37`, `test_t3_37_d7_look.py`). When that
 hop runs, a mixed-model job keeps each clip's **native** frames and fps
 (`T2-47` **built**, `test_t2_47_mixed_model.py`): s2v hop `.expect.json`
 is 77@16.0, LTX hop0 is 81@`LTX25_FPS` (16.8312); they differ. The
@@ -623,9 +623,9 @@ LTX first (`T5-11` **built**, `test_t5_11_ltx_always_first.py`).
 `test_t2_55_needs_lip_sync.py`) marks
 the decoded s2v hop (`T5-12` graph **built**, `test_t5_12_d7_hop.py`;
 `T5-13` `skip_first_frames` **built**, `main()` hop emit + `test_t5_13_s2v_window.py`);
-the look says **NOT MEASURED** until a GPU pair exists (`T3-37`,
-UIUX 7a.3). When the hop ran, the LTX predecessor and the s2v
-successor are both listed (`T6-A5`).
+the look says **harness only; NOT MEASURED** until a GPU pair exists
+(`T3-37`, `test_t3_37_d7_look.py`, UIUX 7a.3). When the hop ran, the
+LTX predecessor and the s2v successor are both listed (`T6-A5`).
 There is no separate Approve refs page.
 Stills and clips show `.qc-tag`: confidence, identity, and the
 assessment sentence. Wardrobe may change; physical identity must not.
@@ -1464,7 +1464,8 @@ successor both listed when the hop ran. Refine sibling on the LTX take,
 not on s2v (`T5-14` **built**, `test_t5_14_refine_on_ltx_take.py`).
 The song-page refine checkbox and `h_clips` progress name T5-A on the
 LTX take; they do not say unproven-on-s2v or i2v-low refine.
-D7 look is NOT MEASURED until `T3-37` has a pinned pair.
+D7 look is **harness only; NOT MEASURED** until `T3-37` has a pinned
+GPU pair (`test_t3_37_d7_look.py`; `T3_37_REAL_PAIR_MEASURED` False).
 
 ## 7b. The surfaces TRD 8-10 adds
 

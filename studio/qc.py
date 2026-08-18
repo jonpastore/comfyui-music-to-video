@@ -284,6 +284,21 @@ T7_7_REAL_PAIR = None
 T7_7_REAL_PAIR_SHA256 = None
 T7_7_REAL_PAIR_MEASURED = False
 
+# docs/TRD-3 T3-37: D7 pair look (lips move, she is still her, LTX
+# blocking readable). Same-scene LTX-only vs LTX+s2v-control. None is
+# NOT MEASURED. skip is not a reading. Do not rank on warm px.
+# T3_37_REAL_PAIR_MEASURED stays False until a GPU pair is pinned;
+# flipping it with an empty hook is the lie. Silent hop omit (no
+# control_video, no finding) is refused — fallback is a finding.
+T3_37_REAL_PAIR = None
+T3_37_REAL_PAIR_SHA256 = None
+T3_37_REAL_PAIR_MEASURED = False
+T3_37_REAL_PAIR_SEED = None
+D7_LOOK = "d7_look"
+D7_HOP_OMIT = "d7_hop_omit"
+T3_37_REFUSED_METRICS = frozenset({"warm_px", "warm-px", "warm", "warmpx"})
+T3_37_LOOK_METRICS = frozenset({"lips_motion", "identity", "blocking"})
+
 # docs/TRD-3 T3-27 / §6.2. The class is what approve() runs. A check with
 # NONE says so and offers no button.
 REMEDY_NONE = "none"
@@ -333,6 +348,8 @@ CHECK_REMEDY_CLASS = {
     "nclips": REMEDY_REASSEMBLE,
     REFINER_HELP_CHECK: REMEDY_NONE,
     REFINE_DIFFERENTIAL: REMEDY_NONE,
+    D7_LOOK: REMEDY_NONE,
+    D7_HOP_OMIT: REMEDY_RERENDER,
 }
 
 # T3-33.a: image content FLAG/REJECT is a prompt rewrite. Structural
@@ -979,6 +996,205 @@ def check_refine_differential(path, expect, kind="clip"):
     row = t5_2_finding(d, path=path)
     row["kind"] = kind
     return [row]
+
+
+# --------------------------------------------------------------- T3-37 D7 --
+
+def _t3_37_metric_name(metric):
+    m = (metric or "lips_motion").strip().lower().replace("-", "_")
+    if m in T3_37_REFUSED_METRICS or (m.startswith("warm") and "px" in m):
+        raise ValueError("T3-37 refuses warm_px ranking")
+    return m
+
+
+def _t3_37_frames(frames, slot):
+    if frames is None:
+        raise ValueError("T3-37 D7 look is NOT MEASURED")
+    try:
+        return _as_float_frames(frames, slot)
+    except ValueError as e:
+        raise ValueError("T3-37 D7 look is NOT MEASURED") from e
+
+
+def t3_37_real_pair():
+    """Hook the renderer populates. None until a same-scene GPU pair lands."""
+    return T3_37_REAL_PAIR
+
+
+def t3_37_pair_sha256(ltx, hop):
+    """Two hex digests. Missing files raise NOT MEASURED."""
+    import hashlib
+
+    def _digest(path, slot):
+        if not path or not os.path.isfile(path):
+            raise ValueError("T3-37 D7 look is NOT MEASURED")
+        h = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    return (_digest(ltx, "ltx"), _digest(hop, "hop"))
+
+
+def record_t3_37_real_pair(ltx, hop, seed=None, sha256=None):
+    """Renderer calls this with the LTX / hop pair. Does not flip MEASURED."""
+    global T3_37_REAL_PAIR, T3_37_REAL_PAIR_SEED, T3_37_REAL_PAIR_SHA256
+    T3_37_REAL_PAIR = (ltx, hop)
+    T3_37_REAL_PAIR_SEED = seed
+    if sha256 is not None:
+        T3_37_REAL_PAIR_SHA256 = sha256
+    elif (isinstance(ltx, (str, bytes, os.PathLike))
+          and isinstance(hop, (str, bytes, os.PathLike))
+          and os.path.isfile(ltx) and os.path.isfile(hop)):
+        T3_37_REAL_PAIR_SHA256 = t3_37_pair_sha256(ltx, hop)
+    else:
+        T3_37_REAL_PAIR_SHA256 = None
+
+
+def t3_37_d7_look_differential(ltx, hop, metric="lips_motion"):
+    """LTX-only vs LTX+s2v. Missing pair raises NOT MEASURED. warm_px refused.
+
+    Harness MAD proves the metric can fail (identical → mad 0). Eye judgment
+    on a GPU pair is the real look; this is not that claim.
+    """
+    import numpy as np
+    m = _t3_37_metric_name(metric)
+    if m not in T3_37_LOOK_METRICS and m != "lips":
+        raise ValueError(
+            f"T3-37 metric {metric!r} is not a D7 look reading "
+            f"(refuses warm_px; allowed {sorted(T3_37_LOOK_METRICS)})")
+    if m == "lips":
+        m = "lips_motion"
+    a = _t3_37_frames(ltx, "ltx")
+    b = _t3_37_frames(hop, "hop")
+    if a.shape != b.shape:
+        raise ValueError(f"T3-37: frame shape {a.shape} vs {b.shape}")
+    mad = float(np.mean(np.abs(a - b)))
+    return {
+        "metric": m,
+        "mad": mad,
+        "lips_moved": mad > 0,
+        "ltx_frames": int(a.shape[0]),
+        "hop_frames": int(b.shape[0]),
+        "threshold": None,
+    }
+
+
+def t3_37_claim():
+    """The real-pair gate. MEASURED with an empty hook is still NOT MEASURED."""
+    if not T3_37_REAL_PAIR_MEASURED:
+        raise ValueError("T3-37 D7 look is NOT MEASURED")
+    pair = t3_37_real_pair()
+    if pair is None:
+        raise ValueError("T3-37 D7 look is NOT MEASURED")
+    ltx, hop = pair
+    if (isinstance(ltx, (str, bytes, os.PathLike))
+            and isinstance(hop, (str, bytes, os.PathLike))):
+        expect = T3_37_REAL_PAIR_SHA256
+        if not expect or t3_37_pair_sha256(ltx, hop) != expect:
+            raise ValueError("T3-37 D7 look is NOT MEASURED")
+    out = t3_37_d7_look_differential(ltx, hop)
+    out["seed"] = T3_37_REAL_PAIR_SEED
+    return out
+
+
+def accept_t3_37_gpu_pair(ltx, hop, seed=None, source=None, metric="lips_motion"):
+    """Decode a same-scene LTX / hop pair and record it.
+
+    source='gpu' is the renderer path: populate the hook and flip
+    T3_37_REAL_PAIR_MEASURED. Lavfi / synthetic must pass source='harness'
+    (or omit it) so the GPU flag stays False. Missing frames raise.
+    warm_px is refused.
+    """
+    global T3_37_REAL_PAIR_MEASURED
+    d = t3_37_d7_look_differential(ltx, hop, metric=metric)
+    record_t3_37_real_pair(ltx, hop, seed=seed)
+    d["seed"] = seed
+    d["source"] = source or "harness"
+    if source == "gpu":
+        if t3_37_real_pair() is None:
+            raise ValueError("T3-37 D7 look is NOT MEASURED")
+        T3_37_REAL_PAIR_MEASURED = True
+    return d
+
+
+def t3_37_finding(report, path=None):
+    """D7 look finding. mad == 0 is FLAG (lips did not move), not a free pass."""
+    if not report or report.get("mad") is None:
+        raise ValueError("T3-37 D7 look is NOT MEASURED")
+    _t3_37_metric_name(report.get("metric") or "lips_motion")
+    path = path or "t3_37_pair"
+    mad = float(report["mad"])
+    moved = bool(report.get("lips_moved", mad > 0))
+    measured = {
+        "mad": mad,
+        "lips_moved": moved,
+        "metric": report.get("metric"),
+        "seed": report.get("seed"),
+    }
+    if moved:
+        detail = f"D7 hop vs LTX MAD {mad:.4f}: lips/motion differential present"
+        verdict = PASS
+    else:
+        detail = (f"D7 hop vs LTX MAD {mad:.4f}: no-op (identical frames); "
+                  "fallback is s2v-from-still, recorded as a finding")
+        verdict = FLAG
+    return finding(
+        path, "clip", D7_LOOK, verdict, detail,
+        measured, {"lips_moved": True}, "mad")
+
+
+def t3_37_hop_omit_finding(path, expect=None, kind="clip"):
+    """s2v-from-still fallback (no control_video) is a finding, not silent.
+
+    Mutation: hop omitted with no finding → red.
+    """
+    expect = expect or {}
+    return finding(
+        path, kind, D7_HOP_OMIT, FLAG,
+        "D7 hop omitted: s2v-from-still fallback (no control_video); "
+        "not a silent drop of the hop",
+        {
+            "hop_omitted": True,
+            "control_video": expect.get("control_video"),
+            "needs_lip_sync": bool(expect.get("needs_lip_sync", True)),
+        },
+        {"control_video": "LTX frames"},
+        None,
+    )
+
+
+def check_d7_hop_omit(path, expect, kind="clip"):
+    """Emit d7_hop_omit when a lip scene dropped the hop without a finding."""
+    expect = expect or {}
+    if not expect.get("needs_lip_sync"):
+        return []
+    omitted = expect.get("hop_omitted")
+    if omitted is None:
+        omitted = bool(expect.get("s2v_from_still")) and not expect.get(
+            "control_video")
+    if not omitted:
+        return []
+    return [t3_37_hop_omit_finding(path, expect=expect, kind=kind)]
+
+
+def t3_37_require_hop_finding(findings, expect=None):
+    """Fail closed: lip-scene hop omit without a d7_hop_omit finding raises."""
+    expect = expect or {}
+    if not expect.get("needs_lip_sync"):
+        return findings
+    omitted = expect.get("hop_omitted")
+    if omitted is None:
+        omitted = bool(expect.get("s2v_from_still")) and not expect.get(
+            "control_video")
+    if not omitted:
+        return findings
+    rows = findings or []
+    if not any(f.get("check") == D7_HOP_OMIT for f in rows):
+        raise ValueError(
+            "T3-37 hop omitted with no finding — silent drop is refused")
+    return rows
 
 
 def t4_13_real_sheet_path():

@@ -169,7 +169,7 @@ the eight things that must become true; they are not a new contract.
 | P10 | Scene refs generate only from an accepted map row; one chosen front is not image1 for every scene | `T2-52` **built**; `T2-56` **built** |
 | P11 | One location plate per location key, reused; unset/studio has no plate | `T2-53` **built** (`test_t2_53_location_plates.py`) |
 | P12 | Ceiling + ticked-lower backfill: r+pg13 writes both; r-only does not write pg13; g ceiling writes no nude | `T2-54` **built** (`test_t2_54_ceiling_backfill.py`); `T4-24` **built** |
-| P13 | Every scene is LTX first. Marked lip scenes then the decoded s2v hop. D7 look is NOT MEASURED until a GPU pair | `T2-55`, `T5-11`, `T5-12`, `T5-13`, `T3-37` |
+| P13 | Every scene is LTX first. Marked lip scenes then the decoded s2v hop. D7 look harness only; NOT MEASURED until a GPU pair | `T2-55`, `T5-11`, `T5-12`, `T5-13`, `T3-37` |
 | P8a | An image FLAG/REJECT content finding's remedy is the next prompt rewrite, not "re-render with a different seed". Identity-wrong already said "edit the text"; blank, uniform, transparent, lighting and portrait findings say the same | `T3-28`, `T3-33.a` |
 
 **P8 is the one to defend hardest.** D10: text names species/body;
@@ -213,9 +213,11 @@ image1 is that scene's accepted keeper;
 `test_t2_54_ceiling_backfill.py`; generate half `T4-24`; C1/C2
 `T7-21`). **P13 is partial**: `T5-11` / `T2-55` / `T5-12` graph / `T5-13`
 `skip_first_frames` **built** (`main()` hop emit + `test_t5_13_s2v_window.py`);
-D7 look `T3-37` NOT MEASURED. Anchors-on-model and
-this loop beat the timeline (`§6.0`). Do not mark a row built until
-the named test can go red.
+D7 look `T3-37` **harness only; NOT MEASURED**
+(`qc.t3_37_*` + `test_t3_37_d7_look.py`; no GPU pair;
+`T3_37_REAL_PAIR_MEASURED` False; warm-px and silent hop omit
+refused). Anchors-on-model and this loop beat the timeline (`§6.0`).
+Do not mark a row built until the named test can go red.
 
 ## 6. Sequencing — the part the TRDs do not have
 
@@ -233,9 +235,9 @@ id, and the answer re-orders everything below:
    → optional s2v hop). This beats the timeline. 0 chosen studio
    anchors live — the factory is still on step 1.
 2. **Know when a sheet or clip is wrong** — QC's repair path plus
-   pose-before-anatomy (`T3-33.b`) and the D7 look (`T3-37`, NOT
-   MEASURED). Image FLAG/REJECT is a prompt rewrite (`T3-33.a`);
-   settings remedies are `T3-35` **built**
+   pose-before-anatomy (`T3-33.b`) and the D7 look (`T3-37`,
+   harness only; NOT MEASURED). Image FLAG/REJECT is a prompt
+   rewrite (`T3-33.a`); settings remedies are `T3-35` **built**
    (`test_t3_35_settings_remedies.py`).
 3. **Clips at the length you asked for** — song length still owns clip
    count. LTX first (`T5-11`); s2v is a hop, not a skip.
