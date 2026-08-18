@@ -697,7 +697,7 @@ _stub("pipeline",
       # ...). Recorded, not ignored: a test asserting the form's knobs reach the
       # renderer has to be able to see them arrive.
       gen_anchor=lambda images, view="front", n=4, progress=None, prefix=None, profile=None, guard="", prompt="", render=None: anchor_calls.append({"profile": profile, "view": view, "guard": guard, "prompt": prompt, "images": list(images), "render": dict(render or {})}) or [],
-      gen_refs=lambda slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="", cast=None: refs_calls.append({"guard": guard, "body": body, "cast": cast}) or [],
+      gen_refs=lambda slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="", cast=None, bases=None, anchors=None: refs_calls.append({"guard": guard, "body": body, "cast": cast}) or [],
       reroll=lambda slug, tier, sb, anchor, mp3, idxs, progress=None: [],
       stage_refs=lambda slug, tier, ref_paths: [],
       gen_artwork=lambda slug, prompt, anchor_path, progress=None, guard="", n=1, size=1024: [],
@@ -709,6 +709,40 @@ _stub("pipeline",
 
 
 _MISSING = object()
+
+
+def _accept_pose_map(sid, tier, path=None):
+    """Accepted scene_pose_map rows for every board scene (T2-52 refs gate)."""
+    import time
+
+    import db
+
+    board = db.one(
+        "SELECT * FROM storyboards WHERE song_id=? AND tier=?", sid, tier)
+    if not board:
+        raise LookupError(f"no storyboard for song {sid} tier {tier}")
+    sb = json.load(open(board["json_path"]))
+    if not path:
+        path = os.path.join(tempfile.mkdtemp(prefix="pose_map_"), "keeper.png")
+        open(path, "wb").write(b"\x89PNG\r\n\x1a\n")
+    now = time.time()
+    for scene in sb.get("scenes") or []:
+        if not isinstance(scene, dict):
+            continue
+        n = scene.get("scene_number")
+        if n is None:
+            continue
+        n = int(n)
+        db.run(
+            """INSERT INTO scene_pose_map
+               (song_id, tier, scene_number, keeper_id, path, status,
+                prev_keeper_id, prev_path, created, updated)
+               VALUES (?,?,?,?,?,'accepted',NULL,NULL,?,?)
+               ON CONFLICT(song_id, tier, scene_number) DO UPDATE SET
+                 keeper_id=excluded.keeper_id, path=excluded.path,
+                 status='accepted', updated=excluded.updated""",
+            sid, tier, n, f"keeper-{n}", path, now, now)
+    return path
 
 
 @pytest.fixture

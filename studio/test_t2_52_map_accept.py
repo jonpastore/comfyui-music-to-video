@@ -2,10 +2,11 @@
 
 docs/TRD-2 §6b: rejecting a draft leaves the previous accepted binding
 (or none). Accepting persists status=accepted. Generate refs reads only
-accepted bindings; start_refs from a draft or rejected row writes no
-still.
+accepted bindings; start_refs from an empty map, draft, or rejected row
+writes no still.
 
 Mutation: generate refs from a draft row → red.
+Mutation: generate refs with an empty map → red.
 Mutation: reject overwrites the previous accepted keeper → red.
 Mutation: accept does not persist → accept arm red.
 """
@@ -244,3 +245,27 @@ def test_t2_52_start_refs_refuses_rejected(monkeypatch):
         assert "rejected" in refused.text.lower() or "Accept" in refused.text
         assert _refs_n(sid) == before
         assert _refs_jobs(sid) == []
+
+
+def test_t2_52_start_refs_refuses_empty_map():
+    """No draft+Accept → start_refs 400s and writes no refs job."""
+    tiers.ensure_builtins()
+    stamp = f"t252-empty-{time.time_ns()}"
+    album = f"T252E {stamp}"
+    sid = db.upsert_song(
+        stamp, title="T2-52 Empty Map Song", album=album, duration=8.0)
+    song = db.one("SELECT * FROM songs WHERE id=?", sid)
+    _write_board(sid, song["slug"], "r", [
+        _scene(1, "kneeling", "medium"),
+    ], album)
+    _front(album, "r")
+    assert _map(sid, "r") == []
+
+    with TestClient(appmod.app) as client:
+        before = _refs_n(sid)
+        refused = client.post(f"/songs/{sid}/refs", data={"tier": "r"})
+        assert refused.status_code == 400, refused.text
+        assert "empty" in refused.text.lower() or "Accept" in refused.text
+        assert _refs_n(sid) == before
+        assert _refs_jobs(sid) == []
+        assert _map(sid, "r") == []

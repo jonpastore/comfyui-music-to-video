@@ -1,8 +1,8 @@
 """T2-51 / T2-52: draft keeper→scene map; Accept/Reject per scene.
 
 Classify never writes here. Generate refs reads accepted rows only.
-A draft or rejected scene is refused by start_refs. Reject restores
-the previous accepted keeper (T2-15 shape). No FastAPI.
+An empty map, or a draft/rejected scene, is refused by start_refs.
+Reject restores the previous accepted keeper (T2-15 shape). No FastAPI.
 """
 import os
 import time
@@ -106,9 +106,12 @@ def unaccepted(song_id, tier):
 
 
 def require_accepted(song_id, tier):
-    """Raise when any map row is still draft or rejected. Empty map is ok."""
+    """Raise when the map is empty or any row is still draft or rejected."""
     song = storyboard_service.require_song(song_id)
     storyboard_service.require_tier(tier)
+    if not has_rows(song["id"], tier):
+        raise ValueError(
+            f"pose map for tier '{tier}' is empty — draft and Accept first")
     bad = unaccepted(song["id"], tier)
     if not bad:
         return

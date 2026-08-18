@@ -298,7 +298,7 @@ sidecar (not the studio loop).
 | D1 coverage list from the board (no bind) | not a first-class studio output |
 | D2 ceiling-tier pose generate (clothed+nude iff r/xxx) | **built** `T4-24` (`test_t4_24_ceiling_generate.py`). `POST /api/songs/{id}/pose-generate` / `pose_generate.generate` from pose-gap holes at the run ceiling. Sidecar `batch_edit` is not the path |
 | D3 ticked-lower backfill, never invent a higher tier | not a criterion |
-| D4 draft map + Accept (classify cannot write it) | **built** `T2-51`/`T2-52` (`test_t2_51_classify_cannot_write_map.py`, `test_t2_52_map_accept.py`). `scene_pose_map` status draft\|accepted\|rejected; `start_refs` refuses draft/rejected |
+| D4 draft map + Accept (classify cannot write it) | **built** `T2-51`/`T2-52` (`test_t2_51_classify_cannot_write_map.py`, `test_t2_52_map_accept.py`). `scene_pose_map` status draft\|accepted\|rejected; `start_refs` refuses empty map, draft, or rejected (no `freeze_auto_binds` fallback) |
 | D5 location plate per location key | **built** `T2-53`/`T7-22` (`test_t2_53_location_plates.py`). Store only; no page display |
 | D6 LTX always first | **built** `T5-11` (`test_t5_11_ltx_always_first.py`); lip fact is `T2-55` **built** |
 | D7 decoded s2v hop (`control_video` = LTX frames) | graph **built** `T5-12`; look **NOT MEASURED** (`T3-37`); no GPU pair |

@@ -7392,24 +7392,16 @@ def start_refs(request: Request, id: int, tier: List[str] = Form([]),
         anchors[t] = anchor
     limit = max(0, limit)
     for t in selected:
-        # T2-52: draft/rejected map rows are not a bind. Empty map keeps
-        # the leftover pose_plan auto-bind for unmapped songs.
+        # T2-52: empty / draft / rejected map is not a bind. Draft+Accept
+        # is required before refs; no pose_plan.freeze_auto_binds fallback.
         try:
             scene_pose_map.require_accepted(id, t)
+            scene_anchors = scene_pose_map.accepted_bases(song, t)
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
-        if scene_pose_map.has_rows(id, t):
-            try:
-                scene_anchors = scene_pose_map.accepted_bases(song, t)
-            except ValueError as e:
-                raise HTTPException(400, str(e)) from e
-            pose_bases = {}
-        else:
-            scene_anchors = {}
-            pose_bases = pose_plan.freeze_auto_binds(song, t)
         job = {"song_id": id, "tier": t, "limit": limit or None,
                "anchor_path": anchors[t]["path"],
-               "pose_bases": pose_bases}
+               "pose_bases": {}}
         if scene_anchors:
             job["anchors"] = scene_anchors
         jid = jobs.enqueue("refs", job, song_id=id)

@@ -16,6 +16,8 @@ import time
 
 from fastapi.testclient import TestClient
 
+from conftest import _accept_pose_map
+
 import app as appmod
 import db
 
@@ -151,6 +153,7 @@ def test_t2_28_anchored_lead_and_unanchored_extra_still_enqueues():
         assert "Nyx" not in names, names
         assert "Dancer" not in names, names
         assert "Crowd" not in names, names
+        _accept_pose_map(sid, "pg13")
 
         before = _n_refs_jobs(sid)
         ok = client.post(f"/songs/{sid}/refs", data={"tier": "pg13"},

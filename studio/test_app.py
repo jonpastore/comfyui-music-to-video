@@ -11,6 +11,7 @@ import pytest
 # conftest.py (which pytest always imports before this file) -- see its
 # docstring for why that has to be the one place it happens.
 from conftest import grok_calls  # noqa: F401  (read by test_guardrail_sent_to_grok_contains_pinned)
+from conftest import _accept_pose_map
 from conftest import _set_duration as _stub_set_duration
 
 import db      # real
@@ -462,6 +463,7 @@ def test_refs_limit_clamped():
         job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
         wait_job(job["id"])
         _chosen_anchor("Limit Album", "pg13")
+        _accept_pose_map(sid, "pg13")
 
         r = client.post(f"/songs/{sid}/refs", data={"tier": "pg13", "limit": "-100"})
         assert r.status_code in (200, 303), r.text
@@ -494,7 +496,7 @@ def test_explicit_flag_set_at_upload_and_toggled_and_shown():
 def test_explicit_not_passed_to_grok_or_pipeline(patch_stub):
     gen_refs_calls = []
 
-    def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="", cast=None, bases=None):
+    def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="", cast=None, bases=None, anchors=None):
         gen_refs_calls.append(dict(slug=slug, tier=tier, anchor=anchor, limit=limit,
                                     guard=guard, body=body))
         return []
@@ -510,6 +512,7 @@ def test_explicit_not_passed_to_grok_or_pipeline(patch_stub):
         assert "explicit" not in grok_calls["args"]["song"]
 
         _chosen_anchor("Explicit Album", "pg13")
+        _accept_pose_map(sid, "pg13")
         r = client.post(f"/songs/{sid}/refs", data={"tier": "pg13"})
         assert r.status_code in (200, 303), r.text
         job2 = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='refs' ORDER BY id DESC", sid)
@@ -585,6 +588,7 @@ def test_refs_two_tiers_enqueues_two_jobs_with_own_anchors():
             job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC", sid)
             wait_job(job["id"])
             _chosen_anchor("Two Tier Album", t, path=f"anchor_{t}.png")
+            _accept_pose_map(sid, t)
 
         before = len(jobs.recent(1000))
         r = client.post(f"/songs/{sid}/refs", data={"tier": ["pg13", "r"], "limit": "0"})
@@ -650,7 +654,7 @@ def test_body_consistency_wording_reaches_every_reference_prompt(patch_stub):
     body text has to be in EVERY frame's prompt, not only the anchor's."""
     seen = []
 
-    def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="", cast=None, bases=None):
+    def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None, guard="", body="", cast=None, bases=None, anchors=None):
         seen.append(body)
         return []
 
@@ -666,6 +670,7 @@ def test_body_consistency_wording_reaches_every_reference_prompt(patch_stub):
         wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC",
                         sid)["id"])
         _chosen_anchor("Body Album", "pg13")
+        _accept_pose_map(sid, "pg13")
 
         client.post(f"/songs/{sid}/refs", data={"tier": "pg13"})
         wait_job(db.one("SELECT id FROM jobs WHERE song_id=? AND kind='refs' ORDER BY id DESC",

@@ -823,21 +823,20 @@ button → HTML arm red. Mutation: enqueue without the check → post arm
 red (`test_t2_28_html.py`, `test_t2_28_refs_unanchored_leads.py`,
 `test_identity_front_blocker_names_pose_library_when_front_is_missing`).
 
-**refs-identity `T2-56` is built.** When `scene_pose_map` has accepted
-rows, `start_refs`/`h_refs` pass `accepted_bases` as `anchors` (image1
-per scene). They do not also stuff those keepers into `pose_bases`
-(image2). Unmapped songs still freeze `chosen_anchor` as image1 for
-every scene and `pose_plan.freeze_auto_binds` as leftover image2.
+**refs-identity `T2-56` is built.** `start_refs`/`h_refs` pass
+`accepted_bases` as `anchors` (image1 per scene). They do not also
+stuff those keepers into `pose_bases` (image2). Empty / draft /
+rejected map → 400; no `pose_plan.freeze_auto_binds` fallback
+(`test_t2_52_map_accept.py`, `test_start_refs_freezes_pose_bases`).
 Standing 4748 plate is refused (keep, `test_t2_refs_identity.py`).
 Location plates (`T2-53` **built**, `test_t2_53_location_plates.py`).
 Extra-view slots are later.
 `test_t2_56_per_scene_keeper.py`. `scene_pose_map` is the Accept-gated
-map (`T2-51`/`T2-52` **built**, `test_t2_52_map_accept.py`).
-`start_refs` 400s on draft/rejected. The leftover bind on the scene
-row is a pose textarea, then current thumb + Save plate, then a
-taller `pose-picks` strip. `#pose-gallery` (search, Gallery grid,
-save icon) `fetch`es `.../scene/{n}/pose-sheet` on select and paints
-the current thumb from the JSON. Not a `<select>`, not a full-page submit.
+map (`T2-51`/`T2-52` **built**). The scene-row bind is a pose
+textarea, then current thumb + Save plate, then a taller `pose-picks`
+strip. `#pose-gallery` (search, Gallery grid, save icon) `fetch`es
+`.../scene/{n}/pose-sheet` on select and paints the current thumb
+from the JSON. Not a `<select>`, not a full-page submit.
 
 **`T2-54` is built.** `storyboard_backfill.backfill(song_id, run_tiers)`
 takes the existing ceiling-tier board (highest ticked) and writes only

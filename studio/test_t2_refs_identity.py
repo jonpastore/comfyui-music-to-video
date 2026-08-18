@@ -19,6 +19,7 @@ import zlib
 
 from fastapi.testclient import TestClient
 
+from conftest import _accept_pose_map
 from conftest import _real_module
 
 import app as appmod
@@ -116,7 +117,7 @@ def test_h_refs_and_start_refs_use_chosen_sheet_not_plate(monkeypatch, tmp_path)
     score_bases = []
 
     def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None,
-                  guard="", body="", cast=None, bases=None):
+                  guard="", body="", cast=None, bases=None, anchors=None):
         seen.append({"anchor": anchor, "slug": slug, "tier": tier})
         out = str(tmp_path / "ref_out.png")
         _png(out)
@@ -167,6 +168,7 @@ def test_h_refs_and_start_refs_use_chosen_sheet_not_plate(monkeypatch, tmp_path)
             """INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen, created)
                VALUES ('album', ?, 'r', 'front', ?, 0, ?)""",
             album, plate_path, time.time())
+        _accept_pose_map(sid, "r", path=chosen_path)
 
         before = len(jobs.recent(1000))
         r = client.post(f"/songs/{sid}/refs", data={"tier": "r", "limit": "1"})
@@ -180,8 +182,9 @@ def test_h_refs_and_start_refs_use_chosen_sheet_not_plate(monkeypatch, tmp_path)
         assert PLATE not in args["anchor_path"]
 
         appmod.h_refs(args, lambda m: None)
-        assert seen, "h_refs never called gen_refs"
-        assert seen[0]["anchor"] == CHOSEN, seen
-        assert seen[0]["anchor"] != PLATE
-        assert score_bases and score_bases[0] == [chosen_path], score_bases
-        assert plate_path not in (score_bases[0] or [])
+        mine = [s for s in seen if s.get("slug") == song["slug"]]
+        assert mine, f"h_refs never called gen_refs for this song: {seen}"
+        assert mine[-1]["anchor"] == CHOSEN, mine
+        assert mine[-1]["anchor"] != PLATE
+        assert score_bases and score_bases[-1] == [chosen_path], score_bases
+        assert plate_path not in (score_bases[-1] or [])

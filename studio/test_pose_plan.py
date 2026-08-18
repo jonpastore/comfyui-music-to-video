@@ -300,14 +300,10 @@ def test_build_refs_bases_file_sets_image2(tmp_path):
 
 
 def test_start_refs_freezes_pose_bases(monkeypatch):
-    seen = []
-
-    def _gen_refs(slug, tier, sb, anchor, mp3, progress=None, limit=None,
-                  guard="", body="", cast=None, bases=None):
-        seen.append({"anchor": anchor, "bases": bases})
-        return []
-
-    monkeypatch.setattr(appmod.pipeline, "gen_refs", _gen_refs)
+    """Empty scene_pose_map refuses refs; freeze_auto_binds is not the path."""
+    monkeypatch.setattr(appmod.pipeline, "gen_refs",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            RuntimeError("gen_refs must not run")))
     monkeypatch.setattr(appmod.pipeline, "install_input",
                         lambda p, name=None: os.path.basename(p))
     with TestClient(appmod.app) as client:
@@ -321,7 +317,7 @@ def test_start_refs_freezes_pose_bases(monkeypatch):
         db.run("""INSERT INTO anchors (scope_kind,scope_value,tier,view,path,chosen,created)
                   VALUES ('album',?,'xxx','front',?,1,?)""",
                song["album"], front, time.time())
-        a_plate = _sheet(song["album"], "xxx", "pose_q", plate, "all fours", nude=True)
+        _sheet(song["album"], "xxx", "pose_q", plate, "all fours", nude=True)
         client.post(f"/songs/{song['id']}/storyboard", data={"tier": "xxx"})
         job = db.one("SELECT id FROM jobs WHERE song_id=? AND kind='storyboard' ORDER BY id DESC",
                      song["id"])
@@ -330,18 +326,15 @@ def test_start_refs_freezes_pose_bases(monkeypatch):
         sb = json.load(open(sb_row["json_path"]))
         sb["scenes"][0]["pose"] = "on all fours, looking back"
         json.dump(sb, open(sb_row["json_path"], "w"))
+        before = list(db.q(
+            "SELECT * FROM jobs WHERE song_id=? AND kind='refs'", song["id"]))
         r = client.post(f"/songs/{song['id']}/refs", data={"tier": "xxx"},
                         follow_redirects=False)
-        assert r.status_code == 303, r.text
-        job = db.one("SELECT * FROM jobs WHERE song_id=? AND kind='refs' ORDER BY id DESC",
-                     song["id"])
-        args = json.loads(job["args_json"])
-        assert args["anchor_path"] == front
-        assert args["pose_bases"], args
-        assert a_plate["path"] in args["pose_bases"].values()
-        page = client.get(f"/songs/{song['id']}").text
-        assert "pose plan" in page.lower()
-        assert "pose-plan" in page
+        assert r.status_code == 400, r.text
+        assert "pose map" in r.text.lower() or "Accept" in r.text
+        assert list(db.q(
+            "SELECT * FROM jobs WHERE song_id=? AND kind='refs'",
+            song["id"])) == before
 
 
 def test_album_coverage_rolls_up_songs_and_clear_unsets_keeper():

@@ -160,9 +160,9 @@ copies. Do not offer those families as `role=reference` defaults.
 **P5's path is built; the picture look is not.** `T7-6` shipped: with
 use-as-ref ticked, `gen_anchor`'s images list is exactly that sheet.
 `gen_refs` passes the accepted keeper for **that** scene as image1
-when the map has accepted rows (`T2-56` **built**,
-`test_t2_56_per_scene_keeper.py`). One chosen front for every scene
-is the unmapped leftover. Location plates (`T2-53` **built**,
+(`T2-56` **built**, `test_t2_56_per_scene_keeper.py`). Empty map /
+draft / rejected refuse refs (`T2-52` **built**); no auto-bind
+fallback. Location plates (`T2-53` **built**,
 `test_t2_53_location_plates.py`). Extra-view slots are later.
 `T7-7` has the offline ranking harness. The GPU four-image set is still
 **NOT MEASURED**. **0 chosen studio anchors** — the factory is still on
@@ -178,7 +178,8 @@ gap **is**; the same page shows ceiling holes and import closes them
 without GPU. `T2-51` draft map (classify cannot write it) **is**
 (`test_t2_51_classify_cannot_write_map.py`). `T2-52` Accept-gated
 map **is** (`test_t2_52_map_accept.py`): Accept/Reject per scene;
-`start_refs` refuses draft/rejected. `T4-24` ceiling-tier pose generate
+`start_refs` refuses empty map, draft, or rejected (no
+`freeze_auto_binds` fallback). `T4-24` ceiling-tier pose generate
 **is** (`test_t4_24_ceiling_generate.py`): pose-gap holes → studio
 jobs at the run ceiling; clothed+nude iff r/xxx. `T7-21` C1/C2
 resolver **is** (`test_t7_21_c1_c2_resolver.py`): same-pose encode
@@ -253,9 +254,10 @@ that roster. The album lead’s gallery tab is a renameable name
 (default **Lead**), not the word protagonist. **Generate…** lists the actors Mage needs a reference
 image for (the sheet’s person, plus the album lead on a partnered
 stance such as cowgirl, kneeling look-back, or supine) above the grey-studio sheet prompt.
-Unmapped leftover auto-bind and the album-coverage keeper dropdown use
-that same actor pool, so a Panther-lead partnered scene can take a
-Meow P / ensemble keeper without generating a new sheet. Uploading a sheet stays on that roster tier — it does
+Album-coverage / scene-row keeper dropdown use that same actor pool,
+so a Panther-lead partnered scene can take a Meow P / ensemble keeper
+without generating a new sheet. Refs enqueue does not auto-bind an
+empty map. Uploading a sheet stays on that roster tier — it does
 not refresh onto G because G has more rows. "Use as reference" is
 not on the tile.
 

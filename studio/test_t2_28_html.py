@@ -17,6 +17,8 @@ import time
 
 from fastapi.testclient import TestClient
 
+from conftest import _accept_pose_map
+
 import app as appmod
 import db
 
@@ -157,6 +159,7 @@ def test_t2_28_html_anchored_lead_is_not_blocked():
             ]),
             _scene(2, []),
         ])
+        _accept_pose_map(sid, "pg13")
         r = client.get(f"/songs/{sid}/storyboard/pg13")
         assert r.status_code == 200, r.text
         html = r.text
@@ -214,6 +217,7 @@ def test_t2_28_post_refs_refuses_unanchored_lead():
                                        chosen, created, character_id)
                   VALUES ('album',?,?,?,?,?,?,?)""",
                album, "pg13", "front", path, 1, time.time(), char["id"])
+        _accept_pose_map(sid, "pg13")
         before_ok = _n_refs_jobs(sid)
         ok = client.post(f"/songs/{sid}/refs", data={"tier": "pg13"},
                          follow_redirects=False)
