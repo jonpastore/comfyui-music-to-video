@@ -3880,6 +3880,55 @@ function initLibraryBulk() {
     });
   }
 
+  var skipAlbumObs = false;
+  function sizeOpenAlbum() {
+    var root = document.getElementById("library-albums");
+    var open = root && root.querySelector(".library-album.open");
+    var body = open && open.querySelector(".library-album-body");
+    if (!root || !body || body.hidden) return;
+    var heads = 0;
+    root.querySelectorAll(".library-album > .album-group-head").forEach(function (h) {
+      heads += h.offsetHeight;
+    });
+    var n = root.querySelectorAll(".library-album").length;
+    var gap = 0.35 * 16;
+    var max = root.clientHeight - heads - Math.max(0, n - 1) * gap;
+    if (max < 128) max = 128;
+    body.style.setProperty("--album-body-max", max + "px");
+  }
+  function watchOpenAlbum() {
+    var root = document.getElementById("library-albums");
+    if (!root) return;
+    if (root._albumObs) {
+      root._albumObs.disconnect();
+      root._albumObs = null;
+    }
+    var open = root.querySelector(".library-album.open");
+    if (!open || !window.IntersectionObserver) return;
+    var obs = new IntersectionObserver(function (entries) {
+      if (skipAlbumObs) return;
+      entries.forEach(function (en) {
+        if (en.target !== open) return;
+        if (en.intersectionRatio > 0.08) return;
+        setGroupOpen(open, false);
+      });
+    }, {root: root, threshold: [0, 0.08, 0.2]});
+    obs.observe(open);
+    root._albumObs = obs;
+  }
+  function chainAlbumWheel(body) {
+    if (!body || body._wheelBound) return;
+    body._wheelBound = true;
+    body.addEventListener("wheel", function (e) {
+      var root = document.getElementById("library-albums");
+      if (!root) return;
+      var atTop = body.scrollTop <= 0;
+      var atBot = body.scrollTop + body.clientHeight >= body.scrollHeight - 1;
+      if ((e.deltaY < 0 && atTop) || (e.deltaY > 0 && atBot)) {
+        root.scrollTop += e.deltaY;
+      }
+    }, {passive: true});
+  }
   function setGroupOpen(head, open) {
     if (!head) return;
     if (open) {
@@ -3892,8 +3941,18 @@ function initLibraryBulk() {
     if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
     var body = head.querySelector(".library-album-body");
     if (body) body.hidden = !open;
+    if (body && open) chainAlbumWheel(body);
+    skipAlbumObs = true;
+    sizeOpenAlbum();
+    watchOpenAlbum();
+    requestAnimationFrame(function () { skipAlbumObs = false; });
     if (typeof refresh === "function") refresh();
   }
+  window.addEventListener("resize", sizeOpenAlbum);
+  sizeOpenAlbum();
+  watchOpenAlbum();
+  var already = document.querySelector(".library-album.open .library-album-body");
+  if (already) chainAlbumWheel(already);
 
   document.addEventListener("click", function (e) {
     var fold = e.target.closest && e.target.closest("button.album-fold");

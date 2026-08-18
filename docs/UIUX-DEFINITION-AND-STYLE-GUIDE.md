@@ -718,9 +718,11 @@ to every song on that album. Analyse-all also asks for per-song genre
 refinements (style_text / title / lyrics) and saves them. The table groups by album
 as an accordion (`#library-albums`): one section open, the others
 collapsed. Column headers (Title / Genre / Length / …) live **inside**
-the open section, not above the album list. The open section fills
-leftover viewport height and scrolls (`.library-album-body.library-scroll`);
-opening another album closes this one. The first album starts open.
+the open section, not above the album list. `#library-albums` scrolls
+the album names. The open body is content-tall up to leftover height
+(`--album-body-max`); extra songs scroll inside it, then the wheel
+continues the album list. If the open album leaves the scroller it
+collapses. Opening another album closes this one. The first album starts open.
 Added date sits under the
 title. Genre is chips (primary + secondary), not the word **Set** —
 the pencil opens `#genre-set`. That modal is a 2×2 field grid (selects

@@ -93,8 +93,15 @@ def test_library_groups_by_album_and_collapses_upload():
         assert body.find("<thead>") > body.find("album-group-head")
         js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
         assert "library-album.open" in js
+        assert "sizeOpenAlbum" in js
+        assert "--album-body-max" in js
+        assert "IntersectionObserver" in js
+        assert "chainAlbumWheel" in js
         assert "/albums/genres" in js
         assert "refineGenres" in js
+        assert "overflow: auto" in css
+        assert "--album-body-max" in css
+        assert "flex: 1 1 auto;\n  min-height: 12rem" not in css
 
 
 def test_album_genre_defaults_copy_to_every_song():

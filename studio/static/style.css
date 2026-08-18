@@ -210,6 +210,7 @@ body:has(#library) main {
 .library-albums {
   flex: 1 1 auto;
   min-height: 0;
+  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -222,10 +223,9 @@ body:has(#library) main {
   overflow: hidden;
 }
 .library-album.open {
-  flex: 1 1 auto;
-  min-height: 12rem;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 .album-group-head {
   display: flex;
@@ -238,11 +238,11 @@ body:has(#library) main {
 .library-album.open .album-group-head {
   border-bottom: 1px solid var(--border-strong);
 }
-.library-album-body {
-  flex: 1 1 auto;
-  min-height: 0;
+.library-album-body,
+.library-album-body.table-scroll {
+  flex: 0 1 auto;
   overflow: auto;
-  max-height: none;
+  max-height: var(--album-body-max, 50vh);
   margin-bottom: 0;
   border: 0;
   border-radius: 0;
