@@ -358,14 +358,22 @@ in a bar the operator has already memorised.
 
 ### 5.2 Type scale
 
-Six steps, geometric-ish, replacing fourteen ad-hoc values.
+Tokens live on `:root` in `style.css` and match the sizes the sheet
+already rendered (not a resize). Timeline ticks stay literal.
 
-    --text-xs:   0.75rem    /* tags, table meta, timestamps */
-    --text-sm:   0.875rem   /* hints, secondary labels, dense tables */
-    --text-base: 1rem       /* body; the default */
-    --text-lg:   1.125rem   /* card titles, section heads */
-    --text-xl:   1.375rem   /* page h2 */
-    --text-2xl:  1.75rem    /* page h1 */
+    --text-xs:   0.75rem    /* tags, table meta */
+    --text-sm:   0.85rem    /* hints */
+    --text-md:   0.9rem
+    --text-base: 1rem       /* h4, body */
+    --text-lg:   1.15rem    /* h3 */
+    --text-xl:   1.35rem    /* h2 */
+    --text-2xl:  1.6rem     /* h1 */
+
+Chip tabs (look / cast / wardrobe) share one rule. Dialog chrome
+(help / confirm / fix / sheet / video / jobs) shares panel + backdrop
++ `.modal-bar`. `dialog.lightbox` stays image-sized. Open-image
+resets (cover / thumb / cand) share one rule. Map is commented at
+the top of `style.css`.
 
 Line height: 1.5 body, 1.25 headings. Headings (`h1`–`h4`) and every
 `details > summary` are initcap (`text-transform: capitalize`) in

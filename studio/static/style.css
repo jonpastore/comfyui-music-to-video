@@ -16,8 +16,24 @@
   --text: #e6e8eb;
   --muted: #8b93a1;
   --accent: #7aa2f7;
+  --accent-hover: #8fb2ff;   /* was hardcoded on button / a.btn / .button-link hover */
+  --accent-active: #6a92e8;  /* was hardcoded on button:active */
   --accent-fg: #0d1117;
   --danger: #f7768e;
+  --danger-active: #d85a72;  /* was hardcoded on button.danger:active */
+  --backdrop: rgba(0, 0, 0, 0.7);
+  --letterbox: #000;
+
+  /* Type scale. Values match what this sheet already rendered — not the
+     unused UIUX 0.875/1.375/1.75 set, which would resize every page.
+     Timeline ticks (0.66–0.72) stay literal; they are not body type. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.85rem;
+  --text-md: 0.9rem;
+  --text-base: 1rem;
+  --text-lg: 1.15rem;
+  --text-xl: 1.35rem;
+  --text-2xl: 1.6rem;
 
   /* The three Material Design 3 ideas worth taking, and only those. Its type
      scale (15 levels), ripple and state-layer overlays solve problems a dense
@@ -32,6 +48,34 @@
   --motion-standard: 200ms;
   --motion-easing: cubic-bezier(0.2, 0, 0, 1);   /* M3's "standard" curve */
 }
+
+/* =====================================================================
+   Consolidation map (2026-08-18). Undo a merge by splitting the grouped
+   selector listed under each heading. Templates still use the old names.
+   ---------------------------------------------------------------------
+   TABS (chip row)
+     was: .look-tabs / .cast-tabs / .cast-subtabs / .wardrobe-tabs
+          .look-tab  / .cast-tab  / .cast-subtab  / .wardrobe-tab
+     keep separate: .tier-tab (notched, accent-active)
+                    .family-tab (pill, accent-active)
+   OPEN-IMAGE (reset button wrapping a thumb)
+     was: .cover-open / button.cover-open / .thumb-open / .cand-open
+          .anchor-tile .thumb-open / .anchor-tile .anchor-open
+     keep separate: button.thumb-open (framed zoom-in tile)
+   DIALOG CHROME (panel + dim + bar)
+     was: .help-modal / .confirm-modal / .fix-modal / dialog.sheet-modal
+          / dialog.video-modal / .jobs-modal  (each had its own bar + 0.7 backdrop)
+     keep separate: dialog.lightbox (transparent, sized to the picture)
+   DEAD, deleted
+     .button-link — unused; a.btn is the same job (sets.html used to nest
+       <a><button></a>; a.btn replaced that). Restore from git if a template
+       still expects the class.
+     .playlist-card > summary::-webkit-details-marker — global details rule.
+   HEX
+     #8fb2ff → --accent-hover; #6a92e8 → --accent-active;
+     #d85a72 → --danger-active; var(--danger, #c44) → var(--danger);
+     var(--card, #1c1c1e) → var(--panel)  (--card was never defined)
+   ===================================================================== */
 
 * { box-sizing: border-box; }
 
@@ -81,7 +125,7 @@ a { color: var(--accent); }
 }
 .job-chip:hover { border-color: var(--accent); }
 .job-chip-running, .job-chip-cancelling { border-color: var(--accent); }
-.job-chip-failed { border-color: var(--danger, #c44); color: var(--danger, #c44); }
+.job-chip-failed { border-color: var(--danger); color: var(--danger); }
 .job-chip-kind { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .job-chip-meta { color: var(--muted); flex: none; }
 .job-chip-progress { color: var(--muted); max-width: 12rem; }
@@ -90,20 +134,9 @@ a { color: var(--accent); }
 .jobs-modal {
   width: min(52rem, 96vw);
   max-height: 80vh;
-  overflow: auto;
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  padding: 1rem;
+  border-color: var(--border-strong);
 }
-.jobs-modal::backdrop { background: rgba(0, 0, 0, 0.7); }
-.jobs-modal .modal-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.75rem;
-}
+.jobs-modal .modal-bar { justify-content: space-between; margin-bottom: 0.75rem; }
 .jobs-modal .queue-panel { border: 0; padding: 0; margin: 0; box-shadow: none; }
 .jobs-modal .queue-head a { display: none; }
 
@@ -181,10 +214,10 @@ button.album-fold {
    tool, by accident rather than by choice. The values below are close to what
    was already rendering for h3/h4 and tighter at the top. */
 h1, h2, h3, h4 { font-weight: 600; line-height: 1.25; text-transform: capitalize; }
-h1 { font-size: 1.6rem; font-weight: 700; }
-h2 { font-size: 1.35rem; }
-h3 { font-size: 1.15rem; }
-h4 { font-size: 1rem; }
+h1 { font-size: var(--text-2xl); font-weight: 700; }
+h2 { font-size: var(--text-xl); }
+h3 { font-size: var(--text-lg); }
+h4 { font-size: var(--text-base); }
 
 .card {
   background: var(--panel);
@@ -233,18 +266,19 @@ details.song-fold > summary {
 }
 details.song-fold > summary .muted { font-weight: 400; }
 details.song-fold[open] > summary { margin-bottom: 0.75rem; }
-.look-tabs, .cast-tabs, .cast-subtabs {
+/* TABS — was look/cast/cast-sub/wardrobe (identical). Split to undo. */
+.look-tabs, .cast-tabs, .cast-subtabs, .wardrobe-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
   margin: 0 0 0.75rem;
 }
-.look-tab, .cast-tab, .cast-subtab {
+.look-tab, .cast-tab, .cast-subtab, .wardrobe-tab {
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--border);
 }
-.look-tab.active, .cast-tab.active, .cast-subtab.active {
+.look-tab.active, .cast-tab.active, .cast-subtab.active, .wardrobe-tab.active {
   color: var(--text);
   border-color: var(--border-strong);
   background: var(--panel-raised);
@@ -265,7 +299,7 @@ details.song-fold[open] > summary { margin-bottom: 0.75rem; }
   padding: 0.05rem 0.3rem;
   border: 1px solid var(--border);
   border-radius: 3px;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   text-align: center;
   text-decoration: none;
 }
@@ -275,7 +309,7 @@ a.tier-cell.has { color: var(--accent); border-color: var(--border-strong); }
 .actor-pick { margin: 0; min-width: 12rem; }
 .actor-pick .check-row { margin: 0.15rem 0 0; }
 .char-rename { margin: 0.45rem 0 0.7rem; }
-.char-rename > summary { cursor: pointer; color: var(--muted); }
+.char-rename > summary { color: var(--muted); }
 .char-rename-row {
   display: flex;
   flex-wrap: wrap;
@@ -286,7 +320,7 @@ a.tier-cell.has { color: var(--accent); border-color: var(--border-strong); }
 .notice {
   margin: 0.4rem 0 0;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
 }
 .pose-need { list-style: none; padding: 0; margin: 0.4rem 0; }
 .pose-need li {
@@ -297,13 +331,22 @@ a.tier-cell.has { color: var(--accent); border-color: var(--border-strong); }
 }
 .pose-need li.missing { color: var(--text); }
 .pose-need img { width: 2.2rem; height: 3rem; object-fit: cover; border-radius: 3px; }
-.pose-need-line { margin: 0.4rem 0 0.75rem; padding-left: 1.1rem; font-size: 0.85rem; }
-.cover-open {
+.pose-need-line { margin: 0.4rem 0 0.75rem; padding-left: 1.1rem; font-size: var(--text-sm); }
+/* OPEN-IMAGE — was .cover-open / .thumb-open / .cand-open (reset + zoom).
+   button.thumb-open below is the framed tile; do not fold it in. */
+.cover-open, .thumb-open, .cand-open,
+.anchor-tile .thumb-open, .anchor-tile .anchor-open {
+  display: block;
   padding: 0;
   border: 0;
   background: none;
   cursor: zoom-in;
+  color: inherit;
   line-height: 0;
+}
+.thumb-open img, .thumb-open video {
+  display: block;
+  max-width: 100%;
 }
 .cast-iconbar {
   display: flex;
@@ -375,23 +418,10 @@ a.tier-cell.has { color: var(--accent); border-color: var(--border-strong); }
 }
 .sb-raw-json, .sb-lock-fields { margin: 0.55rem 0 0.25rem; }
 .sb-raw-json > summary, .sb-lock-fields > summary {
-  cursor: pointer;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--text-md);
 }
 
-.thumb-open {
-  display: block;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
-  color: inherit;
-}
-.thumb-open img, .thumb-open video {
-  display: block;
-  max-width: 100%;
-}
 button.thumb-open {
   padding: 0;
   border: 1px solid var(--border);
@@ -420,7 +450,7 @@ button.thumb-open:active:not(:disabled) {
   height: 6rem;
   object-fit: cover;
   border-radius: 4px;
-  background: #000;
+  background: var(--letterbox);
 }
 .clip-frame figcaption { font-size: 0.8rem; color: var(--muted); }
 
@@ -481,8 +511,8 @@ button {
   align-self: flex-start;
   transition: background-color .12s ease, border-color .12s ease, color .12s ease;
 }
-button:hover:not(:disabled) { background: #8fb2ff; }
-button:active:not(:disabled) { background: #6a92e8; }
+button:hover:not(:disabled) { background: var(--accent-hover); }
+button:active:not(:disabled) { background: var(--accent-active); }
 /* One rule for keyboard focus on every interactive control (UIUX §5.7 / §8). */
 a:focus-visible, button:focus-visible, input:focus-visible,
 select:focus-visible, textarea:focus-visible {
@@ -515,7 +545,7 @@ a.btn {
   padding: 0.5rem 0.9rem;
   text-decoration: none;
 }
-a.btn:hover { background: #8fb2ff; color: var(--accent-fg); }
+a.btn:hover { background: var(--accent-hover); color: var(--accent-fg); }
 a.btn.secondary {
   background: transparent;
   color: var(--text);
@@ -543,7 +573,7 @@ button.danger {
   border-color: var(--danger);
 }
 button.danger:hover:not(:disabled) { background: var(--danger); color: var(--bg); }
-button.danger:active:not(:disabled) { background: #d85a72; border-color: #d85a72; }
+button.danger:active:not(:disabled) { background: var(--danger-active); border-color: var(--danger-active); }
 
 /* Combines with any variant above. For buttons living inside table cells. */
 button.btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; border-radius: 5px; }
@@ -567,7 +597,7 @@ table.list th, table.list td {
 .tag.done { border-color: var(--accent); color: var(--accent); }
 
 .empty { color: var(--muted); font-style: italic; }
-.hint { color: var(--muted); font-size: 0.85rem; }
+.hint { color: var(--muted); font-size: var(--text-sm); }
 .meta { color: var(--muted); }
 .guardrail { color: var(--muted); max-width: 30rem; }
 
@@ -578,7 +608,7 @@ table.list th, table.list td {
   padding: 0.5rem 0.75rem;
   margin-bottom: 1rem;
 }
-.job-status.err { border-color: var(--danger, #c44); color: var(--danger, #c44); }
+.job-status.err { border-color: var(--danger); color: var(--danger); }
 #song-status[hidden] { display: none; }
 
 .thumb { max-width: 160px; border-radius: 6px; display: block; margin: 0.5rem 0; }
@@ -667,14 +697,7 @@ table.list th, table.list td {
 }
 .candidate.picked { border-color: var(--accent); }
 .candidate img, .clip-tile img { max-width: 100%; border-radius: 4px; }
-.cand-open {
-  display: block;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: zoom-in;
-}
+.cand-open { width: 100%; }
 .clip-tile .candidate img {
   width: 100%;
   aspect-ratio: 3 / 4;
@@ -706,10 +729,7 @@ table.list th, table.list td {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  cursor: pointer;
-  list-style: none;
 }
-.playlist-card > summary::-webkit-details-marker { display: none; }
 .playlist-card .cover {
   width: 64px;
   height: 64px;
@@ -856,14 +876,7 @@ form.is-busy button[type=submit] { opacity: 0.55; pointer-events: none; }
   cursor: pointer;
 }
 .playlist-card .tiers { display: inline-flex; gap: 0.6rem; margin: 0 0.6rem; }
-button.cover-open {
-  padding: 0;
-  border: 0;
-  background: none;
-  line-height: 0;
-  cursor: zoom-in;
-  flex: none;
-}
+button.cover-open { flex: none; }
 button.cover-open:hover { background: none; }
 .playlist-body .song-fold {
   border: 1px solid var(--border);
@@ -911,22 +924,6 @@ button.cover-open:hover { background: none; }
 }
 .look-tab-wrap .look-help { visibility: hidden; }
 .look-tab-wrap:has(.look-tab.active) .look-help { visibility: visible; }
-.wardrobe-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  margin: 0 0 0.75rem;
-}
-.wardrobe-tab {
-  background: transparent;
-  color: var(--muted);
-  border: 1px solid var(--border);
-}
-.wardrobe-tab.active {
-  color: var(--text);
-  border-color: var(--border-strong);
-  background: var(--panel-raised);
-}
 .look-hist {
   display: inline-flex;
   align-items: center;
@@ -1063,26 +1060,11 @@ table.sortable tr.dragging { opacity: 0.45; }
 }
 .table-scroll td.nowrap { white-space: nowrap; }
 
-/* Contact sheet viewer: a real <dialog>, so Esc closes it and the browser
-   handles focus instead of hand-written JS. */
-dialog.sheet-modal {
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1rem;
-  max-width: 95vw;
-  max-height: 92vh;
-}
-dialog.sheet-modal::backdrop { background: rgba(0, 0, 0, 0.7); }
+/* Contact sheet viewer. Panel chrome is the shared dialog block below;
+   these are the size/image extras. */
+dialog.sheet-modal { max-width: 95vw; }
 dialog.sheet-modal img { max-width: 100%; max-height: 78vh; object-fit: contain; }
-dialog.sheet-modal .modal-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.6rem;
-}
+dialog.sheet-modal .modal-bar { justify-content: space-between; margin-bottom: 0.6rem; }
 
 @media (max-width: 860px) {
   .row-2col, .image-note-row { grid-template-columns: 1fr; }
@@ -1564,7 +1546,7 @@ img.lazy-src, video.lazy-src {
   width: 100%;
   padding: 0;
   border: 0;
-  background: #000;
+  background: var(--letterbox);
   cursor: pointer;
 }
 .render-preview video {
@@ -1644,12 +1626,12 @@ img.lazy-src, video.lazy-src {
   padding: 0.45rem 0;
 }
 .scene[open] { padding-bottom: 1rem; }
-.scene-head { cursor: pointer; }
+
 .scene-head h3 { margin: 0; font-size: 1rem; }
 .scene-form { margin: 0.6rem 0; }
 .scene-form label { font-size: 0.85rem; color: var(--muted); }
 .scene-form textarea { font-size: 0.9rem; }
-.shot-detail summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
+.shot-detail summary { color: var(--muted); font-size: var(--text-sm); }
 .shot-detail ul { margin: 0.4rem 0; font-size: 0.85rem; }
 
 .scene-refs { display: flex; flex-wrap: nowrap; gap: 0.6rem; overflow-x: auto; }
@@ -1704,7 +1686,7 @@ img.lazy-src, video.lazy-src {
 .cand-meta { font-size: 0.75rem; margin: 0.25rem 0; display: flex; gap: 0.35rem; align-items: center; }
 .cand-meta code { font-size: 0.75rem; }
 .fix-block { margin-top: 0.4rem; }
-.fix-block > summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
+.fix-block > summary { color: var(--muted); font-size: var(--text-sm); }
 .fix-block form {
   border-top: 1px solid var(--border);
   padding-top: 0.5rem;
@@ -1967,10 +1949,12 @@ label.icon-btn {
 }
 .help-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ---- modals ---- */
-.help-modal, .confirm-modal, .lightbox, .fix-modal {
-  /* max-height without overflow-y meant a long help body bled past the panel
-     instead of scrolling. */
+/* ---- modals ----
+   Shared panel: help / confirm / fix / sheet / video / jobs.
+   lightbox is in the group for overflow + colour, then overridden to
+   transparent. Split this list to undo. */
+.help-modal, .confirm-modal, .fix-modal, .jobs-modal,
+dialog.sheet-modal, dialog.video-modal, .lightbox {
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1981,9 +1965,18 @@ label.icon-btn {
   max-height: 92vh;
 }
 .help-modal { max-width: 34rem; }
-.help-modal::backdrop, .confirm-modal::backdrop,
-.lightbox::backdrop, .fix-modal::backdrop { background: rgba(0, 0, 0, 0.7); }
-.confirm-modal > .modal-bar {
+.help-modal::backdrop, .confirm-modal::backdrop, .fix-modal::backdrop,
+.jobs-modal::backdrop, dialog.sheet-modal::backdrop,
+dialog.video-modal::backdrop, .lightbox::backdrop {
+  background: var(--backdrop);
+}
+/* Bar: was copied on confirm / fix / sheet / video / jobs. */
+.modal-bar,
+.confirm-modal > .modal-bar,
+.fix-modal > .modal-bar,
+dialog.sheet-modal .modal-bar,
+dialog.video-modal > .modal-bar,
+.jobs-modal .modal-bar {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -2013,11 +2006,6 @@ label.icon-btn {
   .lightbox-pair img { max-height: 40vh; }
 }
 
-.fix-modal > .modal-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
 .fix-modal > .modal-bar > strong { flex: 1; min-width: 0; }
 .fix-modal-body { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-start; }
 .fix-modal-body > img {
@@ -2034,13 +2022,7 @@ label.icon-btn {
   gap: 0.35rem;
 }
 .anchor-tile .thumb-open,
-.anchor-tile .anchor-open {
-  display: block;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-}
+.anchor-tile .anchor-open { width: 100%; }
 .anchor-tile img {
   display: block;
   width: 100%;
@@ -2053,7 +2035,9 @@ label.icon-btn {
 .fix-forms h4 { margin: 0.75rem 0 0.3rem; }
 .fix-forms form + form { border-top: 1px solid var(--border); padding-top: 0.75rem; }
 
-/* ---- anchors: tier tabs, clothed/nude rows, thumbnails ---- */
+/* ---- anchors: tier tabs, clothed/nude rows, thumbnails ----
+   .tier-tab / .family-tab look like the chip tabs above but stay separate:
+   notched (tier) and accent-active pill (family). Do not fold into look-tab. */
 .tier-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.5rem 0 0.75rem; }
 .tier-tab {
   background: transparent;
@@ -2181,7 +2165,7 @@ table.list td.num, table.list th.num { text-align: right; }
 .set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 1rem; }
 .set-card { margin-bottom: 0; }
 .set-card video, .set-card audio { width: 100%; border-radius: 6px; margin: 0.5rem 0; }
-.set-card video { max-height: 240px; background: #000; }
+.set-card video { max-height: 240px; background: var(--letterbox); }
 .set-switch {
   display: flex;
   flex-wrap: wrap;
@@ -2286,11 +2270,7 @@ table.sortcols th.sort-desc::after { content: " \2193"; color: var(--accent); }
 .model-head h2 { margin: 0; }
 
 dialog.video-modal { max-width: 90vw; }
-dialog.video-modal > .modal-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
+dialog.video-modal > .modal-bar { gap: 0.6rem; }
 dialog.video-modal video { max-width: 100%; max-height: 70vh; display: block; }
 .clip-stage {
   position: relative;
@@ -2521,7 +2501,7 @@ table.list th.pick, table.list td.pick { width: 1.5rem; text-align: center; }
 }
 /* A suggested genre is NOT a saved one, and must not look like it until Save. */
 tr.suggested td.cell-genre {
-  color: var(--accent, #8ab4f8);
+  color: var(--accent);
   font-style: italic;
   cursor: help;
 }
@@ -2602,7 +2582,7 @@ dialog.lightbox img { max-height: 82vh; }
   gap: 0.35rem;
   padding: 0.35rem 0.5rem 0.35rem 0.75rem;
   margin-bottom: 0.4rem;
-  background: var(--card, #1c1c1e);
+  background: var(--panel);
   border-radius: 6px;
 }
 .lightbox-bar form,
@@ -2775,23 +2755,6 @@ tr.job-cancelled { opacity: 0.55; }
   details > summary::before,
   button.album-fold::before { transition: none; }
 }
-
-/* A link that reads as a primary button. sets.html had <a><button></a> --
-   nested interactive content, which is invalid HTML and does not reliably
-   navigate. This is the same look without the nesting. */
-.button-link {
-  display: inline-block;
-  background: var(--accent);
-  color: var(--accent-fg);
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 0.5rem 0.9rem;
-  font: 600 0.875rem/1.2 inherit;
-  text-decoration: none;
-  transition: background-color .12s ease;
-}
-.button-link:hover { background: #8fb2ff; color: var(--accent-fg); }
-.button-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* A .linkish control that removes something is still destructive. It stays a
    text link -- it sits inline in a sentence -- but it is not the accent

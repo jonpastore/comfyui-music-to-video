@@ -73,6 +73,9 @@ def test_library_groups_by_album_and_collapses_upload():
         assert 'details[open] > summary::before' in css
         assert 'button.album-fold::before' in css
         assert "content: \"▸" not in css and "content: \"▾" not in css
+        assert "--text-sm:" in css and "--accent-hover:" in css
+        assert ".button-link {" not in css
+        assert ".look-tabs, .cast-tabs, .cast-subtabs, .wardrobe-tabs" in css
         tag = page.split('id="fold-upload"', 1)[1][:80]
         assert "open" not in tag
         assert 'class="album-group-head"' in page
