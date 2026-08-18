@@ -1227,13 +1227,17 @@ def h_anchor(args, progress):
             progress("no anatomy wording for this album -- a nude sheet will be "
                      "anatomically featureless unless one is set")
     render = args.get("render") or {}
+    # pose-gap prompt is the decided clause for T3-34 scoring; --prompt
+    # would replace the composed sheet. Pose is already on the profile.
+    render_prompt = (
+        "" if args.get("source") == "pose-gap" else args.get("prompt", ""))
     paths = pipeline.gen_anchor(args["images"], view, args.get("n", 4), progress,
                                  profile=anchor_profile,
                                  # this ALBUM's wording for the tier if it has its
                                  # own, else the tier's -- the same call the form
                                  # composed its panel and its preview from
                                  guard=tiers.compose_guardrail(args["tier"], album),
-                                 prompt=args.get("prompt", ""),
+                                 prompt=render_prompt,
                                  render=render)
     # Each candidate points back at the RUN that made it, so a sheet can always
     # answer what produced it -- prompt, negative, references and sampler
@@ -1245,7 +1249,7 @@ def h_anchor(args, progress):
     run_id = args.get("run_id")
     settings = None if run_id else json.dumps(resolved_settings(render))
     now = time.time()
-    asked = args.get("prompt") or ""
+    asked = args.get("prompt") or args.get("pose") or ""
     bases = args.get("images") or []
     prev = db.q("""SELECT path FROM anchors WHERE scope_kind=? AND scope_value=?
                    AND tier=? AND view=? AND character_id IS ?

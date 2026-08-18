@@ -171,7 +171,9 @@ map **is** (`test_t2_52_map_accept.py`): Accept/Reject per scene;
 **is** (`test_t4_24_ceiling_generate.py`): pose-gap holes → studio
 jobs at the run ceiling; clothed+nude iff r/xxx. `T7-21` C1/C2
 resolver **is** (`test_t7_21_c1_c2_resolver.py`): same-pose encode
-vs empty 896×1216 + her keepers. Location plates (`T2-53`/`T7-22` **built**,
+vs empty 896×1216 + her keepers. `T3-34` C1/C2 landing QC **is**
+(`test_t3_34_pose_still_qc.py`): pose-gap `h_anchor` landings call
+`score_candidate` and store `qc_json`. Location plates (`T2-53`/`T7-22` **built**,
 `test_t2_53_location_plates.py`). `T7-23` use-as-ref / map / image1 only
 from `usable≠skip` **is** (`test_t7_23_usable_skip.py`). `T2-54` ceiling + ticked-lower board backfill **is**
 (`test_t2_54_ceiling_backfill.py`). LTX-first and

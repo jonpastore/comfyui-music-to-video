@@ -324,7 +324,7 @@ def generate(song_id, run_tiers, character_id=None, images=None, n=4):
             "images": decided["images"],
             "n": n,
             "character_id": character_id,
-            "prompt": "",
+            "prompt": decided["pose"],
             "pose": decided["pose"],
             "wardrobe": sheet["wardrobe"],
             "anatomy": False,

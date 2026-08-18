@@ -196,6 +196,8 @@ holes only, no `scene_pose_map`. `T4-24` ceiling-tier pose generate
 **built** (`test_t4_24_ceiling_generate.py`): holes → studio jobs at
 the run ceiling; clothed+nude iff r/xxx; g/pg13 clothed only, no
 anatomy. `T7-21` C1/C2 resolver **built** (`test_t7_21_c1_c2_resolver.py`).
+`T3-34` **built** (`test_t3_34_pose_still_qc.py`): those C1/C2
+`source=pose-gap` landings call `score_candidate` and store `qc_json`.
 `T2-51` **built** (`test_t2_51_classify_cannot_write_map.py`):
 classify + gap write zero map rows; `POST .../pose-map` drafts
 `status=draft`. `T2-52` **built** (`test_t2_52_map_accept.py`):
@@ -560,7 +562,10 @@ order and take the dependencies from here.
 11. Every generated still is vision-scored into `qc_json` (`T3-31`),
     including a `fix_anchor` sibling, an `h_reroll` dest, the artwork
     generate (not only the refined cover), an `h_repair` dest still,
-    and a standalone `refine_generated_still` dest. Per-clip refs
+    a standalone `refine_generated_still` dest, and pose-gap C1/C2
+    `h_anchor` landings (`T3-34` **built**,
+    `test_t3_34_pose_still_qc.py` — enqueue prompt is the decided
+    pose clause; skip `score_candidate` on C2 → red). Per-clip refs
     (`h_refs`, `h_reroll`, `h_fix_ref`) are scored against the album's
     **chosen anchor** as `score_candidate` bases — not a job plate or
     the broken source. Storing any `qc_json` is not enough. A refine or

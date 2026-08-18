@@ -280,7 +280,8 @@ exposure — board needs only; analyze writes this table and nothing else),
 `POST /api/songs/{id}/pose-generate` (`T4-24` **built**: ceiling-tier
 library sheets from those holes; clothed+nude iff r/xxx; g/pg13 clothed
 only, no anatomy; studio `anchor` jobs, not `batch_edit`; C1/C2
-graphs `T7-21` **built**, `test_t7_21_c1_c2_resolver.py`),
+graphs `T7-21` **built**, `test_t7_21_c1_c2_resolver.py`; landings
+scored `T3-34` **built**, `test_t3_34_pose_still_qc.py`),
 and `classification_json` (`T4-21`/`T4-22`: album, character_id
 NULL=protagonist, versioned document, same fields as
 image-classification.json; sidecars seed import only),
@@ -859,8 +860,9 @@ file changes and the named-value assertion fails.
 VLM verdict by name — asked "does this match?", a model answers yes — though it
 may write a *description* attached to a finding. `app.score_generated_still`
 stores that advisory `qc_json` on every landed still (anchors, refs including
-`h_reroll`, artwork generate and its refine sibling, and the sibling
-`h_fix_anchor` writes). Landed refs resolve identity bases through
+`h_reroll`, artwork generate and its refine sibling, the sibling
+`h_fix_anchor` writes, and pose-gap C1/C2 `h_anchor` landings —
+`T3-34` **built**, `test_t3_34_pose_still_qc.py`). Landed refs resolve identity bases through
 `app.ref_score_bases` → the album's chosen anchor path
 (`test_h_refs_scores_vs_chosen_anchor` and the reroll/fix_ref twins); a job
 plate or the broken source is not enough.

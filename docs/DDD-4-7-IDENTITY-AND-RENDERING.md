@@ -46,7 +46,7 @@ is not a studio feature.
 | `studio/pose_plan.py` | leftover unmapped image2 match; `plan` / `bind_scene` / `freeze_auto_binds` / `album_coverage`; `scene_actors`; `lead_name` / `set_lead_name` (album lead tab, not “protagonist”); no FastAPI. Not the T2-50 writer or the Accept-gated map |
 | `studio/scene_pose_map.py` | T2-51 draft keeper→scene; T2-52 Accept/Reject per scene; `require_accepted` / `accepted_bases`; `_upsert_draft` / `accepted_bases` call `refuse_skip` (`T7-23`); no FastAPI. Classify never writes here |
 | `studio/pose_coverage.py` | T2-50 analyze-for-poses (writes `pose_coverage` only); T4-23 `gap` reads the open song's ceiling board vs `classification.keepers` and emits holes only; T4-24 `generate` delegates to `pose_generate`; no FastAPI; does not import `pose_plan`; analyze/gap never write `scene_pose_map` |
-| `studio/pose_generate.py` | T4-24 ceiling-tier pose generate from gap holes; clothed+nude iff r/xxx; g/pg13 clothed only, no anatomy; T7-21 `resolve_c1_c2` (C1 image latent + denoise 1.0 + source pose vs C2 empty 896×1216 + her keepers); denoise labels shared with `app.denoise_choices`; enqueues studio `anchor` jobs (`source=pose-gap`); no FastAPI; not `batch_edit` |
+| `studio/pose_generate.py` | T4-24 ceiling-tier pose generate from gap holes; clothed+nude iff r/xxx; g/pg13 clothed only, no anatomy; T7-21 `resolve_c1_c2` (C1 image latent + denoise 1.0 + source pose vs C2 empty 896×1216 + her keepers); denoise labels shared with `app.denoise_choices`; enqueues studio `anchor` jobs (`source=pose-gap`) with the decided pose clause as `prompt` (T3-34); no FastAPI; not `batch_edit` |
 | `studio/classification.py` | T4-21 / T4-22 album pose library; versioned `classification_json` in sqlite; `library` / `query` / `save` / `import_sidecar` / `keepers` (`usable≠skip`); `refuse_skip` (`T7-23` **built**, `test_t7_23_usable_skip.py`) blocks use-as-ref / map / image1; no FastAPI. Sidecar is import seed only |
 | `studio/prompts.py` | `PROMPT_TYPES` — composer fields plus `view:<key>` generated from `VIEWS` (`T7-13`), plus `backdrop`/`composite`/`pose` |
 | `studio/tiers.py` | `compose_guardrail`, `check_text` (tier-aware: g/pg13 may depict T10-18; r lyrics/narrative mention T10-18a), `screen_work_for_tier` / `screen_escalation` / `check_escalation` (T10-19 entry; T10-20 ignores override kwargs), `check_override`, `check_tier_policy` |
@@ -78,7 +78,7 @@ gap vs this board (`GET /api/songs/{id}/pose-gap`, T4-23 **built**)
            `test_t7_21_c1_c2_resolver.py`)
         │
         ▼
-QC each landing (T3-34); keeper / reject; usable≠skip (`T7-23` **built**)
+QC each landing (`T3-34` **built**, `test_t3_34_pose_still_qc.py`); keeper / reject; usable≠skip (`T7-23` **built**)
         │
         ▼
 draft scene_pose_map → operator Accept per scene (T2-51, T2-52)
@@ -528,7 +528,10 @@ code rather than in documents.
   `test_t4_24_ceiling_generate.py`). Highest ticked tier this run.
   Clothed+nude iff r/xxx. g/pg13: clothed only, no anatomy. Studio
   `anchor` jobs, not sidecar `batch_edit`. C1/C2 graphs are `T7-21`
-  (**built**).
+  (**built**). Those landings are scored like an anchor (`T3-34`
+  **built**, `test_t3_34_pose_still_qc.py`): enqueue `prompt` is the
+  decided pose clause; `h_anchor` calls `score_candidate` and stores
+  `qc_json`.
 
 ## 8. How this design is verified
 

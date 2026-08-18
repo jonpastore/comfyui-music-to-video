@@ -1255,7 +1255,9 @@ card.
 
 `T3-31` / `T4-19`. Each generated still — anchors, refs, `h_reroll`
 dests, `fix_ref` results, `fix_anchor` siblings, artwork generate and its
-refine sibling, an `h_repair` dest still, and a standalone refine dest —
+refine sibling, an `h_repair` dest still, a standalone refine dest, and
+pose-gap C1/C2 `h_anchor` landings (`T3-34` **built**,
+`test_t3_34_pose_still_qc.py`) —
 stores `qc_json`. The artwork generate is a scored
 `assets` row even when a refined cover is what the playlist card shows.
 Anchor tiles in `_anchor_group.html` show `confidence` (0–100) against
@@ -1307,7 +1309,8 @@ tier; r/xxx queues clothed **and** nude; a g run offers no nude and no
 anatomy. C1 / C2 job type on generate (`T7-21` **built**,
 `test_t7_21_c1_c2_resolver.py`): same-pose is image latent + denoise
 1.0; new-pose is empty 896×1216 + her keepers; labels match the graph.
-QC remedy
+Those landings are scored like an anchor (`T3-34` **built**,
+`test_t3_34_pose_still_qc.py`). QC remedy
 line (`T3-35`). Keeper / reject; `usable=skip` never enters a
 slot (`T7-23` **built**, `test_t7_23_usable_skip.py`). Ceiling + ticked-lower backfill (`T2-54` **built**,
 `test_t2_54_ceiling_backfill.py`): r+pg13 writes both boards; a g run
