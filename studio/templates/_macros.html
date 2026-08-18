@@ -44,6 +44,21 @@
 </button>
 {% endmacro %}
 
+{# Side chevrons for every image/video viewer. clip-preview used these first;
+   still-stage and clip-stage share the CSS. Header actions stay per-dialog. #}
+{% macro media_nav_prev(label="Previous") %}
+<button type="button" class="clip-nav media-nav-prev" title="{{ label }}"
+        aria-label="{{ label }}">
+  <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M10.2 2.2 4.4 8l5.8 5.8 1.4-1.4L7.2 8l4.4-4.4z"/></svg>
+</button>
+{% endmacro %}
+{% macro media_nav_next(label="Next") %}
+<button type="button" class="clip-nav media-nav-next" title="{{ label }}"
+        aria-label="{{ label }}">
+  <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M5.8 2.2 4.4 3.6 8.8 8l-4.4 4.4 1.4 1.4L11.6 8z"/></svg>
+</button>
+{% endmacro %}
+
 {% macro glyph_close() %}
 {{ _glyph('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>') }}
 {% endmacro %}

@@ -66,6 +66,9 @@
      was: .help-modal / .confirm-modal / .fix-modal / dialog.sheet-modal
           / dialog.video-modal / .jobs-modal  (each had its own bar + 0.7 backdrop)
      keep separate: dialog.lightbox (transparent, sized to the picture)
+   IMAGE/VIDEO STAGE
+     .clip-stage / .still-stage share flex + .clip-nav chevrons
+     (media_nav_prev / media_nav_next). Header actions stay per-dialog.
    DEAD, deleted
      .button-link — unused; a.btn is the same job (sets.html used to nest
        <a><button></a>; a.btn replaced that). Restore from git if a template
@@ -2272,13 +2275,15 @@ table.sortcols th.sort-desc::after { content: " \2193"; color: var(--accent); }
 dialog.video-modal { max-width: 90vw; }
 dialog.video-modal > .modal-bar { gap: 0.6rem; }
 dialog.video-modal video { max-width: 100%; max-height: 70vh; display: block; }
-.clip-stage {
+/* IMAGE/VIDEO STAGE — clip-preview and every lightbox still-stage.
+   Header actions stay per-dialog. Undo: split clip-stage back out. */
+.clip-stage, .still-stage {
   position: relative;
   display: flex;
   align-items: center;
   gap: 0.4rem;
 }
-.clip-stage video { flex: 1; min-width: 0; }
+.clip-stage video, .still-stage img { flex: 1; min-width: 0; }
 button.clip-nav {
   flex: none;
   width: 2.2rem;
@@ -2296,8 +2301,6 @@ button.clip-nav:hover:not(:disabled) {
 }
 button.clip-nav:disabled { opacity: 0.35; }
 button.clip-nav svg { width: 1.2rem; height: 1.2rem; }
-.still-stage { align-items: center; }
-.still-stage img { flex: 1; min-width: 0; }
 .still-stage .clip-nav {
   align-self: center;
   width: 2.6rem;

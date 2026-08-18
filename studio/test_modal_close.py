@@ -41,12 +41,25 @@ def test_base_lightboxes_use_modal_close():
 
 def test_clip_preview_has_nav_and_repair_actions():
     src = open(os.path.join(TEMPLATES, "base.html"), encoding="utf-8").read()
-    assert 'id="clip-prev"' in src
-    assert 'id="clip-next"' in src
+    assert "media_nav_prev" in src and "media_nav_next" in src
     assert 'id="clip-rerender"' in src
     assert 'id="clip-edit-motion"' in src
     assert 'id="clip-open-still"' in src
     assert "lightbox-spacer" in src
+
+
+def test_image_viewers_share_still_stage_chevrons():
+    macros = open(os.path.join(TEMPLATES, "_macros.html"), encoding="utf-8").read()
+    assert "macro media_nav_prev" in macros
+    assert "media-nav-prev" in macros
+    anchors = open(os.path.join(TEMPLATES, "anchors.html"), encoding="utf-8").read()
+    assert 'id="anchor-lightbox"' in anchors
+    assert "still-stage" in anchors
+    assert "media_nav_prev" in anchors
+    base = open(os.path.join(TEMPLATES, "base.html"), encoding="utf-8").read()
+    assert "still-stage" in base
+    css = open(os.path.join(HERE, "static", "style.css"), encoding="utf-8").read()
+    assert ".clip-stage, .still-stage" in css
 
 
 def test_ref_preview_close_is_on_the_bar():

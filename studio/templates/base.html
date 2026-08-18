@@ -1,4 +1,4 @@
-{% from "_macros.html" import modal_close %}
+{% from "_macros.html" import modal_close, media_nav_prev, media_nav_next %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -80,9 +80,15 @@
   <dialog class="lightbox" id="ref-preview">
     <div class="lightbox-bar">
       <strong id="ref-preview-label"></strong>
+      <span id="ref-preview-pos" class="lightbox-pos muted"></span>
+      <span class="lightbox-spacer"></span>
       {{ modal_close() }}
     </div>
-    <img alt="full size">
+    <div class="still-stage">
+      {{ media_nav_prev("Previous still") }}
+      <img alt="full size">
+      {{ media_nav_next("Next still") }}
+    </div>
   </dialog>
   <dialog class="video-modal" id="clip-preview">
     <div class="modal-bar">
@@ -92,15 +98,9 @@
       {{ modal_close() }}
     </div>
     <div class="clip-stage">
-      <button type="button" class="clip-nav clip-nav-prev" id="clip-prev"
-              title="Previous clip" aria-label="Previous clip">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M10.2 2.2 4.4 8l5.8 5.8 1.4-1.4L7.2 8l4.4-4.4z"/></svg>
-      </button>
+      {{ media_nav_prev("Previous clip") }}
       <video controls preload="metadata"></video>
-      <button type="button" class="clip-nav clip-nav-next" id="clip-next"
-              title="Next clip" aria-label="Next clip">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M5.8 2.2 4.4 3.6 8.8 8l-4.4 4.4 1.4 1.4L11.6 8z"/></svg>
-      </button>
+      {{ media_nav_next("Next clip") }}
     </div>
     <div class="clip-actions" id="clip-actions">
       <p class="hint">If the face or body is wrong, fix the still first. If motion

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_download, glyph_actors %}
+{% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_download, glyph_actors, media_nav_prev, media_nav_next %}
 {% block content %}
 <h1>Anchors</h1>
 <p class="hint">This album&rsquo;s pose library. Songs on the album list the poses
@@ -207,9 +207,14 @@
 <dialog class="lightbox" id="pose-preview">
   <div class="lightbox-bar">
     <strong id="pose-preview-label"></strong>
+    <span class="lightbox-spacer"></span>
     {{ modal_close() }}
   </div>
-  <img alt="">
+  <div class="still-stage">
+    {{ media_nav_prev("Previous pose") }}
+    <img alt="">
+    {{ media_nav_next("Next pose") }}
+  </div>
 </dialog>
 <dialog class="lightbox" id="anchor-lightbox">
   <div class="lightbox-bar">
@@ -251,7 +256,11 @@
             aria-label="Delete">{{ glyph_delete() }}</button>
     {{ modal_close() }}
   </div>
-  <img alt="anchor candidate, full size">
+  <div class="still-stage">
+    {{ media_nav_prev("Previous sheet") }}
+    <img alt="anchor candidate, full size">
+    {{ media_nav_next("Next sheet") }}
+  </div>
   <p class="lightbox-help muted">
     &larr; &rarr; between sheets in this row &middot; &uarr; &darr; between rows &middot;
     Del to delete &middot; Esc to close</p>
