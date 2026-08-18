@@ -160,7 +160,10 @@ step 1.
 **P13 (the loop) is not built.** `T2-50` coverage list **is**
 (`test_t2_50_coverage_list.py`). `T4-21`/`T4-22` classification_json
 in sqlite **is** (`test_t4_21_classification_json.py`): album +
-character, versioned, queryable; sidecars seed import only. Accept-gated
+character, versioned, queryable; sidecars seed import only. `T4-24`
+ceiling-tier pose generate **is** (`test_t4_24_ceiling_generate.py`):
+pose-gap holes → studio jobs at the run ceiling; clothed+nude iff
+r/xxx. Accept-gated
 map, location plates, LTX-first, decoded s2v hop are not: see TRD-2
 `T2-51`…`T2-56` and TRD-5 `T5-11`…`T5-15`.
 

@@ -661,6 +661,13 @@ def pose_gap(song_id, character_id=None):
     return pose_coverage.gap(song_id, character_id=character_id)
 
 
+def generate_poses(song_id, run_tiers, character_id=None, images=None):
+    """T4-24: ceiling-tier pose generate from pose-gap holes."""
+    import pose_generate
+    return pose_generate.generate(
+        song_id, run_tiers, character_id=character_id, images=images)
+
+
 def persist_arc(pl, data, model="", direction=""):
     songs = playlist_tracks(pl["id"])
     titles = {s["id"]: s["title"] for s in songs}

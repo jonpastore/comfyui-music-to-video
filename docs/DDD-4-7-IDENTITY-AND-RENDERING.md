@@ -38,7 +38,8 @@ is not a studio feature.
 | `build_refs.py` | the graph: `workflow()`, `sampler_settings`, `assign_ref_slots`, `cast_clause`, `negative_applies` |
 | `studio/app.py` | the anchor routes, `ANCHOR_VIEWS` labels, `ANCHOR_RENDER_FLAGS`, `DENOISE_CHOICES`, the preview; song-page `pose_library_by_tier` (chosen sheets, not just identity front); `start_refs` freezes `pose_plan` binds into `pose_bases` |
 | `studio/pose_plan.py` | scene need-text → chosen sheet match; `plan` / `bind_scene` / `freeze_auto_binds` / `album_coverage`; no FastAPI. Not the T2-50 writer |
-| `studio/pose_coverage.py` | T2-50 analyze-for-poses (writes `pose_coverage` only); T4-23 `gap` reads the open song's ceiling board vs `classification.keepers` and emits holes only; no FastAPI; does not import `pose_plan`; never writes `scene_pose_map` |
+| `studio/pose_coverage.py` | T2-50 analyze-for-poses (writes `pose_coverage` only); T4-23 `gap` reads the open song's ceiling board vs `classification.keepers` and emits holes only; T4-24 `generate` delegates to `pose_generate`; no FastAPI; does not import `pose_plan`; analyze/gap never write `scene_pose_map` |
+| `studio/pose_generate.py` | T4-24 ceiling-tier pose generate from gap holes; clothed+nude iff r/xxx; g/pg13 clothed only, no anatomy; enqueues studio `anchor` jobs (`source=pose-gap`); no FastAPI; not `batch_edit` |
 | `studio/classification.py` | T4-21 / T4-22 album pose library; versioned `classification_json` in sqlite; `library` / `query` / `save` / `import_sidecar` / `keepers` (`usable≠skip`); no FastAPI. Sidecar is import seed only |
 | `studio/prompts.py` | `PROMPT_TYPES` — composer fields plus `view:<key>` generated from `VIEWS` (`T7-13`), plus `backdrop`/`composite`/`pose` |
 | `studio/tiers.py` | `compose_guardrail`, `check_text` (tier-aware: g/pg13 may depict T10-18; r lyrics/narrative mention T10-18a), `screen_work_for_tier` / `screen_escalation` / `check_escalation` (T10-19 entry; T10-20 ignores override kwargs), `check_override`, `check_tier_policy` |
@@ -64,7 +65,9 @@ analyze → pose_coverage (no bind, T2-50)
         ▼
 gap vs this board (`GET /api/songs/{id}/pose-gap`, T4-23 **built**)
         → holes only; no scene_pose_map
-        → C1 same-pose / C2 new-pose at the ceiling (T4-24, T7-21)
+        → ceiling-tier generate from holes (`POST /api/songs/{id}/pose-generate`,
+           T4-24 **built**: clothed+nude iff r/xxx)
+        → C1 same-pose / C2 new-pose graphs still T7-21 (**not built**)
         │
         ▼
 QC each landing (T3-34); keeper / reject; usable≠skip (T7-23)
@@ -510,6 +513,11 @@ code rather than in documents.
   `GET /api/songs/{id}/pose-gap` (`T4-23` **built**,
   `test_t2_51_classify_cannot_write_map.py`). Holes only. Classify and
   gap write no `scene_pose_map` row. Draft map is still T2-51.
+- **Ceiling-tier pose generate** — `pose_generate.generate` /
+  `POST /api/songs/{id}/pose-generate` (`T4-24` **built**,
+  `test_t4_24_ceiling_generate.py`). Highest ticked tier this run.
+  Clothed+nude iff r/xxx. g/pg13: clothed only, no anatomy. Studio
+  `anchor` jobs, not sidecar `batch_edit`. C1/C2 graphs remain `T7-21`.
 
 ## 8. How this design is verified
 

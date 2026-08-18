@@ -514,7 +514,8 @@ The expanded tier's **pose map** is drafted, then Accept per scene
 meter (`T2-50` **built**, `test_t2_50_coverage_list.py`) sits above
 the map and reads `pose_coverage` from
 `POST /api/songs/{id}/storyboard/{tier}/analyze-poses`; holes vs keepers
-are `GET /api/songs/{id}/pose-gap` (`T4-23` **built**). Location plate per unique
+are `GET /api/songs/{id}/pose-gap` (`T4-23` **built**). Generate from those
+holes is `POST /api/songs/{id}/pose-generate` (`T4-24` **built**). Location plate per unique
 location key (`T2-53`) is a still, not a character sheet. Storyboard
 scene rows have a **Pose keeper** select after Accept
 (`POST .../scene/{n}/pose-sheet` is today's auto-bind leftover). The plate thumb is a
@@ -1271,7 +1272,10 @@ sidecar path. Chips UI still pending; the store is the API, not
 board is `GET /api/songs/{id}/pose-gap` (`T4-23` **built**,
 `test_t2_51_classify_cannot_write_map.py`): holes only, keepers from
 `classification_json` with `usable≠skip`; chips UI still pending.
-C1 / C2 job type on generate (`T7-21`). QC remedy
+Generate missing poses is `POST /api/songs/{id}/pose-generate`
+(`T4-24` **built**, `test_t4_24_ceiling_generate.py`): highest ticked
+tier; r/xxx queues clothed **and** nude; a g run offers no nude and no
+anatomy. C1 / C2 job type on generate (`T7-21`). QC remedy
 line (`T3-35`). Keeper / reject; `usable=skip` never enters a
 slot (`T7-23`). Ceiling + ticked-lower backfill is visible
 (`T2-54`): r+pg13 shows both; a g run offers no nude.
@@ -1280,7 +1284,8 @@ slot (`T7-23`). Ceiling + ticked-lower backfill is visible
 reads `pose_coverage` after
 `POST /api/songs/{id}/storyboard/{tier}/analyze-poses` (`T2-50`
 **built**) and holes from `GET /api/songs/{id}/pose-gap` (`T4-23`
-**built**). Draft map + Accept per scene (`T2-52`), same shape as
+**built**). Generate those holes at the run ceiling is
+`POST /api/songs/{id}/pose-generate` (`T4-24` **built**). Draft map + Accept per scene (`T2-52`), same shape as
 the arc wand. Location plate per unique key (`T2-53`); unset / studio is
 grey-studio and no plate. `needs_lip_sync` beside camera. Ceiling
 and ticked-lower boards visible.

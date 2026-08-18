@@ -159,6 +159,8 @@ def describe(row):
         bits.append(f"[{args['tier']}]")
     if args.get("view"):
         bits.append(args["view"])
+    if args.get("pose"):
+        bits.append(args["pose"])
     if args.get("limit"):
         bits.append(f"first {args['limit']}")
     return f"{label} — {' '.join(bits)}" if bits else label

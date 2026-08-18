@@ -1,9 +1,10 @@
-"""T2-50 / T4-23: board coverage list, then gap vs keepers.
+"""T2-50 / T4-23 / T4-24: board coverage, gap vs keepers, then generate.
 
 Analyze persists (pose, view, wardrobe, exposure) per scene. Gap reads the
 open song's ceiling board, compares to classification_json keepers, and
-emits holes only. Neither writes refs, jobs, or scene_pose_map. Does not
-import pose_plan.
+emits holes only. Analyze and gap write no refs, jobs, or scene_pose_map.
+T4-24 generate lives in pose_generate (studio jobs, not batch_edit).
+Does not import pose_plan.
 """
 import re
 import time
@@ -296,3 +297,10 @@ def gap(song_id, character_id=None):
         "n_holes": len(holes),
         "holes": holes,
     }
+
+
+def generate(song_id, run_tiers, character_id=None, images=None):
+    """T4-24: ceiling-tier sheets from gap holes. Delegates to pose_generate."""
+    import pose_generate
+    return pose_generate.generate(
+        song_id, run_tiers, character_id=character_id, images=images)

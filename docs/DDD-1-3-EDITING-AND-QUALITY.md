@@ -271,6 +271,9 @@ separated row exists), the interstitial card
 exposure — board needs only; analyze writes this table and nothing else),
 `GET /api/songs/{id}/pose-gap` (`T4-23` **built**: ceiling board vs
 `classification_json` keepers; holes only; no table; no `scene_pose_map`),
+`POST /api/songs/{id}/pose-generate` (`T4-24` **built**: ceiling-tier
+library sheets from those holes; clothed+nude iff r/xxx; g/pg13 clothed
+only, no anatomy; studio `anchor` jobs, not `batch_edit`),
 and `classification_json` (`T4-21`/`T4-22`: album, character_id
 NULL=protagonist, versioned document, same fields as
 image-classification.json; sidecars seed import only).

@@ -295,7 +295,7 @@ sidecar (not the studio loop).
 | #529 piece | Tree |
 |---|---|
 | D1 coverage list from the board (no bind) | not a first-class studio output |
-| D2 ceiling-tier pose generate (clothed+nude iff r/xxx) | not wired; sidecar `batch_edit` only |
+| D2 ceiling-tier pose generate (clothed+nude iff r/xxx) | **built** `T4-24` (`test_t4_24_ceiling_generate.py`). `POST /api/songs/{id}/pose-generate` / `pose_generate.generate` from pose-gap holes at the run ceiling. Sidecar `batch_edit` is not the path |
 | D3 ticked-lower backfill, never invent a higher tier | not a criterion |
 | D4 draft map + Accept (classify cannot write it) | no `scene_pose_map` |
 | D5 location plate per location key | no `location_plates` |
@@ -305,6 +305,6 @@ sidecar (not the studio loop).
 | D9 D7 look (lips + her + blocking) | no pinned pair |
 | D10 identity = text + her image1; charcoal-brown | measured on stills; 0 chosen studio anchors |
 | sqlite `classification_json` | **built** `T4-21`/`T4-22` (`test_t4_21_classification_json.py`). Sidecar seeds import only |
-| Docs TRD-2/3/4/5/7 + PRDs + DDDs + UIUX describe this loop | **rewritten 2026-08-17** — T2-50…T2-56, T3-34…T3-37, T4-21…T4-24, T5-11…T5-15, T7-21…T7-23. `T2-50` and `T4-21`/`T4-22` **built**. Rest **not built** except where a pre-#529 check already covers a forbid (T5-15 latent, T3-28 no stranger swap). Code still the leftover |
+| Docs TRD-2/3/4/5/7 + PRDs + DDDs + UIUX describe this loop | **rewritten 2026-08-17** — T2-50…T2-56, T3-34…T3-37, T4-21…T4-24, T5-11…T5-15, T7-21…T7-23. `T2-50`, `T4-21`/`T4-22`, `T4-23`, `T4-24` **built**. Rest **not built** except where a pre-#529 check already covers a forbid (T5-15 latent, T3-28 no stranger swap). Code still the leftover |
 
 **Product:** 0 chosen anchors live. Factory is still on step 1.

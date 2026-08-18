@@ -1197,6 +1197,9 @@ def h_anchor(args, progress):
     album = args["scope_value"] if args["scope_kind"] == "album" else ""
     cid = args.get("character_id")
     prof = anchor_profile_fields(album, cid)
+    pose = (args.get("pose") or "").strip()
+    if pose:
+        prof["pose"] = pose
     if cid:
         char = db.one("SELECT * FROM characters WHERE id=?", cid)
         if char:
@@ -6796,6 +6799,22 @@ def api_pose_gap(id: int, character_id: Optional[int] = None):
     try:
         return JSONResponse(storyboard_service.pose_gap(
             get_song_or_404(id)["id"], character_id=character_id))
+    except (LookupError, ValueError, RuntimeError) as e:
+        _svc_http(e)
+
+
+@app.post("/api/songs/{id}/pose-generate")
+async def api_pose_generate(request: Request, id: int,
+                            character_id: Optional[int] = None):
+    """T4-24: ceiling-tier pose generate from pose-gap holes."""
+    body = await _api_body(request)
+    run_tiers = _as_str_list(
+        body.get("tier") if "tier" in body else body.get("tiers"))
+    cid = character_id if character_id is not None else _optional_int(
+        body.get("character_id"))
+    try:
+        return JSONResponse(storyboard_service.generate_poses(
+            get_song_or_404(id)["id"], run_tiers, character_id=cid))
     except (LookupError, ValueError, RuntimeError) as e:
         _svc_http(e)
 
