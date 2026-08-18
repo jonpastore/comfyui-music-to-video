@@ -451,6 +451,14 @@ MIGRATIONS = [
     "ALTER TABLE playlists ADD COLUMN subgenre TEXT",
     "ALTER TABLE playlists ADD COLUMN genre2 TEXT",
     "ALTER TABLE playlists ADD COLUMN subgenre2 TEXT",
+    """CREATE TABLE IF NOT EXISTS prompt_current (
+      scope_value TEXT NOT NULL,
+      prompt_type TEXT NOT NULL,
+      tier TEXT NOT NULL DEFAULT '',
+      character_id INTEGER NOT NULL DEFAULT 0,
+      version_id INTEGER NOT NULL,
+      updated REAL NOT NULL,
+      PRIMARY KEY (scope_value, prompt_type, tier, character_id))""",
 ]
 
 # API keys, encrypted at rest (ALBUM_ARC_AND_STAGING_PLAN.md sec 5, and
@@ -508,6 +516,15 @@ CREATE TABLE IF NOT EXISTS prompt_versions (
 
 CREATE INDEX IF NOT EXISTS idx_prompt_versions
   ON prompt_versions(scope_value, prompt_type, tier, character_id, version_number);
+
+CREATE TABLE IF NOT EXISTS prompt_current (
+  scope_value TEXT NOT NULL,
+  prompt_type TEXT NOT NULL,
+  tier TEXT NOT NULL DEFAULT '',
+  character_id INTEGER NOT NULL DEFAULT 0,
+  version_id INTEGER NOT NULL,
+  updated REAL NOT NULL,
+  PRIMARY KEY (scope_value, prompt_type, tier, character_id));
 """
 
 ANCHOR_RUNS_SCHEMA = """

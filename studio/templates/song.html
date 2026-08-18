@@ -65,7 +65,8 @@
       <p class="muted">The words, in [Section] blocks. Whisper drafts them; edit freely.
         This is what the storyboard is written from. Edits survive a re-fetch.</p>
       <form method="post" action="/songs/{{ song.id }}/lyrics" class="stack-form">
-        <textarea name="lyrics_text" rows="16">{{ song.lyrics or "" }}</textarea>
+        {% from "_macros.html" import versioned_prompt %}
+        {{ versioned_prompt("lyrics_text", 16, lyrics_box, "song:" ~ song.id, "song_lyrics") }}
         <button type="submit">Save lyrics</button>
       </form>
       {% if song.mp3_path %}
@@ -81,7 +82,8 @@
       <p class="muted">What the track was generated from (Suno / ChatGPT). Saved with the
         song; not sent to the storyboard model or the renderer.</p>
       <form method="post" action="/songs/{{ song.id }}/style-text" class="stack-form">
-        <textarea name="style_text" rows="16">{{ song.style_text or "" }}</textarea>
+        {% from "_macros.html" import versioned_prompt %}
+        {{ versioned_prompt("style_text", 16, style_box, "song:" ~ song.id, "song_style") }}
         <button type="submit">Save style prompt</button>
       </form>
     </div>
@@ -150,8 +152,8 @@
       <label>Fade out (s) <input type="number" step="0.1" min="0" name="fade_out" value="0"></label>
     </div>
     <label>Or describe the edit
-      <textarea name="prompt" rows="2"
-        placeholder="cut the giggling in the first 4 seconds"></textarea>
+      {% from "_macros.html" import versioned_prompt %}
+      {{ versioned_prompt("prompt", 2, audio_edit_box if audio_edit_box is defined else {"versions": [], "text": "", "current_id": none}, "song:" ~ song.id, "audio_edit", "", "cut the giggling in the first 4 seconds") }}
     </label>
     <p class="hint">A local model turns the sentence into the same five numbers above,
       then ffmpeg does the work &mdash; so it is exact and reversible, and the prompt,
@@ -227,8 +229,8 @@
       <span class="muted">Musical style tokens, comma separated. Not a scene description.</span>
     </label>
     <label>Lyrics <span class="muted">(optional)</span>
-      <textarea name="lyrics" rows="4" maxlength="10000"
-                placeholder="[verse]&#10;..."></textarea>
+      {% from "_macros.html" import versioned_prompt %}
+      {{ versioned_prompt("lyrics", 4, audio_lyrics_box if audio_lyrics_box is defined else {"versions": [], "text": "", "current_id": none}, "song:" ~ song.id, "audio_gen_lyrics", "", "[verse]") }}
     </label>
     <div class="row">
       <label>Seconds <input type="number" name="seconds" value="30" min="1" max="240" step="1"></label>

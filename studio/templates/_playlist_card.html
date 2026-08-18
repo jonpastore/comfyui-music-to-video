@@ -280,8 +280,8 @@
         {% if not d.playlist.image_path %}<span class="muted">&mdash; no cover yet</span>{% endif %}
       </label>
       <label>Extra direction (optional)
-        <textarea name="instruction" rows="3"
-          placeholder="e.g. shot from below, rain-slick street, cold blue key light"></textarea>
+        {% from "_macros.html" import versioned_prompt %}
+        {{ versioned_prompt("instruction", 3, d.instruction_box if d.instruction_box is defined else {"versions": [], "text": "", "current_id": none}, d.playlist.name, "playlist_instruction", "", "e.g. shot from below, rain-slick street, cold blue key light") }}
       </label>
       <label class="inline-label">Model
         <select name="model">

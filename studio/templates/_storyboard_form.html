@@ -74,7 +74,8 @@
   <label>Direction &mdash; the brief the storyboard is written from
     <span class="muted">This box is not the storyboard. It is what the writer
       reads. Open a board below to see scenes, prompts and stills.</span>
-    <textarea name="direction" rows="8" maxlength="{{ max_direction }}">{{ direction }}</textarea>
+    {% from "_macros.html" import versioned_prompt %}
+    {{ versioned_prompt("direction", 8, direction_box if direction_box is defined else {"versions": [], "text": direction, "current_id": none}, "song:" ~ song.id, "storyboard_direction", tier) }}
   </label>
 
   <p class="hint">The storyboard writes the scenes and their lengths. You do

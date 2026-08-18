@@ -665,7 +665,10 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    Scene field labels are Init Cap. Hint text is the textarea
    placeholder. Story / Image / Negative / Video Motion have Suggest
    and `field_versions`. Failed clip cards dismiss via
-   `dismissed_clip_jobs`. Video Motion Prompt sits above Clips.
+   `dismissed_clip_jobs`. Picking a scene prompt version writes
+   `field_current` and the live field (`apply_field_version`). Song
+   lyrics/style/direction/lock and album look boxes remember the last
+   selected `prompt_versions` id (`prompt_current`). Video Motion Prompt sits above Clips.
    `_compose` fills a blank `video_motion_prompt` from motion + camera.
    Scene-scoped `build_song --only` skips T2-13e. Scene preview is plate / stills / clips. Reroll plants
    `.ref-frame.clip-tile` shimmer cards (same 190px / 3:4 frame as a

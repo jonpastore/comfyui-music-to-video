@@ -384,7 +384,8 @@
             <select class="prompt-version-pick" data-tier="{{ p.name }}" data-view="{{ vb.key }}">
               <option value="">composed from the album look (the default)</option>
               {% for v in p.versions %}
-              <option value="{{ v.id }}" data-text="{{ v.text }}">
+              <option value="{{ v.id }}" data-text="{{ v.text }}"
+                      {% if p.current_id and p.current_id == v.id %}selected{% endif %}>
                 {{ v.label or "unnamed" }} &middot; {{ v.created | isotime }}</option>
               {% endfor %}
             </select>

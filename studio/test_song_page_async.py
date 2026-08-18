@@ -255,6 +255,32 @@ def test_scene_prompt_placeholder_and_version_and_draft():
         vision.ask_text = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("offline"))
         drafted = storyboard_service.draft_scene_field(sid, "xxx", 1, "video_motion_prompt")
         assert "walks" in drafted["text"]
+        applied = client.post(
+            f"/songs/{sid}/storyboard/xxx/scene/1/field-version/apply",
+            json={"field": "story", "n": 1},
+            headers={"Accept": "application/json"})
+        assert applied.status_code == 200, applied.text
+        assert applied.json()["text"] == "she waits in steam"
+        written = _json.load(open(jp))
+        assert written["scenes"][0]["story"] == "she waits in steam"
+        assert written["scenes"][0]["field_current"]["story"] == 1
+        page2 = client.get(f"/songs/{sid}/storyboard/xxx").text
+        assert 'value="1" selected' in page2 or "selected>steam" in page2 or 'selected' in page2
+        assert "js-pv-pick" in client.get(f"/songs/{sid}").text
+        import prompts
+        client.post(f"/songs/{sid}/lyrics",
+                    data={"lyrics_text": "first verse"}, headers=J)
+        client.post(f"/songs/{sid}/lyrics",
+                    data={"lyrics_text": "second verse"}, headers=J)
+        vers = prompts.versions(f"song:{sid}", "song_lyrics")
+        assert len(vers) == 2
+        first = [v for v in vers if v["text"] == "first verse"][0]
+        picked = client.post("/prompt-versions/select",
+                             json={"id": first["id"]}, headers=J)
+        assert picked.status_code == 200, picked.text
+        assert prompts.recalled(f"song:{sid}", "song_lyrics")["text"] == "first verse"
+        again = client.get(f"/songs/{sid}").text
+        assert "first verse" in again
 
 
 def test_storyboard_save_and_restore_roundtrip():

@@ -65,6 +65,24 @@
 {% macro glyph_save() %}
 {{ _glyph('<path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>') }}
 {% endmacro %}
+{% macro versioned_prompt(name, rows, box, scope, ptype, tier="", placeholder="") %}
+<div class="prompt-field js-pv" data-scope="{{ scope }}" data-ptype="{{ ptype }}"
+     data-tier="{{ tier }}">
+  <span class="prompt-field-head">
+    <select class="js-pv-pick" aria-label="saved versions">
+      <option value=""{% if not box.current_id %} selected{% endif %}>current</option>
+      {% for v in box.versions %}
+      <option value="{{ v.id }}"{% if box.current_id == v.id %} selected{% endif %}>{{ v.label or ("v" ~ v.version_number) }}</option>
+      {% endfor %}
+    </select>
+    <button type="button" class="icon-btn js-pv-save"
+            title="Save this text as a version"
+            aria-label="Save this text as a version">{{ glyph_save() }}</button>
+  </span>
+  <textarea name="{{ name }}" rows="{{ rows }}"
+            placeholder="{{ placeholder }}">{{ box.text }}</textarea>
+</div>
+{% endmacro %}
 {% macro glyph_delete() %}
 {{ _glyph('<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>') }}
 {% endmacro %}

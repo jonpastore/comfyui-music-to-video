@@ -1172,6 +1172,7 @@ function initAnchorPrompts() {
     box.dispatchEvent(new Event("input", {bubbles: true}));   // refresh the counter
     markUsedVersion(box, blk, opt.value);
     syncVersionDelete(pick);
+    if (opt.value) api("/prompt-versions/select", {id: opt.value}).catch(function () {});
   });
 
   document.addEventListener("click", function (e) {
@@ -2332,11 +2333,20 @@ document.addEventListener("change", function (e) {
   var box = sel.closest(".prompt-field");
   var hold = box && box.querySelector(".js-scene-ver-json");
   var ta = box && box.querySelector("textarea");
-  if (!hold || !ta || !sel.value) return;
+  var ctx = scenePromptCtx(sel);
+  if (!hold || !ta || !sel.value || !ctx) return;
   var vers = [];
   try { vers = JSON.parse(hold.textContent || "[]"); } catch (err) { return; }
   var hit = vers.filter(function (v) { return String(v.n) === String(sel.value); })[0];
   if (hit && hit.text != null) ta.value = hit.text;
+  api(sceneFieldUrl(ctx, "field-version/apply"), {
+    field: sel.getAttribute("data-field"), n: sel.value
+  }).then(function (d) {
+    if (d.text != null) ta.value = d.text;
+    if (ctx.note) say2(ctx.note, "version current");
+  }).catch(function (err) {
+    if (ctx.note) say2(ctx.note, err.message, true);
+  });
 });
 
 document.addEventListener("error", function (e) {
@@ -4598,11 +4608,57 @@ document.addEventListener("submit", function (e) {
 });
 
 document.addEventListener("change", function (e) {
+  var pv = e.target.closest && e.target.closest(".js-pv-pick");
+  if (pv) {
+    if (!pv.value) return;
+    var wrap = pv.closest(".js-pv");
+    var ta = wrap && wrap.querySelector("textarea");
+    api("/prompt-versions/select", {id: pv.value}).then(function (d) {
+      if (ta && d.text != null) ta.value = d.text;
+    }).catch(function () {});
+    return;
+  }
   var sel = e.target.closest && e.target.closest(".js-look-hist");
   if (!sel || !sel.value) return;
   var ta = document.getElementById(sel.getAttribute("data-target") || "");
   if (!ta) return;
-  fetch("/prompt-versions/" + sel.value + "/text")
-    .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (j) { if (j && j.text != null) ta.value = j.text; });
+  api("/prompt-versions/select", {id: sel.value}).then(function (d) {
+    if (d && d.text != null) ta.value = d.text;
+  }).catch(function () {
+    fetch("/prompt-versions/" + sel.value + "/text")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (j && j.text != null) ta.value = j.text; });
+  });
+});
+
+document.addEventListener("click", function (e) {
+  var save = e.target.closest && e.target.closest(".js-pv-save");
+  if (!save) return;
+  e.preventDefault();
+  var wrap = save.closest(".js-pv");
+  var ta = wrap && wrap.querySelector("textarea");
+  if (!wrap || !ta) return;
+  api("/prompt-versions/touch", {
+    scope: wrap.getAttribute("data-scope") || "",
+    type: wrap.getAttribute("data-ptype") || "",
+    tier: wrap.getAttribute("data-tier") || "",
+    text: ta.value,
+    label: "saved"
+  }).then(function (d) {
+    var pick = wrap.querySelector(".js-pv-pick");
+    if (pick && d.versions) {
+      pick.innerHTML = "";
+      var cur = document.createElement("option");
+      cur.value = "";
+      cur.textContent = "current";
+      pick.appendChild(cur);
+      (d.versions || []).forEach(function (v) {
+        var o = document.createElement("option");
+        o.value = v.id;
+        o.textContent = v.label || ("v" + v.version_number);
+        pick.appendChild(o);
+      });
+      pick.value = String(d.id);
+    }
+  }).catch(function () {});
 });

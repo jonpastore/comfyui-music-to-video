@@ -1474,6 +1474,11 @@ def h_storyboard(args, progress):
               scene_seconds=excluded.scene_seconds""",
            sid, tier, json_path, md_path, scene_count, time.time(), args.get("direction", ""),
            args.get("scene_seconds"))
+    try:
+        prompts.touch(f"song:{sid}", "storyboard_direction",
+                      args.get("direction") or "", "saved", tier=tier)
+    except ValueError:
+        pass
     return {"json": json_path, "md": md_path}
 
 
@@ -2819,6 +2824,12 @@ def song_page(request: Request, id: int):
         "splice_eaten_secs": splice_eaten_secs,
         "song_arc": _song_arc_beat(song),
         "playlist_id": _playlist_id_for_album(album),
+        "lyrics_box": prompts.box(f"song:{song['id']}", "song_lyrics",
+                                  song["lyrics"] or ""),
+        "style_box": prompts.box(f"song:{song['id']}", "song_style",
+                                 song["style_text"] or ""),
+        "audio_edit_box": prompts.box(f"song:{song['id']}", "audio_edit", ""),
+        "audio_lyrics_box": prompts.box(f"song:{song['id']}", "audio_gen_lyrics", ""),
         **storyboard_form_ctx(song, form_tier, chat_models, best),
     })
 
@@ -3040,6 +3051,10 @@ def save_lyrics(request: Request, id: int, lyrics_text: str = Form(...)):
     # T10-8: supplied text is not a transcription; clear any prior backend.
     # T10-9: store_lyrics marks lyrics_edited so a re-fetch cannot discard it.
     db.store_lyrics(id, lyrics_text, source="supplied")
+    try:
+        prompts.touch(f"song:{id}", "song_lyrics", lyrics_text, "saved")
+    except ValueError:
+        pass
     return json_or_redirect(request, {"ok": True, "lyrics": lyrics_text}, f"/songs/{id}")
 
 
@@ -3073,6 +3088,10 @@ def save_style_text(request: Request, id: int, style_text: str = Form(...)):
     """
     get_song_or_404(id)
     db.run("UPDATE songs SET style_text=? WHERE id=?", style_text, id)
+    try:
+        prompts.touch(f"song:{id}", "song_style", style_text, "saved")
+    except ValueError:
+        pass
     return json_or_redirect(request, {"ok": True, "style_text": style_text}, f"/songs/{id}")
 
 
@@ -4614,6 +4633,38 @@ def prompt_version_text(vid: int):
                          "version": row["version_number"]})
 
 
+@app.post("/prompt-versions/select")
+async def select_prompt_version(request: Request):
+    """Make this version the one a refresh loads."""
+    body = await _api_body(request)
+    row = prompts.get(body.get("id"))
+    if not row:
+        raise HTTPException(404, "that version no longer exists")
+    prompts.remember(row["scope_value"], row["prompt_type"], row["id"],
+                     tier=row["tier"], character_id=row["character_id"])
+    return JSONResponse({"ok": True, "id": row["id"], "text": row["text"]})
+
+
+@app.post("/prompt-versions/touch")
+async def touch_prompt_version(request: Request):
+    """Save a new wording if it changed, and remember it as current."""
+    body = await _api_body(request)
+    try:
+        row = prompts.touch(
+            str(body.get("scope") or ""),
+            str(body.get("type") or ""),
+            str(body.get("text") or ""),
+            str(body.get("label") or "saved") or "saved",
+            tier=str(body.get("tier") or ""),
+            character_id=body.get("character_id"))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    vers = [dict(v) for v in prompts.versions(
+        row["scope_value"], row["prompt_type"], row["tier"], row["character_id"])]
+    return JSONResponse({"ok": True, "id": row["id"], "text": row["text"],
+                         "versions": vers})
+
+
 @app.post("/anchors/version/update")
 async def update_prompt_version(request: Request):
     """Correct a version in place -- a typo, or a better name.
@@ -5684,6 +5735,11 @@ def _tier_prompt_panel(tier, album, chosen_views, typed_prompts, character_id,
         })
     clothed = [vb for vb in views if not vb["nude"]]
     nude = [vb for vb in views if vb["nude"]]
+    cur = prompts.recalled(album, "positive", tier, character_id)
+    if cur:
+        for vb in views:
+            if vb["prompt"] == vb["composed"]:
+                vb["prompt"] = cur["text"]
     return {
         "name": tier,
         "text": (tones or {}).get(tier, tier_tone(tier, album)),
@@ -5693,6 +5749,7 @@ def _tier_prompt_panel(tier, album, chosen_views, typed_prompts, character_id,
         "clothed_views": clothed,
         "nude_views": nude,
         "versions": anchor_prompt_versions(album, tier, character_id),
+        "current_id": cur["id"] if cur else None,
     }
 
 
@@ -6252,9 +6309,15 @@ def storyboard_form_ctx(song, tier, chat_models=None, best=None, direction=None)
             if from_board:
                 stored = from_board
         direction = stored or beat or default_direction(song, tier)
+    dbox = prompts.box(f"song:{song['id']}", "storyboard_direction",
+                       direction, tier=tier)
+    if dbox["text"]:
+        direction = dbox["text"]
     album = song["album"] or ""
     return {"song": song, "tier": tier, "tiers": tiers.all_tiers(),
-            "direction": direction, "pinned": tiers.PINNED.strip(),
+            "direction": direction,
+            "direction_box": dbox,
+            "pinned": tiers.PINNED.strip(),
             "tier_text": tier_tone(tier, song["album"] or ""),
             "max_direction": grok.MAX_DIRECTION,
             "models": chat_models if chat_models is not None else [], "best_model": best,
@@ -6708,6 +6771,13 @@ def storyboard_page_ctx(song, tier):
         "flagged_idxs": sorted(latest_flags(song["id"], tier)),
         "ref_flags": latest_flags(song["id"], tier),
         "nclips": nclips,
+        "lock_char_box": prompts.box(
+            f"song:{song['id']}", "character_reference",
+            sb.get("character_reference") or "", tier=tier),
+        "lock_world_box": prompts.box(
+            f"song:{song['id']}", "album_world_reference",
+            sb.get("album_world_reference") or sb.get("world_reference") or "",
+            tier=tier),
     }
 
 
@@ -6778,6 +6848,12 @@ async def save_storyboard_lock(request: Request, id: int, tier: str):
         if (sb.get(field) or "") != value:
             sb[field] = value
             changed = True
+        try:
+            ptype = "character_reference" if field == "character_reference" \
+                else "album_world_reference"
+            prompts.touch(f"song:{id}", ptype, value, "saved", tier=tier)
+        except ValueError:
+            pass
     if not str((sb.get("character_reference") or "")).strip():
         raise HTTPException(400, grok.EMPTY_CHARACTER_REFERENCE)
     if changed:
@@ -6959,6 +7035,20 @@ async def draft_scene_prompt(request: Request, id: int, tier: str, num: int):
     field = str(body.get("field") or "").strip()
     try:
         return JSONResponse(storyboard_service.draft_scene_field(id, tier, num, field))
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.post("/songs/{id}/storyboard/{tier}/scene/{num}/field-version/apply")
+async def apply_scene_field_version(request: Request, id: int, tier: str, num: int):
+    body = await _api_body(request)
+    try:
+        return JSONResponse(storyboard_service.apply_field_version(
+            id, tier, num,
+            str(body.get("field") or "").strip(),
+            body.get("n")))
     except LookupError as e:
         raise HTTPException(404, str(e)) from e
     except ValueError as e:
@@ -8266,6 +8356,11 @@ def generate_audio(request: Request, id: int, tags: str = Form(""), lyrics: str 
     # here either way, so the check is needed regardless of the default.
     if not tags:
         raise HTTPException(400, "a take needs at least one style tag")
+    if (lyrics or "").strip():
+        try:
+            prompts.touch(f"song:{id}", "audio_gen_lyrics", lyrics, "saved")
+        except ValueError:
+            pass
     for value, bound, what in ((tags, MAX_TAGS, "tags"), (lyrics or "", MAX_LYRICS, "lyrics")):
         if len(value) > bound:
             raise HTTPException(400, f"{what} is {len(value)} characters; keep it under {bound}")
@@ -8623,19 +8718,19 @@ def _save_look_version(album, prompt_type, text, tier="", character_id=None):
     text = (text or "").strip()
     if not text or prompt_type not in prompts.PROMPT_TYPES:
         return
-    prev = prompts.latest(album, prompt_type, tier=tier, character_id=character_id)
-    if prev and prev["text"] == text:
-        return
     try:
-        prompts.save(album, prompt_type, text, "album look",
-                     tier=tier, character_id=character_id)
+        prompts.touch(album, prompt_type, text, "album look",
+                      tier=tier, character_id=character_id)
     except ValueError:
         return
 
 
 def _wardrobe_field(album, tier, fallback, character_id=None, who="lead"):
     row = prompts.latest(album, "look_wardrobe", tier=tier, character_id=character_id)
-    value = (row["text"] if row and row["text"] else "") or fallback
+    bx = prompts.box(album, "look_wardrobe",
+                     (row["text"] if row and row["text"] else "") or fallback,
+                     tier=tier, character_id=character_id)
+    value = bx["text"] or fallback
     label = f"Wardrobe ({'PG-13' if tier == 'pg13' else tier.upper()})"
     return {
         "tier": tier,
@@ -8647,6 +8742,7 @@ def _wardrobe_field(album, tier, fallback, character_id=None, who="lead"):
             "wand": True,
             "who": who,
             "tier": tier,
+            "current_id": bx["current_id"],
             "history": _look_history(album, "look_wardrobe", tier=tier,
                                      character_id=character_id),
         },
@@ -8660,9 +8756,12 @@ def _character_look(album, char):
     for k in ("identity", "body", "wardrobe", "nude_wardrobe", "anatomy"):
         label, _default, hint = ALBUM_FIELDS[k]
         val = char[k] if k in char.keys() and char[k] else ""
+        bx = prompts.box(album, k, val, character_id=char["id"])
         fields.append({
-            "key": k, "label": label, "value": val, "hint": hint, "wand": True,
+            "key": k, "label": label, "value": bx["text"] or val, "hint": hint,
+            "wand": True,
             "history": _look_history(album, k, character_id=char["id"]),
+            "current_id": bx["current_id"],
             "who": who,
         })
     fallback = (char["wardrobe"] if "wardrobe" in char.keys() and char["wardrobe"] else "")
@@ -8839,10 +8938,15 @@ def playlist_detail(p):
         sets.append(row)
     # the album profile, as (key, label, current value) for the form
     prof = album_profile(p["name"])
-    profile_fields = [{"key": k, "label": ALBUM_FIELDS[k][0], "value": prof[k],
-                       "hint": ALBUM_FIELDS[k][2], "wand": k in DESCRIBABLE,
-                       "history": _look_history(p["name"], k), "who": "lead"}
-                      for k in ALBUM_FIELDS]
+    profile_fields = []
+    for k in ALBUM_FIELDS:
+        bx = prompts.box(p["name"], k, prof[k])
+        profile_fields.append({
+            "key": k, "label": ALBUM_FIELDS[k][0],
+            "value": bx["text"] or prof[k],
+            "hint": ALBUM_FIELDS[k][2], "wand": k in DESCRIBABLE,
+            "history": _look_history(p["name"], k),
+            "current_id": bx["current_id"], "who": "lead"})
     wardrobe_tiers = [_wardrobe_field(p["name"], t, prof["wardrobe"], who="lead")
                       for t in VIDEO_MATRIX_TIERS]
     has_lyrics = bool(_album_lyrics(p["id"]))
@@ -8885,6 +8989,7 @@ def playlist_detail(p):
                 "SELECT COUNT(*) n FROM characters WHERE scope_value=?",
                 p["name"])["n"] or 1,
             "artwork_models": artwork_models, "has_anchor": has_anchor,
+            "instruction_box": prompts.box(p["name"], "playlist_instruction", ""),
             "cast": cast, "character_fields": CHARACTER_FIELDS,
             "copyable_fields": COPYABLE_CHARACTER_FIELDS,
             "partial_tiers": sorted(t for t in tiers_with_video if t not in ready),
@@ -9336,6 +9441,11 @@ def create_album_artwork(request: Request, id: int, model: str = Form(""),
         tiers.check_override(instruction)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    if instruction:
+        try:
+            prompts.touch(p["name"], "playlist_instruction", instruction, "saved")
+        except ValueError:
+            pass
     anchor = db.one("""SELECT * FROM anchors WHERE scope_kind='album' AND scope_value=?
                        AND chosen=1 AND character_id IS NULL
                        ORDER BY (view='front') DESC, id DESC LIMIT 1""", p["name"])

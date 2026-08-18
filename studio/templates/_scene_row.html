@@ -9,17 +9,19 @@
   "image_prompt": "The still: who, pose, place, light. Self-contained; the image model sees only this.",
   "negative_prompt": "Stills and clips share this box. Sent as the image negative and the video negative.",
   "video_motion_prompt": "What the clip does over time: body motion, camera move, lips.",
+  "pose": "The scene's pose word. The matcher uses this to suggest a plate.",
 } %}
 {% macro prompt_box(r, field, label, rows) %}
 {% set vers = ((r.scene.field_versions or {}).get(field)) or [] %}
+{% set cur = (r.scene.field_current or {}).get(field) %}
 <label class="prompt-field" data-field="{{ field }}">
   <span class="prompt-field-head">
     {{ label }}
     <select class="js-scene-ver" data-field="{{ field }}"
             aria-label="{{ label }} versions">
-      <option value="">current</option>
+      <option value=""{% if not cur %} selected{% endif %}>current</option>
       {% for v in vers %}
-      <option value="{{ v.n }}">{{ v.label or ("v" ~ v.n) }}</option>
+      <option value="{{ v.n }}"{% if cur == v.n %} selected{% endif %}>{{ v.label or ("v" ~ v.n) }}</option>
       {% endfor %}
     </select>
     <button type="button" class="icon-btn js-scene-ver-save" data-field="{{ field }}"
@@ -117,10 +119,9 @@
   </form>
 
   <div class="pose-row">
-    <label class="pose-word-field">Pose
-      <textarea name="pose" form="scene-form-{{ r.num }}" rows="3"
-                title="The scene's pose word. The matcher uses this to suggest a plate.">{{ r.scene.pose or "" }}</textarea>
-    </label>
+    <div class="pose-word-field">
+      {{ prompt_box(r, "pose", "Pose", 3) }}
+    </div>
     {% if pose_plan %}
     {% for s in pose_plan.scenes if s.num == r.num %}
     {% if s.source == "saved" %}

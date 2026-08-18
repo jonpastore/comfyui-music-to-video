@@ -18,7 +18,7 @@
                 title="Load a previous wording of this box"
                 aria-label="Previous wordings of {{ f.label }}">
           {% for v in f.history %}
-          <option value="{{ v.id }}">v{{ v.version_number }} · {{ v.label }}</option>
+          <option value="{{ v.id }}"{% if f.current_id and f.current_id == v.id %} selected{% endif %}>v{{ v.version_number }} · {{ v.label }}</option>
           {% endfor %}
         </select>
       </label>

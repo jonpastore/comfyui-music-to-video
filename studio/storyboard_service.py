@@ -490,12 +490,13 @@ def _clip_job_cards(song_id, tier, scene_num, recs, videos, dismissed=None):
 
 
 PROMPT_FIELDS = (
-    "story", "image_prompt", "negative_prompt", "video_motion_prompt")
+    "story", "image_prompt", "negative_prompt", "video_motion_prompt", "pose")
 PROMPT_HINTS = {
     "story": "What happens in this shot — action, not camera gear.",
     "image_prompt": "The still: who, pose, place, light. Self-contained; the image model sees only this.",
     "negative_prompt": "Stills and clips share this box. Sent as the image negative and the video negative.",
     "video_motion_prompt": "What the clip does over time: body motion, camera move, lips.",
+    "pose": "The scene's pose word. The matcher uses this to suggest a plate.",
 }
 
 
@@ -572,9 +573,38 @@ def save_field_version(song_id, tier, num, field, text, label=""):
     })
     bag[field] = vers[-12:]
     scene["field_versions"] = bag
+    scene[field] = text
+    current = dict(scene.get("field_current") or {})
+    current[field] = n
+    scene["field_current"] = current
     scene["edited"] = time.time()
     _commit_scene(song, row, sb)
-    return {"ok": True, "field": field, "versions": bag[field], "n": n}
+    return {"ok": True, "field": field, "versions": bag[field], "n": n,
+            "text": text}
+
+
+def apply_field_version(song_id, tier, num, field, n):
+    """Make a named version the live field so a refresh loads it."""
+    if field not in PROMPT_FIELDS:
+        raise ValueError(f"unknown prompt field {field!r}")
+    song, row, sb, scene = _open_scene(song_id, tier, num)
+    vers = list(((scene.get("field_versions") or {}).get(field)) or [])
+    try:
+        want = int(n)
+    except (TypeError, ValueError) as e:
+        raise ValueError("a version number is needed") from e
+    hit = next((v for v in vers if int(v.get("n") or 0) == want), None)
+    if not hit:
+        raise LookupError(f"no {field} version {want}")
+    text = str(hit.get("text") or "")
+    scene[field] = text
+    current = dict(scene.get("field_current") or {})
+    current[field] = want
+    scene["field_current"] = current
+    scene["edited"] = time.time()
+    _commit_scene(song, row, sb)
+    return {"ok": True, "field": field, "n": want, "text": text,
+            "versions": vers}
 
 
 def _draft_fallback(scene, field):

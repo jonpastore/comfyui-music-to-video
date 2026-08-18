@@ -76,6 +76,14 @@ PROMPT_TYPES = {
     # Clothed wardrobe per rating. playlists.wardrobe stays the most graphic
     # (XXX) fallback; lower tiers refine it against compose_guardrail.
     "look_wardrobe": {"tiered": True,  "label": "Wardrobe (by rating)"},
+    "song_lyrics":   {"tiered": False, "label": "Song lyrics"},
+    "song_style":    {"tiered": False, "label": "Song style prompt"},
+    "audio_edit":    {"tiered": False, "label": "Audio edit prompt"},
+    "audio_gen_lyrics": {"tiered": False, "label": "Generate-audio lyrics"},
+    "storyboard_direction": {"tiered": True, "label": "Storyboard direction"},
+    "character_reference": {"tiered": True, "label": "Board character lock"},
+    "album_world_reference": {"tiered": True, "label": "Board world lock"},
+    "playlist_instruction": {"tiered": False, "label": "Artwork extra direction"},
 }
 # T7-13: one type per view, generated from the view table so T7-1 still holds.
 # Untiered — camera placement is not a function of the rating.
@@ -86,6 +94,10 @@ PROMPT_TYPES.update({
 
 MAX_LABEL = 80
 MAX_TEXT = 4000
+MAX_TEXT_LONG = 20000
+LONG_TYPES = {
+    "song_lyrics", "audio_gen_lyrics", "storyboard_direction", "song_style",
+}
 
 
 def _norm(prompt_type, tier, character_id):
@@ -136,14 +148,84 @@ def latest(album, prompt_type, tier="", character_id=None):
     return rows[0] if rows else None
 
 
-def check(text, label):
+def _cid(character_id):
+    return int(character_id) if character_id else 0
+
+
+def remember(scope_value, prompt_type, version_id, tier="", character_id=None):
+    """Last selected version for this box. Refresh loads it."""
+    if prompt_type not in PROMPT_TYPES:
+        raise ValueError(f"unknown prompt type: {prompt_type!r}")
+    row = get(version_id)
+    if not row:
+        raise ValueError("that version no longer exists")
+    tier, _ = _norm(prompt_type, tier, character_id)
+    now = time.time()
+    db.run("""INSERT INTO prompt_current
+              (scope_value, prompt_type, tier, character_id, version_id, updated)
+              VALUES (?,?,?,?,?,?)
+              ON CONFLICT(scope_value, prompt_type, tier, character_id)
+              DO UPDATE SET version_id=excluded.version_id, updated=excluded.updated""",
+           scope_value or "", prompt_type, tier, _cid(character_id),
+           int(version_id), now)
+    return get(version_id)
+
+
+def recalled(scope_value, prompt_type, tier="", character_id=None):
+    """The version this box should show, or None."""
+    if prompt_type not in PROMPT_TYPES:
+        return None
+    tier, _ = _norm(prompt_type, tier, character_id)
+    cur = db.one("""SELECT version_id FROM prompt_current
+                    WHERE scope_value=? AND prompt_type=? AND tier=?
+                      AND character_id=?""",
+                 scope_value or "", prompt_type, tier, _cid(character_id))
+    if cur:
+        row = get(cur["version_id"])
+        if row:
+            return row
+    return latest(scope_value, prompt_type, tier, character_id)
+
+
+def box(scope_value, prompt_type, live_text="", tier="", character_id=None):
+    """Versions + the text a form should load (last selected, else last saved)."""
+    vers = [dict(r) for r in versions(scope_value, prompt_type, tier, character_id)]
+    cur = recalled(scope_value, prompt_type, tier, character_id)
+    live = (live_text or "").strip()
+    if cur:
+        return {"versions": vers, "text": cur["text"], "current_id": cur["id"]}
+    if live:
+        for v in vers:
+            if (v.get("text") or "") == live:
+                return {"versions": vers, "text": live, "current_id": v["id"]}
+        return {"versions": vers, "text": live, "current_id": None}
+    return {"versions": vers, "text": "", "current_id": None}
+
+
+def touch(scope_value, prompt_type, text, label="saved", tier="", character_id=None):
+    """Write a version if the wording is new, then remember it as current."""
+    text = (text or "").strip()
+    if not text:
+        raise ValueError("nothing to save -- the box is empty")
+    prev = latest(scope_value, prompt_type, tier, character_id)
+    if prev and prev["text"] == text:
+        remember(scope_value, prompt_type, prev["id"], tier, character_id)
+        return prev
+    row = save(scope_value, prompt_type, text, label, tier=tier,
+               character_id=character_id)
+    remember(scope_value, prompt_type, row["id"], tier, character_id)
+    return row
+
+
+def check(text, label, prompt_type=None):
     """Shared validation. Raises ValueError; the caller turns it into a 400."""
     text = (text or "").strip()
     label = " ".join((label or "").split())[:MAX_LABEL]
     if not text:
         raise ValueError("nothing to save -- the box is empty")
-    if len(text) > MAX_TEXT:
-        raise ValueError(f"that is {len(text)} characters; keep it under {MAX_TEXT}")
+    limit = MAX_TEXT_LONG if prompt_type in LONG_TYPES else MAX_TEXT
+    if len(text) > limit:
+        raise ValueError(f"that is {len(text)} characters; keep it under {limit}")
     if not label:
         # Versions are listed BY name. An unnamed one cannot be told from every
         # other unnamed one, which makes the history unusable at exactly the
@@ -161,7 +243,7 @@ def save(album, prompt_type, text, label, tier="", character_id=None, model=None
     if not album:
         raise ValueError("an album is needed to save a prompt")
     tier, character_id = _norm(prompt_type, tier, character_id)
-    text, label = check(text, label)
+    text, label = check(text, label, prompt_type)
     if prompt_type.startswith("view:") or prompt_type in (
             "identity", "wardrobe", "body", "nude_wardrobe", "anatomy",
             "backdrop", "composite", "pose", "positive", "tier_wording",
@@ -362,6 +444,14 @@ def demo():
     assert latest("Restore Album", "arc")["text"] == r1["text"]
     assert get(r1["id"])["text"] == r1["text"]
     assert get(r2["id"])["text"] == r2["text"]
+
+    t = touch("Song Scope", "song_lyrics", "verse one", "saved")
+    assert recalled("Song Scope", "song_lyrics")["id"] == t["id"]
+    t2 = touch("Song Scope", "song_lyrics", "verse two", "saved")
+    assert recalled("Song Scope", "song_lyrics")["text"] == "verse two"
+    remember("Song Scope", "song_lyrics", t["id"])
+    assert box("Song Scope", "song_lyrics")["current_id"] == t["id"]
+    assert box("Song Scope", "song_lyrics")["text"] == "verse one"
 
     print("prompts.py OK")
     return True

@@ -578,7 +578,12 @@ Scene field labels are Init Cap (Story, Image Prompt, Video Motion
 Prompt, Negative Prompt). Hint copy lives in the textarea
 `placeholder` (italic muted), not a line above the box. Each of those
 four fields has Suggest (drafts from the rest of the scene) and a
-version select + floppy. Video Motion Prompt sits above the Clips
+version select + floppy. Picking a version writes it as the live
+field (`field_current`) so a refresh loads that wording, not an empty
+“current”. Pose is versioned the same way. Song lyrics, style,
+storyboard direction, board lock, audio prompts, album look boxes,
+and artwork extra direction use `prompt_versions` + `prompt_current`
+(last selected, else last saved). Video Motion Prompt sits above the Clips
 strip, not with the stills. A failed clip card has a trash to dismiss it. Storyboard generate fills a blank
 `video_motion_prompt` from motion + camera (`test_compose_fills_empty_video_motion_from_motion_and_camera`).
 A failed clip card says **Render failed** and “Not QC”. Scene media is stacked rows: pose word, then plate controls, then

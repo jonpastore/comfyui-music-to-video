@@ -83,10 +83,11 @@
       <summary>Board lock
         <span class="muted">identity and world on every scene</span></summary>
       <label>Character reference
-        <textarea name="character_reference" rows="3">{{ sb.character_reference or "" }}</textarea>
+        {% from "_macros.html" import versioned_prompt %}
+        {{ versioned_prompt("character_reference", 3, lock_char_box, "song:" ~ song.id, "character_reference", tier) }}
       </label>
       <label>World
-        <textarea name="album_world_reference" rows="3">{{ sb.album_world_reference or sb.world_reference or "" }}</textarea>
+        {{ versioned_prompt("album_world_reference", 3, lock_world_box, "song:" ~ song.id, "album_world_reference", tier) }}
       </label>
       <div class="scene-save-row">
         {{ save_icon("Save lock",
