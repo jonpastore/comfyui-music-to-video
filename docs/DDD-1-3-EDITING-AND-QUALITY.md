@@ -40,7 +40,7 @@ is named.
 | `studio/arc.py` | 327 | TRD-2 §3.1/§3.2 JSON-canonical arc; §3.3 `save_prompt`/`restore_prompt` (`T2-5`); `generate` records an `arc` version (`T2-7`); §4.1 wand (`require_theme`, proposal files, `apply_summaries`) | built (`T2-5`/`T2-7`/`T2-14`/`T2-15`/`T2-16`) |
 | `studio/prompts.py` | 265 | TRD-2 §3.3 versioning; `restore(vid)` puts previous text back as a new version (`T2-5`); `delete` drops a row and does not renumber survivors (`T2-6`); a version stores the asked `model` and `created` (`T2-7`); `running(vid)` is the row a render RUNS (`T3-20`) | built |
 | `studio/grok.py` | 1249 | storyboard generation, `validate`, the retry loop | built; §5.5 |
-| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow`, `clips_for_scene`, `chain_clip_count`, `LTXVAddGuide` handoff (`T2-10`) | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5; hop 0 is `ltx25` (`T5-11`); `T2-47`/`T2-48` hop-0 s2v-as-first retired; T5-12 D7 hop graph **built** (`test_t5_12_d7_hop.py`); T5-13 `skip_first_frames` **built** (`main()` hop emit + `test_t5_13_s2v_window.py`); per-scene `ref_motion` / `control_video` (`T2-46`). A scene over the 15 s LTX ceiling is `ceil(scene / ceiling)` clips; successor graph injects N's last frame at index 0 |
+| `build_song.py` | 789 | `clip_plan`, `clip_seconds`, `n_clips_for`, `expect_from_workflow`, `clips_for_scene`, `chain_clip_count`, `LTXVAddGuide` handoff (`T2-10`) | the one timing owner; `clip_seconds` honours `legal_frames`, §5.5; hop 0 is `ltx25` (`T5-11`); `T2-47` mixed native frames **built** (`test_t2_47_mixed_model.py`: LTX hop0 81@`LTX25_FPS` + s2v hop 77@16.0); `T2-48` hop-0 s2v-as-first retired; T5-12 D7 hop graph **built** (`test_t5_12_d7_hop.py`); T5-13 `skip_first_frames` **built** (`main()` hop emit + `test_t5_13_s2v_window.py`); per-scene `ref_motion` / `control_video` (`T2-46`). A scene over the 15 s LTX ceiling is `ceil(scene / ceiling)` clips; successor graph injects N's last frame at index 0 |
 | `studio/db.py` | 559 | schema | `automation`, `findings` (`artefact_hash`, `remedy_class`), `artefacts`, `sets.mode_audience`, `calibrations` landed; `sets.out_fps` did not, §4 |
 | `studio/vision.py` | 516 | VLM calls, local-first | **not** tier 2, §5.6 |
 | `anchor5/poses/cleanrun/qc-pose-*.json` | — | Operator `T3-33.b` pose-then-anatomy eye gates (not a VLM). Anatomy is not composited on FAIL | process, this slice |
@@ -617,11 +617,12 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    writes no graphs. nclips-only callers are display and skip the gate.
    `assemble_song` keeps `-t audio_dur`; its comment no longer says
    clips are quantised so the video always overruns.
-4. **`T2-47` partial.** Hop 0 is LTX even when a scene is marked `s2v`
-   (`T5-11` **built**, `test_t5_11_ltx_always_first.py`). Mixed native
-   frames (WAN 77@16.0 + LTX 81@16.8312) return with the T5-12 hop
-   (`test_t5_12_d7_hop.py` **built**; `test_t2_47_mixed_model.py`).
-   Two names on a plan is not this check. **`T2-45` built.**
+4. **`T2-47` built.** Hop 0 is LTX even when a scene is marked `s2v`
+   (`T5-11` **built**, `test_t5_11_ltx_always_first.py`). One
+   `build_song.main()` job with `needs_lip_sync` writes LTX hop0
+   `.expect.json` 81@`LTX25_FPS` and s2v hop `.expect.json` 77@16.0;
+   they differ (`test_t2_47_mixed_model.py`). Two names on a plan is
+   not this check. **`T2-45` built.**
    `start_clips` asks `models.mixed_unavailable` (via `models.where()`)
    before `jobs.enqueue`: a mixed board that names a model `False` on
    every reachable backend is 400 and writes no job; `None` is a

@@ -511,10 +511,12 @@ order and take the dependencies from here.
    per-model ceilings, which is P0 item 1 again. The renderer half of those
    ceilings is `T5-9`: labeled measured vs chosen, and an over-long single
    clip is refused or split. The planner divisor is unchanged.
-   **`T2-47` partial**: hop 0 is LTX even when a scene is marked `s2v`
-   (`T5-11` **built**, `test_t5_11_ltx_always_first.py`). Mixed native
-   frames return with the T5-12 hop (`test_t5_12_d7_hop.py` **built**;
-   `test_t2_47_mixed_model.py`).
+   **`T2-47` built**: hop 0 is LTX even when a scene is marked `s2v`
+   (`T5-11` **built**, `test_t5_11_ltx_always_first.py`). One
+   `build_song.main()` job with `needs_lip_sync` writes LTX hop0
+   `.expect.json` 81@`LTX25_FPS` and s2v hop `.expect.json` 77@16.0;
+   they differ (`test_t2_47_mixed_model.py`). Two names on a plan is
+   not this check.
    **`T2-48` partial**: hop 0 splits a 30 s scene on the LTX ceiling
    even when marked `s2v`; s2v hop windows are T5-12
    (`test_t5_12_d7_hop.py` **built**; `test_t2_48_ceilings_compose.py`).

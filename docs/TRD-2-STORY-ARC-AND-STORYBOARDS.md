@@ -406,11 +406,13 @@ the whole limitation.
   cerberus**: both load through `LoadVideosFromFolder`, a kjnodes node present on
   cerberus and **absent on gamingpc** (verified against both `/object_info`). The
   rest of the song must still route freely.
-- `T2-47` **The differential that proves two renderers ran**: one storyboard,
-  two scenes, one marked `s2v` and one left `ltx25`, rendered in a single job —
-  and the two output clips carry the models' own frame counts and fps. Asserting
-  the plan holds two model names proves the field posts, not that two renderers
-  ran.
+- `T2-47` **The differential that proves two renderers ran**: one
+  `build_song.main()` job with `needs_lip_sync` writes LTX hop 0 and the
+  s2v hop, and the two `.expect.json` sidecars carry each model's own
+  frames and fps (81@`LTX25_FPS` vs 77@16.0). They must differ. A scene
+  marked `video_model=s2v` is still LTX as hop 0 (`T5-11`); asserting
+  the plan holds two model names proves the field posts, not that two
+  renderers ran.
 - `T2-48` Per-scene model and per-model ceilings compose: a 30 s LTX
   take splits on the LTX ceiling; each s2v hop window on a marked lip
   scene splits on the s2v ceiling (`T5-9`). A 15 s LTX take becomes
@@ -882,7 +884,7 @@ current.
 | **`T2-44` unknown `video_model` refused at save** | **built** | `test_t2_44_unknown_model.py` | `models.refuse_unknown_video_model` raises naming the scene number and the bad value; `save_scene` / `_apply_scene_fields` return 400 and do not write. Absent or blank is not a name. A cli value (`s2v`) still saves. Mutation: write without the check → save arm red. Mutation: rewrite to `default_cli` → file changes and this fails. Mutation: keys-only `in renderable("video")` → s2v arm red |
 | **`T2-46` driving scene pins to cerberus** | **built** | `test_t2_46_driving_pins_cerberus.py` | scene `ref_motion` / `control_video` writes `LoadVideosFromFolder` on that clip only; `_attempt_plan` yields cerberus and not gamingpc; the other clip still free-draws. Mutation: ignore the node → pin arm red. Mutation: pin every clip → free-route arm red. Mutation: `main()` still applies `--ref-motion` to every clip → scene-only arm red |
 | `T2-45` mixed-model unavailable refused before enqueue | **built** | `test_t2_45_enqueue_unavailable.py` | mixed s2v+ltx25 with s2v False on every reachable backend is 400 and writes no clips job; a None ghost stays a candidate and enqueues; a single-model song is not this check. Mutation: enqueue without asking `where()` → False arm red. Mutation: treat None as False → None arm red |
-| `T2-47` mixed-model native frames/fps | **partial** | `test_t2_47_mixed_model.py` | Hop 0 is LTX even when scene 1 is marked `s2v` (`T5-11` **built**). s2v-as-first retired. T5-12 hop graph **built** (`test_t5_12_d7_hop.py`). Mixed native frames expect still partial. Mutation: emit `WanSoundImageToVideo` as hop 0 → red |
+| `T2-47` mixed-model native frames/fps | **built** | `test_t2_47_mixed_model.py` | Hop 0 is LTX even when scene 1 is marked `s2v` (`T5-11`). One `build_song.main()` job with `needs_lip_sync` writes LTX hop0 `.expect.json` 81@`LTX25_FPS` and s2v hop `.expect.json` 77@16.0; they differ. Two names on a plan is not this check. Mutation: emit `WanSoundImageToVideo` as hop 0 → hop0-not-Wan arm red. Mutation: both expects share one frames/fps → mixed-native arm red |
 | `T2-48` per-scene model ceilings compose | **partial** | `test_t2_48_ceilings_compose.py` | Hop 0 splits a 30 s scene on the LTX ceiling (15 s + 15 s) even when marked `s2v`; tiles (`T2-8b`); `_compose` stamps `clips`; `validate` refuses a gap; `main()` emits LTX graphs. s2v hop windows are T5-12 **built** (`test_t5_12_d7_hop.py`). Mutation: treat `video_model=s2v` as hop 0 → 7 × CHUNK and this fails |
 | **`T2-11` chained clip not ready until predecessor landed** | **built** | `test_t2_11_clip_chain_depends.py` | same-scene successors `depends_on` predecessor. `enqueue_clips` one job per chain clip; only the **scene-head** still is required (successors use last frame). `_claim` skips the successor until the predecessor is `done`. `h_clips` refuses a successor whose predecessor file is missing. Mutation: one batch job with no `_depends_on` → red. Mutation: require a still for every part → head-only arm red. Mutation: skip the predecessor-file check → missing-pred arm red |
 | **`T2-17` generation prompt API** | **built** | this change | `GET /api/songs/{id}/storyboard/{tier}` returns `prompt` from `storyboard_generation_payload`, defaulted from the tier (`g` ≠ `r`). A stored prompt wins after generate. `POST` accepts an edited `prompt` as the job's `direction`. The song-page HTML `POST /songs/{id}/storyboard` is the same enqueue: JSON + `job_id` when `Accept: application/json`, 303 otherwise (`test_song_page_async.py`). Mutation: hardcode one prompt for every tier → red. `studio/test_t2_17_storyboard_prompt.py` |

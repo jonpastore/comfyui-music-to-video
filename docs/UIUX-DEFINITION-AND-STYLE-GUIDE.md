@@ -402,8 +402,9 @@ window follow `clip_seconds`, not a hardcoded `LTX25_LEN`/`CHUNK`; a NULL
 is **built** (`main()` hop emit + `test_t5_13_s2v_window.py`); look is NOT MEASURED
 (`T3-37`). When that
 hop runs, a mixed-model job keeps each clip's **native** frames and fps
-(`T2-47`): s2v is 77@16.0, ltx25 is 81@16.8312; the editor must not
-show one fps as if both renderers produced it. Starting that job is
+(`T2-47` **built**, `test_t2_47_mixed_model.py`): s2v hop `.expect.json`
+is 77@16.0, LTX hop0 is 81@`LTX25_FPS` (16.8312); they differ. The
+editor must not show one fps as if both renderers produced it. Starting that job is
 refused before enqueue when any named model is unavailable on every
 reachable backend (`T2-45`); a box that could not be asked (`None`)
 is still a candidate, not a refusal. A scene that asked for
