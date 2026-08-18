@@ -35,7 +35,8 @@ identity lock (`test_t6_a1_anchor_loop_over_json`).
   GPU pair that proves it helps (`T5-2`) and the peak-VRAM reading (`T5-5`)
   are **NOT MEASURED**.
 - **TRD-6 — the queue, the lifecycle, and what joins to what.** Ledger is
-  **built** (`T6-1`…`T6-A10`). `T6-18` still deletes nothing; GC is deferred.
+  **built** (`T6-1`…`T6-A10`). `T6-18` still deletes nothing; GC is
+  **deferred** (Status row; §7 **No automatic GC**).
 
 **The single thread running through all four is identity.** An album is one
 character seen from many angles across thirty-one songs, and every defect this
@@ -283,7 +284,7 @@ coordinator (TRD-6 §7).
 2. **A criterion satisfied by absence.** TRD-6 §8 warned that 25 unbuilt
    criteria can all go green by never building them. That warning is spent:
    the ledger marks them **built** with tests that can go red. The remaining
-   one-sided risk is `T6-18` (GC deferred) and the GPU **NOT MEASURED** rows
+   one-sided risk is `T6-18` (GC **deferred**, §7 **No automatic GC**) and the GPU **NOT MEASURED** rows
    in TRD-4 (`T4-11` colour), TRD-5, and TRD-7.
 3. **Prompt surface area grows faster than the checks on it.** Four new types ×
    ten views is a lot of composed text, and every combination is a chance at

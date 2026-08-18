@@ -1672,7 +1672,8 @@ dry-run listing from `cleanup_service.plan_clip_cleanup` (`path`,
 only, no recompute (`T6-A4`). Real delete form posts `dry_run=0` and
 `confirm=DELETE` to `POST /api/songs/{id}/cleanup`; default remains
 dry-run. Unconfirmed renders keep the Confirm button and get **no**
-cleanup delete form. T6-18 stays: lifecycle writes never delete.
+cleanup delete form. T6-18 stays: lifecycle writes never delete;
+  automatic GC is deferred (TRD-6 §7 **No automatic GC**).
 
 ### 7b.6 A child mention is not a universal refuse
 

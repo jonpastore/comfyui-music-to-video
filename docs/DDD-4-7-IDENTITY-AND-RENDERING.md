@@ -518,7 +518,9 @@ plus Swarm assign. Do not add a second pull queue.
 
 **The shape of what is left:**
 
-- **`T6-18` still deletes nothing on write.** `T6-19` is the operator
+- **`T6-18` still deletes nothing on write**; automatic GC is **deferred**
+  (TRD-6 Status **deferred**; §7 **No automatic GC**). Predecessor
+  reachability after a re-render is `T6-A5`. `T6-19` is the operator
   confirm + dry-run + clip cleanup: local host `os.remove`; remote host
   only when a known `SWARM_INPUT_DIRS` input→output twin exists (same SSH
   staging path as `install_input`, path `shlex.quote`d because OpenSSH
