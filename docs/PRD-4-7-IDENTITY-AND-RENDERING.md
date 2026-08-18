@@ -158,9 +158,11 @@ use-as-ref ticked, `gen_anchor`'s images list is exactly that sheet.
 step 1.
 
 **P13 (the loop) is not built.** `T2-50` coverage list **is**
-(`test_t2_50_coverage_list.py`). Accept-gated map, location plates,
-LTX-first, decoded s2v hop are not: see TRD-2 `T2-51`…`T2-56` and
-TRD-5 `T5-11`…`T5-15`.
+(`test_t2_50_coverage_list.py`). `T4-21`/`T4-22` classification_json
+in sqlite **is** (`test_t4_21_classification_json.py`): album +
+character, versioned, queryable; sidecars seed import only. Accept-gated
+map, location plates, LTX-first, decoded s2v hop are not: see TRD-2
+`T2-51`…`T2-56` and TRD-5 `T5-11`…`T5-15`.
 
 ## 5. Priorities
 

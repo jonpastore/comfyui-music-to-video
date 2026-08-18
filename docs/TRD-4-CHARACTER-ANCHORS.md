@@ -354,7 +354,7 @@ character."* — the capability loss stated in full.
 
 | criterion | state | commit | evidence |
 |---|---|---|---|
-| `T4-21` / `T4-22` `classification_json` in DB | **not built** | — | Intended: `test_t4_21_classification_json.py`. Tree: sidecar `anchor5/image-classification.json` only |
+| `T4-21` / `T4-22` `classification_json` in DB | **built** | `test_t4_21_classification_json.py` | sqlite `classification_json` (album + `character_id` NULL=protagonist, versioned). Query by view/pose/wardrobe/usable. Sidecar seeds `import_sidecar` only; `library()` never reads a file. Mutation: sidecar-only store → red |
 | `T4-23` gap reads the board, does not bind | **not built** | — | Intended: `test_t2_51_classify_cannot_write_map.py`. No gap-vs-board studio output |
 | `T4-24` ceiling-tier pose generate (clothed+nude iff r/xxx) | **not built** | — | Intended: `test_t4_24_ceiling_generate.py`. Sidecar `batch_edit` only |
 | `T4-11` / D10 colour (charcoal-brown, not jet-black) | **partial** | `4032aba` | Parts list **built**. Composed default still says jet-black. D10 colour not asserted |

@@ -39,6 +39,7 @@ is not a studio feature.
 | `studio/app.py` | the anchor routes, `ANCHOR_VIEWS` labels, `ANCHOR_RENDER_FLAGS`, `DENOISE_CHOICES`, the preview; song-page `pose_library_by_tier` (chosen sheets, not just identity front); `start_refs` freezes `pose_plan` binds into `pose_bases` |
 | `studio/pose_plan.py` | scene need-text → chosen sheet match; `plan` / `bind_scene` / `freeze_auto_binds` / `album_coverage`; no FastAPI. Not the T2-50 writer |
 | `studio/pose_coverage.py` | T2-50 analyze-for-poses; writes `pose_coverage` only; no FastAPI; does not import `pose_plan` |
+| `studio/classification.py` | T4-21 / T4-22 album pose library; versioned `classification_json` in sqlite; `library` / `query` / `save` / `import_sidecar`; no FastAPI. Sidecar is import seed only |
 | `studio/prompts.py` | `PROMPT_TYPES` — composer fields plus `view:<key>` generated from `VIEWS` (`T7-13`), plus `backdrop`/`composite`/`pose` |
 | `studio/tiers.py` | `compose_guardrail`, `check_text` (tier-aware: g/pg13 may depict T10-18; r lyrics/narrative mention T10-18a), `screen_work_for_tier` / `screen_escalation` / `check_escalation` (T10-19 entry; T10-20 ignores override kwargs), `check_override`, `check_tier_policy` |
 | `build_song.py` | TRD-5's territory: `workflow()`, the LTX branches, `clip_plan`, `expect_from_workflow` |
@@ -500,7 +501,9 @@ code rather than in documents.
   `needs_lip_sync`; T5-A if refine. A control that says "lip-sync"
   must not emit s2v-only (`T5-11`, **not built**).
 - **`classification_json` vs `anchor5/*.json`** — the DB document is
-  the store (`T4-21`). Sidecars are not (**not built**).
+  the store (`T4-21` **built**, `test_t4_21_classification_json.py`).
+  Sidecars seed `import_sidecar` only (`T4-22` **built**); `library()`
+  never reads a file.
 
 ## 8. How this design is verified
 

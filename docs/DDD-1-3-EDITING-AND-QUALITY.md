@@ -268,7 +268,10 @@ separated row exists), the interstitial card
 `set_duration` prices it; `POST /sets/{id}/cards`), `lineage`
 (`T6-A5`: predecessor/successor pair, either selectable), and
 `pose_coverage` (`T2-50`: song, tier, scene_number, pose, view, wardrobe,
-exposure — board needs only; analyze writes this table and nothing else).
+exposure — board needs only; analyze writes this table and nothing else),
+and `classification_json` (`T4-21`/`T4-22`: album, character_id
+NULL=protagonist, versioned document, same fields as
+image-classification.json; sidecars seed import only).
 Switching audience writes only that column. Easy is `mixer.master_engaged`
 reading `mode_audience == "easy"` on the item dict — the same application
 point as a gain curve (`T1-18`, `T1-20c`, `T1-20d`).
@@ -278,8 +281,6 @@ Still needed, and no more than this:
     ALTER TABLE sets ADD COLUMN out_fps REAL;                        -- NULL = derive from items
 
     -- #529 loop (D4, D5, D7). Minimum; do not over-schema.
-    -- classification_json: album, character_id NULL=protagonist,
-    --   versioned document, same fields as image-classification.json
     -- scene_pose_map: song, tier, scene_number → keeper id/path,
     --   status draft|accepted|rejected
     -- location_plates: album or song, location key → asset path

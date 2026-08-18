@@ -684,6 +684,22 @@ CREATE TABLE IF NOT EXISTS pose_coverage (
 CREATE INDEX IF NOT EXISTS idx_pose_coverage ON pose_coverage(song_id, tier);
 """
 
+CLASSIFICATION_JSON_SCHEMA = """
+-- T4-21 / T4-22: album pose library as a versioned document.
+-- character_id NULL is the protagonist. Sidecars seed import only.
+-- Same image fields as anchor5/image-classification.json.
+CREATE TABLE IF NOT EXISTS classification_json (
+  id INTEGER PRIMARY KEY,
+  album TEXT NOT NULL,
+  character_id INTEGER,
+  version_number INTEGER NOT NULL,
+  document_json TEXT NOT NULL,
+  created REAL NOT NULL);
+
+CREATE INDEX IF NOT EXISTS idx_classification_json
+  ON classification_json(album, character_id, version_number);
+"""
+
 
 def _nullable_set_item_song_id(c):
     """T1-28: a card is a set_items row with song_id NULL. CREATE TABLE IF
@@ -757,6 +773,7 @@ def conn():
         c.executescript(ADVICE_PROPOSALS_SCHEMA)
         c.executescript(LINEAGE_SCHEMA)
         c.executescript(POSE_COVERAGE_SCHEMA)
+        c.executescript(CLASSIFICATION_JSON_SCHEMA)
         _migrate(c)
         _local.c = c
     return c

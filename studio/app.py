@@ -48,6 +48,7 @@ import library_service  # TRD-6 T6-A2-library: library song_count — no FastAPI
 import media_service  # TRD-8 T8-16: song media bag — no FastAPI
 import nav_service  # UIUX §8 / T6-A2-nav: topbar links — no FastAPI
 import pose_plan  # scene pose → chosen sheet → refs image2
+import classification  # T4-21 / T4-22: album pose library in sqlite
 import civitai  # Civitai LoRA search/download — registers download_lora handler
 import storyboard_versions
 import video_fx   # per-item video look effects -- same, pure/no deps
@@ -6719,6 +6720,54 @@ def api_album_pose_coverage(album: str, tier: str):
         return JSONResponse(pose_plan.album_coverage(album, valid_tier_or_400(tier)))
     except (LookupError, OSError, json.JSONDecodeError, ValueError) as e:
         raise HTTPException(400, str(e))
+
+
+@app.get("/api/albums/{album}/classification/versions")
+def api_classification_versions(album: str, character_id: Optional[int] = None):
+    """T4-21: version list for this album+character. Newest first."""
+    try:
+        return JSONResponse(classification.versions(album, character_id))
+    except (LookupError, ValueError) as e:
+        _svc_http(e)
+
+
+@app.get("/api/albums/{album}/classification")
+def api_classification(album: str, character_id: Optional[int] = None,
+                       view: Optional[str] = None, pose: Optional[str] = None,
+                       wardrobe: Optional[str] = None, usable: Optional[str] = None):
+    """T4-21: latest DB library, optionally filtered. Never a sidecar."""
+    try:
+        return JSONResponse(classification.query(
+            album, character_id=character_id, view=view, pose=pose,
+            wardrobe=wardrobe, usable=usable))
+    except (LookupError, ValueError) as e:
+        _svc_http(e)
+
+
+@app.post("/api/albums/{album}/classification/import")
+async def api_classification_import(request: Request, album: str,
+                                    character_id: Optional[int] = None):
+    """T4-22: seed one version from a sidecar path. Sidecar is not the store."""
+    body = await _api_body(request)
+    path = body.get("path") or ""
+    try:
+        return JSONResponse(classification.import_sidecar(
+            album, path, character_id=character_id))
+    except (LookupError, ValueError) as e:
+        _svc_http(e)
+
+
+@app.post("/api/albums/{album}/classification")
+async def api_classification_save(request: Request, album: str,
+                                  character_id: Optional[int] = None):
+    """T4-21: persist a new classification_json version."""
+    body = await _api_body(request)
+    document = body.get("document") if isinstance(body.get("document"), dict) else body
+    try:
+        return JSONResponse(classification.save(
+            album, document, character_id=character_id))
+    except (LookupError, ValueError) as e:
+        _svc_http(e)
 
 
 @app.post("/api/songs/{id}/storyboard/{tier}/analyze-poses")

@@ -1259,7 +1259,12 @@ inert (7a.3). D7 is unmeasured until the GPU pair exists — say so
 on the control.
 
 **Anchors page.** Library chips from `classification_json` (view /
-pose / wardrobe / usable). Coverage vs the open song's ceiling
+pose / wardrobe / usable). The document is sqlite
+(`T4-21`/`T4-22` **built**, `test_t4_21_classification_json.py`):
+`GET /api/albums/{album}/classification` (query params view / pose /
+wardrobe / usable) and `POST` to save; `POST .../import` seeds from a
+sidecar path. Chips UI still pending; the store is the API, not
+`anchor5/image-classification.json`. Coverage vs the open song's ceiling
 board (`T2-50`). C1 / C2 job type on generate (`T7-21`). QC remedy
 line (`T3-35`). Keeper / reject; `usable=skip` never enters a
 slot (`T7-23`). Ceiling + ticked-lower backfill is visible
