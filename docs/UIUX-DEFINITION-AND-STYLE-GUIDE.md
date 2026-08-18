@@ -646,9 +646,15 @@ and load as soon as the row is in the page. Landed clip tiles reserve a 3:4 `.st
 still in `<img class="clip-poster">` under `<video src>` /
 `preload=metadata`. They do not wait on IntersectionObserver. The
 all-clips strip starts closed.
-`#clip-preview` has prev/next, Close on the right, and repair actions:
-re-render this clip (optional refine), edit the motion prompt, or open
-the approved still. Arrow keys step clips.
+`#clip-preview` has prev/next centered on the stage, Close on the
+right, and repair actions: re-render this clip (optional refine),
+edit the motion prompt, or **Open the still** (the approved start
+frame — fix/reroll it, then re-render). The playlist is the
+`.scene-clips` strip you clicked, de-duplicated by `clip_idx` — not
+every `data-video` on the page (figure + all-clips leftovers). Motion
+text comes from `data-motion` or the scene Video Motion box. Arrow
+keys step clips. Render clip calls `refreshQueue()` so the idle chip
+re-arms.
 **Modals:** every `<dialog>` dismisses with `modal_close()` — ghost X,
 `.modal-close`, never an accent circle and never a mix of Close / ×
 (`test_modal_close_is_one_icon`). Confirm actions stay Cancel / Delete.

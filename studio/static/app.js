@@ -2214,12 +2214,16 @@ document.addEventListener("submit", function (e) {
     paintClipPlaceholders(form, d);
     var jid = d.job_id || (d.job_ids && d.job_ids[0]);
     if (!jid) return;
+    refreshQueue();
     watchJob(jid, "song-status", function (job) {
       if (job.status === "failed" || job.status === "cancelled") {
         clearClipPlaceholders(jid);
       }
       if (job.status === "done" || job.status === "failed" ||
-          job.status === "cancelled") refreshSceneRow(form);
+          job.status === "cancelled") {
+        refreshSceneRow(form);
+        refreshQueue();
+      }
     });
   }).catch(function (err) {
     if (note) say2(note, err.message, true);
@@ -2269,8 +2273,14 @@ document.addEventListener("click", function (e) {
     var idx = del.getAttribute("data-clip-idx");
     if (!ctx || idx == null) return;
     api("/songs/" + ctx.song + "/clips/" + idx + "/delete", {tier: ctx.tier}).then(function () {
-      var fig = del.closest(".clip-frame");
-      if (fig) fig.remove();
+      document.querySelectorAll(
+        '.js-clip-preview[data-clip-idx="' + idx + '"]'
+      ).forEach(function (el) {
+        if (ctx.tier && el.getAttribute("data-tier") &&
+            el.getAttribute("data-tier") !== ctx.tier) return;
+        var card = el.closest(".clip-frame") || el;
+        if (card.parentNode) card.remove();
+      });
     }).catch(function (err) {
       if (ctx.note) say2(ctx.note, err.message, true);
     });
@@ -4048,9 +4058,19 @@ document.addEventListener("click", function (e) {
   var items = [];
   var idx = 0;
 
-  function thumbs() {
-    var nodes = document.querySelectorAll(".js-clip-preview[data-video]");
-    return Array.prototype.slice.call(nodes).sort(function (a, b) {
+  function thumbs(fromEl) {
+    var root = (fromEl && fromEl.closest(".scene-clips")) || document;
+    var nodes = root.querySelectorAll(".js-clip-preview.thumb-open[data-video]");
+    var seen = {};
+    var out = [];
+    Array.prototype.forEach.call(nodes, function (el) {
+      var key = (el.getAttribute("data-clip-idx") || "") + "|" +
+                (el.getAttribute("data-video") || "");
+      if (seen[key]) return;
+      seen[key] = true;
+      out.push(el);
+    });
+    return out.sort(function (a, b) {
       var na = parseInt(a.getAttribute("data-clip-idx") || "0", 10);
       var nb = parseInt(b.getAttribute("data-clip-idx") || "0", 10);
       return na - nb;
@@ -4059,12 +4079,24 @@ document.addEventListener("click", function (e) {
 
   function current() { return items[idx] || null; }
 
+  function motionFor(el) {
+    var m = el && el.getAttribute("data-motion");
+    if (m) return m;
+    var num = el && el.getAttribute("data-scene");
+    var scene = (el && el.closest(".scene")) ||
+                (num && document.getElementById("scene-" + num));
+    var ta = scene && scene.querySelector('textarea[name="video_motion_prompt"]');
+    return (ta && ta.value) || "";
+  }
+
   function show(i) {
     if (!items.length) return;
     idx = (i + items.length) % items.length;
     var el = items[idx];
+    vid.removeAttribute("src");
+    vid.load();
     vid.src = el.getAttribute("data-video") || "";
-    vid.play();
+    vid.play().catch(function () {});
     var lab = document.getElementById("clip-preview-label");
     if (lab) lab.textContent = el.getAttribute("data-label") || "Clip";
     var pos = document.getElementById("clip-preview-pos");
@@ -4074,7 +4106,7 @@ document.addEventListener("click", function (e) {
     if (prev) prev.disabled = items.length < 2;
     if (next) next.disabled = items.length < 2;
     var motion = document.getElementById("clip-motion");
-    if (motion) motion.value = el.getAttribute("data-motion") || "";
+    if (motion) motion.value = motionFor(el);
     var wrap = document.getElementById("clip-motion-wrap");
     if (wrap) wrap.hidden = true;
     var stillBtn = document.getElementById("clip-open-still");
@@ -4082,8 +4114,15 @@ document.addEventListener("click", function (e) {
   }
 
   function openFrom(el) {
-    items = thumbs();
+    items = thumbs(el);
     var at = items.indexOf(el);
+    if (at < 0) {
+      var src = el.getAttribute("data-video");
+      at = -1;
+      items.forEach(function (it, i) {
+        if (at < 0 && it.getAttribute("data-video") === src) at = i;
+      });
+    }
     if (at < 0) {
       items = [el];
       at = 0;
@@ -4171,6 +4210,12 @@ document.addEventListener("click", function (e) {
       note("saved — re-render to apply");
     }).catch(function (err) { note(err.message, true); });
   });
+
+  if (vid) {
+    vid.addEventListener("error", function () {
+      note("this take is gone — deleted or the file is missing. Close and play the current tile.", true);
+    });
+  }
 
   var stillBtn = document.getElementById("clip-open-still");
   if (stillBtn) stillBtn.addEventListener("click", function () {

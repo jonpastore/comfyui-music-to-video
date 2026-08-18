@@ -402,8 +402,15 @@ def scenes(song, sb, tier, anchored=(), scene_seconds=None):
                 "stale": bool(edited and cands and
                               all((c["created"] or 0) < edited for c in cands)),
             })
-        videos = [videos_of[rec["clip_idx"]] for rec in recs
-                  if rec["clip_idx"] in videos_of]
+        videos = []
+        for rec in recs:
+            raw = videos_of.get(rec["clip_idx"])
+            if not raw:
+                continue
+            v = dict(raw)
+            v["scene_num"] = num
+            v["motion"] = scene.get("video_motion_prompt") or ""
+            videos.append(v)
         pending, failed = _clip_job_cards(
             song["id"], tier, num, recs, videos,
             dismissed=scene.get("dismissed_clip_jobs"))

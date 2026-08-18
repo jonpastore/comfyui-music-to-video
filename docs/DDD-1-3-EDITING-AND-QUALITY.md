@@ -678,7 +678,10 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    Scene-scoped `build_song --only` skips T2-13e. Scene preview is plate / stills / clips. Reroll plants
    `.ref-frame.clip-tile` shimmer cards (same 190px / 3:4 frame as a
    finished still). Render clip plants the same cards in
-   `.media-strip.scene-clips` (`paintClipPlaceholders`). A leftover
+   `.media-strip.scene-clips` (`paintClipPlaceholders`) and calls
+   `refreshQueue()` so an idle chip starts polling. `#clip-preview`
+   walks the clicked `.scene-clips` strip (`thumbs(fromEl)`), not every
+   `data-video` on the page. A leftover
    shimmer is cleared when that clip job is done/failed/cancelled
    (`sweepPendingClipCards` reads `/jobs/{id}`; the chip kind may be
    QC). The strip is

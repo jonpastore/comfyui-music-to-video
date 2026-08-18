@@ -143,6 +143,8 @@ def test_scenes_lists_every_rendered_clip_on_a_split_scene():
             song, {"scenes": scenes}, "xxx")
         assert n >= 2, n
         assert [v["clip_idx"] for v in rows[0]["videos"]] == [0, 1]
+        assert rows[0]["videos"][0]["scene_num"] == 1
+        assert "motion" in rows[0]["videos"][0]
         still = os.path.join(db.DATA, "still0.png")
         open(still, "wb").write(b"\x89PNG\r\n\x1a\n")
         db.run("""INSERT INTO refs (song_id,tier,clip_idx,path,seed,approved,created,scene_number)

@@ -109,6 +109,10 @@ def test_sb_panel_toolbar_and_closed_json():
         assert "el.closest(\".clip-frame\")" in js
         assert "function sweepPendingClipCards" in js
         assert "clearClipPlaceholders(jid)" in js.split("function sweepPendingClipCards", 1)[1]
+        clip_submit = js.split("form.clip-bar", 1)[1][:900]
+        assert "refreshQueue();" in clip_submit
+        assert "function thumbs(fromEl)" in js
+        assert "closest(\".scene-clips\")" in js.split("function thumbs(fromEl)", 1)[1][:400]
         css = open(os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
         assert "clip-play" in css
         assert ".clip-frame .still-thumb" in css

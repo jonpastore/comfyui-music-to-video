@@ -154,9 +154,11 @@
         <div class="still-thumb">
         <button type="button" class="js-clip-preview thumb-open"
                 data-video="{{ media_url(v.path) }}"
-                data-label="{{ tier | tiername }} clip {{ v.clip_idx }}"
+                data-label="{{ tier | tiername }} scene {{ v.scene_num or '?' }} clip {{ v.clip_idx }}"
                 data-tier="{{ tier }}"
+                data-scene="{{ v.scene_num or '' }}"
                 data-clip-idx="{{ v.clip_idx }}"
+                data-motion="{{ v.motion or '' }}"
                 title="Play clip {{ v.clip_idx }}">
           <video src="{{ media_url(v.path) }}" preload="metadata" muted playsinline></video>
           <span class="clip-play" aria-hidden="true">play</span>
