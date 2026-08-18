@@ -1945,7 +1945,8 @@ function initSongPage() {
       }
       if (job.status === "failed" || job.status === "cancelled") {
         clearRerollPlaceholders(jid);
-        clearClipPlaceholders(jid);
+        if (form && form.classList.contains("clip-bar")) refreshSceneRow(form);
+        else clearClipPlaceholders(jid);
       }
     });
   }
@@ -2200,10 +2201,8 @@ document.addEventListener("submit", function (e) {
     var jid = d.job_id || (d.job_ids && d.job_ids[0]);
     if (!jid) return;
     watchJob(jid, "song-status", function (job) {
-      if (job.status === "done") refreshSceneRow(form);
-      else if (job.status === "failed" || job.status === "cancelled") {
-        clearClipPlaceholders(jid);
-      }
+      if (job.status === "done" || job.status === "failed" ||
+          job.status === "cancelled") refreshSceneRow(form);
     });
   }).catch(function (err) {
     if (note) say2(note, err.message, true);

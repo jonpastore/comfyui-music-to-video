@@ -662,7 +662,9 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    Scene preview is plate / stills / clips. Reroll plants
    `.ref-frame.clip-tile` shimmer cards (same 190px / 3:4 frame as a
    finished still). Render clip plants the same cards in
-   `.media-strip.scene-clips` (`paintClipPlaceholders`). Reroll note,
+   `.media-strip.scene-clips` (`paintClipPlaceholders`). The strip is
+   also filled from `jobs` (`clip_pending` / `clip_failed`) so the
+   chip going QC does not blank the row. Reroll note,
    seed range, Fix, and Delete live on the still. `GET /songs/{id}/approve/{tier}`
    303s to the song page. `POST /clips` accepts `scene` + `head_only`.
    `auto_qc` enqueues `qc` on that job. Dialogs share `modal_close()`.

@@ -598,7 +598,9 @@ nowrap option bar. First clip only is the default. The clips strip
 is the same framed slider as stills (190px / 3:4 `.clip-tile`).
 Submitting Render clip `fetch`es the job and plants N shimmer
 cards (`paintClipPlaceholders`); they swap for videos when the
-job lands. No form 303. Every scene is
+job lands. The scene strip also reads `jobs` (`clip_pending` /
+`clip_failed`) so a later QC chip cannot hide an in-flight or
+failed clip. Failed cards show the last error line. No form 303. Every scene is
 LTX first (`T5-11` **built**, `test_t5_11_ltx_always_first.py`).
 `needs_lip_sync` beside camera (`T2-55` **built**,
 `test_t2_55_needs_lip_sync.py`) marks

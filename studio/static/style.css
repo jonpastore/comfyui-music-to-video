@@ -1603,6 +1603,24 @@ img.lazy-src, video.lazy-src {
   animation: still-shimmer 1.2s linear infinite;
 }
 .still-pending .still-icons { min-height: 1.7rem; }
+.clip-failed { border-color: var(--danger); }
+.clip-fail-well {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: var(--panel);
+  border: 1px solid var(--danger);
+}
+.clip-fail-err {
+  margin: 0.2rem 0 0;
+  font-size: 0.7rem;
+  line-height: 1.25;
+  color: var(--danger);
+  max-width: 190px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
 @keyframes still-shimmer {
   0% { background-position: 100% 0; }
   100% { background-position: -100% 0; }

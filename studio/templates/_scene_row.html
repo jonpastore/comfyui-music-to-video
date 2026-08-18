@@ -376,9 +376,30 @@
             {% if qv %}<span class="qc-tag" title="first-frame physical identity vs her photographs. Clothes do not lower identity.">{{ qv }}</span>{% endif %}
           </figcaption>
         </figure>
-        {% else %}
-        <p class="empty">No clips yet.</p>
         {% endfor %}
+        {% for j in r.clip_pending or [] %}
+        {% for i in range(j.n) %}
+        <figure class="clip-frame clip-tile clip-pending" data-job-id="{{ j.id }}">
+          <div class="still-thumb">
+            <div class="thumb-open still-skeleton" aria-hidden="true"></div>
+          </div>
+          <figcaption>rendering…{% if j.n > 1 %} {{ i + 1 }}/{{ j.n }}{% endif %}
+            · job #{{ j.id }}</figcaption>
+        </figure>
+        {% endfor %}
+        {% endfor %}
+        {% for j in r.clip_failed or [] %}
+        <figure class="clip-frame clip-tile clip-failed" data-job-id="{{ j.id }}">
+          <div class="still-thumb">
+            <div class="thumb-open clip-fail-well" aria-hidden="true"></div>
+          </div>
+          <figcaption>failed · job #{{ j.id }}</figcaption>
+          {% if j.error %}<p class="clip-fail-err" title="{{ j.error }}">{{ j.error }}</p>{% endif %}
+        </figure>
+        {% endfor %}
+        {% if not r.videos and not r.clip_pending and not r.clip_failed %}
+        <p class="empty">No clips yet.</p>
+        {% endif %}
       </div>
     </div>
   </section>

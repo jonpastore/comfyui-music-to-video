@@ -404,10 +404,13 @@ def scenes(song, sb, tier, anchored=(), scene_seconds=None):
             })
         videos = [videos_of[rec["clip_idx"]] for rec in recs
                   if rec["clip_idx"] in videos_of]
+        pending, failed = _clip_job_cards(song["id"], tier, num, recs, videos)
         rows.append({
             "scene": scene, "num": num, "name": build_song.sname(scene),
             "clips": [head] if head is not None else [],
             "videos": videos,
+            "clip_pending": pending,
+            "clip_failed": failed,
             "n_parts": len(recs) or 1,
             "start": start, "end": end, "length": length,
             "guidance": build_song.guidance_seconds(scene),
@@ -418,6 +421,67 @@ def scenes(song, sb, tier, anchored=(), scene_seconds=None):
                      if _figure_name(n)],
         })
     return rows, nclips
+
+
+def _job_err_line(err):
+    lines = [ln.strip() for ln in str(err or "").splitlines() if ln.strip()]
+    return lines[-1] if lines else ""
+
+
+def _clip_job_cards(song_id, tier, scene_num, recs, videos):
+    """Queued/running/failed clip jobs for this scene. Jobs table is the state.
+
+    The sticky chip is the latest job of any kind, so a QC row hides a clip
+    render. The scene strip reads jobs itself.
+    """
+    idxs = {int(r["clip_idx"]) for r in recs}
+    have = {int(v["clip_idx"]) for v in videos}
+    pending, failed = [], []
+    seen = set()
+    for j in db.q(
+            """SELECT id, status, error, args_json FROM jobs
+               WHERE song_id=? AND kind='clips'
+                 AND status IN ('queued','running','cancelling','failed')
+               ORDER BY id DESC""",
+            song_id):
+        try:
+            args = json.loads(j["args_json"] or "{}")
+        except (TypeError, ValueError):
+            args = {}
+        if str(args.get("tier") or "") != str(tier):
+            continue
+        sn = args.get("scene_number")
+        if sn is None:
+            sn = args.get("scene")
+        ci = args.get("clip_idx")
+        if sn is None and ci is not None:
+            try:
+                if int(ci) in idxs:
+                    sn = scene_num
+            except (TypeError, ValueError):
+                pass
+        try:
+            if sn is None or int(sn) != int(scene_num):
+                continue
+        except (TypeError, ValueError):
+            continue
+        key = int(ci) if ci is not None else "scene"
+        if key in seen:
+            continue
+        seen.add(key)
+        card = {
+            "id": j["id"],
+            "status": j["status"],
+            "error": _job_err_line(j["error"]),
+            "clip_idx": ci,
+            "n": max(1, int(args.get("n") or 1)),
+        }
+        if j["status"] == "failed":
+            if ci is None or int(ci) not in have:
+                failed.append(card)
+        else:
+            pending.append(card)
+    return pending, failed
 
 
 def scene_time_report(scene_time, song_length):

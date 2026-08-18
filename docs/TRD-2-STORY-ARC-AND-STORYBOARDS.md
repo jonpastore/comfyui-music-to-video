@@ -574,7 +574,9 @@ rows are the same HTML routes `initSongPage` posts as JSON.
 `GET /songs/{id}/storyboard/{tier}/scene/{num}` returns one open scene
 row so a finished reroll or Render clip can replace its
 placeholders (same `.ref-frame.clip-tile` / `.clip-frame.clip-tile`
-card size as a finished still).
+card size as a finished still). Scene clips also list
+`clip_pending` / `clip_failed` from the jobs table so a QC chip
+cannot hide them (`test_scene_row_reads_clip_jobs_when_chip_is_qc`).
 
 ### 5.1 The time meter
 

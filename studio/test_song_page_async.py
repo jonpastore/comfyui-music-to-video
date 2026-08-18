@@ -145,6 +145,48 @@ def test_scenes_lists_every_rendered_clip_on_a_split_scene():
         assert [v["clip_idx"] for v in rows[0]["videos"]] == [0, 1]
 
 
+def test_scene_row_reads_clip_jobs_when_chip_is_qc():
+    """The chip is the latest job of any kind. A queued QC must not hide a
+    failed or in-flight clip render on the scene strip."""
+    import json as _json
+    import storyboard_service
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Clip Job State Song")
+        sid = song["id"]
+        db.run("UPDATE songs SET duration=8 WHERE id=?", sid)
+        song = db.one("SELECT * FROM songs WHERE id=?", sid)
+        scenes = [{
+            "scene_number": 1, "name": "One", "length_seconds": 5.0,
+            "video_model": "ltx25", "image_prompt": "alley",
+        }]
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        _json.dump({"title": "T", "scenes": scenes}, open(jp, "w"))
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""", sid, "xxx", jp, jp + ".md", 1, 0)
+        db.run("""INSERT INTO jobs (kind, args_json, song_id, status, error, created)
+                  VALUES (?,?,?,?,?,?)""",
+               "clips",
+               _json.dumps({"tier": "xxx", "scene_number": 1, "clip_idx": 0, "n": 1}),
+               sid, "failed",
+               "ValueError: clip plan 77.0000s misses track 237.6720s",
+               1.0)
+        db.run("""INSERT INTO jobs (kind, args_json, song_id, status, created)
+                  VALUES (?,?,?,?,?)""",
+               "qc", _json.dumps({"tier": "xxx"}), sid, "queued", 2.0)
+        rows, _ = storyboard_service.scenes(song, {"scenes": scenes}, "xxx")
+        assert rows[0]["videos"] == []
+        assert rows[0]["clip_pending"] == []
+        assert len(rows[0]["clip_failed"]) == 1
+        assert rows[0]["clip_failed"][0]["status"] == "failed"
+        assert "clip plan 77.0000s" in rows[0]["clip_failed"][0]["error"]
+        page = client.get(f"/songs/{sid}/storyboard/xxx").text
+        assert "clip-failed" in page
+        assert "job #" in page
+        assert "No clips yet." not in page.split("scene-clips", 1)[-1].split("</div>", 1)[0]
+
+
 def test_storyboard_save_and_restore_roundtrip():
     """CRUD on the live board: save JSON, snapshot, edit, restore."""
     import json as _json
