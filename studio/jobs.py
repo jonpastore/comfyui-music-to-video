@@ -61,6 +61,51 @@ def get(jid):
     return db.one("SELECT * FROM jobs WHERE id=?", jid)
 
 
+def artefact_url(path):
+    """Same /media/ spelling as app.media_url. jobs must not import app."""
+    from urllib.parse import quote
+    if not path:
+        return ""
+    return "/media/" + quote(os.path.realpath(path).lstrip("/"), safe="/")
+
+
+def stills_for(row):
+    """Refs this reroll already wrote. Empty until the first still lands."""
+    if not row or row["kind"] != "reroll":
+        return []
+    try:
+        args = json.loads(row["args_json"] or "{}")
+    except (TypeError, ValueError):
+        return []
+    sid = row["song_id"] or args.get("song_id")
+    tier = args.get("tier")
+    if not sid or not tier:
+        return []
+    since = row["started"] or row["created"] or 0
+    clips = []
+    for c in args.get("clip_indices") or []:
+        try:
+            clips.append(int(c))
+        except (TypeError, ValueError):
+            continue
+    q = """SELECT id, path, seed, clip_idx, origin FROM refs
+           WHERE song_id=? AND tier=? AND created>=?
+             AND origin IN ('reroll', 'refine')"""
+    params = [sid, tier, since]
+    if clips:
+        q += " AND clip_idx IN (" + ",".join("?" * len(clips)) + ")"
+        params.extend(clips)
+    q += " ORDER BY id"
+    out = []
+    for r in db.q(q, *params):
+        out.append({
+            "id": r["id"], "path": r["path"], "url": artefact_url(r["path"]),
+            "seed": r["seed"], "clip_idx": r["clip_idx"],
+            "origin": r["origin"] or "reroll",
+        })
+    return out
+
+
 def transitions(jid):
     """T6-5: every status change, in order, with its time."""
     return db.q(
@@ -459,7 +504,7 @@ async def stream(jid):
             yield "event: gone\ndata: {}\n\n"
             return
         payload = {"id": row["id"], "status": row["status"], "progress": row["progress"],
-                   "error": row["error"]}
+                   "error": row["error"], "stills": stills_for(row)}
         blob = json.dumps(payload)
         if blob != last:
             yield f"data: {blob}\n\n"

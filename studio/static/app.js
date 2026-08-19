@@ -8,6 +8,7 @@ function watchJob(jobId, targetId, onDone) {
   var tries = 0;
   function apply(data) {
     if (!data || finished) return;
+    if (data.stills && data.stills.length) fillPendingStills(data.id, data.stills);
     if (el) {
       el.textContent = "job #" + data.id + " (" + (data.status || "") + "): " +
         (data.error || data.progress || "");
@@ -3023,6 +3024,59 @@ function clearRerollPlaceholders(jobId, root) {
   });
 }
 
+function _attrEsc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function paintLandedStill(fig, still, jobId) {
+  if (!fig || !still) return;
+  fig.className = "ref-frame clip-tile";
+  fig.removeAttribute("aria-label");
+  if (jobId) fig.setAttribute("data-job-id", String(jobId));
+  fig.setAttribute("data-ref-id", String(still.id));
+  if (still.clip_idx != null) fig.setAttribute("data-clip", String(still.clip_idx));
+  var seed = still.seed == null ? "?" : still.seed;
+  var origin = still.origin || "reroll";
+  var url = still.url || "";
+  fig.innerHTML = "<div class=\"still-thumb\">" +
+    "<button type=\"button\" class=\"js-ref-preview thumb-open\" data-full=\"" +
+    _attrEsc(url) + "\" data-label=\"still · " + _attrEsc(seed) +
+    "\" title=\"Open this still full size\">" +
+    "<img src=\"" + _attrEsc(url) + "\" alt=\"still · " + _attrEsc(seed) +
+    "\" loading=\"lazy\" decoding=\"async\"></button></div>" +
+    "<figcaption>still · " + _attrEsc(seed) +
+    " <button type=\"button\" class=\"tag help-tip\" data-label=\"" +
+    _attrEsc(origin) + "\" data-help=\"This candidate came from Generate Images.\" title=\"How this still was made\">" +
+    _attrEsc(origin) + "</button></figcaption>" +
+    "<div class=\"still-icons\" aria-hidden=\"true\"></div>";
+}
+
+function fillPendingStills(jobId, stills) {
+  if (!jobId || !stills || !stills.length) return;
+  var shown = {};
+  document.querySelectorAll(".ref-frame[data-ref-id]").forEach(function (el) {
+    shown[el.getAttribute("data-ref-id")] = true;
+  });
+  var pending = document.querySelectorAll('.still-pending[data-job-id="' + jobId + '"]');
+  var pi = 0;
+  stills.forEach(function (still) {
+    if (!still || still.id == null) return;
+    if (shown[String(still.id)]) return;
+    var fig = pending[pi++];
+    if (!fig) {
+      var marker = document.querySelector('.ref-frame[data-job-id="' + jobId + '"]');
+      var strip = marker && marker.parentNode;
+      if (!strip) return;
+      fig = document.createElement("figure");
+      strip.appendChild(fig);
+    }
+    paintLandedStill(fig, still, jobId);
+    shown[String(still.id)] = true;
+  });
+}
+
 function paintClipPlaceholders(form, d) {
   var row = form && form.closest(".clips-row");
   if (!row) return;
@@ -3091,6 +3145,7 @@ function sweepPendingStillCards() {
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (job) {
         if (!job) return;
+        if (job.stills && job.stills.length) fillPendingStills(jid, job.stills);
         if (job.status === "failed" || job.status === "cancelled") {
           clearRerollPlaceholders(jid);
           return;
@@ -3245,7 +3300,13 @@ function applyRerollChip(chip) {
     clips.forEach(function (ci) {
       var scene = sceneElForClip(tier, ci);
       var form = scene && scene.querySelector(".reroll-bar");
-      if (form) paintRerollPlaceholders(form, {job_id: jid, n: n});
+      if (!form) return;
+      var row = form.closest(".stills-row");
+      var strip = row && row.querySelector(".scene-refs");
+      var have = strip
+        ? strip.querySelectorAll('.ref-frame[data-job-id="' + jid + '"]').length
+        : 0;
+      if (have === 0) paintRerollPlaceholders(form, {job_id: jid, n: n});
     });
     return;
   }

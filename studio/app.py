@@ -1554,6 +1554,30 @@ def h_refs(args, progress):
     return {"count": len(landed)}
 
 
+def _land_reroll_ref(song, tier, r, origin, bases, note, progress, seen):
+    """INSERT one Generate Images still so the song page can paint it now.
+
+    Score after the row exists. Vision is advisory (T3-31) and can take
+    longer than the render-to-disk step the operator is waiting on.
+    """
+    path = r.get("path")
+    if not path or path in seen:
+        return False
+    seen.add(path)
+    sid = song["id"]
+    sn = _clip_scene_number(song, tier, r["clip_idx"])
+    db.run("""INSERT OR IGNORE INTO refs (song_id, tier, clip_idx, path, seed, approved,
+                                           created, origin, qc_json, scene_number)
+              VALUES (?,?,?,?,?,0,?,?,?,?)""",
+           sid, tier, r["clip_idx"], path, r.get("seed"), time.time(), origin, None, sn)
+    progress(f"landed {origin} clip_{int(r['clip_idx']):03d} s{r.get('seed')}")
+    qc = score_generated_still(path, bases, note or "reroll", progress)
+    db.run("""UPDATE refs SET qc_json=? WHERE song_id=? AND tier=? AND clip_idx=?
+              AND path=?""",
+           qc, sid, tier, r["clip_idx"], path)
+    return True
+
+
 @jobs.handler("reroll")
 def h_reroll(args, progress):
     sid, tier = args["song_id"], args["tier"]
@@ -1571,6 +1595,15 @@ def h_reroll(args, progress):
             for c, a in cast_anchors(album, tier)}
     # Job args own plates. Do not fall back to plan() auto scene_bases.
     pose_bases = args.get("pose_bases") or {}
+    bases = ref_score_bases(song, tier, anchor["path"] if anchor else None)
+    note = args.get("note") or "reroll"
+    seen = set()
+    landed = []
+
+    def on_still(r):
+        if _land_reroll_ref(song, tier, r, "reroll", bases, note, progress, seen):
+            landed.append(r)
+
     results = pipeline.reroll(song["slug"], tier, sb["json_path"], anchor_name,
                                song["mp3_path"], args["clip_indices"], progress,
                                guard=tiers.compose_guardrail(tier, album),
@@ -1580,10 +1613,10 @@ def h_reroll(args, progress):
                                n=args.get("n") or 0,
                                seed_min=args.get("seed_min", 8000),
                                seed_max=args.get("seed_max", 11000),
-                               step=args.get("step") or "equal")
-    now = time.time()
-    bases = ref_score_bases(song, tier, anchor["path"] if anchor else None)
-    landed = list(results)
+                               step=args.get("step") or "equal",
+                               on_still=on_still)
+    for r in results:
+        on_still(r)
     if args.get("refine", True):
         for r in list(results):
             try:
@@ -1591,18 +1624,13 @@ def h_reroll(args, progress):
                     "slug": song["slug"], "tier": tier,
                     "clip_idx": r["clip_idx"], "seed": r.get("seed") or 0,
                 })
-                landed.append({"clip_idx": r["clip_idx"], "path": dest,
-                               "seed": (r.get("seed") or 0) + 100000})
+                refined = {"clip_idx": r["clip_idx"], "path": dest,
+                           "seed": (r.get("seed") or 0) + 100000}
+                if _land_reroll_ref(song, tier, refined, "refine", bases, note,
+                                    progress, seen):
+                    landed.append(refined)
             except Exception as e:
                 progress(f"refine skipped: {e}")
-    for i, r in enumerate(landed):
-        qc = score_generated_still(r["path"], bases, args.get("note") or "reroll", progress)
-        origin = "refine" if i >= len(results) else "reroll"
-        sn = _clip_scene_number(song, tier, r["clip_idx"])
-        db.run("""INSERT OR IGNORE INTO refs (song_id, tier, clip_idx, path, seed, approved,
-                                               created, origin, qc_json, scene_number)
-                  VALUES (?,?,?,?,?,0,?,?,?,?)""",
-               sid, tier, r["clip_idx"], r["path"], r.get("seed"), now, origin, qc, sn)
     return {"count": len(landed)}
 
 
@@ -12405,6 +12433,7 @@ def job_one(request: Request, id: int):
         "tier": args.get("tier"),
         "clip_indices": args.get("clip_indices") or [],
         "n": args.get("n") or 0,
+        "stills": jobs.stills_for(row),
     })
 
 

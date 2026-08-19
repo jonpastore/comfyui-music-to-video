@@ -584,7 +584,11 @@ rows are the same HTML routes `initSongPage` posts as JSON.
 `GET /songs/{id}/storyboard/{tier}/scene/{num}` returns one open scene
 row so a finished reroll or Render clip can replace its
 placeholders (same `.ref-frame.clip-tile` / `.clip-frame.clip-tile`
-card size as a finished still). Scene clips also list
+card size as a finished still). A running Generate Images job also
+lands each still into `refs` as the file exists; `GET /jobs/{id}` and
+the SSE stream carry `stills` so the open scene swaps that tile while
+the other placeholders stay `rendering…` (`test_h_reroll_lands_each_still_before_reroll_returns`,
+`test_job_json_lists_stills_landed_while_reroll_runs`). Scene clips also list
 `clip_pending` / `clip_failed` from the jobs table so a QC chip
 cannot hide them (`test_scene_row_reads_clip_jobs_when_chip_is_qc`).
 
@@ -834,6 +838,7 @@ current.
 | still QC chip stays compact text; tip Close on the right | **built** | `test_modal_close.py` | `button.qc-tag` is transparent with `padding: 0` (no primary fill). `#tip-modal` Close sits after `.lightbox-spacer`. Mutation: drop `transparent` / spacer → red |
 | scene-row Reroll uses the pinned plate, not the Accept map | **built** | `test_pose_plan.py` | `start_reroll` requires a saved `pose_sheet_id` on each requested scene (`scene_bases`) and enqueues those paths as `pose_bases`. Empty map + pin enqueues. No pin → 400 "pin a pose plate". Auto `plan()` plates stay out. `start_refs` still Accept-gates (`T2-52`). Mutation: empty map + pin still 400 → red. Mutation: no pin enqueues → red |
 | leftover auto `scene_bases` / start_reroll Accept | **built** | `test_freeze_auto_binds_is_gone` / `test_start_reroll_pinned_plate_skips_empty_map` / `test_pose_plan.py` | `scene_bases` returns only saved `pose_sheet_id` binds (unbound matching sheet → `{}`). Accept is `start_refs` only (`T2-52`); `start_reroll` enqueues pinned paths as `pose_bases` and skips the Accept map — empty map + pin enqueues. `h_refs`/`h_reroll` do not fall back to auto `scene_bases` (`or {}` / missing-key). Mutation: restore auto→render in `scene_bases` → red. Mutation: empty `pose_bases` on reroll fills from auto → red. Mutation: empty map + pin still 400 → red |
+| Generate Images paints each still as it lands | **built** | `test_h_reroll_lands_each_still_before_reroll_returns` / `test_job_json_lists_stills_landed_while_reroll_runs` / `test_sb_panel_ui.py` | `h_reroll` INSERTs a `refs` row from `pipeline.reroll(on_still=)` before the remaining seeds render. `GET /jobs/{id}` and SSE carry `stills`. `fillPendingStills` swaps one `.still-pending` per new id while the job is `running`; job `done` still refreshes the scene row. Mutation: wait for `pipeline.reroll` then INSERT all → mid-job arm red. Mutation: job JSON omits `stills` while a ref exists → red. Mutation: `watchJob` / `sweepPendingStillCards` only act on `status===done` → JS arm red |
 
 ---
 

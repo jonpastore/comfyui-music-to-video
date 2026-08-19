@@ -629,8 +629,10 @@ Reroll is one bar above the stills (What to change, Images to generate,
 Min, Max, Seed stepping). It uses the pinned pose plate on this scene
 as image2 — not a pose-map Accept. Submitting it plants N shimmer placeholders
 in the stills strip — same `.ref-frame.clip-tile` card (190px, 3:4
-frame, caption + icon row) as a finished still. They swap for the
-real stills when the job lands and clear if it fails or is cancelled. The sticky job chip carries
+frame, caption + icon row) as a finished still. Each still swaps its
+placeholder as soon as that file is in `refs` (job SSE / `GET /jobs/{id}`
+`stills`); remaining tiles stay `rendering…`. The scene row refreshes
+when the job is done. They clear if it fails or is cancelled. The sticky job chip carries
 `data-kind` / `data-clips`; a finished reroll refreshes that scene
 row even if the SSE watch was missed. Landed clip tiles reserve a 3:4 well on `.still-thumb` (not the
 video's intrinsic size — a flex `.clip-tile` plus an undecoded
@@ -735,9 +737,10 @@ not an operator step. If the scene is longer than one render, it
 splits and part 2+ starts on the last frame (T2-10 / T2-11). Reroll is n / seed min–max / equal or
 fibonacci; the bar lists the planned seeds (`8000 · 9000 · 10000 · 11000`
 for the default equal band). Those numbers are seeds, not sampler steps
-(Anchors Steps stays 28 / 50). A finished reroll swaps the scene row
-so `rendering…` tiles become stills without a refresh
-(`sweepPendingStillCards`). A candidate has Approve, Fix, Delete. Thumbs open
+(Anchors Steps stays 28 / 50). A running Generate Images job swaps
+each `rendering…` tile as that still lands (`fillPendingStills` from
+job `stills`); job `done` refreshes the scene row (`sweepPendingStillCards`).
+A candidate has Approve, Fix, Delete. Thumbs open
 `#ref-preview`. `test_approve_grid_groups_by_scene_and_puts_seed_above_the_name`.
 **Library:** **Upload a song** is a collapsed `<details id="fold-upload">`
 (open only when the library is empty). Album is a text field with

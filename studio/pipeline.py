@@ -948,7 +948,7 @@ def swarm_job_ran(*, history_before=None, history_after=None, container_log=None
     del history_before, history_after
     return container_log_shows_execution(container_log)
 
-def submit_swarm(wf_dir, prefix_dir, pattern, progress=None):
+def submit_swarm(wf_dir, prefix_dir, pattern, progress=None, on_paths=None):
     """submit_dir + collect for RENDER_BACKEND=swarm, and they cannot be split.
 
     The comfy path DISCOVERS its outputs by globbing a directory; SwarmUI NAMES
@@ -1014,11 +1014,13 @@ def submit_swarm(wf_dir, prefix_dir, pattern, progress=None):
         _stamp(made, *_ran_on(pin), via="swarm", progress=progress)
         got += made
         seen |= set(collect(prefix_dir, pattern))
+        if on_paths and made:
+            on_paths(made)
         progress(f"{i}/{len(files)} {os.path.splitext(name)[0]} {time.time()-start:.0f}s")
     return sorted(got, key=lambda p: _natkey(os.path.basename(p)))
 
 
-def _submit_and_collect(wf_dir, prefix_dir, pattern, progress):
+def _submit_and_collect(wf_dir, prefix_dir, pattern, progress, on_paths=None):
     """submit_dir() + collect(), returning only the files THIS submit asked for.
 
     Two filters, and both are load-bearing.
@@ -1070,7 +1072,8 @@ def _submit_and_collect(wf_dir, prefix_dir, pattern, progress):
     watch.start()
     try:
         if swarm:
-            swarm_out = submit_swarm(wf_dir, prefix_dir, pattern, progress)
+            swarm_out = submit_swarm(wf_dir, prefix_dir, pattern, progress,
+                                     on_paths=on_paths)
         else:
             submit_dir(wf_dir, progress)
             swarm_out = None
@@ -1103,6 +1106,8 @@ def _submit_and_collect(wf_dir, prefix_dir, pattern, progress):
     # as its own local ComfyUI. The host is the part that survives Swarm
     # renumbering its backends, so group by that.
     _stamp(ours, "0", _host(COMFY), "comfy", progress)
+    if on_paths and ours:
+        on_paths(ours)
     return ours
 
 
@@ -1340,7 +1345,7 @@ def gen_refs(slug, tier, storyboard_json, anchor_name, mp3_path, progress=None,
 
 def reroll(slug, tier, storyboard_json, anchor_name, mp3_path, clip_indices, progress=None,
            guard="", body="", note="", cast=None, bases=None,
-           n=0, seed_min=8000, seed_max=11000, step="equal"):
+           n=0, seed_min=8000, seed_max=11000, step="equal", on_still=None):
     """guard/body are NOT optional in practice, whatever the defaults say.
 
     They were absent entirely until now, so every re-rolled frame was built
@@ -1384,7 +1389,19 @@ def reroll(slug, tier, storyboard_json, anchor_name, mp3_path, clip_indices, pro
                 os.remove(cast_path)
             if bases_path:
                 os.remove(bases_path)
-        paths = _submit_and_collect(wf_dir, f"reroll_{bs}", "*.png", progress)
+        recs = []
+
+        def on_paths(paths):
+            for p, m in _clip_records(paths, r"clip_(\d+)_s(\d+)"):
+                rec = {"clip_idx": int(m.group(1)), "path": p, "seed": int(m.group(2))}
+                recs.append(rec)
+                if on_still:
+                    on_still(rec)
+
+        paths = _submit_and_collect(wf_dir, f"reroll_{bs}", "*.png", progress,
+                                    on_paths=on_paths)
+    if recs:
+        return recs
     return [{"clip_idx": int(m.group(1)), "path": p, "seed": int(m.group(2))}
             for p, m in _clip_records(paths, r"clip_(\d+)_s(\d+)")]
 

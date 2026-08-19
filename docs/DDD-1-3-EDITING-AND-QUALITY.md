@@ -699,9 +699,11 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    `clip_idx=`) skip T2-13e / T2-25. Scene preview is plate / stills / clips. Reroll plants
    `.ref-frame.clip-tile` shimmer cards (same 190px / 3:4 frame as a
    finished still). The bar labels Seed min / Seed max and lists the
-   planned seeds. A leftover still shimmer is swapped for the scene
-   row when that reroll is done (`sweepPendingStillCards`; chip
-   `afterSwap` reads the live `#job-chip`). Render clip plants the same cards in
+   planned seeds. `h_reroll` writes each `refs` row as `on_still` fires;
+   job JSON/SSE `stills` drives `fillPendingStills` so one tile swaps
+   while the job is still `running`. Job `done` refreshes the scene row
+   (`sweepPendingStillCards`; chip `afterSwap` reads the live `#job-chip`).
+   Render clip plants the same cards in
    `.media-strip.scene-clips` (`paintClipPlaceholders`) and calls
    `refreshQueue()` so an idle chip starts polling. Scene-row Render clip
    and Generate Images copy scene text into the POST (Save Scene first)

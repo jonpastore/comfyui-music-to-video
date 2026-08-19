@@ -311,6 +311,45 @@ def test_h_reroll_scores_vs_chosen_anchor(monkeypatch, tmp_path):
     assert sheet not in bases
 
 
+def test_h_reroll_lands_each_still_before_reroll_returns(monkeypatch, tmp_path):
+    """1 of 4 done is in refs while the other three are still rendering."""
+    sheet1 = _png(str(tmp_path / "reroll1.png"))
+    sheet2 = _png(str(tmp_path / "reroll2.png"))
+    anchor = _png(str(tmp_path / "anchor.png"))
+    mid = []
+
+    def fake_reroll(*a, **k):
+        on_still = k.get("on_still")
+        first = {"clip_idx": 0, "path": sheet1, "seed": 8000}
+        if on_still:
+            on_still(first)
+            mid.append(db.one("SELECT * FROM refs WHERE path=?", sheet1))
+        return [first, {"clip_idx": 0, "path": sheet2, "seed": 9000}]
+
+    monkeypatch.setattr(appmod.vision, "score_candidate", _score)
+    monkeypatch.setattr(appmod.pipeline, "install_input",
+                        lambda p, name=None: os.path.basename(p))
+    monkeypatch.setattr(appmod.pipeline, "reroll", fake_reroll)
+    album = f"QC Reroll Mid {time.time_ns()}"
+    sid = db.run(
+        "INSERT INTO songs (title, album, slug, created) VALUES (?,?,?,?)",
+        "QC Reroll Mid", album, f"qc-reroll-mid-{time.time_ns()}", time.time())
+    db.run("INSERT INTO storyboards (song_id, tier, json_path, md_path, scene_count, created) "
+           "VALUES (?,?,?,?,?,?)", sid, "xxx", "/sb.json", "/sb.md", 1, time.time())
+    db.run(
+        """INSERT INTO anchors (scope_kind, scope_value, tier, view, path, chosen,
+                                created, character_id)
+           VALUES (?,?,?,?,?,1,?,?)""",
+        "album", album, "xxx", "front", anchor, time.time(), None)
+    appmod.h_reroll({
+        "song_id": sid, "tier": "xxx", "clip_indices": [0], "refine": False,
+    }, lambda m: None)
+    assert mid and mid[0], "first still was not in refs before reroll returned"
+    assert mid[0]["path"] == sheet1
+    assert mid[0]["origin"] == "reroll"
+    assert db.one("SELECT * FROM refs WHERE path=?", sheet2)
+
+
 def test_h_fix_ref_stores_qc_json(monkeypatch, tmp_path):
     src = _png(str(tmp_path / "broken.png"))
     out = _png(str(tmp_path / "fixed.png"))

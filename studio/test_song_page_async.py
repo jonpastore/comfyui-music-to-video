@@ -520,17 +520,57 @@ def test_job_json_reports_reroll_clips():
         jid = jobs.enqueue("reroll", {"song_id": song["id"], "tier": "xxx",
                                       "clip_indices": [0], "n": 4},
                            song_id=song["id"])
-        r = client.get(f"/jobs/{jid}", headers=J)
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert body["id"] == jid
-        assert body["kind"] == "reroll"
-        assert body["clip_indices"] == [0]
-        assert body["n"] == 4
-        chip = client.get("/queue?chip=1").text
-        assert f'data-job-id="{jid}"' in chip
-        assert 'data-kind="reroll"' in chip
-        assert 'data-clips="0"' in chip
+        try:
+            r = client.get(f"/jobs/{jid}", headers=J)
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["id"] == jid
+            assert body["kind"] == "reroll"
+            assert body["clip_indices"] == [0]
+            assert body["n"] == 4
+            assert body["stills"] == []
+            chip = client.get("/queue?chip=1").text
+            assert f'data-job-id="{jid}"' in chip
+            assert 'data-kind="reroll"' in chip
+            assert 'data-clips="0"' in chip
+        finally:
+            db.run("UPDATE jobs SET status='cancelled', finished=? WHERE id=?",
+                   time.time(), jid)
+
+
+def test_job_json_lists_stills_landed_while_reroll_runs():
+    """GET /jobs/{id} carries each landed still so the strip can swap one tile."""
+    import json as _json
+    import time
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Job Stills Song")
+        dest = os.path.join(db.DATA, "refs")
+        os.makedirs(dest, exist_ok=True)
+        path = os.path.join(dest, "live.png")
+        open(path, "wb").write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16)
+        now = time.time()
+        args = {"song_id": song["id"], "tier": "xxx", "clip_indices": [0], "n": 4}
+        jid = db.run(
+            "INSERT INTO jobs (kind, args_json, song_id, status, created, started) "
+            "VALUES (?,?,?, 'running', ?, ?)",
+            "reroll", _json.dumps(args), song["id"], now, now)
+        db.run("""INSERT INTO refs (song_id,tier,clip_idx,path,seed,approved,
+                                    created,origin,scene_number)
+                  VALUES (?,?,?,?,?,0,?,?,?)""",
+               song["id"], "xxx", 0, path, 8000, now + 0.1, "reroll", 1)
+        try:
+            body = client.get(f"/jobs/{jid}", headers=J).json()
+            assert body["status"] == "running"
+            assert len(body["stills"]) == 1, body
+            still = body["stills"][0]
+            assert still["seed"] == 8000
+            assert still["clip_idx"] == 0
+            assert still["origin"] == "reroll"
+            assert still["url"].startswith("/media/")
+            assert "live.png" in still["url"]
+        finally:
+            db.run("UPDATE jobs SET status='done', finished=? WHERE id=?",
+                   time.time(), jid)
 
 
 def test_song_page_storyboard_form_is_dual_path():

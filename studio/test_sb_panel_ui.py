@@ -111,6 +111,14 @@ def test_sb_panel_toolbar_and_closed_json():
         assert "clearClipPlaceholders(jid)" in js.split("function sweepPendingClipCards", 1)[1]
         assert "function sweepPendingStillCards" in js
         assert "function armStillSweep" in js
+        assert "function fillPendingStills" in js
+        assert "function paintLandedStill" in js
+        assert "data.stills" in js.split("function watchJob", 1)[1][:800]
+        assert "fillPendingStills" in js.split("function sweepPendingStillCards", 1)[1]
+        reroll_chip = js.split("function applyRerollChip", 1)[1]
+        assert "have === 0" in reroll_chip
+        assert "paintRerollPlaceholders(form, {job_id: jid, n: n})" in reroll_chip
+        assert "if (job.status === \"done\")" in js.split("function sweepPendingStillCards", 1)[1]
         assert "function seedPlan" in js
         assert "function paintSeedPlan" in js
         assert "outerHTML swap leaves" in js
