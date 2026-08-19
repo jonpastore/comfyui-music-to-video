@@ -1,12 +1,17 @@
 {% extends "base.html" %}
 {% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_download, glyph_actors, glyph_edit, media_nav_prev, media_nav_next, help_tip, page_title %}
 {% block content %}
+<div id="anchors-root">
 {{ page_title("Anchors") }}
 <div id="anchor-scope" class="anchor-scope page-chrome"
      data-tier="{{ page_tier or '' }}">
+  <input type="hidden" name="gap_tier" value="{{ page_tier }}">
+  {% if open_song_id %}<input type="hidden" name="song_id" value="{{ open_song_id }}">{% endif %}
   <label class="scope-album">Album
-    <select id="class-album"
-            onchange="location.href='/anchors?scope_value='+encodeURIComponent(this.value){% if page_tier %}+'&gap_tier='+encodeURIComponent('{{ page_tier }}'){% endif %}">
+    <select id="class-album" name="scope_value"
+            hx-get="/anchors" hx-target="#anchors-root" hx-select="#anchors-root"
+            hx-swap="outerHTML" hx-push-url="true"
+            hx-include="#anchor-scope">
       {% for a in albums %}
       <option value="{{ a }}" {% if a == (class_album or form_album) %}selected{% endif %}>{{ a }}</option>
       {% else %}
@@ -17,7 +22,10 @@
   <div class="scope-tiers" role="tablist" aria-label="Tier">
     {% for c in sticky_tiers %}
     <a class="tier-chip {% if page_tier and c.name == page_tier %}on{% endif %}"
-       href="/anchors?scope_value={{ (class_album or form_album)|urlencode }}{% if open_song_id %}&song_id={{ open_song_id }}{% endif %}&gap_tier={{ c.name }}">{{ c.name | tiername }}
+       href="/anchors?scope_value={{ (class_album or form_album)|urlencode }}{% if open_song_id %}&song_id={{ open_song_id }}{% endif %}&gap_tier={{ c.name }}"
+       hx-get="/anchors?scope_value={{ (class_album or form_album)|urlencode }}{% if open_song_id %}&song_id={{ open_song_id }}{% endif %}&gap_tier={{ c.name }}"
+       hx-target="#anchors-root" hx-select="#anchors-root" hx-swap="outerHTML"
+       hx-push-url="true">{{ c.name | tiername }}
       <span class="muted">{{ c.n_have }}/{{ c.n_needed }} poses
         · {{ c.n_chars }} char{{ "" if c.n_chars == 1 else "s" }}</span></a>
     {% endfor %}
@@ -92,7 +100,9 @@
       {% if pose_gap and pose_gap.n_holes %}
       · {{ pose_gap.n_holes }} missing on this song{% endif %}</span>
   </summary>
-  <form method="get" action="/anchors" id="pose-gap-song-form" class="field-row">
+  <form method="get" action="/anchors" id="pose-gap-song-form" class="field-row"
+        hx-get="/anchors" hx-target="#anchors-root" hx-select="#anchors-root"
+        hx-swap="outerHTML" hx-push-url="true">
     {% if album_songs %}
     <label>Song to check
       <select name="song_id" id="pose-gap-song" onchange="this.form.requestSubmit()">
@@ -102,9 +112,8 @@
       </select>
     </label>
     <input type="hidden" name="scope_value" value="{{ class_album or form_album }}">
-    {% if pose_gap %}
-    <input type="hidden" name="gap_tier" id="pose-gap-tier" value="{{ pose_gap.tier }}">
-    {% endif %}
+    <input type="hidden" name="gap_tier" id="pose-gap-tier"
+           value="{{ page_tier or (pose_gap.tier if pose_gap else '') }}">
     {% endif %}
     {% if pose_gap %}
     <span class="muted" id="pose-gap-meter">{{ pose_gap.tier | tiername }}
@@ -478,4 +487,5 @@
     </div>
   </form>
 </dialog>
+</div>
 {% endblock %}

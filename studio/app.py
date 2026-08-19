@@ -129,8 +129,14 @@ def _set_audience(row):
 
 # Anything servable over /media must resolve inside one of these -- reuses
 # pipeline's own ComfyUI paths rather than inventing a parallel config knob.
-MEDIA_ROOTS = [os.path.realpath(db.DATA), os.path.realpath(pipeline.COMFY_INPUT),
-               os.path.realpath(pipeline.COMFY_OUTPUT)]
+def _media_roots():
+    import pose_generate
+    out = [db.DATA, pipeline.COMFY_INPUT, pipeline.COMFY_OUTPUT]
+    out.extend(pose_generate._image_roots())
+    return [os.path.realpath(p) for p in out if p and os.path.isdir(p)]
+
+
+MEDIA_ROOTS = _media_roots()
 
 
 @asynccontextmanager
@@ -2057,7 +2063,8 @@ def media(path: str, w: int = 0):
     if "\x00" in path:
         raise HTTPException(400, "invalid path")
     real = os.path.realpath("/" + path)
-    if not any(real == root or real.startswith(root + os.sep) for root in MEDIA_ROOTS):
+    if not any(real == root or real.startswith(root + os.sep)
+               for root in _media_roots()):
         raise HTTPException(403, "path not allowed")
     if not os.path.isfile(real):
         raise HTTPException(404)
@@ -3501,8 +3508,29 @@ def _anchors_classification_ctx(album, song_id="", gap_tier=""):
         path = pose_generate.resolve_image_path(im.get("path") or "")
         if path:
             im["path"] = path
-            im["url"] = media_url(path)
+            real = os.path.realpath(path)
+            if any(real == root or real.startswith(root + os.sep)
+                   for root in MEDIA_ROOTS):
+                im["url"] = media_url(path)
     rows = classification.group_rows(keepers)
+    page_tier = (gap_tier or "").strip()
+    if page_tier and album:
+        chosen = {}
+        for row in db.q(
+                f"""SELECT * FROM anchors WHERE {db.visible_anchor_sql()}
+                    AND chosen=1 AND tier=?""", album, page_tier):
+            p = row["path"] or ""
+            if not p or not os.path.isfile(p):
+                continue
+            meta = db.jset(row, "render_json")
+            key = classification._pose_key(
+                meta.get("pose_name") or row["view"] or "")
+            if key and key not in chosen:
+                chosen[key] = media_url(p)
+        for row in rows:
+            t = chosen.get(row["key"])
+            if t:
+                row["thumb"] = t
     n_clothed = sum(1 for im in keepers if im.get("wardrobe") == "clothed")
     n_nude = sum(1 for im in keepers if im.get("wardrobe") == "nude")
     return {

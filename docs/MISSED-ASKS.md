@@ -18,7 +18,10 @@ the picker from the screenshot. Coverage chips ≠ the full tier list.
 Fix: `sticky_tiers` walks `tiers.all_tiers()` and fills 0/0 when a board
 does not exist. Click sets `page_tier` (`gap_tier=`). That chip is `.on`
 even with no storyboard. Roster and Character catalog drop their inner
-tier tabs and show only that tier. Album change keeps `gap_tier`.
+tier tabs and show only that tier. Album / song / tier chips use
+htmx (`#anchors-root`) — no full reload. Keeper thumbs prefer the
+chosen sheet at the selected tier; sidecar files under `scripts/anchor5`
+are inside `MEDIA_ROOTS` so `/media` is not 403.
 
 ## Done on this tree (verify on live after deploy)
 

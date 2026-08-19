@@ -35,6 +35,7 @@ def test_generate_form_uses_sticky_album_and_missing_poses():
             for name in ("G", "PG13", "R", "XXX"):
                 assert f"gap_tier={name.lower()}" in scope, scope[:800]
             assert 'class="tier-chip on"' in scope
+            assert 'hx-target="#anchors-root"' in scope
             assert 'name="tier"' in html.split('id="anchor-form"', 1)[-1][:1500]
             ghtml = client.get("/anchors", params={
                 "scope_value": album, "gap_tier": "g"}).text
