@@ -186,6 +186,48 @@ def test_song_page_folds_and_storyboard_are_buttons():
         assert 'id="ref-preview"' in client.get("/").text
 
 
+def test_song_page_has_sticky_scope_and_async_tiers():
+    """Album/title/tier live in a sticky bar; explicit is under Lyrics.
+
+    Mutation: leave Mark clean above Analysis → red.
+    Mutation: no #song-scope / selectSongTier → chips cannot switch without reload.
+    """
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Sticky Song", album="Sticky Album")
+        sid = song["id"]
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        for t, n in (("r", 2), ("xxx", 3)):
+            jp = os.path.join(outdir, f"{song['slug']}_{t}.json")
+            open(jp, "w").write('{"title":"T","scenes":[{"scene_number":1}]}')
+            db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                      VALUES (?,?,?,?,?,?)""",
+                   sid, t, jp, jp + ".md", n, 0)
+        page = client.get(f"/songs/{sid}").text
+        assert 'id="song-scope"' in page
+        assert "anchor-scope page-chrome" in page
+        assert "Sticky Song" in page
+        assert "Sticky Album" in page
+        head = page.split('id="fold-analysis"', 1)[0]
+        assert f'action="/songs/{sid}/explicit"' not in head
+        words = page.split('id="fold-words"', 1)[1]
+        assert f'action="/songs/{sid}/explicit"' in words
+        assert "Mark explicit" in words or "Mark clean" in words
+        assert 'data-tier="xxx"' in page
+        assert 'data-tier="r"' in page
+        r_page = client.get(f"/songs/{sid}", params={"tier": "r"}).text
+        assert 'data-tier="r"' in r_page.split('id="song-page"', 1)[1][:220]
+        r_attr = r_page.split('class="tier-board" data-tier="r"', 1)[1].split(">", 1)[0]
+        assert "hidden" not in r_attr
+        xxx_attr = r_page.split('class="tier-board" data-tier="xxx"', 1)[1].split(">", 1)[0]
+        assert "hidden" in xxx_attr
+    js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
+    assert "function selectSongTier" in js
+    assert "history.replaceState" in js.split("function selectSongTier", 1)[1][:800]
+    css = open(os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
+    assert ".song-scope-id" in css
+
+
 def test_scenes_lists_every_rendered_clip_on_a_split_scene():
     """A long scene is several files. The row must list each, not only the head."""
     import json as _json

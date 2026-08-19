@@ -499,7 +499,11 @@ stretch/compress (`T2-13e` meter honesty, `test_t2_13e_meter_copy.py`).
 The API meter numbers alone are not this.
 `GET/POST /api/songs/{id}/storyboard/{tier}` is the generation prompt
 (`T2-17`–`T2-19`) and, when a board file exists, the scenes/anchors/refs
-payload (`T2-26`, `T2-27`). The song page itself (`GET /songs/{id}`) does
+payload (`T2-26`, `T2-27`). The song page itself (`GET /songs/{id}`) keeps album, title, duration,
+and tier chips in a sticky `#song-scope` bar (same chrome as Anchors).
+Chip click loads that board via the existing panel GET — no full page
+submit (`selectSongTier`, `?tier=`). Mark clean / explicit lives under
+Lyrics. The song page (`GET /songs/{id}`) does
 not full-submit those forms: `initSongPage` posts `Accept: application/json`
 to the same HTML routes (`wants_json`); a job id is watched in place and
 `GET /api/songs/{id}` refreshes cards. A plain form post still 303s.

@@ -2095,7 +2095,7 @@ function initSongPage() {
 
   function paintSong(d) {
     if (!d || !d.song) return;
-    var title = page.querySelector("h1");
+    var title = page.querySelector("#song-scope h1") || page.querySelector("h1");
     if (title) {
       var tag = title.querySelector(".tag.explicit");
       if (d.song.explicit && !tag) {
@@ -2160,6 +2160,31 @@ function initSongPage() {
   function refreshSong() {
     return api("/api/songs/" + songId).then(paintSong);
   }
+
+  function selectSongTier(tier, opts) {
+    if (!tier) return;
+    page.setAttribute("data-tier", tier);
+    page.querySelectorAll("#song-scope .tier-chip").forEach(function (c) {
+      c.classList.toggle("on", c.getAttribute("data-tier") === tier);
+    });
+    page.querySelectorAll(".tier-board").forEach(function (d) {
+      var on = d.getAttribute("data-tier") === tier;
+      d.hidden = !on;
+      if (on && !d.open) d.open = true;
+    });
+    if (!opts || !opts.skipUrl) {
+      var u = new URL(location.href);
+      u.searchParams.set("tier", tier);
+      history.replaceState({}, "", u.pathname + u.search + u.hash);
+    }
+  }
+  page.addEventListener("click", function (e) {
+    var chip = e.target.closest && e.target.closest("#song-scope .tier-chip");
+    if (!chip || !page.contains(chip)) return;
+    e.preventDefault();
+    selectSongTier(chip.getAttribute("data-tier"));
+  });
+  selectSongTier(page.getAttribute("data-tier"), {skipUrl: true});
 
   function followJob(d, form) {
     var jid = d.job_id || (d.job_ids && d.job_ids[0]);

@@ -2981,7 +2981,7 @@ def api_song_media(id: int):
 
 
 @app.get("/songs/{id}", response_class=HTMLResponse)
-def song_page(request: Request, id: int):
+def song_page(request: Request, id: int, tier: str = ""):
     song = get_song_or_404(id)
     storyboards = {r["tier"]: r for r in db.q("SELECT * FROM storyboards WHERE song_id=?", id)}
     style_assets = db.q("SELECT * FROM assets WHERE song_id=? AND kind='style' ORDER BY id DESC", id)
@@ -3095,6 +3095,11 @@ def song_page(request: Request, id: int):
                     if e["key"] in wired]
     all_tiers = tiers.all_tiers()
     form_tier = next(iter(storyboards), None) or (all_tiers[0]["name"] if all_tiers else "")
+    page_tier = (tier or "").strip()
+    if page_tier not in storyboards:
+        page_tier = "xxx" if "xxx" in storyboards else form_tier
+    if page_tier:
+        form_tier = page_tier
     beat_count = len(json.loads(song["beat_grid_json"])) if song["beat_grid_json"] else 0
     song_paths = set()
     for row in renders:
@@ -3133,6 +3138,7 @@ def song_page(request: Request, id: int):
     faces = _face_choices(song, face_tier) if face_tier else []
     return templates.TemplateResponse(request, "song.html", {
         "song": song, "tiers": all_tiers, "storyboards": storyboards, "beat_count": beat_count,
+        "page_tier": page_tier,
         "approved_tiers": approved_tiers, "reviews": reviews,
         "style_assets": style_assets, "chosen_anchors": chosen_anchors,
         "clips_ready_tiers": clips_ready_tiers, "anchor_by_tier": anchor_by_tier,
