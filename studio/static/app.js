@@ -886,7 +886,7 @@ function initNavDrop() {
       e.preventDefault();
       clearTimers();
       openDrop(drop, true);
-    });
+    }, true);
   });
 
   document.addEventListener("click", function (e) {
@@ -4395,6 +4395,7 @@ document.body.addEventListener("htmx:afterSwap", function () {
   if (!overlay) return;
   document.querySelectorAll("header nav a, header a.brand").forEach(function (a) {
     a.addEventListener("click", function (e) {
+      if (e.defaultPrevented) return;
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return;
       var href = a.getAttribute("href") || "";
       if (!href || href.charAt(0) === "#") return;
