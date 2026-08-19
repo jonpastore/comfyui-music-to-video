@@ -117,6 +117,46 @@ def test_pg13_missing_poses_include_unset_holes_and_actor_thumbs(tmp_path):
         classification._DEFAULT_SIDECAR = prev
 
 
+def test_generate_lists_shared_cast_when_album_characters_empty():
+    """Empty characters + shared Panther sheet → Generate lists Panther + thumb.
+
+    Mutation: form_actor_rows returns only lead → red.
+    """
+    stamp = time.time_ns()
+    open_album = f"CatEmpty {stamp}"
+    other = f"StreetSrc {stamp}"
+    with TestClient(appmod.app) as client:
+        assert client.post("/playlists", data={"name": open_album}).status_code in (200, 303)
+        assert client.post("/playlists", data={"name": other}).status_code in (200, 303)
+        db.run("""INSERT INTO characters (scope_value, name, role, identity, created)
+                  VALUES (?,?,?,?,?)""",
+               other, "Panther", "partner", "Panther identity", time.time())
+        panther = db.one("SELECT * FROM characters WHERE scope_value=? AND name=?",
+                         other, "Panther")
+        assert db.q("SELECT id FROM characters WHERE scope_value=?", open_album) == []
+        sheet = os.path.join(db.shared_anchor_dir(), f"panther_front_{stamp}.png")
+        open(sheet, "wb").write(b"\x89PNG\r\n\x1a\n")
+        db.run("""INSERT INTO anchors
+                  (scope_kind, scope_value, tier, view, path, chosen, created,
+                   character_id, render_json)
+                  VALUES (?,?,?,?,?,1,?,?,?)""",
+               db.SHARED_KIND, db.SHARED_VALUE, "xxx", "front", sheet, time.time(),
+               panther["id"], json.dumps({"pose_name": "standing front"}))
+        page = client.get("/anchors", params={"scope_value": open_album, "gap_tier": "xxx"})
+    assert page.status_code == 200, page.text
+    form = page.text.split('id="anchor-form"', 1)[1]
+    assert "Panther" in form
+    assert 'value="%s"' % panther["id"] in form or f'value="{panther["id"]}"' in form
+    assert os.path.basename(sheet) in form
+    rows = appmod.form_actor_rows(open_album)
+    names = [r["name"] for r in rows]
+    assert names[0] == "Lead" or names[0]
+    assert "Panther" in names
+    panther_row = next(r for r in rows if r["name"] == "Panther")
+    assert panther_row["id"] == str(panther["id"])
+    assert panther_row["thumb"], "shared Panther must paint an identity thumb"
+
+
 def test_apply_keeper_same_file_two_albums_two_tiers(tmp_path):
     """One file, two albums, two tiers — no second copy on disk."""
     import tiers

@@ -56,12 +56,12 @@ so `/media` is not 403.
    not a required chosen row per tier. Promote to `scope_kind=shared`
    when the operator applies to >1 album (T4-25 already exists).
 
-2. **Generate lists every actor the sheet can use.** Partial:
-   Street Cats lists Meow P / Kitty / Panther / Tiger. Thumbs now fall
-   back to any chosen sheet for that body, not only `view=front`.
-   Catatonic's empty `characters` table still needs
-   `_pad_gallery_cast` (shared Street Cats cast) if that album should
-   offer Tiger/Panther without a row.
+2. **Generate lists every actor the sheet can use.** **built**:
+   `form_actor_rows` pads like the gallery — lead + album cast + people
+   with a visible chosen sheet (`visible_anchor_sql` / shared by name).
+   Catatonic with an empty `characters` table still lists Panther when a
+   shared keeper exists (`test_generate_lists_shared_cast_when_album_characters_empty`).
+   Thumbs fall back to any chosen sheet, not only `view=front`.
 
 3. **Identity bag is operator photographs of her, not a stranger plate.**
    The white cat on Base images is an `anchor_ref` with
@@ -106,7 +106,7 @@ so `/media` is not 403.
 
 1. Sticky bar = all builtin tiers (this commit). Generate already
    reads `gap_tier`.
-2. Actor list + identity-front thumbs on Generate (P0-2, P0-3).
+2. Identity bag = her photographs, not a stranger plate (P0-3). Actor list on Generate is built (P0-2).
 3. Shared classification pointers + roster have = keeper covering
    the pose across tiers (P0-1). Tests: apply one path to Catatonic
    + Street Cats + R + XXX → one file, N pointer rows, both albums'

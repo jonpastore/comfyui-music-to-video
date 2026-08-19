@@ -5559,7 +5559,10 @@ def _form_actors(form, album, character_id):
         row = db.one("SELECT * FROM characters WHERE id=? AND scope_value=?",
                      cid, album)
         if not row:
-            continue
+            # Shared / other-album cast with a visible chosen sheet for this album
+            row = db.one("SELECT * FROM characters WHERE id=?", cid)
+            if not row or not actor_identity_url(album, cid):
+                continue
         n = row["name"]
         if n and n.lower() not in seen:
             seen.add(n.lower())
@@ -6273,7 +6276,12 @@ def actor_identity_url(album, character_id=None):
 
 
 def form_actor_rows(album):
-    """Lead + album cast, each with the identity photograph to use as image1."""
+    """Lead + album cast + people with a visible chosen sheet (shared by name).
+
+    Same pool the gallery gets: nest shows sheet owners, `_pad_gallery_cast`
+    adds album cast. Catatonic with an empty `characters` table still lists
+    Panther/Tiger/Kitty when a shared keeper exists. Dedup by lowercased name.
+    """
     album = (album or "").strip()
     lead = pose_plan.lead_name(album) if album else "Lead"
     rows, seen = [], set()
@@ -6287,6 +6295,19 @@ def form_actor_rows(album):
         seen.add(name.lower())
         rows.append({"id": str(c["id"]), "name": name,
                      "thumb": actor_identity_url(album, c["id"])})
+    for r in db.q(
+            f"""SELECT a.character_id, c.name FROM anchors a
+                JOIN characters c ON c.id = a.character_id
+                WHERE {db.visible_anchor_sql('a')} AND a.chosen=1
+                  AND a.character_id IS NOT NULL
+                ORDER BY lower(c.name), a.id""",
+            album or ""):
+        name = (r["name"] or "").strip()
+        if not name or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        rows.append({"id": str(r["character_id"]), "name": name,
+                     "thumb": actor_identity_url(album, r["character_id"])})
     return rows
 
 
