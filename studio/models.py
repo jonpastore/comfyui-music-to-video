@@ -72,6 +72,7 @@ RENDERED_ROLES = ("reference", "video", "refine", "artwork", "audio")
 # New Image picker lists these. Krea has no local weights (ComfyAPI node only).
 T2I_WIRED = frozenset({
     "qwen_t2i", "qwen_artwork", "flux2_t2i", "flux2_klein_t2i", "z_image_t2i",
+    "krea2_t2i",
 })
 
 # loader class -> the input whose enum lists installed files
@@ -642,6 +643,25 @@ CATALOG = {
         "companions": {
             "qwen_3_4b_fp8_mixed.safetensors": "CLIPLoader",
             "flux2-vae.safetensors": "VAELoader",
+        },
+    },
+    "krea2_t2i": {
+        "role": "t2i",
+        "proven": "opportunistic",
+        "weights_gib": 12.2,
+        "label": "Krea 2 Turbo fp8 — local OSS",
+        "file": "krea2_turbo_fp8_scaled.safetensors",
+        "loader": "UNETLoader",
+        "purpose": "Krea 2 open weights (June 2026). Aesthetic exploration, 8 steps.",
+        "when": "New Image when you want Mage-like Krea look without their API.",
+        "not_for": "Identity sheets. Mage Mango/Guava are not this file.",
+        "notes": [
+            "Official template: CLIP type krea2, qwen3vl_4b, qwen_image_vae, "
+            "EmptyLatentImage, KSampler 8/cfg1/euler/simple.",
+        ],
+        "companions": {
+            "qwen3vl_4b_fp8_scaled.safetensors": "CLIPLoader",
+            "qwen_image_vae.safetensors": "VAELoader",
         },
     },
     "qwen_artwork": {

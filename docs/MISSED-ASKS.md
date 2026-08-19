@@ -89,8 +89,8 @@ so `/media` is not 403.
    Do not leave a second seed UI that does not drive the renderer.
 
 6. **New Image model dropdown.** **built**
-   Wired: Qwen, Flux 2 Dev, Flux 2 Klein 4B, Z-Image Turbo (`make_t2i.py`,
-   `pipeline.gen_t2i`). Krea has no local checkpoint (ComfyAPI node only).
+   Wired: Qwen, Flux 2 Dev, Flux 2 Klein 4B, Z-Image Turbo, Krea 2 Turbo
+   OSS (`make_t2i.py`). Mage Mango/Guava are not local files.
    Civitai `base` follows the model. Generate fetch, no full reload.
    `test_make_t2i.py`, `test_media_create.py`.
 

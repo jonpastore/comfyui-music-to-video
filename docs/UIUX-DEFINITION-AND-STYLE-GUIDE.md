@@ -1416,10 +1416,10 @@ Still identity is Qwen-Image-Edit 2511. Clips are `ltx25` / `wan22_s2v`.
 A Pony, Krea, or Flux file on the box does not appear as a second
 “who is she” choice. New Image lists **only** `models.T2I_WIRED`
 (`qwen_t2i`, `qwen_artwork`) that `catalog()` says are available — no
-Qwen, Flux 2 Dev, Flux 2 Klein 4B, and Z-Image Turbo as runnable options
-(Krea has no local weights). A one-line hint under the
-select: runnable Qwen-Image-Edit 2511; Flux 2 Dev on disk with no
-studio graph; Krea not installed. Style LoRA is a second `LoraLoader`
+Qwen, Flux 2 Dev, Flux 2 Klein 4B, Z-Image Turbo, and Krea 2 Turbo OSS
+as runnable options. Mage Mango/Guava/Kiwi are not local files. A
+one-line hint under the select names identity (Qwen) vs exploration
+(Flux / Z-Image / Krea 2) vs Mage-not-downloadable. Style LoRA is a second `LoraLoader`
 only when named (default graph stays byte-identical); the select
 htmx-refreshes from `GET /media/loras` when the model changes. Civitai
 search/download reuses `/models/civitai` with `base` defaulting from
@@ -1921,8 +1921,9 @@ A style guide is falsifiable or it is decoration.
   the old `<a>` tags in the template drops the probe → red. Today's order is
   Library, **Media**, Anchors, Playlists, Sets, Tiers, Models, Jobs, Config.
   Media is a submenu: New Song (`/media?new=song`, ACE-Step → new library
-  row) and New Image (`/media?new=image`, Qwen t2i only — no fake disabled
-  Flux/Krea options; Style LoRA + Civitai fetch with matching base;
+  row) and New Image (`/media?new=image`, `T2I_WIRED` Qwen / Flux 2 /
+  Z-Image / Krea 2 Turbo OSS — no fake disabled rows; Mage fruit is not
+  local; Style LoRA + Civitai fetch with matching base;
   Recent images has multi-select + Delete selected). Click **Media** pins the menu; it
   stays open 2s after the pointer leaves (WAI-ARIA: dismiss on pick,
   outside click, or Escape). Escape focuses Media without the

@@ -1691,7 +1691,7 @@ def h_t2i(args, progress):
     height = int(args.get("height") or args.get("width") or 1024)
     style = args.get("style_lora") or ""
     strength = args.get("style_lora_strength") or 1.0
-    if key in ("flux2_t2i", "flux2_klein_t2i", "z_image_t2i"):
+    if key in ("flux2_t2i", "flux2_klein_t2i", "z_image_t2i", "krea2_t2i"):
         paths = pipeline.gen_t2i(
             key, slug, composed, progress, n=n, size=width, height=height,
             style_lora=style, style_lora_strength=strength)

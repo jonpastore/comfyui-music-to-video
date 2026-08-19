@@ -53,10 +53,22 @@ def test_zimage_caps_pixels_and_uses_lumina2():
     assert wf["6"]["inputs"]["steps"] == 8
 
 
+def test_krea2_uses_krea2_clip_and_empty_latent():
+    wf = _one("krea2_t2i")
+    assert wf["1"]["inputs"]["unet_name"] == "krea2_turbo_fp8_scaled.safetensors"
+    assert wf["2"]["inputs"]["clip_name"] == "qwen3vl_4b_fp8_scaled.safetensors"
+    assert wf["2"]["inputs"]["type"] == "krea2"
+    assert wf["3"]["inputs"]["vae_name"] == "qwen_image_vae.safetensors"
+    assert wf["6"]["class_type"] == "EmptyLatentImage"
+    assert wf["7"]["class_type"] == "KSampler"
+    assert wf["7"]["inputs"]["steps"] == 8
+    assert wf["7"]["inputs"]["cfg"] == 1.0
+
+
 def test_unknown_model_refused():
     try:
-        make_t2i.workflow("krea_t2i", "x", 64, 64, 1, "p")
+        make_t2i.workflow("mango_t2i", "x", 64, 64, 1, "p")
     except ValueError as e:
-        assert "krea" in str(e)
+        assert "mango" in str(e)
     else:
-        raise AssertionError("krea should not have a local graph")
+        raise AssertionError("mango should not have a local graph")

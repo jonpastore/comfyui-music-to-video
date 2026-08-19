@@ -2,7 +2,8 @@
 """Write ComfyUI API graphs for New Image exploration models.
 
 Qwen-Image-Edit stays in make_anchor.py. This file is Flux 2 Dev, Flux 2 Klein,
-and Z-Image Turbo — empty-latent text-to-image only. Identity sheets stay Qwen.
+Z-Image Turbo, and Krea 2 Turbo OSS — empty-latent text-to-image only.
+Identity sheets stay Qwen. Mage Mango/Guava/Kiwi are not local graphs.
 
 Official node lists (ComfyUI templates on cerberus, 2026-08-19):
   Flux 2 Dev: UNET + CLIP(flux2/mistral) + VAE + CLIPTextEncode + FluxGuidance
@@ -45,6 +46,17 @@ SPECS = {
         "clip_type": "lumina2",
         "vae": "ae.safetensors",
         "kind": "zimage",
+        "steps": 8,
+        "cfg": 1.0,
+        "sampler": "euler",
+        "scheduler": "simple",
+    },
+    "krea2_t2i": {
+        "unet": "krea2_turbo_fp8_scaled.safetensors",
+        "clip": "qwen3vl_4b_fp8_scaled.safetensors",
+        "clip_type": "krea2",
+        "vae": "qwen_image_vae.safetensors",
+        "kind": "krea",
         "steps": 8,
         "cfg": 1.0,
         "sampler": "euler",
@@ -112,6 +124,38 @@ def _flux2(spec, prompt, w, h, seed, prefix, style_lora="", style_lora_strength=
     return wf
 
 
+def _krea(spec, prompt, w, h, seed, prefix, style_lora="", style_lora_strength=1.0):
+    """Official Krea 2 Turbo t2i: EmptyLatentImage + KSampler 8/cfg1/euler/simple."""
+    wf = {
+        "1": {"class_type": "UNETLoader",
+              "inputs": {"unet_name": spec["unet"], "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader",
+              "inputs": {"clip_name": spec["clip"], "type": spec["clip_type"]}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": spec["vae"]}},
+        "4": {"class_type": "CLIPTextEncode",
+              "inputs": {"text": prompt, "clip": ["2", 0]}},
+        "5": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["4", 0]}},
+        "6": {"class_type": "EmptyLatentImage",
+              "inputs": {"width": w, "height": h, "batch_size": 1}},
+        "7": {"class_type": "KSampler",
+              "inputs": {"model": ["1", 0], "seed": seed, "steps": spec["steps"],
+                         "cfg": float(spec["cfg"]), "sampler_name": spec["sampler"],
+                         "scheduler": spec["scheduler"], "positive": ["4", 0],
+                         "negative": ["5", 0], "latent_image": ["6", 0],
+                         "denoise": 1.0}},
+        "8": {"class_type": "VAEDecode",
+              "inputs": {"samples": ["7", 0], "vae": ["3", 0]}},
+        "9": {"class_type": "SaveImage",
+              "inputs": {"images": ["8", 0], "filename_prefix": prefix}},
+    }
+    if style_lora:
+        wf["1b"] = {"class_type": "LoraLoaderModelOnly",
+                    "inputs": {"model": ["1", 0], "lora_name": style_lora,
+                               "strength_model": float(style_lora_strength)}}
+        wf["7"]["inputs"]["model"] = ["1b", 0]
+    return wf
+
+
 def _zimage(spec, prompt, w, h, seed, prefix, style_lora="", style_lora_strength=1.0):
     wf = {
         "1": {"class_type": "UNETLoader",
@@ -152,6 +196,9 @@ def workflow(model, prompt, width, height, seed, prefix, style_lora="",
     if spec["kind"] == "zimage":
         return _zimage(spec, prompt, w, h, seed, prefix, style_lora,
                        style_lora_strength)
+    if spec["kind"] == "krea":
+        return _krea(spec, prompt, w, h, seed, prefix, style_lora,
+                     style_lora_strength)
     return _flux2(spec, prompt, w, h, seed, prefix, style_lora,
                   style_lora_strength)
 

@@ -111,8 +111,9 @@ still not shipped (`T8-12`, provisional by absence).
    (`studio/test_t8_2_media_card_pick.py`). Use stays on the edit card.
    Topbar **Media** is a submenu: New Song (`/media?new=song`, ACE-Step
    creates a library row; first take is the original) and New Image
-   (`/media?new=image`, Qwen t2i only + Style LoRA + Civitai fetch with
-   matching base; no fake disabled Flux/Krea rows). `/media` is the
+   (`/media?new=image`, `T2I_WIRED` Qwen / Flux 2 / Z-Image / Krea 2 Turbo
+   OSS + Style LoRA + Civitai fetch with matching base; no fake disabled
+   rows; Mage fruit is not local). `/media` is the
    chooser. Generate-from-tags is not on the song page; span replace /
    re-synth stay on Edit audio.
 3. **TRD-10's bulk edit.** `T10-3`…`T10-7` are built: blank leaves alone, toggle-all is the shown set, invalid refuses the batch, one transaction, pre-write count equals rows changed.

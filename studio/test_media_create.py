@@ -32,14 +32,14 @@ def test_media_page_and_nav():
         assert 'id="t2i-model"' in image.text
         assert 'id="t2i-model-hint"' in image.text
         assert "Flux 2 Dev" in image.text
-        assert "Krea has no local weights" in image.text or "Krea is not on disk" in image.text
+        assert "Krea 2 Turbo" in image.text
         assert 'value="qwen_t2i"' in image.text
         assert 'name="base"' in image.text and 'value="Qwen"' in image.text
         assert "js-media-gen" in image.text
         assert 'hx-get="/media/loras"' in image.text
         assert 'value="flux2_t2i"' in image.text
         assert 'value="z_image_t2i"' in image.text
-        assert 'value="krea' not in image.text.lower()
+        assert 'value="krea2_t2i"' in image.text
         assert "disabled" not in image.text.split('id="t2i-model"')[1].split("</select>")[0]
         # Selected runnable option is Qwen t2i.
         assert 'value="qwen_t2i"' in image.text
@@ -81,11 +81,11 @@ def test_new_image_picker_excludes_unwired_and_selects_qwen():
         assert opts, "no model options"
         for v in opts:
             assert v in appmod.models.T2I_WIRED, v
-            assert "krea" not in v
         assert "qwen_t2i" in opts
         assert "flux2_t2i" in opts
         assert "flux2_klein_t2i" in opts
         assert "z_image_t2i" in opts
+        assert "krea2_t2i" in opts
         sel = re.search(
             r'<option[^>]*value="qwen_t2i"[^>]*>', values[0])
         assert sel and "selected" in sel.group(0)
@@ -217,10 +217,31 @@ def test_new_image_enqueues_flux2(monkeypatch):
         assert json.loads(job["args_json"])["model"] == "flux2_t2i"
 
 
-def test_new_image_refuses_krea():
+def test_new_image_enqueues_krea2(monkeypatch):
+    monkeypatch.setattr(appmod.pipeline, "gen_t2i",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            RuntimeError("t2i must not run in this test")))
+    with TestClient(appmod.app) as client:
+        r = client.post("/media/images", data={
+            "prompt": "a cat", "model": "krea2_t2i",
+        }, follow_redirects=False)
+        assert r.status_code in (200, 303), r.text
+        job = db.one("SELECT * FROM jobs WHERE kind='t2i' ORDER BY id DESC")
+        assert json.loads(job["args_json"])["model"] == "krea2_t2i"
+
+
+def test_new_image_refuses_unknown_krea_alias():
     with TestClient(appmod.app) as client:
         r = client.post("/media/images", data={
             "prompt": "a cat", "model": "krea_t2i",
+        }, follow_redirects=False)
+        assert r.status_code == 400, r.text
+
+
+def test_new_image_refuses_mage_fruit_alias():
+    with TestClient(appmod.app) as client:
+        r = client.post("/media/images", data={
+            "prompt": "a cat", "model": "mango_t2i",
         }, follow_redirects=False)
         assert r.status_code == 400, r.text
 

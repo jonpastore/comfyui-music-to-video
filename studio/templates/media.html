@@ -69,8 +69,9 @@
 <section class="card" id="new-image">
   <h2>New Image</h2>
   <p class="hint">Exploration stills. <strong>Qwen-Image-Edit 2511</strong> is
-    the identity path. Flux 2 Dev (cerberus), Flux 2 Klein 4B, and Z-Image
-    Turbo are empty-latent t2i. Krea has no local weights (ComfyAPI only).
+    the identity path. Flux 2 Dev, Flux 2 Klein 4B, Z-Image Turbo, and
+    <strong>Krea 2 Turbo</strong> (open weights) are empty-latent t2i.
+    Mage Mango/Guava/Kiwi are Mage-only fine-tunes — not downloadable.
     Fetch a LoRA from Civitai below, then pick it here.</p>
   <form method="post" action="/media/images" class="stack-form js-media-gen">
     <label>Prompt
@@ -101,7 +102,7 @@
         </select>
       </label>
     </div>
-    <p class="hint" id="t2i-model-hint">Identity sheets stay Qwen. Flux / Z-Image are exploration. Krea is not on disk.</p>
+    <p class="hint" id="t2i-model-hint">Identity sheets stay Qwen. Flux / Z-Image / Krea 2 Turbo are exploration. Mage fruit names are not local files.</p>
     <div class="field-row">
       <label>Size
         <select name="size">
