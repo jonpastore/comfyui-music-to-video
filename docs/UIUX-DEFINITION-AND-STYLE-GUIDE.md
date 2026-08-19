@@ -1454,7 +1454,11 @@ says so). Every control the backend cannot honour is marked, never
 inert (7a.3). D7 is unmeasured until the GPU pair exists — say so
 on the control.
 
-**Anchors page.** The **Pose catalog** card (`#classification-library`)
+**Anchors page.** `h1` is **Anchors** plus a help icon (no lead paragraph).
+A sticky `#anchor-scope` bar under the topbar holds a thin album select
+and tier chips (`n_have/n_needed` poses · character count); a chip
+sets `gap_tier` and ticks that generate-form tier. **Character catalog**
+(`#character-catalog`) is the collapsible gallery. The **Pose catalog** card (`#classification-library`)
 is a collapsed `<details>` (open when the list is empty or the song
 has holes). Album first, then **Song to check**, then **Tier** (R / XXX).
 Missing chips say `{tier} · {wardrobe} · {pose} · {view}` so you know

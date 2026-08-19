@@ -44,6 +44,11 @@ def test_media_page_and_nav():
         kids = [(c["href"], c["label"]) for c in media["children"]]
         assert kids == [("/media?new=song", "New Song"),
                         ("/media?new=image", "New Image")]
+        crumb = client.get("/media", params={"new": "image"})
+        assert "Media / Images" in crumb.text
+        crumb_s = client.get("/media", params={"new": "song"})
+        assert "Media / Songs" in crumb_s.text
+        assert 'class="current"' in crumb.text
 
 
 def test_new_song_enqueues_as_new_song(monkeypatch):

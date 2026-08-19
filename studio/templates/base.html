@@ -17,18 +17,28 @@
   <header class="topbar">
     <a class="brand" href="/">Meow P Studio</a>
     <nav>
+      {% set path = request.url.path %}
+      {% set qnew = request.query_params.get("new", "") %}
       {% for link in nav_links() %}
+      {% if link.href == "/" %}
+        {% set cur = path == "/" %}
+      {% elif link.href == "/media" %}
+        {% set cur = path == "/media" %}
+      {% else %}
+        {% set cur = path == link.href or path.startswith(link.href + "/") %}
+      {% endif %}
       {% if link.children %}
       <span class="nav-drop">
-        <a href="{{ link.href }}" aria-haspopup="true" aria-expanded="false">{{ link.label }}</a>
+        <a href="{{ link.href }}" class="{% if cur %}current{% endif %}"
+           aria-haspopup="true" aria-expanded="false">{% if cur and qnew == "image" %}Media / Images{% elif cur and qnew == "song" %}Media / Songs{% else %}{{ link.label }}{% endif %}</a>
         <span class="nav-sub">
           {% for child in link.children %}
-          <a href="{{ child.href }}">{{ child.label }}</a>
+          <a href="{{ child.href }}" class="{% if path == "/media" and (("new=song" in child.href and qnew == "song") or ("new=image" in child.href and qnew == "image")) %}current{% endif %}">{{ child.label }}</a>
           {% endfor %}
         </span>
       </span>
       {% else %}
-      <a href="{{ link.href }}">{{ link.label }}</a>
+      <a href="{{ link.href }}" class="{% if cur %}current{% endif %}">{{ link.label }}</a>
       {% endif %}
       {% endfor %}
     </nav>

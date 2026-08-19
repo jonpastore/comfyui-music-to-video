@@ -108,6 +108,35 @@ a { color: var(--accent); }
 .topbar nav { display: flex; gap: 1.1rem; flex-wrap: wrap; align-items: center; }
 .topbar nav a { text-decoration: none; color: var(--muted); }
 .topbar nav a:hover { color: var(--text); }
+.topbar nav a.current { color: #fff; font-weight: 700; }
+.anchor-scope {
+  position: sticky;
+  top: 3.15rem;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.45rem 0 0.55rem;
+  margin: 0 0 0.75rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.anchor-scope .scope-album select { max-width: 11rem; }
+.scope-tiers { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+a.tier-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+a.tier-chip.on { border-color: var(--accent); color: #fff; font-weight: 700; }
+h1 .help-tip { vertical-align: middle; }
 .nav-drop { position: relative; }
 .nav-sub {
   display: none;

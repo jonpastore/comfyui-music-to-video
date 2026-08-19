@@ -3173,15 +3173,43 @@ function initClassificationLibrary() {
   var note = document.getElementById("classification-note");
   function say(msg) { if (note) note.textContent = msg || ""; }
 
+  var scope = document.getElementById("anchor-scope");
+  var wantTier = (scope && scope.getAttribute("data-tier")) || tier;
+  if (wantTier) {
+    document.querySelectorAll('#anchor-form input[name="tier"]').forEach(function (el) {
+      el.checked = el.value === wantTier;
+    });
+  }
+
   var fromSheets = document.getElementById("classification-from-sheets");
   if (fromSheets) {
     fromSheets.addEventListener("click", function () {
-      say("Tagging chosen sheets…");
+      say("Copying chosen Character catalog keepers…");
       api("/api/albums/" + encodeURIComponent(album) + "/classification/from-sheets", {})
         .then(function () { location.reload(); })
         .catch(function (err) { say(err.message); });
     });
   }
+
+  var preview = document.getElementById("keeper-preview");
+  var previewImg = document.getElementById("keeper-preview-img");
+  var previewTitle = document.getElementById("keeper-preview-title");
+  var previewEmpty = document.getElementById("keeper-preview-empty");
+  box.addEventListener("click", function (e) {
+    var chip = e.target.closest && e.target.closest(".js-keeper-preview");
+    if (!chip) return;
+    e.preventDefault();
+    var url = chip.getAttribute("data-url") || "";
+    var label = (chip.getAttribute("data-pose") || "") + " / " +
+      (chip.getAttribute("data-view") || "");
+    if (previewTitle) previewTitle.textContent = label || "Keeper";
+    if (previewImg) {
+      previewImg.hidden = !url;
+      previewImg.src = url ? (url + (url.indexOf("?") >= 0 ? "&" : "?") + "w=720") : "";
+    }
+    if (previewEmpty) previewEmpty.hidden = !!url;
+    if (preview && typeof preview.showModal === "function") preview.showModal();
+  });
 
   var dlg = document.getElementById("hole-pick");
   var grid = document.getElementById("hole-pick-grid");

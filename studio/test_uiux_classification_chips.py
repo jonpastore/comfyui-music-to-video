@@ -131,10 +131,16 @@ def test_uiux_anchors_shows_keeper_chips_and_holes():
     assert f'value="{sid}"' in html
     assert "<summary>" in html.split('id="classification-library"', 1)[1]
     assert "Pose catalog" in html
+    assert 'id="anchor-scope"' in html
+    assert "Character catalog" in html
+    assert '<p class="hint">This album' not in html
     album_at = html.find('id="class-album"')
     song_at = html.find('id="pose-gap-song"')
     assert album_at != -1 and song_at != -1 and album_at < song_at
-    assert album_at < html.find('id="pose-gap-tier"')
+    assert 'class="tier-chip' in html
+    assert "js-keeper-preview" in html
+    assert "Does not generate a new sheet" in html
+    assert "No file, no GPU" not in html
 
 
 def test_gap_tier_select_reads_that_board():

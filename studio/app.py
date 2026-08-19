@@ -3496,9 +3496,17 @@ def _anchors_classification_ctx(album, song_id="", gap_tier=""):
                 gap = storyboard_service.pose_gap(open_id, tier=want)
             except (LookupError, ValueError, RuntimeError):
                 gap = None
+    for im in keepers:
+        path = (im.get("path") or "").strip()
+        if path and os.path.isfile(path):
+            im["url"] = media_url(path)
+    n_clothed = sum(1 for im in keepers if im.get("wardrobe") == "clothed")
+    n_nude = sum(1 for im in keepers if im.get("wardrobe") == "nude")
     return {
         "class_album": album,
         "class_keepers": keepers,
+        "class_n_clothed": n_clothed,
+        "class_n_nude": n_nude,
         "album_songs": songs,
         "pose_gap": gap,
         "open_song_id": open_id,
@@ -3584,12 +3592,30 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
     shown_roster = (roster_tier or "").strip()
     if shown_roster not in coverage_by_tier:
         shown_roster = ""
+    gallery = nest_anchor_groups(group_list)
+    sticky_tiers = []
+    for t, cov in coverage_by_tier.items():
+        n_chars = 0
+        for sec in gallery:
+            for tr in sec.get("tiers") or []:
+                if tr.get("name") != t:
+                    continue
+                for ch in tr.get("characters") or []:
+                    if any((f.get("rows") or []) for f in (ch.get("families") or [])):
+                        n_chars += 1
+        sticky_tiers.append({
+            "name": t,
+            "n_have": cov.get("n_have") or 0,
+            "n_needed": cov.get("n_needed") or 0,
+            "n_chars": n_chars,
+        })
     return templates.TemplateResponse(request, "anchors.html", dict(
         anchor_form_ctx(scope_value),
-        groups=group_list, gallery=nest_anchor_groups(group_list),
+        groups=group_list, gallery=gallery,
         known_albums=albums, playlists=playlists,
         coverage_by_tier=coverage_by_tier,
         roster_tier=shown_roster,
+        sticky_tiers=sticky_tiers,
         failed_jobs=fresh, active_jobs=active,
         **_anchors_classification_ctx(scope_value, song_id, gap_tier)))
 

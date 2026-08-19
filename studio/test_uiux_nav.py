@@ -89,6 +89,8 @@ def test_uiux_nav_html_and_json_share_one_list(monkeypatch):
         ("/config", "Config"),
     ]
     assert html_pairs[:9] == expected_base, html_pairs[:9]
+    assert "nav a.current" in open(
+        os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
     assert html_pairs[9] == (_PROBE_HREF, _PROBE_LABEL)
     assert 'class="nav-sub"' in nav_html
     assert 'href="/media?new=song"' in nav_html
