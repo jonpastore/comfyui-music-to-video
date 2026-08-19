@@ -2091,6 +2091,12 @@ img.lazy-src, video.lazy-src {
 .missing-pose-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .missing-pose-nude { font-size: 0.85rem; color: var(--muted); }
 .keeper-filter { display: block; max-width: 18rem; margin: 0.35rem 0 0.5rem; }
+.keeper-filter-modal {
+  margin: 0;
+  max-width: 14rem;
+  flex: none;
+}
+.keeper-filter-modal input { width: 100%; }
 .keeper-rows {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -3263,17 +3263,6 @@ function initClassificationLibrary() {
     });
   }
 
-  var filter = document.getElementById("keeper-filter");
-  if (filter) {
-    filter.addEventListener("input", function () {
-      var q = filter.value.trim().toLowerCase();
-      box.querySelectorAll(".keeper-row").forEach(function (row) {
-        var name = (row.getAttribute("data-pose") || "").toLowerCase();
-        row.hidden = !!(q && name.indexOf(q) < 0);
-      });
-    });
-  }
-
   var fromSheets = document.getElementById("classification-from-sheets");
   if (fromSheets) {
     fromSheets.addEventListener("click", function () {
@@ -4565,6 +4554,8 @@ document.addEventListener("click", function (e) {
   if (!dlg) return;
   var items = [];
   var idx = 0;
+  var pageFilter = document.getElementById("keeper-filter");
+  var modalFilter = document.getElementById("keeper-modal-filter");
 
   function thumbs() {
     return Array.prototype.slice.call(document.querySelectorAll(".pose-roster-open[data-full]"));
@@ -4579,57 +4570,135 @@ document.addEventListener("click", function (e) {
     if (el.label != null) return el.label;
     return (el.getAttribute && el.getAttribute("data-label")) || "";
   }
-  function show(i) {
-    if (!items.length) return;
-    idx = (i + items.length) % items.length;
-    var el = items[idx];
-    var src = itemFull(el);
-    var img = dlg.querySelector("img");
-    if (img) {
-      if (src) img.src = src;
-      else img.removeAttribute("src");
-    }
-    var lab = document.getElementById("pose-preview-label");
-    if (lab) lab.textContent = itemLabel(el);
-    var prev = dlg.querySelector(".media-nav-prev");
-    var next = dlg.querySelector(".media-nav-next");
-    if (prev) prev.disabled = items.length < 2;
-    if (next) next.disabled = items.length < 2;
+  function parseJson(raw, fallback) {
+    try {
+      var v = JSON.parse(raw || "[]");
+      return Array.isArray(v) ? v : fallback;
+    } catch (err) { return fallback; }
+  }
+  function tokens(q) {
+    return String(q || "").split(/[\s,]+/).map(function (t) {
+      return t.trim().toLowerCase();
+    }).filter(Boolean);
+  }
+  function matchCard(card, q) {
+    var ts = tokens(q);
+    if (!ts.length) return true;
+    var hay = [
+      card.getAttribute("data-pose") || "",
+      card.getAttribute("data-view") || "",
+      card.getAttribute("data-wardrobe") || ""
+    ].join(" ").toLowerCase();
+    return ts.some(function (t) { return hay.indexOf(t) >= 0; });
+  }
+  function applyGridFilter(q) {
+    document.querySelectorAll(".js-keeper-preview").forEach(function (row) {
+      row.hidden = !matchCard(row, q);
+    });
   }
   function previewSrc(url) {
     if (!url) return "";
     return url + (url.indexOf("?") >= 0 ? "&" : "?") + "w=1200";
   }
+  function flatten(q) {
+    var out = [];
+    document.querySelectorAll(".js-keeper-preview").forEach(function (card) {
+      if (!matchCard(card, q)) return;
+      var urls = parseJson(card.getAttribute("data-urls"), []);
+      var paths = parseJson(card.getAttribute("data-paths"), []);
+      var wards = parseJson(card.getAttribute("data-wards"), []);
+      var pose = (card.getAttribute("data-pose") || "").trim() || "Keeper";
+      var ward = card.getAttribute("data-wardrobe") || "";
+      if (!urls.length) {
+        out.push({ full: "", label: pose + " · no file", path: "",
+                   wardrobe: ward, card: card, pose: pose });
+        return;
+      }
+      urls.forEach(function (u, i) {
+        var w = wards[i] || ward;
+        out.push({
+          full: previewSrc(u),
+          label: pose + (w ? " · " + w : ""),
+          path: paths[i] || "",
+          wardrobe: w,
+          card: card,
+          pose: pose
+        });
+      });
+    });
+    return out;
+  }
+  function show(i) {
+    var img = dlg.querySelector("img");
+    var lab = document.getElementById("pose-preview-label");
+    var pos = document.getElementById("pose-preview-pos");
+    var prev = dlg.querySelector(".media-nav-prev");
+    var next = dlg.querySelector(".media-nav-next");
+    if (!items.length) {
+      if (img) img.removeAttribute("src");
+      if (lab) lab.textContent = "No matching keepers";
+      if (pos) pos.textContent = "0/0";
+      if (prev) prev.disabled = true;
+      if (next) next.disabled = true;
+      return;
+    }
+    idx = ((i % items.length) + items.length) % items.length;
+    var el = items[idx];
+    var src = itemFull(el);
+    if (img) {
+      if (src) img.src = src;
+      else img.removeAttribute("src");
+    }
+    if (lab) lab.textContent = itemLabel(el);
+    if (pos) pos.textContent = (idx + 1) + "/" + items.length;
+    if (prev) prev.disabled = items.length < 2;
+    if (next) next.disabled = items.length < 2;
+  }
+  function query() {
+    if (modalFilter && dlg.open) return modalFilter.value;
+    return (pageFilter && pageFilter.value) || "";
+  }
+  function rebuild(keepCard) {
+    var q = query();
+    applyGridFilter(q);
+    items = flatten(q);
+    var at = 0;
+    if (keepCard) {
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].card === keepCard) { at = i; break; }
+      }
+    }
+    show(at);
+  }
+  function bindFilter(el) {
+    if (!el) return;
+    el.addEventListener("input", function () {
+      var q = el.value;
+      if (pageFilter && pageFilter !== el) pageFilter.value = q;
+      if (modalFilter && modalFilter !== el) modalFilter.value = q;
+      var keep = items[idx] && items[idx].card;
+      rebuild(keep);
+    });
+  }
+  bindFilter(pageFilter);
+  bindFilter(modalFilter);
+  if (pageFilter) applyGridFilter(pageFilter.value);
   document.addEventListener("click", function (e) {
     if (e.target.closest("#pose-preview .media-nav-prev")) { e.preventDefault(); show(idx - 1); return; }
     if (e.target.closest("#pose-preview .media-nav-next")) { e.preventDefault(); show(idx + 1); return; }
     var chip = e.target.closest(".js-keeper-preview");
     if (chip) {
       e.preventDefault();
-      var urls = [];
-      try { urls = JSON.parse(chip.getAttribute("data-urls") || "[]"); } catch (err) { urls = []; }
-      if (!Array.isArray(urls)) urls = [];
-      var label = (chip.getAttribute("data-pose") || "").trim() || "Keeper";
-      var paths = [];
-      var wards = [];
-      try { paths = JSON.parse(chip.getAttribute("data-paths") || "[]"); } catch (err) { paths = []; }
-      try { wards = JSON.parse(chip.getAttribute("data-wards") || "[]"); } catch (err) { wards = []; }
-      if (!Array.isArray(paths)) paths = [];
-      if (!Array.isArray(wards)) wards = [];
-      var n = urls.length;
-      if (!n) {
-        items = [{ full: "", label: label + " · no file", path: "", wardrobe: "" }];
-      } else {
-        items = urls.map(function (u, i) {
-          return { full: previewSrc(u),
-                   label: n > 1 ? (label + " · " + (i + 1) + "/" + n) : label,
-                   path: paths[i] || "",
-                   wardrobe: wards[i] || chip.getAttribute("data-wardrobe") || "" };
-        });
+      var q = (pageFilter && pageFilter.value) || "";
+      if (modalFilter) modalFilter.value = q;
+      items = flatten(q);
+      var at = 0;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].card === chip) { at = i; break; }
       }
       var apply = document.getElementById("keeper-apply");
       if (apply) apply.hidden = false;
-      show(0);
+      show(at);
       dlg.showModal();
       return;
     }
@@ -4642,6 +4711,12 @@ document.addEventListener("click", function (e) {
     if (at < 0) { items = [btn]; at = 0; }
     show(at);
     dlg.showModal();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (!dlg.open) return;
+    if (e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); show(idx + 1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); show(idx - 1); }
   });
   var applyForm = document.getElementById("keeper-apply");
   if (applyForm) {
@@ -4660,7 +4735,7 @@ document.addEventListener("click", function (e) {
       if (note) note.textContent = "Applying…";
       api("/api/keepers/apply", {
         path: cur.path || "",
-        pose: (cur.label || "").split(" · ")[0],
+        pose: cur.pose || (cur.label || "").split(" · ")[0],
         wardrobe: cur.wardrobe || "",
         albums: albums,
         tiers: workTiers,
@@ -4672,12 +4747,6 @@ document.addEventListener("click", function (e) {
       });
     });
   }
-  document.addEventListener("keydown", function (e) {
-    if (!dlg.open) return;
-    if (e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
-    if (e.key === "ArrowLeft") { e.preventDefault(); show(idx - 1); }
-    if (e.key === "ArrowRight") { e.preventDefault(); show(idx + 1); }
-  });
 })();
 
 (function () {

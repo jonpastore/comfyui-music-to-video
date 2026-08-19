@@ -117,18 +117,16 @@
     {% endif %}
   </form>
   <h3>Tagged keepers
-    {{ help_tip("Tagged keepers", "One row per pose. Click to preview every sheet of that stance — arrows step through them. Does not generate.") }}</h3>
+    {{ help_tip("Tagged keepers", "Click a sheet to open it. Arrows and search in the modal walk every visible keeper, not just that pose. Does not generate.") }}</h3>
   {% if class_keepers %}
   <p class="hint" id="tag-breakdown">{{ class_keeper_rows | default([]) | length }} pose{{ "" if (class_keeper_rows | default([]) | length) == 1 else "s" }}
     · {{ class_keepers | length }} sheets
     · clothed {{ class_n_clothed }} · nude {{ class_n_nude }}
     {% if pose_gap %} · this song
     {{ pose_gap.n_covered }}/{{ pose_gap.n_needs }}{% endif %}</p>
-  {% if (class_keeper_rows | default([]) | length) > 8 %}
   <label class="keeper-filter">Filter
     <input type="search" id="keeper-filter" placeholder="standing, cowgirl…"
            autocomplete="off"></label>
-  {% endif %}
   <div class="keeper-rows" id="class-keeper-chips">
     {% for im in class_keeper_rows | default([]) %}
     <button type="button" class="keeper-row js-keeper-preview"
@@ -380,6 +378,10 @@
 <dialog class="lightbox" id="pose-preview">
   <div class="lightbox-bar">
     <strong id="pose-preview-label"></strong>
+    <span class="lightbox-pos muted" id="pose-preview-pos"></span>
+    <label class="keeper-filter keeper-filter-modal">Search
+      <input type="search" id="keeper-modal-filter" placeholder="standing, cowgirl…"
+             autocomplete="off"></label>
     <span class="lightbox-spacer"></span>
     {{ modal_close() }}
   </div>

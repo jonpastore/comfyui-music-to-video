@@ -1517,10 +1517,11 @@ has holes). Song to check sits under the sticky album/tier (no album
 echo in the summary). Tagged keepers are a **3-column card grid**
 (large thumb + pose name + clothed/nude counts). Same file is one card,
 not four chips. Click
-opens `#pose-preview`; **Apply this sheet** writes that path as keeper
+opens `#pose-preview` as a gallery of every visible keeper (arrows and
+`#keeper-modal-filter` walk the grid, not only that pose). **Apply this sheet** writes that path as keeper
 on every ticked album and tier (`POST /api/keepers/apply`) — no second
-copy on disk. Sheet slugs like `pose_71` stay off the label. A filter
-appears once there are more than eight poses. Sidecar basenames resolve
+copy on disk. Sheet slugs like `pose_71` stay off the label. The page
+filter is always on the grid. Sidecar basenames resolve
 through `resolve_image_path` so a live `tense.jpg` gets a `/media/`
 url. Missing chips say `{tier} · {wardrobe} · {pose} · {view}` plus
 a scene count; `unspecified` paints as **pose unset**, not a dump of

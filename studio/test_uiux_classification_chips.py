@@ -142,6 +142,9 @@ def test_uiux_anchors_shows_keeper_chips_and_holes():
     assert album_at != -1 and song_at != -1 and album_at < song_at
     assert 'class="tier-chip' in html
     assert "js-keeper-preview" in html
+    assert 'id="pose-preview"' in html
+    assert 'id="keeper-modal-filter"' in html
+    assert 'id="keeper-filter"' in html
     assert "keeper-row" in html
     assert "Does not generate a new sheet" in html
     assert "No file, no GPU" not in html
@@ -314,6 +317,8 @@ def test_uiux_js_wires_import_and_save():
     assert "js-hole-pick" in js
     assert "js-keeper-preview" in js
     assert 'id === "pose-preview"' in js or "pose-preview" in js
+    assert "keeper-modal-filter" in js
+    assert "flatten" in js or "querySelectorAll(\".js-keeper-preview\")" in js
     assert "holdClosed" in js
     assert "pose unset" in js
     assert "no pose named" not in open(_ANCHORS).read()
