@@ -1480,16 +1480,25 @@ no `href`) so it cannot full-reload; it sets `gap_tier` and ticks that
 generate-form tier. When a chip is `.on`, **Tagged keepers** are that
 tier's chosen sheets (nude thumb when the tier allows it), not the
 album-wide classification dump. Thumbs are eager — lazy-load inside the
-overflow grid painted empty boxes. **Character catalog**
+overflow grid painted empty boxes. Operator actions stay in-page: failed-job
+**Retry** is `data-job-retry` + `api()` (no bare `method=post`
+`/jobs/.../retry` form); pick / clear / delete / upload-pose / roster
+keeper save / rename use `api()` (playlist card still uses htmx). Generate
+is already intercepted (`#anchor-form` → `api("/anchors")`). Nested roster
+and Character-catalog tier tabs stay off while a sticky chip is `.on`.
+Roster warn-tag with a sticky tier reads **G needs N**, not a bare
+`N missing` (`test_roster_badge_says_g_needs_n_when_gap_tier_g`,
+`test_anchors_retry_and_roster_badge_are_in_page`). **Character catalog**
 (`#character-catalog`) is the collapsible gallery and starts **closed**.
 The summary is just the heading — album and tier already live in the
 sticky bar. An empty selected tier says to generate or upload, not a
 blank fold.
 The **Pose catalog** card (`#classification-library`)
 is a collapsed `<details>` (open when the list is empty or the song
-has holes). Album first, then **Song to check**, then **Tier** (R / XXX).
-Tagged keepers are a **3-column card grid** (large thumb + pose name +
-clothed/nude counts). Same file is one card, not four chips. Click
+has holes). Song to check sits under the sticky album/tier (no album
+echo in the summary). Tagged keepers are a **3-column card grid**
+(large thumb + pose name + clothed/nude counts). Same file is one card,
+not four chips. Click
 opens `#pose-preview`; **Apply this sheet** writes that path as keeper
 on every ticked album and tier (`POST /api/keepers/apply`) — no second
 copy on disk. Sheet slugs like `pose_71` stay off the label. A filter

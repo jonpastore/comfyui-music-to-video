@@ -118,9 +118,23 @@ a { color: var(--accent); }
   gap: 0.75rem;
   flex-wrap: wrap;
   padding: 0.45rem 0 0.55rem;
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.55rem;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
+}
+#anchors-root > .card,
+#anchors-root > details.card {
+  margin-bottom: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+#anchors-root .disclose > summary {
+  margin-bottom: 0.35rem;
+}
+#anchors-root #classification-library h3,
+#anchors-root #album-pose-roster h3,
+#anchors-root #generate-pose h3,
+#anchors-root #character-catalog h3 {
+  margin: 0.55rem 0 0.35rem;
 }
 .anchor-scope .scope-album select { max-width: 11rem; }
 .scope-tiers { display: flex; flex-wrap: wrap; gap: 0.35rem; }

@@ -609,13 +609,15 @@ document.addEventListener("click", function (e) {
     var dlg = document.getElementById("rename-char");
     var form = document.getElementById("rename-char-form");
     if (!dlg || !form) return;
-    form.action = rename.getAttribute("data-action") || "";
+    form.setAttribute("action", rename.getAttribute("data-action") || "");
+    form._renameBtn = rename;
     var field = rename.getAttribute("data-field") || "name";
     var input = form.querySelector("input[type=text]");
     if (input) {
       input.name = field;
       input.value = rename.getAttribute("data-name") || "";
       input.maxLength = parseInt(rename.getAttribute("data-max") || "60", 10) || 60;
+      input.setCustomValidity("");
     }
     if (!dlg.open) dlg.showModal();
     if (input) input.focus();
@@ -2024,22 +2026,43 @@ function refreshQueue() {
 // /jobs and the kind on a song page -- so two of the three would have had a
 // real cell overwritten with status text.
 function initJobForms() {
+  function paintJobAction(row, btn, retry, d, err) {
+    var cell = row && (row.querySelector("[data-job-msg]") || row.querySelector("td:nth-child(2)"));
+    if (err) {
+      if (cell) cell.textContent = (retry ? "retry failed: " : "cancel failed: ") + err.message;
+      if (btn) btn.disabled = false;
+      return;
+    }
+    if (cell) cell.textContent = retry ? "re-queued as job #" + d.job_id : "cancelled";
+    if (!retry && row) row.classList.add("job-cancelled");
+    refreshQueue();
+  }
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-job-retry]");
+    if (!btn) return;
+    e.preventDefault();
+    var row = btn.closest("tr");
+    var url = btn.getAttribute("data-job-retry");
+    if (!url) return;
+    btn.disabled = true;
+    api(url, {}).then(function (d) {
+      paintJobAction(row, btn, true, d);
+    }).catch(function (err) {
+      paintJobAction(row, btn, true, null, err);
+    });
+  });
   document.addEventListener("submit", function (e) {
     var form = e.target.closest('form[action^="/jobs/"]');
     if (!form) return;
     e.preventDefault();
     var row = form.closest("tr");
-    var cell = row && (row.querySelector("[data-job-msg]") || row.querySelector("td:nth-child(2)"));
     var btn = form.querySelector("button");
     var retry = /\/retry$/.test(form.getAttribute("action") || "");
     if (btn) btn.disabled = true;
     api(form.action, new FormData(form)).then(function (d) {
-      if (cell) cell.textContent = retry ? "re-queued as job #" + d.job_id : "cancelled";
-      if (!retry && row) row.classList.add("job-cancelled");
-      refreshQueue();          // a retry queues work; a cancel may drain it
+      paintJobAction(row, btn, retry, d);
     }).catch(function (err) {
-      if (cell) cell.textContent = (retry ? "retry failed: " : "cancel failed: ") + err.message;
-      if (btn) btn.disabled = false;      // it did not happen, so let it be tried again
+      paintJobAction(row, btn, retry, null, err);
     });
   });
 }
@@ -3165,6 +3188,55 @@ document.addEventListener("submit", function (e) {
   });
 });
 
+document.addEventListener("submit", function (e) {
+  var form = e.target.closest && e.target.closest(".pose-keeper-form");
+  if (!form) return;
+  if (form.getAttribute("hx-post")) return;
+  e.preventDefault();
+  var btn = form.querySelector('button[type="submit"], button:not([type])');
+  if (btn) btn.disabled = true;
+  var tier = (form.querySelector('[name="tier"]') || {}).value || "";
+  api(form.action, new FormData(form)).then(function (d) {
+    rememberRosterTier(d.tier || tier);
+    var row = form.closest(".pose-roster-row");
+    if (row) {
+      row.classList.toggle("have", !!d.chosen);
+      row.classList.toggle("missing", !d.chosen);
+    }
+  }).catch(function (err) {
+    var row = form.closest(".pose-roster-row");
+    var note = row && row.querySelector(".pose-roster-copy .muted");
+    if (note) note.textContent = "not saved: " + err.message;
+  }).then(function () { if (btn) btn.disabled = false; });
+});
+
+document.addEventListener("submit", function (e) {
+  var form = e.target.closest && e.target.closest("#rename-char-form");
+  if (!form) return;
+  e.preventDefault();
+  var dlg = document.getElementById("rename-char");
+  var btn = form.querySelector('button[type="submit"], button:not([type])');
+  if (btn) btn.disabled = true;
+  var name = (form.querySelector('input[type="text"]') || {}).value || "";
+  var dest = form.getAttribute("action") || "";
+  api(dest, new FormData(form)).then(function () {
+    var tab = form._renameBtn;
+    if (tab && name) {
+      tab.setAttribute("data-name", name);
+      var label = tab.closest(".char-tab-wrap");
+      var cast = label && label.querySelector(".gallery-char-tab");
+      if (cast) cast.textContent = name;
+    }
+    if (dlg && dlg.open) dlg.close();
+  }).catch(function (err) {
+    var input = form.querySelector('input[type="text"]');
+    if (input) {
+      input.setCustomValidity(err.message || "not saved");
+      input.reportValidity();
+    }
+  }).then(function () { if (btn) btn.disabled = false; });
+});
+
 restoreRosterTier();
 
 // T4-21 / T4-23: seed classification_json from the anchors page (no GPU).
@@ -3740,6 +3812,30 @@ function initAnchors() {
           if (b) { b.disabled = p.chosen; b.textContent = p.chosen ? "Chosen" : "Pick"; }
         });
       }).catch(function (err) { say(sec, "Not picked: " + err.message); });
+      return;
+    }
+    if ((form = e.target.closest(".clear-anchor"))) {
+      e.preventDefault();
+      sec = sectionOf(form);
+      var card = form.closest(".candidate");
+      api(form.action, new FormData(form)).then(function () {
+        if (!card) return;
+        card.classList.remove("picked");
+        var actions = card.querySelector(".candidate-actions");
+        if (!actions) return;
+        var id = card.getAttribute("data-anchor");
+        var del = actions.querySelector(".delete-anchor");
+        Array.prototype.slice.call(actions.children).forEach(function (el) {
+          if (!el.classList.contains("delete-anchor")) el.remove();
+        });
+        actions.insertAdjacentHTML("afterbegin",
+          '<form method="post" action="/anchors/' + id + '/pick" class="pick-anchor-form">' +
+          '<button type="submit" class="icon-btn" title="Use as this pose — keeper for this pose at this tier" ' +
+          'aria-label="Use as this pose"><svg viewBox="0 0 16 16" aria-hidden="true">' +
+          '<path fill="none" stroke="currentColor" stroke-width="1.6" d="M3.2 8.1 6.3 11.2 13 4.4"/>' +
+          "</svg></button></form>");
+        if (del) del.removeAttribute("data-chosen");
+      }).catch(function (err) { say(sec, "Not cleared: " + err.message); });
       return;
     }
     if ((form = e.target.closest(".delete-anchor"))) {
