@@ -150,6 +150,19 @@ a { color: var(--accent); }
   font-weight: 700;
   line-height: 1.25;
 }
+.lyrics-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.85rem;
+  margin-top: 0.65rem;
+}
+.lyrics-actions form.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+}
 .tier-board[hidden] { display: none; }
 .scope-tiers { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .tier-chip {

@@ -644,12 +644,12 @@ def test_refs_offers_only_tiers_with_a_storyboard_and_one_review_per_tier():
                         sid)["id"])
         page2 = client.get(f"/songs/{sid}").text
         refs_section = page2.split("Reference images")[1].split('id="fold-review"')[0]
-        assert '<input type="checkbox" name="tier" value="pg13"' in refs_section
-        assert 'value="r"' not in refs_section
+        assert 'name="tier" value="pg13"' in refs_section
+        assert 'data-page-tier="r"' not in refs_section
         # ...and because this album has no chosen anchor, the tier is shown as
         # unusable HERE rather than 400ing one click later inside start_refs
         assert "no anchor for this tier" in refs_section
-        assert "disabled" in refs_section
+        assert "missing" in refs_section
 
         # running the check twice must not list the tier twice
         for note in ("first", "second"):

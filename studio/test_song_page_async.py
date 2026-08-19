@@ -221,9 +221,20 @@ def test_song_page_has_sticky_scope_and_async_tiers():
         assert "hidden" not in r_attr
         xxx_attr = r_page.split('class="tier-board" data-tier="xxx"', 1)[1].split(">", 1)[0]
         assert "hidden" in xxx_attr
+        refs = r_page.split('id="refs"', 1)[1].split('id="fold-review"', 1)[0]
+        r_ref = refs.split('data-page-tier="r"', 1)[1].split(">", 1)[0]
+        assert "hidden" not in r_ref
+        xxx_ref = refs.split('data-page-tier="xxx"', 1)[1].split(">", 1)[0]
+        assert "hidden" in xxx_ref
+        assert 'class="js-page-tier"' in r_page
+        assert '<select name="tier">' not in r_page.split("Video")[1][:2000]
+        assert 'id="fold-gen-audio"' not in r_page
+        assert "lyrics-actions" in r_page
+        assert "Explicit lyrics" in r_page
     js = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
     assert "function selectSongTier" in js
-    assert "history.replaceState" in js.split("function selectSongTier", 1)[1][:800]
+    assert "history.replaceState" in js.split("function selectSongTier", 1)[1][:1200]
+    assert "js-page-tier" in js.split("function selectSongTier", 1)[1][:1200]
     css = open(os.path.join(os.path.dirname(__file__), "static", "style.css")).read()
     assert ".song-scope-id" in css
 

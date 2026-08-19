@@ -2172,6 +2172,12 @@ function initSongPage() {
       d.hidden = !on;
       if (on && !d.open) d.open = true;
     });
+    page.querySelectorAll("[data-page-tier]").forEach(function (el) {
+      el.hidden = el.getAttribute("data-page-tier") !== tier;
+    });
+    page.querySelectorAll("input.js-page-tier").forEach(function (el) {
+      el.value = tier;
+    });
     if (!opts || !opts.skipUrl) {
       var u = new URL(location.href);
       u.searchParams.set("tier", tier);

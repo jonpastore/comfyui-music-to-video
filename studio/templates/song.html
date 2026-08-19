@@ -76,24 +76,28 @@
       <h3>Lyrics</h3>
       <p class="muted">The words, in [Section] blocks. Whisper drafts them; edit freely.
         This is what the storyboard is written from. Edits survive a re-fetch.</p>
-      <form method="post" action="/songs/{{ song.id }}/lyrics" class="stack-form song-async">
+      <form method="post" action="/songs/{{ song.id }}/lyrics" class="stack-form song-async"
+            id="lyrics-form">
         {% from "_macros.html" import versioned_prompt %}
         {{ versioned_prompt("lyrics_text", 16, lyrics_box, "song:" ~ song.id, "song_lyrics") }}
-        <button type="submit">Save lyrics</button>
       </form>
-      <form method="post" action="/songs/{{ song.id }}/explicit" class="header-action song-async">
-        <button type="submit" class="secondary">
-          {{ "Mark clean" if song.explicit else "Mark explicit" }}
-        </button>
-        <span class="muted">Whether the LYRICS are explicit. Never selects or gates a tier.</span>
-      </form>
-      {% if song.mp3_path %}
-      <form method="post" action="/songs/{{ song.id }}/retranscribe" class="stack-form"
-            onsubmit="return confirm('Re-transcribe replaces the current lyrics, including any edits. Continue?');">
-        <p class="hint">{{ lyrics_replace_warning }}</p>
-        <button type="submit" class="secondary">Re-transcribe</button>
-      </form>
-      {% endif %}
+      <div class="lyrics-actions">
+        <button type="submit" form="lyrics-form">Save lyrics</button>
+        <form method="post" action="/songs/{{ song.id }}/explicit" class="inline song-async">
+          <button type="submit" class="secondary">
+            {{ "Mark clean" if song.explicit else "Mark explicit" }}
+          </button>
+          {{ help_tip("Explicit lyrics",
+             "Whether the LYRICS are explicit. Never selects or gates a tier.") }}
+        </form>
+        {% if song.mp3_path %}
+        <form method="post" action="/songs/{{ song.id }}/retranscribe" class="inline song-async"
+              onsubmit="return confirm('Re-transcribe replaces the current lyrics, including any edits. Continue?');">
+          <button type="submit" class="secondary">Re-transcribe</button>
+          {{ help_tip("Re-transcribe", lyrics_replace_warning) }}
+        </form>
+        {% endif %}
+      </div>
     </div>
     <div>
       <h3>Style prompt</h3>
@@ -253,18 +257,16 @@
 </details>
 
 
+{% if takes %}
 <details class="card song-fold" id="fold-gen-audio">
   <summary>
     <h2>Takes</h2>
-    <span class="muted">{% if takes %}{{ takes|length }} take{{ "" if takes|length == 1 else "s" }}{% else %}no takes{% endif %}</span>
+    <span class="muted">{{ takes|length }} take{{ "" if takes|length == 1 else "s" }}</span>
   </summary>
-  <p class="hint">New music is a new song &mdash; use
-    <a href="/media?new=song">Media &rarr; New Song</a>.
-    Replace a span or re-synthesise <em>this</em> track under Edit audio above.
-    Takes already on this song stay here; picking one does not overwrite the
-    uploaded original.</p>
+  <p class="hint">Replace a span or re-synthesise <em>this</em> track under Edit audio.
+    Picking a take does not overwrite the uploaded original. New music is
+    <a href="/media?new=song">Media &rarr; New Song</a>.</p>
 
-  {% if takes %}
   <h3>Takes</h3>
   <table class="list">
     <thead><tr><th>#</th><th>What ran</th><th>Picked</th><th></th></tr></thead>
@@ -298,8 +300,8 @@
     {% endfor %}
     </tbody>
   </table>
-  {% endif %}
 </details>
+{% endif %}
 
 
 <details class="card song-fold" id="fold-storyboard" open>
@@ -350,14 +352,14 @@
   </summary>
   <form method="post" action="/songs/{{ song.id }}/refs" class="song-async">
     {% if storyboards %}
+    <input type="hidden" name="tier" value="{{ page_tier }}" class="js-page-tier">
     <fieldset>
-      <legend>Which rating to generate</legend>
-      <p class="hint">Tick a rating to expand its plates. Pose sheets are album
-        plates, not scene stills.</p>
+      <p class="hint">Pose sheets are album plates, not scene stills. The sticky
+        bar picks the rating.</p>
       {% if pose_plan_by_tier %}
       <ul class="pose-need-line">
         {% for t, pplan in pose_plan_by_tier.items() if pplan %}
-        <li>{{ t | tiername }}
+        <li data-page-tier="{{ t }}" {% if page_tier and t != page_tier %}hidden{% endif %}>{{ t | tiername }}
           · {{ pplan.n_bound }}/{{ pplan.n_scenes }} have a plate
           {% if pplan.n_unbound %}
           · <a href="/anchors?scope_value={{ song.album | urlencode }}">{{ pplan.n_unbound }} missing</a>
@@ -375,14 +377,11 @@
       {% set poses = pose_library_by_tier.get(t, []) %}
       {% set prog = ref_progress_by_tier.get(t) %}
       {% set pplan = pose_plan_by_tier.get(t) %}
-      <div class="tier-ref {% if not anchor %}missing{% endif %}">
+      <div class="tier-ref {% if not anchor %}missing{% endif %}"
+           data-page-tier="{{ t }}"
+           {% if page_tier and t != page_tier %}hidden{% endif %}>
         <div class="tier-ref-head">
-          <label class="check">
-            <input type="checkbox" name="tier" value="{{ t }}"
-                   {% if not anchor %}disabled{% endif %}
-                   {% if anchor and loop.last %}checked{% endif %}>
-            {{ t | tiername }}
-          </label>
+          <strong>{{ t | tiername }}</strong>
           {% if anchor %}
           <a href="/anchors?scope_value={{ song.album | urlencode }}"
              title="identity front for the {{ t }} tier -- click to manage">
@@ -463,9 +462,8 @@
       </div>
       {% endfor %}
     </fieldset>
-    <p class="hint">One still per scene. Tick <strong>XXX</strong> and press
-      Generate refs. Leave Limit at 0 for every scene. Video chops a long
-      scene later; you do not approve those parts.</p>
+    <p class="hint">One still per scene. Leave Limit at 0 for every scene.
+      Video chops a long scene later; you do not approve those parts.</p>
     <label>Limit (0 = all) <input type="number" name="limit" value="0" min="0"></label>
     <button type="submit">Generate refs</button>
     {% else %}
@@ -479,25 +477,21 @@
     <h2>Review &amp; video</h2>
     <span class="muted">{% if reviews %}{{ reviews|length }} sheet{{ "" if reviews|length == 1 else "s" }}{% else %}review not run{% endif %}</span>
   </summary>
-  <form method="post" action="/songs/{{ song.id }}/classify">
-    <label>Tier
-      <select name="tier">
-        {% for t in approved_tiers %}<option value="{{ t }}">{{ t | tiername }}</option>
-        {% else %}<option value="" disabled selected>no approved refs yet</option>
-        {% endfor %}
-      </select>
-    </label>
+  <form method="post" action="/songs/{{ song.id }}/classify" class="song-async">
+    <input type="hidden" name="tier" value="{{ page_tier }}" class="js-page-tier">
     <button type="submit">Check the images</button>
   </form>
   {% for rv in reviews %}
-  <p>
+  <p data-page-tier="{{ rv.tier }}" {% if page_tier and rv.tier != page_tier %}hidden{% endif %}>
     {{ rv.tier | tiername }}: {% if rv.flagged %}<strong>{{ rv.flagged|length }} flagged</strong> --
       {% for f in rv.flagged %}scene {{ f.clip }} ({{ f.issue }}){% if not loop.last %}, {% endif %}{% endfor %}
     {% else %}nothing flagged{% endif %}
     &middot; <button type="button" class="linkish"
         onclick="document.getElementById('sheet-{{ loop.index }}').showModal()">contact sheet</button>
   </p>
-  <dialog class="sheet-modal" id="sheet-{{ loop.index }}">
+  <dialog class="sheet-modal" id="sheet-{{ loop.index }}"
+          data-page-tier="{{ rv.tier }}"
+          {% if page_tier and rv.tier != page_tier %}hidden{% endif %}>
     <div class="modal-bar">
       <strong>{{ rv.tier | tiername }} contact sheet</strong>
       <span>
@@ -514,14 +508,8 @@
   <h2>Video &amp; assemble</h2>
   <form method="post" action="/songs/{{ song.id }}/clips" enctype="multipart/form-data"
         class="stack-form song-async">
+    <input type="hidden" name="tier" value="{{ page_tier }}" class="js-page-tier">
     <div class="field-row">
-      <label>Tier
-        <select name="tier">
-          {% for t in clips_ready_tiers %}<option value="{{ t }}">{{ t | tiername }}</option>
-          {% else %}<option value="" disabled selected>no tier has fully approved refs yet</option>
-          {% endfor %}
-        </select>
-      </label>
       <label>Video model
         <select name="video_model">
           {% for m in video_models %}
@@ -555,22 +543,15 @@
     <p class="hint">Video consumes one approved still per scene. Long scenes
       split and chain on the last frame automatically.
       {% for t, prog in ref_progress_by_tier.items() %}
-      {{ t | tiername }}: {{ prog.approved }}/{{ prog.scenes }} scenes approved
-      {% if not loop.last %} · {% endif %}
+      <span data-page-tier="{{ t }}" {% if page_tier and t != page_tier %}hidden{% endif %}>{{ t | tiername }}: {{ prog.approved }}/{{ prog.scenes }} scenes approved</span>
       {% endfor %}
     </p>
     {% endif %}
   </form>
 
   <form method="post" action="/songs/{{ song.id }}/render" class="stack-form song-async">
+    <input type="hidden" name="tier" value="{{ page_tier }}" class="js-page-tier">
     <div class="field-row">
-      <label>Tier
-        <select name="tier">
-          {% for t in render_tiers %}<option value="{{ t }}">{{ t | tiername }}</option>
-          {% else %}<option value="" disabled selected>no clips rendered yet</option>
-          {% endfor %}
-        </select>
-      </label>
       <label>Crossfade secs <input type="number" step="0.1" name="fade" value="0"></label>
     </div>
     <button type="submit">Assemble &amp; mux</button>
@@ -579,7 +560,9 @@
   {% if renders %}
   <div class="render-grid">
     {% for r in renders %}
-    <article class="render-card" data-render-id="{{ r.id }}">
+    <article class="render-card" data-render-id="{{ r.id }}"
+             data-page-tier="{{ r.tier }}"
+             {% if page_tier and r.tier != page_tier %}hidden{% endif %}>
       <button type="button" class="render-preview"
               onclick="document.getElementById('vid-render-{{ r.id }}').showModal()">
         <video class="lazy-src" data-src="{{ media_url(r.path) }}" preload="none" muted playsinline></video>
@@ -625,6 +608,8 @@
 
 {% for plan in cleanup_plans %}
 <details class="card song-fold cleanup-card" id="cleanup-{{ plan.tier }}"
+         data-page-tier="{{ plan.tier }}"
+         {% if page_tier and plan.tier != page_tier %}hidden{% endif %}
          data-cleanup-tier="{{ plan.tier }}"
          data-cleanup-n-can-delete="{{ plan.n_can_delete }}"
          data-cleanup-n-clips="{{ plan.n_clips }}"

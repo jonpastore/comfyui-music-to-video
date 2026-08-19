@@ -502,8 +502,10 @@ The API meter numbers alone are not this.
 payload (`T2-26`, `T2-27`). The song page itself (`GET /songs/{id}`) keeps album, title, duration,
 and tier chips in a sticky `#song-scope` bar (same chrome as Anchors).
 Chip click loads that board via the existing panel GET — no full page
-submit (`selectSongTier`, `?tier=`). Mark clean / explicit lives under
-Lyrics. The song page (`GET /songs/{id}`) does
+submit (`selectSongTier`, `?tier=`). Refs, review, render, and assemble
+use the chip (hidden `js-page-tier`); leftover tier dropdowns are gone.
+Empty Takes is omitted (Media holds the bag). Lyrics actions sit on
+one row with help tips. Mark clean / explicit lives under Lyrics.
 not full-submit those forms: `initSongPage` posts `Accept: application/json`
 to the same HTML routes (`wants_json`); a job id is watched in place and
 `GET /api/songs/{id}` refreshes cards. A plain form post still 303s.
