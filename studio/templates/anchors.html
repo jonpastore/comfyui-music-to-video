@@ -294,6 +294,9 @@
 {% endfor %}
 <details class="disclose card" id="character-catalog">
 <summary><h2>Character catalog</h2></summary>
+<p class="hint">Generated candidates — pick, clear, delete. Click a sheet to
+  preview. Tagged keepers above is the coverage library those picks feed,
+  not a second catalog.</p>
 {% if page_tier and cat_n.n == 0 %}
 <p class="empty" id="catalog-empty">No sheets at {{ page_tier | tiername }} yet.
   Generate a missing pose above, or upload a plate into this catalog.</p>

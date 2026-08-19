@@ -1507,10 +1507,13 @@ and Character-catalog tier tabs stay off while a sticky chip is `.on`.
 Roster warn-tag with a sticky tier reads **G needs N**, not a bare
 `N missing` (`test_roster_badge_says_g_needs_n_when_gap_tier_g`,
 `test_anchors_retry_and_roster_badge_are_in_page`). **Character catalog**
-(`#character-catalog`) is the collapsible gallery and starts **closed**.
-The summary is just the heading — album and tier already live in the
-sticky bar. An empty selected tier says to generate or upload, not a
-blank fold.
+(`#character-catalog`) is the collapsible **candidate** gallery (pick /
+clear / delete) and starts **closed**. Tagged keepers above is the
+coverage library those picks feed — not a second catalog. Click a
+sheet to open `#anchor-lightbox`. QC copy on a candidate is a fixed
+height with overflow scroll so cards line up. The summary is just the
+heading — album and tier already live in the sticky bar. An empty
+selected tier says to generate or upload, not a blank fold.
 The **Pose catalog** card (`#classification-library`)
 is a collapsed `<details>` (open when the list is empty or the song
 has holes). Song to check sits under the sticky album/tier (no album

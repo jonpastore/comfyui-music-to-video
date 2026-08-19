@@ -56,6 +56,10 @@ def test_qc_tag_button_is_not_a_primary():
         r"button\.qc-tag:hover:not\(:disabled\)[^\{]*\{[^}]+\}", css)
     assert hover, "button.qc-tag hover reset missing"
     assert "transparent" in hover.group(0)
+    card = re.search(r"\.candidate p\.qc-tag\s*\{[^}]+\}", css)
+    assert card, "candidate qc-tag height rule missing"
+    assert "overflow-y: auto" in card.group(0)
+    assert "height:" in card.group(0)
 
 
 def test_clip_preview_has_nav_and_repair_actions():

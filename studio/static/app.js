@@ -3532,6 +3532,15 @@ function initAnchors() {
   }
 
   document.addEventListener("click", function (e) {
+    if (e.target.closest(".candidate-pick, .candidate-actions, .delete-selected, form")) {
+      /* pick / delete / clear keep their own handlers */
+    } else {
+      var cardHit = e.target.closest(".candidate[data-anchor]");
+      if (cardHit && cardHit.querySelector("img.thumb")) {
+        show(cardHit);
+        return;
+      }
+    }
     var img = e.target.closest(THUMB_SEL);
     if (img) { show(img.closest(ITEM_SEL)); return; }
     // backdrop or the close button dismisses; clicking the image itself does not
