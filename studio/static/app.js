@@ -882,7 +882,7 @@ function initNavDrop() {
       closeTimer = setTimeout(function () { closeDrop(drop); }, HOLD_MS);
     });
     trigger.addEventListener("click", function (e) {
-      if (drop.classList.contains("open")) return;
+      if (drop.classList.contains("pinned")) return;
       e.preventDefault();
       clearTimers();
       openDrop(drop, true);

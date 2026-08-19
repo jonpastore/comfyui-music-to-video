@@ -102,6 +102,7 @@ def test_uiux_nav_html_and_json_share_one_list(monkeypatch):
     assert "function initNavDrop" in js
     assert "initNavDrop()" in js
     assert "HOLD_MS = 2000" in js
+    assert 'classList.contains("pinned")' in js
     assert "OPEN_MS = 300" in js
     assert "ArrowDown" in js
     assert "ArrowUp" in js
