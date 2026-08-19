@@ -503,6 +503,34 @@ def test_start_reroll_pinned_plate_skips_empty_map(monkeypatch):
         assert str(bases.get("1") or bases.get(1) or "") == plate
 
 
+def test_generate_images_writes_the_image_prompt_before_enqueue(monkeypatch):
+    """Generate Images used the last saved JSON, not the image box."""
+    monkeypatch.setattr(appmod.pipeline, "reroll",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            RuntimeError("reroll must not run")))
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Flush Still Song", album="Flush Still Album")
+        dest = os.path.join(db.DATA, "pose-plan")
+        os.makedirs(dest, exist_ok=True)
+        plate = os.path.join(dest, f"flush-plate-{song['id']}.png")
+        sheet = _reroll_board(song, plate=plate)
+        pose_plan.bind_scene(song["id"], "xxx", 1, sheet["id"])
+        jp = os.path.join(db.DATA, "storyboards", song["slug"],
+                          f"{song['slug']}_xxx.json")
+        want = "standing in the wet alley, feline muzzle, yellow slit pupils"
+        r = client.post(
+            f"/songs/{song['id']}/reroll",
+            data={"tier": "xxx", "clip_idx": "0", "n": "1",
+                  "image_prompt": want, "negative_prompt": "human nose"},
+            headers={"Accept": "application/json"}, follow_redirects=False)
+        assert r.status_code == 200, r.text
+        assert r.json().get("kind") == "reroll"
+        saved = json.load(open(jp))
+        assert saved["scenes"][0]["image_prompt"] == want
+        assert saved["scenes"][0]["negative_prompt"] == "human nose"
+        assert saved["scenes"][0]["image_prompt"] != "alley"
+
+
 def test_start_refs_freezes_pose_bases(monkeypatch):
     """Empty scene_pose_map refuses refs; freeze_auto_binds is gone, not a fallback."""
     assert not hasattr(pose_plan, "freeze_auto_binds")
@@ -1089,7 +1117,7 @@ def test_bind_route_json_reports_source():
         assert "media-strip scene-clips" in page
         assert "When does S2V happen?" in page
         assert "WAN S2V is a later hop" not in page or "data-help=" in page
-        assert ">Reroll<" in page
+        assert ">Generate Images<" in page
         assert "What to change" in page
         assert 'class="reroll-form reroll-bar"' in page
         assert "js-pose-open thumb-open" in page

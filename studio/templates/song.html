@@ -2,7 +2,6 @@
 {% from "_macros.html" import modal_close %}
 {% block content %}
 <div id="song-page" data-song-id="{{ song.id }}">
-<div id="song-status" class="job-status" hidden></div>
 <h1>{{ song.title }} {% if song.explicit %}<span class="tag explicit">EXPLICIT</span>{% endif %}</h1>
 <p class="meta">{{ song.album or "" }}
    {% if song.genre %}&middot; {{ song.genre }}{% if song.subgenre %} / {{ song.subgenre }}{% endif %}{% endif %}

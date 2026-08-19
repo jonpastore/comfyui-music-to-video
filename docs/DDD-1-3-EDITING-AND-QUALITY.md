@@ -704,8 +704,8 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    `afterSwap` reads the live `#job-chip`). Render clip plants the same cards in
    `.media-strip.scene-clips` (`paintClipPlaceholders`) and calls
    `refreshQueue()` so an idle chip starts polling. Scene-row Render clip
-   copies the motion/negative textareas into the POST and writes them
-   before enqueue so the box on screen is what LTX sees. `#clip-preview`
+   and Generate Images copy scene text into the POST (Save Scene first)
+   so the boxes on screen are what Qwen/LTX see. `#clip-preview`
    walks the clicked `.scene-clips` strip (`thumbs(fromEl)`), not every
    `data-video` on the page. A leftover
    shimmer is cleared when that clip job is done/failed/cancelled

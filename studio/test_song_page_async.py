@@ -551,7 +551,9 @@ def test_song_page_js_intercepts_forms():
     assert "new FormData(form)" in src
     assert "api(dest, fd)" in src
     assert 'form.classList.contains("clip-bar")' in src
-    assert 'fd.set(name, ta.value)' in src
+    assert 'form.classList.contains("reroll-bar")' in src
+    assert 'fd.set(name, el.value)' in src
+    assert "saving scene" in src
 
 
 # High-traffic song actions that must not bare-POST a full reload.
@@ -594,6 +596,7 @@ def test_song_page_high_traffic_forms_are_song_async():
     assert "function initSongPage(" in src
     assert "new FormData(form)" in src
     assert "api(dest, fd)" in src
+    assert 'form.classList.contains("reroll-bar")' in src
 
 
 def test_scene_reroll_and_approve_are_song_async():

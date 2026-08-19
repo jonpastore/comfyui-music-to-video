@@ -2212,16 +2212,21 @@ function initSongPage() {
       if (nField && verSel) nField.value = verSel.value;
     }
     var fd = new FormData(form);
-    if (form.classList.contains("clip-bar")) {
+    var go = Promise.resolve();
+    if (form.classList.contains("clip-bar") || form.classList.contains("reroll-bar")) {
       var sceneEl = form.closest(".scene");
-      if (sceneEl) {
-        ["video_motion_prompt", "negative_prompt"].forEach(function (name) {
-          var ta = sceneEl.querySelector('textarea[name="' + name + '"]');
-          if (ta) fd.set(name, ta.value);
-        });
+      var sceneForm = sceneEl && sceneEl.querySelector("form.scene-form");
+      ["image_prompt", "video_motion_prompt", "negative_prompt", "story",
+       "camera", "lighting", "motion", "pose"].forEach(function (name) {
+        var el = sceneEl && sceneEl.querySelector('[name="' + name + '"]');
+        if (el && el.value != null) fd.set(name, el.value);
+      });
+      if (sceneForm) {
+        if (note) say2(note, "saving scene…");
+        go = api(sceneForm.getAttribute("action"), new FormData(sceneForm));
       }
     }
-    api(dest, fd)
+    go.then(function () { return api(dest, fd); })
       .then(function (d) {
         if (d.deleted != null && form.classList.contains("delete-song")) {
           location.href = "/";

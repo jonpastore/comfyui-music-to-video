@@ -8629,7 +8629,15 @@ MAX_REROLL_N = 16
 def start_reroll(request: Request, id: int, tier: str = Form(...), clip_idx: List[int] = Form(...),
                   note: str = Form(""), n: int = Form(4),
                   seed_min: int = Form(8000), seed_max: int = Form(11000),
-                  step: str = Form("equal")):
+                  step: str = Form("equal"),
+                  image_prompt: Optional[str] = Form(None),
+                  video_motion_prompt: Optional[str] = Form(None),
+                  negative_prompt: Optional[str] = Form(None),
+                  story: Optional[str] = Form(None),
+                  camera: Optional[str] = Form(None),
+                  lighting: Optional[str] = Form(None),
+                  motion: Optional[str] = Form(None),
+                  pose: Optional[str] = Form(None)):
     """note: what to change about these clips.
 
     A bare re-roll is four new seeds on the same prompt -- a blind gamble that
@@ -8690,6 +8698,18 @@ def start_reroll(request: Request, id: int, tier: str = Form(...), clip_idx: Lis
             + " first — Reroll uses that plate, not an auto match")
     if not pose_bases:
         raise HTTPException(400, "no valid scene stills given")
+    flush = _scene_flush_updates(
+        image_prompt=image_prompt, video_motion_prompt=video_motion_prompt,
+        negative_prompt=negative_prompt, story=story, camera=camera,
+        lighting=lighting, motion=motion, pose=pose)
+    if flush:
+        seen = []
+        for i in idxs:
+            sn = _clip_scene_number(song, tier, i)
+            if sn is None or sn in seen:
+                continue
+            seen.append(sn)
+            _flush_scene_fields(sb, song, tier, int(sn), flush)
     jid = jobs.enqueue("reroll", {"song_id": id, "tier": tier, "clip_indices": idxs, "note": note,
                              "pose_bases": pose_bases,
                              "n": n, "seed_min": int(seed_min), "seed_max": int(seed_max),
@@ -8850,24 +8870,33 @@ async def save_driving_video(upload, dest_dir, prefix):
     return dest
 
 
-def _flush_scene_clip_prompts(row, song, tier, num, motion, negative):
-    """Write the on-screen motion/negative into the board before enqueue.
+SCENE_FLUSH_FIELDS = (
+    "image_prompt", "video_motion_prompt", "negative_prompt",
+    "story", "camera", "lighting", "motion", "pose",
+)
 
-    Render clip is a different form from Save Scene. The textarea is bound to
-    scene-form-N, so a click on Render clip used to send the last saved JSON
-    and ignore what was in the box.
+
+def _scene_flush_updates(**fields):
+    return {k: v for k, v in fields.items()
+            if k in SCENE_FLUSH_FIELDS and v is not None}
+
+
+def _flush_scene_fields(row, song, tier, num, updates):
+    """Write on-screen scene text into the board JSON before enqueue.
+
+    Generate Images / Render clip are not the Save Scene form. Without this,
+    LTX and Qwen used the last saved JSON and ignored the boxes.
     """
+    if not updates:
+        return False
     sb = load_storyboard(row, normalized=False)
     scene = next((s for s in sb.get("scenes", []) if s.get("scene_number") == num), None)
     if scene is None:
         raise HTTPException(404, f"no scene {num} in this storyboard")
     changed = False
-    pairs = []
-    if motion is not None:
-        pairs.append(("video_motion_prompt", motion))
-    if negative is not None:
-        pairs.append(("negative_prompt", negative))
-    for field, raw in pairs:
+    for field, raw in updates.items():
+        if field not in SCENE_FLUSH_FIELDS:
+            continue
         value = (raw or "").strip()
         if len(value) > MAX_SCENE_FIELD:
             raise HTTPException(
@@ -8898,8 +8927,14 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
                        scene: str = Form(""),
                        clip_idx: str = Form(""),
                        head_only: bool = Form(False),
+                       image_prompt: Optional[str] = Form(None),
                        video_motion_prompt: Optional[str] = Form(None),
                        negative_prompt: Optional[str] = Form(None),
+                       story: Optional[str] = Form(None),
+                       camera: Optional[str] = Form(None),
+                       lighting: Optional[str] = Form(None),
+                       motion: Optional[str] = Form(None),
+                       pose: Optional[str] = Form(None),
                        ref_motion: Optional[UploadFile] = File(None),
                        control_video: Optional[UploadFile] = File(None)):
     song = get_song_or_404(id)
@@ -8935,10 +8970,12 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
         hit = next((p for p in plan0 if int(p.get("clip_idx")) == only_idx), None)
         if hit is not None:
             scene_num = hit.get("scene_number")
-    if scene_num is not None and (
-            video_motion_prompt is not None or negative_prompt is not None):
-        _flush_scene_clip_prompts(
-            sb, song, tier, scene_num, video_motion_prompt, negative_prompt)
+    flush = _scene_flush_updates(
+        image_prompt=image_prompt, video_motion_prompt=video_motion_prompt,
+        negative_prompt=negative_prompt, story=story, camera=camera,
+        lighting=lighting, motion=motion, pose=pose)
+    if scene_num is not None and flush:
+        _flush_scene_fields(sb, song, tier, scene_num, flush)
         board = load_storyboard(sb)
     approved_sns = {r["scene_number"] for r in
                     db.q("""SELECT scene_number FROM refs

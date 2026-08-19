@@ -251,8 +251,9 @@
             <option value="fib">fibonacci</option>
           </select>
         </label>
-        <button type="submit">Reroll</button>
+        <button type="submit">Generate Images</button>
         <span class="save-note" aria-live="polite"></span>
+        <p class="hint">saves unsaved scene text, then queues</p>
         <p class="hint js-seed-plan" aria-live="polite"></p>
       </form>
       {% endif %}
@@ -279,7 +280,7 @@
             {% if r.refs[0].stale %}
             <button type="button" class="tag warn-tag help-tip"
                     data-label="Stale"
-                    data-help="This still landed before the last Save Scene. Pose, story, or image prompt changed after it was rendered. Reroll or generate new stills from the current scene text. Approving it still uses this old picture as the clip start frame."
+                    data-help="This still landed before the last Save Scene. Pose, story, or image prompt changed after it was rendered. Generate Images from the current scene text. Approving it still uses this old picture as the clip start frame."
                     title="This still is older than the last Save Scene">stale</button>
             {% endif %}
             {% if ref_flags and ns.head is not none and ref_flags.get(ns.head) %}
@@ -292,7 +293,7 @@
             {% if origin in ("gen", "reroll", "refine", "face", "inpaint", "outpaint") %}
             <button type="button" class="tag help-tip"
                     data-label="{{ origin }}"
-                    data-help="{% if origin == 'reroll' %}This candidate came from Reroll, not the first generate.{% elif origin == 'refine' %}A refine pass on an existing still.{% elif origin == 'face' %}Face fix on an existing still.{% elif origin == 'inpaint' %}Inpaint on an existing still.{% elif origin == 'outpaint' %}Outpaint on an existing still.{% else %}First generate for this scene.{% endif %}"
+                    data-help="{% if origin == 'reroll' %}This candidate came from Generate Images, not the first generate.{% elif origin == 'refine' %}A refine pass on an existing still.{% elif origin == 'face' %}Face fix on an existing still.{% elif origin == 'inpaint' %}Inpaint on an existing still.{% elif origin == 'outpaint' %}Outpaint on an existing still.{% else %}First generate for this scene.{% endif %}"
                     title="How this still was made">{{ origin }}</button>
             {% endif %}
             {% set q = c | qctag %}
@@ -372,7 +373,7 @@
             <input type="checkbox" name="auto_qc" value="true">
             Auto QC after</label>
           <button type="submit">Render clip</button>
-          <span class="hint">saves the motion box, then queues</span>
+          <span class="hint">saves unsaved scene text, then queues</span>
           <button type="button" class="icon-btn help-tip"
                   title="When does S2V happen?"
                   aria-label="When does S2V happen?"

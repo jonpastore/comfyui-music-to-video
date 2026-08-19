@@ -2108,7 +2108,7 @@ def test_approve_grid_groups_by_scene_and_puts_seed_above_the_name():
         assert 'name="image_prompt"' in page
         assert "17000" in page
         assert 'class="tag">pose-library scene 1 Alley Invitation' not in page
-        assert ">Reroll<" in page
+        assert ">Generate Images<" in page
         assert "What to change" in page
         assert "Scene 1" in page or "1. Alley Invitation" in page
         assert "Part 1" not in page
