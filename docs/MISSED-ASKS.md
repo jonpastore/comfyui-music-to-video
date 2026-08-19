@@ -43,6 +43,8 @@ so `/media` is not 403.
   keeper save / rename stay on the page via `api()` (or htmx on the
   playlist card). Roster badge names the sticky tier (**G needs N**).
   Pose catalog drops the album/tier echo already in `#anchor-scope`.
+- Song-page QC chips (P0-4): `#fold-qc` expandable `.finding-chip`
+  pills; high-traffic song POSTs are `.song-async` + `initSongPage`.
 
 ## Open — do these, do not recommend them
 
@@ -76,9 +78,16 @@ so `/media` is not 403.
    the actor (character_id / actors stamp). Untagged random uploads
    are not image1. Offer delete on the wrong one.
 
-4. **Song-page QC chips.**
-   Playwright only hit `/qc` (small pills). The huge blue boxes were
-   on a song with clip findings. Exercise a song that has findings.
+4. **Song-page QC chips.** **built**
+   Song `#fold-qc` lists expandable `.finding-chip` pills (check /
+   verdict / class); open body has measured + remedy + Approve
+   (`secondary btn-sm`). Full `finding-row` cards stay on `/qc`.
+   High-traffic song actions (lyrics / style / refs / clips / render /
+   QC / reroll / still approve) are `.song-async` under `#song-page`;
+   `initSongPage` posts `Accept: application/json` (no full reload).
+   Tests: `test_song_page_high_traffic_forms_are_song_async`,
+   `test_scene_reroll_and_approve_are_song_async`,
+   `test_song_page_qc_findings_are_expandable_chips_not_cards`.
 
 ### P1 — asked, deferred with a speech
 
