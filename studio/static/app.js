@@ -4991,6 +4991,37 @@ document.addEventListener("click", function (e) {
   });
 })();
 
+document.addEventListener("change", function (e) {
+  var sel = e.target.closest && e.target.closest("#t2i-model");
+  if (!sel) return;
+  var opt = sel.options[sel.selectedIndex];
+  var base = opt && opt.getAttribute("data-civitai-base");
+  var input = document.getElementById("civitai-base");
+  if (base && input) input.value = base;
+});
+
+document.addEventListener("submit", function (e) {
+  var form = e.target.closest && e.target.closest("form.js-media-gen");
+  if (!form) return;
+  if (form.hasAttribute("hx-post") || form.hasAttribute("hx-get")) return;
+  e.preventDefault();
+  var btn = e.submitter || form.querySelector("button[type=submit], button:not([type])");
+  if (btn) btn.disabled = true;
+  var note = form.querySelector(".save-note");
+  if (note) say2(note, "queueing…");
+  api(form.getAttribute("action"), new FormData(form)).then(function (d) {
+    if (btn) btn.disabled = false;
+    var jid = d.job_id || (d.job_ids && d.job_ids[0]);
+    var msg = jid ? ("queued #" + jid) : "queued";
+    if (d.song_id) msg += " · song #" + d.song_id;
+    if (note) say2(note, msg);
+    if (typeof refreshQueue === "function") refreshQueue();
+  }).catch(function (err) {
+    if (btn) btn.disabled = false;
+    if (note) say2(note, err.message || "failed", true);
+  });
+});
+
 function syncT2iDelete(row) {
   if (!row) return;
   var n = row.querySelectorAll(".js-t2i-select:checked").length;

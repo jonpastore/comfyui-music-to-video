@@ -21,6 +21,7 @@ def test_media_page_and_nav():
         assert song.status_code == 200, song.text
         assert 'action="/media/songs"' in song.text
         assert 'action="/media/images"' not in song.text
+        assert "js-media-gen" in song.text
         image = client.get("/media", params={"new": "image"})
         assert image.status_code == 200, image.text
         assert 'action="/media/images"' in image.text
@@ -28,8 +29,21 @@ def test_media_page_and_nav():
         assert 'name="style_lora"' in image.text
         assert 'id="civitai-loras"' in image.text
         assert "/models/civitai" in image.text
-        assert "no studio graph" in image.text
-        assert "flux2_t2i" in image.text
+        assert 'id="t2i-model"' in image.text
+        assert 'id="t2i-model-hint"' in image.text
+        assert "Runnable: Qwen-Image-Edit 2511" in image.text
+        assert 'value="qwen_t2i"' in image.text
+        assert 'name="base"' in image.text and 'value="Qwen"' in image.text
+        assert "js-media-gen" in image.text
+        assert 'hx-get="/media/loras"' in image.text
+        # Honest picker: no parked Flux / Krea / Z-Image option values.
+        assert 'value="flux2_t2i"' not in image.text
+        assert 'value="z_image_t2i"' not in image.text
+        assert 'value="krea' not in image.text.lower()
+        assert "disabled" not in image.text.split('id="t2i-model"')[1].split("</select>")[0]
+        # Selected runnable option is Qwen t2i.
+        assert 'value="qwen_t2i"' in image.text
+        assert "selected" in image.text.split('id="t2i-model"')[1].split("</select>")[0]
         home = client.get("/")
         assert 'href="/media"' in home.text
         assert ">Media<" in home.text
@@ -49,6 +63,37 @@ def test_media_page_and_nav():
         crumb_s = client.get("/media", params={"new": "song"})
         assert "Media / Songs" in crumb_s.text
         assert 'class="current"' in crumb.text
+
+
+def test_new_image_picker_excludes_unwired_and_selects_qwen():
+    """Mutation: putting a disabled flux option back → red."""
+    with TestClient(appmod.app) as client:
+        image = client.get("/media", params={"new": "image"})
+        assert image.status_code == 200, image.text
+        html = image.text
+        # Only T2I_WIRED keys appear as <option value=…>.
+        import re
+        values = re.findall(
+            r'<select[^>]*id="t2i-model"[^>]*>(.*?)</select>',
+            html, re.S)
+        assert values, "t2i-model select missing"
+        opts = re.findall(r'<option[^>]*value="([^"]*)"', values[0])
+        assert opts, "no model options"
+        for v in opts:
+            assert v in appmod.models.T2I_WIRED, v
+            assert v not in ("flux2_t2i", "z_image_t2i", "krea_t2i")
+        assert "qwen_t2i" in opts
+        sel = re.search(
+            r'<option[^>]*value="qwen_t2i"[^>]*>', values[0])
+        assert sel and "selected" in sel.group(0)
+        # Civitai form present with Qwen base default.
+        assert 'id="civitai-loras"' in html
+        assert 'id="civitai-base"' in html
+        assert 'value="Qwen"' in html
+        loras = client.get("/media/loras", params={"model": "qwen_t2i"})
+        assert loras.status_code == 200
+        assert 'id="style-lora-select"' in loras.text
+        assert 'name="style_lora"' in loras.text
 
 
 def test_new_song_enqueues_as_new_song(monkeypatch):

@@ -88,10 +88,13 @@ so `/media` is not 403.
    plan for `n` candidates, or enqueue `n` jobs from the plan.
    Do not leave a second seed UI that does not drive the renderer.
 
-6. **New Image model dropdown.**
-   Hide unwired rows (Flux 2, Z-Image, Krea). A disabled "on disk ·
-   no studio graph" is a fake picker. Wiring Flux 2 is its own graph
-   slice.
+6. **New Image model dropdown.** ✅
+   Honest picker: only `T2I_WIRED` + available (`qwen_t2i` /
+   `qwen_artwork`). Hint under the select names Flux-on-disk / Krea-not-
+   installed. Civitai `base` defaults to Qwen and follows the model
+   select; Style LoRA refreshes via `GET /media/loras`. Generate uses
+   fetch (no full reload). `test_media_create.py`. Wiring Flux 2 stays
+   its own graph slice.
 
 7. **`/media` landing.**
    Keep the two-card chooser. Recent Images stays on New Image.

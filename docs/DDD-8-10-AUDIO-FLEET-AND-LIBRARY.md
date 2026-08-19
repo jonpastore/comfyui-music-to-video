@@ -140,9 +140,11 @@ is the chooser. New Song is `/media?new=song` (`POST /media/songs` → song
 row + `audio` job with `as_new_song`). New Image is `/media?new=image`
 (`POST /media/images` → `t2i` job on `T2I_WIRED` Qwen; album look
 retrieved into the prompt; optional `style_lora`; lands `assets.kind=t2i`).
-Parked Flux 2 / Z-Image are listed disabled. Civitai search/download is
-the same `/models/civitai` as the Models page. Recent images multi-select
-delete is `POST /media/images/delete`. It does not replace T8-16.
+Picker options are only wired+available keys (no disabled Flux / Z-Image
+rows); a hint names Flux-on-disk and Krea-not-installed. Civitai
+search/download is the same `/models/civitai` as the Models page, with
+`base` from the selected model. Recent images multi-select delete is
+`POST /media/images/delete`. It does not replace T8-16.
 
 ## 3. TRD-9 — testing what already works
 
