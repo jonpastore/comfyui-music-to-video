@@ -820,14 +820,12 @@ purpose appear with no template change
 (`test_t2_33_picker_renderable.py`). Mutation: call `renderable()` and
 discard it, or post-filter to a stale list → the probe is absent.
 
-`T2-34` is **built**. The song page's clip-pass picker sets each
-wired model's `available` from `models.available_on_fleet` (True if
-`where()` has a confirmed box, False if every reachable backend
-answered and lacks it, None if no box could be asked).
-`song.html` disables `available is false` and still offers True /
-None. Mutation: copy `catalog()['available']` → a model this box
-does not mark False is offered. Mutation: disable every option →
-the confirmed arm fails (`test_t2_34_unavailable_shown.py`).
+`T2-34` is **built**. `available_on_fleet` is three-valued. GET
+`/songs/{id}` does not call it — `/object_info` is 10s per dead box
+and made the page 22s cold. The picker offers every wired model
+(`available` None). False-on-fleet is `T2-45` at enqueue
+(`test_t2_34_unavailable_shown.py`,
+`test_song_page_does_not_probe_the_fleet`).
 
 `T2-26` is **built**. `GET /api/songs/{id}/storyboard/{tier}` includes
 `anchors`: one group per character with `character`, `character_id` and

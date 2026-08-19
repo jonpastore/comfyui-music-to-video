@@ -464,10 +464,10 @@ order and take the dependencies from here.
    not say "Pacing matches the track" or "stretched or compressed";
    hint names fill-the-track regenerate/`duration_guidance` edit or
    scene-scoped Render clip (`test_t2_13e_meter_copy.py`).
-   **`T2-34` built**: the
-   clip-pass picker marks a model `where()` says False on every
-   reachable backend as unavailable and still offers a confirmed one
-   (`test_t2_34_unavailable_shown.py`). **`T2-17` built**:
+   **`T2-34` built**: `available_on_fleet` is three-valued. The song-page
+   clip picker does not probe the fleet on GET (that was the 22s hang);
+   `T2-45` refuses a False-on-fleet mixed song at enqueue
+   (`test_t2_34_unavailable_shown.py`, `test_song_page_does_not_probe_the_fleet`). **`T2-17` built**:
    `GET /api/songs/{id}/storyboard/{tier}` returns the generation prompt
    defaulted from the tier (`storyboard_generation_payload`); POST accepts
    an edit. The song-page Generate control is the same enqueue over

@@ -650,10 +650,11 @@ Every place a model is chosen shows what the candidates are FOR, from
 
 - `T2-33` The model picker reads `models.renderable(role)`, so a model added to
   the catalogue appears without a UI change.
-- `T2-34` A model that is catalogued but unavailable on every reachable backend
-  is shown as unavailable rather than offered. `models.where()` answers this, and
-  since 2026-08-12 it distinguishes "no box has it" from "no box could be asked"
-  — `available is False` is a refusal, `available is None` is a candidate.
+- `T2-34` `models.available_on_fleet` is three-valued (`where()` True / False /
+  None). GET `/songs/{id}` does **not** call Swarm or `/object_info` to disable
+  picker options — that wait is 10s per dead box and was 22s TTFB on
+  `/songs/32`. Wired models are offered as candidates (`available` None). A
+  model False on every reachable backend is refused at clip enqueue (`T2-45`).
 - `T2-35` **Every file the installed loaders enumerate is either catalogued or
   explicitly listed in `models.IGNORED` with a reason.** BUILT 2026-08-13.
   Measured live rather than quoted: cerberus enumerates **36 files across the
@@ -785,7 +786,7 @@ timing — `clip_chain_plan` is the one the operator and renderer share.
 | `T2-7` provenance recorded | assert the recorded model equals the model that was ASKED for, and the timestamp lies between the call's start and end. Fields that merely exist can hold anything |
 | `T2-18` limits in the response | assert the returned limit is the one ENFORCED: submit text one character over it and confirm the refusal quotes the same number |
 | `T2-33` picker reads `renderable()` | add a model to the catalogue and assert it APPEARS without a UI change; a picker that calls the function and discards it passes otherwise |
-| `T2-34` unavailable shown as unavailable | paired positive: an AVAILABLE model is offered. Marking everything unavailable satisfies the negative half alone |
+| `T2-34` unavailable shown as unavailable | GET does not disable from a live fleet probe (that was the 22s hang). Enqueue `T2-45` is the refusal. `available_on_fleet` still has True/False/None |
 | `T2-36` help text carried | assert a control with no help text is absent from the payload rather than present-and-empty, and that warnings are marked distinctly from notes |
 | `T2-16` multi-song apply | with confirmation it writes to exactly the songs confirmed, asserted by count |
 | `T2-37` arc in the playlist payload | assert a playlist WITHOUT an arc omits the field, so "always present" cannot pass for it |
@@ -888,7 +889,7 @@ current.
 | **`T2-23` API reports scene time vs song length and flags a miss** | **built** | `scene_time_report` | `GET /api/songs/{id}/storyboard/{tier}/meter` returns `scene_time`, `song_length`, `tolerance` (`SCENE_TIME_TOLERANCE` = 0.15 of song length) and `mismatch`. 120s of guidance on a 120s song is not flagged; 20s on the same song is. Mutation: always return the numbers, never set `mismatch` → miss arm red. Mutation: always set `mismatch` → match arm red. The live `meter` component and `T2-25` are not this |
 | **`T2-24` meter reports this song's `clip_seconds`** | **built** | `api_storyboard_meter` | `GET .../meter` returns `clip_seconds` from `build_song.clip_seconds(scene_seconds)`, not `CHUNK`. Same song at 15 s and 30 s yields two lengths. Mutation: hardcode 4.8125 → both arms equal. Mutation: return raw `scene_seconds` → 15.0 is not the legal 8n+1 length. The live `meter` component and `T2-25` are not this |
 | **`T2-33` picker reads `renderable()`** | **built** | `test_t2_33_picker_renderable.py` | add a catalogue model with a cli and it appears in `GET /songs/{id}` video_model options with no template change; option values match `models.renderable("video").values()`. Mutation: hardcode s2v+i2v+ltx → the probe cli is absent |
-| **`T2-34` unavailable shown as unavailable** | **built** | `available_on_fleet` | clip-pass picker takes `models.available_on_fleet` (a fold of `where()`): False on every reachable backend disables the option; a confirmed model is still offered (`test_t2_34_unavailable_shown.py`). Empty backends are None, not False. Mutation: copy `catalog()['available']` → a model this box does not mark False is offered. Mutation: disable every option → available arm red |
+| **`T2-34` unavailable is a fleet fact, not a page-load probe** | **built** | `available_on_fleet` | `available_on_fleet` stays three-valued (`test_t2_34_available_on_fleet_is_three_valued`). GET `/songs/{id}` does not call `swarm_backends` / `_object_info` / `available_on_fleet` (`test_song_page_does_not_probe_the_fleet`, `test_t2_34_picker_does_not_probe_the_fleet_on_get`). Picker offers every wired model. Mutation: GET waits on object_info → red. Enqueue refusal is `T2-45` |
 | **`T2-25` refuse scene-time mismatch before clips enqueue** | **built** | `test_t2_25_scene_time_enqueue.py` | Bare `POST /songs/{id}/clips` 400s and writes no clips job when `scene_time_report` is a miss (20 s of guidance on a 120 s song); in-tolerance still 303s. Scene-scoped `scene=` / `clip_idx=` (Render clip) skips the refuse, matching `build_song --only` / T2-13e (`test_t2_25_scene_scoped_skips_mismatch_refuse`). Mutation: only flag on GET /meter → miss arm red. Mutation: always refuse → match arm red. Mutation: scene-scoped still refuse → seam arm red |
 | **`T2-15` proposal is not saved until accepted** | **built** | `test_t2_15_arc_proposal.py` | Previous arc on disk; `POST .../arc/propose` leaves that file byte-identical; `POST .../arc/reject` leaves it byte-identical; `POST .../arc` replaces the premise. Mutation: propose writes → propose arm red. Mutation: reject overwrites or deletes → reject arm red. Mutation: accept does not write → accept arm red |
 | **`T2-27` each scene JSON carries its reference image** | **built** | `_scene_json` | `GET /api/songs/{id}/storyboard/{tier}` `scenes[]` include `refs` next to `image_prompt` / `story` / `video_motion_prompt`: per-clip `idx` / `path` / `url` (latest candidate) plus `candidates[]`. Scene A does not carry scene B's still. Another tier stays out. Mutation: omit `refs` on the scene → red. Mutation: top-level refs only → red. Mutation: copy another scene's still onto this scene → red. `studio/test_t2_27_scene_refs.py` |

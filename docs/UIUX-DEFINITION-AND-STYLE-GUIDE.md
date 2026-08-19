@@ -768,9 +768,10 @@ on click so a slow first byte is not a blank window
 (`test_playlists_page_is_summaries_until_the_card_loads`).
 The song page **Video model** select is `models.renderable("video")`
 with each option's purpose in the hint (`T2-33`). Adding a catalogue
-entry with a `cli` appears there with no template change. A model
-`where()` says False on every reachable backend is shown disabled,
-not offered; a confirmed model stays selectable (`T2-34`).
+entry with a `cli` appears there with no template change. GET does
+not live-probe the fleet to disable options (`T2-34` — that wait
+was 10s per dead box). A model False on every reachable backend is
+refused at enqueue (`T2-45`).
 A scene may name its own `video_model` beside `camera` (`T2-42`,
 `T2-43`) as a renderer pin. The lip-sync fact is `needs_lip_sync`
 beside camera, not instead of it (`T2-55` **built**,
@@ -1179,10 +1180,11 @@ The middle and the right one must never look the same. "Nobody could ask the
 sleeping gaming PC" and "peaches does not have this model" are different
 sentences and the operator acts differently on each.
 
-The song page's clip-pass picker uses the same three values (`T2-34`):
-`where()` False on every reachable backend is a disabled option
-(shown, not offered); a confirmed model stays selectable. Unknown
-(`None`) stays a candidate, not a refusal.
+The song page's clip-pass picker does not live-probe the fleet on GET
+(`T2-34`). Wired options stay candidates (`available` None). Enqueue
+still refuses a model False on every reachable backend (`T2-45`). The
+three values remain the catalogue / `/models` vocabulary; they are
+not a 22s page-load tax.
 
 ### 7a.3 A control the backend cannot honour is marked, never inert
 

@@ -4,6 +4,8 @@ The page must not full-submit to wait on Grok. Same routes as the HTML
 forms; Accept: application/json is the fetch path (wants_json).
 """
 import os
+import re
+import time
 
 import httpx
 from fastapi.testclient import TestClient
@@ -11,6 +13,7 @@ from fastapi.testclient import TestClient
 import app as appmod
 import db
 import jobs
+import models
 from conftest import _real_module
 from test_app import _upload_song
 
@@ -80,6 +83,49 @@ def test_list_models_is_cached_and_not_a_120s_wait(monkeypatch):
     assert real.list_models() == ["grok-4.5"]
     assert hits["n"] == 1
     real._models_cache["ids"] = None
+
+
+def test_list_models_wait_false_does_not_block(monkeypatch):
+    """GET /songs uses wait=False so a cold xAI hop cannot own TTFB."""
+    real = _real_module("grok")
+    assert real is not None, "grok.py failed to import"
+    real._models_cache["ids"] = None
+    real._models_cache["at"] = 0.0
+
+    def fake_get(*_a, **_k):
+        raise RuntimeError("wait=False must not call /models on the request thread")
+
+    monkeypatch.setattr(real, "_api_key", lambda: "sk-test")
+    monkeypatch.setattr(real.httpx, "get", fake_get)
+    t0 = time.monotonic()
+    assert real.list_models(wait=False) == []
+    assert time.monotonic() - t0 < 0.5
+    real._models_cache["ids"] = ["grok-4.5"]
+    real._models_cache["at"] = 0.0
+    assert real.list_models(wait=False) == ["grok-4.5"]
+    real._models_cache["ids"] = None
+
+
+def test_song_page_does_not_probe_the_fleet(monkeypatch):
+    """GET /songs/{id} must not wait on Swarm or /object_info.
+
+    Measured 2026-08-19: /songs/32 was 22.28s cold because available_on_fleet
+    walked every backend (OBJECT_INFO_TIMEOUT=10 each) plus xAI /models.
+    """
+    def boom(*_a, **_k):
+        raise AssertionError("song GET must not probe the fleet")
+
+    monkeypatch.setattr(appmod.pipeline, "swarm_backends", boom)
+    monkeypatch.setattr(models, "_object_info", boom)
+    monkeypatch.setattr(models, "_system_stats", boom)
+    monkeypatch.setattr(models, "available_on_fleet", boom)
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "No Fleet Probe")
+        r = client.get(f"/songs/{song['id']}")
+    assert r.status_code == 200, r.text
+    block = re.search(r'<select name="video_model">(.*?)</select>', r.text, re.S)
+    assert block, "song page has no video_model picker"
+    assert "disabled" not in block.group(1)
 
 
 def test_api_song_returns_state():

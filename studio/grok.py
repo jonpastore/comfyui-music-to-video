@@ -384,23 +384,19 @@ def _chat(model, messages, progress=None):
 MODELS_TIMEOUT = float(os.environ.get("XAI_MODELS_TIMEOUT", 8))
 MODELS_TTL = float(os.environ.get("XAI_MODELS_TTL", 300))
 _models_cache = {"at": 0.0, "ids": None}
+_models_lock = threading.Lock()
+_models_refreshing = False
 
 
-def list_models():
-    """Chat model ids from /v1/models, sorted -- feeds a UI dropdown.
+def _store_models(ids):
+    with _models_lock:
+        _models_cache["at"] = time.monotonic()
+        _models_cache["ids"] = ids
+    return list(ids)
 
-    grok-imagine-* are image/video models, not chat models; a user picking one
-    for storyboard text generation would just get a confusing failure, so
-    they're filtered out here. grok-build-* stays selectable (see _resolve_model
-    for where it's skipped instead: auto-picking a default).
 
-    Cached: song_page calls this on every GET. A 22s xAI round-trip is not
-    a model picker.
-    """
-    now = time.monotonic()
-    hit = _models_cache["ids"]
-    if hit is not None and (now - _models_cache["at"]) < MODELS_TTL:
-        return list(hit)
+def _fetch_models():
+    """Blocking /v1/models. Raises on a hard miss so _resolve_model still fails loud."""
     key = _api_key()
     try:
         resp = httpx.get(f"{BASE_URL}/models",
@@ -413,9 +409,52 @@ def list_models():
     out = sorted(i for i in ids
                  if not i.startswith(_NON_CHAT_PREFIXES)
                  and not any(k in i.lower() for k in _NON_CHAT_MARKERS))
-    _models_cache["at"] = now
-    _models_cache["ids"] = out
-    return list(out)
+    return _store_models(out)
+
+
+def _schedule_models_refresh():
+    global _models_refreshing
+    with _models_lock:
+        if _models_refreshing:
+            return
+        _models_refreshing = True
+
+    def run():
+        global _models_refreshing
+        try:
+            _fetch_models()
+        except Exception:
+            log.exception("xAI /models refresh failed")
+        finally:
+            with _models_lock:
+                _models_refreshing = False
+
+    threading.Thread(target=run, daemon=True, name="xai-models").start()
+
+
+def list_models(*, wait=True):
+    """Chat model ids from /v1/models, sorted -- feeds a UI dropdown.
+
+    grok-imagine-* are image/video models, not chat models; a user picking one
+    for storyboard text generation would just get a confusing failure, so
+    they're filtered out here. grok-build-* stays selectable (see _resolve_model
+    for where it's skipped instead: auto-picking a default).
+
+    wait=True (default) is for generate / _resolve_model: miss the cache and
+    we ask xAI, up to MODELS_TIMEOUT. wait=False is for GET /songs/{id}:
+    return the last list (or []) and refresh in the background. A 22s
+    /models hop is not a model picker.
+    """
+    now = time.monotonic()
+    with _models_lock:
+        hit = _models_cache["ids"]
+        at = _models_cache["at"]
+    if hit is not None and (now - at) < MODELS_TTL:
+        return list(hit)
+    if hit is not None or not wait:
+        _schedule_models_refresh()
+        return list(hit or [])
+    return _fetch_models()
 
 
 def _version_key(name):

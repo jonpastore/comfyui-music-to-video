@@ -2989,13 +2989,11 @@ def song_page(request: Request, id: int):
     media = media_service.list_bag(id)
     song_jobs = db.q("SELECT * FROM jobs WHERE song_id=? ORDER BY id DESC LIMIT 20", id)
     active_job = next((j for j in song_jobs if j["status"] in ("queued", "running", "cancelling")), None)
-    try:
-        # the xAI CHAT models -- named chat_models, not models, because `models`
-        # is this app's model CATALOGUE module and shadowing it here silently
-        # turned models.default_for() into a list attribute lookup
-        chat_models = grok.list_models()
-    except Exception:
-        chat_models = []
+    # the xAI CHAT models -- named chat_models, not models, because `models`
+    # is this app's model CATALOGUE module and shadowing it here silently
+    # turned models.default_for() into a list attribute lookup.
+    # wait=False: a cold /v1/models hop is not a page load (T8 /songs hang).
+    chat_models = grok.list_models(wait=False)
     # what "(highest available)" will actually pick, named in the dropdown so
     # the default is not a mystery
     best = grok.best_model(chat_models) if chat_models else None
@@ -3087,11 +3085,14 @@ def song_page(request: Request, id: int):
     # and must not be selectable.
     default_video = models.default_for("video")
     wired = models.renderable("video")
-    backends = pipeline.swarm_backends()
+    # Do not probe Swarm or /object_info on GET. object_info is 10s per dead
+    # box and turned /songs/32 into a 22s page. available None keeps every
+    # wired option a candidate; T2-45 still refuses at enqueue.
     video_models = [{"value": wired[e["key"]], "label": e["label"], "purpose": e["purpose"],
-                     "available": models.available_on_fleet(e["key"], backends),
+                     "available": None,
                      "default": e["key"] == default_video}
-                    for e in models.catalog(role="video") if e["key"] in wired]
+                    for e in models.catalog(role="video", object_info={})
+                    if e["key"] in wired]
     all_tiers = tiers.all_tiers()
     form_tier = next(iter(storyboards), None) or (all_tiers[0]["name"] if all_tiers else "")
     beat_count = len(json.loads(song["beat_grid_json"])) if song["beat_grid_json"] else 0
@@ -7084,10 +7085,7 @@ def storyboard_form(request: Request, id: int, tier: str):
     """
     song = get_song_or_404(id)
     valid_tier_or_400(tier)
-    try:
-        chat_models = grok.list_models()
-    except Exception:
-        chat_models = []
+    chat_models = grok.list_models(wait=False)
     return templates.TemplateResponse(
         request, "_storyboard_form.html",
         storyboard_form_ctx(song, tier, chat_models,

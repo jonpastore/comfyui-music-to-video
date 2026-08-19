@@ -75,25 +75,25 @@ def test_t2_34_available_on_fleet_is_three_valued(monkeypatch):
     assert models.available_on_fleet("ltx25", GHOST) is None
 
 
-def test_t2_34_picker_marks_false_unavailable_and_still_offers_true(monkeypatch):
-    """s2v is False on the fleet and disabled; ltx25 is confirmed and offered.
+def test_t2_34_picker_does_not_probe_the_fleet_on_get(monkeypatch):
+    """GET offers every wired model. False-on-fleet is T2-45 at enqueue.
 
-    catalog() on this box lists s2v as installed, so reading that field
-    instead of where() offers the missing model and this fails.
+    Walking Swarm + /object_info on GET made /songs/32 22s cold
+    (OBJECT_INFO_TIMEOUT=10 per dead box). The picker stays a candidate
+    list; available_on_fleet remains the three-valued helper above.
     """
-    _pin(monkeypatch, FLEET)
-    local = {e["key"]: e["available"] for e in models.catalog(role="video")}
-    assert local["wan22_s2v"] is not False, (
-        "catalog() must not already mark s2v unavailable — that lets a "
-        "picker ignore where() and still pass")
+    def boom(*_a, **_k):
+        raise AssertionError("GET /songs must not probe the fleet")
 
+    monkeypatch.setattr(appmod.pipeline, "swarm_backends", boom)
+    monkeypatch.setattr(models, "available_on_fleet", boom)
     with TestClient(appmod.app) as client:
         song = _upload_song(client, "T234 Picker")
         page = client.get(f"/songs/{song['id']}").text
     opts = _options(page)
     assert "s2v" in opts, opts
-    assert "disabled" in opts["s2v"], (
-        "a model where() says False on every reachable backend was offered")
+    assert "disabled" not in opts["s2v"], (
+        "GET disabled a wired model by probing the fleet")
     assert "ltx25" in opts, opts
     assert "disabled" not in opts["ltx25"], (
         "an available model was not offered — picker marked everything unavailable")
