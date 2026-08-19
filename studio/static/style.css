@@ -1161,6 +1161,8 @@ table.sortable tr.dragging { opacity: 0.45; }
    two labelled selects floated up level with their captions. */
 .field-row button, .field-row .version-delete { align-self: end; }
 .field-row > .row-note { align-self: end; padding-bottom: 0.45rem; }
+#style-lora-select-wrap { min-width: 0; }
+#style-lora-select, #t2i-size { width: 100%; max-width: 100%; }
 
 /* Image with its note beside it, and controls over the image itself. */
 .image-note-row {

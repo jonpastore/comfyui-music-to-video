@@ -2076,6 +2076,8 @@ def media_loras(request: Request, model: str = ""):
         "lora_groups": pack["groups"],
         "lora_missing": pack["missing"],
         "lora_family": pack["family"],
+        "t2i_sizes": civitai.sizes_for(model),
+        "swap_size": True,
     })
 
 
@@ -2417,6 +2419,7 @@ def media_page(request: Request, new: str = ""):
         "lora_groups": pack["groups"],
         "lora_missing": pack["missing"],
         "lora_family": pack["family"],
+        "t2i_sizes": civitai.sizes_for(default_key),
         "civitai_set": True,
         "civitai_base": civitai_base,
     })

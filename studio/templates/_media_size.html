@@ -1,0 +1,5 @@
+<select name="size" id="t2i-size"{% if swap_size %} hx-swap-oob="true"{% endif %}>
+  {% for s in t2i_sizes|default([]) %}
+  <option value="{{ s.value }}"{% if s.default %} selected{% endif %}>{{ s.label }}</option>
+  {% endfor %}
+</select>

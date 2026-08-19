@@ -17,6 +17,37 @@ TIMEOUT = 20
 PACK_PATH = os.path.join(os.path.dirname(__file__), "seed", "lora_pack.json")
 FAMILIES = ("qwen", "flux2", "klein", "zimage", "krea2")
 GROUP_ORDER = ("Anatomy", "Popular", "Other")
+# New Image Size options. Qwen stays on the identity sheet. The others
+# use the model's native play sizes, not 896×1216 for everything.
+FAMILY_SIZES = {
+    "qwen": (
+        ("896x1216", "896×1216 portrait (sheets)", True),
+        ("1024x1024", "1024×1024 square (covers)", False),
+        ("1216x896", "1216×896 landscape", False),
+    ),
+    "flux2": (
+        ("1024x1536", "1024×1536 portrait", True),
+        ("1536x1024", "1536×1024 landscape", False),
+        ("1024x1024", "1024×1024 square", False),
+        ("1920x1088", "1920×1088 wide", False),
+    ),
+    "klein": (
+        ("768x1024", "768×1024 portrait", True),
+        ("1024x1024", "1024×1024 square", False),
+        ("1024x768", "1024×768 landscape", False),
+    ),
+    "zimage": (
+        ("1024x1024", "1024×1024 (1MP cap)", True),
+        ("832x1216", "832×1216 portrait", False),
+        ("1216x832", "1216×832 landscape", False),
+    ),
+    "krea2": (
+        ("1024x1536", "1024×1536 portrait", True),
+        ("1536x1024", "1536×1024 landscape", False),
+        ("1024x1024", "1024×1024 square", False),
+        ("2048x2048", "2048×2048 native", False),
+    ),
+}
 
 
 def _headers():
@@ -122,6 +153,12 @@ def base_for(model_key):
     fam = family_for(model_key)
     spec = (load_pack().get("families") or {}).get(fam) or {}
     return spec.get("base") or "Qwen"
+
+
+def sizes_for(model_key):
+    """Size dropdown rows for one t2i family."""
+    rows = FAMILY_SIZES.get(family_for(model_key)) or FAMILY_SIZES["qwen"]
+    return [{"value": v, "label": lab, "default": bool(d)} for v, lab, d in rows]
 
 
 def infer_family(rel):

@@ -106,6 +106,16 @@ def test_new_image_picker_excludes_unwired_and_selects_qwen():
             r'<option[^>]*value="flux2_t2i"[^>]*data-civitai-base="([^"]*)"',
             html)
         assert flux_base and flux_base.group(1) == "Flux.2 D"
+        assert 'id="t2i-size"' in html
+        assert 'value="896x1216"' in html
+        krea_sizes = client.get("/media/loras", params={"model": "krea2_t2i"}).text
+        assert 'value="2048x2048"' in krea_sizes
+        assert 'value="1024x1536"' in krea_sizes
+        assert 'id="t2i-size"' in krea_sizes
+        z_sizes = client.get("/media/loras", params={"model": "z_image_t2i"}).text
+        assert 'value="1024x1024"' in z_sizes
+        klein_sizes = client.get("/media/loras", params={"model": "flux2_klein_t2i"}).text
+        assert 'value="768x1024"' in klein_sizes
 
 
 def test_new_song_enqueues_as_new_song(monkeypatch):
@@ -305,6 +315,19 @@ def test_list_installed_skips_video_loras(tmp_path, monkeypatch):
     monkeypatch.setattr(civitai, "lora_dir", lambda: str(d))
     got = civitai.list_installed()
     assert got == ["qwen-edit-skin.safetensors"]
+
+
+def test_new_image_sizes_follow_the_model_family():
+    import civitai
+    qwen = civitai.sizes_for("qwen_t2i")
+    assert qwen[0]["value"] == "896x1216" and qwen[0]["default"]
+    krea = civitai.sizes_for("krea2_t2i")
+    assert any(s["value"] == "2048x2048" for s in krea)
+    assert next(s for s in krea if s["default"])["value"] == "1024x1536"
+    klein = civitai.sizes_for("flux2_klein_t2i")
+    assert next(s for s in klein if s["default"])["value"] == "768x1024"
+    zit = civitai.sizes_for("z_image_t2i")
+    assert next(s for s in zit if s["default"])["value"] == "1024x1024"
 
 
 def test_style_lora_select_filters_to_the_model_family(tmp_path, monkeypatch):

@@ -60,9 +60,7 @@
     {"file": "krea2/furry_enhancer_Krea2V2.1.safetensors", "family": "krea2", "group": "Popular", "label": "Furry Enhancer", "version_id": 3120301},
     {"file": "krea2/krea2_nud3.safetensors", "family": "krea2", "group": "Anatomy", "label": "PhotoReal BetterNudes", "version_id": 3066702},
     {"file": "krea2/realism_engine_krea2_v3.1.safetensors", "family": "krea2", "group": "Popular", "label": "Realism Engine", "version_id": 3109006},
-    {"file": "krea2/krea2_retroanime.safetensors", "family": "krea2", "group": "Popular", "label": "Official retro anime"},
-    {"file": "krea2/krea2_darkbrush.safetensors", "family": "krea2", "group": "Popular", "label": "Official dark brush"},
-    {"file": "krea2/krea2_softwatercolor.safetensors", "family": "krea2", "group": "Popular", "label": "Official soft watercolor"},
+
     {"file": "krea2/lenovo_krea2.safetensors", "family": "krea2", "group": "Popular", "label": "Lenovo UltraReal", "version_id": 3075606},
     {"file": "krea2/nicegirls_krea2.safetensors", "family": "krea2", "group": "Popular", "label": "NiceGirls UltraReal", "version_id": 3075498},
     {"file": "krea2/krea2_innie_vagina_v3.safetensors", "family": "krea2", "group": "Anatomy", "label": "Innie Vagina", "version_id": 3179896},

@@ -1435,6 +1435,8 @@ htmx-refreshes from `GET /media/loras` when the model changes and lists
 only that family's files (Anatomy / Popular optgroups). Civitai
 search/download reuses `/models/civitai` with `base` from the selected
 model (`Qwen`, `Flux.2 D`, `Flux.2 Klein 4B`, `ZImageTurbo`, `Krea 2`).
+Size follows the model (Qwen 896×1216 sheets; Flux/Krea 1024×1536;
+Klein 768×1024; Z-Image 1024×1024 / 1MP).
 When-to-use copy lives in DDD-4-7 §1a.
 
 ### 7a.6a Candidate tiles carry a vision confidence
