@@ -44,6 +44,9 @@
       {% if r.start is not none %}
         {{ r.start | hms }} &rarr; {{ r.end | hms }}
         <span class="muted">({{ "%.1f"|format(r.length) }}s
+          {% if r.guidance and r.length and (r.guidance - r.length)|abs > 0.6 %}
+          &middot; guidance {{ "%.0f"|format(r.guidance) }}s
+          {% endif %}
           {% if r.n_parts and r.n_parts > 1 %}
           &middot; renders as {{ r.n_parts }} chained parts
           {% endif %})</span>
@@ -353,6 +356,7 @@
         <form method="post" action="/songs/{{ song.id }}/clips" class="clip-bar song-async">
           <input type="hidden" name="tier" value="{{ tier }}">
           <input type="hidden" name="scene" value="{{ r.num }}">
+          {% if r.n_parts and r.n_parts > 1 %}
           <label class="check" title="If this scene is longer than one render, only queue the first part. Later parts chain from the last frame after you like the first.">
             <input type="checkbox" name="head_only" value="true" checked>
             First clip only</label>
@@ -360,12 +364,13 @@
                   title="What First clip only means"
                   aria-label="What First clip only means"
                   data-label="First clip only"
-                  data-help="A scene longer than one render is chopped into chained parts. First clip only queues the first part so you can judge it before the rest. Uncheck to queue the whole scene (part 2+ starts on the last frame of the part before it).">
+                  data-help="This scene is {{ r.n_parts }} chained parts ({{ '%.1f'|format(r.length) }}s). First clip only queues the first part so you can judge it before the rest. Uncheck to queue the whole scene (part 2+ starts on the last frame of the part before it).">
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
               <path fill="currentColor" d="M7.3 6.2c0-.8.5-1.3 1.3-1.3s1.3.5 1.3 1.2c0 .6-.3.9-.9 1.3-.5.4-.8.7-.8 1.3h1.3c0-.4.2-.7.7-1.1.7-.5 1.3-1 1.3-2 0-1.3-1-2.2-2.4-2.2-1.5 0-2.6 1-2.6 2.5zm1.1 5.8h1.4V10.7H8.4z"/>
             </svg>
           </button>
+          {% endif %}
           <label class="check" title="Second LTX pass on this render (same resolution, extra detail). Not WAN S2V.">
             <input type="checkbox" name="refine" value="true">
             Auto post (LTX refine)</label>

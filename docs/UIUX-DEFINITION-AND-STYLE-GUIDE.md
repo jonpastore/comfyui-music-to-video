@@ -659,7 +659,10 @@ first (`test_render_clip_writes_the_onscreen_motion_before_enqueue`,
 Auto post (LTX refine on the LTX take, `T5-14` **built**,
 `test_t5_14_refine_on_ltx_take.py`), and Auto QC as one
 nowrap option bar. Auto QC is read only when Render clip is pressed —
-unchecking it does not cancel a QC already queued. First clip only is the default. The clips strip
+unchecking it does not cancel a QC already queued. First clip only is shown only when the scene is more than one
+part (LTX ceiling 15s; 14s is one take). Saving Duration Guidance
+stamps `length_seconds` so the 14s box is what Render clip asks for.
+The clips strip
 is the same framed slider as stills (190px / 3:4 `.clip-tile`).
 Submitting Render clip `fetch`es the job and plants N shimmer
 cards (`paintClipPlaceholders`); they swap for videos when the

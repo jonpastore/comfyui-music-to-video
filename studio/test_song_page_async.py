@@ -632,6 +632,40 @@ def test_scene_reroll_and_approve_are_song_async():
         assert f'/songs/{sid}/refs/' in html and "/approve" in html
 
 
+def test_saving_duration_guidance_stamps_chain_length():
+    """The 14s box was a label; length_seconds stayed 4.8s so n_parts=1."""
+    import json as _json
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Guidance Length Song")
+        sid = song["id"]
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        _json.dump({
+            "title": "T",
+            "character_reference": "black feline woman, yellow slit pupils",
+            "scenes": [{"scene_number": 1, "name": "One",
+                        "image_prompt": "alley", "story": "stand",
+                        "duration_guidance": "14s",
+                        "length_seconds": 4.8125, "frames": 81}],
+        }, open(jp, "w"))
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               sid, "xxx", jp, jp.replace(".json", ".md"), 1, 0)
+        r = client.post(
+            f"/songs/{sid}/storyboard/xxx/scene/1",
+            data={"duration_guidance": "14s"},
+            headers=J)
+        assert r.status_code == 200, r.text
+        saved = _json.load(open(jp))
+        secs = saved["scenes"][0]["length_seconds"]
+        assert secs > 12, saved["scenes"][0]
+        html = client.get(f"/songs/{sid}/storyboard/xxx/scene/1").text
+        assert f"{secs:.1f}s" in html
+        assert "renders as 3 chained parts" not in html
+        assert 'name="head_only"' not in html
+
+
 def test_render_clip_writes_the_onscreen_motion_before_enqueue():
     """Render clip used the last saved JSON, not the motion box."""
     import json as _json

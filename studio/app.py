@@ -7687,6 +7687,17 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
         if (scene.get(field) or "") != value:
             scene[field] = value
             changed = True
+    # duration_guidance is the ask; length_seconds is what clip_chain_plan
+    # splits. Saving "14s" used to leave a 4.8s stamp, so Render clip had
+    # nothing to chain (n_parts=1) while the box said 14.
+    if "duration_guidance" in form:
+        planned = build_song.guidance_seconds(scene)
+        frames = build_song.legal_frames(planned, build_song.LTX_FPS)
+        new_len = round(frames / build_song.LTX_FPS, 4)
+        if scene.get("frames") != frames or scene.get("length_seconds") != new_len:
+            scene["frames"] = frames
+            scene["length_seconds"] = new_len
+            changed = True
     # T2-22: refuse after the proposed values are patched so an edit that
     # introduces another tier's clause cannot land. Whole board, not just
     # the field that changed — the criterion is about the storyboard.
