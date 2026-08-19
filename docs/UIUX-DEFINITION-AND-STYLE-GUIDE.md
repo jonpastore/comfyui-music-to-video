@@ -1340,7 +1340,7 @@ pose-unset song holes; not the old front/back × clothed/nude matrix).
 Nude is a per-pose tick only when
 the selected tier allows it. Actors are cards with that person's
 identity front (any chosen sheet if they have no `view=front`). Help sits on the heading. This form is Qwen-Image-Edit 2511. Generate uses **Actors**
-(Lead + cast + **All**), not a character dropdown. A base-image card has the same ticks; Assign as sheet writes them onto the keeper. **All** is every `actor_id`. The gallery **Actors** tab is the unfiltered list of plates with more than one actor. A multi-body photograph is the lock for intertwined sex, not three solo fronts. Upload-pose writes the roster’s actors onto the row. The first character tab is the album lead (not the word
+(Lead + album cast + people with a visible chosen sheet, including shared keepers on albums with an empty `characters` table + **All**), not a character dropdown. A base-image card has the same ticks; Assign as sheet writes them onto the keeper. **All** is every `actor_id`. The gallery **Actors** tab is the unfiltered list of plates with more than one actor. A multi-body photograph is the lock for intertwined sex, not three solo fronts. Upload-pose writes the roster’s actors onto the row. The first character tab is the album lead (not the word
 protagonist). A pencil (`glyph_edit`) on each tab opens
 `#rename-char` and posts lead_name or `/characters/{id}/save`.
 **Name** on Playlists → Album look still writes the lead;

@@ -285,7 +285,9 @@ Identity front stays image1. The anchors page shows the album pose
 roster (have/missing across every song board) and **Use as this pose**
 is the keeper; the full-size lightbox classifies the open sheet onto
 that roster. The album lead’s gallery tab is a renameable name
-(default **Lead**), not the word protagonist. **Generate…** lists the actors Mage needs a reference
+(default **Lead**), not the word protagonist. **Generate…** lists every usable
+actor (lead + album cast + people with a visible chosen sheet, including shared
+Street Cats cast on albums with an empty `characters` table) Mage needs a reference
 image for (the sheet’s person, plus the album lead on a partnered
 stance such as cowgirl, kneeling look-back, or supine) above the grey-studio sheet prompt.
 Album-coverage / scene-row keeper dropdown use that same actor pool,
