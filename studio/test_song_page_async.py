@@ -498,3 +498,160 @@ def test_song_page_js_intercepts_forms():
     assert "function initSongPage(" in src
     assert "initSongPage()" in src
     assert "function watchJob(jobId, targetId, onDone)" in src
+    # Catch-all: #song-page form submit → api() unless hx-* or /jobs/.
+    assert 'page.addEventListener("submit"' in src
+    assert "e.preventDefault()" in src
+    assert "hasAttribute(\"hx-post\")" in src
+    assert "api(dest, new FormData(form))" in src
+
+
+# High-traffic song actions that must not bare-POST a full reload.
+_SONG_ASYNC_ACTIONS = (
+    "/lyrics",
+    "/style-text",
+    "/refs",
+    "/clips",
+    "/render",
+    "/qc",
+)
+
+
+def test_song_page_high_traffic_forms_are_song_async():
+    """Generate refs / clips / render / lyrics / style / QC stay in-page.
+
+    Each form is marked `.song-async` under `#song-page`. initSongPage
+    preventDefaults and posts Accept: application/json. A bare method=post
+    without the class (or without the intercept) is the reload bug.
+    """
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Song Async Forms")
+        sid = song["id"]
+        page = client.get(f"/songs/{sid}").text
+        assert 'id="song-page"' in page
+        for suffix in _SONG_ASYNC_ACTIONS:
+            action = f"/songs/{sid}{suffix}"
+            assert f'action="{action}"' in page, action
+            # The opening form tag for this action carries song-async.
+            idx = page.find(f'action="{action}"')
+            assert idx > 0, action
+            tag_start = page.rfind("<form", 0, idx)
+            tag_end = page.find(">", idx)
+            assert tag_end > tag_start, action
+            tag = page[tag_start:tag_end + 1]
+            assert "song-async" in tag, tag
+            assert 'method="post"' in tag
+            assert "hx-post" not in tag  # fetch path, not htmx fragment swap
+    src = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
+    assert "function initSongPage(" in src
+    assert "api(dest, new FormData(form))" in src
+
+
+def test_scene_reroll_and_approve_are_song_async():
+    """Reroll + still approve live on the hx-loaded scene row, still in-page."""
+    import json as _json
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Scene Async Forms")
+        sid = song["id"]
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_r.json")
+        _json.dump({
+            "title": "T", "character_reference": "her",
+            "scenes": [{"scene_number": 1, "name": "One",
+                        "image_prompt": "alley", "story": "walk",
+                        "duration_guidance": "5s"}],
+        }, open(jp, "w"))
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               sid, "r", jp, jp.replace(".json", ".md"), 1, 0)
+        dest = os.path.join(db.DATA, "refs")
+        os.makedirs(dest, exist_ok=True)
+        path = os.path.join(dest, "async_still.png")
+        open(path, "wb").write(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16)
+        db.run("""INSERT INTO refs (song_id,tier,clip_idx,path,seed,approved,
+                                    created,origin,scene_number)
+                  VALUES (?,?,?,?,?,0,?,?,?)""",
+               sid, "r", 0, path, 42, 1.0, "gen", 1)
+        html = client.get(f"/songs/{sid}/storyboard/r/scene/1").text
+        assert 'action="/songs/%d/reroll"' % sid in html or f'action="/songs/{sid}/reroll"' in html
+        assert "reroll-bar" in html and "song-async" in html
+        assert "still-pick" in html and "song-async" in html
+        assert f'/songs/{sid}/refs/' in html and "/approve" in html
+
+
+def test_song_page_qc_findings_are_expandable_chips_not_cards():
+    """P0-4: song-page findings are small expandable chips, not finding-row cards."""
+    import time
+    import qc_service
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Song QC Chips")
+        sid = song["id"]
+        path = os.path.join(db.DATA, f"chip_{time.time_ns()}.mp4")
+        open(path, "wb").write(b"not-a-real-video")
+        # Tie the finding path to this song so song_page includes it.
+        db.run("""INSERT INTO clips (song_id,tier,clip_idx,path,status)
+                  VALUES (?,?,?,?,?)""", sid, "r", 0, path, "done")
+        qc_service.record([{
+            "path": path, "kind": "clip", "tier": 1, "check": "duration",
+            "verdict": "reject", "measured": "4.8", "expected": "30.0",
+            "unit": "s", "detail": "duration 4.8 vs 30.0 s",
+            "remedy": "re-render clip",
+        }])
+        page = client.get(f"/songs/{sid}").text
+        assert 'id="fold-qc"' in page
+        assert "finding-chip" in page
+        assert "finding-chips" in page
+        assert 'class="finding-row' not in page.split('id="fold-qc"', 1)[-1].split('id="fold-jobs"', 1)[0]
+        assert "duration" in page
+        assert "Approve repair" in page
+        # /qc keeps the full finding-row atom
+        qc_page = client.get("/qc").text
+        assert "finding-row" in qc_page
+        fold = page.split('id="fold-qc"', 1)[-1].split('id="fold-jobs"', 1)[0]
+        assert 'action="/qc/findings/' in fold
+        assert "song-async" in fold
+        assert "finding-chip-summary" in fold
+
+
+def test_qc_finding_approve_form_answers_json(monkeypatch):
+    """Song chips post the HTML approve route with Accept: JSON; no 303."""
+    import time
+    import qc_service
+    # Do not enqueue real repair jobs — actuator suites share the same
+    # monkeypatched gen_postproc/fix_ref collectors.
+    monkeypatch.setattr(jobs, "enqueue", lambda *a, **k: 0)
+    path = os.path.join(db.DATA, f"approve_json_{time.time_ns()}.mp4")
+    open(path, "wb").write(b"x")
+    qc_service.record([{
+        "path": path, "kind": "clip", "tier": 1, "check": "duration",
+        "verdict": "reject", "measured": "1.0", "expected": "5.0",
+        "unit": "s", "detail": "duration 1.0 vs 5.0 s",
+        "remedy": "re-render clip",
+    }])
+    fid = db.one("SELECT id FROM findings WHERE path=?",
+                 jobs.canonical_path(path))["id"]
+    with TestClient(appmod.app) as client:
+        plain = client.post(
+            f"/qc/findings/{fid}/approve",
+            data={"text": "re-render clip"},
+            follow_redirects=False)
+        assert plain.status_code == 303, plain.text
+    path2 = os.path.join(db.DATA, f"approve_json2_{time.time_ns()}.mp4")
+    open(path2, "wb").write(b"x")
+    qc_service.record([{
+        "path": path2, "kind": "clip", "tier": 1, "check": "duration",
+        "verdict": "reject", "measured": "1.0", "expected": "5.0",
+        "unit": "s", "detail": "duration 1.0 vs 5.0 s",
+        "remedy": "re-render clip",
+    }])
+    fid2 = db.one("SELECT id FROM findings WHERE path=?",
+                  jobs.canonical_path(path2))["id"]
+    with TestClient(appmod.app) as client:
+        js = client.post(
+            f"/qc/findings/{fid2}/approve",
+            data={"text": "re-render clip"},
+            headers=J)
+        assert js.status_code == 200, js.text
+        body = js.json()
+        assert body["ok"] is True
+        assert body["id"] == fid2

@@ -178,8 +178,11 @@ component behind `_clip_tile.html`, the anchor grid, the approve grid and the
 refs grid, which are four re-specifications of it today); `section-head` (title
 + its own actions); `modal` (on `<dialog>`); `queue-strip` (§5.5);
 `field-with-wand` (label + AI action + hint + control, the album-profile shape);
-`finding-row` (`_finding_row.html` on `GET /qc` and the song QC card:
-measured / expected / unit / editable remedy / approve, `T3-19`).
+`finding-row` (`_finding_row.html` on `GET /qc`: measured / expected /
+unit / editable remedy / approve, `T3-19`); song-page QC uses compact
+expandable `.finding-chip` pills (`_finding_chip.html`, MISSED-ASKS
+P0-4) — closed summary is tags only; open body has the numbers and a
+quiet Approve, not a primary blue well.
 
 **`plan-panel` is the most under-used component in the studio.** `.plan-panel` /
 `.plan-line` / `.plan-blocker` / `.plan-note` plus `button.blocked` already
@@ -531,6 +534,13 @@ JSON (`name`, `camera`, `pose`, prompts, …). Approve remaining /
 replace picks sit above that list. `GET /songs/{id}/approve/{tier}`
 303s to the song page. `GET /songs/{id}/storyboard/{tier}` remains for T6-A2 numbers.
 `initSongPage` posts every control as JSON.
+High-traffic song actions (Save lyrics / Save style / Generate refs /
+Render video / Assemble / Run QC / scene Reroll / still approve) carry
+`.song-async` under `#song-page` so a missing intercept goes red
+(`test_song_page_high_traffic_forms_are_song_async`). Plain form post
+still 303s; fetch uses `Accept: application/json` on the same routes.
+Song `#fold-qc` findings are expandable `.finding-chip` pills, not
+full `finding-row` cards (`test_song_page_qc_findings_are_expandable_chips_not_cards`).
 The song page **Reference images** checkboxes stay disabled until front
 exists; the warning is *N pose sheets · missing identity front* with a
 deep-link to `/anchors`. Tick a ready rating to expand **that tier

@@ -2237,6 +2237,12 @@ function initSongPage() {
           if (note) say2(note, d.approved ? "approved" : "unapproved");
           return;
         }
+        if (/\/qc\/findings\/\d+\/approve$/.test(action)) {
+          var chip = form.closest(".finding-chip, .finding-row");
+          if (chip) chip.remove();
+          flash("Repair approved.");
+          return;
+        }
         if (d.deleted != null && /\/refs\/\d+\/delete$/.test(action)) {
           var goneFig = form.closest(".ref-frame");
           if (goneFig) goneFig.remove();

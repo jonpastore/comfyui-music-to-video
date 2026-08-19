@@ -229,7 +229,7 @@
                 title="Delete every still with a tick">Delete selected</button>
       </div>
       {% if ns.head is not none %}
-      <form method="post" action="/songs/{{ song.id }}/reroll" class="reroll-form reroll-bar">
+      <form method="post" action="/songs/{{ song.id }}/reroll" class="reroll-form reroll-bar song-async">
         <input type="hidden" name="tier" value="{{ tier }}">
         <input type="hidden" name="clip_idx" value="{{ ns.head }}">
         <label>What to change
@@ -305,7 +305,7 @@
           {% if ns.head is not none %}
           <div class="still-icons">
             <form method="post" action="/songs/{{ song.id }}/refs/{{ ns.head }}/approve"
-                  class="inline still-pick">
+                  class="inline still-pick song-async">
               <input type="hidden" name="tier" value="{{ tier }}">
               <input type="hidden" name="ref_id" value="{{ c.id }}">
               <button type="submit" class="icon-btn js-approve{% if c.approved %} on{% endif %}"
@@ -348,7 +348,7 @@
       {{ prompt_box(r, "video_motion_prompt", "Video Motion Prompt", 2) }}
       <div class="clips-head">
         <h4>Clips</h4>
-        <form method="post" action="/songs/{{ song.id }}/clips" class="clip-bar">
+        <form method="post" action="/songs/{{ song.id }}/clips" class="clip-bar song-async">
           <input type="hidden" name="tier" value="{{ tier }}">
           <input type="hidden" name="scene" value="{{ r.num }}">
           <label class="check" title="If this scene is longer than one render, only queue the first part. Later parts chain from the last frame after you like the first.">

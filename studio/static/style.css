@@ -2285,6 +2285,54 @@ button.toggle.off { color: var(--muted); }
   font-weight: 650;
   color: var(--accent);
 }
+
+/* Song-page QC: closed chips are small pills, not finding-row cards.
+   Open body carries measured / remedy / approve (P0-4). */
+.finding-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+.finding-chip {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 8px);
+  background: var(--panel);
+}
+.finding-chip > summary.finding-chip-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  list-style: none;
+  cursor: pointer;
+  padding: 0.35rem 0.55rem;
+}
+.finding-chip > summary.finding-chip-summary::-webkit-details-marker { display: none; }
+.finding-chip > summary.finding-chip-summary::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(-45deg);
+  margin-right: 0.15rem;
+  flex: none;
+}
+.finding-chip[open] > summary.finding-chip-summary::before {
+  transform: rotate(45deg);
+}
+.finding-chip-body {
+  padding: 0.35rem 0.65rem 0.65rem;
+  border-top: 1px solid var(--border);
+}
+.finding-chip-body .stack-form { margin-top: 0.4rem; }
+.finding-chip-body button.secondary.btn-sm {
+  /* Approve is a quiet action inside a chip, not a primary blue well. */
+  padding: 0.2rem 0.55rem;
+}
 .candidate-actions {
   display: flex;
   flex-wrap: wrap;

@@ -330,7 +330,9 @@ PASS on a compensated clip, latent exemption alone is not enough;
 `mixer.spliced_duration` / `bridge_seconds` within
 `mixer.SPLICE_DURATION_TOLERANCE`, `test_t3_10_splice.py`; **`T3-11` built** — `check_set` / `qc.run(kind="set")` compares the artefact to `mixer.set_duration()` within `mixer.SET_DURATION_TOLERANCE`, `test_t3_11_set_duration.py`; **`T3-4.4-mp3` built** — assembled song duration vs `songs.duration` / source mp3 within `DURATION_TOL_S`; mismatch REJECTs on the media (`test_t3_4_4_mp3.py`); **`T3-4.4-gap` built** — no black gap at an assembled song join (`qc.check_join_black_gap` / `test_t3_4_4_gap.py`: hard cut PASSes, black insert on a planned join REJECTS)), `studio/qc_service.py` + `db.findings` +`/api/qc/*` including `GET /api/qc/by-host` (`T3-1`) and dismiss/reopen on
 artefact change (`T3-22`), `GET /qc` finding-row (`T3-19`: measured /
-expected / unit, editable remedy, approve; `test_t3_19_finding_row.py`),
+expected / unit, editable remedy, approve; `test_t3_19_finding_row.py`);
+song-page `#fold-qc` shows expandable finding chips not full cards
+(MISSED-ASKS P0-4, `test_song_page_qc_findings_are_expandable_chips_not_cards`),
 `qc_service.run_song` (`T3-32`: tier 1 over a song
 completes without a GPU, a backend, or the one worker thread), `studio/automation.py` + `db.automation` (TRD-1 §5's curve model,
 decimation and filter emission; `T1-1` **built** — reorder or trim

@@ -1,0 +1,52 @@
+{# Song-page QC atom: closed = small pills; open = measured/remedy/approve.
+   Full finding-row stays on GET /qc (T3-19). MISSED-ASKS P0-4. #}
+<details class="finding-chip" id="finding-{{ f.id }}"
+         data-finding="{{ f.id }}"
+         data-measured="{{ f.measured }}"
+         data-expected="{{ f.expected }}"
+         data-unit="{{ f.unit }}"
+         data-actionable="{{ 'true' if f.actionable else 'false' }}"
+         data-check="{{ f.check_name }}"
+         {% if f.check_name == 'identity_drift' %}data-compliance="{{ f.compliance }}" data-variation="{{ f.variation }}" data-n="{{ f.n }}"{% endif %}>
+  <summary class="finding-chip-summary">
+    <span class="tag">{{ f.check_name }}</span>
+    <span class="tag">{{ f.verdict }}</span>
+    {% if f.remedy_class %}<span class="tag">{{ f.remedy_class }}</span>{% endif %}
+    {% if f.tier %}<span class="tag">tier {{ f.tier }}</span>{% endif %}
+  </summary>
+  <div class="finding-chip-body">
+    {% if f.check_name == 'identity_drift' %}
+    <p class="meta identity-drift-scores">
+      <span class="num" data-field="compliance">{{ f.compliance }}</span>
+      <span class="muted">compliance</span>
+      <span class="num" data-field="variation">{{ f.variation }}</span>
+      <span class="muted">variation</span>
+      <span class="num" data-field="n">{{ f.n }}</span>
+      <span class="muted">n</span>
+      <span class="num" data-field="unit">{{ f.unit }}</span>
+    </p>
+    {% else %}
+    <p class="meta">
+      <span class="num" data-field="measured">{{ f.measured }}</span>
+      <span class="muted">measured</span>
+      vs
+      <span class="num" data-field="expected">{{ f.expected }}</span>
+      <span class="muted">expected</span>
+      <span class="num" data-field="unit">{{ f.unit }}</span>
+    </p>
+    {% endif %}
+    {% if f.detail %}<p class="hint">{{ f.detail }}</p>{% endif %}
+    <p class="muted truncate">{{ f.path }}</p>
+    {% if f.actionable %}
+    <form method="post" action="/qc/findings/{{ f.id }}/approve" class="stack-form song-async">
+      <label>Remedy
+        <textarea name="text" rows="2">{{ f.remedy or "" }}</textarea>
+      </label>
+      <button type="submit" class="secondary btn-sm">Approve repair</button>
+    </form>
+    {% else %}
+    <p class="hint">This check has no remedy — it cannot be approved.</p>
+    {% endif %}
+    <p class="hint"><a href="/qc#finding-{{ f.id }}">Open on /qc</a></p>
+  </div>
+</details>

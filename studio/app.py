@@ -3188,17 +3188,24 @@ def qc_queue_page(request: Request):
 
 
 @app.post("/qc/findings/{fid}/approve")
-def qc_approve_form(fid: int, text: str = Form("")):
-    """HTML sign-off: store the edited remedy, then approve (T3-19)."""
+def qc_approve_form(request: Request, fid: int, text: str = Form("")):
+    """HTML sign-off: store the edited remedy, then approve (T3-19).
+
+    Song-page chips post Accept: application/json (initSongPage); plain
+    form still 303s to /qc.
+    """
     try:
         if (text or "").strip():
             qc_service.set_remedy(fid, text)
-        qc_service.approve(fid)
+        row = qc_service.approve(fid)
     except ValueError as e:
         raise HTTPException(400, str(e))
     except KeyError:
         raise HTTPException(404, f"no finding {fid}")
-    return RedirectResponse("/qc", status_code=303)
+    return json_or_redirect(
+        request,
+        {"ok": True, "id": row["id"], "status": row["status"]},
+        "/qc")
 
 
 @app.get("/api/qc/findings")

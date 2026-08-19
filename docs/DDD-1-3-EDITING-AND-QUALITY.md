@@ -236,18 +236,21 @@ directions produce two different boards and two different model messages),
 `/{fid}/remedy`, `/{fid}/dismiss`, `/{fid}/approve`, `/{fid}/recheck`,
 `/api/qc/by-host` (`T3-1`: groups by `host`, NULL host is the
 `unattributed` bucket). `GET /qc` is the finding-row page (`T3-19`):
-measured / expected / unit, editable remedy, approve. `POST
-/qc/findings/{fid}/approve` stores the edited text then `approve()`.
-Each finding carries `remedy_class` and
-`actionable` (`T3-27`): approve uses the class, and a false `actionable`
-is why the button is absent, not a button that does nothing. Dismiss needs a
-reason and leaves the open queue; re-running QC on the same bytes keeps
-it dismissed; rewriting the file reopens that `(path, check)` row
-(`T3-22`). `POST /songs/{id}/qc` calls `qc_service.run_song` in-process
-(`T3-32`): tier 1 over that song's artefacts does not enqueue behind
-the GPU worker. `/api/qc/lineage` lists predecessor and successor for a
-re-render / refine / repair / anchor re-roll; `/api/qc/lineage/select`
-picks either (`T6-A5`).
+measured / expected / unit, editable remedy, approve. Song `#fold-qc`
+uses expandable `.finding-chip` pills (`_finding_chip.html`, P0-4) —
+not the full card. `POST /qc/findings/{fid}/approve` stores the edited
+text then `approve()`; `Accept: application/json` returns JSON
+(`json_or_redirect`), plain form still 303s to `/qc`. Each finding
+carries `remedy_class` and `actionable` (`T3-27`): approve uses the
+class, and a false `actionable` is why the button is absent, not a
+button that does nothing. Dismiss needs a reason and leaves the open
+queue; re-running QC on the same bytes keeps it dismissed; rewriting
+the file reopens that `(path, check)` row (`T3-22`). `POST
+/songs/{id}/qc` calls `qc_service.run_song` in-process (`T3-32`): tier
+1 over that song's artefacts does not enqueue behind the GPU worker.
+`/api/qc/lineage` lists predecessor and successor for a re-render /
+refine / repair / anchor re-roll; `/api/qc/lineage/select` picks
+either (`T6-A5`).
 
 **D · anchors** — `GET/POST /api/anchors`, `/api/anchors/refs`,
 `POST /api/anchors/{id}/pick`, `POST /api/anchors/{id}/use-as-ref`.

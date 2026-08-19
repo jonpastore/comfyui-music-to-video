@@ -64,7 +64,7 @@
       <h3>Lyrics</h3>
       <p class="muted">The words, in [Section] blocks. Whisper drafts them; edit freely.
         This is what the storyboard is written from. Edits survive a re-fetch.</p>
-      <form method="post" action="/songs/{{ song.id }}/lyrics" class="stack-form">
+      <form method="post" action="/songs/{{ song.id }}/lyrics" class="stack-form song-async">
         {% from "_macros.html" import versioned_prompt %}
         {{ versioned_prompt("lyrics_text", 16, lyrics_box, "song:" ~ song.id, "song_lyrics") }}
         <button type="submit">Save lyrics</button>
@@ -81,7 +81,7 @@
       <h3>Style prompt</h3>
       <p class="muted">What the track was generated from (Suno / ChatGPT). Saved with the
         song; not sent to the storyboard model or the renderer.</p>
-      <form method="post" action="/songs/{{ song.id }}/style-text" class="stack-form">
+      <form method="post" action="/songs/{{ song.id }}/style-text" class="stack-form song-async">
         {% from "_macros.html" import versioned_prompt %}
         {{ versioned_prompt("style_text", 16, style_box, "song:" ~ song.id, "song_style") }}
         <button type="submit">Save style prompt</button>
@@ -330,7 +330,7 @@
     <h2>Reference images</h2>
     <span class="muted">album pose plates · generate scene stills · then approve</span>
   </summary>
-  <form method="post" action="/songs/{{ song.id }}/refs">
+  <form method="post" action="/songs/{{ song.id }}/refs" class="song-async">
     {% if storyboards %}
     <fieldset>
       <legend>Which rating to generate</legend>
@@ -495,7 +495,7 @@
 
   <h2>Video &amp; assemble</h2>
   <form method="post" action="/songs/{{ song.id }}/clips" enctype="multipart/form-data"
-        class="stack-form">
+        class="stack-form song-async">
     <div class="field-row">
       <label>Tier
         <select name="tier">
@@ -544,7 +544,7 @@
     {% endif %}
   </form>
 
-  <form method="post" action="/songs/{{ song.id }}/render" class="stack-form">
+  <form method="post" action="/songs/{{ song.id }}/render" class="stack-form song-async">
     <div class="field-row">
       <label>Tier
         <select name="tier">
@@ -668,15 +668,17 @@
     <h2>QC</h2>
     <span class="muted">{% if findings %}{{ findings|length }} finding{{ "" if findings|length == 1 else "s" }}{% else %}none open{% endif %}</span>
   </summary>
-  <form method="post" action="/songs/{{ song.id }}/qc">
+  <form method="post" action="/songs/{{ song.id }}/qc" class="song-async">
     <button type="submit">Run QC</button>
   </form>
   <p class="hint">Measured against what was asked. Nothing repairs itself.
     <a href="/qc">All open findings</a></p>
   {% if findings %}
+  <div class="finding-chips" id="song-findings">
   {% for f in findings %}
-    {% include "_finding_row.html" %}
+    {% include "_finding_chip.html" %}
   {% endfor %}
+  </div>
   {% endif %}
 </details>
 
