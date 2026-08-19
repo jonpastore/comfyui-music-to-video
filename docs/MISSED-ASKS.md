@@ -56,13 +56,12 @@ so `/media` is not 403.
    not a required chosen row per tier. Promote to `scope_kind=shared`
    when the operator applies to >1 album (T4-25 already exists).
 
-2. **Generate lists every actor the sheet can use.**
-   Catatonic's `characters` table is empty, so the form showed Meow P
-   only. Street Cats people (Tiger, Panther, Kitty) live as shared
-   sheets / other-album rows. Pad `form_actor_rows` the same way
-   `_pad_gallery_cast` pads gallery tabs: lead + album cast + people
-   with a visible chosen front (`visible_anchor_sql`). Thumb stays
-   that person's identity front.
+2. **Generate lists every actor the sheet can use.** Partial:
+   Street Cats lists Meow P / Kitty / Panther / Tiger. Thumbs now fall
+   back to any chosen sheet for that body, not only `view=front`.
+   Catatonic's empty `characters` table still needs
+   `_pad_gallery_cast` (shared Street Cats cast) if that album should
+   offer Tiger/Panther without a row.
 
 3. **Identity bag is operator photographs of her, not a stranger plate.**
    The white cat on Base images is an `anchor_ref` with

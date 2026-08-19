@@ -22,6 +22,7 @@
   {% if generate_tier %}
   <input type="hidden" name="tier" value="{{ generate_tier }}">
   {% endif %}
+  {% if form_song_id %}<input type="hidden" name="song_id" value="{{ form_song_id }}">{% endif %}
   <input type="hidden" name="character_id" value="{{ character_id or '' }}">
   <div class="anchor-form-top">
     <div class="anchor-form-who">
@@ -61,7 +62,7 @@
     {% if not generate_tier %}
     <p class="empty">Pick a tier chip in the sticky bar. One tier at a time.</p>
     {% elif not missing_poses %}
-    <p class="empty" id="pose-gap-empty-form">No missing catalog poses at
+    <p class="empty" id="pose-gap-empty-form">No missing poses at
       {{ generate_tier | tiername }}.</p>
     {% else %}
     <div class="missing-pose-list" id="missing-pose-list">
@@ -467,10 +468,6 @@
       </label>
     </div>
 
-    <details class="disclose" data-fold="render-more">
-      <summary>Size, latent, sweep
-        <span class="muted">sheet size, denoise, CFG sweep</span></summary>
-    {# ---- CFG sweep: the same sheet at every guidance value ---- #}
     <div class="field-row">
       <label>
         <span class="label-text">CFG sweep{{ help("cfg_sweep") }}</span>
@@ -482,19 +479,6 @@
           {% endfor %}
         </select>
       </label>
-    </div>
-
-    {# Denoise sits OUT here, not inside the collapsed Sampler section, and its
-       warning sits with it. A closed <details> is worse than a modal for a
-       silent-failure warning: a modal takes a deliberate click to open, while a
-       collapsed section tells you that reading the visible page was enough. #}
-    {# What the sampler STARTS from, beside the control whose meaning depends on
-       it. Denoise below 1.0 was documented as returning noise on every one of
-       its own options, and that was true and unfixable while the latent was
-       pinned to empty. docs/TRD-7 T7-8. Changing this re-fetches the form so the
-       denoise labels are re-worded by the server -- one resolver
-       (app.denoise_choices), so the label and the graph cannot disagree. #}
-    <div class="field-row">
       <label>
         <span class="label-text">Sampler starts from{{ help("latent") }}</span>
         <select name="latent" hx-get="/anchors/form" hx-target="#anchor-form"
@@ -504,8 +488,6 @@
           {% endfor %}
         </select>
       </label>
-    </div>
-    <div class="field-row">
       <label>
         <span class="label-text">Denoise{{ help("denoise") }}</span>
         <select name="denoise">
@@ -515,12 +497,6 @@
           {% endfor %}
         </select>
       </label>
-    </div>
-    {# Sheet size. Every sheet this studio ever rendered was 896x1216 because
-       gen_anchor passed neither flag, so a head-and-shoulders framing asked for
-       inside a full-body portrait frame rendered a distant figure.
-       docs/TRD-7 T7-12. #}
-    <div class="field-row">
       <label>
         <span class="label-text">Sheet size{{ help("size") }}</span>
         <select name="size" {% if latent == "image" %}disabled{% endif %}>

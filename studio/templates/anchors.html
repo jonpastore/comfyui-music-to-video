@@ -274,7 +274,7 @@
 <section class="card" id="generate-pose">
   <details class="disclose" open>
   <summary><h2>Generate a missing pose
-    {{ help_tip("Generate a missing pose", "Album and tier come from the sticky bar — one tier at a time. Tick missing catalog poses. Front is the camera; nude only if this tier allows it. If no identity photo is ticked, each actor's chosen front is image1. Then Save the keeper on the roster.") }}</h2></summary>
+    {{ help_tip("Generate a missing pose", "Album and tier come from the sticky bar — one tier at a time. Tick missing poses (named catalog rows and pose-unset holes on this song). Nude only if this tier allows it. If no identity photo is ticked, each actor's chosen sheet is image1. This form is Qwen-Image-Edit 2511 — Flux 2 / Krea are on disk without a studio graph.") }}</h2></summary>
   {% include "_anchor_form.html" %}
   </details>
 </section>
@@ -283,10 +283,24 @@
 <p class="empty">No pose sheets on this album yet. Generate or assign one above.</p>
 {% else %}
 {% set want_tier = page_tier or (pose_gap.tier if pose_gap else "") %}
+{% set cat_n = namespace(n=0) %}
+{% for section in gallery %}
+  {% for t in section.tiers %}
+    {% if not page_tier or t.name == page_tier %}
+      {% for ch in t.characters %}
+        {% for fam in ch.families %}
+          {% for row in fam.rows %}{% set cat_n.n = cat_n.n + (row.groups | length) %}{% endfor %}
+        {% endfor %}
+      {% endfor %}
+    {% endif %}
+  {% endfor %}
+{% endfor %}
 <details class="disclose card" id="character-catalog">
-<summary><h2>Character catalog</h2>
-  <span class="muted">{{ gallery[0].album if gallery else "" }}
-    {% if page_tier %} · {{ page_tier | tiername }}{% endif %}</span></summary>
+<summary><h2>Character catalog</h2></summary>
+{% if page_tier and cat_n.n == 0 %}
+<p class="empty" id="catalog-empty">No sheets at {{ page_tier | tiername }} yet.
+  Generate a missing pose above, or upload a plate into this catalog.</p>
+{% else %}
 {% for section in gallery %}
 <div class="gallery-section">
   {% if not page_tier %}
@@ -357,6 +371,7 @@
   {% endfor %}
 </div>
 {% endfor %}
+{% endif %}
 </details>
 {% endif %}
 

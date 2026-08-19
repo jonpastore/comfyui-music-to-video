@@ -1331,12 +1331,15 @@ select is focused so classifying does not step or delete the sheet.
 Roster thumbs open `#pose-preview`. Playlist Anchors uses
 character tabs and Clothed/Nude family tabs. On `/anchors` the gallery tabs are **tier → character → clothed/nude**, plus an **Actors** tab for multi-body plates (split roast, cowgirl, or any sheet with two or more stamped actors). Every album character gets a tab on every tier even when that tier has no sheet yet (empty clothed/nude). Solo all-fours stays on the owner. **Generate a missing pose** is one collapsible card. Album and tier
 come from the sticky bar (one tier at a time; **every** builtin tier is
-a chip, including 0/0). The form has no second
+a chip, including 0/0). Nested G/PG-13/R/XXX tabs on the roster and
+Character catalog are omitted when a sticky chip is `.on` — keep the
+All / Meow P / Panther character filter. The form has no second
 album select and no G/PG-13/R/XXX checkbox row. The right column is
-**missing catalog poses** for that album+tier (not the old
-front/back × clothed/nude matrix). Nude is a per-pose tick only when
+**missing poses** for that album+tier (named coverage rows **and**
+pose-unset song holes; not the old front/back × clothed/nude matrix).
+Nude is a per-pose tick only when
 the selected tier allows it. Actors are cards with that person's
-identity front. Help sits on the heading. Generate uses **Actors**
+identity front (any chosen sheet if they have no `view=front`). Help sits on the heading. This form is Qwen-Image-Edit 2511. Generate uses **Actors**
 (Lead + cast + **All**), not a character dropdown. A base-image card has the same ticks; Assign as sheet writes them onto the keeper. **All** is every `actor_id`. The gallery **Actors** tab is the unfiltered list of plates with more than one actor. A multi-body photograph is the lock for intertwined sex, not three solo fronts. Upload-pose writes the roster’s actors onto the row. The first character tab is the album lead (not the word
 protagonist). A pencil (`glyph_edit`) on each tab opens
 `#rename-char` and posts lead_name or `/characters/{id}/save`.
@@ -1479,6 +1482,9 @@ tier's chosen sheets (nude thumb when the tier allows it), not the
 album-wide classification dump. Thumbs are eager — lazy-load inside the
 overflow grid painted empty boxes. **Character catalog**
 (`#character-catalog`) is the collapsible gallery and starts **closed**.
+The summary is just the heading — album and tier already live in the
+sticky bar. An empty selected tier says to generate or upload, not a
+blank fold.
 The **Pose catalog** card (`#classification-library`)
 is a collapsed `<details>` (open when the list is empty or the song
 has holes). Album first, then **Song to check**, then **Tier** (R / XXX).

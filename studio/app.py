@@ -3690,7 +3690,8 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
         shown_roster = page_tier
     gen_tier = page_tier
     return templates.TemplateResponse(request, "anchors.html", dict(
-        anchor_form_ctx(scope_value, selected_tiers=[gen_tier] if gen_tier else []),
+        anchor_form_ctx(scope_value, selected_tiers=[gen_tier] if gen_tier else [],
+                        song_id=song_id),
         groups=group_list, gallery=gallery,
         known_albums=albums, playlists=playlists,
         coverage_by_tier=coverage_by_tier,
@@ -3855,7 +3856,8 @@ def _anchor_ctx_from_form(form, album, character_id):
                             latent=form.get("latent"),
                             pose=form.get("pose") or "",
                             selected_actor_ids=_selected_actor_ids(
-                                form, album, character_id))
+                                form, album, character_id),
+                            song_id=form.get("song_id") or "")
 
 
 @app.post("/anchors/refs")
@@ -5262,6 +5264,18 @@ async def anchor_preflight(request: Request):
     # what the renderer does not produce, in the one place whose whole job is
     # to agree with it.
     views_sel = sorted({v for v in form.getlist("view") if v})
+    need_keys = [k for k in form.getlist("need_key") if k]
+    if need_keys and tiers_sel:
+        miss = {g["key"]: g for g in missing_catalog_poses(
+            album, tiers_sel[0], song_id=form.get("song_id"))}
+        nude_keys = set(form.getlist("need_nude"))
+        derived = []
+        for key in need_keys:
+            g = miss.get(key)
+            if g:
+                derived.extend(_need_views(g, tiers_sel[0], key in nude_keys))
+        if derived:
+            views_sel = sorted(set(derived))
     blockers, notes = [], []
 
     if not album:
@@ -5281,8 +5295,11 @@ async def anchor_preflight(request: Request):
         notes.append(f"{ANCHOR_VIEWS.get(view, view)} is skipped for {tier.upper()} "
                      f"-- that tier permits no nudity.")
     if tiers_sel and not combos:
-        blockers.append("Every view you picked is a nude one and no tier you picked permits "
-                        "nudity, so there is nothing to render.")
+        if not views_sel and not need_keys:
+            blockers.append("Tick at least one missing pose.")
+        else:
+            blockers.append("Every view you picked is a nude one and no tier you picked permits "
+                            "nudity, so there is nothing to render.")
 
     # Count what the ROUTE counts: ticked gallery images PLUS anything in the
     # upload input. Counting only the ticks reported "no blockers, 4 sheets,
@@ -5298,10 +5315,12 @@ async def anchor_preflight(request: Request):
                         f"{pipeline.MAX_ANCHOR_REFS}. Untick some.")
     if not refs:
         front = None
-        for t in tiers_sel:
+        for t in list(tiers_sel) + ["xxx", "r", "pg13", "g"]:
             front = chosen_anchor("album", album, t, "front")
             if front and front["path"]:
                 break
+        if not front and actor_identity_url(album, None):
+            front = True
         if front:
             notes.append("No base ticked — using the chosen identity front as image1 "
                          "(empty latent + her, the measured pose-candidate path).")
@@ -5869,7 +5888,8 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
             raise HTTPException(400, "pick a tier chip in the sticky bar")
         work_tier = selected[0]
         nude_keys = set(form.getlist("need_nude"))
-        miss = {g["key"]: g for g in missing_catalog_poses(album, work_tier)}
+        miss = {g["key"]: g for g in missing_catalog_poses(
+            album, work_tier, song_id=form.get("song_id"))}
         actor_names, extra_ids = _form_actors(form, album, character_id)
         uploads = form_files(form, "images")
         extra = [a["path"] for a in await _save_anchor_refs(
@@ -5885,9 +5905,7 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
             g = miss.get(key)
             if not g:
                 continue
-            views = ["front"]
-            if key in nude_keys and tiers.allows_nudity(work_tier):
-                views.append("front_nude")
+            views = _need_views(g, work_tier, key in nude_keys)
             album, st, sv, combos = _validate_anchor_request(album, [work_tier], views)
             payload = _enqueue_anchor_jobs(
                 album, st, sv, combos, n, character_id, form, paths,
@@ -6227,10 +6245,25 @@ def default_anchor_prompt(scope_value, view, character_id=None, pose=None):
 
 
 def actor_identity_url(album, character_id=None):
-    """Chosen identity front for this body, else an identity photograph."""
+    """Chosen identity front for this body, else any chosen sheet, else a photo."""
     for t in ("xxx", "r", "pg13", "g"):
         row = chosen_anchor("album", album or "", t, "front", character_id)
         if row and row["path"] and os.path.isfile(row["path"]):
+            return media_url(row["path"])
+    params = [album or ""]
+    if character_id is None:
+        who = "a.character_id IS NULL"
+    else:
+        who = ("(a.character_id=? OR (a.scope_kind=? AND c.name="
+               "(SELECT name FROM characters WHERE id=?)))")
+        params.extend([character_id, db.SHARED_KIND, character_id])
+    for row in db.q(
+            f"""SELECT a.path FROM anchors a
+                LEFT JOIN characters c ON c.id = a.character_id
+                WHERE {db.visible_anchor_sql('a')} AND a.chosen=1 AND {who}
+                ORDER BY (a.view='front') DESC, (a.view='front_nude') DESC, a.id DESC""",
+            *params):
+        if row["path"] and os.path.isfile(row["path"]):
             return media_url(row["path"])
     for r in anchor_refs(album, character_id):
         if (r.get("role") or "identity") == "identity" and not r.get("pose_name"):
@@ -6257,16 +6290,69 @@ def form_actor_rows(album):
     return rows
 
 
-def missing_catalog_poses(album, tier):
-    """Unbound album-coverage rows at this tier (the generate checklist)."""
+_GAP_VIEW = {
+    "front": "front", "back": "back", "side": "profile", "profile": "profile",
+    "3qtr": "three_quarter", "3qtr-rear": "back",
+    "three-quarter": "three_quarter", "three_quarter": "three_quarter",
+}
+
+
+def _need_views(item, work_tier, want_nude):
+    """Camera keys a missing-pose tick should enqueue."""
+    raw = (item.get("view") or "front").strip().lower()
+    mapped = _GAP_VIEW.get(raw, "front" if raw not in ANCHOR_VIEWS else raw)
+    if mapped not in ANCHOR_VIEWS:
+        mapped = "front"
+    views = [mapped]
+    if want_nude and tiers.allows_nudity(work_tier):
+        nude = mapped if mapped.endswith("_nude") else f"{mapped}_nude"
+        if nude in ANCHOR_VIEWS and nude not in views:
+            views.append(nude)
+    return views
+
+
+def missing_catalog_poses(album, tier, song_id=""):
+    """Unbound coverage rows, plus this song's pose-gap holes at the tier.
+
+    album_coverage skips pose-unset scenes. Those still need a sheet — the
+    generate checklist has to list them or PG13 looks empty while the song
+    shows hole chips.
+    """
     album, tier = (album or "").strip(), (tier or "").strip()
     if not album or not tier:
         return []
+    missing = []
     try:
         cov = pose_plan.album_coverage(album, tier)
+        missing = [g for g in (cov.get("needed") or []) if not g.get("sheet_id")]
     except (LookupError, OSError, ValueError, json.JSONDecodeError):
-        return []
-    return [g for g in (cov.get("needed") or []) if not g.get("sheet_id")]
+        pass
+    raw = str(song_id or "").strip()
+    if not raw.isdigit():
+        return missing
+    try:
+        gap = storyboard_service.pose_gap(int(raw), tier=tier)
+    except (LookupError, ValueError, RuntimeError, TypeError):
+        return missing
+    seen = {g["key"] for g in missing}
+    for h in gap.get("holes") or []:
+        pose = (h.get("pose") or "").strip() or "unspecified"
+        view = (h.get("view") or "front").strip() or "front"
+        ward = (h.get("wardrobe") or "clothed").strip() or "clothed"
+        key = f"gap|{pose}|{view}|{ward}"
+        if key in seen:
+            continue
+        seen.add(key)
+        missing.append({
+            "key": key,
+            "label": pose if pose != "unspecified" else view,
+            "character_label": "",
+            "n_scenes": len(h.get("scenes") or []),
+            "view": view,
+            "wardrobe": ward,
+            "sheet_id": None,
+        })
+    return missing
 
 
 def identity_base_refs(album, character_id=None):
@@ -6297,7 +6383,7 @@ def anchor_plan(selected_tiers, selected_views):
 
 def anchor_form_ctx(album="", selected_tiers=(), selected_views=(), character_id=None,
                     typed_prompts=None, negative=None, tones=None, latent=None, pose=None,
-                    selected_actor_ids=None):
+                    selected_actor_ids=None, song_id=""):
     """The generate form for one album, across any number of tiers and views.
 
     Every view is offered against every tier; see anchor_plan() for what gets
@@ -6391,7 +6477,9 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=(), character_id
         "all_refs": anchor_refs(album, character_id),
         "generate_tier": (selected[0] if selected else ""),
         "allow_nude": bool(selected and tiers.allows_nudity(selected[0])),
-        "missing_poses": missing_catalog_poses(album, selected[0] if selected else ""),
+        "form_song_id": str(song_id or "").strip(),
+        "missing_poses": missing_catalog_poses(
+            album, selected[0] if selected else "", song_id=song_id),
         "form_actors": form_actor_rows(album),
         "max_anchor_prompt": MAX_ANCHOR_PROMPT, "max_uploads": MAX_ANCHOR_UPLOADS,
         "max_refs": pipeline.MAX_ANCHOR_REFS,
@@ -6484,7 +6572,8 @@ def anchor_form(request: Request, album: str = "", tier: List[str] = Query([]),
                                                        character_id, typed_prompts, negative, tones,
                                                        latent=qp.get("latent"), pose=pose,
                                                        selected_actor_ids=_selected_actor_ids(
-                                                           qp, album, character_id)))
+                                                           qp, album, character_id),
+                                                       song_id=qp.get("song_id") or ""))
 
 
 def _drop_anchor(row):

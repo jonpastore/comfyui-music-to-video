@@ -2357,7 +2357,7 @@ def test_nude_anchor_refused_for_a_tier_that_does_not_permit_nudity():
         # named a tier you could no longer see ticked.
         pg = client.get("/anchors/form", params={"album": "Nude Gate Album",
                                                   "tier": "pg13"}).text
-        assert "missing-pose" in pg or "No missing catalog poses" in pg or "Pick a tier chip" in pg
+        assert "missing-pose" in pg or "No missing poses" in pg or "Pick a tier chip" in pg
         assert 'class="view-matrix"' not in pg
         assert "greyed out because" not in pg
 
@@ -2413,7 +2413,7 @@ def test_anchor_form_does_not_preselect_a_tier_or_view():
         assert "No nude view is offered because" not in page
         rform = client.get("/anchors/form", params={"album": "Default Tier Album",
                                                      "tier": "r"}).text
-        assert 'name="need_key"' in rform or "No missing catalog poses" in rform
+        assert 'name="need_key"' in rform or "No missing poses" in rform
 
 
 def test_anchor_form_folds_and_actions_are_icons():
