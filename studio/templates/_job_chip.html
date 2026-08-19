@@ -18,8 +18,9 @@
   {% if queue_latest %}
   <span class="job-chip-kind">{{ queue_latest.desc }}</span>
   <span class="job-chip-meta">#{{ queue_latest.job.id }} · {{ queue_latest.job.status }}</span>
-  {% if queue_latest.job.progress or queue_latest.job.error %}
-  <span class="job-chip-progress truncate">{{ queue_latest.job.error or queue_latest.job.progress }}</span>
+  {% set chip_prog = queue_latest.job.error or queue_latest.job.progress %}
+  {% if chip_prog and chip_prog != queue_latest.job.status %}
+  <span class="job-chip-progress truncate">{{ chip_prog }}</span>
   {% endif %}
   {% else %}
   <span class="muted">idle</span>

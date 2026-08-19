@@ -750,6 +750,16 @@ document.addEventListener("DOMContentLoaded", function () {
   formatLocalTimes(document);
   applyRerollChip(document.getElementById("job-chip"));
   applyClipsChip(document.getElementById("job-chip"));
+  document.querySelectorAll(".reroll-bar").forEach(paintSeedPlan);
+  if (document.querySelector(".still-pending[data-job-id]")) armStillSweep();
+});
+document.addEventListener("input", function (e) {
+  var form = e.target && e.target.closest && e.target.closest(".reroll-bar");
+  if (form) paintSeedPlan(form);
+});
+document.addEventListener("change", function (e) {
+  var form = e.target && e.target.closest && e.target.closest(".reroll-bar");
+  if (form) paintSeedPlan(form);
 });
 
 // ---- keyboard review ------------------------------------------------------
@@ -1141,10 +1151,12 @@ document.body.addEventListener("htmx:afterSwap", function (e) {
       if (lt) lt.click();
     }
   }
-  var chip = (target && target.id === "job-chip") ? target
-    : document.getElementById("job-chip");
+  // outerHTML swap leaves e.detail.target as the DETACHED old chip
+  // (often still status=running). Always read the live one.
+  var chip = document.getElementById("job-chip");
   applyRerollChip(chip);
   applyClipsChip(chip);
+  document.querySelectorAll(".reroll-bar").forEach(paintSeedPlan);
 });
 document.addEventListener("toggle", function (e) {
   if (e.target && e.target.tagName === "DETAILS" && e.target.open) {
@@ -2167,8 +2179,10 @@ function initSongPage() {
       refreshQueue();
       if (job.status === "done") {
         if (form && (form.classList.contains("reroll-bar") ||
-                     form.classList.contains("clip-bar"))) refreshSceneRow(form);
-        else refreshSong();
+                     form.classList.contains("clip-bar"))) {
+          refreshSceneRow(form);
+          sweepPendingStillCards();
+        } else refreshSong();
         return;
       }
       if (job.status === "failed" || job.status === "cancelled") {
@@ -2865,6 +2879,58 @@ function reloadSbPanel(form) {
   htmx.ajax("GET", dest, {target: body, swap: "innerHTML"});
 }
 
+function seedPlan(n, lo, hi, mode) {
+  n = parseInt(n, 10);
+  lo = parseInt(lo, 10);
+  hi = parseInt(hi, 10);
+  if (!(n >= 1) || isNaN(lo) || isNaN(hi) || hi < lo) return [];
+  if (n > (hi - lo + 1)) return [];
+  if (n === 1) return [lo];
+  var out = [], i;
+  if (mode === "fib") {
+    var steps = [], a = 1, b = 1;
+    for (i = 0; i < n - 1; i++) { steps.push(a); var t = a + b; a = b; b = t; }
+    var span = hi - lo, total = 0, acc = 0;
+    for (i = 0; i < steps.length; i++) total += steps[i];
+    out = [lo];
+    for (i = 0; i < steps.length; i++) {
+      acc += steps[i];
+      out.push(i === steps.length - 1 ? hi : lo + Math.round(span * acc / total));
+    }
+  } else {
+    for (i = 0; i < n; i++) out.push(lo + Math.round(i * (hi - lo) / (n - 1)));
+  }
+  var seen = {}, fixed = [], nxt = lo;
+  for (i = 0; i < out.length; i++) {
+    var s = Math.max(lo, Math.min(hi, Math.round(out[i])));
+    if (seen[s]) {
+      s = nxt;
+      while (seen[s] && s <= hi) s += 1;
+      if (s > hi) return [];
+    }
+    seen[s] = true;
+    fixed.push(s);
+    nxt = s + 1;
+  }
+  return fixed;
+}
+
+function paintSeedPlan(form) {
+  if (!form) return;
+  var hint = form.querySelector(".js-seed-plan");
+  if (!hint) return;
+  var n = (form.querySelector('[name="n"]') || {}).value;
+  var lo = (form.querySelector('[name="seed_min"]') || {}).value;
+  var hi = (form.querySelector('[name="seed_max"]') || {}).value;
+  var step = (form.querySelector('[name="step"]') || {}).value || "equal";
+  var seeds = seedPlan(n, lo, hi, step);
+  if (!seeds.length) {
+    hint.textContent = n + " unique seeds cannot fit in " + lo + "–" + hi;
+    return;
+  }
+  hint.textContent = "seeds " + seeds.join(" · ");
+}
+
 function paintRerollPlaceholders(form, d) {
   var row = form && form.closest(".stills-row");
   if (!row) return;
@@ -2890,6 +2956,7 @@ function paintRerollPlaceholders(form, d) {
       "<div class=\"still-icons\" aria-hidden=\"true\"></div>";
     strip.appendChild(fig);
   }
+  armStillSweep();
 }
 
 function clearRerollPlaceholders(jobId, root) {
@@ -2934,6 +3001,54 @@ function clearClipPlaceholders(jobId, root) {
   if (!jobId) return;
   scope.querySelectorAll('.clip-pending[data-job-id="' + jobId + '"]').forEach(function (el) {
     el.remove();
+  });
+}
+
+var _pendingStillAsk = {};
+var _stillSweepTimer = null;
+function armStillSweep() {
+  if (_stillSweepTimer) return;
+  _stillSweepTimer = setInterval(function () {
+    if (!document.querySelector(".still-pending[data-job-id]")) {
+      clearInterval(_stillSweepTimer);
+      _stillSweepTimer = null;
+      return;
+    }
+    sweepPendingStillCards();
+  }, 2500);
+  sweepPendingStillCards();
+}
+
+function sweepPendingStillCards() {
+  var cards = document.querySelectorAll(".still-pending[data-job-id]");
+  if (!cards.length) return;
+  var seen = {};
+  Array.prototype.forEach.call(cards, function (fig) {
+    var jid = fig.getAttribute("data-job-id");
+    if (!jid || seen[jid]) return;
+    seen[jid] = true;
+    var now = Date.now();
+    if (_pendingStillAsk[jid] && now - _pendingStillAsk[jid] < 2000) return;
+    _pendingStillAsk[jid] = now;
+    var scene = fig.closest(".scene");
+    fetch("/jobs/" + jid, {headers: {Accept: "application/json"}})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (job) {
+        if (!job) return;
+        if (job.status === "failed" || job.status === "cancelled") {
+          clearRerollPlaceholders(jid);
+          return;
+        }
+        if (job.status === "done") {
+          if (scene) {
+            refreshSceneEl(scene, scene.getAttribute("data-song"),
+                           scene.getAttribute("data-tier"), jid);
+          } else {
+            clearRerollPlaceholders(jid);
+          }
+        }
+      })
+      .catch(function () {});
   });
 }
 
@@ -2997,9 +3112,16 @@ function refreshSceneRow(form) {
 }
 
 function sceneElForClip(tier, clipIdx) {
-  var sel = '.sb-panel[data-tier="' + tier + '"] .reroll-bar input[name=clip_idx][value="' + clipIdx + '"]';
-  var input = document.querySelector(sel);
-  return input ? input.closest(".scene") : null;
+  var inputs = document.querySelectorAll(
+    '.reroll-bar input[name=clip_idx][value="' + clipIdx + '"]');
+  for (var i = 0; i < inputs.length; i++) {
+    var scene = inputs[i].closest(".scene");
+    if (!scene) continue;
+    if (tier && scene.getAttribute("data-tier") &&
+        scene.getAttribute("data-tier") !== String(tier)) continue;
+    return scene;
+  }
+  return null;
 }
 
 function refreshSceneEl(scene, songId, tier, jobId) {
@@ -3032,6 +3154,7 @@ function refreshSceneEl(scene, songId, tier, jobId) {
 var _appliedReroll = {};
 
 function applyRerollChip(chip) {
+  sweepPendingStillCards();
   if (!chip || chip.getAttribute("data-kind") !== "reroll") return;
   var jid = chip.getAttribute("data-job-id");
   var status = chip.getAttribute("data-status");
@@ -3066,6 +3189,15 @@ function applyRerollChip(chip) {
     any = true;
     refreshSceneEl(scene, songId || chipSong, tier, jid);
   });
+  if (!any) {
+    var pending = document.querySelector('.still-pending[data-job-id="' + jid + '"]');
+    var scene = pending && pending.closest(".scene");
+    if (scene) {
+      any = true;
+      refreshSceneEl(scene, songId || chipSong || scene.getAttribute("data-song"),
+                     tier || scene.getAttribute("data-tier"), jid);
+    }
+  }
   if (any) _appliedReroll[key] = true;
 }
 

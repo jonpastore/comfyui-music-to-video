@@ -2114,7 +2114,10 @@ def test_approve_grid_groups_by_scene_and_puts_seed_above_the_name():
         assert "Part 1" not in page
         assert "Clip #0" not in page
         assert "Images to generate" in page
+        assert "Seed min" in page
+        assert "Seed max" in page
         assert "Seed stepping" in page
+        assert "js-seed-plan" in page
         assert 'name="n"' in page
         assert 'name="seed_min"' in page
         assert 'name="seed_max"' in page

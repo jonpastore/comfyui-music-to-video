@@ -717,7 +717,11 @@ show them (`test_approve_grid_fix_is_a_dialog_not_an_inline_form`).
 You edit the scene prompt and pick the scene still. Clip chopping is
 not an operator step. If the scene is longer than one render, it
 splits and part 2+ starts on the last frame (T2-10 / T2-11). Reroll is n / seed min–max / equal or
-fibonacci. A candidate has Approve, Fix, Delete. Thumbs open
+fibonacci; the bar lists the planned seeds (`8000 · 9000 · 10000 · 11000`
+for the default equal band). Those numbers are seeds, not sampler steps
+(Anchors Steps stays 28 / 50). A finished reroll swaps the scene row
+so `rendering…` tiles become stills without a refresh
+(`sweepPendingStillCards`). A candidate has Approve, Fix, Delete. Thumbs open
 `#ref-preview`. `test_approve_grid_groups_by_scene_and_puts_seed_above_the_name`.
 **Library:** **Upload a song** is a collapsed `<details id="fold-upload">`
 (open only when the library is empty). Album is a text field with

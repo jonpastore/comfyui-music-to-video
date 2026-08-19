@@ -1755,7 +1755,7 @@ img.lazy-src, video.lazy-src {
 .scene-preview .reroll-form { margin-top: 0.5rem; }
 .reroll-bar {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 0.65rem;
   overflow-x: auto;
@@ -1782,6 +1782,10 @@ img.lazy-src, video.lazy-src {
 .reroll-bar input[type=number] { width: 5.2rem; }
 .reroll-bar select { min-width: 7.5rem; }
 .reroll-bar button { align-self: flex-end; margin: 0; }
+.reroll-bar .js-seed-plan {
+  flex: 1 0 100%;
+  margin: 0.1rem 0 0;
+}
 .still-pending .still-skeleton,
 .clip-pending .still-skeleton {
   width: 100%;

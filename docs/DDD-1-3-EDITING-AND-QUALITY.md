@@ -698,7 +698,10 @@ and submit skips `.expect.json` (**refs-length per-clip**,
    Scene-scoped `build_song --only` and studio Render clip (`scene=` /
    `clip_idx=`) skip T2-13e / T2-25. Scene preview is plate / stills / clips. Reroll plants
    `.ref-frame.clip-tile` shimmer cards (same 190px / 3:4 frame as a
-   finished still). Render clip plants the same cards in
+   finished still). The bar labels Seed min / Seed max and lists the
+   planned seeds. A leftover still shimmer is swapped for the scene
+   row when that reroll is done (`sweepPendingStillCards`; chip
+   `afterSwap` reads the live `#job-chip`). Render clip plants the same cards in
    `.media-strip.scene-clips` (`paintClipPlaceholders`) and calls
    `refreshQueue()` so an idle chip starts polling. `#clip-preview`
    walks the clicked `.scene-clips` strip (`thumbs(fromEl)`), not every

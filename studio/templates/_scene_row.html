@@ -239,10 +239,10 @@
         <label>Images to generate
           <input type="number" name="n" value="4" min="1" max="16">
         </label>
-        <label>Min
+        <label>Seed min
           <input type="number" name="seed_min" value="8000" min="0">
         </label>
-        <label>Max
+        <label>Seed max
           <input type="number" name="seed_max" value="11000" min="0">
         </label>
         <label>Seed stepping
@@ -253,6 +253,7 @@
         </label>
         <button type="submit">Reroll</button>
         <span class="save-note" aria-live="polite"></span>
+        <p class="hint js-seed-plan" aria-live="polite"></p>
       </form>
       {% endif %}
       {% if cands %}

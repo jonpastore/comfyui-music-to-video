@@ -109,6 +109,14 @@ def test_sb_panel_toolbar_and_closed_json():
         assert "el.closest(\".clip-frame\")" in js
         assert "function sweepPendingClipCards" in js
         assert "clearClipPlaceholders(jid)" in js.split("function sweepPendingClipCards", 1)[1]
+        assert "function sweepPendingStillCards" in js
+        assert "function armStillSweep" in js
+        assert "function seedPlan" in js
+        assert "function paintSeedPlan" in js
+        assert "outerHTML swap leaves" in js
+        assert 'getElementById("job-chip")' in js.split("outerHTML swap leaves", 1)[1][:400]
+        assert '.sb-panel[data-tier="' not in js.split("function sceneElForClip", 1)[1][:500]
+        assert "data-tier" in js.split("function sceneElForClip", 1)[1][:500]
         clip_submit = js.split("form.clip-bar", 1)[1][:900]
         assert "refreshQueue();" in clip_submit
         assert "function thumbs(fromEl)" in js
@@ -118,6 +126,7 @@ def test_sb_panel_toolbar_and_closed_json():
         assert ".clip-frame .still-thumb" in css
         assert "aspect-ratio: 3 / 4" in css.split(".clip-frame .still-thumb", 1)[1][:280]
         assert "aspect-ratio: 3 / 4" in css.split(".still-pending .still-skeleton", 1)[1][:280]
+        assert ".reroll-bar .js-seed-plan" in css
         assert "refreshSceneEl" in js
         assert "if (!el || !jobId) return" not in js
         assert "seekNonBlackFrame" in js
