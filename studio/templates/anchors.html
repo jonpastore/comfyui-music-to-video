@@ -131,9 +131,11 @@
             data-id="{{ im.ids[0] }}" data-view="{{ im.view }}"
             data-pose="{{ im.pose }}" data-wardrobe="{{ im.wardrobe }}"
             data-usable="{{ im.usable }}"
-            data-urls='{{ im.urls | tojson }}'>
+            data-urls='{{ im.urls | tojson }}'
+            data-paths='{{ im.paths | tojson }}'
+            data-wards='{{ im.wards | tojson }}'>
       {% if im.thumb %}
-      <img src="{{ im.thumb }}?w=96" alt="" width="36" height="48" loading="lazy">
+      <img src="{{ im.thumb }}?w=480" alt="" loading="lazy">
       {% else %}
       <span class="pose-ph" aria-hidden="true"></span>
       {% endif %}
@@ -350,6 +352,25 @@
     <img alt="">
     {{ media_nav_next("Next pose") }}
   </div>
+  <form id="keeper-apply" class="keeper-apply" hidden>
+    <p class="hint">Same file. Tick every album and tier this sheet should keep.</p>
+    <div class="check-row">
+      {% for a in albums %}
+      <label class="check"><input type="checkbox" name="album" value="{{ a }}"
+        {% if a == (class_album or form_album) %}checked{% endif %}>{{ a }}</label>
+      {% endfor %}
+    </div>
+    <div class="check-row">
+      {% for t in tiers %}
+      <label class="check"><input type="checkbox" name="tier" value="{{ t.name }}"
+        {% if pose_gap and t.name == pose_gap.tier %}checked{% endif %}>{{ t.name | tiername }}</label>
+      {% endfor %}
+    </div>
+    <div class="button-row">
+      <button type="submit">Apply this sheet</button>
+      <span class="save-note" id="keeper-apply-note"></span>
+    </div>
+  </form>
 </dialog>
 <dialog class="lightbox" id="anchor-lightbox">
   <div class="lightbox-bar">

@@ -380,6 +380,14 @@ def test_group_rows_one_row_per_pose():
     assert got[0]["view"] == "front"
     assert got[1]["view"] == ""
     assert classification.pose_label("3qtr nude") == "3qtr"
+    same = [
+        _image("x", pose="back", view="front", wardrobe="clothed", path="/tmp/a.jpg"),
+        _image("y", pose="back", view="front", wardrobe="clothed", path="/tmp/a.jpg"),
+    ]
+    same[0]["url"] = "/media/a.jpg"
+    same[1]["url"] = "/media/a.jpg"
+    one = classification.group_rows(same)
+    assert one[0]["n_clothed"] == 1
 
 
 def test_keeper_chips_group_and_resolve_basename():

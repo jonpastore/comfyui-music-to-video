@@ -4508,19 +4508,31 @@ document.addEventListener("click", function (e) {
       try { urls = JSON.parse(chip.getAttribute("data-urls") || "[]"); } catch (err) { urls = []; }
       if (!Array.isArray(urls)) urls = [];
       var label = (chip.getAttribute("data-pose") || "").trim() || "Keeper";
+      var paths = [];
+      var wards = [];
+      try { paths = JSON.parse(chip.getAttribute("data-paths") || "[]"); } catch (err) { paths = []; }
+      try { wards = JSON.parse(chip.getAttribute("data-wards") || "[]"); } catch (err) { wards = []; }
+      if (!Array.isArray(paths)) paths = [];
+      if (!Array.isArray(wards)) wards = [];
       var n = urls.length;
       if (!n) {
-        items = [{ full: "", label: label + " · no file" }];
+        items = [{ full: "", label: label + " · no file", path: "", wardrobe: "" }];
       } else {
         items = urls.map(function (u, i) {
           return { full: previewSrc(u),
-                   label: n > 1 ? (label + " · " + (i + 1) + "/" + n) : label };
+                   label: n > 1 ? (label + " · " + (i + 1) + "/" + n) : label,
+                   path: paths[i] || "",
+                   wardrobe: wards[i] || chip.getAttribute("data-wardrobe") || "" };
         });
       }
+      var apply = document.getElementById("keeper-apply");
+      if (apply) apply.hidden = false;
       show(0);
       dlg.showModal();
       return;
     }
+    var applyHide = document.getElementById("keeper-apply");
+    if (applyHide) applyHide.hidden = true;
     var btn = e.target.closest(".pose-roster-open");
     if (!btn) return;
     items = thumbs();
@@ -4529,6 +4541,35 @@ document.addEventListener("click", function (e) {
     show(at);
     dlg.showModal();
   });
+  var applyForm = document.getElementById("keeper-apply");
+  if (applyForm) {
+    applyForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var cur = items[idx] || {};
+      var albums = [];
+      applyForm.querySelectorAll('input[name="album"]:checked').forEach(function (el) {
+        albums.push(el.value);
+      });
+      var workTiers = [];
+      applyForm.querySelectorAll('input[name="tier"]:checked').forEach(function (el) {
+        workTiers.push(el.value);
+      });
+      var note = document.getElementById("keeper-apply-note");
+      if (note) note.textContent = "Applying…";
+      api("/api/keepers/apply", {
+        path: cur.path || "",
+        pose: (cur.label || "").split(" · ")[0],
+        wardrobe: cur.wardrobe || "",
+        albums: albums,
+        tiers: workTiers,
+      }).then(function (d) {
+        if (note) note.textContent = "Kept on " + (d.albums || []).join(", ") +
+          " · " + (d.tiers || []).join(", ");
+      }).catch(function (err) {
+        if (note) note.textContent = err.message || String(err);
+      });
+    });
+  }
   document.addEventListener("keydown", function (e) {
     if (!dlg.open) return;
     if (e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;

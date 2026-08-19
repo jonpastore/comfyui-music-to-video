@@ -2073,39 +2073,50 @@ img.lazy-src, video.lazy-src {
 .missing-pose-nude { font-size: 0.85rem; color: var(--muted); }
 .keeper-filter { display: block; max-width: 18rem; margin: 0.35rem 0 0.5rem; }
 .keeper-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  max-height: min(28rem, 50vh);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  max-height: min(36rem, 60vh);
   overflow: auto;
   margin: 0.3rem 0 0.6rem;
   padding-right: 0.2rem;
 }
+@media (max-width: 860px) {
+  .keeper-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .keeper-row {
-  display: grid;
-  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.65rem;
-  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
   margin: 0;
-  padding: 0.25rem 0.4rem;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
+  overflow: hidden;
 }
-.keeper-row:hover { background: var(--panel); }
+.keeper-row:hover { border-color: var(--border-strong); }
 .keeper-row img,
 .keeper-row .pose-ph {
-  width: 2.25rem;
-  height: 3rem;
+  width: 100%;
+  height: 10.5rem;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: 0;
+  background: var(--bg);
 }
-.keeper-row-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.keeper-row-name { font-weight: 600; padding: 0 0.55rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.keeper-row .muted { padding: 0 0.55rem 0.5rem; }
+.keeper-apply {
+  margin: 0.6rem 0.4rem 0.4rem;
+  padding: 0.55rem 0.65rem;
+  border-top: 1px solid var(--border);
+}
+.keeper-apply .check-row { margin: 0.35rem 0; }
 .class-chip.hole { border-color: var(--danger); color: var(--danger); }
 button.class-chip.hole {
   font: inherit;

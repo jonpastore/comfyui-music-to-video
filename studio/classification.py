@@ -210,6 +210,9 @@ def group_rows(images):
                 "ids": [],
                 "urls_clothed": [],
                 "urls_nude": [],
+                "paths_clothed": [],
+                "paths_nude": [],
+                "seen": set(),
                 "n_clothed": 0,
                 "n_nude": 0,
                 "thumb": "",
@@ -217,18 +220,29 @@ def group_rows(images):
             index[key] = row
             rows.append(row)
         row = index[key]
+        path = (im.get("path") or "").strip()
+        real = os.path.realpath(path) if path else ""
+        dupe = (ward, real) if real else None
+        if dupe and dupe in row["seen"]:
+            continue
+        if dupe:
+            row["seen"].add(dupe)
         row["ids"].append(im.get("id") or "")
         url = (im.get("url") or "").strip()
         if ward == "nude":
             row["n_nude"] += 1
             if url:
                 row["urls_nude"].append(url)
+            if path:
+                row["paths_nude"].append(path)
         else:
             row["n_clothed"] += 1
             if url:
                 row["urls_clothed"].append(url)
-                if not row["thumb"]:
-                    row["thumb"] = url
+            if path:
+                row["paths_clothed"].append(path)
+            if url and not row["thumb"]:
+                row["thumb"] = url
         if url and not row["thumb"]:
             row["thumb"] = url
         view = (im.get("view") or "").strip()
@@ -239,7 +253,11 @@ def group_rows(images):
     for row in rows:
         row["n"] = row["n_clothed"] + row["n_nude"]
         row["urls"] = row["urls_clothed"] + row["urls_nude"]
+        row["paths"] = row["paths_clothed"] + row["paths_nude"]
+        row["wards"] = (["clothed"] * len(row["paths_clothed"]) +
+                        ["nude"] * len(row["paths_nude"]))
         row["wardrobe"] = "nude" if row["n_nude"] and not row["n_clothed"] else "clothed"
+        row.pop("seen", None)
     return rows
 
 
@@ -291,6 +309,7 @@ def add_keeper(album, image, character_id=None):
     """Append or replace one keeper. New version. No GPU."""
     parsed = _parse_document({"images": [image]})["images"][0]
     images = list(library(album, character_id)["images"])
+    new_real = os.path.realpath(parsed["path"]) if parsed.get("path") else ""
     images = [
         im for im in images
         if im.get("id") != parsed["id"]
@@ -299,6 +318,7 @@ def add_keeper(album, image, character_id=None):
             and im.get("view") == parsed["view"]
             and im.get("wardrobe") == parsed["wardrobe"]
         )
+        and not (new_real and os.path.realpath(im.get("path") or "") == new_real)
     ]
     images.append(parsed)
     return save(album, {"images": images}, character_id)

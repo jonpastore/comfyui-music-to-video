@@ -1330,7 +1330,8 @@ stamp `render_json.actors` (`POST /anchors/{id}/actors`). Arrows and Delete are 
 select is focused so classifying does not step or delete the sheet.
 Roster thumbs open `#pose-preview`. Playlist Anchors uses
 character tabs and Clothed/Nude family tabs. On `/anchors` the gallery tabs are **tier → character → clothed/nude**, plus an **Actors** tab for multi-body plates (split roast, cowgirl, or any sheet with two or more stamped actors). Every album character gets a tab on every tier even when that tier has no sheet yet (empty clothed/nude). Solo all-fours stays on the owner. **Generate a missing pose** is one collapsible card. Album and tier
-come from the sticky bar (one tier at a time); the form has no second
+come from the sticky bar (one tier at a time; **every** builtin tier is
+a chip, including 0/0). The form has no second
 album select and no G/PG-13/R/XXX checkbox row. The right column is
 **missing catalog poses** for that album+tier (not the old
 front/back × clothed/nude matrix). Nude is a per-pose tick only when
@@ -1477,12 +1478,12 @@ sets `gap_tier` and ticks that generate-form tier. **Character catalog**
 The **Pose catalog** card (`#classification-library`)
 is a collapsed `<details>` (open when the list is empty or the song
 has holes). Album first, then **Song to check**, then **Tier** (R / XXX).
-Tagged keepers are **one row per pose** (thumb + name + clothed/nude
-counts), not a chip wall of `pose / view / wardrobe usable`. Sheet
-slugs like `pose_71` stay off the label. Several files of the same
-stance share the row; click opens `#pose-preview` and arrows step
-through that group. A filter appears once there are more than eight
-poses. Sidecar basenames resolve
+Tagged keepers are a **3-column card grid** (large thumb + pose name +
+clothed/nude counts). Same file is one card, not four chips. Click
+opens `#pose-preview`; **Apply this sheet** writes that path as keeper
+on every ticked album and tier (`POST /api/keepers/apply`) — no second
+copy on disk. Sheet slugs like `pose_71` stay off the label. A filter
+appears once there are more than eight poses. Sidecar basenames resolve
 through `resolve_image_path` so a live `tense.jpg` gets a `/media/`
 url. Missing chips say `{tier} · {wardrobe} · {pose} · {view}` plus
 a scene count; `unspecified` paints as **pose unset**, not a dump of

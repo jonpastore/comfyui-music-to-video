@@ -3500,6 +3500,7 @@ def _anchors_classification_ctx(album, song_id="", gap_tier=""):
     for im in keepers:
         path = pose_generate.resolve_image_path(im.get("path") or "")
         if path:
+            im["path"] = path
             im["url"] = media_url(path)
     rows = classification.group_rows(keepers)
     n_clothed = sum(1 for im in keepers if im.get("wardrobe") == "clothed")
@@ -3598,7 +3599,9 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
         shown_roster = ""
     gallery = nest_anchor_groups(group_list)
     sticky_tiers = []
-    for t, cov in coverage_by_tier.items():
+    for trow in tiers.all_tiers():
+        t = trow["name"]
+        cov = coverage_by_tier.get(t) or {}
         n_chars = 0
         for sec in gallery:
             for tr in sec.get("tiers") or []:
@@ -7783,6 +7786,70 @@ def api_album_sheets(album: str, family: str = ""):
         })
     return JSONResponse({"album": album, "family": want or None,
                          "n": len(rows), "sheets": rows})
+
+
+@app.post("/api/keepers/apply")
+async def api_apply_keeper(request: Request):
+    """Point many albums and tiers at one file. Does not copy bytes."""
+    import pose_generate
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required")
+    if not isinstance(body, dict):
+        raise HTTPException(400, "JSON object required")
+    path = pose_generate.resolve_image_path(body.get("path") or "")
+    if not path:
+        raise HTTPException(400, "that sheet has no file")
+    pose = classification.pose_label(body.get("pose") or "")
+    wardrobe = "nude" if (body.get("wardrobe") or "") == "nude" else "clothed"
+    view = (body.get("view") or "front").strip() or "front"
+    if wardrobe == "nude" and not make_anchor.is_nude_view(view):
+        view = "front_nude" if view == "front" else view + "_nude"
+    if wardrobe != "nude":
+        view = view.replace("_nude", "") or "front"
+    albums = [a.strip() for a in (body.get("albums") or []) if str(a).strip()]
+    work_tiers = [t.strip() for t in (body.get("tiers") or []) if str(t).strip()]
+    if not albums:
+        raise HTTPException(400, "tick at least one album")
+    if not work_tiers:
+        raise HTTPException(400, "tick at least one tier")
+    names = {p["name"] for p in db.q("SELECT name FROM playlists WHERE kind='playlist'")}
+    for album in albums:
+        if album not in names:
+            raise HTTPException(400, f"no album called {album!r}")
+        classification.add_keeper(album, {
+            "id": f"apply-{os.path.basename(path)}-{wardrobe}",
+            "path": path,
+            "kind": "operator",
+            "view": view,
+            "pose": pose,
+            "wardrobe": wardrobe,
+            "usable": "pose",
+        })
+    picked = []
+    for album in albums:
+        for t in work_tiers:
+            valid_tier_or_400(t)
+            if wardrobe == "nude" and not tiers.allows_nudity(t):
+                continue
+            row = db.one(
+                """SELECT * FROM anchors WHERE scope_kind='album' AND scope_value=?
+                   AND tier=? AND view=? AND path=? AND character_id IS NULL""",
+                album, t, view, path)
+            if not row:
+                aid = db.run(
+                    """INSERT INTO anchors
+                       (scope_kind, scope_value, tier, view, path, chosen, created)
+                       VALUES ('album',?,?,?,?,0,?)""",
+                    album, t, view, path, time.time())
+                row = db.one("SELECT * FROM anchors WHERE id=?", aid)
+            picked.append(_pick_anchor(row["id"]))
+            pose_plan.stamp_sheet_pose_name(row["id"], pose)
+    return JSONResponse({
+        "ok": True, "path": path, "pose": pose, "view": view,
+        "albums": albums, "tiers": work_tiers, "n": len(picked),
+    })
 
 
 @app.post("/api/albums/{album}/classification/from-sheets")
