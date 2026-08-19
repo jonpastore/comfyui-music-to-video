@@ -235,7 +235,11 @@
   <div class="tier-panel {% if t != ns.shown %}hidden{% endif %}"
        data-album="coverage" data-tier="{{ t }}">
     {% if not cov.needed %}
+    {% if cov.n_boards %}
+    <p class="empty">This album has a {{ t | tiername }} storyboard, but no scene named a pose (standing / kneeling / …). The holes are in <strong>Missing on this song</strong>.</p>
+    {% else %}
     <p class="empty">No storyboard on this album at {{ t | tiername }} yet.</p>
+    {% endif %}
     {% else %}
     {% if cov.people and cov.people | length > 1 %}
     <div class="cast-tabs pose-who-tabs" role="tablist" aria-label="Filter poses by character">

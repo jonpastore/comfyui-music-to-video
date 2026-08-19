@@ -643,18 +643,31 @@ def album_coverage(album, tier):
     songs = db.q("SELECT * FROM songs WHERE album=? ORDER BY title", album or "")
     people = _album_leads(album)
     groups = {}
+    n_boards = 0
     for song in songs:
         if not db.one("SELECT id FROM storyboards WHERE song_id=? AND tier=?",
                       song["id"], tier):
             continue
+        n_boards += 1
         try:
             p = plan(song, tier)
         except (LookupError, OSError, ValueError, json.JSONDecodeError):
             continue
+        try:
+            gap = storyboard_service.pose_gap(song["id"], tier=tier)
+        except (LookupError, ValueError, RuntimeError, TypeError):
+            gap = {}
+        unset_holes = {
+            (h.get("view") or "front", h.get("wardrobe") or "clothed"): h
+            for h in (gap.get("holes") or [])
+            if ((h.get("pose") or "unspecified").strip() or "unspecified")
+            == "unspecified"
+        }
         for item in p["scenes"]:
             pose_line = (item.get("pose") or "").strip()
             if not pose_line and not item.get("sheet_id"):
-                # Environment / no-pose scenes are not a library slot.
+                # Pose-unset still needs a sheet (Missing-on-this-song holes).
+                # Group by view + wardrobe, not one row per scene.
                 continue
             who = item.get("characters") or people[:1]
             pose_key = (str(item["sheet_id"]) if item["sheet_id"]
@@ -699,6 +712,44 @@ def album_coverage(album, tier):
                 g["sheet_id"] = item["sheet_id"]
                 g["path"] = item["path"]
                 g["source"] = item["source"]
+        for (view, ward), h in unset_holes.items():
+            pose_key = f"unspecified|{view}|{ward}"
+            who = []
+            for item in p["scenes"]:
+                if item.get("num") in (h.get("scenes") or []):
+                    _append_people(who, item.get("actors") or item.get("characters") or [])
+            if not who:
+                who = list(people[:1])
+            key = f"{_who_key(who)}|{pose_key}"
+            g = groups.get(key)
+            if g is None:
+                g = {
+                    "key": key,
+                    "who": _who_key(who),
+                    "label": f"{view} · pose unset",
+                    "sheet_id": None,
+                    "path": None,
+                    "source": "unbound",
+                    "characters": who,
+                    "character_label": _who_label(who),
+                    "actors": list(who),
+                    "actor_label": _who_label(who),
+                    "songs": [],
+                    "binds": [],
+                    "needs": [],
+                    "mage_parts": [],
+                    "n_scenes": 0,
+                    "view": view,
+                    "wardrobe": ward,
+                    "pose": "unspecified",
+                }
+                groups[key] = g
+            _append_people(g["actors"], who)
+            g["actor_label"] = _who_label(g["actors"])
+            g["character_label"] = _who_label(g["characters"] or g["actors"])
+            g["n_scenes"] += len(h.get("scenes") or []) or 1
+            if not any(s["id"] == song["id"] for s in g["songs"]):
+                g["songs"].append({"id": song["id"], "title": song["title"]})
     needed = sorted(groups.values(),
                     key=lambda r: (r["sheet_id"] is not None,
                                    r["character_label"].lower(),
@@ -735,6 +786,7 @@ def album_coverage(album, tier):
     return {
         "album": album or "",
         "tier": tier,
+        "n_boards": n_boards,
         "needed": needed,
         "n_needed": len(needed),
         "n_have": sum(1 for r in needed if r["sheet_id"]),

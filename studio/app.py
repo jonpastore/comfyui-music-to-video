@@ -6432,12 +6432,20 @@ def missing_catalog_poses(album, tier, song_id=""):
     except (LookupError, ValueError, RuntimeError, TypeError):
         return missing
     seen = {g["key"] for g in missing}
+    seen_unset = {
+        (g.get("view") or "front", g.get("wardrobe") or "clothed")
+        for g in missing
+        if (g.get("pose") == "unspecified"
+            or "pose unset" in (g.get("label") or ""))
+    }
     for h in gap.get("holes") or []:
         pose = (h.get("pose") or "").strip() or "unspecified"
         view = (h.get("view") or "front").strip() or "front"
         ward = (h.get("wardrobe") or "clothed").strip() or "clothed"
         key = f"gap|{pose}|{view}|{ward}"
         if key in seen:
+            continue
+        if pose == "unspecified" and (view, ward) in seen_unset:
             continue
         seen.add(key)
         missing.append({

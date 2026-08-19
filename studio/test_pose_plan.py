@@ -874,6 +874,42 @@ def test_cowgirl_coverage_lists_both_actors_for_mage():
         assert 'data-actors="Meow P · Panther"' in page
 
 
+def test_album_coverage_counts_pose_unset_as_needed():
+    """A PG13 board with unnamed poses is not 'no storyboard'."""
+    with TestClient(appmod.app) as client:
+        album = f"Unset Cov {time.time_ns()}"
+        client.post("/playlists", data={"name": album})
+        song = _upload_song(client, "Unset Song", album=album)
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_pg13.json")
+        json.dump({
+            "title": "T", "album": album, "version": "pg13",
+            "character_reference": "her",
+            "scenes": [
+                {"scene_number": 1, "name": "One", "pose": "",
+                 "camera": "front", "wardrobe": "clothed",
+                 "image_prompt": "neon street", "duration_guidance": "5s"},
+                {"scene_number": 2, "name": "Two", "pose": "",
+                 "camera": "back", "wardrobe": "clothed",
+                 "image_prompt": "neon street", "duration_guidance": "5s"},
+            ],
+        }, open(jp, "w"))
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               song["id"], "pg13", jp, jp + ".md", 2, time.time())
+        cov = pose_plan.album_coverage(album, "pg13")
+        assert cov["n_boards"] >= 1
+        assert cov["n_needed"] >= 1, cov
+        labels = " ".join(g["label"] for g in cov["needed"])
+        assert "pose unset" in labels
+        page = client.get("/anchors", params={
+            "scope_value": album, "song_id": song["id"], "gap_tier": "pg13"}).text
+        roster = page.split('id="album-pose-roster"', 1)[-1].split("</section>", 1)[0]
+        assert "No storyboard on this album at PG13 yet." not in roster
+        assert "No storyboard on this album at PG-13 yet." not in roster
+
+
 def test_album_coverage_floats_missing_poses_first():
     """A filled Lead row must not bury a missing Panther row under All."""
     with TestClient(appmod.app) as client:

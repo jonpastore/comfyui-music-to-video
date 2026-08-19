@@ -105,6 +105,10 @@ def test_pg13_missing_poses_include_unset_holes_and_actor_thumbs(tmp_path):
         form = html.split('id="anchor-form"', 1)[1]
         assert 'name="need_key"' in form
         assert "front" in form.split("missing-pose-list", 1)[-1][:800]
+        roster = html.split('id="album-pose-roster"', 1)[-1].split("</section>", 1)[0]
+        assert "No storyboard on this album at PG-13 yet." not in roster
+        assert "No storyboard on this album at PG13 yet." not in roster
+        assert "pose unset" in roster or "front" in roster
         assert os.path.basename(sheet) in html
         assert 'class="tier-tabs"' not in html.split(
             'id="album-pose-roster"', 1)[-1].split("</section>", 1)[0]
