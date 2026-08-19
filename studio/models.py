@@ -69,8 +69,8 @@ ROLES = {
 # storyboard and vision are resolved by their own modules at call time.
 RENDERED_ROLES = ("reference", "video", "refine", "artwork", "audio")
 
-# New Image can actually enqueue these. Everything else in role=t2i/artwork
-# is listed so the picker can say "on disk, no graph" instead of hiding it.
+# New Image picker lists only these (role t2i/artwork + available). Parked
+# flux2_t2i / z_image_t2i stay in CATALOG for fleet docs — not as options.
 T2I_WIRED = frozenset({"qwen_t2i", "qwen_artwork"})
 
 # loader class -> the input whose enum lists installed files

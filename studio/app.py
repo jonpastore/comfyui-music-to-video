@@ -2058,6 +2058,16 @@ def _media_thumb(real, width):
     return FileResponse(dest, media_type="image/jpeg")
 
 
+@app.get("/media/loras", response_class=HTMLResponse)
+def media_loras(request: Request, model: str = ""):
+    """Style LoRA <select> fragment. Same list for Qwen; model reserved for later."""
+    _ = model  # Flux filter later
+    loras = civitai.list_installed()
+    return templates.TemplateResponse(request, "_media_style_lora.html", {
+        "loras": loras,
+    })
+
+
 @app.get("/media/{path:path}")
 def media(path: str, w: int = 0):
     if "\x00" in path:
@@ -2315,32 +2325,52 @@ async def create_song(request: Request, title: str = Form(...), album: str = For
     return RedirectResponse(f"/songs/{sid}", status_code=303)
 
 
-@app.get("/media", response_class=HTMLResponse)
-def media_page(request: Request, new: str = ""):
-    """Create surface: New Song (ACE-Step) or New Image (local t2i)."""
-    albums = [r["name"] for r in db.q(
-        "SELECT name FROM playlists WHERE kind='playlist' ORDER BY name") if r["name"]]
+def _civitai_base_for(key):
+    """Civitai baseModels filter for a studio t2i key."""
+    low = (key or "").lower()
+    if "flux" in low:
+        return "Flux"
+    if "z_image" in low or low.startswith("zimage"):
+        return "ZImage"
+    return "Qwen"
+
+
+def _t2i_picker_models():
+    """Runnable New Image options only — no parked 'on disk · no graph' rows."""
     default = models.default_for("t2i") or models.default_for("artwork")
-    t2i_models = []
-    seen = set()
     live = {}
     try:
         live = {e["key"]: e for e in models.catalog()}
     except Exception:
         live = {}
-    for key, spec in models.CATALOG.items():
-        if spec.get("role") not in ("t2i", "artwork") or key in seen:
+    out = []
+    for key in sorted(models.T2I_WIRED):
+        spec = models.CATALOG.get(key) or {}
+        if spec.get("role") not in ("t2i", "artwork"):
             continue
-        seen.add(key)
         row = live.get(key) or {}
-        wired = key in models.T2I_WIRED
-        on_box = bool(row.get("available", True))
-        t2i_models.append({
-            "key": key, "label": spec["label"],
-            "available": on_box,
-            "runnable": wired and on_box,
-            "default": key == default and wired,
+        # None = Comfy unreachable; still offer wired keys. False = missing file.
+        if "available" in row and row["available"] is False:
+            continue
+        out.append({
+            "key": key,
+            "label": spec.get("label") or key,
+            "available": True,
+            "runnable": True,
+            "default": key == default,
+            "civitai_base": _civitai_base_for(key),
         })
+    if out and not any(m["default"] for m in out):
+        out[0]["default"] = True
+    return out
+
+
+@app.get("/media", response_class=HTMLResponse)
+def media_page(request: Request, new: str = ""):
+    """Create surface: New Song (ACE-Step) or New Image (local t2i)."""
+    albums = [r["name"] for r in db.q(
+        "SELECT name FROM playlists WHERE kind='playlist' ORDER BY name") if r["name"]]
+    t2i_models = _t2i_picker_models()
     loras = civitai.list_installed()
     recent = db.q(
         "SELECT * FROM assets WHERE kind='t2i' ORDER BY id DESC LIMIT 24")
@@ -2354,10 +2384,16 @@ def media_page(request: Request, new: str = ""):
     pane = (new or "").strip().lower()
     if pane not in ("song", "image"):
         pane = ""
+    civitai_base = "Qwen"
+    for m in t2i_models:
+        if m.get("default"):
+            civitai_base = m.get("civitai_base") or "Qwen"
+            break
     return templates.TemplateResponse(request, "media.html", {
         "albums": albums, "t2i_models": t2i_models, "images": images,
         "pane": pane, "loras": loras,
         "civitai_set": bool(creds.get("civitai")),
+        "civitai_base": civitai_base,
     })
 
 

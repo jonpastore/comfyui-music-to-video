@@ -1414,12 +1414,15 @@ resort (roadmap O14 on gamingpc), not a control on this page.
 
 Still identity is Qwen-Image-Edit 2511. Clips are `ltx25` / `wan22_s2v`.
 A Pony, Krea, or Flux file on the box does not appear as a second
-“who is she” choice. New Image lists parked t2i weights that are on
-disk (`flux2_t2i`) as **disabled · no studio graph**; Krea is not
-installed. Runnable keys are `models.T2I_WIRED` (`qwen_t2i`,
-`qwen_artwork`). Style LoRA is a second `LoraLoader` only when named
-(default graph stays byte-identical). Civitai search/download on that
-pane reuses `/models/civitai`. When-to-use copy lives in DDD-4-7 §1a.
+“who is she” choice. New Image lists **only** `models.T2I_WIRED`
+(`qwen_t2i`, `qwen_artwork`) that `catalog()` says are available — no
+disabled “on disk · no studio graph” rows. A one-line hint under the
+select: runnable Qwen-Image-Edit 2511; Flux 2 Dev on disk with no
+studio graph; Krea not installed. Style LoRA is a second `LoraLoader`
+only when named (default graph stays byte-identical); the select
+htmx-refreshes from `GET /media/loras` when the model changes. Civitai
+search/download reuses `/models/civitai` with `base` defaulting from
+the selected model (Qwen). When-to-use copy lives in DDD-4-7 §1a.
 
 ### 7a.6a Candidate tiles carry a vision confidence
 
@@ -1908,9 +1911,9 @@ A style guide is falsifiable or it is decoration.
   the old `<a>` tags in the template drops the probe → red. Today's order is
   Library, **Media**, Anchors, Playlists, Sets, Tiers, Models, Jobs, Config.
   Media is a submenu: New Song (`/media?new=song`, ACE-Step → new library
-  row) and New Image (`/media?new=image`, Qwen t2i; parked Flux 2
-  listed disabled; Style LoRA + Civitai fetch; Recent images has
-  multi-select + Delete selected). Click **Media** pins the menu; it
+  row) and New Image (`/media?new=image`, Qwen t2i only — no fake disabled
+  Flux/Krea options; Style LoRA + Civitai fetch with matching base;
+  Recent images has multi-select + Delete selected). Click **Media** pins the menu; it
   stays open 2s after the pointer leaves (WAI-ARIA: dismiss on pick,
   outside click, or Escape). Escape focuses Media without the
   `focusin` handler reopening it (`holdClosed` in `initNavDrop`). Hover opens after 300ms (Baymard). Arrow
