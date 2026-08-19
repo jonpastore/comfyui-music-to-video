@@ -69,9 +69,10 @@ ROLES = {
 # storyboard and vision are resolved by their own modules at call time.
 RENDERED_ROLES = ("reference", "video", "refine", "artwork", "audio")
 
-# New Image picker lists only these (role t2i/artwork + available). Parked
-# flux2_t2i / z_image_t2i stay in CATALOG for fleet docs — not as options.
-T2I_WIRED = frozenset({"qwen_t2i", "qwen_artwork"})
+# New Image picker lists these. Krea has no local weights (ComfyAPI node only).
+T2I_WIRED = frozenset({
+    "qwen_t2i", "qwen_artwork", "flux2_t2i", "flux2_klein_t2i", "z_image_t2i",
+})
 
 # loader class -> the input whose enum lists installed files
 LOADER_FIELD = {
@@ -109,6 +110,16 @@ ALIASES = {
     # is the ONLY image model the 2080 Ti can run, and the workflow that has
     # actually rendered Z-Image here loads "ae.safetensors".
     "ae.safetensors": ("z_image_ae.safetensors",),
+    "z_image_turbo_fp8mix.safetensors": (
+        "SwarmUI_Z-Image-Turbo-FP8Mix.safetensors",
+        "ZImage/SwarmUI_Z-Image-Turbo-FP8Mix.safetensors",
+    ),
+    "qwen_3_4b_fp8_mixed.safetensors": (
+        "qwen_3_4b.safetensors", "qwen_3_4b_fp8mixed.safetensors",
+    ),
+    "flux-2-klein-4b-fp8.safetensors": (
+        "flux-2-klein-4b.safetensors", "flux-2-klein-base-4b.safetensors",
+    ),
     # Cerberus carries the Qwen VAE at the top level AND under QwenImage/. Same
     # file, two enum entries, and a workflow written against one is refused by a
     # box that only has the other.
@@ -242,7 +253,10 @@ CATALOG = {
         "file": "z_image_turbo_fp8mix.safetensors",
         "loader": "UNETLoader",
         "cli": "zimage",
-        "companions": {"ae.safetensors": "VAELoader"},
+        "companions": {
+            "ae.safetensors": "VAELoader",
+            "qwen_3_4b_fp8_mixed.safetensors": "CLIPLoader",
+        },
         "weights_gib": 6.7,
         "proven": "opportunistic",
         "purpose": (
@@ -585,31 +599,50 @@ CATALOG = {
         "when": "Background plates and extras on peaches. Warm ~8.6s at 1024x576.",
         "not_for": "Identity sheets. No Omni checkpoint, so a face photo does not lock her.",
         "notes": [
-            "Measured 2026-08-12 on peaches. Feed /16-clean sizes; 896x1216 crashes.",
-            "Unwired as a picker default — generate via a Z-Image workflow on Swarm, "
-            "or wait until artwork accepts cli=zimage.",
+            "Measured 2026-08-12 on peaches. Feed /16-clean sizes; long side "
+            "is capped at ~1 MP so 896×1216 does not OOM.",
         ],
-        "companions": {"ae.safetensors": "VAELoader"},
+        "companions": {
+            "ae.safetensors": "VAELoader",
+            "qwen_3_4b_fp8_mixed.safetensors": "CLIPLoader",
+        },
     },
     "flux2_t2i": {
         "role": "t2i",
         "proven": "opportunistic",
         "weights_gib": 33.02,
-        "label": "Flux 2 Dev fp8 (on disk · no studio graph)",
+        "label": "Flux 2 Dev fp8 — cerberus 5090",
         "file": "flux2_dev_fp8mixed.safetensors",
         "loader": "UNETLoader",
         "purpose": (
-            "The Flux 2 Dev weights are on cerberus. There is no studio t2i "
-            "graph for them yet — New Image cannot run this file."),
-        "when": "Later, once a measured Flux 2 empty-latent graph exists.",
-        "not_for": (
-            "Identity sheets or 'who is she'. Pose/identity stay Qwen-Image-Edit "
-            "2511. A Krea / Pony / Flux file is not a second Meow P."),
+            "Empty-latent Flux 2 Dev for exploration stills. Not an identity lock."),
+        "when": "New Image exploration on cerberus. ~20 steps, FluxGuidance 4.",
+        "not_for": "Meow P identity sheets — those stay Qwen-Image-Edit 2511.",
         "notes": [
-            "File is diffusion_models/flux2_dev_fp8mixed.safetensors (33 GiB).",
-            "No Krea checkpoint is installed. Do not list a model we cannot load.",
+            "Official Comfy template: mistral_3_small_flux2_fp8 + flux2-vae.",
         ],
-        "companions": {},
+        "companions": {
+            "mistral_3_small_flux2_fp8.safetensors": "CLIPLoader",
+            "flux2-vae.safetensors": "VAELoader",
+        },
+    },
+    "flux2_klein_t2i": {
+        "role": "t2i",
+        "proven": "opportunistic",
+        "weights_gib": 3.8,
+        "label": "Flux 2 Klein 4B fp8 — gamingpc / cerberus",
+        "file": "flux-2-klein-4b-fp8.safetensors",
+        "loader": "UNETLoader",
+        "purpose": "Small Flux 2 for fast exploration. Distilled 4-step, CFG 1.",
+        "when": "New Image when Dev is too heavy. Gamingpc already holds Klein.",
+        "not_for": "Identity sheets.",
+        "notes": [
+            "CLIP is qwen_3_4b type=flux2 (not Mistral). Official Klein template.",
+        ],
+        "companions": {
+            "qwen_3_4b_fp8_mixed.safetensors": "CLIPLoader",
+            "flux2-vae.safetensors": "VAELoader",
+        },
     },
     "qwen_artwork": {
         "role": "artwork",

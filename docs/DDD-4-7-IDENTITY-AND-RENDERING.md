@@ -238,7 +238,8 @@ Rules for that change:
 - No `role=reference` entry for Pony, Krea, or Flux until the
   product is a different identity lock. New Image lists only
   `models.T2I_WIRED` (`qwen_t2i` / `qwen_artwork`) that are available —
-  not a disabled `flux2_t2i` row. A style LoRA is a second loader only
+  including Flux 2 Dev / Klein and Z-Image (`make_t2i.py`). Krea is not
+  a local option. A style LoRA is a second loader only
   when named.
 
 Companion write-up: `docs/ROADMAP-2026-08-16-POSE-ANATOMY.md`

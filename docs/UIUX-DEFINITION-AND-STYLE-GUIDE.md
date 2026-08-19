@@ -1416,7 +1416,8 @@ Still identity is Qwen-Image-Edit 2511. Clips are `ltx25` / `wan22_s2v`.
 A Pony, Krea, or Flux file on the box does not appear as a second
 “who is she” choice. New Image lists **only** `models.T2I_WIRED`
 (`qwen_t2i`, `qwen_artwork`) that `catalog()` says are available — no
-disabled “on disk · no studio graph” rows. A one-line hint under the
+Qwen, Flux 2 Dev, Flux 2 Klein 4B, and Z-Image Turbo as runnable options
+(Krea has no local weights). A one-line hint under the
 select: runnable Qwen-Image-Edit 2511; Flux 2 Dev on disk with no
 studio graph; Krea not installed. Style LoRA is a second `LoraLoader`
 only when named (default graph stays byte-identical); the select

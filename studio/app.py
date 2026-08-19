@@ -1684,15 +1684,24 @@ def h_t2i(args, progress):
         raise RuntimeError(str(e)) from e
     guard = tiers.compose_guardrail(args.get("tier") or "xxx", album)
     lora = 1.0 if args.get("lightning") else 0.0
-    paths = pipeline.gen_artwork(
-        safe_name(f"t2i_{int(time.time())}"), composed, progress,
-        anchor_path=args.get("anchor_path"),
-        guard=guard, n=int(args.get("n") or 1),
-        size=int(args.get("width") or 1024),
-        height=int(args.get("height") or args.get("width") or 1024),
-        lora_strength=lora,
-        style_lora=args.get("style_lora") or "",
-        style_lora_strength=args.get("style_lora_strength") or 1.0)
+    key = args.get("model") or "qwen_t2i"
+    slug = safe_name(f"t2i_{int(time.time())}")
+    n = int(args.get("n") or 1)
+    width = int(args.get("width") or 1024)
+    height = int(args.get("height") or args.get("width") or 1024)
+    style = args.get("style_lora") or ""
+    strength = args.get("style_lora_strength") or 1.0
+    if key in ("flux2_t2i", "flux2_klein_t2i", "z_image_t2i"):
+        paths = pipeline.gen_t2i(
+            key, slug, composed, progress, n=n, size=width, height=height,
+            style_lora=style, style_lora_strength=strength)
+    else:
+        paths = pipeline.gen_artwork(
+            slug, composed, progress,
+            anchor_path=args.get("anchor_path"),
+            guard=guard, n=n, size=width, height=height,
+            lora_strength=lora, style_lora=style,
+            style_lora_strength=strength)
     if not paths:
         raise RuntimeError("the image render produced no file")
     now = time.time()
@@ -2338,20 +2347,12 @@ def _civitai_base_for(key):
 def _t2i_picker_models():
     """Runnable New Image options only — no parked 'on disk · no graph' rows."""
     default = models.default_for("t2i") or models.default_for("artwork")
-    live = {}
-    try:
-        live = {e["key"]: e for e in models.catalog()}
-    except Exception:
-        live = {}
     out = []
     for key in sorted(models.T2I_WIRED):
         spec = models.CATALOG.get(key) or {}
         if spec.get("role") not in ("t2i", "artwork"):
             continue
-        row = live.get(key) or {}
-        # None = Comfy unreachable; still offer wired keys. False = missing file.
-        if "available" in row and row["available"] is False:
-            continue
+        # List every wired graph. Swarm retargets filenames onto gamingpc.
         out.append({
             "key": key,
             "label": spec.get("label") or key,

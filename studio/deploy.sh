@@ -34,6 +34,7 @@ echo "== syncing pipeline scripts"
 rsync -a "$REPO"/build_refs.py "$REPO"/build_song.py "$REPO"/build_storyboard.py \
          "$REPO"/make_anchor.py "$REPO"/reroll_refs.py "$REPO"/make_contact_sheet.py \
          "$REPO"/guardrail.py "$REPO"/fix_ref.py "$REPO"/make_audio.py \
+         "$REPO"/make_t2i.py \
          "$R:$DEST/scripts/"
 rsync -a "$REPO"/profiles/ "$R:$DEST/scripts/profiles/" 2>/dev/null || true
 

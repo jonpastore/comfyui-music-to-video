@@ -1596,6 +1596,23 @@ def gen_artwork(slug, prompt, progress=None, anchor_path=None, source_path=None,
         return _submit_and_collect(wf_dir, prefix, "*.png", progress)
 
 
+def gen_t2i(model, slug, prompt, progress=None, n=1, size=1024, height=None,
+            seed=None, style_lora="", style_lora_strength=1.0):
+    """Empty-latent Flux 2 / Klein / Z-Image. Not the Qwen identity path."""
+    prefix = f"t2i_{slug}"
+    h = height if height else size
+    args = ["--model", model, "--prompt", prompt, "--n", str(n),
+            "--prefix", prefix, "--width", str(size), "--height", str(h)]
+    if seed is not None:
+        args += ["--seed", str(int(seed))]
+    if style_lora:
+        args += ["--style-lora", style_lora,
+                 "--style-lora-strength", str(style_lora_strength)]
+    with tempfile.TemporaryDirectory() as wf_dir:
+        _run_script("make_t2i.py", [*args, "--outdir", wf_dir], progress)
+        return _submit_and_collect(wf_dir, prefix, "*.png", progress)
+
+
 def gen_audio(slug, tags, lyrics="", seconds=30.0, n=1, progress=None, seed=None,
               source_path=None, denoise=1.0, steps=None, cfg=None):
     """Generate audio with ACE-Step. Returns the rendered mp3 paths.

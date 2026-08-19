@@ -68,9 +68,10 @@
 {% if pane == "image" %}
 <section class="card" id="new-image">
   <h2>New Image</h2>
-  <p class="hint">This form runs the studio graph: <strong>Qwen-Image-Edit
-    2511</strong>. Identity sheets stay Qwen. Fetch a LoRA from Civitai
-    below, then pick it here.</p>
+  <p class="hint">Exploration stills. <strong>Qwen-Image-Edit 2511</strong> is
+    the identity path. Flux 2 Dev (cerberus), Flux 2 Klein 4B, and Z-Image
+    Turbo are empty-latent t2i. Krea has no local weights (ComfyAPI only).
+    Fetch a LoRA from Civitai below, then pick it here.</p>
   <form method="post" action="/media/images" class="stack-form js-media-gen">
     <label>Prompt
       <textarea name="prompt" rows="5" required
@@ -100,7 +101,7 @@
         </select>
       </label>
     </div>
-    <p class="hint" id="t2i-model-hint">Runnable: Qwen-Image-Edit 2511. Flux 2 Dev is on disk with no studio graph. Krea is not installed.</p>
+    <p class="hint" id="t2i-model-hint">Identity sheets stay Qwen. Flux / Z-Image are exploration. Krea is not on disk.</p>
     <div class="field-row">
       <label>Size
         <select name="size">
