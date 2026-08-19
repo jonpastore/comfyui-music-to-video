@@ -142,3 +142,52 @@ def test_apply_keeper_same_file_two_albums_two_tiers(tmp_path):
     assert os.path.isfile(path)
     libs = classification.library(a1)["images"] + classification.library(a2)["images"]
     assert sum(1 for im in libs if im["path"] == path) == 2
+
+
+def test_roster_badge_says_g_needs_n_when_gap_tier_g():
+    """Sticky G + missing coverage → 'G needs N', not a bare 'N missing'.
+
+    Mutation: warn-tag stays '{{ miss.n }} missing' with page_tier → red.
+    """
+    stamp = f"g-needs-{time.time_ns()}"
+    album, sid, _song = _album_song(stamp, scenes=[
+        _scene(1, "standing", "wide"),
+        _scene(2, "kneeling", "medium"),
+    ])
+    from test_uiux_classification_chips import _write_board
+    _write_board(sid, _song["slug"], "g", [
+        _scene(1, "standing", "wide"),
+        _scene(2, "kneeling", "medium"),
+    ], album)
+    prev = classification._DEFAULT_SIDECAR
+    classification._DEFAULT_SIDECAR = os.path.join(db.DATA, f"{stamp}-gneeds.json")
+    try:
+        with TestClient(appmod.app) as client:
+            html = client.get("/anchors", params={
+                "scope_value": album, "song_id": sid, "gap_tier": "g"}).text
+        roster = html.split('id="album-pose-roster"', 1)
+        assert len(roster) > 1, html[:600]
+        head = roster[1].split("</summary>", 1)[0]
+        assert "G needs" in head, head
+        assert "missing" not in head.lower() or "G needs" in head
+    finally:
+        classification._DEFAULT_SIDECAR = prev
+
+
+def test_anchors_failed_retry_is_not_full_page_form():
+    """Failed-job Retry on /anchors must not be a bare method=post /retry form.
+
+    Mutation: restore <form method=\"post\" action=\"/jobs/{{ j.id }}/retry\">
+    without hx / data-job-retry → red.
+    """
+    import re
+    src = open(os.path.join(os.path.dirname(appmod.__file__),
+                            "templates", "anchors.html")).read()
+    failed = src.split("failed-jobs", 1)[1].split("</details>", 1)[0]
+    bare = re.search(
+        r'<form\b[^>]*\baction="/jobs/\{\{\s*j\.id\s*\}\}/retry"[^>]*>', failed)
+    if bare:
+        tag = bare.group(0)
+        assert "hx-post" in tag or "hx-get" in tag, tag
+    assert 'data-job-retry="/jobs/{{ j.id }}/retry"' in failed or (
+        bare and ("hx-post" in bare.group(0) or "hx-get" in bare.group(0))), failed[:500]

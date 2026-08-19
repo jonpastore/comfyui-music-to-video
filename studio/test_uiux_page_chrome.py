@@ -69,3 +69,26 @@ def test_anchors_help_sits_on_the_right_of_the_toolbar():
     assert "margin-left: auto" in css
     macros = open(os.path.join(_TEMPL, "_macros.html")).read()
     assert "macro page_title" in macros
+
+
+def test_anchors_retry_and_roster_badge_are_in_page():
+    """No bare /jobs/.../retry form on Anchors; roster names the sticky tier.
+
+    Mutation: bare method=post action=/jobs/{{ j.id }}/retry in anchors.html → red.
+    Mutation: warn-tag is only '{{ miss.n }} missing' when page_tier is set → red.
+    """
+    src = open(os.path.join(_TEMPL, "anchors.html")).read()
+    failed = src.split("failed-jobs", 1)[1].split("</details>", 1)[0]
+    assert 'data-job-retry="/jobs/{{ j.id }}/retry"' in failed
+    assert not re.search(
+        r'<form\b[^>]*\bmethod="post"[^>]*\baction="/jobs/\{\{\s*j\.id\s*\}\}/retry"',
+        failed)
+    roster = src.split('id="album-pose-roster"', 1)[1]
+    assert "page_tier | tiername }} needs" in roster or \
+        "{{ page_tier | tiername }} needs" in roster
+    group = open(os.path.join(_TEMPL, "_anchor_group.html")).read()
+    assert 'class="clear-anchor' in group
+    js = open(os.path.join(os.path.dirname(appmod.__file__), "static", "app.js")).read()
+    assert "data-job-retry" in js
+    assert ".clear-anchor" in js
+    assert ".pose-keeper-form" in js

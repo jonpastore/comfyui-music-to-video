@@ -38,6 +38,11 @@ so `/media` is not 403.
 - Hole chips: **pose unset** + scene count, not `no pose named` + dump.
 - Character catalog starts closed.
 - Sidecar basenames resolve for keeper urls.
+- Anchors in-page: failed-job Retry is `data-job-retry` + `api()` (no
+  bare `/jobs/.../retry` form). Clear / pick / delete / upload-pose /
+  keeper save / rename stay on the page via `api()` (or htmx on the
+  playlist card). Roster badge names the sticky tier (**G needs N**).
+  Pose catalog drops the album/tier echo already in `#anchor-scope`.
 
 ## Open — do these, do not recommend them
 
@@ -91,9 +96,11 @@ so `/media` is not 403.
 7. **`/media` landing.**
    Keep the two-card chooser. Recent Images stays on New Image.
 
-8. **G 0/100 vs "100 Missing".**
-   Same count, two sentences. Roster tag should read **G needs 100**
-   so it names the tier.
+8. **G 0/100 vs "100 Missing".** **built**
+   Roster warn-tag with sticky `gap_tier` reads **G needs N** (tier
+   named), not a bare `N missing`. Evidence:
+   `test_roster_badge_says_g_needs_n_when_gap_tier_g`,
+   `test_anchors_retry_and_roster_badge_are_in_page`.
 
 ### P2 — inspect leftovers, not dropped
 
@@ -116,8 +123,10 @@ so `/media` is not 403.
 ## Tests that can go red
 
 - `test_uiux_generate_catalog.py` — all four sticky chips; no form
-  album select; apply one file two albums two tiers.
-- `test_uiux_page_chrome.py` — hidden nav h1.
+  album select; apply one file two albums two tiers; **G needs N**;
+  failed Retry not a bare `/jobs/.../retry` form.
+- `test_uiux_page_chrome.py` — hidden nav h1; Retry + roster badge
+  + clear-anchor / pose-keeper `api()` wiring.
 - `test_uiux_classification_chips.py` — keeper cards, pose unset.
 
 Mutation for P0-1 (not built yet): `classification.library("Catatonic")`

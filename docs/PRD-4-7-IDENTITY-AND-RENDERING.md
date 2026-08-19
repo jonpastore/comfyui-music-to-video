@@ -191,8 +191,12 @@ auto-seed **built** (`ensure_sidecar_seed` from
 right). Sticky tier chips are buttons (htmx, no full reload). A
 selected chip paints that tier's chosen sheets as tagged keepers
 (`test_page_tier_keepers_are_chosen_sheets_and_chips_are_buttons`).
-Generate lists pose-unset song holes at that tier, not only named
-coverage rows. Actor cards use any chosen sheet as the identity thumb.
+Operator actions on that page stay in-page: Retry / pick / clear /
+delete / upload-pose / keeper save / rename via `api()` (no bare
+`/jobs/.../retry` form). Sticky-tier roster badge reads **G needs N**
+(`test_roster_badge_says_g_needs_n_when_gap_tier_g`). Generate lists
+pose-unset song holes at that tier, not only named coverage rows.
+Actor cards use any chosen sheet as the identity thumb.
 It paints keeper chips (grouped by pose/view/wardrobe; preview
 is `#pose-preview`) and import/save seed an empty library
 (`test_uiux_classification_chips.py`). Sidecar keeper paths resolve

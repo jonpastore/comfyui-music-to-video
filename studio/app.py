@@ -9852,6 +9852,9 @@ def _playlist_hx_album(request, album, *, gone=False):
 
 def _after_name_save(request, playlist):
     """Stay on /anchors when the name was saved from the gallery."""
+    if wants_json(request):
+        return JSONResponse({
+            "ok": True, "name": playlist["name"], "playlist_id": playlist["id"]})
     ref = request.headers.get("referer") or ""
     if "/anchors" in ref:
         return RedirectResponse(
