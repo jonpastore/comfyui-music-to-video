@@ -15,9 +15,10 @@ listing **only tiers that already had storyboard coverage**. Catatonic
 showed R and XXX. G and PG-13 never appeared, so it did not look like
 the picker from the screenshot. Coverage chips ≠ the full tier list.
 
-Fix in the same change as this doc: `sticky_tiers` walks `tiers.all_tiers()`
-and fills 0/0 when a board does not exist. Click still sets `gap_tier`
-and drives Generate.
+Fix: `sticky_tiers` walks `tiers.all_tiers()` and fills 0/0 when a board
+does not exist. Click sets `page_tier` (`gap_tier=`). That chip is `.on`
+even with no storyboard. Roster and Character catalog drop their inner
+tier tabs and show only that tier. Album change keeps `gap_tier`.
 
 ## Done on this tree (verify on live after deploy)
 

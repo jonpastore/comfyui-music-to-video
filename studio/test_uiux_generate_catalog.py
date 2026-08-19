@@ -22,23 +22,30 @@ def test_generate_form_uses_sticky_album_and_missing_poses():
         with TestClient(appmod.app) as client:
             page = client.get("/anchors", params={
                 "scope_value": album, "song_id": sid, "gap_tier": "xxx"})
+            assert page.status_code == 200, page.text
+            html = page.text
+            assert "<select name=\"album\"" not in html
+            assert 'type="hidden" name="album"' in html
+            assert 'class="view-matrix"' not in html
+            assert "Tick at least one" not in html
+            assert "need_key" in html or "No missing catalog poses" in html or "Pick a tier chip" in html
+            assert "actor-card" in html
+            assert "help-tip" in html.split('id="generate-pose"', 1)[1][:800]
+            scope = html.split('id="anchor-scope"', 1)[1].split('id="classification-library"', 1)[0]
+            for name in ("G", "PG13", "R", "XXX"):
+                assert f"gap_tier={name.lower()}" in scope, scope[:800]
+            assert 'class="tier-chip on"' in scope
+            assert 'name="tier"' in html.split('id="anchor-form"', 1)[-1][:1500]
+            ghtml = client.get("/anchors", params={
+                "scope_value": album, "gap_tier": "g"}).text
+            gscope = ghtml.split('id="anchor-scope"', 1)[1][:2500]
+            assert 'class="tier-chip on"' in gscope
+            assert 'gap_tier=g"' in gscope or "gap_tier=g&" in gscope
+            roster = ghtml.split('id="album-pose-roster"', 1)
+            if len(roster) > 1:
+                assert 'data-album="coverage"' not in roster[1].split("</section>", 1)[0]
     finally:
         classification._DEFAULT_SIDECAR = prev
-    assert page.status_code == 200, page.text
-    html = page.text
-    assert "<select name=\"album\"" not in html
-    assert 'type="hidden" name="album"' in html
-    assert 'class="view-matrix"' not in html
-    assert "Tick at least one" not in html
-    assert "need_key" in html or "No missing catalog poses" in html or "Pick a tier chip" in html
-    assert "actor-card" in html
-    assert "help-tip" in html.split('id="generate-pose"', 1)[1][:800]
-    scope = html.split('id="anchor-scope"', 1)[1].split("id=\"classification-library\"", 1)[0]
-    for name in ("G", "PG13", "R", "XXX"):
-        assert f"gap_tier={name.lower()}\"" in scope or f"gap_tier={name.lower()}&" in scope or \
-            f'gap_tier={name.lower()}' in scope, scope[:800]
-    assert 'name="tier"' in html.split('id="anchor-form"', 1)[-1][:1500]
-    assert "<select name=\"album\"" not in html.split('id="anchor-form"', 1)[-1]
 
 
 def test_apply_keeper_same_file_two_albums_two_tiers(tmp_path):

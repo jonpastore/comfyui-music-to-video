@@ -3616,13 +3616,20 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
             "n_needed": cov.get("n_needed") or 0,
             "n_chars": n_chars,
         })
-    gen_tier = (gap_tier or "").strip()
+    valid = {c["name"] for c in sticky_tiers}
+    page_tier = (gap_tier or "").strip()
+    if page_tier not in valid:
+        page_tier = ""
+    if page_tier:
+        shown_roster = page_tier
+    gen_tier = page_tier
     return templates.TemplateResponse(request, "anchors.html", dict(
         anchor_form_ctx(scope_value, selected_tiers=[gen_tier] if gen_tier else []),
         groups=group_list, gallery=gallery,
         known_albums=albums, playlists=playlists,
         coverage_by_tier=coverage_by_tier,
         roster_tier=shown_roster,
+        page_tier=page_tier,
         sticky_tiers=sticky_tiers,
         failed_jobs=fresh, active_jobs=active,
         **_anchors_classification_ctx(scope_value, song_id, gap_tier)))

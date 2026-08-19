@@ -3,10 +3,10 @@
 {% block content %}
 {{ page_title("Anchors") }}
 <div id="anchor-scope" class="anchor-scope page-chrome"
-     data-tier="{{ pose_gap.tier if pose_gap else '' }}">
+     data-tier="{{ page_tier or '' }}">
   <label class="scope-album">Album
     <select id="class-album"
-            onchange="location.href='/anchors?scope_value='+encodeURIComponent(this.value)">
+            onchange="location.href='/anchors?scope_value='+encodeURIComponent(this.value){% if page_tier %}+'&gap_tier='+encodeURIComponent('{{ page_tier }}'){% endif %}">
       {% for a in albums %}
       <option value="{{ a }}" {% if a == (class_album or form_album) %}selected{% endif %}>{{ a }}</option>
       {% else %}
@@ -16,7 +16,7 @@
   </label>
   <div class="scope-tiers" role="tablist" aria-label="Tier">
     {% for c in sticky_tiers %}
-    <a class="tier-chip {% if pose_gap and c.name == pose_gap.tier %}on{% endif %}"
+    <a class="tier-chip {% if page_tier and c.name == page_tier %}on{% endif %}"
        href="/anchors?scope_value={{ (class_album or form_album)|urlencode }}{% if open_song_id %}&song_id={{ open_song_id }}{% endif %}&gap_tier={{ c.name }}">{{ c.name | tiername }}
       <span class="muted">{{ c.n_have }}/{{ c.n_needed }} poses
         · {{ c.n_chars }} char{{ "" if c.n_chars == 1 else "s" }}</span></a>
@@ -202,11 +202,13 @@
 {% if coverage_by_tier %}
 <section class="card" id="album-pose-roster">
   {% set miss = namespace(n=0) %}
-  {% for t, cov in coverage_by_tier.items() %}{% set miss.n = miss.n + cov.n_missing %}{% endfor %}
+  {% for t, cov in coverage_by_tier.items() %}
+    {% if not page_tier or t == page_tier %}{% set miss.n = miss.n + cov.n_missing %}{% endif %}
+  {% endfor %}
   <details class="disclose" {% if miss.n %}open{% endif %}>
   <summary><h2>Poses this album&rsquo;s songs need</h2>
     {% if miss.n %}<span class="tag warn-tag">{{ miss.n }} missing</span>{% endif %}</summary>
-  {% set ns = namespace(shown=roster_tier | default(""), n=-1) %}
+  {% set ns = namespace(shown=page_tier or roster_tier | default(""), n=-1) %}
   {% if not ns.shown %}
   {% for t, cov in coverage_by_tier.items() %}
     {% if cov.n_needed > ns.n %}
@@ -216,6 +218,7 @@
   {% endfor %}
   {% endif %}
   {% if not ns.shown %}{% set ns.shown = coverage_by_tier.keys() | first %}{% endif %}
+  {% if not page_tier %}
   <div class="tier-tabs" data-album="coverage">
     {% for t, cov in coverage_by_tier.items() %}
     <button type="button" class="tier-tab {% if t == ns.shown %}active{% endif %}"
@@ -223,7 +226,9 @@
       <span class="muted">({{ cov.n_have }}/{{ cov.n_needed }}{% if cov.n_missing %} · {{ cov.n_missing }} missing{% endif %})</span></button>
     {% endfor %}
   </div>
+  {% endif %}
   {% for t, cov in coverage_by_tier.items() %}
+  {% if page_tier and t != page_tier %}{% else %}
   <div class="tier-panel {% if t != ns.shown %}hidden{% endif %}"
        data-album="coverage" data-tier="{{ t }}">
     {% if not cov.needed %}
@@ -249,7 +254,11 @@
     </ul>
     {% endif %}
   </div>
+  {% endif %}
   {% endfor %}
+  {% if page_tier and page_tier not in coverage_by_tier %}
+  <p class="empty">No storyboard on this album at {{ page_tier | tiername }} yet.</p>
+  {% endif %}
   </details>
 </section>
 {% endif %}
@@ -265,19 +274,23 @@
 {% if not gallery %}
 <p class="empty">No pose sheets on this album yet. Generate or assign one above.</p>
 {% else %}
-{% set want_tier = pose_gap.tier if pose_gap else "" %}
+{% set want_tier = page_tier or (pose_gap.tier if pose_gap else "") %}
 <details class="disclose card" id="character-catalog">
 <summary><h2>Character catalog</h2>
-  <span class="muted">{{ gallery[0].album if gallery else "" }}</span></summary>
+  <span class="muted">{{ gallery[0].album if gallery else "" }}
+    {% if page_tier %} · {{ page_tier | tiername }}{% endif %}</span></summary>
 {% for section in gallery %}
 <div class="gallery-section">
+  {% if not page_tier %}
   <div class="tier-tabs" data-album="{{ section.tab_id }}">
     {% for t in section.tiers %}
     <button type="button" class="tier-tab {% if (want_tier and t.name == want_tier) or (not want_tier and loop.first) %}active{% endif %}"
             data-tier="{{ t.name }}">{{ t.name | tiername }}</button>
     {% endfor %}
   </div>
+  {% endif %}
   {% for t in section.tiers %}
+  {% if page_tier and t.name != page_tier %}{% else %}
   <div class="tier-panel {% if not ((want_tier and t.name == want_tier) or (not want_tier and loop.first)) %}hidden{% endif %}"
        data-album="{{ section.tab_id }}" data-tier="{{ t.name }}">
     {% set ns_pl = namespace(id=none) %}
@@ -332,6 +345,7 @@
     </div>
     {% endfor %}
   </div>
+  {% endif %}
   {% endfor %}
 </div>
 {% endfor %}
@@ -363,7 +377,7 @@
     <div class="check-row">
       {% for t in tiers %}
       <label class="check"><input type="checkbox" name="tier" value="{{ t.name }}"
-        {% if pose_gap and t.name == pose_gap.tier %}checked{% endif %}>{{ t.name | tiername }}</label>
+        {% if page_tier and t.name == page_tier %}checked{% endif %}>{{ t.name | tiername }}</label>
       {% endfor %}
     </div>
     <div class="button-row">
