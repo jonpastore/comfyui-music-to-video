@@ -142,7 +142,8 @@ row + `audio` job with `as_new_song`). New Image is `/media?new=image`
 Krea 2 Turbo OSS; album look retrieved into the prompt; optional
 `style_lora`; lands `assets.kind=t2i`).
 Picker options are only wired+available keys (no disabled Flux / Z-Image
-rows). Mage fruit names are not local files. Civitai
+rows). Mage fruit names are not local files. Style LoRA is family-filtered
+(`seed/lora_pack.json`). Civitai
 search/download is the same `/models/civitai` as the Models page, with
 `base` from the selected model. Recent images multi-select delete is
 `POST /media/images/delete`. It does not replace T8-16.

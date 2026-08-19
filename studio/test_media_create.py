@@ -97,6 +97,15 @@ def test_new_image_picker_excludes_unwired_and_selects_qwen():
         assert loras.status_code == 200
         assert 'id="style-lora-select"' in loras.text
         assert 'name="style_lora"' in loras.text
+        assert 'id="style-lora-select-wrap"' in loras.text
+        krea_base = re.search(
+            r'<option[^>]*value="krea2_t2i"[^>]*data-civitai-base="([^"]*)"',
+            html)
+        assert krea_base and krea_base.group(1) == "Krea 2"
+        flux_base = re.search(
+            r'<option[^>]*value="flux2_t2i"[^>]*data-civitai-base="([^"]*)"',
+            html)
+        assert flux_base and flux_base.group(1) == "Flux.2 D"
 
 
 def test_new_song_enqueues_as_new_song(monkeypatch):
@@ -296,6 +305,51 @@ def test_list_installed_skips_video_loras(tmp_path, monkeypatch):
     monkeypatch.setattr(civitai, "lora_dir", lambda: str(d))
     got = civitai.list_installed()
     assert got == ["qwen-edit-skin.safetensors"]
+
+
+def test_style_lora_select_filters_to_the_model_family(tmp_path, monkeypatch):
+    import civitai
+    d = tmp_path / "loras"
+    (d / "krea2").mkdir(parents=True)
+    (d / "flux2").mkdir()
+    (d / "qwen-edit-skin.safetensors").write_bytes(b"x")
+    (d / "krea2" / "KNP_Krea2_NSFW_V4.safetensors").write_bytes(b"x")
+    (d / "flux2" / "lenovo_flux2.safetensors").write_bytes(b"x")
+    monkeypatch.setattr(civitai, "lora_dir", lambda: str(d))
+    monkeypatch.setattr(appmod.civitai, "lora_dir", lambda: str(d))
+    krea = civitai.list_for_model("krea2_t2i")
+    files = [row["file"] for g in krea["groups"] for row in g["loras"]]
+    assert files == ["krea2/KNP_Krea2_NSFW_V4.safetensors"]
+    assert krea["family"] == "krea2"
+    qwen = civitai.list_for_model("qwen_t2i")
+    qfiles = [row["file"] for g in qwen["groups"] for row in g["loras"]]
+    assert "qwen-edit-skin.safetensors" in qfiles
+    assert all("krea2/" not in f and "flux2/" not in f for f in qfiles)
+    with TestClient(appmod.app) as client:
+        html = client.get("/media/loras", params={"model": "krea2_t2i"}).text
+        assert "Krea 2 NSFW V4" in html
+        assert "qwen-edit-skin" not in html
+        assert "Anatomy" in html
+
+
+def test_fetch_pack_enqueues_missing_family_loras(tmp_path, monkeypatch):
+    import civitai
+    d = tmp_path / "loras"
+    d.mkdir()
+    monkeypatch.setattr(civitai, "lora_dir", lambda: str(d))
+    monkeypatch.setattr(appmod.civitai, "lora_dir", lambda: str(d))
+    with TestClient(appmod.app) as client:
+        r = client.post("/media/loras/pack", data={"model": "krea2_t2i"},
+                        headers={"Accept": "application/json"})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["ok"] is True
+        assert body["family"] == "krea2"
+        assert body["queued"] >= 1
+        job = db.one("SELECT * FROM jobs WHERE kind='download_lora' ORDER BY id DESC")
+        args = json.loads(job["args_json"])
+        assert args["family"] == "krea2"
+        assert args["version_id"]
 
 
 def test_new_image_refuses_empty_prompt():

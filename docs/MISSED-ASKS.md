@@ -100,7 +100,9 @@ so `/media` is not 403.
 6. **New Image model dropdown.** **built**
    Wired: Qwen, Flux 2 Dev, Flux 2 Klein 4B, Z-Image Turbo, Krea 2 Turbo
    OSS (`make_t2i.py`). Mage Mango/Guava are not local files.
-   Civitai `base` follows the model. Generate fetch, no full reload.
+   Civitai `base` follows the model (Qwen / Flux.2 D / Klein 4B /
+   ZImageTurbo / Krea 2). Style LoRA select is family-filtered with
+   Anatomy / Popular groups (`seed/lora_pack.json`).
    `test_make_t2i.py`, `test_media_create.py`.
 
 7. **`/media` landing.**

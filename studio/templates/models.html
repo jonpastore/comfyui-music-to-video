@@ -13,17 +13,15 @@
 <section class="card">
   <h2>Civitai LoRAs</h2>
   <p class="hint">Search the public catalog and download a <code>.safetensors</code>
-    into <code>~/ComfyUI/models/loras</code> on this box. Applying a LoRA to
-    Qwen Edit is a later generate-form control; this step only lands the file.
-    {% if not civitai_set %}<strong>No API key</strong> — store one on
-    <a href="/config">Config</a> first.{% endif %}</p>
+    into <code>~/ComfyUI/models/loras/&lt;family&gt;</code> on this box.
+    New Image Style LoRA lists the files for the selected model.</p>
   <form class="field-row" hx-get="/models/civitai" hx-target="#civitai-out"
         hx-swap="innerHTML">
     <label>Search
-      <input type="search" name="q" placeholder="qwen 2511 pose, fur, …"></label>
+      <input type="search" name="q" placeholder="nsfw, fur, anatomy, pose"></label>
     <label>Base model
-      <input type="text" name="base" placeholder="optional, e.g. Qwen"></label>
-    <button type="submit" {% if not civitai_set %}disabled{% endif %}>Search</button>
+      <input type="text" name="base" placeholder="Qwen, Flux.2 D, Krea 2"></label>
+    <button type="submit">Search</button>
   </form>
   <div id="civitai-out"></div>
 </section>

@@ -3647,7 +3647,8 @@ def test_set_editor_page_404s_for_an_unknown_id():
         assert client.post("/sets/999999", data={"name": "x", "mode": "audio"}).status_code == 404
 
 
-def test_sets_editor_is_boosted_and_models_lists_t2i_and_civitai():
+def test_sets_editor_is_boosted_and_models_lists_t2i_and_civitai(monkeypatch):
+    monkeypatch.setattr(appmod.civitai, "search", lambda *a, **k: [])
     with TestClient(appmod.app) as client:
         client.post("/sets/new", data={"name": "Boost Set", "mode": "audio"})
         page = client.get("/sets").text
@@ -3659,7 +3660,7 @@ def test_sets_editor_is_boosted_and_models_lists_t2i_and_civitai():
         assert "Suno.com" in models_page
         assert "Use when." in models_page
         miss = client.get("/models/civitai").text
-        assert "Civitai API key" in miss
+        assert "No matches" in miss
 
 
 # ---- SETS_MIXING_PLAN.md: beatmatch.py / effects.py / video_fx.py wired in,

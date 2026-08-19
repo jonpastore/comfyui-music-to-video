@@ -2069,12 +2069,36 @@ def _media_thumb(real, width):
 
 @app.get("/media/loras", response_class=HTMLResponse)
 def media_loras(request: Request, model: str = ""):
-    """Style LoRA <select> fragment. Same list for Qwen; model reserved for later."""
-    _ = model  # Flux filter later
-    loras = civitai.list_installed()
+    """Style LoRA <select> fragment, filtered to the selected t2i family."""
+    pack = civitai.list_for_model(model)
     return templates.TemplateResponse(request, "_media_style_lora.html", {
-        "loras": loras,
+        "loras": [row["file"] for g in pack["groups"] for row in g["loras"]],
+        "lora_groups": pack["groups"],
+        "lora_missing": pack["missing"],
+        "lora_family": pack["family"],
     })
+
+
+@app.post("/media/loras/pack")
+def media_fetch_pack(request: Request, model: str = Form("")):
+    """Enqueue curated pack LoRAs that are not on disk yet."""
+    pack = civitai.list_for_model(model)
+    jids = []
+    for row in pack["missing"]:
+        jids.append(jobs.enqueue("download_lora", {
+            "version_id": row["version_id"],
+            "family": pack["family"],
+            "file": row["file"],
+        }))
+    if wants_hx(request):
+        n = len(jids)
+        return HTMLResponse(
+            f"Queued {n} download{'' if n == 1 else 's'} — watch Jobs.")
+    return json_or_redirect(
+        request,
+        {"ok": True, "queued": len(jids), "job_ids": jids,
+         "family": pack["family"]},
+        "/media?new=image")
 
 
 @app.get("/media/{path:path}")
@@ -2336,12 +2360,7 @@ async def create_song(request: Request, title: str = Form(...), album: str = For
 
 def _civitai_base_for(key):
     """Civitai baseModels filter for a studio t2i key."""
-    low = (key or "").lower()
-    if "flux" in low:
-        return "Flux"
-    if "z_image" in low or low.startswith("zimage"):
-        return "ZImage"
-    return "Qwen"
+    return civitai.base_for(key)
 
 
 def _t2i_picker_models():
@@ -2372,7 +2391,9 @@ def media_page(request: Request, new: str = ""):
     albums = [r["name"] for r in db.q(
         "SELECT name FROM playlists WHERE kind='playlist' ORDER BY name") if r["name"]]
     t2i_models = _t2i_picker_models()
-    loras = civitai.list_installed()
+    default_key = next((m["key"] for m in t2i_models if m.get("default")), "")
+    pack = civitai.list_for_model(default_key)
+    loras = [row["file"] for g in pack["groups"] for row in g["loras"]]
     recent = db.q(
         "SELECT * FROM assets WHERE kind='t2i' ORDER BY id DESC LIMIT 24")
     images = []
@@ -2393,7 +2414,10 @@ def media_page(request: Request, new: str = ""):
     return templates.TemplateResponse(request, "media.html", {
         "albums": albums, "t2i_models": t2i_models, "images": images,
         "pane": pane, "loras": loras,
-        "civitai_set": bool(creds.get("civitai")),
+        "lora_groups": pack["groups"],
+        "lora_missing": pack["missing"],
+        "lora_family": pack["family"],
+        "civitai_set": True,
         "civitai_base": civitai_base,
     })
 
@@ -11969,22 +11993,22 @@ def set_storyboard_default(request: Request, key: str = Form("")):
 @app.get("/models/civitai", response_class=HTMLResponse)
 def civitai_search_page(request: Request, q: str = "", base: str = ""):
     err, rows = "", []
-    if not creds.get("civitai"):
-        err = "Store a Civitai API key on Config first."
-    else:
-        try:
-            rows = civitai.search(q, base_model=base or None)
-        except RuntimeError as e:
-            err = str(e)
+    try:
+        rows = civitai.search(q, base_model=base or None)
+    except RuntimeError as e:
+        err = str(e)
     return templates.TemplateResponse(request, "_civitai_results.html",
                                       {"rows": rows, "err": err, "q": q, "base": base})
 
 
 @app.post("/models/civitai/download")
-def civitai_download(request: Request, version_id: int = Form(...)):
-    if not creds.get("civitai"):
-        raise HTTPException(400, "Store a Civitai API key on Config first")
-    jid = jobs.enqueue("download_lora", {"version_id": version_id})
+def civitai_download(request: Request, version_id: int = Form(...),
+                     family: str = Form(""), file: str = Form("")):
+    jid = jobs.enqueue("download_lora", {
+        "version_id": version_id,
+        "family": (family or "").strip(),
+        "file": (file or "").strip(),
+    })
     if wants_hx(request):
         return HTMLResponse(
             f'<p class="hint">Queued download #{jid} — watch the job chip.</p>')

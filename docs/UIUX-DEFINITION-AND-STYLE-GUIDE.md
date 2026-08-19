@@ -1431,9 +1431,11 @@ as runnable options. Mage Mango/Guava/Kiwi are not local files. A
 one-line hint under the select names identity (Qwen) vs exploration
 (Flux / Z-Image / Krea 2) vs Mage-not-downloadable. Style LoRA is a second `LoraLoader`
 only when named (default graph stays byte-identical); the select
-htmx-refreshes from `GET /media/loras` when the model changes. Civitai
-search/download reuses `/models/civitai` with `base` defaulting from
-the selected model (Qwen). When-to-use copy lives in DDD-4-7 §1a.
+htmx-refreshes from `GET /media/loras` when the model changes and lists
+only that family's files (Anatomy / Popular optgroups). Civitai
+search/download reuses `/models/civitai` with `base` from the selected
+model (`Qwen`, `Flux.2 D`, `Flux.2 Klein 4B`, `ZImageTurbo`, `Krea 2`).
+When-to-use copy lives in DDD-4-7 §1a.
 
 ### 7a.6a Candidate tiles carry a vision confidence
 

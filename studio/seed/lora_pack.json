@@ -1,0 +1,57 @@
+{
+  "families": {
+    "qwen": {
+      "keys": ["qwen_t2i", "qwen_artwork"],
+      "base": "Qwen"
+    },
+    "flux2": {
+      "keys": ["flux2_t2i"],
+      "base": "Flux.2 D"
+    },
+    "klein": {
+      "keys": ["flux2_klein_t2i"],
+      "base": "Flux.2 Klein 4B"
+    },
+    "zimage": {
+      "keys": ["z_image_t2i"],
+      "base": "ZImageTurbo"
+    },
+    "krea2": {
+      "keys": ["krea2_t2i"],
+      "base": "Krea 2"
+    }
+  },
+  "items": [
+    {"file": "Qwen_Snofs_1_3.safetensors", "family": "qwen", "group": "Anatomy", "label": "SNOFS — nudes / sex", "version_id": 2474488},
+    {"file": "qwen-edit-skin.safetensors", "family": "qwen", "group": "Anatomy", "label": "Qwen Edit skin"},
+    {"file": "m99_labiaplasty_pussy_4_qwen-image-edit-2511.safetensors", "family": "qwen", "group": "Anatomy", "label": "Labiaplasty / vulva (2511)"},
+    {"file": "qwen-image-edit-plus-nsfw-lora.safetensors", "family": "qwen", "group": "Anatomy", "label": "Qwen Edit NSFW"},
+    {"file": "qwen/Furry_Enhancer_Qwen_V3.9.safetensors", "family": "qwen", "group": "Popular", "label": "Furry Enhancer", "version_id": 2506507},
+    {"file": "qwen/Qwen4Play2512_v2.safetensors", "family": "qwen", "group": "Anatomy", "label": "QWEN 4 PLAY AIO NSFW", "version_id": 3061098},
+    {"file": "2511-AnyPose-base-000006250.safetensors", "family": "qwen", "group": "Popular", "label": "AnyPose base"},
+    {"file": "Qwen-Edit-2511-versatile-poses.safetensors", "family": "qwen", "group": "Popular", "label": "Versatile poses"},
+    {"file": "Qwen-Image-Edit-2511-Multiple-Angles.safetensors", "family": "qwen", "group": "Popular", "label": "Multiple angles"},
+
+    {"file": "flux2/lenovo_flux2.safetensors", "family": "flux2", "group": "Popular", "label": "Lenovo UltraReal", "version_id": 2449027},
+    {"file": "flux2/boreal-flux-dev2.safetensors", "family": "flux2", "group": "Popular", "label": "Boreal (boring reality)", "version_id": 2455415},
+
+    {"file": "klein/ExcellentFullNude_F2K4B_1.safetensors", "family": "klein", "group": "Anatomy", "label": "Excellent Full Nude", "version_id": 2734784},
+    {"file": "klein/nipplediffusion-f2-klein-4b.safetensors", "family": "klein", "group": "Anatomy", "label": "NippleDiffusion", "version_id": 2633618},
+    {"file": "klein/klein4B_slider_anatomy.safetensors", "family": "klein", "group": "Anatomy", "label": "Anatomy / quality slider", "version_id": 2617474},
+    {"file": "klein/amateur_selfie_4b.safetensors", "family": "klein", "group": "Popular", "label": "Ultra Real amateur selfies", "version_id": 2666766},
+
+    {"file": "zimage/Mystic-XXX-ZIT-V7.safetensors", "family": "zimage", "group": "Anatomy", "label": "Mystic XXX", "version_id": 2855359},
+    {"file": "zimage/NSFW_master_ZIT.safetensors", "family": "zimage", "group": "Anatomy", "label": "NSFW MASTER", "version_id": 2904324},
+    {"file": "zimage/furry_enhancer_zimageV1.safetensors", "family": "zimage", "group": "Popular", "label": "Furry Enhancer", "version_id": 2506032},
+    {"file": "zimage/anatomy_v1_3.safetensors", "family": "zimage", "group": "Anatomy", "label": "Anatomy (heels / breasts)", "version_id": 2527061},
+
+    {"file": "krea2/KNP_Krea2_NSFW_V4.safetensors", "family": "krea2", "group": "Anatomy", "label": "Krea 2 NSFW V4", "version_id": 3147117},
+    {"file": "krea2/snofs_krea_v1_3D.safetensors", "family": "krea2", "group": "Anatomy", "label": "SNOFS Krea 2", "version_id": 3220691},
+    {"file": "krea2/furry_enhancer_Krea2V2.1.safetensors", "family": "krea2", "group": "Popular", "label": "Furry Enhancer", "version_id": 3120301},
+    {"file": "krea2/krea2_nud3.safetensors", "family": "krea2", "group": "Anatomy", "label": "PhotoReal BetterNudes", "version_id": 3066702},
+    {"file": "krea2/realism_engine_krea2_v3.1.safetensors", "family": "krea2", "group": "Popular", "label": "Realism Engine", "version_id": 3109006},
+    {"file": "krea2/krea2_retroanime.safetensors", "family": "krea2", "group": "Popular", "label": "Official retro anime"},
+    {"file": "krea2/krea2_darkbrush.safetensors", "family": "krea2", "group": "Popular", "label": "Official dark brush"},
+    {"file": "krea2/krea2_softwatercolor.safetensors", "family": "krea2", "group": "Popular", "label": "Official soft watercolor"}
+  ]
+}

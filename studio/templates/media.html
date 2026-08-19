@@ -72,7 +72,8 @@
     the identity path. Flux 2 Dev, Flux 2 Klein 4B, Z-Image Turbo, and
     <strong>Krea 2 Turbo</strong> (open weights) are empty-latent t2i.
     Mage Mango/Guava/Kiwi are Mage-only fine-tunes — not downloadable.
-    Fetch a LoRA from Civitai below, then pick it here.</p>
+    Style LoRA is filtered to the selected model. Fetch a LoRA from
+    Civitai below, or the curated pack for that family.</p>
   <form method="post" action="/media/images" class="stack-form js-media-gen">
     <label>Prompt
       <textarea name="prompt" rows="5" required
@@ -89,7 +90,7 @@
       <label>Model
         <select name="model" id="t2i-model"
                 hx-get="/media/loras"
-                hx-target="#style-lora-select"
+                hx-target="#style-lora-select-wrap"
                 hx-trigger="change"
                 hx-swap="outerHTML"
                 hx-include="this">
@@ -134,19 +135,18 @@
 
 <section class="card" id="civitai-loras">
   <h2>Fetch a LoRA from Civitai</h2>
-  <p class="hint">Search the public catalog and download into
-    <code>~/ComfyUI/models/loras</code> on cerberus. Then pick it in Style
-    LoRA above (refresh this page after the job lands).
-    {% if not civitai_set %}<strong>No API key</strong> — store one on
-    <a href="/config">Config</a> first.{% endif %}</p>
+  <p class="hint">Search the public catalog (sorted by downloads) and
+    save into <code>~/ComfyUI/models/loras/&lt;family&gt;</code> on
+    cerberus. Base follows the model picker: Qwen, Flux.2 D, Flux.2 Klein
+    4B, ZImageTurbo, Krea 2. Then pick it in Style LoRA.</p>
   <form class="field-row" hx-get="/models/civitai" hx-target="#civitai-out"
         hx-swap="innerHTML">
     <label>Search
-      <input type="search" name="q" placeholder="qwen 2511 pose, fur, nsfw"></label>
+      <input type="search" name="q" placeholder="nsfw, fur, anatomy, pose"></label>
     <label>Base model
       <input type="text" name="base" id="civitai-base"
              value="{{ civitai_base }}" placeholder="Qwen"></label>
-    <button type="submit" {% if not civitai_set %}disabled{% endif %}>Search</button>
+    <button type="submit">Search</button>
   </form>
   <div id="civitai-out"></div>
 </section>

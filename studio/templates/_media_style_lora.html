@@ -1,6 +1,24 @@
+<div id="style-lora-select-wrap">
 <select name="style_lora" id="style-lora-select">
   <option value="">none</option>
-  {% for l in loras %}
-  <option value="{{ l }}">{{ l }}</option>
+  {% for g in lora_groups|default([]) %}
+  <optgroup label="{{ g.name }}">
+    {% for l in g.loras %}
+    <option value="{{ l.file }}">{{ l.label }}</option>
+    {% endfor %}
+  </optgroup>
   {% endfor %}
 </select>
+{% if lora_missing %}
+<p class="hint" id="lora-pack-note">
+  {{ lora_missing|length }} curated {{ lora_family }} LoRA{{ "" if lora_missing|length == 1 else "s" }} not on disk.
+  <button type="button" class="secondary btn-sm"
+          hx-post="/media/loras/pack"
+          hx-include="#t2i-model"
+          hx-target="#lora-pack-note"
+          hx-swap="innerHTML">
+    Fetch pack
+  </button>
+</p>
+{% endif %}
+</div>
