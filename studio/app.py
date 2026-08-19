@@ -8850,6 +8850,46 @@ async def save_driving_video(upload, dest_dir, prefix):
     return dest
 
 
+def _flush_scene_clip_prompts(row, song, tier, num, motion, negative):
+    """Write the on-screen motion/negative into the board before enqueue.
+
+    Render clip is a different form from Save Scene. The textarea is bound to
+    scene-form-N, so a click on Render clip used to send the last saved JSON
+    and ignore what was in the box.
+    """
+    sb = load_storyboard(row, normalized=False)
+    scene = next((s for s in sb.get("scenes", []) if s.get("scene_number") == num), None)
+    if scene is None:
+        raise HTTPException(404, f"no scene {num} in this storyboard")
+    changed = False
+    pairs = []
+    if motion is not None:
+        pairs.append(("video_motion_prompt", motion))
+    if negative is not None:
+        pairs.append(("negative_prompt", negative))
+    for field, raw in pairs:
+        value = (raw or "").strip()
+        if len(value) > MAX_SCENE_FIELD:
+            raise HTTPException(
+                400, f"{field} is {len(value)} characters; keep it under {MAX_SCENE_FIELD}")
+        try:
+            tiers.check_text(value, f"scene {num} {field}", tier=tier)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        if (scene.get(field) or "") != value:
+            scene[field] = value
+            changed = True
+    if not changed:
+        return False
+    foreign = foreign_tier_in_storyboard(sb, tier)
+    if foreign:
+        raise HTTPException(
+            400, f"storyboard carries {foreign} wording; this board is {tier}")
+    scene["edited"] = time.time()
+    grok.write_storyboard(sb, os.path.dirname(row["json_path"]), song["slug"], tier)
+    return True
+
+
 @app.post("/songs/{id}/clips")
 async def start_clips(request: Request, id: int, tier: str = Form(...),
                        video_model: str = Form(""),
@@ -8858,6 +8898,8 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
                        scene: str = Form(""),
                        clip_idx: str = Form(""),
                        head_only: bool = Form(False),
+                       video_motion_prompt: Optional[str] = Form(None),
+                       negative_prompt: Optional[str] = Form(None),
                        ref_motion: Optional[UploadFile] = File(None),
                        control_video: Optional[UploadFile] = File(None)):
     song = get_song_or_404(id)
@@ -8893,6 +8935,11 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
         hit = next((p for p in plan0 if int(p.get("clip_idx")) == only_idx), None)
         if hit is not None:
             scene_num = hit.get("scene_number")
+    if scene_num is not None and (
+            video_motion_prompt is not None or negative_prompt is not None):
+        _flush_scene_clip_prompts(
+            sb, song, tier, scene_num, video_motion_prompt, negative_prompt)
+        board = load_storyboard(sb)
     approved_sns = {r["scene_number"] for r in
                     db.q("""SELECT scene_number FROM refs
                             WHERE song_id=? AND tier=? AND approved=1

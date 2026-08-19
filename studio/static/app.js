@@ -2211,7 +2211,17 @@ function initSongPage() {
       var verSel = (form.closest(".sb-panel") || page).querySelector("select.sb-ver");
       if (nField && verSel) nField.value = verSel.value;
     }
-    api(dest, new FormData(form))
+    var fd = new FormData(form);
+    if (form.classList.contains("clip-bar")) {
+      var sceneEl = form.closest(".scene");
+      if (sceneEl) {
+        ["video_motion_prompt", "negative_prompt"].forEach(function (name) {
+          var ta = sceneEl.querySelector('textarea[name="' + name + '"]');
+          if (ta) fd.set(name, ta.value);
+        });
+      }
+    }
+    api(dest, fd)
       .then(function (d) {
         if (d.deleted != null && form.classList.contains("delete-song")) {
           location.href = "/";

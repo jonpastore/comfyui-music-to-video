@@ -548,7 +548,10 @@ def test_song_page_js_intercepts_forms():
     assert 'page.addEventListener("submit"' in src
     assert "e.preventDefault()" in src
     assert "hasAttribute(\"hx-post\")" in src
-    assert "api(dest, new FormData(form))" in src
+    assert "new FormData(form)" in src
+    assert "api(dest, fd)" in src
+    assert 'form.classList.contains("clip-bar")' in src
+    assert 'fd.set(name, ta.value)' in src
 
 
 # High-traffic song actions that must not bare-POST a full reload.
@@ -589,7 +592,8 @@ def test_song_page_high_traffic_forms_are_song_async():
             assert "hx-post" not in tag  # fetch path, not htmx fragment swap
     src = open(os.path.join(os.path.dirname(__file__), "static", "app.js")).read()
     assert "function initSongPage(" in src
-    assert "api(dest, new FormData(form))" in src
+    assert "new FormData(form)" in src
+    assert "api(dest, fd)" in src
 
 
 def test_scene_reroll_and_approve_are_song_async():
@@ -623,6 +627,52 @@ def test_scene_reroll_and_approve_are_song_async():
         assert "reroll-bar" in html and "song-async" in html
         assert "still-pick" in html and "song-async" in html
         assert f'/songs/{sid}/refs/' in html and "/approve" in html
+
+
+def test_render_clip_writes_the_onscreen_motion_before_enqueue():
+    """Render clip used the last saved JSON, not the motion box."""
+    import json as _json
+    with TestClient(appmod.app) as client:
+        song = _upload_song(client, "Flush Motion Song")
+        sid = song["id"]
+        outdir = os.path.join(db.DATA, "storyboards", song["slug"])
+        os.makedirs(outdir, exist_ok=True)
+        jp = os.path.join(outdir, f"{song['slug']}_xxx.json")
+        _json.dump({
+            "title": "T",
+            "character_reference": "black feline woman, yellow slit pupils",
+            "scenes": [{"scene_number": 1, "name": "One",
+                        "image_prompt": "alley", "story": "stand",
+                        "duration_guidance": "5s",
+                        "video_motion_prompt": "OLD MOTION she walks off",
+                        "negative_prompt": "old neg",
+                        "length_seconds": 5.0}],
+        }, open(jp, "w"))
+        db.run("""INSERT INTO storyboards (song_id,tier,json_path,md_path,scene_count,created)
+                  VALUES (?,?,?,?,?,?)""",
+               sid, "xxx", jp, jp.replace(".json", ".md"), 1, 0)
+        dest = os.path.join(db.DATA, "refs")
+        os.makedirs(dest, exist_ok=True)
+        path = os.path.join(dest, "flush_still.png")
+        open(path, "wb").write(b"\x89PNG\r\n\x1a\x0a" + b"\x00" * 16)
+        db.run("""INSERT INTO refs (song_id,tier,clip_idx,path,seed,approved,
+                                    created,origin,scene_number)
+                  VALUES (?,?,?,?,?,1,?,?,?)""",
+               sid, "xxx", 0, path, 42, 1.0, "gen", 1)
+        want = ("She holds still in the wet alley. Camera locked wide-low, "
+                "no cut, no walk-off.")
+        r = client.post(
+            f"/songs/{sid}/clips",
+            data={"tier": "xxx", "scene": "1", "head_only": "true",
+                  "video_motion_prompt": want, "negative_prompt": "human nose"},
+            headers=J, follow_redirects=False)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body.get("kind") == "clips"
+        saved = _json.load(open(jp))
+        assert saved["scenes"][0]["video_motion_prompt"] == want
+        assert saved["scenes"][0]["negative_prompt"] == "human nose"
+        assert "OLD MOTION" not in saved["scenes"][0]["video_motion_prompt"]
 
 
 def test_song_page_qc_findings_are_expandable_chips_not_cards():
