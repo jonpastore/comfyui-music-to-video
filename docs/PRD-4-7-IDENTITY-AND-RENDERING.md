@@ -188,7 +188,10 @@ auto-seed **built** (`ensure_sidecar_seed` from
 `deploy.sh` ships tracked `studio/seed/image-classification.json` there
 — live seed depends on that ship; `library()` never reads a file).
 `/anchors` has no visible page title (nav current + toolbar `?` on the
-right). It paints keeper chips (grouped by pose/view/wardrobe; preview
+right). Sticky tier chips are buttons (htmx, no full reload). A
+selected chip paints that tier's chosen sheets as tagged keepers
+(`test_page_tier_keepers_are_chosen_sheets_and_chips_are_buttons`).
+It paints keeper chips (grouped by pose/view/wardrobe; preview
 is `#pose-preview`) and import/save seed an empty library
 (`test_uiux_classification_chips.py`). Sidecar keeper paths resolve
 to a file before the chip gets a url. Hole-pick **Generate anchors**

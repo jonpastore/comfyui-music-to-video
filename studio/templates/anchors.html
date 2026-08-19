@@ -21,13 +21,12 @@
   </label>
   <div class="scope-tiers" role="tablist" aria-label="Tier">
     {% for c in sticky_tiers %}
-    <a class="tier-chip {% if page_tier and c.name == page_tier %}on{% endif %}"
-       href="/anchors?scope_value={{ (class_album or form_album)|urlencode }}{% if open_song_id %}&song_id={{ open_song_id }}{% endif %}&gap_tier={{ c.name }}"
+    <button type="button" class="tier-chip {% if page_tier and c.name == page_tier %}on{% endif %}"
        hx-get="/anchors?scope_value={{ (class_album or form_album)|urlencode }}{% if open_song_id %}&song_id={{ open_song_id }}{% endif %}&gap_tier={{ c.name }}"
        hx-target="#anchors-root" hx-select="#anchors-root" hx-swap="outerHTML"
        hx-push-url="true">{{ c.name | tiername }}
       <span class="muted">{{ c.n_have }}/{{ c.n_needed }} poses
-        · {{ c.n_chars }} char{{ "" if c.n_chars == 1 else "s" }}</span></a>
+        · {{ c.n_chars }} char{{ "" if c.n_chars == 1 else "s" }}</span></button>
     {% endfor %}
   </div>
   {{ help_tip("Anchors", "This album's pose library. Songs list the poses they need; each pose has one keeper at the selected tier. Scene stills for LTX are generated on the song page after keepers exist. Pick a keeper in Character catalog, or Generate anchors for a missing pose.") }}
@@ -144,7 +143,7 @@
             data-paths='{{ im.paths | tojson }}'
             data-wards='{{ im.wards | tojson }}'>
       {% if im.thumb %}
-      <img src="{{ im.thumb }}?w=480" alt="" loading="lazy">
+      <img src="{{ im.thumb }}?w=480" alt="">
       {% else %}
       <span class="pose-ph" aria-hidden="true"></span>
       {% endif %}

@@ -3469,6 +3469,52 @@ def nest_anchor_groups(group_list):
     return out
 
 
+def _file_media_url(path):
+    """/media url only when the file exists inside a live media root."""
+    path = (path or "").strip()
+    if not path or not os.path.isfile(path):
+        return ""
+    real = os.path.realpath(path)
+    if not any(real == root or real.startswith(root + os.sep)
+               for root in _media_roots()):
+        return ""
+    return media_url(path) or ""
+
+
+def _keeper_from_anchor(row):
+    """Chosen anchor row → classification-shaped image for group_rows."""
+    path = row["path"] or ""
+    meta = db.jset(row, "render_json")
+    pose = (meta.get("pose_name") or row["view"] or "").strip()
+    view = (row["view"] or "").strip()
+    low = pose.lower()
+    wardrobe = "nude" if (
+        make_anchor.is_nude_view(view) or low.endswith(" nude")
+        or low.endswith(" naked")) else "clothed"
+    return {
+        "id": f"anchor-{row['id']}",
+        "path": path,
+        "kind": "operator",
+        "view": view,
+        "pose": pose,
+        "wardrobe": wardrobe,
+        "usable": "pose",
+        "url": _file_media_url(path),
+    }
+
+
+def _attach_keeper_urls(keepers):
+    import pose_generate
+    for im in keepers:
+        path = pose_generate.resolve_image_path(im.get("path") or "")
+        if path:
+            im["path"] = path
+            url = _file_media_url(path)
+            if url:
+                im["url"] = url
+    return keepers
+
+
 def _anchors_classification_ctx(album, song_id="", gap_tier=""):
     """T4-21 / T4-23: keepers and holes for the open song + selected tier."""
     album = (album or "").strip()
@@ -3503,34 +3549,26 @@ def _anchors_classification_ctx(album, song_id="", gap_tier=""):
                 gap = storyboard_service.pose_gap(open_id, tier=want)
             except (LookupError, ValueError, RuntimeError):
                 gap = None
-    import pose_generate
-    for im in keepers:
-        path = pose_generate.resolve_image_path(im.get("path") or "")
-        if path:
-            im["path"] = path
-            real = os.path.realpath(path)
-            if any(real == root or real.startswith(root + os.sep)
-                   for root in MEDIA_ROOTS):
-                im["url"] = media_url(path)
-    rows = classification.group_rows(keepers)
     page_tier = (gap_tier or "").strip()
+    chosen_imgs = []
     if page_tier and album:
-        chosen = {}
         for row in db.q(
                 f"""SELECT * FROM anchors WHERE {db.visible_anchor_sql()}
-                    AND chosen=1 AND tier=?""", album, page_tier):
+                    AND chosen=1 AND tier=? ORDER BY id DESC""",
+                album, page_tier):
             p = row["path"] or ""
-            if not p or not os.path.isfile(p):
-                continue
-            meta = db.jset(row, "render_json")
-            key = classification._pose_key(
-                meta.get("pose_name") or row["view"] or "")
-            if key and key not in chosen:
-                chosen[key] = media_url(p)
+            if p and os.path.isfile(p):
+                chosen_imgs.append(_keeper_from_anchor(row))
+    if chosen_imgs:
+        keepers = chosen_imgs
+    else:
+        _attach_keeper_urls(keepers)
+    rows = classification.group_rows(keepers)
+    if page_tier and tiers.allows_nudity(page_tier):
         for row in rows:
-            t = chosen.get(row["key"])
-            if t:
-                row["thumb"] = t
+            nudes = row.get("urls_nude") or []
+            if nudes:
+                row["thumb"] = nudes[0]
     n_clothed = sum(1 for im in keepers if im.get("wardrobe") == "clothed")
     n_nude = sum(1 for im in keepers if im.get("wardrobe") == "nude")
     return {

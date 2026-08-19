@@ -416,6 +416,49 @@ def test_keeper_chips_group_and_resolve_basename():
     assert os.path.basename(a) in html
 
 
+def test_page_tier_keepers_are_chosen_sheets_and_chips_are_buttons(tmp_path):
+    """Sticky XXX chip shows that tier's chosen sheet, not the class copy.
+
+    Mutation: tagged keepers stay the album-wide classification dump → red.
+    Mutation: chip is <a href> (full navigation) → red.
+    """
+    stamp = f"uiux-chosen-{time.time_ns()}"
+    album, sid, _song = _album_song(stamp, scenes=[_scene(1, "standing", "wide")])
+    class_path = os.path.join(db.DATA, f"{stamp}-class.png")
+    chosen_path = os.path.join(db.DATA, f"{stamp}-xxx.png")
+    open(class_path, "wb").write(b"\x89PNG\r\n\x1a\n")
+    open(chosen_path, "wb").write(b"\x89PNG\r\n\x1a\n")
+    classification.save(album, {"images": [
+        _image("class-stand", path=class_path, pose="stand", view="front",
+               wardrobe="clothed", usable="pose"),
+    ]})
+    db.run("""INSERT INTO anchors
+              (scope_kind, scope_value, tier, view, path, chosen, created, render_json)
+              VALUES ('album',?,'xxx','front_nude',?,1,?,?)""",
+           album, chosen_path, time.time(), json.dumps({"pose_name": "stand"}))
+    prev = classification._DEFAULT_SIDECAR
+    classification._DEFAULT_SIDECAR = os.path.join(db.DATA, f"{stamp}-missing.json")
+    try:
+        with TestClient(appmod.app) as client:
+            xxx = client.get("/anchors", params={
+                "scope_value": album, "song_id": sid, "gap_tier": "xxx"})
+            bare = client.get("/anchors", params={
+                "scope_value": album, "song_id": sid})
+    finally:
+        classification._DEFAULT_SIDECAR = prev
+    assert xxx.status_code == 200, xxx.text
+    html = xxx.text
+    chips = html.split('id="class-keeper-chips"', 1)[1].split("Missing on this song", 1)[0]
+    assert os.path.basename(chosen_path) in chips
+    assert os.path.basename(class_path) not in chips
+    assert 'loading="lazy"' not in chips
+    scope = html.split('id="anchor-scope"', 1)[1].split('id="classification-library"', 1)[0]
+    assert '<button type="button" class="tier-chip' in scope
+    assert 'href="/anchors?' not in scope
+    assert 'hx-target="#anchors-root"' in scope
+    assert os.path.basename(class_path) in bare.text
+
+
 def test_unspecified_hole_says_pose_unset_not_scene_dump():
     stamp = f"uiux-unset-{time.time_ns()}"
     scenes = []

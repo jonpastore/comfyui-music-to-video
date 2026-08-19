@@ -124,7 +124,7 @@ a { color: var(--accent); }
 }
 .anchor-scope .scope-album select { max-width: 11rem; }
 .scope-tiers { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-a.tier-chip {
+.tier-chip {
   display: inline-flex;
   align-items: baseline;
   gap: 0.35rem;
@@ -133,9 +133,12 @@ a.tier-chip {
   border-radius: 6px;
   text-decoration: none;
   color: var(--text);
+  font: inherit;
   font-size: 0.9rem;
+  background: transparent;
+  cursor: pointer;
 }
-a.tier-chip.on { border-color: var(--accent); color: #fff; font-weight: 700; }
+.tier-chip.on { border-color: var(--accent); color: #fff; font-weight: 700; }
 .page-chrome > .help-tip,
 .anchor-scope > .help-tip {
   margin-left: auto;

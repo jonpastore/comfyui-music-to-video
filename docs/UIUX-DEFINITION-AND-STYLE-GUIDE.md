@@ -1472,8 +1472,12 @@ the **far right** of the first toolbar (`.page-chrome` / `#anchor-scope`
 **Anchors page.** No visible **Anchors** heading. A sticky `#anchor-scope`
 bar under the topbar holds a thin album select, tier chips
 (`n_have/n_needed` poses · character count), and the page `?` on the
-right; a chip
-sets `gap_tier` and ticks that generate-form tier. **Character catalog**
+right. A chip is a `<button>` with htmx (`hx-target="#anchors-root"`,
+no `href`) so it cannot full-reload; it sets `gap_tier` and ticks that
+generate-form tier. When a chip is `.on`, **Tagged keepers** are that
+tier's chosen sheets (nude thumb when the tier allows it), not the
+album-wide classification dump. Thumbs are eager — lazy-load inside the
+overflow grid painted empty boxes. **Character catalog**
 (`#character-catalog`) is the collapsible gallery and starts **closed**.
 The **Pose catalog** card (`#classification-library`)
 is a collapsed `<details>` (open when the list is empty or the song
