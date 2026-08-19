@@ -118,7 +118,8 @@ def test_uiux_anchors_shows_keeper_chips_and_holes():
     assert 'data-view="front"' in html
     assert 'data-wardrobe="clothed"' in html
     assert 'data-usable="pose"' in html
-    assert "kneel / front / clothed" in html
+    assert "kneel / front / clothed" not in html
+    assert 'class="keeper-row-name">kneel</span>' in html
     assert 'id="pose-gap-holes"' in html
     assert 'class="tag class-chip hole warn-tag js-hole-pick"' in html
     assert 'data-pose="standing"' in html
@@ -132,6 +133,8 @@ def test_uiux_anchors_shows_keeper_chips_and_holes():
     assert "<summary>" in html.split('id="classification-library"', 1)[1]
     assert "Pose catalog" in html
     assert 'id="anchor-scope"' in html
+    assert '<h1 class="visually-hidden">Anchors</h1>' in html
+    assert "help-tip" in html.split('id="anchor-scope"', 1)[1][:2500]
     assert "Character catalog" in html
     assert '<p class="hint">This album' not in html
     album_at = html.find('id="class-album"')
@@ -139,8 +142,15 @@ def test_uiux_anchors_shows_keeper_chips_and_holes():
     assert album_at != -1 and song_at != -1 and album_at < song_at
     assert 'class="tier-chip' in html
     assert "js-keeper-preview" in html
+    assert "keeper-row" in html
     assert "Does not generate a new sheet" in html
     assert "No file, no GPU" not in html
+    assert "no pose named" not in html
+    assert 'id="keeper-preview"' not in html
+    assert 'id="pose-preview"' in html
+    src = open(_ANCHORS).read()
+    assert 'id="character-catalog"' in src
+    assert 'id="character-catalog" open' not in src
 
 
 def test_gap_tier_select_reads_that_board():
@@ -189,7 +199,7 @@ def test_uiux_import_seeds_empty_library_and_closes_holes():
         assert filled.status_code == 200, filled.text
         html = filled.text
         assert 'data-id="sidecar-stand"' in html
-        assert "stand / front / clothed" in html
+        assert 'class="keeper-row-name">stand</span>' in html
         assert 'id="pose-gap-empty"' in html
         assert "No ceiling holes for this song." in html
         assert 'class="tag class-chip hole warn-tag"' not in html
@@ -264,7 +274,7 @@ def test_uiux_live_empty_auto_seeds_from_default_sidecar():
             again = client.get("/anchors", params={"scope_value": album, "song_id": sid})
         assert page.status_code == 200, page.text
         assert 'data-id="auto-stand"' in page.text
-        assert "stand / front / clothed" in page.text
+        assert 'class="keeper-row-name">stand</span>' in page.text
         assert 'id="pose-gap-empty"' in page.text
         assert again.status_code == 200, again.text
         assert 'data-id="auto-stand"' in again.text
@@ -302,6 +312,11 @@ def test_uiux_js_wires_import_and_save():
     assert "/classification/from-sheets" in js
     assert "/classification/keeper" in js
     assert "js-hole-pick" in js
+    assert "js-keeper-preview" in js
+    assert 'id === "pose-preview"' in js or "pose-preview" in js
+    assert "holdClosed" in js
+    assert "pose unset" in js
+    assert "no pose named" not in open(_ANCHORS).read()
     assert "Generate anchors" in open(_ANCHORS).read()
     assert "requestSubmit" in js
 
@@ -342,6 +357,80 @@ def test_add_keeper_tags_one_sheet(tmp_path):
     })
     assert any(im["pose"] == "seated" and im["wardrobe"] == "nude"
                for im in got["images"])
+
+
+def test_group_rows_one_row_per_pose():
+    imgs = [
+        _image("a", pose="kneel", view="front", wardrobe="clothed",
+               usable="pose", path="a.jpg"),
+        _image("b", pose="kneel", view="front", wardrobe="clothed",
+               usable="identity", path="b.jpg"),
+        _image("c", pose="kneel nude", view="pose_91_nude", wardrobe="nude",
+               usable="pose", path="c.jpg"),
+        _image("d", pose="stand", view="pose_77", wardrobe="clothed",
+               usable="pose", path="d.jpg"),
+    ]
+    imgs[0]["url"] = "/media/a.jpg"
+    imgs[1]["url"] = "/media/b.jpg"
+    imgs[2]["url"] = "/media/c.jpg"
+    got = classification.group_rows(imgs)
+    assert [g["pose"] for g in got] == ["kneel", "stand"]
+    assert got[0]["n_clothed"] == 2 and got[0]["n_nude"] == 1
+    assert got[0]["urls"] == ["/media/a.jpg", "/media/b.jpg", "/media/c.jpg"]
+    assert got[0]["view"] == "front"
+    assert got[1]["view"] == ""
+    assert classification.pose_label("3qtr nude") == "3qtr"
+
+
+def test_keeper_chips_group_and_resolve_basename():
+    """Two same-pose keepers → one chip; sidecar basename becomes /media/."""
+    stamp = f"uiux-group-{time.time_ns()}"
+    album, sid, _song = _album_song(stamp, scenes=[_scene(1, "kneeling", "medium")])
+    a = os.path.join(db.DATA, f"{stamp}-a.jpg")
+    b = os.path.join(db.DATA, f"{stamp}-b.jpg")
+    open(a, "wb").write(b"\x89PNG\r\n\x1a\n")
+    open(b, "wb").write(b"\x89PNG\r\n\x1a\n")
+    classification.save(album, {"images": [
+        _image("keep-a", path=os.path.basename(a), pose="kneel", view="front",
+               wardrobe="clothed", usable="pose"),
+        _image("keep-b", path=os.path.basename(b), pose="kneel", view="front",
+               wardrobe="clothed", usable="identity"),
+    ]})
+    with TestClient(appmod.app) as client:
+        page = client.get("/anchors", params={"scope_value": album, "song_id": sid})
+    assert page.status_code == 200, page.text
+    html = page.text
+    assert html.count('class="keeper-row js-keeper-preview"') == 1
+    assert "clothed ×2" in html
+    assert "kneel / front / clothed" not in html
+    assert "data-urls=" in html
+    assert "/media/" in html
+    assert os.path.basename(a) in html
+
+
+def test_unspecified_hole_says_pose_unset_not_scene_dump():
+    stamp = f"uiux-unset-{time.time_ns()}"
+    scenes = []
+    for n in (1, 2, 3):
+        s = _scene(n, "", "wide")
+        s["story"] = "neon street at night"
+        s["image_prompt"] = "Meow P in a neon street at night"
+        s["pose"] = ""
+        scenes.append(s)
+    album, sid, _song = _album_song(stamp, scenes=scenes)
+    prev = classification._DEFAULT_SIDECAR
+    classification._DEFAULT_SIDECAR = os.path.join(db.DATA, f"{stamp}-missing.json")
+    try:
+        with TestClient(appmod.app) as client:
+            page = client.get("/anchors", params={"scope_value": album, "song_id": sid})
+    finally:
+        classification._DEFAULT_SIDECAR = prev
+    assert page.status_code == 200, page.text
+    html = page.text
+    assert "pose unset" in html
+    assert "no pose named" not in html
+    assert "3 scenes" in html
+    assert "scenes 1, 2, 3" not in html
 
 
 def test_uiux_stays_off_scene_row_and_storyboard_panel():

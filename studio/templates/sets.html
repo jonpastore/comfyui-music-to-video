@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Sets</h1>
+<h1 class="visually-hidden">Sets</h1>
 <p class="hint">A set is a document: songs in an order, each with its own trim, gain and
   transition. Create one to open the editor.</p>
 
-<form method="post" action="/sets/new" class="new-playlist-bar">
+<form method="post" action="/sets/new" class="new-playlist-bar page-chrome">
   <label>New set
     <input type="text" name="name" required placeholder="set name">
   </label>

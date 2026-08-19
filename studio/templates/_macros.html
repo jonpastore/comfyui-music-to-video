@@ -23,6 +23,14 @@
    beside its control. So does anything COMPUTED from the current selections:
    that is the form reporting your own choices back, not reference material. #}
 
+{# Nav already names the section (bold current). A second "Anchors" / "Library"
+   h1 is the same word twice. Unique titles (song name, New Image) stay
+   visible. Help, when the page has one, sits on the far right of the first
+   toolbar (.page-chrome / #anchor-scope), not beside the title. #}
+{% macro page_title(title) %}
+<h1 class="visually-hidden">{{ title }}</h1>
+{% endmacro %}
+
 {% macro help_tip(label, text) %}
 <button type="button" class="icon-btn help-tip"
         title="{{ label }}" aria-label="{{ label }}"

@@ -136,7 +136,13 @@ a.tier-chip {
   font-size: 0.9rem;
 }
 a.tier-chip.on { border-color: var(--accent); color: #fff; font-weight: 700; }
-h1 .help-tip { vertical-align: middle; }
+.page-chrome > .help-tip,
+.anchor-scope > .help-tip {
+  margin-left: auto;
+  flex: none;
+  align-self: center;
+}
+h1:not(.visually-hidden) .help-tip { vertical-align: middle; }
 .nav-drop { position: relative; }
 .nav-sub {
   display: none;
@@ -933,6 +939,7 @@ button.qc-tag:active:not(:disabled) {
   border-radius: 8px;
   background: var(--panel);
 }
+.new-playlist-bar.page-chrome > .help-tip { align-self: center; }
 .new-playlist-bar label {
   display: flex;
   flex-direction: column;
@@ -2015,6 +2022,90 @@ img.lazy-src, video.lazy-src {
 /* ---- cast ---- */
 .cast-chips { margin: 0.3rem 0; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
 .class-chips { margin: 0.3rem 0; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.actor-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+.actor-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  width: 4.6rem;
+  margin: 0;
+  padding: 0.35rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 0.8rem;
+  text-align: center;
+  cursor: pointer;
+}
+.actor-card img,
+.actor-card .pose-ph {
+  width: 2.5rem;
+  height: 3.4rem;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.actor-card-name { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.actor-card-all { justify-content: center; min-height: 5.4rem; }
+.missing-pose-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: min(22rem, 45vh);
+  overflow: auto;
+}
+.missing-pose {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.28rem 0.35rem;
+  border-radius: 6px;
+}
+.missing-pose:hover { background: var(--panel); }
+.missing-pose-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.missing-pose-nude { font-size: 0.85rem; color: var(--muted); }
+.keeper-filter { display: block; max-width: 18rem; margin: 0.35rem 0 0.5rem; }
+.keeper-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: min(28rem, 50vh);
+  overflow: auto;
+  margin: 0.3rem 0 0.6rem;
+  padding-right: 0.2rem;
+}
+.keeper-row {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.25rem 0.4rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.keeper-row:hover { background: var(--panel); }
+.keeper-row img,
+.keeper-row .pose-ph {
+  width: 2.25rem;
+  height: 3rem;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.keeper-row-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .class-chip.hole { border-color: var(--danger); color: var(--danger); }
 button.class-chip.hole {
   font: inherit;

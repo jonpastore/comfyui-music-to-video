@@ -111,3 +111,4 @@ def test_uiux_nav_html_and_json_share_one_list(monkeypatch):
     assert "ArrowRight" in js
     assert 'key === "Enter"' in js
     assert "subItems" in js
+    assert "holdClosed" in js

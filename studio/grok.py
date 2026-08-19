@@ -378,6 +378,14 @@ def _chat(model, messages, progress=None):
     return out
 
 
+# /v1/models is a small JSON list. 120s made every song page wait on a
+# slow or wedged xAI hop (measured 22s TTFB on /songs/32). The dropdown
+# can be empty for one refresh; the page cannot.
+MODELS_TIMEOUT = float(os.environ.get("XAI_MODELS_TIMEOUT", 8))
+MODELS_TTL = float(os.environ.get("XAI_MODELS_TTL", 300))
+_models_cache = {"at": 0.0, "ids": None}
+
+
 def list_models():
     """Chat model ids from /v1/models, sorted -- feeds a UI dropdown.
 
@@ -385,17 +393,29 @@ def list_models():
     for storyboard text generation would just get a confusing failure, so
     they're filtered out here. grok-build-* stays selectable (see _resolve_model
     for where it's skipped instead: auto-picking a default).
+
+    Cached: song_page calls this on every GET. A 22s xAI round-trip is not
+    a model picker.
     """
+    now = time.monotonic()
+    hit = _models_cache["ids"]
+    if hit is not None and (now - _models_cache["at"]) < MODELS_TTL:
+        return list(hit)
     key = _api_key()
     try:
-        resp = httpx.get(f"{BASE_URL}/models", headers={"Authorization": f"Bearer {key}"}, timeout=120)
+        resp = httpx.get(f"{BASE_URL}/models",
+                         headers={"Authorization": f"Bearer {key}"},
+                         timeout=MODELS_TIMEOUT)
         resp.raise_for_status()
     except httpx.HTTPError as e:
         raise RuntimeError(f"xAI models request failed: {_scrub(str(e), key)}") from None
     ids = (m["id"] for m in resp.json().get("data", []))
-    return sorted(i for i in ids
-                  if not i.startswith(_NON_CHAT_PREFIXES)
-                  and not any(k in i.lower() for k in _NON_CHAT_MARKERS))
+    out = sorted(i for i in ids
+                 if not i.startswith(_NON_CHAT_PREFIXES)
+                 and not any(k in i.lower() for k in _NON_CHAT_MARKERS))
+    _models_cache["at"] = now
+    _models_cache["ids"] = out
+    return list(out)
 
 
 def _version_key(name):

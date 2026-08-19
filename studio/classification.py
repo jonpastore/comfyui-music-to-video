@@ -6,6 +6,7 @@ No FastAPI.
 """
 import json
 import os
+import re
 import time
 
 import db
@@ -169,6 +170,82 @@ def keepers(album, character_id=None):
     lib = library(album, character_id)
     lib["images"] = [im for im in lib["images"] if not _is_skip(im)]
     return lib
+
+
+def pose_label(raw):
+    """Operator-facing pose name. Drops a trailing nude/clothed token."""
+    text = (raw or "").strip()
+    low = text.lower()
+    for suffix in (" nude", " clothed", " naked"):
+        if low.endswith(suffix):
+            text = text[: -len(suffix)].strip()
+            break
+    return text or "unnamed pose"
+
+
+def _pose_key(raw):
+    return re.sub(r"[^a-z0-9]+", "-", pose_label(raw).lower()).strip("-") or "unnamed"
+
+
+def _is_sheet_slug(view):
+    return bool(re.match(r"^pose_\d+", (view or "").strip(), re.I))
+
+
+def group_rows(images):
+    """One row per pose. Clothed and nude sheets of the same stance share it.
+
+    View slugs like pose_71 stay off the label. urls are all files for that
+    pose, clothed first, so #pose-preview can step them.
+    """
+    rows, index = [], {}
+    for im in images or []:
+        key = _pose_key(im.get("pose") or "")
+        ward = "nude" if (im.get("wardrobe") or "") == "nude" else "clothed"
+        if key not in index:
+            row = {
+                "key": key,
+                "pose": pose_label(im.get("pose") or ""),
+                "view": "",
+                "usable": im.get("usable") or "",
+                "ids": [],
+                "urls_clothed": [],
+                "urls_nude": [],
+                "n_clothed": 0,
+                "n_nude": 0,
+                "thumb": "",
+            }
+            index[key] = row
+            rows.append(row)
+        row = index[key]
+        row["ids"].append(im.get("id") or "")
+        url = (im.get("url") or "").strip()
+        if ward == "nude":
+            row["n_nude"] += 1
+            if url:
+                row["urls_nude"].append(url)
+        else:
+            row["n_clothed"] += 1
+            if url:
+                row["urls_clothed"].append(url)
+                if not row["thumb"]:
+                    row["thumb"] = url
+        if url and not row["thumb"]:
+            row["thumb"] = url
+        view = (im.get("view") or "").strip()
+        if view and not _is_sheet_slug(view) and not row["view"]:
+            row["view"] = view
+        if not row["usable"]:
+            row["usable"] = im.get("usable") or ""
+    for row in rows:
+        row["n"] = row["n_clothed"] + row["n_nude"]
+        row["urls"] = row["urls_clothed"] + row["urls_nude"]
+        row["wardrobe"] = "nude" if row["n_nude"] and not row["n_clothed"] else "clothed"
+    return rows
+
+
+def group_chips(images):
+    """Back-compat name. Rows, not one chip per view slug."""
+    return group_rows(images)
 
 
 def query(album, character_id=None, view=None, pose=None, wardrobe=None,

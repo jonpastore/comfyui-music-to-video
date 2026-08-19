@@ -834,6 +834,7 @@ function initNavDrop() {
     var n = ((i % list.length) + list.length) % list.length;
     list[n].focus();
   }
+  var holdClosed = false;
   function closeDrop(drop) {
     drop.classList.remove("open", "pinned");
     var t = triggerOf(drop);
@@ -874,6 +875,7 @@ function initNavDrop() {
     });
     drop.addEventListener("focusin", function () {
       clearTimers();
+      if (holdClosed) return;
       openDrop(drop, false);
     });
     drop.addEventListener("focusout", function (e) {
@@ -909,9 +911,11 @@ function initNavDrop() {
     if (key === "Escape") {
       e.preventDefault();
       if (drop) {
+        holdClosed = true;
         closeDrop(drop);
         var back = triggerOf(drop);
         if (back) back.focus();
+        holdClosed = false;
       }
       return;
     }
@@ -3181,6 +3185,17 @@ function initClassificationLibrary() {
     });
   }
 
+  var filter = document.getElementById("keeper-filter");
+  if (filter) {
+    filter.addEventListener("input", function () {
+      var q = filter.value.trim().toLowerCase();
+      box.querySelectorAll(".keeper-row").forEach(function (row) {
+        var name = (row.getAttribute("data-pose") || "").toLowerCase();
+        row.hidden = !!(q && name.indexOf(q) < 0);
+      });
+    });
+  }
+
   var fromSheets = document.getElementById("classification-from-sheets");
   if (fromSheets) {
     fromSheets.addEventListener("click", function () {
@@ -3190,26 +3205,6 @@ function initClassificationLibrary() {
         .catch(function (err) { say(err.message); });
     });
   }
-
-  var preview = document.getElementById("keeper-preview");
-  var previewImg = document.getElementById("keeper-preview-img");
-  var previewTitle = document.getElementById("keeper-preview-title");
-  var previewEmpty = document.getElementById("keeper-preview-empty");
-  box.addEventListener("click", function (e) {
-    var chip = e.target.closest && e.target.closest(".js-keeper-preview");
-    if (!chip) return;
-    e.preventDefault();
-    var url = chip.getAttribute("data-url") || "";
-    var label = (chip.getAttribute("data-pose") || "") + " / " +
-      (chip.getAttribute("data-view") || "");
-    if (previewTitle) previewTitle.textContent = label || "Keeper";
-    if (previewImg) {
-      previewImg.hidden = !url;
-      previewImg.src = url ? (url + (url.indexOf("?") >= 0 ? "&" : "?") + "w=720") : "";
-    }
-    if (previewEmpty) previewEmpty.hidden = !!url;
-    if (preview && typeof preview.showModal === "function") preview.showModal();
-  });
 
   var dlg = document.getElementById("hole-pick");
   var grid = document.getElementById("hole-pick-grid");
@@ -3269,7 +3264,7 @@ function initClassificationLibrary() {
     if (hole.tier) tier = hole.tier;
     var title = document.getElementById("hole-pick-title");
     var meta = document.getElementById("hole-pick-meta");
-    var poseLab = hole.pose === "unspecified" ? "no pose named" : hole.pose;
+    var poseLab = hole.pose === "unspecified" ? "pose unset" : hole.pose;
     if (title) title.textContent = (tier || "sheet") + " · " + poseLab + " · " + hole.view;
     if (meta) {
       meta.textContent = "Generate or tag a " + (tier || "") + " " + ward +
@@ -3345,24 +3340,28 @@ function initClassificationLibrary() {
         return;
       }
       var wantTier = hole.tier || tier || "xxx";
-      var wantView = sheetViewKey(hole.view, ward);
-      var tierBox = form.querySelector('input[name="tier"][value="' + wantTier + '"]');
-      var viewBox = form.querySelector('input[name="view"][value="' + wantView + '"]');
-      if (!tierBox || !viewBox) {
-        if (meta) {
-          meta.textContent = "No " + wantTier + " / " + wantView +
-            " on the generate form. Tick that cell by hand.";
-        }
-        return;
+      var poseName = (hole.pose || "").toLowerCase();
+      var needBox = null;
+      form.querySelectorAll('input[name="need_key"]').forEach(function (el) {
+        var row = el.closest(".missing-pose");
+        var lab = row && row.querySelector(".missing-pose-name");
+        var t = (lab && lab.textContent || "").toLowerCase();
+        if (poseName && t.indexOf(poseName) >= 0) needBox = el;
+      });
+      var tierBox = form.querySelector('input[name="tier"]');
+      if (tierBox && wantTier) tierBox.value = wantTier;
+      form.querySelectorAll('input[name="need_key"]').forEach(function (el) {
+        el.checked = el === needBox;
+      });
+      if (needBox && ward === "nude") {
+        var nude = form.querySelector('input[name="need_nude"][value="' +
+                                      needBox.value + '"]');
+        if (nude) nude.checked = true;
       }
-      form.querySelectorAll('input[name="tier"]').forEach(function (el) {
-        el.removeAttribute("hx-trigger");
-        el.checked = el === tierBox;
-      });
-      form.querySelectorAll('input[name="view"]').forEach(function (el) {
-        el.removeAttribute("hx-trigger");
-        el.checked = el === viewBox;
-      });
+      if (!needBox) {
+        var poseIn = form.querySelector('input[name="pose"]');
+        if (poseIn && hole.pose && hole.pose !== "unspecified") poseIn.value = hole.pose;
+      }
       if (!form.querySelector('input[name="ref_id"]:checked')) {
         var firstRef = form.querySelector('input[name="ref_id"]');
         if (firstRef) firstRef.checked = true;
@@ -4468,22 +4467,60 @@ document.addEventListener("click", function (e) {
   function thumbs() {
     return Array.prototype.slice.call(document.querySelectorAll(".pose-roster-open[data-full]"));
   }
+  function itemFull(el) {
+    if (!el) return "";
+    if (el.full != null) return el.full;
+    return (el.getAttribute && el.getAttribute("data-full")) || "";
+  }
+  function itemLabel(el) {
+    if (!el) return "";
+    if (el.label != null) return el.label;
+    return (el.getAttribute && el.getAttribute("data-label")) || "";
+  }
   function show(i) {
     if (!items.length) return;
     idx = (i + items.length) % items.length;
     var el = items[idx];
+    var src = itemFull(el);
     var img = dlg.querySelector("img");
-    if (img) img.src = el.getAttribute("data-full") || "";
+    if (img) {
+      if (src) img.src = src;
+      else img.removeAttribute("src");
+    }
     var lab = document.getElementById("pose-preview-label");
-    if (lab) lab.textContent = el.getAttribute("data-label") || "";
+    if (lab) lab.textContent = itemLabel(el);
     var prev = dlg.querySelector(".media-nav-prev");
     var next = dlg.querySelector(".media-nav-next");
     if (prev) prev.disabled = items.length < 2;
     if (next) next.disabled = items.length < 2;
   }
+  function previewSrc(url) {
+    if (!url) return "";
+    return url + (url.indexOf("?") >= 0 ? "&" : "?") + "w=1200";
+  }
   document.addEventListener("click", function (e) {
     if (e.target.closest("#pose-preview .media-nav-prev")) { e.preventDefault(); show(idx - 1); return; }
     if (e.target.closest("#pose-preview .media-nav-next")) { e.preventDefault(); show(idx + 1); return; }
+    var chip = e.target.closest(".js-keeper-preview");
+    if (chip) {
+      e.preventDefault();
+      var urls = [];
+      try { urls = JSON.parse(chip.getAttribute("data-urls") || "[]"); } catch (err) { urls = []; }
+      if (!Array.isArray(urls)) urls = [];
+      var label = (chip.getAttribute("data-pose") || "").trim() || "Keeper";
+      var n = urls.length;
+      if (!n) {
+        items = [{ full: "", label: label + " · no file" }];
+      } else {
+        items = urls.map(function (u, i) {
+          return { full: previewSrc(u),
+                   label: n > 1 ? (label + " · " + (i + 1) + "/" + n) : label };
+        });
+      }
+      show(0);
+      dlg.showModal();
+      return;
+    }
     var btn = e.target.closest(".pose-roster-open");
     if (!btn) return;
     items = thumbs();

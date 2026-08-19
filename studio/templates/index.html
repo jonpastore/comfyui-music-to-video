@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_edit %}
+{% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_edit, page_title %}
 {% block content %}
-<h1>Library</h1>
+{{ page_title("Library") }}
 
 <script id="genre-data" type="application/json">{{ genre_data | tojson }}</script>
 

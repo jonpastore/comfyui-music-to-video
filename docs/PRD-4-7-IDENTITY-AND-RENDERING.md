@@ -187,8 +187,11 @@ auto-seed **built** (`ensure_sidecar_seed` from
 `~/meowp-studio/anchor5/image-classification.json` on the render box;
 `deploy.sh` ships tracked `studio/seed/image-classification.json` there
 — live seed depends on that ship; `library()` never reads a file).
-`/anchors` paints keeper chips and import/save seed an empty library
-(`test_uiux_classification_chips.py`). Hole-pick **Generate anchors**
+`/anchors` has no visible page title (nav current + toolbar `?` on the
+right). It paints keeper chips (grouped by pose/view/wardrobe; preview
+is `#pose-preview`) and import/save seed an empty library
+(`test_uiux_classification_chips.py`). Sidecar keeper paths resolve
+to a file before the chip gets a url. Hole-pick **Generate anchors**
 fills `#anchor-form` and submits; `GET /api/albums/{album}/sheets`
 skips missing files and returns `actors`. `T4-23`
 gap **is**; the Pose catalog on `/anchors` is album-first then song-to-check, collapsed unless empty or holed, and import closes holes

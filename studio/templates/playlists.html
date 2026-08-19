@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% from "_macros.html" import modal_close, glyph_edit, glyph_delete, media_nav_prev, media_nav_next %}
+{% from "_macros.html" import modal_close, glyph_edit, glyph_delete, media_nav_prev, media_nav_next, page_title %}
 {% block content %}
-<h1>Playlists</h1>
+{{ page_title("Playlists") }}
 
-<form method="post" action="/playlists" enctype="multipart/form-data" class="new-playlist-bar"
+<form method="post" action="/playlists" enctype="multipart/form-data" class="new-playlist-bar page-chrome"
       hx-post="/playlists" hx-target="body" hx-swap="innerHTML"
       hx-encoding="multipart/form-data">
   <label>New playlist

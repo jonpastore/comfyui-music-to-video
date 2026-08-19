@@ -18,149 +18,69 @@
      another view" from "the user picked a different character", and carrying a
      prompt across the latter renders one character's wording as another's. #}
   <input type="hidden" name="composed_for" value="{{ form_album }}|{{ character_id or '' }}">
+  <input type="hidden" name="album" value="{{ form_album }}">
+  {% if generate_tier %}
+  <input type="hidden" name="tier" value="{{ generate_tier }}">
+  {% endif %}
+  <input type="hidden" name="character_id" value="{{ character_id or '' }}">
   <div class="anchor-form-top">
     <div class="anchor-form-who">
-    <label>Album
-      {# An album IS a playlist -- the same record, matched by the name songs
-         already carry. There is no scope to choose, and the free-text box this
-         replaces let you type a name nothing would ever match. #}
-      <select name="album"
-              onchange="location.href='/anchors?scope_value='+encodeURIComponent(this.value)">
-        {% for a in albums %}
-        <option value="{{ a }}" {% if a == form_album %}selected{% endif %}>{{ a }}</option>
-        {% else %}
-        <option value="">no albums yet &mdash; create one on Playlists</option>
-        {% endfor %}
-      </select>
-    </label>
     <label>
       <span class="label-text">Candidates per sheet{{ help("n") }}</span>
       <input type="number" name="n" value="{{ last_n }}" min="1" max="8">
     </label>
-    <input type="hidden" name="character_id" value="{{ character_id or '' }}">
     <fieldset class="actor-pick">
-      <legend>Actors</legend>
-      <div class="check-row">
-        <label class="check">
+      <legend>Actors{{ help("actors") }}</legend>
+      <div class="actor-cards">
+        <label class="actor-card actor-card-all">
           <input type="checkbox" class="actor-check-all" name="actor_all" value="1"
-                 {% if characters and selected_actor_ids | length >= (characters | length) + 1 %}checked{% endif %}
+                 {% if form_actors and selected_actor_ids | length >= form_actors | length %}checked{% endif %}
                  aria-label="all actors">
-          All
+          <span class="actor-card-name">All</span>
         </label>
-        <label class="check">
-          <input type="checkbox" name="actor_id" value="lead"
-                 {% if "lead" in selected_actor_ids %}checked{% endif %}>
-          {{ lead_name or "Lead" }}
-        </label>
-        {% for c in characters %}
-        <label class="check">
-          <input type="checkbox" name="actor_id" value="{{ c.id }}"
-                 {% if c.id | string in selected_actor_ids %}checked{% endif %}>
-          {{ c.name }}
+        {% for a in form_actors %}
+        <label class="actor-card">
+          {% if a.thumb %}
+          <img src="{{ a.thumb }}?w=96" alt="" width="40" height="54" loading="lazy">
+          {% else %}
+          <span class="pose-ph" aria-hidden="true"></span>
+          {% endif %}
+          <input type="checkbox" name="actor_id" value="{{ a.id }}"
+                 {% if a.id in selected_actor_ids %}checked{% endif %}>
+          <span class="actor-card-name">{{ a.name }}</span>
         </label>
         {% endfor %}
       </div>
-      <p class="hint">Tick every body on this sheet. <em>All</em> is every
-        lead and cast member. Two or more land on the Actors tab. A
-        multi-body photograph is the lock for intertwined poses — not
-        three solo fronts glued together.</p>
     </fieldset>
     </div>
     <div class="anchor-form-plan">
-  <fieldset>
-    <legend>Tiers &mdash; one tab, and one set of sheets, per tier</legend>
-    <div class="check-row">
-      {% for t in tiers %}
-      <label class="check">
-        <input type="checkbox" name="tier" value="{{ t.name }}"
-               {% if t.name in selected_tiers %}checked{% endif %}
-               hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
-               hx-trigger="change" hx-include="#anchor-form">
-        {{ t.name | tiername }}{% if not t.allow_nudity %}
-        <span class="muted">no nudity</span>{% endif %}
+  <fieldset class="missing-poses">
+    <legend>Missing poses
+      {% if generate_tier %}<span class="muted">{{ generate_tier | tiername }}</span>{% endif %}
+    </legend>
+    {% if not generate_tier %}
+    <p class="empty">Pick a tier chip in the sticky bar. One tier at a time.</p>
+    {% elif not missing_poses %}
+    <p class="empty" id="pose-gap-empty-form">No missing catalog poses at
+      {{ generate_tier | tiername }}.</p>
+    {% else %}
+    <div class="missing-pose-list" id="missing-pose-list">
+      {% for g in missing_poses %}
+      <label class="missing-pose">
+        <input type="checkbox" name="need_key" value="{{ g.key }}"
+               {% if g.key in selected_need_keys %}checked{% endif %}>
+        <span class="missing-pose-name">{% if g.character_label %}{{ g.character_label }} · {% endif %}{{ g.label }}</span>
+        <span class="muted">{{ g.n_scenes }} scene{{ "" if g.n_scenes == 1 else "s" }}</span>
+        {% if allow_nude %}
+        <span class="missing-pose-nude">
+          <input type="checkbox" name="need_nude" value="{{ g.key }}">
+          nude
+        </span>
+        {% endif %}
       </label>
       {% endfor %}
     </div>
-  </fieldset>
-  <fieldset class="views-fieldset">
-    <legend>Views &mdash; one sheet per ticked cell, per tier</legend>
-    <div class="view-toolbar">
-      <label class="check">
-        <input type="checkbox" class="view-check-all" data-scope="all"
-               {% if all_views %}checked{% endif %}
-               aria-label="select all views">
-        All views
-      </label>
-    </div>
-    <table class="view-matrix">
-      <thead>
-        <tr>
-          <th scope="col"></th>
-          <th scope="col">
-            <label class="check">
-              <input type="checkbox" class="view-check-all" data-scope="clothed"
-                     {% if all_clothed %}checked{% endif %}
-                     aria-label="select all clothed views">
-              Clothed
-            </label>
-          </th>
-          <th scope="col">
-            <label class="check">
-              <input type="checkbox" class="view-check-all" data-scope="nude"
-                     {% if all_nude %}checked{% endif %}
-                     aria-label="select all nude views">
-              Nude
-            </label>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in view_pairs %}
-        <tr>
-          <th scope="row">{{ row.short }}</th>
-          <td>
-            {% if row.clothed %}
-            <label class="check">
-              <input type="checkbox" name="view" value="{{ row.clothed.key }}"
-                     data-nude="0" title="{{ row.clothed.label }}"
-                     aria-label="{{ row.clothed.label }}"
-                     {% if row.clothed.key in selected_views %}checked{% endif %}
-                     hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
-                     hx-trigger="change" hx-include="#anchor-form">
-            </label>
-            {% endif %}
-          </td>
-          <td>
-            {% if row.nude %}
-            <label class="check">
-              <input type="checkbox" name="view" value="{{ row.nude.key }}"
-                     data-nude="1" title="{{ row.nude.label }}"
-                     aria-label="{{ row.nude.label }}"
-                     {% if row.nude.key in selected_views %}checked{% endif %}
-                     hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
-                     hx-trigger="change" hx-include="#anchor-form">
-            </label>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {# what will actually be rendered, per tier, in words -- a tier that cannot
-       use a ticked view says so here instead of removing the checkbox #}
-    <ul class="hint plan-list">
-      {% for p in plan %}
-      <li><code>{{ p.tier | tiername }}</code>
-        {% if p.views %}{{ p.views | map('viewname') | join(', ') }}{% else %}
-        <em>nothing</em>{% endif %}
-        {% if p.skipped %}<span class="muted">&mdash;
-          {{ p.skipped | map('viewname') | join(' and ') }}
-          skipped, this tier permits no nudity (change it under <a href="/tiers">Tiers</a>)</span>{% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-    <p class="hint"><strong>{{ sheet_count }}</strong> sheet{{ "" if sheet_count == 1 else "s" }}
-      to render, each with its own candidates.</p>
+    {% endif %}
   </fieldset>
     </div>
   </div>
@@ -172,11 +92,8 @@
       <span class="muted">{{ saved_refs | length }}</span></summary>
   <fieldset>
     <legend>Base images{{ help("refs") }}</legend>
-    <p class="hint">Identity lock: tick up to {{ max_refs }} photographs of her.
-      Named poses are separate — name the pose, tick <em>Generate this pose</em>,
-      and the sheet uses those identity photos plus this plate. Or assign the
-      upload itself as the chosen sheet for a tier. No render settings on
-      these; they are supplied images.</p>
+    <p class="hint">Identity photographs only. Tick the lock that matches the
+      actor above. Pose plates stay on the catalog, not here.</p>
     <div class="ref-gallery candidate-grid">
       {% for r in saved_refs %}
       {# Same card + lightbox hooks as generated candidates, without a render-tag. #}
@@ -421,23 +338,14 @@
     {% endfor %}
   </div>
   {% endfor %}
-  <label>Pose override &mdash; optional, replaces the selected position's stance
+  <p class="hint">An edited prompt is used verbatim for that sheet only.</p>
+  <label>Pose override{{ help("pose") }}
     <input type="text" name="pose" value="{{ pose or '' }}" maxlength="400"
-           placeholder="leave blank for the view's own stance"
+           placeholder="leave blank — missing poses carry their catalog name"
            hx-get="/anchors/form" hx-target="#anchor-form" hx-swap="outerHTML"
            hx-trigger="change delay:400ms" hx-include="#anchor-form">
   </label>
-  <p class="hint">Use the matrix for the camera position (front, on all fours, &hellip;).
-    This box only replaces that stance wording. Two contradictory positives do not average.</p>
-  <p class="hint">Each position is its own prompt. Leave a box untouched and that view
-    composes from this album's look plus <em>its</em> camera. Edit one and that text is
-    used verbatim for that sheet only.
-    <strong>Draft this prompt</strong> recommends one view;
-    <strong>Draft all &hellip; prompts</strong> fills every selected position in that
-    clothed or nude set. Nothing is saved until you Save or Generate.</p>
   </details>
-  {% else %}
-  <p class="hint">Tick at least one tier and one view. Nothing is pre-selected.</p>
   {% endif %}
 
   {# What this form will DO, and what would stop it, before you press it. Every
@@ -624,16 +532,10 @@
     </div>
     {% if latent == "image" %}
     <p class="hint"><span class="tag">refining the first reference</span>
-      The sheet is re-rendered from your first base image, so denoise below 1.0 is the point of
-      the control: it keeps that image's composition and size and redraws the surface. The width
-      and height below are <strong>ignored</strong> &mdash; the output inherits the reference's.
-      The keeper sheet for the ticked view (if one is picked below) is the
-      composition you are refining.</p>
+      Sheet size is ignored.</p>
     {% else %}
     <p class="hint"><span class="tag warn-tag">returns noise below 1.0</span>
-      This renders from an EMPTY latent (<code>EmptySD3LatentImage</code>), so there is no
-      base image to preserve and anything under 1.0 leaves it partly un-denoised. Switch the
-      control above to start from your first reference and the lower values refine it instead.</p>
+      Empty latent. Switch to the first reference to refine.</p>
     {% endif %}
 
     <details class="disclose" data-fold="sampler">
@@ -680,12 +582,6 @@
       {# Quality mode is already DPM++ 2M Karras. The spec asks for it as the
          default and it is one; these two selects surface it rather than
          re-pick it. #}
-      <p class="hint"><strong>Seed</strong> is the variation control. Blank draws a new one
-        every time, which is what makes a second Generate give different sheets. Set it and the
-        same composition comes back, so a prompt or sampler change can be judged on its own
-        &mdash; composition here is seed-dominated, and comparing two random seeds tells you
-        nothing about what you changed. The candidates within one sheet are spaced off it
-        (seed, +137, +274&hellip;), and a CFG sweep reuses it at every guidance value.</p>
     </details>
     </details>
   </fieldset>

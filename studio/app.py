@@ -3496,15 +3496,19 @@ def _anchors_classification_ctx(album, song_id="", gap_tier=""):
                 gap = storyboard_service.pose_gap(open_id, tier=want)
             except (LookupError, ValueError, RuntimeError):
                 gap = None
+    import pose_generate
     for im in keepers:
-        path = (im.get("path") or "").strip()
-        if path and os.path.isfile(path):
+        path = pose_generate.resolve_image_path(im.get("path") or "")
+        if path:
             im["url"] = media_url(path)
+    rows = classification.group_rows(keepers)
     n_clothed = sum(1 for im in keepers if im.get("wardrobe") == "clothed")
     n_nude = sum(1 for im in keepers if im.get("wardrobe") == "nude")
     return {
         "class_album": album,
         "class_keepers": keepers,
+        "class_keeper_rows": rows,
+        "class_keeper_chips": rows,
         "class_n_clothed": n_clothed,
         "class_n_nude": n_nude,
         "album_songs": songs,
@@ -3609,8 +3613,9 @@ def anchors_page(request: Request, scope_kind: str = "", scope_value: str = "",
             "n_needed": cov.get("n_needed") or 0,
             "n_chars": n_chars,
         })
+    gen_tier = (gap_tier or "").strip()
     return templates.TemplateResponse(request, "anchors.html", dict(
-        anchor_form_ctx(scope_value),
+        anchor_form_ctx(scope_value, selected_tiers=[gen_tier] if gen_tier else []),
         groups=group_list, gallery=gallery,
         known_albums=albums, playlists=playlists,
         coverage_by_tier=coverage_by_tier,
@@ -4333,11 +4338,11 @@ ANCHOR_HELP = {
     "denoise": {"label": "Denoise", "body": [
         "How much of the starting latent is replaced. 1.0 denoises it completely; lower values "
         "preserve some of what was already there.",
-        "That only makes sense when something WAS already there. An anchor renders from "
-        "<code>EmptySD3LatentImage</code> &mdash; pure noise &mdash; so there is nothing to "
-        "preserve and anything below 1.0 leaves part of the noise in the output.",
-        "The lower values exist because a refine-from-an-image pass genuinely wants them. "
-        "This is not one of those."]},
+        "That only makes sense when something WAS already there. An empty latent is "
+        "pure noise, so anything below 1.0 leaves part of the noise in the output.",
+        "Starting from the first reference is the refine pass: denoise below 1.0 keeps "
+        "that image's composition and size and redraws the surface. Sheet size is "
+        "ignored then &mdash; the output inherits the reference."]},
     "sampler_name": {"label": "Sampler", "body": [
         "The <strong>algorithm</strong> that removes noise at each step &mdash; the solver.",
         "<code>euler</code> takes one naive step at a time. <code>dpmpp_2m</code> is a "
@@ -4362,7 +4367,19 @@ ANCHOR_HELP = {
         "seed-dominated, and comparing two random seeds tells you nothing about what you "
         "changed.",
         "The candidates within one sheet are spaced off it (seed, +137, +274&hellip;), and a "
-        "CFG sweep reuses it at every guidance value."]},
+        "CFG sweep reuses it at every guidance value.",
+        "Clip reroll uses a min/max band with equal or fibonacci steps because that mint is "
+        "N independent stills. This form is one base seed plus offsets. A range here would "
+        "be a second, different contract."]},
+    "pose": {"label": "Pose override", "body": [
+        "Missing catalog ticks already send that pose's stance. This box replaces "
+        "the camera view's standing clause when you generate without a catalog tick. "
+        "Two contradictory positives do not average."]},
+    "actors": {"label": "Actors", "body": [
+        "Tick every body on this sheet. The photograph beside the name is that person's "
+        "identity front, the image1 lock. All is every lead and cast member.",
+        "Two or more land on the Actors tab. A multi-body photograph is the lock for "
+        "intertwined poses &mdash; not three solo fronts glued together."]},
     "refs": {"label": "Base images", "body": [
         "The photographs this model conditions on natively. They are an unordered "
         "<strong>set</strong>, not face-then-outfit: one image carrying both is fine, and with "
@@ -5526,7 +5543,7 @@ def _collect_anchor_ref_paths(album, character_id, ref_ids, extra_paths=None,
 
 
 def _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
-                         character_id, form, paths, actors=None):
+                         character_id, form, paths, actors=None, pose=None):
     """Queue one job per planned sheet. Shared by HTML POST /anchors and /api/anchors."""
     if character_id is not None:
         char = get_character_or_404(character_id)
@@ -5547,7 +5564,7 @@ def _enqueue_anchor_jobs(album, selected_tiers, selected_views, combos, n,
                 tiers.screen_work_for_tier(srow["id"], dest)
             except ValueError as e:
                 raise HTTPException(400, str(e))
-    form_pose = (form.get("pose") or "").strip()
+    form_pose = (pose if pose is not None else (form.get("pose") or "")).strip()
     if form_pose:
         if len(form_pose) > MAX_PROMPT_FIELD:
             raise HTTPException(400, f"pose is {len(form_pose)} characters; keep it under "
@@ -5767,6 +5784,45 @@ async def start_anchor(request: Request, album: str = Form(...), tier: List[str]
     that was perfectly legal for the others.
     """
     form = await request.form()
+    need_keys = [k for k in form.getlist("need_key") if k]
+    if need_keys:
+        if not album:
+            raise HTTPException(400, "choose an album")
+        selected = [t for t in tier if t]
+        if not selected:
+            raise HTTPException(400, "pick a tier chip in the sticky bar")
+        work_tier = selected[0]
+        nude_keys = set(form.getlist("need_nude"))
+        miss = {g["key"]: g for g in missing_catalog_poses(album, work_tier)}
+        actor_names, extra_ids = _form_actors(form, album, character_id)
+        uploads = form_files(form, "images")
+        extra = [a["path"] for a in await _save_anchor_refs(
+            album, character_id, uploads, actors=actor_names)]
+        ref_ids = form.getlist("ref_id")
+        if not ref_ids:
+            ref_ids = [str(r["id"]) for r in identity_base_refs(album, character_id)][:2]
+        extra.extend(_actor_identity_paths(album, extra_ids, [work_tier]))
+        paths = _collect_anchor_ref_paths(album, character_id, ref_ids,
+                                          extra_paths=extra, work_tiers=[work_tier])
+        queued = []
+        for key in need_keys:
+            g = miss.get(key)
+            if not g:
+                continue
+            views = ["front"]
+            if key in nude_keys and tiers.allows_nudity(work_tier):
+                views.append("front_nude")
+            album, st, sv, combos = _validate_anchor_request(album, [work_tier], views)
+            payload = _enqueue_anchor_jobs(
+                album, st, sv, combos, n, character_id, form, paths,
+                actors=actor_names, pose=(g.get("label") or "")[:400])
+            queued.extend(payload.get("jobs") or [])
+        if not queued:
+            raise HTTPException(400, "select at least one missing pose")
+        if wants_json(request):
+            return JSONResponse({"queued": len(queued), "jobs": queued, "album": album})
+        return RedirectResponse(f"/anchors?scope_value={quote(album)}&gap_tier={quote(work_tier)}",
+                                status_code=303)
     view = list(view) + _named_pose_views(album, character_id, form.getlist("pose_id"))
     album, selected_tiers, selected_views, combos = _validate_anchor_request(
         album, tier, view)
@@ -6094,6 +6150,55 @@ def default_anchor_prompt(scope_value, view, character_id=None, pose=None):
     return make_anchor.prompt_for(view, make_anchor.anchor_from(fields))
 
 
+def actor_identity_url(album, character_id=None):
+    """Chosen identity front for this body, else an identity photograph."""
+    for t in ("xxx", "r", "pg13", "g"):
+        row = chosen_anchor("album", album or "", t, "front", character_id)
+        if row and row["path"] and os.path.isfile(row["path"]):
+            return media_url(row["path"])
+    for r in anchor_refs(album, character_id):
+        if (r.get("role") or "identity") == "identity" and not r.get("pose_name"):
+            if r.get("path") and os.path.isfile(r["path"]):
+                return media_url(r["path"])
+    return ""
+
+
+def form_actor_rows(album):
+    """Lead + album cast, each with the identity photograph to use as image1."""
+    album = (album or "").strip()
+    lead = pose_plan.lead_name(album) if album else "Lead"
+    rows, seen = [], set()
+    rows.append({"id": "lead", "name": lead or "Lead",
+                 "thumb": actor_identity_url(album, None)})
+    seen.add((lead or "Lead").lower())
+    for c in album_cast(album):
+        name = (c["name"] or "").strip()
+        if not name or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        rows.append({"id": str(c["id"]), "name": name,
+                     "thumb": actor_identity_url(album, c["id"])})
+    return rows
+
+
+def missing_catalog_poses(album, tier):
+    """Unbound album-coverage rows at this tier (the generate checklist)."""
+    album, tier = (album or "").strip(), (tier or "").strip()
+    if not album or not tier:
+        return []
+    try:
+        cov = pose_plan.album_coverage(album, tier)
+    except (LookupError, OSError, ValueError, json.JSONDecodeError):
+        return []
+    return [g for g in (cov.get("needed") or []) if not g.get("sheet_id")]
+
+
+def identity_base_refs(album, character_id=None):
+    """Operator identity photographs, not named pose plates."""
+    return [r for r in anchor_refs(album, character_id)
+            if (r.get("role") or "identity") == "identity" and not r.get("pose_name")]
+
+
 def anchor_plan(selected_tiers, selected_views):
     """What each ticked tier will actually render: [{tier, views, skipped}].
 
@@ -6206,7 +6311,12 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=(), character_id
                         for t in selected],
         # the album+character's saved base images, so a sheet can be generated
         # from photographs already here instead of finding them again
-        "saved_refs": anchor_refs(album, character_id),
+        "saved_refs": identity_base_refs(album, character_id),
+        "all_refs": anchor_refs(album, character_id),
+        "generate_tier": (selected[0] if selected else ""),
+        "allow_nude": bool(selected and tiers.allows_nudity(selected[0])),
+        "missing_poses": missing_catalog_poses(album, selected[0] if selected else ""),
+        "form_actors": form_actor_rows(album),
         "max_anchor_prompt": MAX_ANCHOR_PROMPT, "max_uploads": MAX_ANCHOR_UPLOADS,
         "max_refs": pipeline.MAX_ANCHOR_REFS,
         # the sampler vocabulary the RENDERER accepts, read from the module that
@@ -6245,6 +6355,7 @@ def anchor_form_ctx(album="", selected_tiers=(), selected_views=(), character_id
         "selected_actor_ids": selected_actor_ids or (
             ["lead"] if character_id is None else [str(character_id)]),
         "pose": pose or "",
+        "selected_need_keys": [],
     }
 
 

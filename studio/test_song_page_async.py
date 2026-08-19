@@ -55,6 +55,33 @@ def test_grok_chat_timeout_names_model_elapsed_chars(monkeypatch):
     assert any("POST grok-test" in n for n in notes)
 
 
+def test_list_models_is_cached_and_not_a_120s_wait(monkeypatch):
+    """Song page GET must not block on a 22s xAI /models hop."""
+    real = _real_module("grok")
+    assert real is not None, "grok.py failed to import"
+    assert real.MODELS_TIMEOUT <= 10
+    real._models_cache["ids"] = None
+    real._models_cache["at"] = 0.0
+    hits = {"n": 0}
+
+    class _Resp:
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return {"data": [{"id": "grok-4.5"}, {"id": "grok-imagine-1"}]}
+
+    def fake_get(*_a, **_k):
+        hits["n"] += 1
+        return _Resp()
+
+    monkeypatch.setattr(real, "_api_key", lambda: "sk-test")
+    monkeypatch.setattr(real.httpx, "get", fake_get)
+    assert real.list_models() == ["grok-4.5"]
+    assert real.list_models() == ["grok-4.5"]
+    assert hits["n"] == 1
+    real._models_cache["ids"] = None
+
+
 def test_api_song_returns_state():
     with TestClient(appmod.app) as client:
         song = _upload_song(client, "Async State Song")

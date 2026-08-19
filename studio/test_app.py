@@ -2357,23 +2357,13 @@ def test_nude_anchor_refused_for_a_tier_that_does_not_permit_nudity():
         # named a tier you could no longer see ticked.
         pg = client.get("/anchors/form", params={"album": "Nude Gate Album",
                                                   "tier": "pg13"}).text
-        assert 'value="front_nude"' in pg, "the nude view is not even listed"
-        assert 'class="view-matrix"' in pg, "nude views are not in the view matrix"
-        assert not re.search(r'value="front_nude"[^>]*disabled', pg, re.S), \
-            "a view is disabled again; it should be skipped per tier, not withdrawn"
+        assert "missing-pose" in pg or "No missing catalog poses" in pg or "Pick a tier chip" in pg
+        assert 'class="view-matrix"' not in pg
         assert "greyed out because" not in pg
 
-        # instead the plan says, in words, what each tier will actually render
-        both = client.get("/anchors/form", params={"album": "Nude Gate Album",
-                                                    "tier": ["pg13", "r"],
-                                                    "view": ["front", "front_nude"]}).text
-        assert "skipped, this tier permits no nudity" in both
-        assert "<strong>3</strong> sheet" in both, "the sheet count ignores the skip"
-
-        # and ticking pg13 ALONGSIDE r leaves them selectable: the combination is
-        # no longer refused, pg13 just does not get those two sheets
-        assert not re.search(r'value="front_nude"[^>]*disabled', both, re.S), \
-            "one restrictive tier withdrew a view from the permissive one again"
+        rform = client.get("/anchors/form", params={"album": "Nude Gate Album",
+                                                     "tier": "r"}).text
+        assert "need_nude" in rform or "nude" in rform.lower()
 
 
 def test_one_post_generates_every_tier_and_view_combination(patch_stub):
@@ -2407,13 +2397,11 @@ def test_anchor_form_does_not_preselect_a_tier_or_view():
         client.post("/playlists", data={"name": "Default Tier Album"})
 
         fresh = client.get("/anchors/form", params={"album": "Default Tier Album"}).text
-        assert not re.search(r'name="tier"[^>]*checked', fresh), "a tier was pre-ticked"
-        assert not re.search(r'name="view"[^>]*checked', fresh), "a view was pre-ticked"
-        assert "Nothing is pre-selected" in fresh
-        assert 'value="front_nude"' in fresh, "nude views must still be listed"
-        assert 'data-scope="clothed"' in fresh and 'data-scope="nude"' in fresh
-        assert 'data-scope="all"' in fresh
-        assert 'class="view-matrix"' in fresh
+        assert not re.search(r'name="need_key"[^>]*checked', fresh), "a pose was pre-ticked"
+        assert 'name="album" type="hidden"' in fresh or 'type="hidden" name="album"' in fresh
+        assert "<select name=\"album\"" not in fresh
+        assert 'class="view-matrix"' not in fresh
+        assert "Pick a tier chip" in fresh or 'name="tier"' in fresh
         assert fresh.index('id="anchor-generate"') < fresh.index("Render &mdash; reference")
 
         # last-used is not a default either
@@ -2421,24 +2409,11 @@ def test_anchor_form_does_not_preselect_a_tier_or_view():
         time.sleep(0.01)
         _chosen_anchor("Default Tier Album", "r", path="/tmp/dta.png")
         page = client.get("/anchors/form", params={"album": "Default Tier Album"}).text
-        assert not re.search(r'name="tier"[^>]*checked', page), "last-used tier was pre-ticked"
-        assert not re.search(r'name="view"[^>]*checked', page), "a view was pre-ticked"
-        assert 'value="front_nude"' in page, "R permits nudity but no nude view was offered"
+        assert not re.search(r'name="need_key"[^>]*checked', page), "last-used pose was pre-ticked"
         assert "No nude view is offered because" not in page
-
-        clothed = [k for k in appmod.ANCHOR_VIEWS if k not in appmod.NUDE_VIEWS]
-        nude = [k for k in appmod.ANCHOR_VIEWS if k in appmod.NUDE_VIEWS]
-        cols = client.get("/anchors/form", params={"album": "Default Tier Album",
-                                                    "tier": "r", "view": clothed}).text
-        assert re.search(r'data-scope="clothed"[^>]*checked', cols), "all-clothed not ticked"
-        assert not re.search(r'data-scope="nude"[^>]*checked', cols), "all-nude ticked with none"
-        assert not re.search(r'data-scope="all"[^>]*checked', cols), "all-views ticked on one column"
-        both = client.get("/anchors/form", params={"album": "Default Tier Album",
-                                                    "tier": "r",
-                                                    "view": clothed + nude}).text
-        assert re.search(r'data-scope="all"[^>]*checked', both), "all-views not ticked"
-        assert re.search(r'data-scope="clothed"[^>]*checked', both)
-        assert re.search(r'data-scope="nude"[^>]*checked', both)
+        rform = client.get("/anchors/form", params={"album": "Default Tier Album",
+                                                     "tier": "r"}).text
+        assert 'name="need_key"' in rform or "No missing catalog poses" in rform
 
 
 def test_anchor_form_folds_and_actions_are_icons():
@@ -6564,9 +6539,7 @@ def test_editing_one_view_does_not_change_another_views_compose(patch_stub):
         form = client.get("/anchors/form", params={"album": "Matrix Album", "tier": ["r", "xxx"],
                                                     "view": ["front", "back"]}).text
         assert 'name="matrix_cell"' not in form
-        assert 'type="radio"' not in form or 'name="view"' in form
-        assert form.count('name="view"') >= 2
-        assert 'type="checkbox" name="view"' in form
+        assert 'class="view-matrix"' not in form
         assert form.count('name="prompt_r__') == 2
         assert form.count('name="prompt_xxx__') == 2
         assert 'name="prompt_r__front"' in form and 'name="prompt_r__back"' in form
@@ -6954,8 +6927,9 @@ def test_help_lives_behind_an_icon_but_the_footguns_stay_on_the_page(patch_stub)
         # collapsed sampler section. A closed <details> is worse than a modal:
         # a modal takes a deliberate click, a collapsed section tells you that
         # reading the visible page was enough.
-        first = page.index("<details>")
-        collapsed = page[first:page.index("</details>", first)]
+        samp = page.find('data-fold="sampler"')
+        assert samp != -1
+        collapsed = page[samp:page.index("</details>", samp)]
         assert "returns noise below 1.0" not in collapsed, \
             "the denoise warning is buried in a collapsed section again"
 

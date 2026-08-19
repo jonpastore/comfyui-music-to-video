@@ -1,10 +1,8 @@
 {% extends "base.html" %}
-{% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_download, glyph_actors, glyph_edit, media_nav_prev, media_nav_next, help_tip %}
+{% from "_macros.html" import modal_close, glyph_save, glyph_delete, glyph_download, glyph_actors, glyph_edit, media_nav_prev, media_nav_next, help_tip, page_title %}
 {% block content %}
-<h1>Anchors
-  {{ help_tip("Anchors", "This album's pose library. Songs list the poses they need; each pose has one keeper at the selected tier. Scene stills for LTX are generated on the song page after keepers exist. Pick a keeper in Character catalog, or Generate anchors for a missing pose.") }}
-</h1>
-<div id="anchor-scope" class="anchor-scope"
+{{ page_title("Anchors") }}
+<div id="anchor-scope" class="anchor-scope page-chrome"
      data-tier="{{ pose_gap.tier if pose_gap else '' }}">
   <label class="scope-album">Album
     <select id="class-album"
@@ -24,6 +22,7 @@
         · {{ c.n_chars }} char{{ "" if c.n_chars == 1 else "s" }}</span></a>
     {% endfor %}
   </div>
+  {{ help_tip("Anchors", "This album's pose library. Songs list the poses they need; each pose has one keeper at the selected tier. Scene stills for LTX are generated on the song page after keepers exist. Pick a keeper in Character catalog, or Generate anchors for a missing pose.") }}
 </div>
 
 {% if failed_jobs %}
@@ -114,32 +113,33 @@
     {% endif %}
   </form>
   <h3>Tagged keepers
-    {{ help_tip("Tagged keepers", "Click a chip to preview that sheet. These are chosen Character catalog keepers copied into the pose catalog. Nothing is generated.") }}</h3>
+    {{ help_tip("Tagged keepers", "One row per pose. Click to preview every sheet of that stance — arrows step through them. Does not generate.") }}</h3>
   {% if class_keepers %}
-  <p class="hint" id="tag-breakdown">{{ class_keepers | length }} tagged
+  <p class="hint" id="tag-breakdown">{{ class_keeper_rows | default([]) | length }} pose{{ "" if (class_keeper_rows | default([]) | length) == 1 else "s" }}
+    · {{ class_keepers | length }} sheets
     · clothed {{ class_n_clothed }} · nude {{ class_n_nude }}
     {% if pose_gap %} · this song {{ pose_gap.tier | tiername }}
     {{ pose_gap.n_covered }}/{{ pose_gap.n_needs }}{% endif %}</p>
-  <h4>Clothed</h4>
-  <div class="class-chips" id="class-keeper-chips">
-    {% for im in class_keepers if im.wardrobe != 'nude' %}
-    <button type="button" class="tag class-chip js-keeper-preview"
-            data-id="{{ im.id }}" data-view="{{ im.view }}"
+  {% if (class_keeper_rows | default([]) | length) > 8 %}
+  <label class="keeper-filter">Filter
+    <input type="search" id="keeper-filter" placeholder="standing, cowgirl…"
+           autocomplete="off"></label>
+  {% endif %}
+  <div class="keeper-rows" id="class-keeper-chips">
+    {% for im in class_keeper_rows | default([]) %}
+    <button type="button" class="keeper-row js-keeper-preview"
+            data-id="{{ im.ids[0] }}" data-view="{{ im.view }}"
             data-pose="{{ im.pose }}" data-wardrobe="{{ im.wardrobe }}"
             data-usable="{{ im.usable }}"
-            {% if im.url %}data-url="{{ im.url }}"{% endif %}>{{ im.pose }} / {{ im.view }} / {{ im.wardrobe }}
-      <span class="muted">{{ im.usable }}</span></button>
-    {% endfor %}
-  </div>
-  <h4>Nude</h4>
-  <div class="class-chips">
-    {% for im in class_keepers if im.wardrobe == 'nude' %}
-    <button type="button" class="tag class-chip js-keeper-preview"
-            data-id="{{ im.id }}" data-view="{{ im.view }}"
-            data-pose="{{ im.pose }}" data-wardrobe="{{ im.wardrobe }}"
-            data-usable="{{ im.usable }}"
-            {% if im.url %}data-url="{{ im.url }}"{% endif %}>{{ im.pose }} / {{ im.view }} / {{ im.wardrobe }}
-      <span class="muted">{{ im.usable }}</span></button>
+            data-urls='{{ im.urls | tojson }}'>
+      {% if im.thumb %}
+      <img src="{{ im.thumb }}?w=96" alt="" width="36" height="48" loading="lazy">
+      {% else %}
+      <span class="pose-ph" aria-hidden="true"></span>
+      {% endif %}
+      <span class="keeper-row-name">{{ im.pose }}</span>
+      <span class="muted">{% if im.n_clothed %}clothed ×{{ im.n_clothed }}{% endif %}{% if im.n_clothed and im.n_nude %} · {% endif %}{% if im.n_nude %}nude ×{{ im.n_nude }}{% endif %}</span>
+    </button>
     {% endfor %}
   </div>
   {% else %}
@@ -149,18 +149,18 @@
   {% endif %}
   <h3>Missing on this song
     {% if pose_gap %}<span class="muted">· generate {{ pose_gap.tier | tiername }}</span>{% endif %}
-    {{ help_tip("Missing on this song", "Each chip is one sheet to make or tag at the selected tier. no pose named means the scene text never said standing / kneeling / … — open it and pick. Nude vs clothed is in the picker.") }}
+    {{ help_tip("Missing on this song", "Each chip is one sheet to make or tag at the selected tier. pose unset means the scene text never said standing / kneeling / … — open the chip and pick. Nude vs clothed is in the picker.") }}
   </h3>
   <div class="class-chips" id="pose-gap-holes">
     {% if pose_gap and pose_gap.holes %}
     {% for h in pose_gap.holes %}
-    {% set pose_lab = "no pose named" if h.pose == "unspecified" else h.pose %}
+    {% set pose_lab = "pose unset" if h.pose == "unspecified" else h.pose %}
     <button type="button" class="tag class-chip hole warn-tag js-hole-pick"
             data-pose="{{ h.pose }}" data-view="{{ h.view }}"
             data-wardrobe="{{ h.wardrobe }}"
             data-tier="{{ pose_gap.tier }}"
             data-scenes="{{ h.scenes | join(',') }}">{{ pose_gap.tier | tiername }} · {{ h.wardrobe }} · {{ pose_lab }} · {{ h.view }}
-      <span class="muted">scenes {{ h.scenes | join(', ') }}</span></button>
+      <span class="muted">{{ h.scenes | length }} scene{{ "" if h.scenes | length == 1 else "s" }}</span></button>
     {% endfor %}
     {% elif pose_gap %}
     <p class="empty" id="pose-gap-empty">No ceiling holes for this song.</p>
@@ -193,15 +193,6 @@
       <button type="button" id="hole-pick-use" disabled>Use selected sheet</button>
       <button type="button" class="secondary" id="hole-pick-gen">Generate anchors</button>
     </div>
-  </dialog>
-  <dialog class="lightbox" id="keeper-preview" aria-labelledby="keeper-preview-title">
-    <div class="lightbox-bar">
-      <strong id="keeper-preview-title">Keeper</strong>
-      <span class="lightbox-spacer"></span>
-      {{ modal_close() }}
-    </div>
-    <img id="keeper-preview-img" alt="">
-    <p class="empty" id="keeper-preview-empty" hidden>No thumbnail for this tag.</p>
   </dialog>
   </details>
 </section>
@@ -263,11 +254,8 @@
 
 <section class="card" id="generate-pose">
   <details class="disclose" open>
-  <summary><h2>Generate a missing pose</h2></summary>
-  <p class="hint">Tick at least one <strong>tier</strong> and one <strong>view</strong>.
-    Generate still mints sheets. If no base is ticked, the chosen identity
-    front is image1 (empty latent + her). Then <strong>Save</strong> the
-    keeper in the dropdown above.</p>
+  <summary><h2>Generate a missing pose
+    {{ help_tip("Generate a missing pose", "Album and tier come from the sticky bar — one tier at a time. Tick missing catalog poses. Front is the camera; nude only if this tier allows it. If no identity photo is ticked, each actor's chosen front is image1. Then Save the keeper on the roster.") }}</h2></summary>
   {% include "_anchor_form.html" %}
   </details>
 </section>
@@ -276,7 +264,7 @@
 <p class="empty">No pose sheets on this album yet. Generate or assign one above.</p>
 {% else %}
 {% set want_tier = pose_gap.tier if pose_gap else "" %}
-<details class="disclose card" id="character-catalog" open>
+<details class="disclose card" id="character-catalog">
 <summary><h2>Character catalog</h2>
   <span class="muted">{{ gallery[0].album if gallery else "" }}</span></summary>
 {% for section in gallery %}

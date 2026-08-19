@@ -1329,9 +1329,14 @@ with Close on the far right. An actors icon opens `#actor-tag` to
 stamp `render_json.actors` (`POST /anchors/{id}/actors`). Arrows and Delete are ignored while the
 select is focused so classifying does not step or delete the sheet.
 Roster thumbs open `#pose-preview`. Playlist Anchors uses
-character tabs and Clothed/Nude family tabs. On `/anchors` the gallery tabs are **tier → character → clothed/nude**, plus an **Actors** tab for multi-body plates (split roast, cowgirl, or any sheet with two or more stamped actors). Every album character gets a tab on every tier even when that tier has no sheet yet (empty clothed/nude). Solo all-fours stays on the owner. **Generate a missing pose** is one collapsible card. Inside: album /
-candidates / actors in a left column; Tiers and Views stacked on the
-right with no nested carets. Generate uses **Actors** checkboxes (Lead + cast + **All**), not a character dropdown. A base-image card has the same ticks; Assign as sheet writes them onto the keeper. **All** is every `actor_id`. The gallery **Actors** tab is the unfiltered list of plates with more than one actor. A multi-body photograph is the lock for intertwined sex, not three solo fronts. Upload-pose writes the roster’s actors onto the row. The first character tab is the album lead (not the word
+character tabs and Clothed/Nude family tabs. On `/anchors` the gallery tabs are **tier → character → clothed/nude**, plus an **Actors** tab for multi-body plates (split roast, cowgirl, or any sheet with two or more stamped actors). Every album character gets a tab on every tier even when that tier has no sheet yet (empty clothed/nude). Solo all-fours stays on the owner. **Generate a missing pose** is one collapsible card. Album and tier
+come from the sticky bar (one tier at a time); the form has no second
+album select and no G/PG-13/R/XXX checkbox row. The right column is
+**missing catalog poses** for that album+tier (not the old
+front/back × clothed/nude matrix). Nude is a per-pose tick only when
+the selected tier allows it. Actors are cards with that person's
+identity front. Help sits on the heading. Generate uses **Actors**
+(Lead + cast + **All**), not a character dropdown. A base-image card has the same ticks; Assign as sheet writes them onto the keeper. **All** is every `actor_id`. The gallery **Actors** tab is the unfiltered list of plates with more than one actor. A multi-body photograph is the lock for intertwined sex, not three solo fronts. Upload-pose writes the roster’s actors onto the row. The first character tab is the album lead (not the word
 protagonist). A pencil (`glyph_edit`) on each tab opens
 `#rename-char` and posts lead_name or `/characters/{id}/save`.
 **Name** on Playlists → Album look still writes the lead;
@@ -1454,15 +1459,34 @@ says so). Every control the backend cannot honour is marked, never
 inert (7a.3). D7 is unmeasured until the GPU pair exists — say so
 on the control.
 
-**Anchors page.** `h1` is **Anchors** plus a help icon (no lead paragraph).
-A sticky `#anchor-scope` bar under the topbar holds a thin album select
-and tier chips (`n_have/n_needed` poses · character count); a chip
+**Page chrome.** The topbar current item is the page name. A second
+visible `h1` that repeats it (Library, Media, Anchors, Playlists, Sets,
+Tiers, Models, Jobs) is gone — `page_title` emits a visually-hidden
+`h1` for the outline. Unique titles stay visible (song name, New Song /
+New Image, Publishing, QC findings, a storyboard). Page help sits on
+the **far right** of the first toolbar (`.page-chrome` / `#anchor-scope`
+`> .help-tip { margin-left: auto }`), not beside a title
+(`test_uiux_page_chrome.py`).
+
+**Anchors page.** No visible **Anchors** heading. A sticky `#anchor-scope`
+bar under the topbar holds a thin album select, tier chips
+(`n_have/n_needed` poses · character count), and the page `?` on the
+right; a chip
 sets `gap_tier` and ticks that generate-form tier. **Character catalog**
-(`#character-catalog`) is the collapsible gallery. The **Pose catalog** card (`#classification-library`)
+(`#character-catalog`) is the collapsible gallery and starts **closed**.
+The **Pose catalog** card (`#classification-library`)
 is a collapsed `<details>` (open when the list is empty or the song
 has holes). Album first, then **Song to check**, then **Tier** (R / XXX).
-Missing chips say `{tier} · {wardrobe} · {pose} · {view}` so you know
-what to generate. It is the tagged
+Tagged keepers are **one row per pose** (thumb + name + clothed/nude
+counts), not a chip wall of `pose / view / wardrobe usable`. Sheet
+slugs like `pose_71` stay off the label. Several files of the same
+stance share the row; click opens `#pose-preview` and arrows step
+through that group. A filter appears once there are more than eight
+poses. Sidecar basenames resolve
+through `resolve_image_path` so a live `tense.jpg` gets a `/media/`
+url. Missing chips say `{tier} · {wardrobe} · {pose} · {view}` plus
+a scene count; `unspecified` paints as **pose unset**, not a dump of
+scene numbers. It is the tagged
 keeper list, not generate. **Tag from these sheets** marks chosen
 gallery keepers (no file path). A missing-pose chip opens `#hole-pick`:
 clothed/nude toggle, pick a sheet to tag, or **Generate anchors** —
@@ -1877,7 +1901,8 @@ A style guide is falsifiable or it is decoration.
   listed disabled; Style LoRA + Civitai fetch; Recent images has
   multi-select + Delete selected). Click **Media** pins the menu; it
   stays open 2s after the pointer leaves (WAI-ARIA: dismiss on pick,
-  outside click, or Escape). Hover opens after 300ms (Baymard). Arrow
+  outside click, or Escape). Escape focuses Media without the
+  `focusin` handler reopening it (`holdClosed` in `initNavDrop`). Hover opens after 300ms (Baymard). Arrow
   Down/Up move in the open menu; Enter activates; Left/Right open and
   close nested submenus (`initNavDrop`). No
   gap between the label and the panel (`test_uiux_nav.py`). `GET /media`

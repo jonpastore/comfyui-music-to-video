@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{% if pane == "song" %}New Song{% elif pane == "image" %}New Image{% else %}Media{% endif %} · Meow P Studio{% endblock %}
 {% block content %}
-<h1>{% if pane == "song" %}New Song{% elif pane == "image" %}New Image{% else %}Media{% endif %}</h1>
+{% if pane == "song" %}<h1>New Song</h1>
+{% elif pane == "image" %}<h1>New Image</h1>
+{% else %}<h1 class="visually-hidden">Media</h1>{% endif %}
 {% if pane %}
 <p class="hint"><a href="/media">Media</a>
   · {% if pane == "song" %}ACE-Step writes a new library song
