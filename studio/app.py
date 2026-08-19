@@ -2471,10 +2471,15 @@ def media_new_image(request: Request, prompt: str = Form(...), album: str = Form
     key = model or models.default_for("t2i") or models.default_for("artwork")
     spec = models.CATALOG.get(key) or {}
     if spec.get("role") not in ("t2i", "artwork") or key not in models.T2I_WIRED:
+        if spec:
+            raise HTTPException(
+                400,
+                f"'{key}' is on the box but has no studio t2i graph yet — "
+                "use Qwen-Image-Edit 2511")
         raise HTTPException(
             400,
-            f"'{key}' is on the box but has no studio t2i graph yet — "
-            "use Qwen-Image-Edit 2511")
+            f"'{key}' is not a local t2i model. Mage Mango/Guava/Kiwi "
+            "are Mage.space-only. Pick Krea 2 Turbo or Qwen.")
     style_lora = " ".join((style_lora or "").replace("\\", "/").split())
     if style_lora.startswith("/") or ".." in style_lora.split("/"):
         raise HTTPException(400, "style LoRA must be a filename under models/loras")

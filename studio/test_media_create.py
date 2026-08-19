@@ -244,6 +244,8 @@ def test_new_image_refuses_mage_fruit_alias():
             "prompt": "a cat", "model": "mango_t2i",
         }, follow_redirects=False)
         assert r.status_code == 400, r.text
+        assert "on the box" not in r.text.lower()
+        assert "Mage" in r.text or "mage" in r.text.lower()
 
 
 def test_new_image_enqueues_style_lora(monkeypatch, tmp_path):
