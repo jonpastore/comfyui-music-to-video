@@ -2238,17 +2238,27 @@ function initSongPage() {
     }
     var fd = new FormData(form);
     var go = Promise.resolve();
+    var sceneEl = form.closest(".scene");
+    if (form.classList.contains("scene-form") && sceneEl) {
+      collectSceneFields(sceneEl, fd);
+    }
     if (form.classList.contains("clip-bar") || form.classList.contains("reroll-bar")) {
-      var sceneEl = form.closest(".scene");
       var sceneForm = sceneEl && sceneEl.querySelector("form.scene-form");
-      ["image_prompt", "video_motion_prompt", "negative_prompt", "story",
-       "camera", "lighting", "motion", "pose"].forEach(function (name) {
-        var el = sceneEl && sceneEl.querySelector('[name="' + name + '"]');
-        if (el && el.value != null) fd.set(name, el.value);
-      });
+      collectSceneFields(sceneEl, fd);
+      if (form.classList.contains("clip-bar") && fd.has("video_model")) {
+        fd.set("scene_video_model", fd.get("video_model"));
+        fd.delete("video_model");
+      }
       if (sceneForm) {
+        var sceneFd = collectSceneFields(sceneEl, new FormData(sceneForm));
         if (note) say2(note, "saving scene…");
-        go = api(sceneForm.getAttribute("action"), new FormData(sceneForm));
+        go = api(sceneForm.getAttribute("action"), sceneFd);
+        var poseForm = sceneEl && sceneEl.querySelector("form.pose-bind");
+        if (poseForm) {
+          go = go.then(function () {
+            return api(poseForm.getAttribute("action"), new FormData(poseForm));
+          });
+        }
       }
     }
     go.then(function () { return api(dest, fd); })
@@ -3128,6 +3138,23 @@ function sweepPendingClipCards() {
       })
       .catch(function () {});
   });
+}
+
+function collectSceneFields(scene, fd) {
+  fd = fd || new FormData();
+  if (!scene) return fd;
+  scene.querySelectorAll("input[name], textarea[name], select[name]").forEach(function (el) {
+    if (el.closest(".reroll-bar") || el.closest(".clip-bar") ||
+        el.closest(".still-pick") || el.closest(".still-del") ||
+        el.closest(".pose-bind") || el.closest(".pose-picks")) return;
+    if (el.type === "file") return;
+    if (el.type === "checkbox") {
+      fd.set(el.name, el.checked ? (el.value || "true") : "");
+      return;
+    }
+    fd.set(el.name, el.value);
+  });
+  return fd;
 }
 
 function songIdFromForm(form) {

@@ -654,10 +654,12 @@ removes the ticked ones. `#ref-preview`: Close is on the right of the
 bar with Use this still / Fix / Delete; tall prev/next sit beside the
 image; Left/Right arrows step stills in that scene. Clip thumbs walk
 forward from ~0.2s until the frame is not black.
-**Render clip** and **Generate Images** (was Reroll) save unsaved scene
-text (image / motion / negative / camera / lighting / pose / story)
-into the board, then queue. Scene-form Save Scene is no longer required
-first (`test_render_clip_writes_the_onscreen_motion_before_enqueue`,
+**Save Scene**, **Render clip**, and **Generate Images** persist every
+scene field used to render (prompts with their own version save, camera,
+duration, pose plate). Prompt versions do not increment when the text
+is unchanged (`test_scene_prompt_placeholder_and_version_and_draft`).
+Scene-form Save Scene is no longer required first
+(`test_render_clip_writes_the_onscreen_motion_before_enqueue`,
 `test_generate_images_writes_the_image_prompt_before_enqueue`).
 **Render clip** sits on the Clips heading row with First clip only,
 Auto post (LTX refine on the LTX take, `T5-14` **built**,

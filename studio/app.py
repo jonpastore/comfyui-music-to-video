@@ -7693,6 +7693,8 @@ async def save_scene(request: Request, id: int, tier: str, num: int):
         if (scene.get(field) or "") != value:
             scene[field] = value
             changed = True
+            if field in storyboard_service.PROMPT_FIELDS:
+                storyboard_service.maybe_record_field_version(scene, field, value)
     # duration_guidance is the ask; length_seconds is what clip_chain_plan
     # splits. Saving "14s" used to leave a 4.8s stamp, so Render clip had
     # nothing to chain (n_parts=1) while the box said 14.
@@ -8654,7 +8656,13 @@ def start_reroll(request: Request, id: int, tier: str = Form(...), clip_idx: Lis
                   camera: Optional[str] = Form(None),
                   lighting: Optional[str] = Form(None),
                   motion: Optional[str] = Form(None),
-                  pose: Optional[str] = Form(None)):
+                  pose: Optional[str] = Form(None),
+                  location: Optional[str] = Form(None),
+                  duration_guidance: Optional[str] = Form(None),
+                  video_model: Optional[str] = Form(None),
+                  needs_lip_sync: Optional[str] = Form(None),
+                  name: Optional[str] = Form(None),
+                  cue: Optional[str] = Form(None)):
     """note: what to change about these clips.
 
     A bare re-roll is four new seeds on the same prompt -- a blind gamble that
@@ -8718,7 +8726,9 @@ def start_reroll(request: Request, id: int, tier: str = Form(...), clip_idx: Lis
     flush = _scene_flush_updates(
         image_prompt=image_prompt, video_motion_prompt=video_motion_prompt,
         negative_prompt=negative_prompt, story=story, camera=camera,
-        lighting=lighting, motion=motion, pose=pose)
+        lighting=lighting, motion=motion, pose=pose, location=location,
+        duration_guidance=duration_guidance, video_model=video_model,
+        needs_lip_sync=needs_lip_sync, name=name, cue=cue)
     if flush:
         seen = []
         for i in idxs:
@@ -8887,10 +8897,7 @@ async def save_driving_video(upload, dest_dir, prefix):
     return dest
 
 
-SCENE_FLUSH_FIELDS = (
-    "image_prompt", "video_motion_prompt", "negative_prompt",
-    "story", "camera", "lighting", "motion", "pose",
-)
+SCENE_FLUSH_FIELDS = EDITABLE_SCENE_FIELDS
 
 
 def _scene_flush_updates(**fields):
@@ -8914,6 +8921,12 @@ def _flush_scene_fields(row, song, tier, num, updates):
     for field, raw in updates.items():
         if field not in SCENE_FLUSH_FIELDS:
             continue
+        if field in BOOL_SCENE_FIELDS:
+            value = storyboard_service._as_scene_bool(raw)
+            if bool(scene.get(field)) != value:
+                scene[field] = value
+                changed = True
+            continue
         value = (raw or "").strip()
         if len(value) > MAX_SCENE_FIELD:
             raise HTTPException(
@@ -8924,6 +8937,16 @@ def _flush_scene_fields(row, song, tier, num, updates):
             raise HTTPException(400, str(e))
         if (scene.get(field) or "") != value:
             scene[field] = value
+            changed = True
+            if field in storyboard_service.PROMPT_FIELDS:
+                storyboard_service.maybe_record_field_version(scene, field, value)
+    if "duration_guidance" in updates:
+        planned = build_song.guidance_seconds(scene)
+        frames = build_song.legal_frames(planned, build_song.LTX_FPS)
+        new_len = round(frames / build_song.LTX_FPS, 4)
+        if scene.get("frames") != frames or scene.get("length_seconds") != new_len:
+            scene["frames"] = frames
+            scene["length_seconds"] = new_len
             changed = True
     if not changed:
         return False
@@ -8952,6 +8975,12 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
                        lighting: Optional[str] = Form(None),
                        motion: Optional[str] = Form(None),
                        pose: Optional[str] = Form(None),
+                       location: Optional[str] = Form(None),
+                       duration_guidance: Optional[str] = Form(None),
+                       scene_video_model: Optional[str] = Form(None),
+                       needs_lip_sync: Optional[str] = Form(None),
+                       name: Optional[str] = Form(None),
+                       cue: Optional[str] = Form(None),
                        ref_motion: Optional[UploadFile] = File(None),
                        control_video: Optional[UploadFile] = File(None)):
     song = get_song_or_404(id)
@@ -8990,7 +9019,9 @@ async def start_clips(request: Request, id: int, tier: str = Form(...),
     flush = _scene_flush_updates(
         image_prompt=image_prompt, video_motion_prompt=video_motion_prompt,
         negative_prompt=negative_prompt, story=story, camera=camera,
-        lighting=lighting, motion=motion, pose=pose)
+        lighting=lighting, motion=motion, pose=pose, location=location,
+        duration_guidance=duration_guidance, video_model=scene_video_model,
+        needs_lip_sync=needs_lip_sync, name=name, cue=cue)
     if scene_num is not None and flush:
         _flush_scene_fields(sb, song, tier, scene_num, flush)
         board = load_storyboard(sb)

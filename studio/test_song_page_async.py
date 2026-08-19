@@ -368,6 +368,19 @@ def test_scene_prompt_placeholder_and_version_and_draft():
             headers={"Accept": "application/json"})
         assert saved.status_code == 200, saved.text
         assert saved.json()["n"] == 1
+        again = client.post(
+            f"/songs/{sid}/storyboard/xxx/scene/1/field-version",
+            json={"field": "story", "text": "she waits in steam"},
+            headers={"Accept": "application/json"})
+        assert again.status_code == 200, again.text
+        assert again.json()["n"] == 1
+        assert len(again.json()["versions"]) == 1
+        edited = client.post(
+            f"/songs/{sid}/storyboard/xxx/scene/1/field-version",
+            json={"field": "story", "text": "she waits in steam, then turns"},
+            headers={"Accept": "application/json"})
+        assert edited.status_code == 200, edited.text
+        assert edited.json()["n"] == 2
         import vision
         vision.ask_text = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("offline"))
         drafted = storyboard_service.draft_scene_field(sid, "xxx", 1, "video_motion_prompt")
@@ -594,7 +607,8 @@ def test_song_page_js_intercepts_forms():
     assert "api(dest, fd)" in src
     assert 'form.classList.contains("clip-bar")' in src
     assert 'form.classList.contains("reroll-bar")' in src
-    assert 'fd.set(name, el.value)' in src
+    assert "function collectSceneFields" in src
+    assert "form.pose-bind" in src
     assert "saving scene" in src
 
 

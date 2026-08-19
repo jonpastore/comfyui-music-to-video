@@ -559,6 +559,41 @@ def dismiss_clip_job(song_id, tier, num, job_id):
     return {"ok": True, "dismissed": jid}
 
 
+def maybe_record_field_version(scene, field, text, label=""):
+    """Append a named version only when the text is new.
+
+    Same text as the last snapshot returns that n and writes nothing.
+    """
+    if field not in PROMPT_FIELDS:
+        return None
+    text = (text or "").strip()
+    if not text:
+        return None
+    bag = dict(scene.get("field_versions") or {})
+    vers = list(bag.get(field) or [])
+    last = vers[-1] if vers else None
+    if last and (last.get("text") or "").strip() == text:
+        current = dict(scene.get("field_current") or {})
+        n = int(last.get("n") or 0)
+        if current.get(field) != n:
+            current[field] = n
+            scene["field_current"] = current
+        return n
+    n = (max((int(v.get("n") or 0) for v in vers), default=0) + 1)
+    vers.append({
+        "n": n,
+        "label": (label or "").strip() or f"v{n}",
+        "text": text,
+        "created": time.time(),
+    })
+    bag[field] = vers[-12:]
+    scene["field_versions"] = bag
+    current = dict(scene.get("field_current") or {})
+    current[field] = n
+    scene["field_current"] = current
+    return n
+
+
 def save_field_version(song_id, tier, num, field, text, label=""):
     if field not in PROMPT_FIELDS:
         raise ValueError(f"unknown prompt field {field!r}")
@@ -571,23 +606,21 @@ def save_field_version(song_id, tier, num, field, text, label=""):
     tiers.check_text(text, f"scene {num} {field}", tier=tier)
     bag = dict(scene.get("field_versions") or {})
     vers = list(bag.get(field) or [])
-    n = (max((int(v.get("n") or 0) for v in vers), default=0) + 1)
-    vers.append({
-        "n": n,
-        "label": (label or "").strip() or f"v{n}",
-        "text": text,
-        "created": time.time(),
-    })
-    bag[field] = vers[-12:]
-    scene["field_versions"] = bag
+    last = vers[-1] if vers else None
+    unchanged = bool(last and (last.get("text") or "").strip() == text)
+    n = maybe_record_field_version(scene, field, text, label=label)
+    live_changed = (scene.get(field) or "") != text
     scene[field] = text
-    current = dict(scene.get("field_current") or {})
-    current[field] = n
-    scene["field_current"] = current
-    scene["edited"] = time.time()
+    if unchanged and not live_changed:
+        return {"ok": True, "field": field,
+                "versions": list((scene.get("field_versions") or {}).get(field) or vers),
+                "n": n, "text": text, "unchanged": True}
+    if live_changed or not unchanged:
+        scene["edited"] = time.time()
     _commit_scene(song, row, sb)
-    return {"ok": True, "field": field, "versions": bag[field], "n": n,
-            "text": text}
+    return {"ok": True, "field": field,
+            "versions": (scene.get("field_versions") or {}).get(field) or [],
+            "n": n, "text": text, "unchanged": unchanged}
 
 
 def apply_field_version(song_id, tier, num, field, n):
