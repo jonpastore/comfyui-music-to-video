@@ -5,10 +5,9 @@ methodology:
   superpowers: 6.3.0
 workstreams:
   COMFYUI-UX-PROTOTYPE:
-    status: ACTIVE_USER_PRIORITY
+    status: INTEGRATED_PENDING_USER_DECISION
     readiness: UX_DESIGN_READINESS
-    worktree: /tmp/comfyui-ux-prototype-20260821
-    branch: agent/comfyui-ux-prototype
+    integration: main@ef30cdd
     scope: disposable mock-only UX decision package
     blockers: []
   P0-1-MIGRATION-RECONCILIATION:

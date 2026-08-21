@@ -21,7 +21,7 @@ This is the project-specific measure, not the broader Jarvis portfolio count. It
 ### UX prototype — user priority / ready for decision
 
 - Isolated worktree: `/tmp/comfyui-ux-prototype-20260821`
-- Branch and commit: `agent/comfyui-ux-prototype` at `2d74040`
+- Integrated: `main@ef30cdd` (`2d74040` is the prototype-artifact commit)
 - Scope: disposable static prototype only; synthetic fixtures; no production API, data mutation, deployment, render fleet, or GPU use.
 - Decision package: `.ux-review/decision-package.md`
 - Capability parity: `.ux-review/feature-capability-parity.md`
@@ -30,7 +30,7 @@ This is the project-specific measure, not the broader Jarvis portfolio count. It
 
 Directions: **A — Operations Control Room**, **B — Production Desk** (recommended), and **C — Review Theatre**. The synthetic keeper surface covers shared/tiered, reconciled, legacy-only, and verification-required states without exposing migration internals. Fresh Playwright checks proved working direction/keeper actions, no 390px horizontal overflow, and zero `axe-core 4.13.0` WCAG 2 A/AA violations.
 
-**Gate:** user selects A, B, C, or a combination. That authorizes implementation planning, not an automatic production rewrite.
+**Gate:** user selects A, B, C, or a combination. That authorizes implementation planning, not an automatic production rewrite. The prototype is committed in the repository; it is not served as a live Studio product route.
 
 ### P0-1 shared keeper controlled migration — separate implementation readiness
 
@@ -45,6 +45,7 @@ Do **not** integrate P0-1 yet. It remains separate from UX readiness. A fresh in
 
 - **Production migration:** not authorized; do not run against live data.
 - **GPU / render fleet:** separate pending workstream; do not claim a renderer for UX or migration work.
+- **Studio runtime deployment:** `main@ef30cdd` restarted and smoke-tested on cerberus. This deployment did not make the disposable prototype a production route.
 - **Shared/main checkout:** user-owned and dirty; use clean isolated worktrees.
 
 ## Resume order
