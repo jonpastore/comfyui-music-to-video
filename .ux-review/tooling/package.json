@@ -1,0 +1,9 @@
+{
+  "name": "meowp-ux-review-tooling",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Isolated, mock-prototype accessibility tooling",
+  "devDependencies": {
+    "axe-core": "4.13.0"
+  }
+}

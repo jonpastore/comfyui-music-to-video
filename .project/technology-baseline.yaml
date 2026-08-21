@@ -1,0 +1,31 @@
+components:
+  - kind: prototype-validation
+    component: axe-core
+    selected: 4.13.0
+    selected-release-evidence: https://registry.npmjs.org/axe-core/-/axe-core-4.13.0.tgz
+    latest: 4.13.0
+    latest-evidence: https://registry.npmjs.org/axe-core
+    verified_at: 2026-08-21T16:06:00-04:00
+    support_eol: maintained-current
+    license: MPL-2.0
+    direct_security_vulnerability: no known direct issue assessed for isolated static prototype tooling
+    provenance_source_identity: npm registry package axe-core
+    compatibility: injected only into localhost mock during validation
+    planned_resolved_lock: .ux-review/tooling/package-lock.json with exact axe-core 4.13.0
+    update_owner: UX implementation workstream
+    exception_gate: N/A
+  - kind: browser-automation
+    component: Playwright CLI
+    selected: 0.1.18
+    selected-release-evidence: user-scoped installed skill wrapper; npm registry latest returned 0.1.18 on 2026-08-21
+    latest: 0.1.18
+    latest-evidence: https://registry.npmjs.org/@playwright/cli
+    verified_at: 2026-08-21T16:04:00-04:00
+    support_eol: N/A — ephemeral isolated validation tool
+    license: N/A
+    direct_security_vulnerability: N/A — no production dependency introduced
+    provenance_source_identity: installed Codex Playwright skill wrapper
+    compatibility: headless Chromium against localhost only
+    planned_resolved_lock: user-scoped skill tool, no repository runtime dependency
+    update_owner: Codex UX validation
+    exception_gate: N/A

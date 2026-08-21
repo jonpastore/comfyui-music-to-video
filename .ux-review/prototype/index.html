@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Meow P Studio — UX direction prototype</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23191c1f'/%3E%3Cpath d='M8 24V8l8 8 8-8v16h-4v-8l-4 4-4-4v8z' fill='%2377b7f5'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="prototype.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="app-header">
+      <a class="brand" href="#attention" aria-label="Meow P Studio home">MP <span>Studio</span></a>
+      <nav aria-label="Prototype views" class="nav-links">
+        <a class="active" href="#directions">Directions</a>
+        <a href="#attention">Attention</a>
+        <a href="#plan">Scene plan</a>
+        <a href="#review">Review</a>
+        <a href="#set">Sets</a>
+        <a href="#release">Release</a>
+      </nav>
+      <button class="quiet-button" data-open-dialog="help">Keyboard help <kbd>?</kbd></button>
+    </header>
+
+    <main id="main">
+      <section id="directions" class="section direction-hub" aria-labelledby="directions-title">
+        <div class="eyebrow">Isolated UX prototype · mock data only</div>
+        <div class="title-row"><div><h1 id="directions-title">Three ways to run the same production</h1><p class="lede">One attention item, the same evidence, and three genuinely different information hierarchies.</p></div>
+          <label class="state-picker">Fixture <select id="fixture"><option value="normal">Normal / ready</option><option value="running">Running / partial</option><option value="degraded">Missing media</option><option value="exhausted">Fourth repair exhausted</option><option value="keeper-review">Keeper needs review</option><option value="stale">Stale plan version</option><option value="cloud">Paid cloud authorization</option><option value="empty">Empty attention queue</option><option value="release">Partial release</option></select></label>
+        </div>
+        <div class="direction-grid">
+          <article class="direction-card direction-a"><div class="direction-label">A · Operations Control Room</div><h2>Everything visible, all at once</h2><p>Best for model commissioning and throughput triage. Evidence opens in an inspector rather than taking the screen.</p><div class="mini-console"><div class="mini-toolbar">8 attention items · Filters</div><div class="mini-table"><b>Scene 04</b><span class="severity high">Hard blocker</span><small>Qwen Edit · attempt 4</small><b>Scene 08</b><span class="severity med">Approval</span><small>LTX preview · 2m ago</small><b>Fleet</b><span class="severity med">Offline</span><small>peaches · 9m ago</small></div><aside><div class="mock-thumb still-1"></div><strong>Scene 04 · 00:42</strong><small>Identity mismatch</small><a class="mini-cta" href="#attention">Inspect attention</a></aside></div><footer><span>Dense triage</span><span>Media secondary</span></footer></article>
+          <article class="direction-card recommended"><div class="direction-label">B · Production Desk <span>Recommended</span></div><h2>Decisions first. Evidence close.</h2><p>A compact attention queue opens a calm workspace where media is primary and expert evidence is available one layer deeper.</p><div class="mini-desk"><aside><b>Attention</b><span class="selected">Scene 04 <small>Repair exhausted</small></span><span>Scene plan <small>8 / 9 ready</small></span><span>Midnight set <small>Plan ready</small></span></aside><div><div class="mock-thumb wide still-2"></div><strong>00:42 · Face identity drifts from anchor</strong><p>Retry limit reached. Preserve duration; repair the reference stage.</p><a class="mini-cta primary" href="#review">Review repair</a><a class="mini-cta" href="#plan">Plan evidence</a></div></div><footer><span>Contextual media</span><span>Progressive disclosure</span></footer></article>
+          <article class="direction-card direction-c"><div class="direction-label">C · Review Theatre</div><h2>The video is the product</h2><p>Large media and direct playback judgment. Operational context moves away from the creative surface.</p><div class="mini-theatre"><div class="mock-thumb cinema still-3"><span class="play">▶</span></div><div class="mini-timeline"><i></i><i class="finding"></i><i></i><i class="finding"></i><i></i></div><div><strong>Scene 04 · 00:42</strong><a class="mini-cta primary" href="#review">Review scene</a></div></div><footer><span>Best review</span><span>Weakest triage</span></footer></article>
+        </div>
+        <aside class="recommendation"><strong>Recommendation: Production Desk.</strong> It keeps routine work calm, makes the next decision obvious, and does not hide model evidence needed while the pipeline matures.</aside>
+      </section>
+
+      <section id="attention" class="section workspace" aria-labelledby="attention-title">
+        <div class="section-heading"><div><div class="eyebrow">Production Desk · default landing</div><h1 id="attention-title">Attention</h1><p>Only work needing a person. Successful routine stages keep moving.</p></div><button class="primary" data-toast="Queue refreshed from mock worker">Refresh status</button></div>
+        <div class="attention-layout">
+          <div class="queue-panel" aria-label="Attention queue">
+            <div class="queue-tabs" role="tablist" aria-label="Attention categories"><button id="tab-action" role="tab" aria-selected="true" aria-controls="attention-panel" tabindex="0">Action required <span>4</span></button><button id="tab-ready" role="tab" aria-selected="false" aria-controls="attention-panel" tabindex="-1">Ready to review <span>2</span></button><button id="tab-system" role="tab" aria-selected="false" aria-controls="attention-panel" tabindex="-1">System blocked <span>1</span></button></div>
+            <div id="empty-queue" class="empty-state" hidden><span aria-hidden="true">✓</span><h2>No decisions waiting</h2><p>Successful work will continue automatically. We’ll email you if something changes.</p><a href="#review">Open latest review</a></div>
+            <div id="attention-panel" role="tabpanel" aria-labelledby="tab-action"><ol id="attention-list" class="attention-list">
+              <li class="attention-item selected" data-item="repair"><button><span class="severity-icon high" aria-label="Hard blocker">!</span><span><b>Scene 04 needs a repair decision</b><small>Neon Aftercare · 00:42 · 18 min ago</small></span><span class="item-meta">Attempt 4 of 4<br><em>2m estimated</em></span></button></li>
+              <li class="attention-item" data-item="approve"><button><span class="severity-icon med" aria-label="Approval needed">✓</span><span><b>Scene plan ready for approval</b><small>Neon Aftercare · 8 of 9 scenes ready</small></span><span class="item-meta">Version 12<br><em>9 min render</em></span></button></li>
+              <li class="attention-item" data-item="cloud"><button><span class="severity-icon cloud" aria-label="Cloud authorization">$</span><span><b>Cloud lip-sync repair needs approval</b><small>Scene 07 · Provider: VoiceForge</small></span><span class="item-meta">Up to $1.80<br><em>data leaves host</em></span></button></li>
+              <li class="attention-item" data-item="fleet"><button><span class="severity-icon low" aria-label="System warning">↯</span><span><b>peaches fleet worker is unavailable</b><small>3 queued local preview jobs have been rerouted</small></span><span class="item-meta">9 min ago<br><em>No work lost</em></span></button></li>
+            </ol></div>
+          </div>
+          <aside id="attention-inspector" class="decision-pane" aria-live="polite"></aside>
+        </div>
+      </section>
+
+      <section id="plan" class="section workspace" aria-labelledby="plan-title">
+        <div class="workspace-head"><div><div class="eyebrow">Neon Aftercare · Individual video</div><h1 id="plan-title">Plan scenes</h1></div><ol class="stage-path" tabindex="0" aria-label="Production stages. Scroll horizontally on narrow screens."><li>Prepare</li><li class="current">Plan scenes</li><li>Generate</li><li>Review</li><li>Release</li></ol></div>
+        <div class="approval-banner"><span class="severity-icon med">✓</span><div><b>Approval package · version <span id="plan-version">12</span></b><p>Approve 8 ready scenes; hold Scene 04 for repair. Lip-sync routing and requested duration are locked into this version.</p></div><button class="primary" id="approve-ready">Approve 8 ready scenes</button></div>
+        <div class="scene-grid" id="scene-grid"></div>
+        <section id="keeper-context" class="keeper-context" aria-labelledby="keeper-context-title"><div><div class="eyebrow">Asset context</div><h2 id="keeper-context-title">Keepers stay clear without exposing migration mechanics</h2><p id="keeper-context-note">A scene uses a canonical source asset. Album and tier scope are context, not a second editable copy.</p></div><div class="keeper-grid"><article><div class="mock-thumb still-1" role="img" aria-label="Mock shared keeper thumbnail"></div><h3>Meow P · rain-platform front</h3><p class="keeper-id">Canonical asset · MP-017</p><p><span class="badge">Shared · 2 albums</span><span class="badge">R · XXX memberships</span></p><small>Scene 01 reference · usable</small></article><article><div class="mock-thumb still-2" role="img" aria-label="Mock reconciled keeper thumbnail"></div><h3>Window-reflection profile</h3><p class="keeper-id">Canonical asset · MP-024</p><p><span class="badge">Reconciled</span><span class="badge">Ceiling tier · XXX</span></p><small>Legacy source remains readable during transition; this canonical asset is authoritative.</small></article><article><div class="mock-thumb still-3" role="img" aria-label="Mock legacy keeper thumbnail"></div><h3>Crosswalk turn · archive import</h3><p class="keeper-id">Legacy source · read-only compatibility</p><p><span class="badge">Legacy-only</span><span class="badge">Needs catalog pass</span></p><small>Still usable as historical evidence; a new write does not create a second keeper record.</small></article><article id="keeper-review-card" class="keeper-review"><div class="mock-thumb wide" role="img" aria-label="Mock keeper verification thumbnail"></div><h3>Neon close-up identity needs review</h3><p class="keeper-id">Canonical identity verification required</p><p><span class="badge error">Needs review</span><span class="badge">Scene 04 held</span></p><small>Membership context disagrees with the available evidence. Do not reuse it until the safe review is complete.</small><a class="mini-cta" href="#attention" data-attention-item="keeper">Open keeper verification</a></article></div></section>
+        <details class="evidence"><summary>Technical evidence and automation policy</summary><div class="evidence-grid"><dl><dt>Effective policy</dt><dd>Global → Neon Aftercare → Scene 04</dd><dt>Self-hosted retries</dt><dd>4 total attempts / smallest failing stage</dd><dt>Duration invariant</dt><dd>25 fps LTX → timestamp sampling → 16 fps WAN</dd></dl><dl><dt>Plan hash</dt><dd>8b4f…e1c</dd><dt>Prompt analysis</dt><dd>Scene 07: visible singing; WAN required</dd><dt>Latest worker</dt><dd>cerberus / LTX 2.5 / 25 fps</dd></dl></div></details>
+      </section>
+
+      <section id="review" class="section workspace" aria-labelledby="review-title">
+        <div class="workspace-head"><div><div class="eyebrow">Neon Aftercare · assembled master v18 · current as of 10:42</div><h1 id="review-title">Video review <span class="status ready">Resolve hard blocker</span></h1></div><div class="button-row"><button id="play-toggle" aria-pressed="false">▶ Play</button><button data-open-dialog="compare">Compare attempts</button><button id="video-approval" class="primary" disabled>Resolve 1 hard blocker</button></div></div>
+        <div class="review-layout"><div class="media-review"><div id="review-media" class="review-media mock-thumb cinema still-3" aria-label="Mock video frame: performer in a neon-lit street scene"><span class="timecode">00:42.3</span><span class="media-status">Paused</span><button class="media-play" aria-label="Play mock video">▶</button></div><div class="timeline" aria-label="Video timeline with AI findings"><div class="time-labels"><span>00:00</span><span>01:14</span><span>02:28</span><span>03:42</span></div><div class="track"><span class="segment s1"></span><span class="segment s2"></span><span class="segment s3"></span><button class="marker hard" data-finding="identity" style="left:19%" aria-label="Hard blocker at 00:42: identity mismatch">!</button><button class="marker warn" data-finding="lipsync" style="left:64%" aria-label="Warning at 02:22: lip-sync drift">!</button><button class="playhead" style="left:19%" aria-label="Current time 00:42"></button></div><div class="finding-legend"><span><i class="dot hard"></i> Hard blocker</span><span><i class="dot warn"></i> Needs review</span><span><i class="dot pass"></i> Passed QC</span></div></div></div><aside id="finding-panel" class="finding-panel"></aside></div>
+      </section>
+
+      <section id="set" class="section workspace" aria-labelledby="set-title">
+        <div class="workspace-head"><div><div class="eyebrow">Set · 5 individual videos</div><h1 id="set-title">Midnight on the Line</h1><p>AI-proposed order with a continuous narrative arc. Standalone videos stay intact.</p></div><div class="button-row"><button data-open-dialog="set-plan">View plan rationale</button><button class="primary" data-open-dialog="set-approval">Approve set plan</button></div></div>
+        <div class="set-summary"><span class="status approval">Plan v6 needs approval · current as of 10:42</span><span>33:18 total</span><span>5 source masters + 4 connective derivatives</span><span>Local · 41 min estimate · $0</span></div>
+        <div class="arrangement" tabindex="0" aria-label="Set arrangement timeline. Scroll horizontally on narrow screens."><div class="ruler"><span>00:00</span><span>08:00</span><span>16:00</span><span>24:00</span><span>32:00</span></div><div class="arrange-track"><span class="track-label">Video</span><div class="clip c1">01 · First Light · master v4</div><div class="transition t1">fade / overlap 1.2s</div><div class="clip c2">02 · Neon Aftercare · master v18</div><div class="transition t2">bridge / replace edge 4s</div><div class="clip c3">03 · Glass Ocean · master v7</div><div class="clip c4">04 · Afterglow · master v3</div><div class="clip c5">05 · Home Signal · master v5</div></div><div class="arrange-track"><span class="track-label">Connective</span><div class="derivative d1">Generated street reflection · 6 s</div><div class="derivative d2">Title image / 4 s</div><div class="derivative d3">Regenerated train exit · 5 s</div><div class="derivative d4">Dawn dissolve · 7 s</div></div><div class="arrange-track"><span class="track-label">Automation</span><div class="automation">↗ narrative energy · trims / overlap / edge replacement / regeneration ranges · ↘ cooldown</div></div></div>
+        <details class="evidence"><summary>Why this order</summary><p><b>AI rationale:</b> energy rises from “First Light” to “Neon Aftercare,” then the reflective image bridge gives “Glass Ocean” room to reset the emotional arc. The bridge is a set-only derivative; no standalone master changes.</p></details>
+      </section>
+
+      <section id="release" class="section workspace" aria-labelledby="release-title">
+        <div class="workspace-head"><div><div class="eyebrow">Midnight on the Line · exported master v6 · current as of 10:42</div><h1 id="release-title">Release</h1><p>Approval, export, and each destination are separate facts.</p></div><span class="status partial">1 of 3 released</span></div>
+        <div class="release-steps" tabindex="0" aria-label="Release stages. Scroll horizontally on narrow screens."><div class="complete">✓<b>Approved</b><small>Creative result accepted</small></div><div class="complete">✓<b>Exported</b><small>4K master verified</small></div><div class="active">3<b>Destinations</b><small>1 released</small></div></div>
+        <div class="destination-list"><article><span class="destination-icon">▶</span><div><b>YouTube</b><small>@meowp · master v6 · Public · published 2m ago</small></div><span class="status success">Released</span><button>View</button></article><article><span class="destination-icon">♪</span><div><b>Vimeo</b><small>Team account · master v6 · Unlisted · processing; safe status retry</small></div><span class="status running">Processing</span><button>Check status</button></article><article><span class="destination-icon">◉</span><div><b>Archive delivery</b><small>Partner vault / album 12 · master v6 · delivery token expired before transfer</small></div><span class="status failed">Failed</span><button class="danger" data-open-dialog="reauthorize">Reauthorize</button></article></div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <dialog id="dialog" aria-labelledby="dialog-title"><button class="modal-close" aria-label="Close dialog" data-close-dialog>×</button><div id="dialog-content"></div></dialog>
+    <script src="prototype.js"></script>
+  </body>
+</html>

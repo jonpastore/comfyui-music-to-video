@@ -1,0 +1,40 @@
+mode: brownfield
+phase: ux-prototype-review
+methodology:
+  development_skills: 1.3.0
+  superpowers: 6.3.0
+workstreams:
+  COMFYUI-UX-PROTOTYPE:
+    status: ACTIVE_USER_PRIORITY
+    readiness: UX_DESIGN_READINESS
+    worktree: /tmp/comfyui-ux-prototype-20260821
+    branch: agent/comfyui-ux-prototype
+    scope: disposable mock-only UX decision package
+    blockers: []
+  P0-1-MIGRATION-RECONCILIATION:
+    status: ACTIVE
+    readiness: IMPLEMENTATION_READINESS
+    worktree: /tmp/comfyui-p0-1-shared-keeper-K4s1Va
+    branch: agent/p0-1-shared-keeper
+    blocker: mixed pre-migration shared/tier state reconciliation
+  PRODUCTION-MIGRATION:
+    status: NOT_AUTHORIZED
+  GPU-RUNTIME-VALIDATION:
+    status: SEPARATE_PENDING
+next:
+  skill: ui-ux-product-review
+  phase: rendered-prototype-and-user-design-decision
+baselines:
+  requirements: approved-with-drift-recorded
+  domain: approved-with-p0-1-in-flight
+  ux: in-review
+  verification: prototype-validation-complete
+approvals:
+  ux_direction: pending-user-confirmation
+  implementation: false
+  production_migration: false
+  gpu_runtime_validation: false
+dependencies:
+  - id: DEP-P0-1
+    classification: DEFERRED_IMPLEMENTATION_DEPENDENCY
+    impact: P0-1 changes persistence reconciliation, not the approved user-visible keeper states in this mock.
